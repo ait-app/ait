@@ -349,8 +349,11 @@ impl Engine {
             }
             _ => return Err(AgentSessionError::Rejected),
         }
-        self.native_mut()?.configure(&config).await?;
-        self.config = config;
+        let outcome = self.native_mut()?.apply_config(&config).await?;
+        if !outcome.rejected.is_empty() {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.config = outcome.config;
         let options = self.options().await?;
         self.notify("session/update",json!({"sessionId":self.id,"update":{"sessionUpdate":"config_option_update","configOptions":options}}));
         Ok(Some(json!({"configOptions":options})))

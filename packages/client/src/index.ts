@@ -30,6 +30,7 @@ import type {
   WorkspaceCreateRequest,
 } from "@ait/protocol/messages";
 import { DaemonClient, type CreateAgentRequestOptions } from "./daemon-client.js";
+export { AgentConfigRejectedError } from "./daemon-client.js";
 import {
   createTerminalActions,
   type PaseoTerminalActions,

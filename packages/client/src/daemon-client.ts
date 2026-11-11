@@ -911,6 +911,21 @@ export class DaemonConnectionError extends Error {
   }
 }
 
+/**
+ * A configuration request was refused by the host or provider. `rejectedFields`
+ * lists the fields that kept their previous values when the provider applied the
+ * rest natively; older hosts omit it and the list is empty.
+ */
+export class AgentConfigRejectedError extends Error {
+  readonly rejectedFields: readonly string[];
+
+  constructor(message: string, rejectedFields: readonly string[] = []) {
+    super(message);
+    this.name = "AgentConfigRejectedError";
+    this.rejectedFields = rejectedFields;
+  }
+}
+
 class DaemonRpcError extends Error {
   readonly requestId: string;
   readonly requestType?: string;
@@ -3646,7 +3661,10 @@ export class DaemonClient {
       },
     });
     if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentMode rejected");
+      throw new AgentConfigRejectedError(
+        payload.error ?? "setAgentMode rejected",
+        payload.rejectedFields ?? [],
+      );
     }
     return payload.notice ?? null;
   }
@@ -3677,7 +3695,10 @@ export class DaemonClient {
       },
     });
     if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentModel rejected");
+      throw new AgentConfigRejectedError(
+        payload.error ?? "setAgentModel rejected",
+        payload.rejectedFields ?? [],
+      );
     }
     return payload.notice ?? null;
   }
@@ -3706,7 +3727,10 @@ export class DaemonClient {
       },
     });
     if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentFeature rejected");
+      throw new AgentConfigRejectedError(
+        payload.error ?? "setAgentFeature rejected",
+        payload.rejectedFields ?? [],
+      );
     }
   }
 
@@ -3736,7 +3760,10 @@ export class DaemonClient {
       },
     });
     if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentThinkingOption rejected");
+      throw new AgentConfigRejectedError(
+        payload.error ?? "setAgentThinkingOption rejected",
+        payload.rejectedFields ?? [],
+      );
     }
     return payload.notice ?? null;
   }
@@ -3744,8 +3771,9 @@ export class DaemonClient {
   /**
    * Applies a whole agent-config bundle in one request. Use this instead of
    * chaining the single-field setters when the values belong together so client
-   * interruption and other mutations cannot interleave between steps. A
-   * provider rejection can still leave earlier steps applied.
+   * interruption and other mutations cannot interleave between steps. Providers
+   * with native confirmation persist confirmed fields and report the rest in
+   * `AgentConfigRejectedError.rejectedFields`; older hosts reject atomically.
    * Gated on `server_info.features.agentConfigApply`.
    */
   async applyAgentConfig(
@@ -3774,7 +3802,10 @@ export class DaemonClient {
       },
     });
     if (!payload.accepted) {
-      throw new Error(payload.error ?? "applyAgentConfig rejected");
+      throw new AgentConfigRejectedError(
+        payload.error ?? "applyAgentConfig rejected",
+        payload.rejectedFields ?? [],
+      );
     }
     return payload.notice ?? null;
   }

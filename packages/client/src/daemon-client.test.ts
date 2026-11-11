@@ -11,6 +11,7 @@ import {
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
 import {
+  AgentConfigRejectedError,
   DaemonClient,
   type CreateAgentRequestOptions,
   type DaemonClientTrace,
@@ -7327,6 +7328,109 @@ test("setAgentModel returns the provider notice for a deferred switch", async ()
     }),
   );
   await expect(switching).resolves.toEqual(notice);
+});
+
+test("configuration setters surface rejectedFields as AgentConfigRejectedError", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "config-rejected",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connecting = client.connect();
+  mock.triggerOpen();
+  await connecting;
+
+  const cases = [
+    {
+      call: () => client.setAgentFeature("agent", "fastMode", true),
+      requestType: "agent.feature.set.request",
+      responseType: "agent.feature.set.response",
+    },
+    {
+      call: () => client.setAgentModel("agent", "next-model"),
+      requestType: "agent.model.set.request",
+      responseType: "agent.model.set.response",
+    },
+    {
+      call: () => client.setAgentThinkingOption("agent", "high"),
+      requestType: "agent.thinking.set.request",
+      responseType: "agent.thinking.set.response",
+    },
+    {
+      call: () => client.setAgentMode("agent", "plan"),
+      requestType: "agent.mode.set.request",
+      responseType: "agent.mode.set.response",
+    },
+    {
+      call: () => client.applyAgentConfig("agent", { modelId: "next-model" }),
+      requestType: "agent.config.apply.request",
+      responseType: "agent.config.apply.response",
+    },
+  ];
+  for (const { call, requestType, responseType } of cases) {
+    const pending = call();
+    const assertion = expect(pending).rejects.toMatchObject({
+      name: "AgentConfigRejectedError",
+      message: "provider rejected configuration fields: thinkingOptionId",
+      rejectedFields: ["thinkingOptionId"],
+    });
+    const request = parseSentFrame(mock.sent.at(-1));
+    expect(request).toMatchObject({ type: requestType });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: responseType,
+        payload: {
+          requestId: request.requestId,
+          agentId: "agent",
+          accepted: false,
+          error: "provider rejected configuration fields: thinkingOptionId",
+          rejectedFields: ["thinkingOptionId"],
+        },
+      }),
+    );
+    await assertion;
+    const error = await pending.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AgentConfigRejectedError);
+  }
+});
+
+test("configuration rejection without rejectedFields stays compatible with old hosts", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "config-rejected-old-host",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connecting = client.connect();
+  mock.triggerOpen();
+  await connecting;
+
+  const pending = client.setAgentFeature("agent", "fastMode", true);
+  const assertion = expect(pending).rejects.toMatchObject({
+    name: "AgentConfigRejectedError",
+    message: "setAgentFeature rejected",
+    rejectedFields: [],
+  });
+  const request = parseSentFrame(mock.sent.at(-1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.feature.set.response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent",
+        accepted: false,
+        error: null,
+      },
+    }),
+  );
+  await assertion;
 });
 
 test("Bot requests validate params, correlate results and release errors", async () => {

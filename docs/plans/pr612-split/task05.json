@@ -1,0 +1,218 @@
+{
+  "id": "05",
+  "title": "Native-confirmed configuration",
+  "priority": 5,
+  "depends_on": [
+    "00",
+    "01"
+  ],
+  "donor_sections": [
+    5,
+    15,
+    22,
+    33
+  ],
+  "donor_paths": [
+    "apps/mobile/src/agent-stream/turn-membership.ts",
+    "apps/mobile/src/agent-stream/view.tsx",
+    "apps/mobile/src/components/model-feature-controls.test.tsx",
+    "apps/mobile/src/components/model-feature-controls.tsx",
+    "apps/mobile/src/composer/actions.test.ts",
+    "apps/mobile/src/composer/actions.ts",
+    "apps/mobile/src/composer/agent-controls/control.tsx",
+    "apps/mobile/src/composer/agent-controls/index.tsx",
+    "apps/mobile/src/composer/agent-controls/localization.test.tsx",
+    "apps/mobile/src/composer/agent-controls/mode-control.tsx",
+    "apps/mobile/src/composer/agent-controls/runtime-features.test.ts",
+    "apps/mobile/src/composer/agent-controls/runtime-features.ts",
+    "apps/mobile/src/composer/index.tsx",
+    "apps/mobile/src/composer/input/input.tsx",
+    "apps/mobile/src/composer/submit.test.ts",
+    "apps/mobile/src/composer/submit.ts",
+    "apps/mobile/src/hooks/feature-preferences.ts",
+    "apps/mobile/src/hooks/use-draft-agent-features.test.tsx",
+    "apps/mobile/src/hooks/use-draft-agent-features.ts",
+    "apps/mobile/src/i18n/resources/ar.ts",
+    "apps/mobile/src/i18n/resources/en.ts",
+    "apps/mobile/src/i18n/resources/es.ts",
+    "apps/mobile/src/i18n/resources/fr.ts",
+    "apps/mobile/src/i18n/resources/ja.ts",
+    "apps/mobile/src/i18n/resources/ko.ts",
+    "apps/mobile/src/i18n/resources/pt-BR.ts",
+    "apps/mobile/src/i18n/resources/ru.ts",
+    "apps/mobile/src/i18n/resources/zh-CN.ts",
+    "apps/mobile/src/panels/agent-facts-line.ts",
+    "apps/mobile/src/runtime/replica-cache/index.test.ts",
+    "apps/mobile/src/runtime/replica-cache/index.ts",
+    "apps/mobile/src/stores/session-store.ts",
+    "apps/mobile/src/types/stream.test.ts",
+    "apps/mobile/src/types/stream.ts",
+    "apps/mobile/src/utils/agent-snapshots.ts",
+    "apps/mobile/test-stubs/lucide-react-native.ts",
+    "crates/api/src/capabilities/tests.rs",
+    "crates/api/src/connection.rs",
+    "crates/api/src/connection/validation/tests.rs",
+    "crates/api/src/tests.rs",
+    "crates/api/src/tests/placeholders.rs",
+    "crates/metadata/src/daemon/protocol.rs",
+    "crates/model/src/server.rs",
+    "crates/provider/src/capabilities/tests.rs",
+    "crates/provider/src/composition/tests.rs",
+    "crates/provider/src/dispatch/agent_execution.rs",
+    "crates/provider/src/dispatch/requests.rs",
+    "crates/provider/src/local/configuration.rs",
+    "crates/provider/src/local/configuration/tests.rs",
+    "crates/provider/src/local/omp.rs",
+    "crates/provider/src/local/omp/bridge.rs",
+    "crates/provider/src/local/omp/bridge/engine.rs",
+    "crates/provider/src/local/omp/bridge/tests.rs",
+    "crates/provider/src/local/omp/config.rs",
+    "crates/provider/src/local/omp/config/tests.rs",
+    "crates/provider/src/local/omp/history.rs",
+    "crates/provider/src/local/omp/history/tests.rs",
+    "crates/provider/src/local/omp/session.rs",
+    "crates/provider/src/local/omp/session/observed_settings.rs",
+    "crates/provider/src/local/omp/session/observed_settings/tests.rs",
+    "crates/provider/src/local/omp/session/tests.rs",
+    "crates/provider/src/local/omp/session/tests/review.rs",
+    "crates/provider/src/local/omp/tests.rs",
+    "crates/provider/src/local/omp/tests/capabilities.rs",
+    "crates/provider/src/local/omp/tests/fixtures/generic-extension.ts",
+    "crates/provider/src/local/omp/tests/fixtures/omp.py",
+    "crates/provider/src/local/omp/tests/installed.rs",
+    "crates/provider/src/local/omp/tests/installed/review.rs",
+    "crates/provider/src/local/omp/transport.rs",
+    "crates/provider/src/local/omp/transport/tests.rs",
+    "crates/provider/src/ports.rs",
+    "crates/provider/src/ports/agent_session.rs",
+    "crates/provider/src/protocol.rs",
+    "crates/provider/src/protocol/agent_config.rs",
+    "crates/provider/src/protocol/agent_config/tests.rs",
+    "crates/provider/src/protocol/controls.rs",
+    "crates/provider/src/rpc/agent_execution.rs",
+    "crates/provider/src/rpc/agent_execution/controls.rs",
+    "crates/provider/src/rpc/agent_execution/deferred.rs",
+    "crates/provider/src/rpc/agent_execution/deferred/tests.rs",
+    "crates/provider/src/rpc/agent_execution/scheduling.rs",
+    "crates/provider/src/service.rs",
+    "crates/provider/src/service/agent_execution.rs",
+    "crates/provider/src/service/agent_execution/lane.rs",
+    "crates/provider/src/service/agent_execution/operation.rs",
+    "crates/provider/src/service/agent_execution/routing.rs",
+    "crates/provider/src/service/agent_execution/tests/controls.rs",
+    "crates/provider/src/service/agent_execution/tests/delivery.rs",
+    "crates/provider/src/service/agent_execution/voice.rs",
+    "crates/provider/src/service/agent_manager.rs",
+    "crates/provider/src/service/agent_manager/controls.rs",
+    "crates/provider/src/service/agent_manager/delivery.rs",
+    "crates/provider/src/service/agent_manager/execution.rs",
+    "crates/provider/src/service/agent_manager/ownership.rs",
+    "crates/provider/src/service/agent_manager/streaming.rs",
+    "crates/provider/src/service/agent_manager/tests.rs",
+    "crates/provider/src/service/agent_manager/tests/review.rs",
+    "crates/provider/src/storage/timeline.rs",
+    "crates/provider/src/storage/timeline/projection/query.rs",
+    "crates/provider/src/storage/timeline/projection/tests/compatibility.rs",
+    "crates/provider/src/storage/timeline/tests.rs",
+    "crates/provider/src/timeline_projection.rs",
+    "crates/provider/src/timeline_projection/tests.rs",
+    "crates/provider/tests/fixtures/omp_commands.json",
+    "crates/provider/tests/fixtures/omp_dialogs.json",
+    "packages/client/src/daemon-client.test.ts",
+    "packages/client/src/daemon-client.ts",
+    "packages/client/src/index.test.ts",
+    "packages/client/src/index.ts",
+    "packages/client/src/protocol/connection.test.ts",
+    "packages/client/src/protocol/connection.ts",
+    "packages/client/src/protocol/messages.ts",
+    "packages/client/src/protocol/methods.ts",
+    "packages/protocol/src/agent-types.ts",
+    "packages/protocol/src/messages.provider-ui.test.ts",
+    "packages/protocol/src/messages.rename-entities.test.ts",
+    "packages/protocol/src/messages.ts",
+    "packages/protocol/src/timeline-identity.ts"
+  ],
+  "implementation": "Apply typed config through native confirmation, preserve per-field partial success and rollback only rejected fields; persist actual observed model/thinking/settings.",
+  "acceptance": "UI reports confirmed values and field-level failures after partial success, reconnect and restore; absent/clear/set remain distinct and no uncertain operation is duplicated.",
+  "status": "in_review",
+  "branch": "feat/pr612-task05-native-config",
+  "base": {
+    "kind": "stacked-unmerged",
+    "task": "01",
+    "commit": "22efa58f",
+    "note": "task01 user-excluded from delivery but its code/Draft651 remains the valid dependency base for task05; no task01 acceptance gates task05."
+  },
+  "commit": "88e888f5",
+  "pr_url": "https://github.com/ait-app/ait/pull/661",
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --lib local::omp::tests::configuration -- --test-threads=2",
+        "result": "PASS: 7 tests incl. partial_ack_persists_only_acknowledged_fields_after_transport_error (model acked durable, thinking/feature not claimed), transport_failure_after_model_ack (durable+restart), unreadable uncertain no-rollback, plugin observation persistence+restart, busy no-mutation, absent/clear/set, rejected thinking."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --lib service::agent_manager -- --test-threads=2",
+        "result": "PASS: 149 passed, 0 failed, 1 ignored."
+      },
+      {
+        "command": "npm run test --workspace=@ait/protocol --workspace=@ait/client",
+        "result": "PASS: protocol full suite; client 568 passed 1 skipped incl. 2 new AgentConfigRejectedError tests (5 setters + old-host omission)."
+      },
+      {
+        "command": "apps/mobile: tsgo --noEmit; vitest run src/composer/agent-controls",
+        "result": "PASS: typecheck clean; 38 tests incl. busy-spinner and busy-gate regressions."
+      },
+      {
+        "command": "node scripts/adr.mjs index; npm run check:docs",
+        "result": "PASS: 224 ADRs indexed; 7 doc tests, 560 Markdown documents."
+      },
+      {
+        "command": "cargo fmt -p provider -- --check; oxfmt scoped changed files",
+        "result": "PASS after formatting."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --lib local::omp::tests::capabilities:: / native_sdk_context_changes / observed_settings (targeted)",
+        "result": "PASS after fixes: capabilities 4/4 (fixture launch-arg precedence over persisted settings), bridge identity 1/1 (observe_settings adopts full get_state snapshot incl. refreshed session identity), observed_settings 5/5 (observations report runtime facts, never rewrite stored overrides)."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --lib local::omp::tests::configuration (final)",
+        "result": "PASS 7/7 with runtime-facts plugin observation semantics."
+      },
+      {
+        "command": "npm run check:docs (final)",
+        "result": "PASS: 560 Markdown documents, 224 ADRs."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 AIT_TEST_OMP_BIN=/usr/bin/omp cargo test -p provider --lib installed_omp_applies_and_rejects_configuration -- --ignored",
+        "result": "PASS: official omp/18.17.0 applies thinking high (acked), rejects invented level keeping prior value, config.yml/models.yml byte-identical after. No inference."
+      },
+      {
+        "command": "Semantic correction (director-confirmed): full get_state snapshot=observation only (no override materialization); explicit native change events=accepted selection persisted (last accepted writer wins, survives reopen); ACK-supersede fence drops only pre-ACK buffered selection events (donor supersede_buffered pattern, byte accounting preserved).",
+        "result": "observed_settings 7/7 PASS incl. config_update persist, inherited-None snapshot, stale-snapshot no-revert, pre-ACK supersede, post-ACK fresh persist. Native contract verified from official omp/18.17.0 (thinking_level_changed carries configured/resolved, emitted only on actual change)."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo clippy -p provider --lib --no-deps",
+        "result": "PASS clean after fixes: flattened LiveApply.acked_model to Option<String>, collapsed nested ifs with let-chains, removed unused async on adopt_reopen, extracted apply_drain_result helper (drain under 100 lines), justified per-call registry closure clones. cargo fmt -p provider clean."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --lib service::agent_manager / local::omp::bridge",
+        "result": "PASS: manager 149/149, bridge 16/16."
+      },
+      {
+        "command": "apps/mobile: E2E_AIT_SERVER_BIN=target/debug/daemon npx playwright test --project=browser e2e/browser/omp-native-config.spec.ts",
+        "result": "PASS (1.6m): real daemon + offline OMP RPC fixture through the actual agent-controls UI. Acknowledged thinking High selection persists and reflects in the trigger; a config change during an active turn is refused (AgentConfigRejectedError via SDK), keeps the prior confirmed value, and the UI shows the localized rejection toast. Turn settled on cleanup."
+      },
+      {
+        "command": "Final targeted battery after clippy refactors",
+        "result": "PASS: observed_settings 8/8, configuration 7/7, service::agent_manager 149, capabilities 4/4. Installed official-OMP smoke PASS (omp/18.17.0, no inference, user files byte-identical)."
+      }
+    ]
+  },
+  "blockers": [],
+  "adr": "ADR-241"
+}

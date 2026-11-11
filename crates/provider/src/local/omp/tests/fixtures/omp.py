@@ -33,11 +33,19 @@ models = [
      'thinking': {'mode': 'effort', 'efforts': ['low', 'high', 'max']}, 'contextWindow': 32768},
 ]
 model = models[0]
+level = 'off'
+toggles = {'autoCompaction': False, 'autoRetry': False, 'fastMode': False, 'slowMode': False}
+settings_file = root / 'settings.json'
+if settings_file.exists():
+    saved = json.loads(settings_file.read_text())
+    model = next((item for item in models if item['provider'] + '/' + item['id'] == saved.get('model')), model)
+    level = saved.get('thinkingLevel', level)
+    toggles.update(saved.get('toggles', {}))
+# Explicit launch selection wins over persisted settings, like the real native runtime.
 if '--provider' in args and '--model' in args:
     provider = args[args.index('--provider') + 1]
     model_id = args[args.index('--model') + 1]
     model = next((item for item in models if item['provider'] == provider and item['id'] == model_id), model)
-level = 'off'
 active = False
 prompt_id = None
 pending_plugin = None
@@ -46,6 +54,13 @@ pending_async = False
 current_prompt = None
 pending_dialog = None
 dialog_commands = []
+# Fault injection targets the session transport only. Disposable service-tier probes
+# (--no-session) must not consume the one-shot markers meant for the main process.
+session_transport = '--no-session' not in args
+exit_after_ack = False
+
+def save_settings():
+    settings_file.write_text(json.dumps({'model': model['provider'] + '/' + model['id'], 'thinkingLevel': level, 'toggles': toggles}))
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -104,6 +119,16 @@ for line in sys.stdin:
     with log.open('a') as output:
         output.write(json.dumps(command) + '\n')
     kind = command['type']
+    fail_marker = root / 'fail-after-setter'
+    if exit_after_ack:
+        # The previous setter was acknowledged; this command gets EOF instead of a reply.
+        sys.exit(0)
+    if session_transport and fail_marker.exists() and kind in ('set_model', 'set_thinking_level', 'set_fast_mode', 'set_slow_mode', 'set_auto_compaction', 'set_auto_retry'):
+        fail_marker.unlink()
+        exit_after_ack = True
+    if session_transport and (root / 'die-on-next-setter').exists() and kind in ('set_model', 'set_thinking_level', 'set_fast_mode', 'set_slow_mode', 'set_auto_compaction', 'set_auto_retry'):
+        # No acknowledgement and no readback: the outcome stays uncertain.
+        sys.exit(0)
     if pending_dialog and kind in ('get_state', 'steer'):
         dialog_commands.append(command)
         continue
@@ -120,7 +145,7 @@ for line in sys.stdin:
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
                           'isSettled': not active and not pending_async,
                           'hasPendingAsyncWork': pending_async, 'queuedMessageCount': 0,
-                          'slowModeSupported': model['provider'] == 'test'}
+                          'slowModeSupported': model['provider'] == 'test', **toggles}
         if current_prompt == 'missing-settlement-fact':
             state.pop('isSettled')
         response(command, state)
@@ -137,15 +162,43 @@ for line in sys.stdin:
         selected = next((item for item in models if item['provider'] == command['provider'] and item['id'] == command['modelId']), None)
         if selected:
             model = selected
+            save_settings()
             response(command, model)
+            emit({'type': 'model_changed', 'model': model})
         else:
             response(command, success=False)
     elif kind == 'set_thinking_level':
         level = command['level']
+        save_settings()
         response(command)
+        emit({'type': 'thinking_level_changed', 'thinkingLevel': level})
     elif kind in ('set_fast_mode', 'set_slow_mode'):
-        response(command, success=not command['enabled'] or model['provider'] == 'test')
-    elif kind in ('set_auto_compaction', 'set_auto_retry', 'set_ask_dialog', 'set_subagent_subscription'):
+        enabled = bool(command['enabled'])
+        ok = not enabled or model['provider'] == 'test'
+        if ok:
+            toggles['fastMode' if kind == 'set_fast_mode' else 'slowMode'] = enabled
+            save_settings()
+        response(command, success=ok)
+    elif kind in ('set_auto_compaction', 'set_auto_retry'):
+        toggles['autoCompaction' if kind == 'set_auto_compaction' else 'autoRetry'] = bool(command['enabled'])
+        save_settings()
+        response(command)
+    elif kind in ('set_ask_dialog', 'set_subagent_subscription'):
+        response(command)
+    elif kind == 'fixture_config_update':
+        # Simulate a native plugin changing model/thinking outside an Ait request.
+        if 'model' in command:
+            selected = next((item for item in models if item['provider'] == command['model']['provider'] and item['id'] == command['model']['id']), None)
+            if selected:
+                model = selected
+        if 'thinkingLevel' in command:
+            level = command['thinkingLevel']
+        event = {'type': 'config_update'}
+        if 'model' in command:
+            event['model'] = model
+        if 'thinkingLevel' in command:
+            event['thinkingLevel'] = level
+        emit(event)
         response(command)
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
@@ -184,6 +237,14 @@ for line in sys.stdin:
             continue
         if text == '/local':
             response(command, {'agentInvoked': False})
+            continue
+        if text == 'plugin-config':
+            model = next(item for item in models if item['provider'] == 'other')
+            level = 'high'
+            save_settings()
+            response(command, {'agentInvoked': False})
+            emit({'type': 'config_update', 'model': model, 'thinkingLevel': level})
+            emit({'type': 'prompt_result', 'id': prompt_id, 'agentInvoked': False, 'status': 'completed', 'sessionSettled': True})
             continue
         response(command, {'agentInvoked': True})
         active = True

@@ -550,6 +550,8 @@ export const ru: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "Изменение конфигурации отклонено.",
+    configRejectedFields: "Сохранены прежние значения: {{fields}}",
     provider: {
       fallback: "Провайдер",
       select: "Выбрать провайдера агента",
@@ -568,6 +570,7 @@ export const ru: TranslationResources = {
       withValue: "Скорость: {{value}}",
     },
     model: {
+      title: "Модель",
       unknown: "Неизвестная модель",
     },
     features: {

@@ -481,14 +481,20 @@ impl AgentManager {
 
     /// Persist a validated patch for subsequent turns without altering an accepted turn.
     ///
+    /// Live sessions with native confirmation apply the patch immediately and persist only the
+    /// confirmed configuration; rejected fields are returned and keep their prior values.
+    /// Adapters without live confirmation keep deferred validation and persistence.
+    ///
     /// # Errors
-    /// Returns validation, unavailable-provider, archived-Agent, or registry errors. All supplied
-    /// fields commit together; failed writes leave the running session and durable config intact.
+    /// Returns validation, unavailable-provider, archived-Agent, busy, or registry errors.
+    /// A failed live application still durably commits the facts the native session
+    /// acknowledged before the failure; unacknowledged fields keep their prior values and
+    /// the running session is never rolled back speculatively.
     pub(crate) async fn configure(
-        &self,
+        &mut self,
         agent_id: &str,
         patch: &ConfigPatch,
-    ) -> Result<(), AgentManagerError> {
+    ) -> Result<Vec<crate::ports::agent_session::RejectedConfigField>, AgentManagerError> {
         let record = self
             .registry
             .get(agent_id)
@@ -509,7 +515,7 @@ impl AgentManager {
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
         );
-        if let Some(agent) = self.live.get(agent_id) {
+        if let Some(agent) = self.live.get_mut(agent_id) {
             if let Some(binding) = &agent.mcp {
                 binding.apply(&mut effective);
             }
@@ -517,6 +523,48 @@ impl AgentManager {
                 .session
                 .validate_config_update(&effective)
                 .map_err(|_| AgentManagerError::InvalidRequest)?;
+            match agent.session.apply_config(&effective).await {
+                Ok(outcome) => {
+                    let confirmed = outcome.config;
+                    let now = now_timestamp();
+                    self.registry
+                        .update(agent_id, &|current| {
+                            let mut next = current.clone();
+                            // The registry may invoke this closure more than once; each call
+                            // needs its own owned copies of the confirmed configuration.
+                            #[allow(clippy::assigning_clones)]
+                            {
+                                next.last_mode_id = confirmed.mode_id.clone();
+                                next.config = Some(confirmed.clone());
+                            }
+                            next.updated_at.clone_from(&now);
+                            next
+                        })
+                        .map_err(map_registry)?
+                        .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+                    return Ok(outcome.rejected);
+                }
+                // Adapters without live confirmation keep the deferred commit below.
+                Err(AgentSessionError::Unavailable) => {}
+                Err(error) => {
+                    // The adapter may have queued confirmed observations before failing.
+                    // Persist them so partial native success survives the error response;
+                    // a settlement event still fails the lane, an observation-only drain
+                    // leaves the session usable.
+                    let drained = streaming::drain(
+                        self.registry.as_ref(),
+                        self.timeline.as_ref(),
+                        &self.events,
+                        agent_id,
+                        agent,
+                    )
+                    .await;
+                    return match drained {
+                        Ok(()) => Err(map_session(error)),
+                        Err(registry) => Err(registry),
+                    };
+                }
+            }
         }
         self.clients
             .get(&record.provider)
@@ -550,7 +598,7 @@ impl AgentManager {
             })
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        Ok(())
+        Ok(Vec::new())
     }
 
     /// Create a native session and persist its initial Agent snapshot.

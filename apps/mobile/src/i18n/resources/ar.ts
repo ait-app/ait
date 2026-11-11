@@ -544,6 +544,8 @@ export const ar: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "تم رفض تغيير الإعدادات.",
+    configRejectedFields: "تم الاحتفاظ بالقيم السابقة: {{fields}}",
     provider: {
       fallback: "مزود",
       select: "حدد مزود الوكيل",
@@ -562,6 +564,7 @@ export const ar: TranslationResources = {
       withValue: "السرعة: {{value}}",
     },
     model: {
+      title: "النموذج",
       unknown: "نموذج غير معروف",
     },
     features: {

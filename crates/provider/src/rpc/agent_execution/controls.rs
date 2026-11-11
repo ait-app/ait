@@ -148,7 +148,7 @@ impl ExecutionState {
     /// Apply one configuration request whose payload is carried in `field`: `config` for a
     /// bundle, `value` for a feature, or the named single configuration field.
     pub(super) async fn configure(
-        &self,
+        &mut self,
         field: &'static str,
         params: &Value,
     ) -> Result<Value, ErrorCode> {
@@ -198,10 +198,23 @@ impl ExecutionState {
         }
         let patch: ConfigPatch = decode(patch)?;
         let result = self.manager.configure(&id, &patch).await;
-        let notice = (result.is_ok() && self.manager.active_turn(&id).is_some())
+        let rejected: Vec<String> = match &result {
+            Ok(rejected) => rejected.iter().map(|entry| entry.field.clone()).collect(),
+            Err(_) => Vec::new(),
+        };
+        let accepted = result.is_ok() && rejected.is_empty();
+        let error = match &result {
+            Err(error) => Some(error.to_string()),
+            Ok(_) if !rejected.is_empty() => Some(format!(
+                "provider rejected configuration fields: {}",
+                rejected.join(", ")
+            )),
+            Ok(_) => None,
+        };
+        let notice = (accepted && self.manager.active_turn(&id).is_some())
             .then(|| json!({"type":"warning","message":"Configuration applies next turn"}));
         Ok(
-            json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(|error|error.to_string()),"notice":notice}),
+            json!({"agentId":id,"accepted":accepted,"error":error,"notice":notice,"rejectedFields":rejected}),
         )
     }
 

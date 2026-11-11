@@ -582,6 +582,8 @@ export const zhCN: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "配置更改被拒绝。",
+    configRejectedFields: "以下字段保留原值：{{fields}}",
     provider: {
       fallback: "提供方",
       select: "选择智能体提供方",
@@ -600,6 +602,7 @@ export const zhCN: TranslationResources = {
       withValue: "速度：{{value}}",
     },
     model: {
+      title: "模型",
       unknown: "未知模型",
     },
     features: {

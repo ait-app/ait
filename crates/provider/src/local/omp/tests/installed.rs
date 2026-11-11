@@ -138,6 +138,69 @@ async fn installed_omp_tiers_and_thinking_follow_model_without_changing_defaults
 }
 
 #[tokio::test]
+#[ignore = "requires AIT_TEST_OMP_BIN; applies native-confirmed configuration without inference"]
+async fn installed_omp_applies_and_rejects_configuration_without_touching_user_files() {
+    let root = tempfile::tempdir().unwrap();
+    let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
+    let agent = root.path().join("agent");
+    std::fs::create_dir_all(&agent).unwrap();
+    let models = json!({"providers":{"ait-local-fixture":{
+        "baseUrl":"http://127.0.0.1:9/v1","api":"openai-completions","auth":"none",
+        "models":[{"id":"fixture","name":"Local fixture","reasoning":true,"input":["text"],
+            "thinking":{"mode":"effort","efforts":["low","high"]},
+            "contextWindow":32768,"maxTokens":1024,
+            "cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}});
+    std::fs::write(agent.join("models.yml"), models.to_string()).unwrap();
+    let defaults = "modelRoles:\n  default: ait-local-fixture/fixture\n";
+    std::fs::write(agent.join("config.yml"), defaults).unwrap();
+    let client = OmpClient {
+        environment: AgentEnvironment::try_from(BTreeMap::from([
+            (
+                "PI_CODING_AGENT_DIR".to_owned(),
+                agent.to_str().unwrap().to_owned(),
+            ),
+            ("OMP_PROFILE".to_owned(), String::new()),
+            ("PI_PROFILE".to_owned(), String::new()),
+        ]))
+        .unwrap(),
+        ..OmpClient::new(program.into())
+    };
+    let spec = AgentSessionSpec {
+        provider: "omp".to_owned(),
+        cwd: root.path().to_str().unwrap().to_owned(),
+        config: StoredAgentConfig::default(),
+        confinement: None,
+    };
+    let mut session = client.create_session(&spec).await.unwrap();
+
+    // Acknowledged thinking change applies live and is reported back.
+    let mut configured = spec.config.clone();
+    configured.thinking_option_id = Some("high".to_owned());
+    let outcome = session.apply_config(&configured).await.unwrap();
+    assert!(outcome.rejected.is_empty());
+    assert_eq!(outcome.config.thinking_option_id.as_deref(), Some("high"));
+
+    // An unsupported level is refused by the native session and keeps the prior value.
+    let mut rejected = configured.clone();
+    rejected.thinking_option_id = Some("invented".to_owned());
+    let outcome = session.apply_config(&rejected).await.unwrap();
+    assert_eq!(outcome.rejected.len(), 1);
+    assert_eq!(outcome.rejected[0].field, "thinkingOptionId");
+    assert_eq!(outcome.config.thinking_option_id.as_deref(), Some("high"));
+
+    session.close().await.unwrap();
+    // Native user configuration stays untouched: Ait applies session-scoped settings only.
+    assert_eq!(
+        std::fs::read_to_string(agent.join("config.yml")).unwrap(),
+        defaults
+    );
+    assert_eq!(
+        std::fs::read_to_string(agent.join("models.yml")).unwrap(),
+        models.to_string()
+    );
+}
+
+#[tokio::test]
 #[ignore = "requires official AIT_TEST_OMP_BIN; audits ACP without inference or user configuration"]
 async fn installed_omp_acp_opens_without_ait_specific_capabilities() {
     let root = tempfile::tempdir().unwrap();

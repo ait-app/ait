@@ -146,6 +146,7 @@ async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
             id: "old-state".to_owned(),
             turn: Some(turn.clone()),
             written: None,
+            refresh_settings: false,
         });
         session.idle_without_outcome = Some(Instant::now() - STATE_CHECK_INTERVAL);
 
@@ -179,6 +180,7 @@ async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() 
         id: "old-state".to_owned(),
         turn: Some(turn.clone()),
         written: Some(receiver),
+        refresh_settings: false,
     });
     session.cancel_requests.insert("old-abort".to_owned(), turn);
     session.finish();
@@ -232,6 +234,7 @@ async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
         id: "old-state".to_owned(),
         turn: Some(previous),
         written: None,
+        refresh_settings: false,
     });
     session.finish();
     session.stream.events.clear();
@@ -267,6 +270,7 @@ async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
             id: "state".to_owned(),
             turn: Some(turn.clone()),
             written: None,
+            refresh_settings: false,
         });
         let mut state = json!({"sessionId":session.state["sessionId"],"isSettled":true});
         state
@@ -294,6 +298,7 @@ async fn another_native_sessions_settlement_is_rejected() {
         id: "state".to_owned(),
         turn: Some(turn),
         written: None,
+        refresh_settings: false,
     });
 
     assert_eq!(
@@ -325,6 +330,7 @@ async fn a_failed_state_write_invalidates_the_connection() {
         id: "state".to_owned(),
         turn: Some(turn),
         written: Some(receiver),
+        refresh_settings: false,
     });
 
     assert_eq!(
@@ -349,6 +355,7 @@ async fn a_state_response_can_precede_the_correlated_prompt_result() {
         id: "state".to_owned(),
         turn: Some(turn.clone()),
         written: None,
+        refresh_settings: false,
     });
     session
         .consume(

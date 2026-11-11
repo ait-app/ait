@@ -890,7 +890,7 @@ async fn cancelled_internal_archived_and_deleted_agents_do_not_publish_attention
 
 #[tokio::test]
 async fn configuration_write_failure_preserves_the_previous_bundle_and_unrelated_metadata() {
-    let (manager, registry, _) = make_manager();
+    let (mut manager, registry, _) = make_manager();
     registry.upsert(&stored_record()).unwrap();
     let original = registry.get("agent-1").unwrap().unwrap();
     let patch = ConfigPatch {

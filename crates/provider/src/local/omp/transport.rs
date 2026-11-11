@@ -292,6 +292,22 @@ impl Transport {
         }
     }
 
+    /// Remove buffered observations superseded by an acknowledged snapshot on this ordered stream.
+    /// Unrelated turn and interaction frames keep their order and byte accounting.
+    pub(super) fn supersede_buffered(&mut self, kinds: &[&str]) {
+        self.events.retain(|record| {
+            if record.value["type"]
+                .as_str()
+                .is_some_and(|kind| kinds.contains(&kind))
+            {
+                self.buffered_bytes -= record.bytes;
+                false
+            } else {
+                true
+            }
+        });
+    }
+
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         if self.closed {
             return Ok(());

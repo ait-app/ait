@@ -159,3 +159,14 @@
   内部不再使用 ACP 客户端或 `_omp/rpc`。旧句柄/别名恢复不重写原生历史，创建、恢复及配置重开
   保留调用方精确 confinement；会话作用域探测同样遵守它
   （[ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md) 修订 ADR-190 的内部入口）。
+- OMP 配置提交以原生确认为准：`apply_config` 逐字段应用 model/thinking/feature，并在每个原生
+  确认到达时记录该字段实际确认值；拒绝字段保留旧值并随响应报告 `rejectedFields`。全部写入成功
+  后 `get_state` 回读，model/thinking 以回读事实为准。传输错误时不回读（请求失败即关闭传输），
+  仅把错误前已确认的事实经唯一观察写者持久化后返回错误；未确认字段保留旧值，不做投机回滚。
+  完整 `get_state` 快照只是观察（刷新 runtime_info，不创建/回退覆盖）；显式原生变更事件
+  （config_update/model_changed/thinking_level_changed）是被接受的选择更新，持久化后在重开/恢复
+  后仍生效。Ait 确认并回读后超替回读前缓冲的同类选择事件，防止滞后的 pre-ACK 变更回退新确认值。
+  mode/systemPrompt 变更
+  与清除 model/thinking 覆盖走原子重开（同一 sessionFile 与 confinement，失败一次恢复重连）；
+  可选 service-tier 探测失败只降级开关展示
+  （[ADR-241](../decisions/providers/adr-241-native-confirmed-configuration.md)）。

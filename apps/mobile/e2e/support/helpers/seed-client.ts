@@ -141,12 +141,14 @@ export interface SeedDaemonClient {
   }>;
   updateAgent(agentId: string, updates: { name?: string }): Promise<void>;
   setAgentMode(agentId: string, modeId: string): Promise<unknown>;
+  setAgentModel(agentId: string, modelId: string | null): Promise<unknown>;
   waitForAgentUpsert(
     agentId: string,
     predicate: (snapshot: { status: string }) => boolean,
     timeout?: number,
   ): Promise<{ status: string }>;
   sendAgentMessage(agentId: string, text: string): Promise<void>;
+  cancelAgent(agentId: string): Promise<void>;
   waitForFinish(
     agentId: string,
     timeout?: number,
