@@ -45,6 +45,21 @@ fn turn_records(turns: usize) -> Vec<Value> {
     records
 }
 
+/// Keep the latest turn open while its start falls behind several native message pages.
+fn running_records(extra_messages: usize) -> Vec<Value> {
+    let mut records = turn_records(3);
+    records.pop();
+    for index in 0..extra_messages {
+        let seq = records.len();
+        records.push(json!({"type":"event","event":{
+            "seq":seq,"type":"assistant/message","time":1_700_000_000_000_u64+seq as u64,
+            "data":{"turn":2,"message":{"id":format!("progress-{index}"),
+                "content":[{"type":"text","text":format!("progress {index}")}]}}
+        }}));
+    }
+    records
+}
+
 #[tokio::test]
 async fn preview_pages_newest_first_on_a_fixed_cut_without_writer_requests() {
     let fixture = Fixture::new().await;
@@ -397,10 +412,8 @@ async fn preview_replays_excess_items_before_advancing_the_native_window() {
     next.cursor = second.older_cursor;
     assert_eq!(next.cursor.as_ref().unwrap().before_seq, 8);
     assert!(next.cursor.as_ref().unwrap().window.is_none());
-    fixture.reply(
-        "session/page",
-        json!({"records":records[..8],"hasMore":false}),
-    );
+    // Later display and activity reads have different beforeSeq values.
+    fixture.clear_reply("session/page");
     let third = fixture.client.preview_session(&next).await.unwrap();
     assert!(third.older_cursor.is_none());
     let entries: Vec<_> = first
@@ -549,4 +562,87 @@ async fn preview_window_replay_stays_within_the_native_page_budget() {
     );
     assert_eq!(fixture.requests("session/page").len() - before, 16);
     assert!(fixture.requests("session/follow").is_empty());
+}
+
+#[tokio::test]
+async fn preview_resolves_long_running_turn_at_the_fixed_cut_on_older_pages() {
+    let fixture = Fixture::new().await;
+    let mut records = running_records(6);
+    let cut = records.len() - 1;
+    fixture.seed_records(records.clone());
+    let first = fixture
+        .client
+        .preview_session(&request(&fixture, 1))
+        .await
+        .unwrap();
+    assert!(
+        first.active,
+        "the start is outside the newest display window"
+    );
+    assert!(fixture.requests("session/page").len() > 1);
+    let mut next = request(&fixture, 1);
+    next.cursor = first.older_cursor;
+    // Completion after the fixed cut must not change the activity of its older pages.
+    records.push(json!({"type":"event","event":{
+        "seq":cut+1,"type":"turn/end","time":1_700_000_000_100_u64,
+        "data":{"turn":2,"reason":{"kind":"completed"}}
+    }}));
+    fixture.seed_records(records);
+    let mut reached_previous_turn = false;
+    for _ in 0..20 {
+        let page = fixture.client.preview_session(&next).await.unwrap();
+        assert!(
+            page.active,
+            "older turn/end events are not the latest activity"
+        );
+        reached_previous_turn = page
+            .entries
+            .iter()
+            .any(|entry| entry.item["text"] == "answer 1");
+        if reached_previous_turn {
+            break;
+        }
+        next.cursor = Some(page.older_cursor.expect("previous completed turn remains"));
+    }
+    assert!(reached_previous_turn);
+    assert!(
+        fixture
+            .requests("session/page")
+            .iter()
+            .all(|page| page["request"]["throughSeq"] == cut)
+    );
+    let reopened = fixture
+        .client
+        .preview_session(&request(&fixture, 1))
+        .await
+        .unwrap();
+    assert!(!reopened.active, "a new cut observes the completed turn");
+    for method in [
+        "session/follow",
+        "session/create",
+        "session/prompt",
+        "session/cancel",
+    ] {
+        assert!(fixture.requests(method).is_empty());
+    }
+}
+
+#[tokio::test]
+async fn preview_rejects_unknown_activity_at_the_shared_native_page_budget() {
+    let fixture = Fixture::new().await;
+    fixture.seed_records(running_records(32));
+    assert!(
+        fixture
+            .client
+            .preview_session(&request(&fixture, 1))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture.requests("session/page").len(),
+        16,
+        "display and activity reads share one budget, rather than sixteen pages each"
+    );
+    assert!(fixture.requests("session/follow").is_empty());
+    assert!(fixture.requests("session/prompt").is_empty());
 }

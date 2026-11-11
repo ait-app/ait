@@ -83,6 +83,25 @@ const runningRecords = (() => {
     type: "event",
     event: { seq: seq + 1, type: "turn/start", time: BASE_TIME + seq + 1, data: { turn: 1 } },
   });
+  // Keep turn/start outside the newest 16-record page, as in a long unfinished turn.
+  for (let index = 0; index < 20; index += 1) {
+    const messageSeq = settled.length;
+    settled.push({
+      type: "event",
+      event: {
+        seq: messageSeq,
+        time: BASE_TIME + messageSeq,
+        type: "assistant/message",
+        data: {
+          turn: 1,
+          message: {
+            id: `running-progress-${index}`,
+            content: [{ type: "text", text: `running progress ${index}` }],
+          },
+        },
+      },
+    });
+  }
   return settled;
 })();
 

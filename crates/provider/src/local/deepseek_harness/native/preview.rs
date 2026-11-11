@@ -24,6 +24,52 @@ const MAX_WIRE_PAGES: usize = 16;
 /// Serialized record budget for one preview response.
 const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;
 
+/// One response budget shared by display-window replay and activity discovery.
+#[derive(Default)]
+struct PageBudget {
+    pages: usize,
+    bytes: usize,
+}
+
+impl PageBudget {
+    /// Read one page at the fixed cut, accounting for its full serialized response.
+    async fn page(
+        &mut self,
+        runtime: &Runtime,
+        address: &Value,
+        cut: i64,
+        before: i64,
+    ) -> Result<Value, AgentSessionError> {
+        if self.pages >= MAX_WIRE_PAGES {
+            return Err(AgentSessionError::Failed);
+        }
+        self.pages += 1;
+        let mut request = json!({"request":{"address":address,"throughSeq":cut,"maxMessages":WIRE_PAGE_MESSAGES}});
+        if before <= cut {
+            request["request"]["beforeSeq"] = json!(before);
+        }
+        let page = runtime.api.call("session/page", request).await?;
+        // Count without allocating a second serialized copy of the native page.
+        serde_json::to_writer(self, &page).map_err(|_| AgentSessionError::Failed)?;
+        Ok(page)
+    }
+}
+
+impl std::io::Write for PageBudget {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .filter(|size| *size <= MAX_PAGE_BYTES)
+            .ok_or_else(|| std::io::Error::other("Native preview record budget exceeded"))?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Read one bounded newest-first preview page without creating or restoring a writer.
 /// Rejects unsupported transports, invalid limits, foreign identities and stale cursors.
 pub(in crate::local::deepseek_harness) async fn read(
@@ -97,21 +143,11 @@ async fn read_page(
         .and_then(|cursor| cursor.window.as_ref());
     let mut records = Vec::new();
     let mut entries = Vec::new();
-    let mut bytes = 0usize;
+    let mut budget = PageBudget::default();
     let mut has_more = false;
     for _ in 0..MAX_WIRE_PAGES {
-        let mut wire_request = json!({"request":{"address":address,"throughSeq":cut,"maxMessages":WIRE_PAGE_MESSAGES}});
-        if before <= cut {
-            wire_request["request"]["beforeSeq"] = json!(before);
-        }
-        let page = runtime.api.call("session/page", wire_request).await?;
+        let page = budget.page(runtime, &address, cut, before).await?;
         let page_records = validated_records(&page, before)?;
-        bytes = bytes
-            .checked_add(page.to_string().len())
-            .ok_or(AgentSessionError::Failed)?;
-        if bytes > MAX_PAGE_BYTES {
-            return Err(AgentSessionError::Failed);
-        }
         has_more = page["hasMore"].as_bool().ok_or(AgentSessionError::Failed)?;
         if page_records.is_empty() {
             // The first page of an empty journal legitimately ends at the native zero boundary.
@@ -124,7 +160,7 @@ async fn read_page(
             .as_i64()
             .ok_or(AgentSessionError::Failed)?;
         // Wire pages arrive newest-first; keep that order across the accumulated window.
-        let mut window = page_records;
+        let mut window = page_records.to_vec();
         window.extend(records);
         records = window;
         if let Some(replay) = replay {
@@ -157,16 +193,15 @@ async fn read_page(
     if replay.is_some_and(|window| before != window.start_seq) {
         return Err(AgentSessionError::Failed);
     }
-    let active = records
-        .iter()
-        .rev()
-        .find(|record| {
-            matches!(
-                record["event"]["type"].as_str(),
-                Some("turn/start" | "turn/end")
-            )
-        })
-        .is_some_and(|record| record["event"]["type"] == "turn/start");
+    let active = if initial_before == cut + 1 {
+        match latest_turn_boundary(&records) {
+            Some(active) => active,
+            None => activity_before(runtime, &address, cut, before, &mut budget).await?,
+        }
+    } else {
+        // An older display window cannot establish activity at the fixed newest cut.
+        activity_before(runtime, &address, cut, cut + 1, &mut budget).await?
+    };
     let (entries, older_cursor) =
         display_page(entries, request, cut, before..initial_before, has_more)?;
     Ok(SessionPreview {
@@ -175,6 +210,44 @@ async fn read_page(
         entries,
         older_cursor,
     })
+}
+
+/// Find the latest recorded turn boundary in an ascending native sequence window.
+fn latest_turn_boundary(records: &[Value]) -> Option<bool> {
+    records
+        .iter()
+        .rev()
+        .find_map(|record| match record["event"]["type"].as_str() {
+            Some("turn/start") => Some(true),
+            Some("turn/end") => Some(false),
+            _ => None,
+        })
+}
+
+/// Resolve activity at the fixed cut; an exhausted budget is unknown, never inactive.
+async fn activity_before(
+    runtime: &Runtime,
+    address: &Value,
+    cut: i64,
+    mut before: i64,
+    budget: &mut PageBudget,
+) -> Result<bool, AgentSessionError> {
+    while before > 0 {
+        let page = budget.page(runtime, address, cut, before).await?;
+        let records = validated_records(&page, before)?;
+        let has_more = page["hasMore"].as_bool().ok_or(AgentSessionError::Failed)?;
+        let first = records.first().ok_or(AgentSessionError::Failed)?;
+        before = first["event"]["seq"]
+            .as_i64()
+            .ok_or(AgentSessionError::Failed)?;
+        if let Some(active) = latest_turn_boundary(records) {
+            return Ok(active);
+        }
+        if !has_more && before != 0 {
+            return Err(AgentSessionError::Failed);
+        }
+    }
+    Ok(false)
 }
 
 /// Keep excess display items in a bounded replay cursor, including on the final native page.
@@ -245,7 +318,7 @@ async fn root_summary(
 }
 
 /// Validate one wire page: event records, contiguous sequences below the exclusive boundary.
-fn validated_records(page: &Value, before: i64) -> Result<Vec<Value>, AgentSessionError> {
+fn validated_records(page: &Value, before: i64) -> Result<&[Value], AgentSessionError> {
     let records = page["records"]
         .as_array()
         .ok_or(AgentSessionError::Failed)?;
@@ -266,7 +339,7 @@ fn validated_records(page: &Value, before: i64) -> Result<Vec<Value>, AgentSessi
     if previous.is_some_and(|last| last + 1 != before) {
         return Err(AgentSessionError::Failed);
     }
-    Ok(records.clone())
+    Ok(records)
 }
 
 /// Build display metadata from validated native facts; cached continuation pages keep the

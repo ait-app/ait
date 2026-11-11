@@ -49,7 +49,7 @@
     {
       "surface": "import-session sheet UI",
       "old": "row press imports; no preview",
-      "new": "separate read-only Eye preview action opens a paged preview sheet; row-press import unchanged; preview never imports/resumes/prompts",
+      "new": "separate read-only Eye preview action opens a paged preview sheet; each explicit opening starts a fresh cut and releases pages on close; row-press import unchanged; preview never imports/resumes/prompts",
       "compatibility": "additive UI; hidden when host method or provider capability is absent"
     },
     {
@@ -57,6 +57,12 @@
       "old": "initial Draft serialized absent native turnId as null and advanced native beforeSeq past projected items truncated by the display limit",
       "new": "borrowed typed wire projection omits absent turnId; optional window(startSeq, skippedItems) replays the exact bounded record window before advancing to older records",
       "compatibility": "public RPC/SDK cursor remains opaque string; no public field removal or widening; NativeItem storage, CLI/binaries and Files interfaces unchanged; all repeated window reads share the16-page/8MiB response budget"
+    },
+    {
+      "surface": "preview activity observation (semantics, schema unchanged)",
+      "old": "initial Draft inferred active from displayed native records and treated an absent turn boundary as inactive",
+      "new": "every page resolves the latest turn boundary at its fixed cut; display/replay/activity reads share16-page/8MiB budgets; unresolved activity fails explicitly",
+      "compatibility": "public active boolean, RPC/SDK fields and opaque cursor contract unchanged; no cursor-supplied activity fact; no writer, Files or CLI change"
     }
   ],
   "checks": {
@@ -84,16 +90,24 @@
       "Recovery bg754: SessionPreviewSheet consumer regressions2/2 PASS (global page order/stable keys and same-client reconnect late reply); mobile typecheck PASS; cargo fmt --all --check PASS; changed frontend lint0 warnings/errors",
       "Recovery bg773: installed /usr/bin/dsh0.2.2-rc.1 readonly test1/1 PASS using freshly shipped web profile, ONLY owned official task29 v4 journals/attachment and nonsecret DEEPSEEK_API_KEY=ait-task30-readonly-fixture; no copied user credentials/config/cache/locks and no model request. Journal SHA256 before=after:17f0a925f3e54f5741ea7db6b4ab4f77a4011f452a67697c514cce5f84465584 and f72a39b436fc38a88b3ea3de1764b105867350705b4b1157c546a181b53c803a",
       "Recovery bg781: final scoped formatting check8 files PASS; scoped frontend lint4 files0 warnings/errors; ADR index current; docs checks7/7 PASS,559 Markdown documents and223 ADRs verified",
+      "Recovery bg811: SessionPreviewSheet consumer regressions3/3 PASS, including same-session reopen under actual production Infinity-stale/no-mount-refetch defaults; mobile typecheck PASS",
+      "Recovery bg819/artifact3757: focused native preview suite13/13 PASS, including long unfinished turns beyond the display window, activity retained at the fixed cut on older pages after native completion, and explicit failure within the shared16-page budget; cargo fmt --all --check, strict provider library clippy and daemon build PASS",
+      "Recovery bg826: scoped formatting8 files and lint4 files PASS (0 warnings/errors); ADR index current; docs checks7/7 PASS,559 Markdown documents and223 ADRs verified",
       "Removed owned throwaway dsh-snapshot-probe.mjs, copied daemon, isolated smoke homes and sensitive probe cookies/logs; all own direct native probe groups stopped; prior recorded PID917051 absent. Original user home/root dirty worktree and task29 proof source remain untouched"
     ],
-    "recovery_pending": [],
+    "recovery_pending": [
+      "bg828: changed-path actual browser smoke for fresh cut on same-session reopen and long unfinished turn outside newest native page",
+      "Implementation commit, Draft655 evidence update and push"
+    ],
     "historical_failures": [
       "Earlier discovery snapshot race and copied-daemon ENOENT are retained as setup failures. Latest preserved retry trace test.trace36-38 PASSED the preview capability assertion, disproving stale-binary/capability failure as its cause; lines41-42 failed SDK validation because absent turnId serialized as null. Fixed only the preview wire projection, not global NativeItem storage or client schema.",
       "Recovery bg718: wire/active-control reads passed; 2-event fixture pages reached the existing16-native-page budget and returned16 items rather than the test's assumed56. Fixture changed to16-event pages while preserving multi-page behavior.",
       "Recovery bg723: a16-event native page exposed actual data loss: requested4 items, but continuation skipped the whole8-item projection (52 remaining instead of56). Internal bounded window+projected-offset continuation implemented; focused checks pending. Browser assertions now consume all opaque cursors rather than assuming page length equals requested limit.",
       "Inherited installed-copy probes bg600/bg646 failed at list_sessions with copied .credentials.yaml.lock startup failure; a later manual probe used an invalid envelope without type=client-request. Neither establishes product acceptance; original recorded readonly installed PASS remains historical.",
       "Recovery bg746 passed browser pagination/growth/cwd/audit but its final equality compared different RPC requestIds. The fixture now compares every typed native fact while excluding transport correlation identity; final bg753 passed.",
-      "Recovery bg747 copied-profile Host failed before list_sessions; direct startup emitted no launch URL while public configuration dump worked. Fresh shipped profile then booted, but bg764 selected a native session whose actual list row was blank:true and correctly filtered. A credentials-free owned-journal home required the existing nonsecret discovery-fixture key convention for boot. No Ait timeout increase, provider suppression or unchanged hanging-copy rerun was used; clean official bg773 passed."
+      "Recovery bg747 copied-profile Host failed before list_sessions; direct startup emitted no launch URL while public configuration dump worked. Fresh shipped profile then booted, but bg764 selected a native session whose actual list row was blank:true and correctly filtered. A credentials-free owned-journal home required the existing nonsecret discovery-fixture key convention for boot. No Ait timeout increase, provider suppression or unchanged hanging-copy rerun was used; clean official bg773 passed.",
+      "Read-only GPT review found same-session reopen could reuse Infinity-stale preview pages and a long unfinished turn could lack any boundary in the displayed window, incorrectly returning active:false. Per-opening query lifetime and fixed-cut bounded activity discovery implemented; public bool/RPC fields unchanged. Focused verification recorded separately.",
+      "Recovery bg810:12/13 native preview tests passed, including both new activity regressions. The oversized-window test's permanent session/page reply incorrectly returned one old window for later head activity reads; clearing that override restored real fixture pagination. No production validation weakened; bg81913/13 passed."
     ]
   },
   "blockers": [],

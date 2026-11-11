@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { FetchProviderSessionPreviewEntry } from "@ait/client/internal/daemon-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionPreviewSheet } from "@/components/session-preview-sheet";
+import { queryClient as appQueryClient } from "@/data/query-client";
 
 const { theme, hostSnapshot } = vi.hoisted(() => ({
   hostSnapshot: { clientGeneration: 1, connectionEpoch: 1 },
@@ -251,6 +252,48 @@ describe("SessionPreviewSheet pagination", () => {
       expect(screen.queryByText("stale connection")).toBeNull();
       expect(screen.getByText("fresh connection")).toBeTruthy();
       expect(fetchProviderSessionPreview).toHaveBeenCalledTimes(2);
+    } finally {
+      queryClient.clear();
+    }
+  });
+
+  it("reopens with a fresh first page under production cache defaults", async () => {
+    const fetchProviderSessionPreview = vi
+      .fn()
+      .mockResolvedValueOnce(newestPage)
+      .mockResolvedValueOnce(olderPage)
+      .mockResolvedValueOnce({
+        ...newestPage,
+        entries: [message("m5", "message 5")],
+        olderCursor: "fresh-cut-older",
+      });
+    const client = { fetchProviderSessionPreview };
+    const queryClient = new QueryClient({ defaultOptions: appQueryClient.getDefaultOptions() });
+    const view = (visible: boolean) =>
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(SessionPreviewSheet, {
+          visible,
+          client,
+          serverId: "server-1",
+          entry,
+          onClose: vi.fn(),
+        }),
+      );
+    try {
+      const rendered = render(view(true));
+      await waitFor(() => expect(screen.getByText("message 4")).toBeTruthy());
+      fireEvent.click(screen.getByTestId("session-preview-load-older"));
+      await waitFor(() => expect(screen.getByText("message 1")).toBeTruthy());
+      rendered.rerender(view(false));
+      expect(screen.queryByTestId("session-preview-sheet")).toBeNull();
+      rendered.rerender(view(true));
+      await waitFor(() => expect(screen.getByText("message 5")).toBeTruthy());
+      expect(screen.queryByText("message 1")).toBeNull();
+      expect(screen.queryByText("message 4")).toBeNull();
+      expect(fetchProviderSessionPreview).toHaveBeenCalledTimes(3);
+      expect(fetchProviderSessionPreview.mock.calls[2][0]).not.toHaveProperty("cursor");
     } finally {
       queryClient.clear();
     }

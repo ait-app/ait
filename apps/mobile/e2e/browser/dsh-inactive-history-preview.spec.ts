@@ -54,6 +54,10 @@ test.use({
   },
 });
 
+test.afterAll(async () => {
+  await rm(fixtureDirectory, { recursive: true, force: true });
+});
+
 type PreviewClient = Pick<
   DaemonClient,
   | "connect"
@@ -270,11 +274,80 @@ test("previews inactive DSH history read-only with fixed-cut pagination", async 
       try {
         await client.close();
       } finally {
-        try {
-          await workspace.cleanup();
-        } finally {
-          await rm(fixtureDirectory, { recursive: true, force: true });
-        }
+        await workspace.cleanup();
+      }
+    }
+  }
+});
+
+test("refreshes reopened previews and observes a long unfinished turn read-only", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  writeFileSync(statePath, "33");
+  const workspace = await seedWorkspace({ repoPrefix: "ait-dsh-preview-opening-", git: false });
+  const client = await connectDaemonClient<PreviewClient>({ clientIdPrefix: "dsh-opening" });
+  try {
+    await expect
+      .poll(async () => {
+        const snapshot = await client.getProvidersSnapshot({ cwd: workspace.repoPath });
+        return snapshot.entries.find((entry) => entry.provider === "deepseek-harness")
+          ?.supportsSessionPreview;
+      })
+      .toBe(true);
+    const recent = await client.fetchRecentProviderSessions({
+      cwd: workspace.repoPath,
+      providers: ["deepseek-harness"],
+    });
+    const entry = recent.entries.find((item) => item.providerHandleId === "e2e-native-session");
+    const running = recent.entries.find((item) => item.providerHandleId === "e2e-running-session");
+    if (!entry || !running) throw new Error("Native preview fixtures were not listed");
+    const before = await client.fetchProviderSessionPreview({ ...running, limit: 1 });
+    expect(before.active).toBe(true);
+
+    await gotoAppShell(page);
+    await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.workspaceId));
+    await page.getByTestId("sidebar-import-session").click();
+    const previewAction = page.getByTestId(
+      `import-session-preview-deepseek-harness-${entry.providerHandleId}`,
+    );
+    await previewAction.click();
+    const sheet = page.getByTestId("session-preview-sheet");
+    const messages = sheet.getByText(/^(question|answer) \d+$/);
+    await expect(page.getByText("answer 32", { exact: true })).toBeVisible();
+    await expect(messages).toHaveCount(50);
+    await page.keyboard.press("Escape");
+    await expect(previewAction).toBeVisible();
+    writeFileSync(statePath, "34");
+    await previewAction.click();
+    await expect(page.getByText("answer 33", { exact: true })).toBeVisible();
+    await expect(messages).toHaveCount(50);
+    await page.keyboard.press("Escape");
+    await page
+      .getByTestId(`import-session-preview-deepseek-harness-${running.providerHandleId}`)
+      .click();
+    await expect(page.getByTestId("session-preview-active-notice")).toBeVisible();
+    await expect(page.getByText("running progress 19", { exact: true })).toBeVisible();
+    const after = await client.fetchProviderSessionPreview({ ...running, limit: 1 });
+    expect(after).toEqual({ ...before, requestId: after.requestId });
+    expectNoWriterRequests("reopen and long unfinished-turn preview");
+  } finally {
+    try {
+      await testInfo.attach("opening-before-cleanup", {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+      if (existsSync(auditPath)) {
+        await testInfo.attach("native-request-audit", {
+          path: auditPath,
+          contentType: "application/x-ndjson",
+        });
+      }
+    } finally {
+      try {
+        await client.close();
+      } finally {
+        await workspace.cleanup();
       }
     }
   }

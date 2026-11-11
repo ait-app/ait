@@ -137,6 +137,9 @@ impl Fixture {
             .unwrap()
             .insert(method.into(), value);
     }
+    pub(super) fn clear_reply(&self, method: &str) {
+        self.host.replies.lock().unwrap().remove(method);
+    }
     pub(super) fn fail(&self, method: &str, scenario: &str) {
         *self.host.failure.lock().unwrap() = Some((method.into(), scenario.into()));
     }

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useId, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -118,7 +118,11 @@ function PreviewItem({ entry }: { entry: FetchProviderSessionPreviewEntry }) {
  * Read-only native history preview. Every request is a typed preview read against the same
  * fixed native cut; no import, resume, prompt or writer activation is reachable from here.
  */
-export function SessionPreviewSheet({
+export function SessionPreviewSheet(props: SessionPreviewSheetProps) {
+  return props.visible && props.entry ? <OpenSessionPreview {...props} /> : null;
+}
+
+function OpenSessionPreview({
   visible,
   client,
   serverId,
@@ -127,9 +131,10 @@ export function SessionPreviewSheet({
 }: SessionPreviewSheetProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  // An explicit opening owns one cut. Reopening must not reuse Infinity-stale cached pages.
+  const openingId = useId();
   const entryKey = entry ? `${entry.providerId}:${entry.providerHandleId}:${entry.cwd}` : null;
-  // A different row (or a closed sheet) starts a fresh preview; cursors never cross sessions.
-  const activeKey = visible ? entryKey : null;
+  // A different row starts a fresh preview; cursors never cross sessions.
   // A same-host reconnect advances the runtime epoch; cached pages and cursors from the
   // previous connection must not mix with fresh reads (workspace-screen query convention).
   const hostSnapshot = useHostRuntimeSnapshot(serverId ?? "");
@@ -138,13 +143,15 @@ export function SessionPreviewSheet({
     queryKey: [
       "native-session-preview",
       serverId,
-      activeKey,
+      entryKey,
       hostSnapshot?.clientGeneration ?? 0,
       hostSnapshot?.connectionEpoch ?? 0,
+      openingId,
     ],
     enabled: Boolean(visible && client && entry),
     initialPageParam: null as string | null,
     retry: false,
+    gcTime: 0,
     queryFn: async ({ pageParam, signal }) => {
       if (!client || !entry) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
