@@ -2,6 +2,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync, spawn } = require("node:child_process");
+const { verifyPackagedResources } = require("../scripts/verify-packaged-resources.cjs");
+const { sourceVersion, packagedVersion } = require("../../../scripts/source-version.cjs");
 
 const APP_PATH = "/opt/Ait";
 
@@ -30,6 +32,13 @@ function sandboxDecision(launcher) {
 
 async function main() {
   if (process.getuid() === 0) throw new Error("Launch the smoke as an unprivileged user");
+  verifyPackagedResources({
+    appOutDir: APP_PATH,
+    platform: "linux",
+    version: packagedVersion(
+      sourceVersion(require("../package.json").version, path.resolve(__dirname, "../../..")),
+    ),
+  });
   const helper = fs.statSync(path.join(APP_PATH, "chrome-sandbox"));
   if (helper.uid !== 0 || (helper.mode & 0o7777) !== 0o4755) {
     throw new Error("Installed native package did not provide a root-owned 4755 helper");

@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use super::{aliases, mapping};
-use crate::local::omp::{OmpClient, PROVIDER, config, history, session};
+use super::mapping;
+use crate::local::omp::{OmpClient, PROVIDER, aliases, config, history, session};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -156,7 +156,7 @@ impl Engine {
         self.capabilities.elicitation =
             params["clientCapabilities"]["elicitation"]["form"].is_object();
         Ok(Some(
-            json!({"protocolVersion":1,"agentInfo":{"name":"ait-omp-acp","version":env!("CARGO_PKG_VERSION")},
+            json!({"protocolVersion":1,"agentInfo":{"name":"ait-omp-acp","version":model::BUILD_VERSION},
                 "agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},
                     "sessionCapabilities":{"resume":{},"close":{}}},
                 "authMethods":[],"_meta":{"ait":{"version":1},"ompNative":{"version":1},

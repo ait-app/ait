@@ -1,6 +1,6 @@
 # Oh My Pi
 
-Oh My Pi 是独立 Provider `omp`，固定通过 Ait 的 Rust ACP 桥接层运行官方 `omp --mode rpc-ui`。
+Oh My Pi 是独立 Provider `omp`，Ait 通过原生 Session 直接运行官方 `omp --mode rpc-ui`。
 它的安装、配置、权限、工具和会话均由 OMP 管理，不依赖 Ait 的 Pi 适配器。
 
 ## 安装与配置
@@ -80,24 +80,51 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 
 ## ACP 桥接与插件
 
-ACP 是固定入口，没有 Protocol 控件；恢复同样经过 Ait 的桥接层。
-旧 `transport: rpc/acp` 选择仅做兼容，实际句柄标明 `transport: acp`、`nativeTransport: rpc`。
-桥接层负责 ACP→官方 RPC 转换，对话、控制、子 Agent 和后台任务由同一个原生实例持有。
+Ait 内部不经过 ACP，没有 Protocol 控件；创建和恢复直接调用原生 Session。
+旧 `transport: rpc/acp` 配置、带 ACP 标记的原生句柄以及合法历史别名仍可恢复，不重写原生 JSONL。
+调用方指定的沙箱在创建、恢复、配置重开及会话作用域探测中保持一致，不从 cwd 推断或失败后取消。
+外部 ACP bridge 才负责 ACP→官方 RPC 转换；每个会话的对话、控制、子 Agent 和后台任务仍由一个原生实例持有。
 无需定制 OMP、源码补丁或插件配合；这与直连 OMP 自带 ACP 不同。
 
 OMP 中已安装的插件继续按官方规则加载。命令、工具、问答、自定义消息与原生额外帧
 采用通用接口处理，不按插件名称、路径或命令写分支。具体能力和 TUI 限制见
 [架构与兼容表](../architecture/omp-acp-bridge.md)。
 
-外部 ACP 客户端可使用同一桥接引擎：
+### 升级迁移：旧 CLI 已移除
+
+**这是 CLI 破坏性变更，不提供透明转发兼容。** 旧命令 `aitd omp-acp` 已删除。
+原来调用它的 shell 脚本、编辑器 ACP 配置和外部 launcher，必须改为下面的独立
+`ait-omp-acp [--omp-bin path]`，不能继续在 `aitd` 路径后追加 `omp-acp`。
+从同一构建版本的发行物中取得 daemon 与桥接程序；macOS/Linux desktop 资源和支持的独立归档
+包含配对程序。`--omp-bin` 与 `AIT_SERVER_OMP_BIN` 指向用户安装的 OMP 本体，不是桥接程序。
+
+调用链变化：
+
+- Ait 内部：`AgentSession → 内部 ACP 客户端 → ACP engine → OMP` 改为
+  `AgentSession → Provider 原生 Session → OMP RPC`；不另起桥接进程，也没有新的 Protocol UI。
+- 外部 ACP：`ACP 客户端 → aitd omp-acp → Provider ACP → OMP RPC` 改为
+  `ACP 客户端 → ait-omp-acp → Provider ACP → OMP RPC`。独立程序只管 CLI/stdio；
+  协议转换和原生能力仍归 Provider，不反向依赖 daemon/API。
+- 标准 ACP 继续可用；只有明确协商的外部连接使用 `_omp/rpc`、`_omp/event`、`_omp/respond`。
+  它们不是 Ait 内部任意原生命令入口。
+
+已有 `transport: rpc/acp` 配置、ACP 标记句柄和合法 `ait-acp-aliases` 仍在恢复时只读解析，
+不重写原生 JSONL。显式 `sessionFile`、调用方配置及精确沙箱约束保持权威；不根据旧配置或 cwd
+取消沙箱，不因探测失败降级为无沙箱。此处的持久数据兼容**不意味着旧 CLI 仍可调用**。
+公共 SDK、daemon wire 字段和既有 UI 保持兼容；CLI/分发与 Provider 内部结构变化是另一层接口。
+
+外部 ACP 客户端使用独立 Rust 可执行文件（macOS/Linux desktop 资源及独立归档中与 `aitd` 一同提供）：
 
 ```sh
-daemon omp-acp --omp-bin /absolute/path/to/omp
+ait-omp-acp --omp-bin /absolute/path/to/omp
 ```
 
-不传 `--omp-bin` 时使用 `AIT_SERVER_OMP_BIN` 或 PATH 中的 `omp`。
-该子命令仅服务 stdin/stdout JSONL，不启动 HTTP daemon、不要求 Host 登录或创建 API token。
-Ait 内部已使用同一引擎，不需要另外启动这个进程。
+不传 `--omp-bin` 时使用 `AIT_SERVER_OMP_BIN` 或 PATH 中的 `omp`。OMP 必须由用户安装和登录；
+Ait 不附带或下载 OMP、OMP SDK 或 Bun。
+正常服务时 stdin/stdout 只承载 JSONL，诊断写入 stderr；`--help` 和 `--version` 是不启动协议的独立操作。
+该程序不启动 HTTP daemon、不要求 Host 登录或创建 API token。Ait 内部不需要另起桥接进程。
+桥接程序使用与 daemon/desktop 相同的构建版本源。
 
-决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
-当前官方 CLI 与插件验证见[报告](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。
+当前边界见 [ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md)。
+[历史官方 CLI 与插件验证](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)
+不是本次独立程序、沙箱或签名发布的验收记录。

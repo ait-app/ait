@@ -2,6 +2,8 @@
 use super::*;
 use crate::local::omp::tests::{complete, fixture, next};
 
+mod boundary;
+
 #[tokio::test]
 async fn late_steering_rejection_cannot_claim_the_next_prompts_client_message_id() {
     let (_root, client, spec) = fixture();

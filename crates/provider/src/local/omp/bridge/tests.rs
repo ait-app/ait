@@ -1,5 +1,6 @@
 use super::*;
-use crate::ports::agent_session::{AgentClient, AgentResumePurpose};
+use crate::local::omp::aliases;
+use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSession, AgentTurnEvent};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};
 use tokio_util::task::AbortOnDropHandle;
 
@@ -422,7 +423,7 @@ async fn native_controls_and_host_callbacks_remain_interactive_without_plugin_sp
 }
 
 #[tokio::test]
-async fn legacy_rpc_configuration_and_handles_use_acp_bridge_without_losing_identity() {
+async fn legacy_acp_configuration_and_handles_restore_direct_native_identity() {
     let (_root, client, mut spec) = super::super::tests::fixture();
     spec.config.feature_values = Some(std::collections::BTreeMap::from([
         ("transport".to_owned(), json!("rpc")),
@@ -432,10 +433,18 @@ async fn legacy_rpc_configuration_and_handles_use_acp_bridge_without_losing_iden
     session.start_turn("hello", &spec.config).await.unwrap();
     super::super::tests::complete(session.as_mut()).await;
     let mut handle = session.persistence().unwrap();
-    assert_eq!(handle.metadata.as_ref().unwrap()["transport"], "acp");
-    assert_eq!(handle.metadata.as_ref().unwrap()["nativeTransport"], "rpc");
+    assert!(!handle.metadata.as_ref().unwrap().contains_key("transport"));
+    handle
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert("transport".to_owned(), json!("acp"));
+    handle
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert("nativeTransport".to_owned(), json!("rpc"));
     session.close().await.unwrap();
-    handle.metadata.as_mut().unwrap().remove("transport");
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await

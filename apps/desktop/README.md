@@ -3,7 +3,7 @@
 Electron desktop app for Ait. Release versions follow the root workspace release.
 Dev builds display `YYYY-MM-DD-<8-character hash>` using the UTC build date.
 Git installs display `git-YYYY-MM-DD-<8-character hash>` using the source commit date,
-including when building a checkout at a release tag. Desktop and daemon share this identity.
+including when building a checkout at a release tag. Desktop, daemon and `ait-omp-acp` share this identity.
 Installer and updater metadata use a date-based SemVer (`2026.10.25-gabcdef01` for dev builds,
 `2026.10.25-git.gabcdef01` for Git), without the workspace release number.
 `AIT_BUILD_VERSION` supplies an explicit build identity; official releases set `RELEASE_TAG`.
@@ -15,8 +15,21 @@ The display name is Ait. Release builds use Ait's `dev.ait.desktop` application 
 Ait uses its own profile directories and the `ait://` link protocol.
 
 Official releases build this app for Linux x64, macOS arm64 and Windows x64.
-Linux and macOS bundle only `resources/bin/aitd` (the Cargo `daemon` binary); Windows ships without a daemon.
+Linux and macOS bundle exactly `resources/bin/aitd` (the Cargo `daemon` binary) and
+`resources/bin/ait-omp-acp` (the standalone native OMP ACP bridge); Windows ships neither.
+The staging script builds both, or accepts `AIT_SERVER_BIN` and `AIT_OMP_ACP_BIN` for
+prebuilt binaries, and rejects either binary when its `--version` differs from the source identity.
+The bridge launches user-installed OMP; OMP itself, its SDK and Bun are never bundled or downloaded.
 No legacy daemon, worker or CLI shim is shipped. See [release operations](../../docs/operations/releasing.md).
+Linux payload preparation normalizes the application directory to `0755`, including reused private
+build directories, before root-owned deb/rpm installation. Installed smoke checks never repair permissions.
+
+Both native resources are macOS signing targets; the signed release validates the app's
+stapled notarization ticket. Standalone daemon archives contain `aitd`, `ait-omp-acp` and
+`LICENSE`, with matching binary versions checked before archiving. Stable/beta macOS
+archives sign and notarize both executables; dev builds remain ad-hoc and unnotarized.
+Historical immutable-tag rebuilds omit the bridge only when the selected source workspace
+predates `bins/omp-acp`; a missing current build output is always an error.
 
 macOS checks for updates through AIT Server at `https://aitapp.cn/api/v1/updates/macos/`.
 The server routes versioned downloads to COS or GitHub by region. Stable and beta retain

@@ -53,6 +53,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
     for package in packages {
         let name = package["name"].as_str().unwrap();
         let allowed: &[&str] = match name {
+            "ait-omp-acp" => &["model", "provider"],
             "daemon" => &[
                 "bot",
                 "persistence",
@@ -170,6 +171,25 @@ fn guard_catches_indirect_renamed_optional_target_and_development_edges() {
         violations(&[json!({"id":"domain", "name":"domain", "dependencies":[{"name":"tokio"}]})]),
         ["impure domain -> tokio"]
     );
+}
+
+#[test]
+fn omp_acp_cli_depends_only_on_its_provider_and_build_identity() {
+    for dependency in ["model", "provider"] {
+        let packages = [
+            json!({"name":"ait-omp-acp", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+        ];
+        assert!(violations(&packages).is_empty());
+    }
+    for dependency in ["daemon", "api", "persistence", "domain"] {
+        let packages = [
+            json!({"name":"ait-omp-acp", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+        ];
+        assert_eq!(
+            violations(&packages),
+            [format!("ait-omp-acp -> {dependency}")]
+        );
+    }
 }
 
 #[test]

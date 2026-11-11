@@ -525,9 +525,10 @@ pub(super) async fn inspect(
     handle: &AgentPersistenceHandle,
     cwd: &str,
 ) -> Result<SessionHistory, AgentSessionError> {
-    let lookup = Lookup::new(client, handle, cwd)?;
+    let handle = super::aliases::resolve(client, handle, cwd).await?;
+    let lookup = Lookup::new(client, &handle, cwd)?;
     let client = client.clone();
-    let handle = handle.clone();
+    let handle = handle.into_owned();
     tokio::task::spawn_blocking(move || {
         lookup
             .load()?
