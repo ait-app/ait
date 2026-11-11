@@ -153,6 +153,8 @@ pub(super) async fn execution(
                 | "agent.provider_subagents.list.request"
                 | "agent.subagents.list.request"
                 | "agent.provider_subagents.timeline.get.request"
+                | "agent.subagents.guide.request"
+                | "agent.subagents.stop.request"
                 | "provider.diagnostic.request"
         )
     }) else {

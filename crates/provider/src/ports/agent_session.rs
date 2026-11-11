@@ -291,6 +291,37 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// Guide one verified native child by steering a user message into the child's own session
+    /// through this parent's managed native writer. The child ID is the adapter-verified native
+    /// identity resolved by the manager from the observed child record; callers never pass raw
+    /// native IDs from the client. Only a running/pending child accepts guidance.
+    ///
+    /// # Errors
+    /// Returns `Rejected` for providers without native child guidance (the default), or when the
+    /// native runtime definitively refuses the message. Other errors leave delivery uncertain and
+    /// must never trigger an automatic resubmission.
+    async fn guide_child(
+        &mut self,
+        _child_id: &str,
+        _message: &str,
+    ) -> Result<super::controls::ChildGuideOutcome, AgentSessionError> {
+        Err(AgentSessionError::Rejected)
+    }
+
+    /// Stop one verified native child through this parent's managed native writer. A running child
+    /// is hard-killed inside the native runtime; a non-running child yields `NotRunning` without
+    /// error. The parent turn and sibling children are unaffected, and no child writer is created.
+    ///
+    /// # Errors
+    /// Returns `Rejected` for providers without native child stop (the default), or a native
+    /// transport failure. Acceptance (`Cancelled`) is not proof of termination.
+    async fn stop_child(
+        &mut self,
+        _child_id: &str,
+    ) -> Result<super::controls::ChildStopOutcome, AgentSessionError> {
+        Err(AgentSessionError::Rejected)
+    }
+
     /// Read a queued progress or terminal event without waiting for new provider output.
     ///
     /// # Errors

@@ -109,6 +109,8 @@ impl ExecutionState {
             Operation::Commands => self.commands(params).await,
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
+            Operation::ChildGuide => self.subagent_guide(params).await,
+            Operation::ChildStop => self.subagent_stop(params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,

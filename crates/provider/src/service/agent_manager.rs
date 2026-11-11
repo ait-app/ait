@@ -1,6 +1,7 @@
 //! Provider session registration and recovery for the independent server.
 
 pub(crate) mod auto_archive;
+mod child_controls;
 mod confinement;
 mod controls;
 mod delivery;

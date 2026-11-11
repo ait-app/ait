@@ -55,3 +55,32 @@ pub(crate) struct SubagentRequest {
     /// Page size, with zero meaning the bounded full window.
     pub(crate) limit: Option<usize>,
 }
+
+/// Guide one observed native child through its parent's managed writer.
+///
+/// The client addresses Ait identities only; the manager resolves the verified native child ID
+/// from the observed record after validating the parent chain and live single-writer ownership.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SubagentGuideRequest {
+    /// Registered parent Agent that owns the live native writer.
+    pub(crate) parent_agent_id: String,
+    /// Observed child Agent identifier (stable Ait ID, never a raw native ID).
+    pub(crate) child_agent_id: String,
+    /// Non-blank multiline guidance delivered verbatim to the running child.
+    pub(crate) message: String,
+    /// Optional child observation revision for stale-UI fencing.
+    pub(crate) expected_revision: Option<u64>,
+}
+
+/// Stop one observed native child through its parent's managed writer.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SubagentStopRequest {
+    /// Registered parent Agent that owns the live native writer.
+    pub(crate) parent_agent_id: String,
+    /// Observed child Agent identifier (stable Ait ID, never a raw native ID).
+    pub(crate) child_agent_id: String,
+    /// Optional child observation revision for stale-UI fencing.
+    pub(crate) expected_revision: Option<u64>,
+}

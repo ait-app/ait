@@ -37,6 +37,8 @@ fn child_and_plugin_operations_use_their_own_identity_fields() {
         Operation::Subagents,
         Operation::UnifiedSubagents,
         Operation::ChildTimeline,
+        Operation::ChildGuide,
+        Operation::ChildStop,
     ] {
         assert_eq!(operation.access(), Access::Session);
         assert_eq!(operation.target().unwrap().pointer(), "/parentAgentId");

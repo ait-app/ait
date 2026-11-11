@@ -6,7 +6,8 @@ use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_config::ConfigPatch;
 use crate::protocol::controls::{
-    CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
+    CommandsRequest, PermissionRequest, RewindRequest, SubagentGuideRequest, SubagentRequest,
+    SubagentStopRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
@@ -84,6 +85,44 @@ impl ExecutionState {
             .collect::<Result<Vec<_>, _>>()?;
         crate::rpc::timeline::bounded(json!({"parentAgentId":parent,"agents":agents,"error":null}))
             .map_err(Into::into)
+    }
+
+    /// Guide one observed native child through its parent's live managed writer.
+    pub(super) async fn subagent_guide(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let request: SubagentGuideRequest = decode(params)?;
+        let parent = self.resolve(&request.parent_agent_id)?;
+        let child = self.resolve(&request.child_agent_id)?;
+        let outcome = self
+            .manager
+            .guide_child(&parent, &child, &request.message, request.expected_revision)
+            .await
+            .map_err(|error| super::map_manager(&error))?;
+        let disposition = match outcome {
+            crate::ports::controls::ChildGuideOutcome::Accepted => "accepted",
+            crate::ports::controls::ChildGuideOutcome::NotRunning => "not_running",
+        };
+        Ok(
+            json!({"parentAgentId":parent,"childAgentId":child,"disposition":disposition,"error":null}),
+        )
+    }
+
+    /// Stop one observed native child through its parent's live managed writer.
+    pub(super) async fn subagent_stop(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let request: SubagentStopRequest = decode(params)?;
+        let parent = self.resolve(&request.parent_agent_id)?;
+        let child = self.resolve(&request.child_agent_id)?;
+        let outcome = self
+            .manager
+            .stop_child(&parent, &child, request.expected_revision)
+            .await
+            .map_err(|error| super::map_manager(&error))?;
+        let disposition = match outcome {
+            crate::ports::controls::ChildStopOutcome::Cancelled => "cancelled",
+            crate::ports::controls::ChildStopOutcome::NotRunning => "not_running",
+        };
+        Ok(
+            json!({"parentAgentId":parent,"childAgentId":child,"disposition":disposition,"error":null}),
+        )
     }
 
     pub(super) async fn diagnostic(&self, params: Value) -> Result<Value, ErrorCode> {

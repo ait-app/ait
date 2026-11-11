@@ -195,6 +195,8 @@ export function serverInfo(
       providerSubagentNesting: supportsProviderSubagents,
       unifiedSubagentAgents: has("agent.subagents.list.request"),
       projectedSubagentTimeline: has("agent.provider_subagents.timeline.get.request"),
+      subagentControls:
+        has("agent.subagents.guide.request") && has("agent.subagents.stop.request"),
     },
   });
 }
