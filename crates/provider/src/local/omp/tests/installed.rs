@@ -1,6 +1,7 @@
 use super::*;
 
 mod boundary;
+mod child_controls;
 mod interactions;
 mod settlement;
 

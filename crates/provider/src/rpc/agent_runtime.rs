@@ -546,6 +546,9 @@ pub(crate) const READ_ONLY_SESSION_FLAGS: [&str; 5] = [
     "supportsArchive",
 ];
 
+/// Child controls are offered from the parent snapshot; an observed child never advertises them.
+pub(crate) const CHILD_CONTROL_FLAGS: [&str; 2] = ["supportsChildGuide", "supportsChildStop"];
+
 fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityFlags {
     let mut flags: AgentCapabilityFlags = [
         ("supportsStreaming", false),
@@ -557,6 +560,8 @@ fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityF
         ("supportsRewindConversation", false),
         ("supportsRewindFiles", false),
         ("supportsRewindBoth", false),
+        ("supportsChildGuide", false),
+        ("supportsChildStop", false),
     ]
     .into_iter()
     .map(|(key, value)| (key.to_owned(), value))
@@ -571,11 +576,18 @@ fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityF
         ] {
             flags.insert(flag.to_owned(), false);
         }
+        // A child is controlled through its parent's writer, never through its own record.
+        for flag in CHILD_CONTROL_FLAGS {
+            flags.insert(flag.to_owned(), false);
+        }
         flags.insert("supportsArchive".to_owned(), source.status.is_terminal());
         flags.insert("supportsStreaming".to_owned(), true);
     }
     if record.internal {
-        for flag in READ_ONLY_SESSION_FLAGS {
+        for flag in READ_ONLY_SESSION_FLAGS
+            .into_iter()
+            .chain(CHILD_CONTROL_FLAGS)
+        {
             flags.insert(flag.to_owned(), false);
         }
     }

@@ -2590,6 +2590,26 @@ export const fr: TranslationResources = {
     archiveFinishedAction: "Archiver les sous-agents terminés",
     archiveFinishedRetry: "Réessayer ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "Sous-agent",
+      guide: "Guider",
+      stop: "Arrêter",
+      guideTitle: "Guider {{name}}",
+      stopTitle: "Arrêter {{name}} ?",
+      stopDescription: "Cela termine le sous-agent en cours. La tâche parente continue.",
+      guidance: "Que doit faire ce sous-agent ensuite ?",
+      confirmGuide: "Envoyer les consignes",
+      confirmStop: "Arrêter le sous-agent",
+      sent: "Consignes transmises.",
+      notRunningGuide: "Rien ne s’exécutait, donc aucune consigne n’a été transmise.",
+      stopped: "Arrêt accepté. En attente du rapport du sous-agent.",
+      notRunningStop: "Rien ne s’exécutait, donc rien n’a été arrêté.",
+      guideFailed:
+        "Les consignes n’ont pas pu être transmises. Réessayez après avoir vérifié le sous-agent.",
+      stopFailed: "La demande d’arrêt a été refusée. Réessayez après avoir vérifié le sous-agent.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "Nouvel agent",

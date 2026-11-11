@@ -538,6 +538,20 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.subagents.list.response",
   },
+  // Child controls ride the services channel: the Agent channel is at Rust's 64-capability
+  // hello limit, and a split-mode connection is rejected above it.
+  "agent.subagents.guide.request": {
+    method: "agent.subagents.guide.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.subagents.guide.response",
+  },
+  "agent.subagents.stop.request": {
+    method: "agent.subagents.stop.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.subagents.stop.response",
+  },
   "agent.provider_subagents.list.request": {
     method: "agent.provider_subagents.list.request",
     kind: "request",

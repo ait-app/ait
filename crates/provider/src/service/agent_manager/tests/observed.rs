@@ -347,3 +347,242 @@ fn unavailable_observations_keep_outcomes_and_stale_lists_cannot_reverse_complet
         ObservedStatus::Unknown
     );
 }
+
+fn observed_child(id: &str, parent: &str, status: ObservedStatus) -> PersistedAgentRuntimeRecord {
+    let mut record = stored_record();
+    record.id = id.to_owned();
+    record.persistence = None;
+    record.observation = Some(domain::agent_runtime::observation::ObservedAgent {
+        revision: 1,
+        root_agent_id: parent.to_owned(),
+        root_session_id: "native-1".to_owned(),
+        parent_agent_id: parent.to_owned(),
+        native_id: format!("native-{id}"),
+        parent_native_id: "native-1".to_owned(),
+        persistence: None,
+        ready: true,
+        status,
+        health: ObservationHealth::Current,
+        observed_at: "2026-10-30T01:00:00.000Z".to_owned(),
+        description: Some("Inspect".to_owned()),
+        subtitle: None,
+    });
+    record
+}
+
+#[tokio::test]
+async fn child_controls_reject_a_non_live_parent_without_a_native_write() {
+    let (mut manager, registry, _) = make_manager();
+    registry.upsert(&stored_record()).expect("parent");
+    registry
+        .upsert(&observed_child(
+            "child-1",
+            "agent-1",
+            ObservedStatus::Running,
+        ))
+        .expect("child");
+    // The parent record exists but no live writer owns it in this process.
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "go", None)
+            .await
+            .err(),
+        Some(AgentManagerError::Busy)
+    );
+    assert_eq!(
+        manager.stop_child("agent-1", "child-1", None).await.err(),
+        Some(AgentManagerError::Busy)
+    );
+}
+
+#[tokio::test]
+async fn child_controls_reject_wrong_parent_and_stale_observation() {
+    let (mut manager, registry, _) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("live parent");
+    registry
+        .upsert(&observed_child(
+            "child-1",
+            "another-parent",
+            ObservedStatus::Running,
+        ))
+        .expect("child");
+    // Wrong parent: the child's observed parent chain does not match the claimed parent.
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "go", None)
+            .await
+            .err(),
+        Some(AgentManagerError::Busy)
+    );
+    // Stale observation health blocks control even with a matching parent.
+    let mut stale = observed_child("child-1", "agent-1", ObservedStatus::Running);
+    stale.observation.as_mut().expect("source").health = ObservationHealth::Stale;
+    registry.upsert(&stale).expect("stale child");
+    assert_eq!(
+        manager.stop_child("agent-1", "child-1", None).await.err(),
+        Some(AgentManagerError::Busy)
+    );
+    // A mismatched expected revision is fenced before any native write.
+    let current = observed_child("child-1", "agent-1", ObservedStatus::Running);
+    registry.upsert(&current).expect("current child");
+    assert!(
+        manager
+            .guide_child("agent-1", "child-1", "go", Some(99))
+            .await
+            .is_err_and(|error| error == AgentManagerError::Busy)
+    );
+}
+
+#[tokio::test]
+async fn guide_requires_a_running_child_and_blank_guidance_is_invalid() {
+    let (mut manager, registry, _) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("live parent");
+    registry
+        .upsert(&observed_child(
+            "child-1",
+            "agent-1",
+            ObservedStatus::Completed,
+        ))
+        .expect("child");
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "go", None)
+            .await
+            .err(),
+        Some(AgentManagerError::Busy)
+    );
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "   ", None)
+            .await
+            .err(),
+        Some(AgentManagerError::InvalidRequest)
+    );
+}
+
+#[tokio::test]
+async fn child_controls_reject_providers_without_native_child_support() {
+    let (mut manager, registry, _) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("live parent");
+    registry
+        .upsert(&observed_child(
+            "child-1",
+            "agent-1",
+            ObservedStatus::Running,
+        ))
+        .expect("child");
+    // The default session port rejects child controls; no second writer is created.
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "go", None)
+            .await
+            .err(),
+        Some(AgentManagerError::SessionRejected)
+    );
+    assert_eq!(
+        manager.stop_child("agent-1", "child-1", None).await.err(),
+        Some(AgentManagerError::SessionRejected)
+    );
+    assert!(manager.live_snapshot("child-1").is_none());
+}
+
+#[tokio::test]
+async fn child_controls_reject_observations_from_a_replaced_native_owner() {
+    let (mut manager, registry, _) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("live parent");
+    let mut child = observed_child("child-1", "agent-1", ObservedStatus::Running);
+    child.observation.as_mut().expect("source").root_session_id = "previous-native".to_owned();
+    registry.upsert(&child).expect("previous owner's child");
+    assert_eq!(
+        manager
+            .guide_child("agent-1", "child-1", "go", None)
+            .await
+            .err(),
+        Some(AgentManagerError::Busy)
+    );
+    assert_eq!(
+        manager.stop_child("agent-1", "child-1", None).await.err(),
+        Some(AgentManagerError::Busy)
+    );
+
+    let mut child = observed_child("child-1", "agent-1", ObservedStatus::Running);
+    child.provider = "omp".to_owned();
+    registry.upsert(&child).expect("another provider's child");
+    assert_eq!(
+        manager.stop_child("agent-1", "child-1", None).await.err(),
+        Some(AgentManagerError::Busy)
+    );
+    assert!(manager.live_snapshot("child-1").is_none());
+}
+
+#[tokio::test]
+async fn child_control_dispatch_returns_before_the_native_answer_arrives() {
+    use crate::ports::controls::{
+        ChildControlFailure, ChildControlOutcome, ChildControlReceipt, ChildGuideOutcome,
+    };
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .expect("live parent");
+    registry
+        .upsert(&observed_child(
+            "child-1",
+            "agent-1",
+            ObservedStatus::Running,
+        ))
+        .expect("child");
+    client.0.lock().unwrap().child_control_result =
+        Some(ChildControlOutcome::Guide(Ok(ChildGuideOutcome::Accepted)));
+    // The write is acknowledged immediately; the typed answer arrives on a later drain.
+    let dispatched = manager
+        .guide_child("agent-1", "child-1", "go", None)
+        .await
+        .expect("dispatched");
+    assert_eq!(
+        dispatched.receipt,
+        ChildControlReceipt {
+            token: "receipt-1".to_owned()
+        }
+    );
+    assert_eq!(manager.take_completed_child_controls(), []);
+    manager.poll().await.expect("drain");
+    assert_eq!(
+        manager.take_completed_child_controls(),
+        [(
+            "receipt-1".to_owned(),
+            ChildControlOutcome::Guide(Ok(ChildGuideOutcome::Accepted))
+        )]
+    );
+
+    // A refusal reaches the reply as a typed failure instead of an error on the write path.
+    client.0.lock().unwrap().child_control_result = Some(ChildControlOutcome::Stop(Err(
+        ChildControlFailure::Rejected,
+    )));
+    let dispatched = manager
+        .stop_child("agent-1", "child-1", None)
+        .await
+        .expect("dispatched");
+    assert_eq!(dispatched.receipt.token, "receipt-1");
+    manager.poll().await.expect("drain");
+    assert_eq!(
+        manager.take_completed_child_controls(),
+        [(
+            "receipt-1".to_owned(),
+            ChildControlOutcome::Stop(Err(ChildControlFailure::Rejected))
+        )]
+    );
+}

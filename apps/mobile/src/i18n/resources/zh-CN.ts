@@ -2709,6 +2709,25 @@ export const zhCN: TranslationResources = {
     archiveFinishedAction: "归档已完成的子智能体",
     archiveFinishedRetry: "重试 ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "子 Agent",
+      guide: "指导",
+      stop: "停止",
+      guideTitle: "指导 {{name}}",
+      stopTitle: "停止 {{name}}？",
+      stopDescription: "这将终止正在运行的子 Agent。父任务会继续。",
+      guidance: "这个子 Agent 接下来应该做什么？",
+      confirmGuide: "发送指导",
+      confirmStop: "停止子 Agent",
+      sent: "指导已送达。",
+      notRunningGuide: "没有正在运行的对象，因此未送达指导。",
+      stopped: "已接受停止。正在等待子 Agent 报告。",
+      notRunningStop: "没有正在运行的对象，因此未停止任何内容。",
+      guideFailed: "指导无法送达。请检查子 Agent 后重试。",
+      stopFailed: "停止请求被拒绝。请检查子 Agent 后重试。",
+    },
+  },
   panels: {
     draft: {
       newAgent: "新建 Agent",

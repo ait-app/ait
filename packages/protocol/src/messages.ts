@@ -1849,6 +1849,23 @@ export const SubagentListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const SubagentGuideRequestMessageSchema = z.object({
+  type: z.literal("agent.subagents.guide.request"),
+  parentAgentId: z.string(),
+  childAgentId: z.string(),
+  message: z.string().min(1).max(65536),
+  expectedRevision: z.number().int().nonnegative().optional(),
+  requestId: z.string(),
+});
+
+export const SubagentStopRequestMessageSchema = z.object({
+  type: z.literal("agent.subagents.stop.request"),
+  parentAgentId: z.string(),
+  childAgentId: z.string(),
+  expectedRevision: z.number().int().nonnegative().optional(),
+  requestId: z.string(),
+});
+
 export const ProviderSubagentListRequestMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.request"),
   parentAgentId: z.string(),
@@ -3178,6 +3195,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentTimelineSearchRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
   SubagentListRequestMessageSchema,
+  SubagentGuideRequestMessageSchema,
+  SubagentStopRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -3575,6 +3594,8 @@ export const ServerInfoStatusPayloadSchema = z
         projectedSubagentTimeline: z.boolean().optional(),
         // COMPAT(providerSubagentNesting): added in v0.7, remove gate after 2027-03-04.
         providerSubagentNesting: z.boolean().optional(),
+        // COMPAT(subagentControls): added in v0.2.8, remove gate after 2027-05-11.
+        subagentControls: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
         // COMPAT(workspaceMarkUnread): added in v0.5.0, remove after 2027-08-20.
@@ -4690,6 +4711,34 @@ export const SubagentListResponseMessageSchema = z.object({
     agents: z.array(AgentSnapshotPayloadSchema),
     error: z.string().nullable(),
   }),
+});
+
+export const SubagentGuideReceiptPayloadSchema = z.object({
+  requestId: z.string(),
+  parentAgentId: z.string(),
+  childAgentId: z.string(),
+  disposition: z.enum(["accepted", "not_running"]),
+  error: z.string().nullable(),
+});
+export type SubagentGuideReceiptPayload = z.infer<typeof SubagentGuideReceiptPayloadSchema>;
+
+export const SubagentGuideResponseMessageSchema = z.object({
+  type: z.literal("agent.subagents.guide.response"),
+  payload: SubagentGuideReceiptPayloadSchema,
+});
+
+export const SubagentStopReceiptPayloadSchema = z.object({
+  requestId: z.string(),
+  parentAgentId: z.string(),
+  childAgentId: z.string(),
+  disposition: z.enum(["cancelled", "not_running"]),
+  error: z.string().nullable(),
+});
+export type SubagentStopReceiptPayload = z.infer<typeof SubagentStopReceiptPayloadSchema>;
+
+export const SubagentStopResponseMessageSchema = z.object({
+  type: z.literal("agent.subagents.stop.response"),
+  payload: SubagentStopReceiptPayloadSchema,
 });
 
 export const ProviderSubagentListResponseMessageSchema = z.object({
@@ -6609,6 +6658,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentTimelineSearchResponseMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
   SubagentListResponseMessageSchema,
+  SubagentGuideResponseMessageSchema,
+  SubagentStopResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,

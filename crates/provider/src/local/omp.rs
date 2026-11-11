@@ -107,7 +107,8 @@ impl AgentClient for OmpClient {
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
             "supportsDynamicModes":false,"supportsRewindConversation":false,
-            "supportsRewindFiles":false,"supportsRewindBoth":false}})
+            "supportsRewindFiles":false,"supportsRewindBoth":false,
+            "supportsChildGuide":true,"supportsChildStop":true}})
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {

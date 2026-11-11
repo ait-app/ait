@@ -2797,6 +2797,25 @@ export const en = {
     archiveFinishedAction: "Archive finished subagents",
     archiveFinishedRetry: "Retry ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "Subagent",
+      guide: "Guide",
+      stop: "Stop",
+      guideTitle: "Guide {{name}}",
+      stopTitle: "Stop {{name}}?",
+      stopDescription: "This kills the running subagent. The parent task keeps going.",
+      guidance: "What should this subagent do next?",
+      confirmGuide: "Send guidance",
+      confirmStop: "Stop subagent",
+      sent: "Guidance delivered.",
+      notRunningGuide: "Nothing was running, so no guidance was delivered.",
+      stopped: "Stop accepted. Waiting for the subagent to report.",
+      notRunningStop: "Nothing was running, so nothing was stopped.",
+      guideFailed: "Guidance could not be delivered. Try again after checking the subagent.",
+      stopFailed: "The stop request was rejected. Try again after checking the subagent.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "New Agent",

@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- Guide or stop a running sub-agent from its row in the sub-agent tree. Guidance is delivered as a message to that sub-agent's own session, and stopping cancels only that sub-agent, not the parent turn or its siblings. Controls appear only for a connected Host whose provider supports them and only while the sub-agent is running; stopping asks for confirmation first. "Stop accepted" is not shown as "stopped": the final state still comes from the sub-agent's own lifecycle. Other providers keep sub-agents read-only.
+
 ## 0.2.7 - 2026-11-11
 
 - OMP startup questions can be answered before initialization completes. Empty inputs, editor prefills, whitespace and cancellation retain their native meaning; startup failures settle as errors instead of leaving a pending question.

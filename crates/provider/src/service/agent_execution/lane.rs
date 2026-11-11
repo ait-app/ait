@@ -76,7 +76,9 @@ pub(super) async fn serve(
             Ok(next) => state = next,
             Err(_) => break,
         }
-        let cadence = if state.manager.has_active_turns() {
+        let cadence = if state.manager.has_active_turns() || !state.child_controls.is_empty() {
+            // A parked child control needs its native answer promptly; the lane stays awake
+            // only until every pending receipt is settled.
             ACTIVE_POLL
         } else {
             IDLE_POLL
@@ -143,6 +145,11 @@ pub(super) async fn request(
                     }
                 }
                 voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
+                // Dispatching a child control parks its reply; the same drain may already have
+                // produced the answer, so settle it before the lane sleeps again.
+                state.observe_messages();
+                let _ = state.manager.poll().await;
+                state.settle_child_controls();
                 tracing::debug!(
                     method = method.as_str(),
                     class = class(method, owned),
@@ -166,6 +173,8 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
             state.observe_messages();
             let _ = state.manager.reconcile().await;
             let _ = state.manager.poll().await;
+            // A child control answer arrives on this drain; settle its parked RPC reply here.
+            state.settle_child_controls();
             let _ = state.manager.dispatch_pending_inputs().await;
             let _ = state.publish();
             if state.manager.has_sessions() {

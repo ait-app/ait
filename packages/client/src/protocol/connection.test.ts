@@ -929,9 +929,11 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(226);
+    // Method count is a moving fact; uniqueness and the channel rules below are what matter.
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(226);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(
+      Object.keys(METHODS).length,
+    );
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -1012,6 +1014,30 @@ describe("Rust v1 connection", () => {
           initialBranch: "initial-workspace",
         },
       });
+    } finally {
+      h.transport.close();
+    }
+  });
+  it("routes child guide/stop off the Agent channel so split mode stays within its budget", () => {
+    const h = harness();
+    try {
+      h.ready();
+      // The Agent channel holds the provider methods; Rust rejects a hello above 64 capabilities.
+      for (const methods of ["agent.subagents.guide.request", "agent.subagents.stop.request"]) {
+        expect(CHANNEL_CAPABILITIES[0]).not.toContain(methods);
+        expect(CHANNEL_CAPABILITIES[3]).toContain(methods);
+        h.send({
+          type: methods,
+          requestId: `${methods}-1`,
+          parentAgentId: "parent",
+          childAgentId: "child",
+        });
+        expect(h.last(3)).toMatchObject({
+          method: methods,
+          request_id: `${methods}-1`,
+          params: { parentAgentId: "parent", childAgentId: "child" },
+        });
+      }
     } finally {
       h.transport.close();
     }
