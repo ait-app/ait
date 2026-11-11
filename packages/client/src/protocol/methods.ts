@@ -380,6 +380,20 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     response: "agent.timeline.export.cancel.response",
     retryAdmission: false,
   },
+  "agent.native_html.export.request": {
+    method: "agent.native_html.export.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.native_html.export.response",
+    retryAdmission: false,
+  },
+  "agent.native_html.export.cancel.request": {
+    method: "agent.native_html.export.cancel.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.native_html.export.cancel.response",
+    retryAdmission: false,
+  },
   "agent.history.get.request": {
     method: "agent.history.get.request",
     kind: "request",

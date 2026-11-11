@@ -57,6 +57,16 @@ impl OmpClient {
         self
     }
 
+    /// Resolve the private native-export staging directory for this installed adapter.
+    /// It is a sibling of the native `sessions` root, i.e. inside the OMP state tree that
+    /// the sandbox already allows the confined native process to write. No daemon data-dir
+    /// or workspace path is used, so no sandbox policy needs to widen.
+    fn export_directory(&self) -> Option<PathBuf> {
+        history::root(self)
+            .ok()
+            .map(|root| root.with_file_name("ait-native-exports"))
+    }
+
     async fn service_tiers(
         &self,
         cwd: &str,
@@ -70,6 +80,14 @@ impl OmpClient {
         closed?;
         Ok(tiers)
     }
+}
+
+/// Private staging directory for native HTML renders owned by the installed OMP adapter.
+/// Defaults inside the OMP state root so sandboxed sessions can write it without new policy.
+pub(crate) fn native_export_directory(
+    clients: &std::collections::BTreeMap<String, std::sync::Arc<dyn AgentClient>>,
+) -> Option<PathBuf> {
+    clients.get(PROVIDER)?.native_html_export_directory()
 }
 
 /// Serve the OMP bridge on a caller-owned JSONL stream without altering native installation.
@@ -107,6 +125,10 @@ impl AgentClient for OmpClient {
             "supportsToolInvocations":true,"supportsMcpServers":false,
             "supportsDynamicModes":false,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
+    }
+
+    fn native_html_export_directory(&self) -> Option<PathBuf> {
+        self.export_directory()
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {

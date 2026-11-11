@@ -508,6 +508,14 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
             json!({"agentId":"outside","token":"secret"}),
         ),
         (
+            "agent.native_html.export.request",
+            json!({"agentId":"outside"}),
+        ),
+        (
+            "agent.native_html.export.cancel.request",
+            json!({"agentId":"outside","token":"secret"}),
+        ),
+        (
             "agent.message.send.request",
             json!({"agentId": "a", "text": "hi"}),
         ),
@@ -688,6 +696,18 @@ async fn node_timeline_exports_use_private_visitor_bound_download_delivery() {
         .decide(
             "agent.timeline.export.request",
             json!({"agentId":"agent","format":"markdown","scope":"timeline"}),
+        )
+        .await;
+    assert!(matches!(decision, Decision::Private(_, Private::Download)));
+}
+
+#[tokio::test]
+async fn node_native_html_exports_use_private_visitor_bound_download_delivery() {
+    let guest = Guest::with(ResourceKind::Node).await;
+    let decision = guest
+        .decide(
+            "agent.native_html.export.request",
+            json!({"agentId":"agent"}),
         )
         .await;
     assert!(matches!(decision, Decision::Private(_, Private::Download)));

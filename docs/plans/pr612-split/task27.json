@@ -1,0 +1,142 @@
+{
+  "id": "27",
+  "title": "OMP native HTML export",
+  "priority": 27,
+  "depends_on": ["00", "01", "26"],
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "dependency_prs": [
+    "https://github.com/ait-app/ait/pull/651",
+    "https://github.com/ait-app/ait/pull/650",
+    "https://github.com/ait-app/ait/pull/656"
+  ],
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "donor_sections": [10],
+  "donor_paths": [
+    "apps/mobile/src/stores/download-store.ts",
+    "apps/mobile/src/stores/download-store.test.ts",
+    "crates/provider/src/local/omp/actions.rs",
+    "crates/provider/src/local/omp/actions/branch.rs",
+    "crates/provider/src/local/omp/actions/choices.rs"
+  ],
+  "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. These are reference paths, not a cherry-pick; the donor generic native_action gateway is explicitly rejected and replaced by a feature-typed native HTML export consumer.",
+  "implementation": "Render the live OMP session's persisted journal with OMP's own public export_html RPC on the already-owned session transport (correlated non-blocking begin/poll, never the blocking request lane, no second process/resume/lease/prompt). The adapter exclusively creates an owned staging file inside the OMP state root (sandbox-allowed), validates regular-file/exact-directory/exact-basename/16MiB, adopts the bytes verbatim into an anonymous GeneratedArtifact via an O_NOFOLLOW retained handle, and removes the owned staging on every terminal outcome including late post-timeout creation. Reuse task26 Files single-use grants, expiry, guest download budget, API completion composition and the shared client generated-artifact download pipeline. Native bytes are a download only, never rendered/sanitized/auto-opened; the UI shows an explicit nine-locale risk warning.",
+  "acceptance": "Native export returns a downloadable file whose bytes match the native renderer output and receipt size/name; errors, cleanup, remote access and unsupported-version behavior are exercised. Active native execution keeps running with no extra input/writer/interruption. Old hosts receive no unsupported request. Owned staging is removed on success/failure/cancel/timeout/late-create/close; missing artifacts are not re-exported automatically. Real browser download of the native file is proven against an active official OMP turn.",
+  "status": "draft",
+  "branch": "pr612-split-task27-omp-native-export",
+  "base_branch": "pr612-split-task27-integration",
+  "base": "3b5285fa",
+  "integration_base": {
+    "commit": "3b5285fa",
+    "parents": [
+      "1648320c8b9063d0a6dba8ba98790a845d4fc91f (task26 Draft #656 head, stacked on task04 Draft #650 head a0d803124dd7fd4b30f4f2ab474d29078672624d)",
+      "43a0e9529ec371df427f43562a8bddd9b0930188 (task01 Draft #651 cleanup head)"
+    ],
+    "conflict_resolution": "Only additive docs/decisions/README.md index conflict; ADR-237/238/239 all kept; zero feature code in the merge.",
+    "note": "Integration base contains exactly the verified prereq commits (01+04+26). task01 and task31 are user-excluded from delivery (2026-11-11) but task01 code 43a0e952 remains an integration dependency and Draft #651 is unchanged; missing task01 macOS signing/notarization does not block task27."
+  },
+  "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-native-export",
+  "commit": "7f78d9f7487160a13d8c74f86ddc06520ffde42d",
+  "pr_url": "https://github.com/ait-app/ait/pull/663",
+  "updated_at": "2026-11-11",
+  "interface_changes": [
+    {
+      "owner": "Provider/API/protocol/SDK",
+      "old": "Only generic persisted-Timeline export RPC/SDK; no provider-native HTML export.",
+      "new": "Typed agent.native_html.export.request and agent.native_html.export.cancel.request, typed omp_native artifact receipt, exportAgentNativeHtml/cancelAgentNativeHtmlExport, negotiated agentNativeHtmlExport capability requiring both methods.",
+      "migration": "Additive wire/SDK feature; old hosts are gated before request and old clients keep existing Timeline/messages. No generic native_action gateway; generic Timeline HTML export stays inert and unchanged."
+    },
+    {
+      "owner": "Provider port/internal event",
+      "old": "AgentSession had no native export; AgentTurnEvent derived Debug, Clone, PartialEq, Serialize, Deserialize with no native export variant.",
+      "new": "begin_native_html_export(output_path, export_directory)/cancel_native_html_export default to unsupported; AgentClient::native_html_export_directory; AgentTurnEvent::NativeHtmlExport carries the owned artifact in-process only.",
+      "migration": "Only OMP implements; other adapters default unsupported and exhaustive matches are migrated. AgentTurnEvent keeps Serialize/Deserialize (wire form of the new variant is metadata-only, never bytes/server path; deserialization yields a failed outcome) and PartialEq via metadata-only comparison for the file-bearing variant; Clone dropped because an open file handle is not cloneable and no whole-event Clone consumer exists. OMP bridge == comparisons migrated to matches!. No new port abstraction added solely to preserve unused derives."
+    },
+    {
+      "owner": "Provider/model/API/Files",
+      "old": "task26 GeneratedArtifact handoff and Files single-use grant registry.",
+      "new": "NativeHtmlExport/ReleaseNativeHtmlExport Completion variants reuse the same GeneratedArtifact and existing Files registry (register_native shares register_artifact).",
+      "migration": "No second token registry or artifact store; API exhaustive Completion consumers migrated; grant/visitor/expiry/byte bounds unchanged; source=omp_native receipt."
+    },
+    {
+      "owner": "Client UI/download adapters",
+      "old": "Generic Timeline export controls and startTimelineExport download pipeline.",
+      "new": "Separate OMP-provider+capability-gated native HTML section with explicit risk warning; shared startGeneratedExport/downloadGeneratedArtifact/GENERATED_EXPORT_MAX_BYTES pipeline; startNativeHtmlExport entry.",
+      "migration": "startTimelineExport behavior preserved for all existing callers; native bytes downloaded verbatim (download only, never preview/open); browser_handoff semantics unchanged; nine locales add nativeHtmlExport labels including risk. No sanitize/rewrite/second format."
+    }
+  ],
+  "bounds": {
+    "output_bytes": 16777216,
+    "generation_slots": 2,
+    "artifact_slots": 8,
+    "grant_ttl_seconds": 60,
+    "native_rpc_deadline_seconds": 30
+  },
+  "checks": {
+    "results": [
+      {
+        "check": "Official OMP 18.17.0 export_html RPC probe (isolated profile + synthetic journal)",
+        "status": "passed",
+        "result": "export_html {outputPath}->{path==requested} success; journal bytes unchanged; sessionId/messageCount unchanged; output is native formatter HTML with inline <script>, remote stencil.so/build.stencil.so viewer JS and base64 session-data containing the full journal (marker verified after decode); no busy gate; bad path -> ENOENT rejection. Confirms the format is NOT inert and the remote viewer can read embedded history."
+      },
+      {
+        "check": "cargo check -p provider -p api --lib",
+        "status": "passed",
+        "result": "Provider and API libs compile clean after owned-artifact fixes."
+      },
+      {
+        "check": "cargo check -p provider --lib --tests",
+        "status": "passed",
+        "result": "Provider lib+tests compile clean after restoring AgentTurnEvent PartialEq (metadata-only for the file-bearing variant)."
+      },
+      {
+        "check": "cargo test -p provider --lib native_export (adapter regressions)",
+        "status": "passed",
+        "result": "11 passed: success cleanup + journal byte-unchanged, active-turn isolation (export during running turn, turn completes after), late-create cleanup after timeout, rejected/foreign-path/symlink/oversize no-adoption, cancel cleanup, silent expiry without killing session, unpersisted rejection, and AitID≠nativeUUID artifact binding at the manager boundary."
+      },
+      {
+        "check": "cargo test -p provider --lib capabilities::tests + canonical agent runtime names",
+        "status": "passed",
+        "result": "Incidental method-count assertions deleted per repo rule (never re-pinned); real uniqueness/ownership/downgrade checks retained. Pre-existing task04 statistics method added to the canonical-names list."
+      },
+      {
+        "check": "cargo test -p api --lib capabilities + native receipt + guest policy",
+        "status": "passed",
+        "result": "10 passed incl. native_html_receipt_preserves_bytes_and_reuses_the_single_use_grant and node/scoped native export download-budget policy. Incidental count assertions deleted, real behavior retained."
+      },
+      {
+        "check": "Protocol/SDK/native schema + capability + client tests",
+        "status": "passed",
+        "result": "messages.agent-native-html-export.test.ts + native capability negotiation + daemon-client native export/cancel/failure tests; 260 client tests passed. Incidental METHODS count pins deleted, canonical-name/uniqueness/prefix checks retained."
+      },
+      {
+        "check": "cargo fmt --all --check + targeted clippy (provider/api) + mobile typecheck",
+        "status": "passed",
+        "result": "fmt clean; clippy clean on new code (only pre-existing drain too-many-lines and unrelated schedule/filesystem warnings remain); mobile tsgo --noEmit passes after building UI deps."
+      },
+      {
+        "check": "Real browser native download proof (official OMP + loopback model, active turn)",
+        "status": "passed",
+        "result": "Recovery run: 1 passed (3.3m), retries=0, official /usr/bin/omp with loopback OpenAI-compatible fixture. Actual browser download succeeded; receipt filename/size matched; decoded native journal preserved the seeded user message; risk warning visible; main turn stayed running during export and returned idle after fixture release. Recorded failure was a plaintext assertion against base64 journal data; corrected to semantic decoded-message verification. The recorded journal also proved the fixture had completed its supposed active turn; explicit hold/release now proves active execution.",
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp E2E_AIT_SERVER_BIN=\"$PWD/target/debug/daemon\" PLAYWRIGHT_BROWSERS_PATH=\"$HOME/.cache/ms-playwright\" E2E_KEEP_AIT_DATA=1 npm run test:e2e --workspace=@ait/mobile -- e2e/browser/omp-native-html-export.spec.ts --retries=0 --trace=on --output=\"$HOME/.cache/ait-pr612-dispatch/task27-browser-proof\"",
+        "artifacts": "/home/KirisameLonnet/.cache/ait-pr612-dispatch/task27-browser-proof/omp-native-html-export-omp-01efb-bytes-during-an-active-turn-browser/"
+      },
+      {
+        "check": "Recovery focused oxfmt and oxlint",
+        "status": "passed",
+        "result": "Browser spec/model helper and pending native UI/client/protocol formatting normalized; focused oxlint found zero warnings/errors. Prior Rust and SDK suites retained without rerunning unchanged suites."
+      }
+    ]
+  },
+  "test_coverage": {
+    "status": "not measured",
+    "reason": "Coverage was not requested. Existing focused results and the actual browser proof are execution evidence, not coverage percentages. Measure only the affected native-export scope if requested."
+  },
+  "blockers": [],
+  "external_blockers": [],
+  "context": [
+    "User decision 2026-11-11: task01 and task31 are excluded from delivery (not delivered). task01 code 43a0e952 is retained as an integration dependency and Draft #651 stays open/unchanged; do not delete/revert task01 code or close #651. Missing task01 macOS signing/notarization is not a task27 blocker. task31 (OpenCode) is irrelevant to task27.",
+    "Native HTML risk is explicit and evidence-based: the verified output loads remote stencil.so viewer JS and embeds the full native journal; it is NOT privacy-equivalent to the inert generic Ait HTML. UI shows nativeHtmlExport.risk in all nine locales; download only, never auto-preview/open; no sanitize/rewrite/second format.",
+    "Staging confinement: owned staging lives in the OMP state root sibling ait-native-exports (already inside the sandbox OMP_STATE allow tree), never daemon data-dir or workspace; no sandbox policy widened, no Ait DB root touched. Adoption validates the exact owned directory and opens with O_NOFOLLOW from a retained handle (no symlink/TOCTOU redirect)."
+  ]
+}

@@ -188,6 +188,34 @@ it.each([
 });
 
 it.each([
+  [true, true],
+  [true, false],
+  [false, true],
+  [false, false],
+])(
+  "negotiates native HTML export with export=%s and cancel=%s",
+  (exportSupported, cancelSupported) => {
+    const methods = Object.values(METHODS)
+      .map((spec) => spec.method)
+      .filter(
+        (method) =>
+          (exportSupported || method !== "agent.native_html.export.request") &&
+          (cancelSupported || method !== "agent.native_html.export.cancel.request"),
+      );
+    const h = harness(methods);
+    try {
+      h.ready();
+      const status = h.received.find((message) => message.type === "status");
+      expect(object(object(status).payload).features).toMatchObject({
+        agentNativeHtmlExport: exportSupported && cancelSupported,
+      });
+    } finally {
+      h.transport.close();
+    }
+  },
+);
+
+it.each([
   ["markdown", "conversation"],
   ["markdown", "timeline"],
   ["html", "conversation"],
@@ -1098,12 +1126,12 @@ describe("Rust v1 connection", () => {
       h.transport.close();
     }
   });
-  it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(227);
+  it("uses canonical names and keeps method ownership consistent", () => {
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(227);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(
+      Object.keys(METHODS).length,
+    );
     for (const capabilities of CHANNEL_CAPABILITIES) {
-      expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
     }
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(

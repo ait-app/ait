@@ -46,6 +46,10 @@ pub struct ExecutionDependencies {
     pub lifetime: Arc<dyn Send + Sync>,
 }
 
+/// Typed delivery for one native HTML export artifact; never serialized onto the wire.
+pub(crate) type NativeExportReply =
+    oneshot::Sender<Result<crate::ports::native_html_export::ExportedNativeHtml, ErrorCode>>;
+
 enum Command {
     Request {
         method: Operation,
@@ -53,6 +57,14 @@ enum Command {
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
         realtime: Option<model::realtime::Endpoint>,
+        permit: OwnedSemaphorePermit,
+        queued: std::time::Instant,
+    },
+    /// One provider-native HTML render. The owned request and the typed artifact reply are
+    /// the only payloads: no JSON round-trip and no unread placeholder channel.
+    NativeHtmlExport {
+        request: crate::ports::native_html_export::Request,
+        reply: NativeExportReply,
         permit: OwnedSemaphorePermit,
         queued: std::time::Instant,
     },
@@ -374,6 +386,44 @@ impl AgentExecution {
                 reply,
                 cancel,
                 realtime,
+                permit,
+                queued: std::time::Instant::now(),
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
+                mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
+            })?;
+        receiver.await.map_err(|_| ErrorCode::AgentIo)?
+    }
+
+    /// Render one live OMP session's journal with the provider's native HTML formatter.
+    /// Shares the saved-export generation slots; the artifact travels through a typed
+    /// reply, never the JSON wire. A dropped caller withdraws the export and its cleanup.
+    ///
+    /// # Errors
+    /// Returns admission, identity, unsupported-provider, native or bounded-size errors.
+    pub(crate) async fn export_native_html(
+        &self,
+        request: crate::ports::native_html_export::Request,
+    ) -> Result<crate::ports::native_html_export::ExportedNativeHtml, ErrorCode> {
+        let _permit = Arc::clone(&self.0.exports)
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::ResourceExhausted)?;
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::AgentIo);
+        }
+        let permit = self
+            .0
+            .admission
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::CatalogBusy)?;
+        let (reply, receiver) = oneshot::channel();
+        self.0
+            .sender
+            .try_send(Command::NativeHtmlExport {
+                request,
+                reply,
                 permit,
                 queued: std::time::Instant::now(),
             })

@@ -78,6 +78,7 @@ fn capabilities_use_only_canonical_agent_runtime_names() {
             "agent.list.request",
             "agent.history.get.request",
             "agent.get.request",
+            "agent.statistics.get.request",
             "agent.update.request",
             "agent.archive.request",
             "agent.delete.request",

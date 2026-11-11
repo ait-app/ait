@@ -116,6 +116,8 @@ for line in sys.stdin:
             message('assistant', [{'type': 'text', 'text': 'Background finished'}],
                     provider='test', model='model', stopReason='stop')
             emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+        if current_prompt == 'export-hold' and active and (root / 'release-export-hold').exists():
+            finish()
         state = {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
                           'isSettled': not active and not pending_async,
@@ -293,7 +295,46 @@ for line in sys.stdin:
                         toolCallId='foreground', toolName='bash', isError=False)
             else:
                 emit({'type': 'agent_start'})
+        if text == 'export-hold':
+            # Keep the turn active without blocking the RPC loop, so a concurrent native
+            # export can be processed (real OMP is async). The turn finishes when the
+            # release marker is observed on a later get_state poll.
+            continue
         finish(settled=text != 'background')
+    elif kind == 'export_html':
+        output = command.get('outputPath')
+        mode = (root / 'export-mode').read_text().strip() if (root / 'export-mode').exists() else 'ok'
+        if mode == 'silent':
+            continue
+        if mode == 'late':
+            # Answer only after the caller's deadline, creating the file late. Signal after
+            # the write so the test can prove the late file was actually created then cleaned.
+            time.sleep(0.6)
+            Path(output).write_text('<html>LATE_NATIVE_FILE</html>')
+            (root / 'late-file-written').touch()
+            response(command, {'path': output})
+            continue
+        if mode == 'reject':
+            response(command, success=False)
+            continue
+        if mode == 'wrong-path':
+            response(command, {'path': str(root / 'somewhere-else.html')})
+            continue
+        if mode == 'oversize':
+            Path(output).write_bytes(b'x' * (16 * 1024 * 1024 + 1))
+            response(command, {'path': output})
+            continue
+        if mode == 'symlink':
+            target = root / 'symlink-target.html'
+            target.write_text('SYMLINK_TARGET_CONTENT')
+            Path(output).unlink(missing_ok=True)
+            Path(output).symlink_to(target)
+            response(command, {'path': output})
+            continue
+        Path(output).write_text(
+            '<!DOCTYPE html><html><head><script>var viewer=1;</script></head>'
+            '<body>NATIVE_FIXTURE_MARKER_27 ' + session_id + '</body></html>')
+        response(command, {'path': output})
     elif kind == 'steer':
         response(command, {'disposition': 'queued'})
         message('user', command['message'])

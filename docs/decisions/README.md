@@ -101,7 +101,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
-- [ADR-239：已保存 Timeline 导出与一次性客户端下载](providers/adr-239-persisted-timeline-export-downloads.md)（提议中）
+- [ADR-265：OMP 原生 HTML 导出与一次性客户端下载](providers/adr-265-omp-native-html-export-downloads.md)（提议中）
+- [ADR-239：已保存 Timeline 导出与一次性客户端下载](providers/adr-239-persisted-timeline-export-downloads.md)（提议中；经 [ADR-265](providers/adr-265-omp-native-html-export-downloads.md) 修订）
 - [ADR-238：只读会话统计使用已提交事实](providers/adr-238-read-only-session-statistics.md)（提议中）
 - [ADR-237：OMP 原生 Session 与独立 ACP 可执行文件](providers/adr-237-omp-native-session-and-standalone-acp.md)（提议中）
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)

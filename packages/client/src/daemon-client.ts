@@ -25,6 +25,8 @@ export type {
   AgentTimelineExportOptions,
   AgentTimelineExportResult,
   AgentTimelineExportCancelResult,
+  AgentNativeHtmlExportResult,
+  AgentNativeHtmlExportCancelResult,
 } from "@ait/protocol/messages";
 import type {
   ShareAudience,
@@ -42,6 +44,10 @@ import {
   type AgentSessionStatistics,
   AgentTimelineExportResultSchema,
   AgentTimelineExportCancelResultSchema,
+  AgentNativeHtmlExportResultSchema,
+  AgentNativeHtmlExportCancelResultSchema,
+  type AgentNativeHtmlExportResult,
+  type AgentNativeHtmlExportCancelResult,
   type AgentTimelineExportOptions,
   type AgentTimelineExportResult,
   type AgentTimelineExportCancelResult,
@@ -2867,6 +2873,37 @@ export class DaemonClient {
       message: { type: "agent.timeline.export.cancel.request", agentId, token },
       responseType: "agent.timeline.export.cancel.response",
       selectPayload: (payload) => AgentTimelineExportCancelResultSchema.parse(payload),
+    });
+  }
+
+  /** Create one provider-native HTML download; failures never regenerate an artifact. */
+  async exportAgentNativeHtml(agentId: string): Promise<AgentNativeHtmlExportResult> {
+    if (this.lastServerInfoMessage?.features?.agentNativeHtmlExport !== true) {
+      throw Object.assign(new Error("Native HTML export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_html.export.request", agentId },
+      responseType: "agent.native_html.export.response",
+      selectPayload: (payload) => AgentNativeHtmlExportResultSchema.parse(payload),
+    });
+  }
+
+  /** Release an unused native export token without creating a replacement artifact. */
+  async cancelAgentNativeHtmlExport(
+    agentId: string,
+    token: string,
+  ): Promise<AgentNativeHtmlExportCancelResult> {
+    if (this.lastServerInfoMessage?.features?.agentNativeHtmlExport !== true) {
+      throw Object.assign(new Error("Native HTML export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_html.export.cancel.request", agentId, token },
+      responseType: "agent.native_html.export.cancel.response",
+      selectPayload: (payload) => AgentNativeHtmlExportCancelResultSchema.parse(payload),
     });
   }
 

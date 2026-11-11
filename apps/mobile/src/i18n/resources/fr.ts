@@ -2709,6 +2709,14 @@ export const fr: TranslationResources = {
     browserHandoff:
       "Transmis au navigateur — consultez ses téléchargements pour terminer l’enregistrement.",
   },
+  nativeHtmlExport: {
+    title: "Export HTML natif (OMP)",
+    description:
+      "Oh My Pi rend cette session avec son propre formateur. Le fichier peut contenir des scripts actifs et n’est enregistré qu’en téléchargement — il n’est jamais ouvert dans Ait. Maximum 16 Mio.",
+    download: "Exporter le HTML natif",
+    risk: "Le format natif contient des scripts et peut charger une visionneuse externe (stencil.so) à l’ouverture ; celle-ci peut lire l’historique de session intégré au fichier. Téléchargement uniquement — Ait ne le prévisualise ni ne l’ouvre jamais. Différent de l’export HTML générique inerte.",
+    unavailable: "Export HTML natif indisponible. Connectez-vous à un hôte OMP compatible.",
+  },
   sessionStatistics: {
     title: "Statistiques de la session sélectionnée",
     scope: "Dernier instantané du fournisseur — ni cumul de session ni forcément le dernier tour.",

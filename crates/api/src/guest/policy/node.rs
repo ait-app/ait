@@ -53,7 +53,9 @@ pub(super) async fn request(session: &Session, state: &Shared, mut request: Requ
     }
     match request.method.as_str() {
         "terminal.create.request" => Decision::Private(request, Private::TerminalCreate),
-        "fs.file.download_token.request" | "agent.timeline.export.request" => {
+        "fs.file.download_token.request"
+        | "agent.timeline.export.request"
+        | "agent.native_html.export.request" => {
             if session.take_download(std::time::Instant::now()) {
                 Decision::Private(request, Private::Download)
             } else {

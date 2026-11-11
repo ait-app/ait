@@ -2,6 +2,7 @@
 
 mod bot;
 mod controls;
+mod native_export;
 mod native_sessions;
 mod placement;
 mod resume;
@@ -82,6 +83,8 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            // Native HTML export travels through the typed lane reply, never JSON execute.
+            Operation::NativeHtmlExport => Err(ErrorCode::UnsupportedCapability),
             Operation::Statistics => {
                 super::agent_runtime::statistics::get(&self.directory, &decode(params)?)
             }
@@ -723,7 +726,7 @@ pub(crate) fn only(params: &Value, allowed: &[&str]) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-const fn map_manager(error: &AgentManagerError) -> ErrorCode {
+fn map_manager(error: &AgentManagerError) -> ErrorCode {
     match error {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
         AgentManagerError::ProviderUnavailable(_)
@@ -736,6 +739,7 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::Session
         | AgentManagerError::History(_)
         | AgentManagerError::Registry => ErrorCode::AgentIo,
+        AgentManagerError::Operation(code) => (*code).into(),
     }
 }
 

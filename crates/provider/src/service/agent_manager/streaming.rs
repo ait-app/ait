@@ -108,6 +108,11 @@ pub(super) async fn drain(
                 }
             };
         }
+        // Native export completion is a download fact, not history or a turn outcome.
+        if let Some(AgentTurnEvent::NativeHtmlExport(result)) = agent.pending.take() {
+            deliver_native_html_export(id, agent, result);
+            continue;
+        }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
             Some(AgentTurnEvent::Started(turn)) => {
@@ -160,6 +165,8 @@ pub(super) async fn drain(
                     .reconcile(id, &agent.record.provider, entries)
                     .map(|_| ())
             }),
+            // Intercepted above before display projection; never a turn outcome.
+            Some(AgentTurnEvent::NativeHtmlExport(_)) => unreachable!(),
             Some(
                 AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed,
             )
@@ -189,6 +196,30 @@ pub(super) async fn drain(
         settle_failure(registry, timeline, events, id, agent).await?;
     }
     Ok(())
+}
+
+/// Forward a completed native HTML export to its waiting typed request, binding the artifact
+/// to the authorized Ait Agent identity (not the OMP native sessionId, which the adapter
+/// retains only for its own validation). The receipt, Files grant and scoped release all key
+/// on the Ait Agent the caller was authorized to export.
+fn deliver_native_html_export(
+    id: &str,
+    agent: &mut super::LiveAgent,
+    result: Result<
+        crate::ports::native_html_export::ExportedNativeHtml,
+        crate::ports::native_html_export::NativeHtmlExportError,
+    >,
+) {
+    let Some(reply) = agent.native_export.take() else {
+        return;
+    };
+    let result = result
+        .map(|mut export| {
+            id.clone_into(&mut export.artifact.agent_id);
+            export
+        })
+        .map_err(|error| model::ErrorCode::from(crate::rpc::ErrorCode::from(error)));
+    let _ = reply.send(result);
 }
 
 fn persist_info(

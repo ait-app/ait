@@ -546,7 +546,7 @@ impl Engine {
                 } else {
                     json!({})
                 };
-                if event == AgentTurnEvent::Failed {
+                if matches!(event, AgentTurnEvent::Failed) {
                     let message = self
                         .native()
                         .and_then(AgentSession::failure_message)
@@ -563,7 +563,7 @@ impl Engine {
                         });
                     self.outgoing.push(json!({"jsonrpc":"2.0","id":id,"error":{"code":-32603,"message":message,"data":{"_meta":meta,"diagnostic":diagnostic}}}));
                 } else {
-                    self.outgoing.push(json!({"jsonrpc":"2.0","id":id,"result":{"stopReason":if event==AgentTurnEvent::Cancelled {"cancelled"} else {"end_turn"},"_meta":meta}}));
+                    self.outgoing.push(json!({"jsonrpc":"2.0","id":id,"result":{"stopReason":if matches!(event, AgentTurnEvent::Cancelled) {"cancelled"} else {"end_turn"},"_meta":meta}}));
                 }
             } else if self.capabilities.ait {
                 self.notify("_ait/event", json!({"sessionId":self.id,"event":event}));

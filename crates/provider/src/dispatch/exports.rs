@@ -1,4 +1,5 @@
-//! Typed saved-Timeline exports; the API only finishes existing download-grant composition.
+//! Typed saved-Timeline and provider-native HTML exports; the API only finishes existing
+//! download-grant composition.
 
 use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode};
@@ -10,6 +11,8 @@ use super::{Completion, State};
 pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.timeline.export.request"),
     MethodSpec::request("agent.timeline.export.cancel.request"),
+    MethodSpec::request("agent.native_html.export.request"),
+    MethodSpec::request("agent.native_html.export.cancel.request"),
 ];
 
 pub(super) async fn dispatch(
@@ -19,22 +22,49 @@ pub(super) async fn dispatch(
     let Some(mut context) = pending.take_if(|context| {
         matches!(
             context.request.method.as_str(),
-            "agent.timeline.export.request" | "agent.timeline.export.cancel.request"
+            "agent.timeline.export.request"
+                | "agent.timeline.export.cancel.request"
+                | "agent.native_html.export.request"
+                | "agent.native_html.export.cancel.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);
     };
     let params = std::mem::take(&mut context.request.params);
-    let result = if context.request.method == "agent.timeline.export.cancel.request" {
-        serde_json::from_value::<CancelRequest>(params)
+    let result = match context.request.method.as_str() {
+        "agent.timeline.export.cancel.request" => serde_json::from_value::<CancelRequest>(params)
             .map(|request| Completion::ReleaseTimelineExport {
                 request_id: context.request.id.clone(),
                 agent_id: request.agent_id,
                 token: request.token,
             })
-            .map_err(|_| ErrorCode::InvalidMessage)
-    } else {
-        match serde_json::from_value::<Request>(params) {
+            .map_err(|_| ErrorCode::InvalidMessage),
+        "agent.native_html.export.cancel.request" => {
+            serde_json::from_value::<crate::ports::native_html_export::CancelRequest>(params)
+                .map(|request| Completion::ReleaseNativeHtmlExport {
+                    request_id: context.request.id.clone(),
+                    agent_id: request.agent_id,
+                    token: request.token,
+                })
+                .map_err(|_| ErrorCode::InvalidMessage)
+        }
+        "agent.native_html.export.request" => {
+            match serde_json::from_value::<crate::ports::native_html_export::Request>(params) {
+                Ok(request) => match state.agent_execution.as_ref() {
+                    Some(execution) => execution
+                        .export_native_html(request)
+                        .await
+                        .map(|export| Completion::NativeHtmlExport {
+                            request_id: context.request.id.clone(),
+                            export,
+                        })
+                        .map_err(ErrorCode::from),
+                    None => Err(ErrorCode::NotImplemented),
+                },
+                Err(_) => Err(ErrorCode::InvalidMessage),
+            }
+        }
+        _ => match serde_json::from_value::<Request>(params) {
             Ok(request) => match state.agent_execution.as_ref() {
                 Some(execution) => execution.export_timeline(request).await.map(|export| {
                     Completion::TimelineExport {
@@ -45,7 +75,7 @@ pub(super) async fn dispatch(
                 None => Err(ErrorCode::NotImplemented),
             },
             Err(_) => Err(ErrorCode::InvalidMessage),
-        }
+        },
     };
     match result {
         Ok(completion) => Ok(Some(completion)),

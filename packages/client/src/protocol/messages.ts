@@ -155,6 +155,8 @@ export function serverInfo(
       agentStatisticsGet: has("agent.statistics.get.request"),
       agentTimelineExport:
         has("agent.timeline.export.request") && has("agent.timeline.export.cancel.request"),
+      agentNativeHtmlExport:
+        has("agent.native_html.export.request") && has("agent.native_html.export.cancel.request"),
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),
       agentTimelinePromptIndex: has("agent.timeline.list_prompts.request"),

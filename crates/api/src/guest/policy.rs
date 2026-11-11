@@ -204,10 +204,11 @@ fn classify(method: &str) -> Rule {
 fn classify_resource(method: &str) -> Rule {
     match method {
         "agent.create.request" => Rule::AgentCreate,
-        "agent.timeline.export.request" => Rule::AgentDownload,
+        "agent.timeline.export.request" | "agent.native_html.export.request" => Rule::AgentDownload,
         "agent.get.request"
         | "agent.statistics.get.request"
         | "agent.timeline.export.cancel.request"
+        | "agent.native_html.export.cancel.request"
         | "agent.finish.wait.request"
         | "agent.timeline.get.request"
         | "agent.timeline.search.request"

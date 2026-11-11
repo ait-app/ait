@@ -20,6 +20,8 @@ import {
 import type {
   AgentTimelineExportResult,
   AgentTimelineExportCancelResult,
+  AgentNativeHtmlExportResult,
+  AgentNativeHtmlExportCancelResult,
 } from "@ait/protocol/messages";
 
 expectTypeOf<"getGitDiff" extends keyof DaemonClient ? true : false>().toEqualTypeOf<false>();
@@ -336,6 +338,123 @@ test.each(["not_found", "expired", "resource_exhausted"])(
     expect(mock.sent.map((frame) => parseSentFrame(frame).type)).toEqual([
       "agent.timeline.export.request",
       "agent.timeline.export.cancel.request",
+    ]);
+  },
+);
+
+test("exports native HTML with a typed single-use artifact and cancels it", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "native-html-export",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentNativeHtmlExport: true } });
+  await connected;
+  const result = client.exportAgentNativeHtml("agent-1");
+  expectTypeOf(result).toEqualTypeOf<Promise<AgentNativeHtmlExportResult>>();
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toEqual({
+    type: "agent.native_html.export.request",
+    requestId: expect.any(String),
+    agentId: "agent-1",
+  });
+  const artifact: AgentNativeHtmlExportResult = {
+    agentId: "agent-1",
+    source: "omp_native",
+    token: "single-use-token",
+    fileName: "ait-native-123.html",
+    mimeType: "text/html; charset=utf-8",
+    size: 4096,
+    expiresAt: "2026-11-11T00:05:00Z",
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.native_html.export.response",
+      payload: { ...artifact, requestId: request.requestId },
+    }),
+  );
+  expect(await result).toEqual(artifact);
+  const cancelled = client.cancelAgentNativeHtmlExport("agent-1", artifact.token);
+  expectTypeOf(cancelled).toEqualTypeOf<Promise<AgentNativeHtmlExportCancelResult>>();
+  const cancelRequest = parseSentFrame(mock.sent[1]);
+  expect(cancelRequest).toEqual({
+    type: "agent.native_html.export.cancel.request",
+    requestId: expect.any(String),
+    agentId: "agent-1",
+    token: artifact.token,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.native_html.export.cancel.response",
+      payload: { requestId: cancelRequest.requestId, released: true },
+    }),
+  );
+  expect(await cancelled).toEqual({ released: true });
+  expect(mock.sent).toHaveLength(2);
+});
+
+test.each([undefined, false])(
+  "does not export or cancel native HTML on an unsupported host (%s)",
+  async (supported) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "native-export-old-host",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { agentNativeHtmlExport: supported } });
+    await connected;
+    await expect(client.exportAgentNativeHtml("agent-1")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    await expect(client.cancelAgentNativeHtmlExport("agent-1", "token")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    expect(mock.sent).toHaveLength(0);
+  },
+);
+
+test.each(["not_found", "expired", "resource_exhausted"])(
+  "does not retry or regenerate after native export failure %s",
+  async (code) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "native-export-failure",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { agentNativeHtmlExport: true } });
+    await connected;
+    for (const result of [
+      () => client.exportAgentNativeHtml("agent-1"),
+      () => client.cancelAgentNativeHtmlExport("agent-1", "expired-token"),
+    ]) {
+      const pending = result();
+      const request = parseSentFrame(mock.sent.at(-1)!);
+      mock.triggerMessage(
+        wrapSessionMessage({
+          type: "rpc_error",
+          payload: { requestId: request.requestId, code, error: "Export failed" },
+        }),
+      );
+      await expect(pending).rejects.toMatchObject({ code });
+    }
+    expect(mock.sent.map((frame) => parseSentFrame(frame).type)).toEqual([
+      "agent.native_html.export.request",
+      "agent.native_html.export.cancel.request",
     ]);
   },
 );

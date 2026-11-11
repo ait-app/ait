@@ -278,6 +278,33 @@ export const AgentTimelineExportCancelResultSchema = z.object({
 });
 export type AgentTimelineExportCancelResult = z.infer<typeof AgentTimelineExportCancelResultSchema>;
 
+/**
+ * Provider-native HTML export receipt. The bytes are the provider's own renderer output:
+ * they may contain active scripts and upstream viewer resources, so clients download the
+ * file and never render it inline. Single-use token, never a server filesystem path.
+ */
+export const AgentNativeHtmlExportResultSchema = z.object({
+  agentId: z.string(),
+  source: z.literal("omp_native"),
+  token: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  size: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(16 * 1024 * 1024),
+  expiresAt: z.string(),
+});
+export type AgentNativeHtmlExportResult = z.infer<typeof AgentNativeHtmlExportResultSchema>;
+
+export const AgentNativeHtmlExportCancelResultSchema = z.object({
+  released: z.boolean(),
+});
+export type AgentNativeHtmlExportCancelResult = z.infer<
+  typeof AgentNativeHtmlExportCancelResultSchema
+>;
+
 const AgentModeSchema: z.ZodType<AgentMode> = z.object({
   id: z.string(),
   label: z.string(),
@@ -1543,6 +1570,25 @@ export const AgentTimelineExportCancelRequestMessageSchema = z.object({
 });
 export type AgentTimelineExportCancelRequestMessage = z.infer<
   typeof AgentTimelineExportCancelRequestMessageSchema
+>;
+
+export const AgentNativeHtmlExportRequestMessageSchema = z.object({
+  type: z.literal("agent.native_html.export.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+export type AgentNativeHtmlExportRequestMessage = z.infer<
+  typeof AgentNativeHtmlExportRequestMessageSchema
+>;
+
+export const AgentNativeHtmlExportCancelRequestMessageSchema = z.object({
+  type: z.literal("agent.native_html.export.cancel.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  token: z.string(),
+});
+export type AgentNativeHtmlExportCancelRequestMessage = z.infer<
+  typeof AgentNativeHtmlExportCancelRequestMessageSchema
 >;
 
 export const SendAgentMessageRequestSchema = z.object({
@@ -3193,6 +3239,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentStatisticsGetRequestMessageSchema,
   AgentTimelineExportRequestMessageSchema,
   AgentTimelineExportCancelRequestMessageSchema,
+  AgentNativeHtmlExportRequestMessageSchema,
+  AgentNativeHtmlExportCancelRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
   CloseItemsRequestMessageSchema,
@@ -3547,6 +3595,7 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         agentStatisticsGet: z.boolean().optional(),
         agentTimelineExport: z.boolean().optional(),
+        agentNativeHtmlExport: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
@@ -4667,6 +4716,22 @@ export const AgentTimelineExportCancelResponseMessageSchema = z.object({
 });
 export type AgentTimelineExportCancelResponseMessage = z.infer<
   typeof AgentTimelineExportCancelResponseMessageSchema
+>;
+
+export const AgentNativeHtmlExportResponseMessageSchema = z.object({
+  type: z.literal("agent.native_html.export.response"),
+  payload: AgentNativeHtmlExportResultSchema.extend({ requestId: z.string() }),
+});
+export type AgentNativeHtmlExportResponseMessage = z.infer<
+  typeof AgentNativeHtmlExportResponseMessageSchema
+>;
+
+export const AgentNativeHtmlExportCancelResponseMessageSchema = z.object({
+  type: z.literal("agent.native_html.export.cancel.response"),
+  payload: AgentNativeHtmlExportCancelResultSchema.extend({ requestId: z.string() }),
+});
+export type AgentNativeHtmlExportCancelResponseMessage = z.infer<
+  typeof AgentNativeHtmlExportCancelResponseMessageSchema
 >;
 
 const AgentTimelineSeqRangeSchema = z.object({
@@ -6706,6 +6771,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentStatisticsGetResponseMessageSchema,
   AgentTimelineExportResponseMessageSchema,
   AgentTimelineExportCancelResponseMessageSchema,
+  AgentNativeHtmlExportResponseMessageSchema,
+  AgentNativeHtmlExportCancelResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,
