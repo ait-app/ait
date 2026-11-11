@@ -67,6 +67,11 @@ Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时�
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、
 [ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)。
 
+OMP 的模型角色由原生 profile 动态发现，角色 id、模型 kind 与继承解析留在 adapter；
+共享层复用 `feature_values` 与普通 select，不新增角色枚举或存储。
+私有 overlay 与同身份重开契约见
+[ADR-247](../decisions/providers/adr-247-dynamic-model-roles.md)。
+
 Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可变读视图；目录、
 Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
 旧视图保持有效，权限写入仍核对最新记录，见

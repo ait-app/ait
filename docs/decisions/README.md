@@ -101,6 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-247：动态发现的模型角色与私有 overlay 生命周期](providers/adr-247-dynamic-model-roles.md)（提议中）
 - [ADR-241：原生确认的 Agent 配置提交与字段级部分成功](providers/adr-241-native-confirmed-configuration.md)（提议中）
 - [ADR-237：OMP 原生 Session 与独立 ACP 可执行文件](providers/adr-237-omp-native-session-and-standalone-acp.md)（提议中）
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)

@@ -208,6 +208,7 @@ fn parse(
 async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
     let available = client.is_available().await;
     let (status, error, details) = if matches!(available, Ok(true)) {
+        client.refresh_discovery_cache(cwd);
         match client.discover(cwd).await {
             Ok(details) => ("ready", None, details),
             Err(_) => (

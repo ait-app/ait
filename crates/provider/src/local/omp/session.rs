@@ -8,7 +8,7 @@ use tokio::{sync::oneshot, time::Instant};
 use uuid::Uuid;
 
 use super::{
-    LABEL, OmpClient, PROVIDER, config, history, interactions::Dialogs, stream::Stream,
+    LABEL, OmpClient, PROVIDER, config, history, interactions::Dialogs, roles, stream::Stream,
     transport::Transport,
 };
 use crate::local::prompt_blocks;
@@ -54,6 +54,10 @@ struct NativeBridge {
 pub(super) struct Session {
     client: OmpClient,
     transport: Transport,
+    // Declared after the transport: the private `--config` overlay must outlive its reader.
+    overlay: Option<tempfile::NamedTempFile>,
+    // Discovered at open; absent when native metadata could not be read, which only hides roles.
+    catalog: Option<std::sync::Arc<roles::Catalog>>,
     cwd: String,
     confinement: Option<domain::workspace::sandbox::WriteConfinement>,
     state: Value,
@@ -119,14 +123,30 @@ pub(super) async fn probe(
     Ok(transport)
 }
 
+/// One live native process with the private role overlay that process must keep reading.
+struct Connection {
+    transport: Transport,
+    // Owned for the connection's lifetime; `--config` is a path, not a copied snapshot.
+    overlay: Option<tempfile::NamedTempFile>,
+    state: Value,
+    tiers: config::ServiceTiers,
+}
+
 async fn connect(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     path: Option<&str>,
-) -> Result<(Transport, Value, config::ServiceTiers), AgentSessionError> {
+) -> Result<Connection, AgentSessionError> {
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
     if let Some(path) = path {
         args.extend(["--resume".to_owned(), path.to_owned()]);
+    }
+    // Explicit role assignments ride a private AIT-owned overlay; inherited roles add no file
+    // and the native layered settings apply unchanged.
+    let overlay = roles::overlay(&spec.config).await?;
+    if let Some(file) = &overlay {
+        let path = file.path().to_str().ok_or(AgentSessionError::Failed)?;
+        args.extend(["--config".to_owned(), path.to_owned()]);
     }
     if let Some(prompt) = &spec.config.system_prompt {
         args.extend(["--append-system-prompt".to_owned(), prompt.clone()]);
@@ -164,7 +184,12 @@ async fn connect(
             spec.confinement.as_ref(),
         )
         .await?;
-    Ok((transport, state, tiers))
+    Ok(Connection {
+        transport,
+        overlay,
+        state,
+        tiers,
+    })
 }
 
 pub(super) async fn open(
@@ -194,8 +219,12 @@ pub(super) async fn open(
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
-    let (transport, state, service_tiers) =
-        connect(client, spec, path.filter(|_| persisted)).await?;
+    let Connection {
+        transport,
+        overlay,
+        state,
+        tiers: service_tiers,
+    } = connect(client, spec, path.filter(|_| persisted)).await?;
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
@@ -203,9 +232,12 @@ pub(super) async fn open(
     let mut stream = replayed.unwrap_or_else(|| Stream::new(id.to_owned(), client.images.clone()));
     stream = stream.with_blobs(history::root(client)?.with_file_name("blobs"));
     stream.set_context(&state);
+    let catalog = client.role_catalog(&spec.cwd).await.ok();
     Ok(Session {
         client: client.clone(),
         transport,
+        overlay,
+        catalog,
         cwd: spec.cwd.clone(),
         confinement: spec.confinement.clone(),
         state,
@@ -292,11 +324,16 @@ impl Session {
                 rejected: Vec::new(),
             });
         }
+        self.validate_roles(config).await?;
         // Clearing a host override restores native inheritance, which only a reopen applies:
         // the live setters have no "unset" command.
         let clears_override = (self.config.model.is_some() && config.model.is_none())
             || (self.config.thinking_option_id.is_some() && config.thinking_option_id.is_none());
+        // Role assignments reach OMP only through the private `--config` overlay a new process
+        // reads at startup, so any assignment change reopens instead of using a live setter.
+        let overlay_changed = !roles::same_overlay(&self.config, config);
         if !clears_override
+            && !overlay_changed
             && self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
         {
@@ -307,6 +344,28 @@ impl Session {
                 config,
                 rejected: Vec::new(),
             })
+        }
+    }
+
+    /// Reject new role assignments the live catalog cannot resolve.
+    ///
+    /// Bounded shape is already checked by `config::validate`. This second gate compares the
+    /// proposed assignments with the real role and model pools; a stored value the catalog
+    /// cannot resolve stays display-only, so re-submitting it (other than "inherit") is
+    /// rejected until a native read resolves it again.
+    async fn validate_roles(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        let proposed = roles::overrides(config);
+        if proposed.is_empty() || proposed == roles::overrides(&self.config) {
+            return Ok(());
+        }
+        match self.client.role_catalog(&self.cwd).await {
+            Ok(catalog) => catalog.validate(config),
+            // No catalog means no authority to accept a new assignment; inherit still works
+            // because it produces no overlay entry.
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; new assignments rejected");
+                Err(AgentSessionError::Rejected)
+            }
         }
     }
 
@@ -450,11 +509,11 @@ impl Session {
             confinement: self.confinement.clone(),
         };
         match connect(&self.client, &spec, persisted.then_some(path.as_str())).await {
-            Ok((transport, state, service_tiers)) => {
-                if persisted && state["sessionId"] != self.state["sessionId"] {
+            Ok(connection) => {
+                if persisted && connection.state["sessionId"] != self.state["sessionId"] {
                     return Err(AgentSessionError::Failed);
                 }
-                self.adopt_reopen(transport, state, service_tiers, persisted, config.clone())?;
+                self.adopt_reopen(connection, persisted, config.clone())?;
                 Ok(self.config.clone())
             }
             Err(error) => {
@@ -462,11 +521,11 @@ impl Session {
                     config: previous.clone(),
                     ..spec
                 };
-                let (transport, state, service_tiers) =
+                let connection =
                     connect(&self.client, &recovery, persisted.then_some(path.as_str()))
                         .await
                         .map_err(|_| error)?;
-                self.adopt_reopen(transport, state, service_tiers, persisted, previous)?;
+                self.adopt_reopen(connection, persisted, previous)?;
                 Err(error)
             }
         }
@@ -475,12 +534,16 @@ impl Session {
     /// Install a reopened native process, retaining the stream of a persisted session.
     fn adopt_reopen(
         &mut self,
-        transport: Transport,
-        state: Value,
-        service_tiers: config::ServiceTiers,
+        connection: Connection,
         persisted: bool,
         config: StoredAgentConfig,
     ) -> Result<(), AgentSessionError> {
+        let Connection {
+            transport,
+            overlay,
+            state,
+            tiers: service_tiers,
+        } = connection;
         if !persisted {
             self.stream = Stream::new(
                 config::text(&state, "sessionId")?.to_owned(),
@@ -489,6 +552,8 @@ impl Session {
             .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
         }
         self.transport = transport;
+        self.overlay = overlay;
+        // Same cwd/environment identity: the cached catalog still describes this profile.
         self.state_check = None;
         self.settings_refresh = observed_settings::Refresh::default();
         self.cancel_requests.clear();
@@ -997,7 +1062,13 @@ impl AgentSession for Session {
         } else {
             config::ServiceTiers::default()
         };
-        Some(json!({"availableModes":config::modes(),"features":config::features(config, tiers)}))
+        let mut features = config::features(config, tiers);
+        features.extend(match &self.catalog {
+            Some(catalog) => catalog.features(config),
+            // Without a catalog only the persisted role keys render; no fixed set is invented.
+            None => roles::stored_features(config),
+        });
+        Some(json!({"availableModes":config::modes(),"features":features}))
     }
 
     fn failure_diagnostic(&self) -> Option<Diagnostic> {

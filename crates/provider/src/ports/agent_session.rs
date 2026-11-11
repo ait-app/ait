@@ -597,6 +597,10 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// Invalidate adapter-cached discovery data for `cwd` before a fresh snapshot read.
+    /// Default no-op; adapters with a discovery cache (e.g. OMP role catalog) override it.
+    fn refresh_discovery_cache(&self, _cwd: &str) {}
+
     /// Read existing native history without resuming or claiming an interactive writer.
     /// # Errors
     /// Returns unavailable, missing-history or malformed-provider errors.

@@ -64,6 +64,20 @@
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。共享的 slash 命令发现路径
   不传入写入限制（[ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md)）。
 
+## 动态模型角色
+
+- OMP 从 `modelRoles`、`modelTags` 与 `cycleOrder` 的并集发现角色；目录按 cwd 和运行环境
+  隔离、串行读取，刷新失效对应身份，迟到结果不覆盖刷新后的目录。读取失败保留上次有效目录；
+  离线仅显示已存储角色，不合成固定列表。
+- `feature_values["modelRole.<id>"]` 复用已有配置补丁和持久化路径。`native` 表示继承；
+  `unset` 表示显式未分配；其他值由 OMP 目录验证。目录无法解析的存储值保留展示并标记
+  `metadata.unresolved`，不能重新应用；未知角色仅允许改回 `native`。
+- 角色的模型 kind、effort 与继承别名只由 adapter 解释。客户端渲染普通 select 的 label
+  与 metadata，不解析 selector；无角色目录的旧主机不增加角色控件。
+- 角色 overlay 的会话重开、quiet gate 与沙箱只读文件生命周期契约见
+  [ADR-247](../decisions/providers/adr-247-dynamic-model-roles.md)；实际验收状态记录在
+  [task21](../plans/pr612-split/task21.json)。
+
 ## 时间线与历史投影
 
 - 原生会话、认证与历史由原生程序持有；provider 的 Timeline SQLite 是可重建的展示索引。

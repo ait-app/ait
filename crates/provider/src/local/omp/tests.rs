@@ -220,6 +220,20 @@ pub(super) async fn next(
     .unwrap()
 }
 
+/// Ids of the native service-tier toggles in an adapter-rendered controls payload.
+///
+/// Role selects share the same `features` array, so tier assertions must select the tier
+/// keys rather than pin the whole array length.
+pub(super) fn tier_features(controls: &Value) -> Vec<&str> {
+    controls["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|feature| feature["id"].as_str())
+        .filter(|id| !id.starts_with("modelRole."))
+        .collect()
+}
+
 pub(super) async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     let mut events = Vec::new();
     loop {

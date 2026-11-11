@@ -112,6 +112,24 @@ def finish(aborted=False, settled=True):
         emit({'type': 'agent_end', 'messages': []})
     emit({'type': 'session_settled'})
 
+# Machine-readable metadata subcommands the adapter reads instead of starting a conversation.
+# Like the real CLI, these report layered user settings, not a per-run `--config` overlay.
+if args[:2] == ['config', 'list']:
+    roles = {'default': 'test/model', 'task': 'test/model:high'}
+    tags = {'task': {'name': 'Worker'}}
+    cycle = list(roles)
+    print(json.dumps({'modelRoles': {'key': 'modelRoles', 'value': roles},
+                      'modelTags': {'key': 'modelTags', 'value': tags},
+                      'cycleOrder': {'key': 'cycleOrder', 'value': cycle}}))
+    sys.exit(0)
+if args[:1] == ['models']:
+    print(json.dumps({'models': [
+        {'selector': item['provider'] + '/' + item['id'], 'name': item['name'],
+         'kind': 'chat', 'input': ['text'],
+         'thinking': item['thinking']['efforts']}
+        for item in models]}))
+    sys.exit(0)
+
 emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864})
 
 for line in sys.stdin:

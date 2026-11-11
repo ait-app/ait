@@ -4,6 +4,26 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSession,
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};
 use tokio_util::task::AbortOnDropHandle;
 
+/// Command lines of the native conversation transports the fixture recorded.
+///
+/// A conversation transport runs `--mode rpc-ui` without `--no-session`. Read-only metadata
+/// reads (`config list`, `models`) carry no `--mode`, and disposable capability probes run with
+/// `--no-session`; neither is a conversation, so neither counts towards the "one process per
+/// session" invariants.
+fn conversation_launches(root: &std::path::Path) -> Vec<Vec<Value>> {
+    std::fs::read_to_string(root.join("agent/calls.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter_map(|call| call["args"].as_array().cloned())
+        .filter(|args| {
+            args.windows(2)
+                .any(|pair| pair[0] == json!("--mode") && pair[1] == json!("rpc-ui"))
+                && !args.contains(&json!("--no-session"))
+        })
+        .collect()
+}
+
 #[test]
 fn standard_acp_retains_provider_notifications_without_assistant_text() {
     let event = AgentTurnEvent::Timeline(crate::protocol::timeline::NativeItem {
@@ -181,20 +201,9 @@ async fn standard_acp_waits_for_native_background_settlement_and_deduplicates_ch
         })
         .collect::<Vec<_>>();
     assert_eq!(text, vec!["Inspect", "Hello world", "Background finished"]);
-    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
-    let launches = calls
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|call| {
-            call["args"].is_array()
-                && !call["args"]
-                    .as_array()
-                    .unwrap()
-                    .contains(&json!("--no-session"))
-        })
-        .collect::<Vec<_>>();
+    let launches = conversation_launches(root.path());
     assert_eq!(launches.len(), 1);
-    assert_eq!(launches[0]["args"][1], "rpc-ui");
+    assert_eq!(launches[0][1], "rpc-ui");
     peer.finish(&session).await;
 }
 
@@ -314,18 +323,9 @@ async fn standard_config_controls_and_rpc_extension_keep_native_ownership() {
         )
         .await;
     assert!(forbidden.get("error").is_some());
-    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
-    let launches = calls
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|call| {
-            call["args"]
-                .as_array()
-                .is_some_and(|args| !args.contains(&json!("--no-session")))
-        })
-        .count();
     assert_eq!(
-        launches, 1,
+        conversation_launches(root.path()).len(),
+        1,
         "model, thinking and toggle changes must keep the same plugin process"
     );
     peer.finish(&session).await;

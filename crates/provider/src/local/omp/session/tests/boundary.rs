@@ -220,3 +220,109 @@ async fn native_sandbox_placement_survives_create_restore_and_config_reopen() {
     complete(&mut restored).await;
     restored.close().await.unwrap();
 }
+
+/// A role assignment reaches OMP only through the private `--config` overlay a fresh process
+/// reads at startup, so the adapter must reopen instead of using a live setter.
+#[tokio::test]
+async fn role_assignment_reopens_with_a_private_overlay_and_keeps_the_session() {
+    let (root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session.start_turn("hello", &spec.config).await.unwrap();
+    complete(&mut session).await;
+    let before = session.state["sessionId"].clone();
+    let session_file = session.state["sessionFile"].as_str().unwrap().to_owned();
+    let calls = root.path().join("agent/calls.jsonl");
+    let launched = std::fs::read_to_string(&calls).unwrap().lines().count();
+    let config = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([(
+            "modelRole.task".to_owned(),
+            json!("test/model:high"),
+        )])),
+        ..spec.config.clone()
+    };
+
+    session.configure(&config).await.unwrap();
+
+    assert_eq!(
+        session.state["sessionId"], before,
+        "same native session resumed"
+    );
+    assert_eq!(session.config, config);
+    let launch = std::fs::read_to_string(&calls)
+        .unwrap()
+        .lines()
+        .skip(launched)
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .find(|call| {
+            call["args"]
+                .as_array()
+                .is_some_and(|args| args.iter().any(|arg| arg == "--config"))
+        })
+        .expect("a new native process was launched with the private overlay");
+    let args: Vec<&str> = launch["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    let overlay = args
+        .windows(2)
+        .find(|pair| pair[0] == "--config")
+        .map(|pair| pair[1])
+        .expect("the overlay path is passed on the command line");
+    assert!(
+        args.windows(2)
+            .any(|pair| pair[0] == "--resume" && pair[1] == session_file.as_str()),
+        "reopen resumes the persisted session"
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&std::fs::read_to_string(overlay).unwrap()).unwrap(),
+        json!({"modelRoles":{"task":"test/model:high"}})
+    );
+    assert!(
+        Path::new(overlay).exists(),
+        "the live process keeps its overlay readable"
+    );
+    session.close().await.unwrap();
+    drop(session);
+    assert!(
+        !Path::new(overlay).exists(),
+        "the overlay dies with the native process"
+    );
+}
+
+/// Role assignments the live catalog cannot resolve stay display-only: an apply that would
+/// write them is rejected, and inheriting remains the escape hatch.
+#[tokio::test]
+async fn an_unresolvable_role_assignment_is_rejected_but_inherit_still_applies() {
+    let (root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let unknown = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([(
+            "modelRole.ghost".to_owned(),
+            json!("test/model"),
+        )])),
+        ..spec.config.clone()
+    };
+    assert_eq!(
+        session.configure(&unknown).await.unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    let inherit = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([(
+            "modelRole.ghost".to_owned(),
+            json!("native"),
+        )])),
+        ..spec.config.clone()
+    };
+    session.configure(&inherit).await.unwrap();
+    assert_eq!(session.config, inherit);
+    assert!(
+        !root.path().join("agent/calls.jsonl").exists()
+            || !std::fs::read_to_string(root.path().join("agent/calls.jsonl"))
+                .unwrap()
+                .contains("ghost"),
+        "no unresolved assignment reached the native process"
+    );
+    session.close().await.unwrap();
+}

@@ -39,6 +39,18 @@ export AIT_SERVER_OMP_BIN=/absolute/path/to/omp
 清除模型/thinking 覆盖或更改模式/系统提示会重开同一原生会话（保留会话身份与沙箱）；
 会话正忙时配置请求返回 Busy，界面保留原值。
 
+### 动态模型角色
+
+角色选择来自当前 OMP profile 的 `modelRoles`、`modelTags`、`cycleOrder`，不是固定角色表。
+模型与推理选项来自原生目录；友好名称来自原生 tag。`Use OMP setting` 保留 OMP 分层配置，
+已存储但目录无法解析的值保留显示为 unresolved；只能清回继承，不能当作已验证选项提交。
+目录刷新按工作目录和运行环境隔离，读取失败不清除已存储覆盖。
+
+角色覆盖使用 Ait 私有临时 `--config` 文件，不改写全局或项目配置。
+角色编辑的目标语义是下一轮生效：只在原生会话完全空闲时重开同一会话，忙时返回 Busy。
+该生命周期与移动端端到端验收状态见 [task21](../plans/pr612-split/task21.json)，
+边界说明见 [ADR-247](../decisions/providers/adr-247-dynamic-model-roles.md)。
+
 OMP `ask` 使用结构化问答，支持单选、多选、含逗号的选项与自由文本。
 文件/命令审批和插件的 `select/confirm/input/editor/ask` 均经共享交互事件展示，
 保留原生标题、选项说明和输入提示。运行中的元数据读取和追加输入不等待原生命令确认，

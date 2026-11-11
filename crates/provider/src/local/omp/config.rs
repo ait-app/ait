@@ -36,6 +36,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             if key == "transport" {
                 return !matches!(value.as_str(), Some("acp" | "rpc"));
             }
+            if super::roles::is_key(key) {
+                return !super::roles::valid(key, value);
+            }
             !matches!(
                 key.as_str(),
                 "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
@@ -217,6 +220,14 @@ pub(super) async fn apply(
         }
         let kind = match id.as_str() {
             "transport" => continue,
+            // Role assignments never reach a live `set_*` toggle: they are applied by the private
+            // `--config` overlay the native process read at startup, and `Session::apply_config`
+            // reopens whenever the overlay changes. Reaching this loop means the overlay is
+            // already in effect, so the stored value is confirmed rather than dropped.
+            id if super::roles::is_key(id) => {
+                progress.acked_features.insert(id.to_owned(), value.clone());
+                continue;
+            }
             "autoCompaction" => "set_auto_compaction",
             "autoRetry" => "set_auto_retry",
             "fastMode" => "set_fast_mode",
