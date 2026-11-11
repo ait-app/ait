@@ -161,6 +161,11 @@ macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Deskto
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 
+Provider 模型目录在客户端共享一份按 Host+目录键控的快照缓存：选择器、Profile 编辑、定时任务与
+设置入口打开时经同一单飞刷新触发原生重新发现，正在发现的不追加刷新；失败保留最近可用候选并可见
+重试，未知持久模型/mode/thinking 值保持原样。连接更换中止旧刷新，generation/revision 单调保护不变，
+见 [ADR-236](../decisions/providers/adr-236-shared-model-catalog-refresh.md)。
+
 群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
 node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
 创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，

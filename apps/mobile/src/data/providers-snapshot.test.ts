@@ -21,6 +21,7 @@ import {
   providersSnapshotQueryRoot,
   providersSnapshotRequestOptions,
   refreshAndApplyProvidersSnapshot,
+  refreshProvidersOnAccess,
 } from "@/data/providers-snapshot";
 
 describe("providers snapshot query scope", () => {
@@ -250,6 +251,90 @@ const snapshot = {
   snapshotHash: "test-hash",
   compactSnapshot: compactProviderSnapshot(entries),
 } satisfies GetProvidersSnapshotResponseMessage["payload"];
+
+describe("model catalog access", () => {
+  it("retains the last good choices on discovery failure and replaces them after retry", async () => {
+    const queryClient = new QueryClient();
+    const cache = createProviderSnapshotCache(createStorage());
+    const serverId = "catalog-failure";
+    const key = providersSnapshotQueryKey(serverId, snapshot.cwd);
+    const failed = {
+      ...entries[0]!,
+      status: "error" as const,
+      error: "Discovery failed",
+      models: [],
+    };
+    const changed = { ...entries[0]!, models: [{ ...entries[0]!.models![0]!, id: "new-model" }] };
+    const responses = [
+      snapshot,
+      { ...snapshot, snapshotHash: "failure", compactSnapshot: compactProviderSnapshot([failed]) },
+      {
+        ...snapshot,
+        snapshotHash: "recovered",
+        compactSnapshot: compactProviderSnapshot([changed]),
+      },
+    ];
+    const client = { getProvidersSnapshot: vi.fn(async () => responses.shift()!) };
+    try {
+      for (let index = 0; index < 3; index += 1) {
+        const result = await fetchProvidersSnapshot({
+          client,
+          serverId,
+          cwd: snapshot.cwd,
+          queryClient,
+          cache,
+        });
+        queryClient.setQueryData(key, result);
+        if (index === 1) {
+          expect(result.entries[0]).toMatchObject({
+            status: "error",
+            error: "Discovery failed",
+            models: entries[0]!.models,
+          });
+          expect((await cache.read(serverId, snapshot.cwd))?.entries).toEqual(entries);
+        }
+        if (index === 2) expect(result.entries[0]?.models?.[0]?.id).toBe("new-model");
+      }
+    } finally {
+      queryClient.clear();
+      replaceProviderSnapshotIcons(serverId, []);
+    }
+  });
+
+  it("shares concurrent refreshes and does not queue another while discovery is loading", async () => {
+    const queryClient = new QueryClient();
+    const serverId = "catalog-coalescing";
+    const key = providersSnapshotQueryKey(serverId, snapshot.cwd);
+    queryClient.setQueryData(key, { ...snapshot, entries });
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const refreshProvidersSnapshot = vi.fn(async () => {
+      await gate;
+      return { requestId: "refresh", acknowledged: true };
+    });
+    const client = {
+      refreshProvidersSnapshot,
+      getProvidersSnapshot: vi.fn(async () => ({ ...snapshot, entries })),
+    };
+    try {
+      const first = refreshProvidersOnAccess({ client, serverId, cwd: snapshot.cwd, queryClient });
+      const second = refreshProvidersOnAccess({ client, serverId, cwd: snapshot.cwd, queryClient });
+      expect(refreshProvidersSnapshot).toHaveBeenCalledTimes(1);
+      release();
+      await Promise.all([first, second]);
+      queryClient.setQueryData(key, {
+        ...snapshot,
+        entries: [{ ...entries[0]!, status: "loading" }],
+        refreshing: [entries[0]!.provider],
+      });
+      await refreshProvidersOnAccess({ client, serverId, cwd: snapshot.cwd, queryClient });
+      expect(refreshProvidersSnapshot).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      queryClient.clear();
+      replaceProviderSnapshotIcons(serverId, []);
+    }
+  });
+});
 
 describe("full provider snapshots with content hashes", () => {
   it("rejects an uncached not-modified response rather than caching an empty catalog", async () => {

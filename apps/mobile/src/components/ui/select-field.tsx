@@ -46,6 +46,7 @@ export interface SelectFieldProps<TValue> {
   selectedDisplay: SelectFieldDisplay | null;
   options: SelectFieldOption<TValue>[];
   onChange: (value: TValue, display: SelectFieldDisplay) => void;
+  onOpen?: () => void;
   placeholder: string;
   emptyText: string;
   loading?: boolean;
@@ -176,6 +177,7 @@ export function SelectField<TValue>({
   selectedDisplay,
   options,
   onChange,
+  onOpen,
   placeholder,
   emptyText,
   loading = false,
@@ -232,8 +234,9 @@ export function SelectField<TValue>({
     if (disabled) {
       return;
     }
-    setOpen((current) => !current);
-  }, [disabled]);
+    if (!open) onOpen?.();
+    setOpen(!open);
+  }, [disabled, onOpen, open]);
   const handleTriggerFocus = useCallback((_event: NativeSyntheticEvent<TargetedEvent>) => {
     setTriggerFocused(true);
   }, []);

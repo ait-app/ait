@@ -1,7 +1,13 @@
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "../support/fixtures";
 import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
+import { openModelPicker } from "../support/helpers/agent-profiles";
+import { clickNewChat, gotoWorkspace } from "../support/helpers/launcher";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -177,6 +183,64 @@ test.describe("provider settings overlay stack", () => {
       await expect(selector).toBeVisible();
       await expect(settingsButton).toBeFocused();
     } finally {
+      await session.cleanup();
+    }
+  });
+
+  test("opening the model picker refreshes a changed native catalog", async ({ page }) => {
+    test.setTimeout(180_000);
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "provider-catalog-refresh-",
+      title: "Provider catalog refresh",
+    });
+    const client = await connectDaemonClient<DaemonClient>({ clientIdPrefix: "catalog-refresh" });
+    const catalogFile = path.join(session.cwd, "catalog-e2e.json");
+    try {
+      await writeFile(
+        catalogFile,
+        JSON.stringify([{ modelId: "before-refresh", name: "Before refresh" }]),
+      );
+      await client.patchDaemonConfig({
+        providers: {
+          gemini: {
+            extends: "acp",
+            label: "Catalog provider",
+            enabled: true,
+            command: [
+              process.execPath,
+              path.resolve(__dirname, "../support/fixtures/catalog-acp.cjs"),
+              "1",
+              catalogFile,
+            ],
+          },
+        },
+      });
+      await expect
+        .poll(
+          async () =>
+            (await client.getProvidersSnapshot({ cwd: session.cwd })).entries.find(
+              (entry) => entry.provider === "gemini",
+            )?.status,
+          { timeout: 30_000 },
+        )
+        .toBe("ready");
+      await gotoWorkspace(page, session.workspaceId);
+      await clickNewChat(page);
+      await expectComposerVisible(page);
+      await writeFile(
+        catalogFile,
+        JSON.stringify([{ modelId: "after-refresh", name: "After refresh" }]),
+      );
+      await openModelPicker(page);
+      const back = page.getByRole("button", { name: "Back", exact: true });
+      if (await back.isVisible()) await back.click();
+      await page.getByTestId("model-provider-gemini").click();
+      await expect(page.getByTestId("model-row-gemini-after-refresh")).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      await client.patchDaemonConfig({ removeProviders: ["gemini"] });
+      await client.close();
       await session.cleanup();
     }
   });

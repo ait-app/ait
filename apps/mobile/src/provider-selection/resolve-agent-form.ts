@@ -172,17 +172,11 @@ export function resolveThinkingOptionId(args: {
   modelId: string;
   requestedThinkingOptionId: string;
 }): string {
+  const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
+  if (normalizedThinkingOptionId) return normalizedThinkingOptionId;
   const effectiveModel = resolveEffectiveModel(args.availableModels, args.modelId);
   const thinkingOptions = effectiveModel?.thinkingOptions ?? [];
   if (thinkingOptions.length === 0) return "";
-
-  const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
-  if (
-    normalizedThinkingOptionId &&
-    thinkingOptions.some((option) => option.id === normalizedThinkingOptionId)
-  ) {
-    return normalizedThinkingOptionId;
-  }
 
   return effectiveModel?.defaultThinkingOptionId ?? thinkingOptions[0]?.id ?? "";
 }
@@ -250,7 +244,9 @@ export function buildProviderDefinitionMapForStatuses(args: {
 
   const matchingProviders = new Set(
     args.snapshotEntries
-      .filter((entry) => args.statuses.has(entry.status) && entry.enabled)
+      .filter(
+        (entry) => entry.enabled && (args.statuses.has(entry.status) || !!entry.models?.length),
+      )
       .map((entry) => entry.provider),
   );
 
@@ -321,11 +317,7 @@ function resolveModelField(input: {
       ? resolveCanonicalModelId(availableModels, preferredModel)
       : null;
     if (canonicalModel) return canonicalModel;
-    // OpenCode admits only IDs from its native catalogue. Do not replace an
-    // explicit draft choice, or treat an unavailable/empty catalogue as authoritative.
-    return provider === "opencode" && availableModels?.length
-      ? resolveDefaultModelId(availableModels)
-      : preferredModel;
+    return preferredModel;
   }
   return "";
 }
@@ -546,16 +538,17 @@ function completeResolution(
 function applyProfile(state: AgentFormReducerState, action: ApplyProfileAction) {
   const preferredModelId = action.modelId || action.providerPrefs?.model || "";
   const normalizedModelId = resolveCanonicalModelId(action.providerModels, preferredModelId);
-  const nextModelId = normalizedModelId || resolveDefaultModelId(action.providerModels);
-  const availableModeIds = new Set(action.providerDef?.modes.map((mode) => mode.id) ?? []);
+  const nextModelId =
+    normalizedModelId || preferredModelId || resolveDefaultModelId(action.providerModels);
   const preferredModeId = action.modeId || action.providerPrefs?.mode || "";
-  const defaultModeId = action.providerDef?.defaultModeId ?? "";
-  let nextModeId = "";
-  if (availableModeIds.has(preferredModeId)) {
-    nextModeId = preferredModeId;
-  } else if (availableModeIds.has(defaultModeId)) {
-    nextModeId = defaultModeId;
-  }
+  const providerModes = action.providerDef?.modes ?? [];
+  // A known mode catalog proves a stale preference unusable, including a
+  // modeless provider; an absent definition keeps the persisted value intact.
+  const nextModeId = !action.providerDef
+    ? preferredModeId || ""
+    : providerModes.some((mode) => mode.id === preferredModeId)
+      ? preferredModeId
+      : action.providerDef.defaultModeId || "";
   const nextThinkingOptionId =
     action.thinkingOptionId ||
     pickNextThinkingOptionForProvider({

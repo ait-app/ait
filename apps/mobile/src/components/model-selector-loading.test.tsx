@@ -75,7 +75,8 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
 
     const view = render(<Selector />);
     const trigger = view.getByTestId("combined-model-selector");
-    expect(trigger.textContent).toBe("Select model");
+    // The remembered selection stays visible while its provider loads.
+    expect(trigger.textContent).toBe("remembered-model");
     expect(trigger.getAttribute("aria-disabled")).not.toBe("true");
     fireEvent.click(trigger);
     if (surface === "compact") {

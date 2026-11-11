@@ -160,6 +160,33 @@ describe("combined model selector data", () => {
     ]);
   });
 
+  it.each(["error", "unavailable"] as const)(
+    "keeps cached models selectable and exposes the %s failure",
+    (status) => {
+      const [provider] = buildSelectableProviderSelectorProviders([
+        snapshotEntry({
+          provider: "codex",
+          status,
+          error: "Discovery failed",
+          models: [codexModel],
+        }),
+      ]);
+      expect(provider?.modelSelection).toMatchObject({
+        kind: "models",
+        error: "Discovery failed",
+        rows: [{ modelId: codexModel.id }],
+      });
+      expect(
+        resolveSelectedModelLabel({
+          providers: provider ? [provider] : [],
+          selectedProvider: "codex",
+          selectedModel: codexModel.id,
+          isLoading: false,
+        }),
+      ).toBe(codexModel.label);
+    },
+  );
+
   it("builds selector providers from an already-curated provider list", () => {
     const providerDefinitions: AgentProviderDefinition[] = [
       {
@@ -308,7 +335,7 @@ describe("combined model selector data", () => {
     ).toBe("Select model");
   });
 
-  it("keeps a loading remembered provider from taking over the model picker label", () => {
+  it("keeps a remembered model visible while its provider loads", () => {
     const providers = buildSelectableProviderSelectorProviders([
       snapshotEntry({ provider: "omp", status: "loading", models: [] }),
       snapshotEntry({ provider: "codex", models: [codexModel] }),
@@ -322,7 +349,7 @@ describe("combined model selector data", () => {
         selectedModel: "remembered-model",
         isLoading: true,
       }),
-    ).toBe("Select model");
+    ).toBe("remembered-model");
     expect(
       resolveSelectedModelLabel({
         providers,

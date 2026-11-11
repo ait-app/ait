@@ -545,7 +545,8 @@ function ControlledAgentControls({
   );
   const canSelectModel = Boolean(onSelectModel);
   const canSelectThinking = Boolean(
-    onSelectThinkingOption && thinkingOptions && thinkingOptions.length > 0,
+    (onSelectThinkingOption && thinkingOptions && thinkingOptions.length > 0) ||
+    selectedThinkingOptionId,
   );
 
   const displayProvider = findOptionLabel(
@@ -560,7 +561,9 @@ function ControlledAgentControls({
   const displayThinking = findOptionLabel(
     formattedThinkingOptions,
     selectedThinkingOptionId,
-    formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown"),
+    selectedThinkingOptionId ||
+      formattedThinkingOptions[0]?.label ||
+      t("agentControls.thinking.unknown"),
   );
 
   const hasAnyControl = resolveHasAnyControl({
@@ -1210,7 +1213,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
 
   const thinkingAnchorRef = useRef<View | null>(null);
 
-  const hasThinking = comboboxThinkingOptions.length > 0;
+  const hasThinking = comboboxThinkingOptions.length > 0 || Boolean(selectedThinkingOptionId);
 
   const handleOpenThinking = useCallback(() => handleOpenSheet("thinking"), [handleOpenSheet]);
   const handleThinkingSheetOpenChange = useCallback(

@@ -30,7 +30,7 @@ function buildModelRowKey(provider: string, modelId: string): string {
 }
 
 export type ProviderModelSelection =
-  | { kind: "models"; rows: ProviderSelectionModelRow[] }
+  | { kind: "models"; rows: ProviderSelectionModelRow[]; error?: string }
   | { kind: "loading" }
   | { kind: "error"; message: string };
 
@@ -105,7 +105,17 @@ function buildEntryModelSelection(
   label: string,
 ): ProviderModelSelection {
   if ((entry.models?.length ?? 0) > 0) {
-    return buildModelSelection(entry.provider, label, entry.models ?? null);
+    const selection = buildModelSelection(entry.provider, label, entry.models ?? null);
+    if (
+      selection.kind === "models" &&
+      (entry.status === "error" || entry.status === "unavailable")
+    ) {
+      return {
+        ...selection,
+        error: entry.error ?? i18n.t("providerSelection.unknownError"),
+      };
+    }
+    return selection;
   }
   if (entry.status === "ready") {
     return buildModelSelection(entry.provider, label, entry.models ?? null);
@@ -144,7 +154,7 @@ export function buildSelectableProviderSelectorProviders(
   entries: ProviderSnapshotEntry[] | undefined,
 ): ProviderSelectorProvider[] {
   return (entries ?? [])
-    .filter((entry) => entry.enabled && entry.status !== "unavailable")
+    .filter((entry) => entry.enabled && (entry.status !== "unavailable" || !!entry.models?.length))
     .map((entry) => {
       const label = entry.label ?? entry.provider;
       return {
@@ -180,14 +190,14 @@ export function resolveSelectedModelLabel(input: {
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
   if (!provider) {
-    return i18n.t("providerSelection.selectModel");
+    return input.selectedModel.trim() || selectedProvider;
   }
   if (provider.modelSelection.kind === "loading") {
     // Loading belongs to the provider row; the entry point remains a model picker.
-    return i18n.t("providerSelection.selectModel");
+    return input.selectedModel.trim() || i18n.t("providerSelection.selectModel");
   }
   if (provider.modelSelection.kind === "error") {
-    return i18n.t("providerSelection.error");
+    return input.selectedModel.trim() || i18n.t("providerSelection.error");
   }
   if (provider.modelSelection.kind !== "models") {
     return i18n.t("providerSelection.selectModel");
