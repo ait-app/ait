@@ -212,8 +212,9 @@ workstreams are authorized; the register prevents duplicate ownership.
 
 - **00** delivered inventory — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence `7ac9b4ac`.
 - **01** blocked — Draft [#651](https://github.com/ait-app/ait/pull/651), branch
-  `refactor/pr612-omp-native-boundary`, code `92abc77d`, interface disclosure `22efa58f` (ADR-237).
-  macOS signing/notarization evidence missing; normal-0077 Linux installed smoke pending. Not delivered.
+  `refactor/pr612-omp-native-boundary`, code `92abc77d`, interface disclosure `22efa58f`, cleanup
+  `43a0e952` (ADR-237 proposed). Normal-0077 Linux installed deb+rpm smoke passes; macOS
+  signing/notarization evidence missing. Not delivered.
 - **02** active — recovery owner, branch `feat/pr612-task02-model-catalog-refresh` (base `248a93cf`);
   shared refresh patch under verification, no Draft yet.
 - **03** design-ready, waits for 02 (ADR-244 reserved); owner `profile-settings`.

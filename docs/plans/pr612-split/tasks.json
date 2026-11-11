@@ -323,15 +323,14 @@
         "PASS native boundary: cargo fmt --all --check; focused provider local::omp:: 94 tests; ait-omp-acp 12 tests plus 13 including official OMP 18.17.0 installed CLI; daemon removed-subcommand rejection and 17 dependency guards.",
         "PASS official-runtime lifecycle: installed boundary create/persist/legacy-alias/restore/config-reopen confined and unconfined (2 tests); standalone external ACP stdio session with EOF exit and process-group cleanup.",
         "PASS CI Rust 1.98.1 manylinux_2_28: strict clippy -D warnings for provider/ait-omp-acp/daemon; release build pair; GLIBC 2.28 baseline verified; standalone archive SHA256 c999aaf4f1ace3e9c3a7687218841b538c88bdd2452782e3f09337f2af8b5465 with extracted official-runtime smoke.",
-        "PASS Linux packaging: all four formats (AppImage/tar.gz/deb/rpm) built with paired 0.2.7 resources; production payload-root chmod 0755 fix in scripts/linux-sandbox; installed deb+rpm unprivileged Xvfb startup smoke under umask 022 (diagnostic).",
-        "PASS incidental source-text test removal per review: dev-build-workflow 2 cases, release-assets workflow case, desktop-packaging bundles case deleted (not re-pinned); npm run test:release 81/81; desktop packaging/launcher/environment vitest 19/19.",
-        "PASS docs: ADR-237 interface-change/migration table and operations migration section (head 22efa58f); npm run check:docs; git diff --check.",
-        "PENDING normal-umask 0077 installed-package smoke rerun after the payload-root fix; prior captured job result was lost when its owner session was policy-stopped."
+        "PASS Linux packaging: all four formats built with paired 0.2.7 resources; production payload-tree permission normalization in scripts/linux-sandbox (root-only fix extended after the first 0077 attempt exposed private resources/app-dist).",
+        "PASS final normal-umask 0077 installed deb+rpm smoke (557s): sandbox enabled, rendererErrors=[], deb serverId f7f02a31-6e0b-4f0f-a98d-767bc48bed34, rpm serverId 3a7cb846-3ee3-49cd-9846-2b0e45a7d292; supersedes the 022 diagnostic.",
+        "PASS incidental source-text test removal per review (dev-build-workflow 2 cases, release-assets workflow case, desktop-packaging bundles case): npm run test:release 81/81; desktop packaging/launcher/environment vitest 19/19 including extended private-0700 regression.",
+        "PASS docs: ADR-237 (status proposed pending review) interface-change/migration table and operations migration section; npm run check:docs; git diff --check. Cleanup head 43a0e9529ec371df427f43562a8bddd9b0930188."
       ]
     },
     "blockers": [
-      "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete.",
-      "Final installed Linux desktop smoke under the normal 0077 umask remains pending after the production payload-root permission correction; the successful 022 diagnostic is not claimed as complete acceptance."
+      "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete; Linux acceptance including normal-0077 installed smoke now passes. Not delivered."
     ]
   },
   {
@@ -2689,7 +2688,7 @@
     ],
     "implementation": "Use the real ACP command catalog and terminal lifecycle signals. Preserve MCP and native command delivery; do not infer completion from timeout guesses.",
     "acceptance": "Command discovery/execution/draft queries are provenance-aware; terminal completion and cancellation are confirmed by protocol; startup failure keeps useful catalog and no duplicate session.",
-    "status": "planned",
+    "status": "blocked",
     "branch": null,
     "base": null,
     "commit": null,
@@ -2702,7 +2701,9 @@
       ],
       "results": []
     },
-    "blockers": []
+    "blockers": [
+      "Native capability blocker (observed 2026-11-11, official OpenCode 2.1.3): custom commands end_turn early (0.04-0.121s) before model requests; public ACP exposes no reliable terminal lifecycle signal. The internal native HTTP lease credential is unreachable without violating ADR-159/195, so it is not a credential request. Delivery needs upstream completion semantics or a public attach surface; catalog+cleanup portions remain reachable after task06. Not delivered, no Draft yet; owner opencode-command-lifecycle persists. Not user-excluded (only task13 is)."
+    ]
   },
   {
     "id": "32",
