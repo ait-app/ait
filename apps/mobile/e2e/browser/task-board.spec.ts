@@ -270,6 +270,18 @@ test.describe("Task overview", () => {
     await expect
       .poll(async () => (await client.fetchAgent(ids[2]))?.agent.pendingPermissions.length)
       .toBe(0);
+    await expect(form).toHaveCount(0);
+    await page
+      .getByTestId("task-detail-sheet")
+      .getByRole("button", { name: "关闭", exact: true })
+      .click();
+    await page.setViewportSize({ width: 1200, height: 820 });
+    for (const lane of ["needs_action", "review", "done"]) {
+      await page.getByTestId(`task-collapse-${lane}`).click();
+    }
+    await page.setViewportSize({ width: 650, height: 844 });
+    await card(0).getByTestId("task-summary").click();
+    await expect(page.getByTestId("task-detail-sheet")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

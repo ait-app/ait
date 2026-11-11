@@ -34,6 +34,7 @@ All captures come from the existing authorized Playwright browser, running the r
 4. Compared the phone render with the source. Three running cards fit together; stop/open remain available. Added a geometry check that expanded search cannot overlap the toolbar controls.
 5. Inspected the narrow tablet review lane. The extra archive button forced Open to wrap vertically. Review cards now show Mark as read + Open; archive appears after marking read and remains available in details. Open has an 84 px minimum. The final screenshot and button-height check confirm a single-line label.
 6. Inspected final light and dark renders, long titles, side panel, collapsed lane, empty Done state, offline notice, and mobile tabs. No horizontal page overflow or clipped action labels remain in the tested viewports.
+7. Added a breakpoint regression after collapsing all four desktop columns: at 650 px, details must still open in a sheet. Compact mode now explicitly excludes inline details, independent of saved column state; the extended tablet/phone flow passed.
 
 ## Visual and behavior checklist
 

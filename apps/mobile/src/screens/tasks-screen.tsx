@@ -118,7 +118,7 @@ export function TasksScreenContent() {
     (TASK_LANES.length - collapsedLanes.length) * MIN_LANE_WIDTH +
     collapsedLanes.length * COLLAPSED_LANE_WIDTH +
     (TASK_LANES.length + 1) * theme.spacing[2];
-  const inlineDetail = width >= minimumBoardWidth + DETAIL_WIDTH;
+  const inlineDetail = !compact && width >= minimumBoardWidth + DETAIL_WIDTH;
   const lanesWidth = compact ? boardWidth : Math.max(boardWidth, minimumBoardWidth);
   const closeDetail = useCallback(() => setSelectedKey(null), []);
   const toggleLane = useCallback(
