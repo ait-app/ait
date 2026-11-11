@@ -104,12 +104,15 @@ pub(super) async fn runtime(
     }
     let params = std::mem::take(&mut context.request.params);
     match super::agent_runtime::dispatch(&context.request.method, params, state).await {
-        Ok(reply) if !reply.terminals.is_empty() => Ok(Some(Completion::CloseTerminals {
-            request_id: context.request.id,
-            value: reply.value,
-            terminal_ids: reply.terminals,
-        })),
-        Ok(reply) => {
+        Ok(mut reply) => {
+            super::permission_projection::response(&mut reply.value, context.secret_questions);
+            if !reply.terminals.is_empty() {
+                return Ok(Some(Completion::CloseTerminals {
+                    request_id: context.request.id,
+                    value: reply.value,
+                    terminal_ids: reply.terminals,
+                }));
+            }
             context.respond(Ok(reply.value))?;
             Ok(None)
         }
@@ -167,13 +170,22 @@ pub(super) async fn execution(
         return super::agent_execution::wait(
             context.request.id,
             context.request.params,
+            context.secret_questions,
             state,
             context.outbound,
         )
         .map_err(Into::into);
     }
     let params = std::mem::take(&mut context.request.params);
-    let result = super::agent_execution::dispatch(&context.request.method, params, state).await;
+    let result = if context.request.method == "agent.permission.resolve.request" {
+        super::agent_execution::permission(params, context.secret_questions, state).await
+    } else {
+        super::agent_execution::dispatch(&context.request.method, params, state).await
+    };
+    let result = result.map(|mut result| {
+        super::permission_projection::response(&mut result, context.secret_questions);
+        result
+    });
     context.respond(result).map_err(Into::into)
 }
 

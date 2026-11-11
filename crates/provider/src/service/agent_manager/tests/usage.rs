@@ -10,6 +10,7 @@ async fn native_control_and_usage_streams_have_timestamps_and_turn_identity() {
         "timeline-lease".to_owned(),
         ["agent-1".to_owned()].into(),
         outbound,
+        false,
     );
     subscription.activate().unwrap();
     let mut manager = manager.with_timeline(timeline);

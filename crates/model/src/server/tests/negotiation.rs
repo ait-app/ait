@@ -67,6 +67,40 @@ fn negotiates_supported_intersection_and_rejects_required_unknown() {
 }
 
 #[test]
+fn secret_questions_require_both_server_support_and_client_opt_in() {
+    let mut offer = hello();
+    let mut available = default_capabilities();
+    available.push(SECRET_QUESTIONS_CAPABILITY.to_owned());
+
+    assert_eq!(
+        offer.negotiate_available(&available).unwrap(),
+        ["server.info", "connection.ping"]
+    );
+
+    offer
+        .capabilities
+        .push(SECRET_QUESTIONS_CAPABILITY.to_owned());
+    assert_eq!(
+        offer.negotiate_available(&available).unwrap(),
+        [
+            "server.info",
+            "connection.ping",
+            SECRET_QUESTIONS_CAPABILITY
+        ]
+    );
+    assert_eq!(
+        offer.negotiate_available(&default_capabilities()).unwrap(),
+        ["server.info", "connection.ping"]
+    );
+
+    offer.capabilities.clear();
+    assert_eq!(
+        offer.negotiate_available(&available).unwrap(),
+        ["connection.ping"]
+    );
+}
+
+#[test]
 fn rejects_incompatible_and_reversed_version_ranges() {
     for protocol in [
         VersionOffer {

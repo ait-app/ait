@@ -72,6 +72,11 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 旧视图保持有效，权限写入仍核对最新记录，见
 [ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
 
+结构化秘密问答在连接边界按 `agent-secret-questions-v1` 做兼容性投影，公共投影归
+`model::session::permission`；provider 的私有 typed operation 保留协商结果到会话 lane。
+这不是新的授权系统，见 [ADR-243](../decisions/providers/adr-243-omp-structured-native-interactions.md)
+（proposed）及 [OMP 规格](omp-acp-bridge.md)。
+
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
 Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见

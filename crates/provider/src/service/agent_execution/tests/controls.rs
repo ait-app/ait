@@ -866,3 +866,189 @@ fn assert_has_review(commands: &Value) {
             .any(|command| command["name"] == "review")
     );
 }
+
+async fn permission_from_connection(
+    execution: &AgentExecution,
+    params: Value,
+    secret_questions: bool,
+) -> Value {
+    use model::outbound::{Frame, Outbound};
+    use model::{Context, Lifecycle, Limits, Request, Runtime, ServerInfo, VERSION};
+
+    let state = crate::dispatch::State {
+        runtime: Arc::new(Runtime::new(ServerInfo {
+            server_id: "server".to_owned(),
+            instance_id: "instance".to_owned(),
+            version: None,
+            listen: "127.0.0.1:0".to_owned(),
+            lifecycle: Lifecycle::Ready,
+            protocol: VERSION,
+            capabilities: Vec::new(),
+            implemented_capabilities: Vec::new(),
+            features: Vec::new(),
+            limits: Limits::default(),
+        })),
+        agents: None,
+        skills: None,
+        agent_runtime: None,
+        agent_execution: Some(execution.clone()),
+        summary_source: None,
+        directory_changes: None,
+        has_terminals: false,
+    };
+    let (outbound, mut receiver) = Outbound::new();
+    let mut connection = crate::connection::Connection::new("permission-peer");
+    crate::dispatch::dispatch(
+        &mut Some(Context {
+            request: Request {
+                id: "resolve".to_owned(),
+                method: "agent.permission.resolve.request".to_owned(),
+                params,
+            },
+            runtime: &state.runtime,
+            outbound: &outbound,
+            available_subscriptions: 0,
+            secret_questions,
+        }),
+        &state,
+        &mut connection,
+    )
+    .await
+    .unwrap();
+    let queued = receiver.try_recv().unwrap();
+    let Frame::Text(text) = &queued.message else {
+        panic!("expected a permission response");
+    };
+    serde_json::from_str(text).unwrap()
+}
+
+fn permission_worker(fixture: &Fixture) -> AgentExecution {
+    use std::os::unix::fs::PermissionsExt;
+
+    let program = fixture.root.path().join("omp");
+    let peer = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/local/omp/tests/fixtures/omp.py");
+    // Scope every native probe and session to this fixture, without process-global environment.
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\nexport PI_CODING_AGENT_DIR='{}'\nexec '{}' \"$@\"\n",
+            fixture.root.path().join("omp-agent").display(),
+            peer.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    worker_with_client(
+        fixture,
+        model::creation::Creations::default(),
+        Box::new(
+            crate::local::omp::OmpClient::new(program)
+                .with_image_directory(fixture.root.path().join("images")),
+        ),
+    )
+    .0
+}
+
+#[tokio::test]
+async fn secret_permission_context_survives_dispatch_and_serialized_resolution() {
+    let fixture = Fixture::new();
+    let execution = permission_worker(&fixture);
+    let created = execution
+        .execute(
+            "agent.create.request",
+            json!({"config":{"provider":"omp","cwd":fixture.cwd,"title":"Permission test"}}),
+        )
+        .await
+        .unwrap();
+    let id = created["agentId"].as_str().unwrap();
+    let agent_directory = fixture.root.path().join("omp-agent");
+    // Reusing the native request ID across successive dialogs must not reuse a cached secret flag.
+    for (secret, capable, behavior) in [
+        (false, false, "allow"),
+        (true, true, "allow"),
+        (true, false, "deny"),
+    ] {
+        std::fs::write(
+            agent_directory.join("dialog.json"),
+            json!({"method":"input","title":"Live question","secret":secret}).to_string(),
+        )
+        .unwrap();
+        execution
+            .execute(
+                "agent.message.send.request",
+                json!({"agentId":id,"text":"interactive-fixture"}),
+            )
+            .await
+            .unwrap();
+        let request = pending(&execution, id).await;
+        assert_eq!(request["input"]["questions"][0]["secret"] == true, secret);
+        let response = json!({
+            "behavior":behavior,
+            "updatedInput":{"answers":{"value":"  private answer  "}}
+        });
+        let params = json!({"agentId":id,"requestId":request["id"],"response":response});
+        if secret && behavior == "allow" {
+            assert_eq!(
+                execution
+                    .execute("agent.permission.resolve.request", params.clone())
+                    .await,
+                Err(ErrorCode::UnsupportedCapability)
+            );
+            let rejected = permission_from_connection(&execution, params.clone(), false).await;
+            assert_eq!(
+                rejected["code"],
+                json!(model::ErrorCode::UnsupportedCapability)
+            );
+            for (field, value) in [
+                ("secretQuestions", json!(true)),
+                ("secret_questions", json!(true)),
+                ("permissionContext", json!({"secretQuestions":true})),
+            ] {
+                let mut forged = params.clone();
+                forged[field] = value;
+                let rejected = permission_from_connection(&execution, forged, false).await;
+                assert_eq!(rejected["code"], json!(model::ErrorCode::InvalidMessage));
+            }
+            let mut forged = params.clone();
+            forged["response"]["secretQuestions"] = json!(true);
+            let rejected = permission_from_connection(&execution, forged, false).await;
+            assert_eq!(
+                rejected["code"],
+                json!(model::ErrorCode::UnsupportedCapability)
+            );
+            assert_eq!(pending(&execution, id).await, request);
+        }
+        let resolved = permission_from_connection(&execution, params, capable).await;
+        assert_eq!(
+            resolved["result"]["resolution"],
+            if secret {
+                json!({"behavior":behavior,"redacted":true})
+            } else {
+                response
+            }
+        );
+        assert_eq!(
+            execution
+                .execute("agent.finish.wait.request", json!({"agentId":id}))
+                .await
+                .unwrap()["status"],
+            "idle"
+        );
+    }
+    let calls: Vec<Value> = std::fs::read_to_string(agent_directory.join("calls.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .filter(|call: &Value| call["type"] == "extension_ui_response")
+        .collect();
+    assert_eq!(
+        calls,
+        vec![
+            json!({"type":"extension_ui_response","id":"dialog-1","value":"  private answer  "}),
+            json!({"type":"extension_ui_response","id":"dialog-1","value":"  private answer  "}),
+            json!({"type":"extension_ui_response","id":"dialog-1","cancelled":true}),
+        ]
+    );
+    execution.shutdown().await.unwrap();
+}

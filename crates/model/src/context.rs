@@ -29,6 +29,9 @@ pub struct Context<'a> {
     pub outbound: &'a Outbound,
     /// Remaining capacity across every subscription kind on this connection.
     pub available_subscriptions: usize,
+    /// Whether this connection negotiated `agent-secret-questions-v1`; secret dialogs
+    /// are projected cancel-only and secret answers refused without it (ADR-243).
+    pub secret_questions: bool,
 }
 
 /// Failure to handle a request or deliver its response.

@@ -1,5 +1,7 @@
 //! Bounded connection observers and activity policy, without a transport/runtime dependency.
 
+pub mod permission;
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};

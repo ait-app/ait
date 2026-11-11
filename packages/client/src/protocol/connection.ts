@@ -3,6 +3,7 @@ import { parseDaemonTransportUrl } from "./transport-url.js";
 import { ClientMessageChunks } from "./chunks.js";
 import { METHODS, type MethodSpec } from "./methods.js";
 import { sessionEventKind } from "@ait/protocol/session-event-kinds";
+import { CLIENT_CAPS, type ClientCapability } from "@ait/protocol/client-capabilities";
 import { eventMessage, responseMessage, rpcError, serverInfo } from "./messages.js";
 import type { HubShareResourceKind } from "../hub/index.js";
 import type { DaemonClientTrace } from "../daemon-client.js";
@@ -25,7 +26,6 @@ const RUNTIME_METHODS: Readonly<Record<string, MethodSpec>> = {
 
 export const CHANNEL_CAPABILITIES = Array.from({ length: 4 }, (_, channel) => [
   ...new Set([
-    "connection.ping",
     "subscription.release.request",
     ...Object.values(RUNTIME_METHODS)
       .filter((spec) => spec.channel === channel)
@@ -88,15 +88,18 @@ export function createDaemonConnection(
     headers,
     guestScope,
     trace,
+    capabilities,
     mode = "auto",
   }: {
     url: string;
     headers?: Record<string, string>;
     guestScope?: HubShareResourceKind;
     trace?: DaemonClientTrace;
+    capabilities?: Partial<Record<ClientCapability, unknown>>;
     mode?: DaemonConnectionMode;
   },
 ): DaemonConnection {
+  const secretQuestions = capabilities?.[CLIENT_CAPS.secretQuestions] === true;
   const parsed = parseDaemonTransportUrl(url);
   const relay = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
   // Direct, SSH and local daemons try one socket first; a rejection falls back to four
@@ -236,7 +239,9 @@ export function createDaemonConnection(
             min_minor: 0,
             max_minor: 0,
           },
-          capabilities: capabilityGroups[index],
+          capabilities: secretQuestions
+            ? [...capabilityGroups[index], CLIENT_CAPS.secretQuestions]
+            : capabilityGroups[index],
           required_capabilities: single ? [SINGLE_CONNECTION] : [],
         }),
       );

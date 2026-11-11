@@ -107,7 +107,7 @@ impl ExecutionState {
             }
             Operation::Rewind => self.rewind(params).await,
             Operation::Commands => self.commands(params).await,
-            Operation::Permission => self.permission(params).await,
+            Operation::Permission(context) => self.permission(params, context).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
             Operation::Usage => self.usage(params).await,

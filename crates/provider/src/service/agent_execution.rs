@@ -12,7 +12,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 pub(crate) mod operation;
-use operation::{Access, Operation};
+use operation::{Access, Operation, PermissionContext};
 mod lane;
 mod routing;
 mod voice;
@@ -237,6 +237,18 @@ impl AgentExecution {
             return self.call(operation, params).await;
         }
         self.wait(params).await
+    }
+
+    /// Resolve `params` on the owning session lane with trusted connection compatibility.
+    /// The context is carried by the operation, independently of client-controlled JSON.
+    /// # Errors
+    /// Returns safe validation, admission, provider or registry errors.
+    pub(crate) async fn permission(
+        &self,
+        params: Value,
+        context: PermissionContext,
+    ) -> Result<Value, ErrorCode> {
+        self.call(Operation::Permission(context), params).await
     }
 
     /// Drain accepted commands, close native children, and join the owning thread.

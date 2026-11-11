@@ -123,8 +123,8 @@ export class ConnectionSubscriptions extends OwnedSubscriptions {
   }
 }
 
-// Protocol support belongs to the installed client. Only browser hosting needs
-// a resource supplied by the caller. Keep this exhaustive as the protocol evolves.
+// Protocol support belongs to the installed client. Browser hosting needs a caller
+// resource; secret-question UI support needs app opt-in. Keep other support exhaustive.
 export const DEFAULT_CLIENT_CAPABILITIES = {
   [CLIENT_CAPS.ownedSubscriptions]: true,
   [CLIENT_CAPS.allProviders]: true,
@@ -142,7 +142,10 @@ export const DEFAULT_CLIENT_CAPABILITIES = {
   [CLIENT_CAPS.pluginTimelineItems]: true,
   [CLIENT_CAPS.workspaceSetupBlocked]: true,
   [CLIENT_CAPS.explicitEventSubscriptions]: true,
-} satisfies Record<Exclude<ClientCapability, typeof CLIENT_CAPS.browserHost>, true>;
+} satisfies Record<
+  Exclude<ClientCapability, typeof CLIENT_CAPS.browserHost | typeof CLIENT_CAPS.secretQuestions>,
+  true
+>;
 
 /** Calling releases demand; ready waits for membership, or local attachment on broadcast hosts. */
 export type TimelineSubscription = (() => void) & {

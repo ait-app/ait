@@ -41,10 +41,29 @@ impl Event {
                 TIMELINE,
                 json!({"agentId":params["agentId"],"epoch":params["epoch"],"reset":true}),
             ),
+            // Durable publications are invalidation markers; full permission state stays live
+            // on the Host. Never journal provider input, prefills, or submitted answers.
+            "agent_permission_request" => (
+                method,
+                json!({
+                    "agentId": params["agentId"],
+                    "request": {"id": params["request"]["id"], "redacted": true}
+                }),
+            ),
+            "agent_permission_resolved" => (
+                method,
+                json!({
+                    "agentId": params["agentId"],
+                    "requestId": params["requestId"],
+                    "resolution": {
+                        "behavior": params["resolution"]["behavior"].as_str()
+                            .filter(|behavior| matches!(*behavior, "allow" | "deny")),
+                        "redacted": true
+                    }
+                }),
+            ),
             "agent_attention_required"
             | "terminal_attention_required"
-            | "agent_permission_request"
-            | "agent_permission_resolved"
             | "creation.update"
             | "workspace_setup_status"
             | "status.server_info" => (method, params.clone()),

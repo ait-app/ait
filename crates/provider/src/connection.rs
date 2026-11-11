@@ -156,6 +156,7 @@ impl Connection {
                 Uuid::new_v4().to_string(),
                 ids.clone(),
                 context.outbound.clone(),
+                context.secret_questions,
             );
             Ok((ids, subscription))
         }

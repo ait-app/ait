@@ -3,6 +3,9 @@
 //! The provisional session answers dialogs through the same serialized native writer that
 //! initialization uses. Once the native session is ready it adopts the remaining dialogs and
 //! releases the single queued first input; a cancelled input is never replayed.
+//! Startup failure settles through the manager's durable error state and timeline, not a
+//! fabricated native persistence handle. Closing also releases a ready-but-unadopted session;
+//! cancelled initialization remains a draft and cannot be mistaken for resumable native history.
 
 use std::borrow::Cow;
 use std::collections::VecDeque;
@@ -46,6 +49,9 @@ struct Session {
     input: Option<Input>,
     turns: Option<(String, String)>,
     closed: bool,
+    /// Startup/admission failure settles once through the ordinary manager drain.
+    failed: bool,
+    failure: Option<String>,
 }
 
 /// Keep normal initialization unchanged; return early only to let the user answer a startup
@@ -76,6 +82,8 @@ pub(super) async fn open(
         input: None,
         turns: None,
         closed: false,
+        failed: false,
+        failure: None,
     };
     loop {
         tokio::select! {
@@ -111,32 +119,84 @@ impl Session {
     }
 
     /// Adopt the ready native session and release the single queued input through it.
+    /// Startup, adoption and queued-admission failures become one terminal Failed event
+    /// so the manager commits the failure, closes the writer and releases the lane.
     async fn advance(&mut self) -> Result<(), AgentSessionError> {
-        while let Ok(frame) = self.receiver.try_recv() {
-            self.frame(frame)?;
+        if self.failed || self.closed {
+            return Ok(());
         }
-        if self.inner.is_none() && !self.closed {
+        while let Ok(frame) = self.receiver.try_recv() {
+            if let Err(error) = self.frame(frame) {
+                self.fail(error);
+                return Ok(());
+            }
+        }
+        if self.inner.is_none() {
             match self.ready.try_recv() {
                 Ok(result) => {
-                    let mut inner = result?;
-                    inner.adopt_startup(std::mem::take(&mut self.dialogs))?;
-                    self.writer.take();
-                    self.task.take();
-                    self.events
-                        .push_back(AgentTurnEvent::RuntimeInfo(inner.runtime_info().await?));
-                    self.inner = Some(inner);
+                    let adopted = async {
+                        let mut inner = result?;
+                        inner.adopt_startup(std::mem::take(&mut self.dialogs))?;
+                        let info = inner.runtime_info().await?;
+                        Ok::<_, AgentSessionError>((inner, info))
+                    }
+                    .await;
+                    match adopted {
+                        Ok((inner, info)) => {
+                            self.writer.take();
+                            self.task.take();
+                            self.events.push_back(AgentTurnEvent::RuntimeInfo(info));
+                            self.inner = Some(inner);
+                        }
+                        Err(error) => {
+                            self.fail(error);
+                            return Ok(());
+                        }
+                    }
                 }
                 Err(oneshot::error::TryRecvError::Empty) => return Ok(()),
-                Err(oneshot::error::TryRecvError::Closed) => return Err(AgentSessionError::Failed),
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    self.fail(AgentSessionError::Failed);
+                    return Ok(());
+                }
             }
         }
         if let Some(inner) = &mut self.inner
             && let Some(input) = self.input.take()
         {
-            let turn = inner.start_input(&input.prompt, &input.config).await?;
-            self.turns = Some((input.turn, turn));
+            match inner.start_input(&input.prompt, &input.config).await {
+                Ok(turn) => self.turns = Some((input.turn, turn)),
+                Err(error) => {
+                    self.fail(error);
+                }
+            }
         }
         Ok(())
+    }
+
+    /// Settle a startup failure exactly once: withdraw pending dialogs, drop the queued
+    /// input without replaying it, and queue the terminal event for the manager drain.
+    fn fail(&mut self, error: AgentSessionError) {
+        if self.failed {
+            return;
+        }
+        self.failed = true;
+        self.failure = Some(match error {
+            AgentSessionError::Rejected => {
+                "OMP rejected the session startup or its first input.".to_owned()
+            }
+            AgentSessionError::Unavailable => "OMP became unavailable during startup.".to_owned(),
+            _ => "OMP native initialization failed before the first input was admitted.".to_owned(),
+        });
+        self.input.take();
+        self.turns.take();
+        self.writer.take();
+        if let Some(task) = &self.task {
+            task.abort();
+        }
+        self.receiver.close();
+        self.events.extend(self.dialogs.clear());
+        self.events.push_back(AgentTurnEvent::Failed);
     }
 
     fn inner(&mut self) -> Result<&mut session::Session, AgentSessionError> {
@@ -153,7 +213,7 @@ impl Session {
                 AgentTurnEvent::Started(logical.clone())
             }
             AgentTurnEvent::Timeline(mut entry) => {
-                if entry.turn_id.as_ref() == Some(native) {
+                if entry.turn_id.is_none() || entry.turn_id.as_ref() == Some(native) {
                     entry.turn_id = Some(logical.clone());
                 }
                 AgentTurnEvent::Timeline(entry)
@@ -162,7 +222,7 @@ impl Session {
                 observation,
                 mut entry,
             } => {
-                if entry.turn_id.as_ref() == Some(native) {
+                if entry.turn_id.is_none() || entry.turn_id.as_ref() == Some(native) {
                     entry.turn_id = Some(logical.clone());
                 }
                 AgentTurnEvent::Progress { observation, entry }
@@ -214,6 +274,9 @@ impl AgentSession for Session {
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
+        if let Some(message) = &self.failure {
+            return Some(Cow::Borrowed(message.as_str()));
+        }
         self.inner.as_ref().and_then(AgentSession::failure_message)
     }
 
@@ -254,7 +317,7 @@ impl AgentSession for Session {
         prompt: &AgentPrompt,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
-        if self.closed {
+        if self.closed || self.failed {
             return Err(AgentSessionError::Unavailable);
         }
         if let Some(inner) = &mut self.inner {
@@ -293,6 +356,9 @@ impl AgentSession for Session {
     }
 
     async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        if self.closed {
+            return Ok(());
+        }
         if self.input.as_ref().is_some_and(|input| input.turn == turn) {
             self.close().await?;
             self.events.push_back(AgentTurnEvent::Cancelled);
@@ -312,6 +378,9 @@ impl AgentSession for Session {
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
+        if self.failed {
+            return Err(AgentSessionError::Rejected);
+        }
         if let Some(inner) = &mut self.inner {
             return inner.respond_permission(id, response).await;
         }
@@ -328,21 +397,26 @@ impl AgentSession for Session {
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
-        if self.closed {
+        if self.closed || self.failed {
             return Ok(self.events.pop_front());
         }
         while let Ok(frame) = self.receiver.try_recv() {
-            self.frame(frame)?;
+            if let Err(error) = self.frame(frame) {
+                self.fail(error);
+                return Ok(self.events.pop_front());
+            }
         }
         if let Some(event) = self.events.pop_front() {
             return Ok(Some(event));
         }
-        let event = self
-            .inner
-            .as_mut()
-            .map(AgentSession::poll_turn)
-            .transpose()?
-            .flatten();
+        let event = match self.inner.as_mut().map(AgentSession::poll_turn) {
+            Some(Ok(event)) => event,
+            Some(Err(error)) => {
+                self.fail(error);
+                return Ok(self.events.pop_front());
+            }
+            None => None,
+        };
         let event = event.map(|event| self.event(event));
         if matches!(
             event,
@@ -356,10 +430,20 @@ impl AgentSession for Session {
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
         self.receiver.close();
-        while self.receiver.try_recv().is_ok() {}
         self.input.take();
-        self.task.take();
+        if let Some(task) = self.task.take() {
+            task.abort();
+            // Join cancellation so the startup future drops its transport before close returns.
+            let _ = task.await;
+        }
         self.writer.take();
+        while self.receiver.try_recv().is_ok() {}
+        self.ready.close();
+        if let Ok(Ok(mut inner)) = self.ready.try_recv() {
+            // Startup may have finished before cancellation without advance adopting its result.
+            // Close that native process without publishing its identity or replaying queued input.
+            inner.close().await?;
+        }
         self.events.extend(self.dialogs.clear());
         if let Some(inner) = &mut self.inner {
             inner.close().await?;

@@ -35,6 +35,7 @@ use model::outbound::{Outbound, QueueError};
 pub(crate) fn wait(
     request_id: String,
     params: Value,
+    secret_questions: bool,
     state: &Shared,
     outbound: &Outbound,
 ) -> Result<(), QueueError> {
@@ -70,7 +71,10 @@ pub(crate) fn wait(
             result = execution.execute("agent.finish.wait.request", params) => result,
         };
         let _ = match result {
-            Ok(result) => outbound.send(&ServerMessage::Response { request_id, result }),
+            Ok(mut result) => {
+                super::permission_projection::response(&mut result, secret_questions);
+                outbound.send(&ServerMessage::Response { request_id, result })
+            }
             Err(code) => send_error(&outbound, request_id, code.into()),
         };
     });
@@ -144,6 +148,36 @@ pub(crate) async fn dispatch(
         state.tasks.token()
     };
     let result = execution.execute(method, params).await.map_err(Into::into);
+    drop(tracking);
+    result
+}
+
+/// Resolve a permission using the transport's negotiated compatibility flag.
+/// The flag is never decoded from `params`; validation runs on the owning session lane.
+/// # Errors
+/// Returns admission, capability, validation, or native execution errors.
+pub(crate) async fn permission(
+    params: Value,
+    secret_questions: bool,
+    state: &Shared,
+) -> Result<Value, ErrorCode> {
+    let execution = state
+        .agent_execution
+        .as_ref()
+        .ok_or(ErrorCode::UnsupportedCapability)?;
+    let tracking = {
+        let _admission = state.admission.lock().map_err(|_| ErrorCode::AgentIo)?;
+        if state.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        state.tasks.token()
+    };
+    let context =
+        crate::service::agent_execution::operation::PermissionContext::negotiated(secret_questions);
+    let result = execution
+        .permission(params, context)
+        .await
+        .map_err(Into::into);
     drop(tracking);
     result
 }

@@ -45,6 +45,7 @@ pub(crate) async fn execute_observed(
             runtime: state,
             outbound: &outbound,
             available_subscriptions: observer.as_ref().map_or(0, |(_, available)| *available),
+            secret_questions: false,
         },
         state,
         &mut subscriptions,

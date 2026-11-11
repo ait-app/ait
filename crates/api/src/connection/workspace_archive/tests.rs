@@ -62,6 +62,7 @@ impl Fixture {
             runtime: &self.api.shared,
             outbound,
             available_subscriptions: 16,
+            secret_questions: false,
         }
     }
 

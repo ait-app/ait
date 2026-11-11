@@ -4,9 +4,9 @@
   "priority": 7,
   "depends_on": ["00", "01"],
   "donor_sections": [12, 20, 22, 31],
-  "donor_paths": "Frozen 154-path inventory: task00 tasks.json id 07 (PR647, evidence 7ac9b4ac); implemented slice is the 8 exclusive paths plus selected OMP-core/fixture/doc hunks listed in the PR description.",
-  "implementation": "Typed question/approval fields on the existing permission wire (secret, initialValue, allowEmpty, dismissBehavior, preserveWhitespace; confirm detail without raw tool JSON); OMP adapter interprets native frames, UI never parses OMP strings. New omp/bootstrap.rs provisional session publishes startup dialogs before native initialization completes and answers them through the same serialized writer; first input queued once and released through the same native session, cancelled input never replayed. Metadata probes run --no-ui while still loading plugins. No new RPC methods, events, providerUi state or generic native_action gateway; later consumers own their own typed schemas.",
-  "acceptance": "Real structured forms preserve all value/cancel semantics; reconnect and startup recover drafts without repeating side effects; approvals are not blocked by command waits and secrets are not leaked.",
+  "donor_paths": "Frozen inventory remains in task00 tasks.json id 07 (closed PR647, evidence 7ac9b4ac). This feature integrates the transferred SDK, connection projection, serialized resolution, OMP bootstrap, Hub redaction and mobile form files plus their shared module/caller migrations; the central inventory is not duplicated here.",
+  "implementation": "Existing typed permission forms support secret, editor prefill, empty/verbatim input and deny-dismiss. Provisional OMP startup publishes dialogs before initialization; one writer releases queued input once, failures settle normally and logical receipts remain distinct from native persistence. Explicit SDK/app capability negotiation drives connection-owned event/timeline/get/list/subscription/finish.wait projections. Private non-Serde PermissionContext reaches serialized resolution, rejects incapable secret ALLOW from live pending state, keeps DENY valid and sanitizes RPC success echoes. Durable Hub permission publications are invalidation markers. Secret inputs stay masked and lock during response; option selection resets both visible custom text and its answer. No Bot feature or new authorization system.",
+  "acceptance": "Explicit SDK hello opt-in reaches Context.secret_questions; legacy secret events and GET/list/subscription snapshots are valid DENY-only upgrade cards without answer-bearing fields; capable and nonsecret views are unchanged; live serialized resolution rejects incapable ALLOW and JSON spoofing while retaining DENY; RPC and durable Hub redaction preserve exact native answers; startup failure/draft receipt/concurrent approval regressions and actual browser flows pass; secure/multiline/empty/cancel UI regressions pass.",
   "status": "in_review",
   "branch": "feat/pr612-task07-structured-interactions",
   "base": {
@@ -16,9 +16,9 @@
     "verified_code_commit": "92abc77dbede57caf4c4b4bf1be7076982ffea48"
   },
   "commit": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/ait-app/ait/pull/657",
   "adr": "ADR-243 (proposed)",
-  "compatibility": "No public SDK/UI/protocol envelope changes: AgentPermissionRequestPayloadSchema.input stays an open record and only optional question fields are added; permission events, pendingPermissions snapshot and agent.permission.resolve.request unchanged; no method registration or capability-count changes. Old clients keep rendering/answering the same permission requests; new clients on old hosts simply never see the optional fields. Internal Rust changes: session::open gains a startup sender parameter (bridge/tests updated), OmpClient create/resume signatures unchanged. ACP structure untouched (task01).",
+  "compatibility": "agent-secret-questions-v1 is an optional, explicit app capability; only literal true opts in. Old hosts may omit it without blocking connection. New hosts project incapable secret views to cancel-only tool permissions and reject secret ALLOW server-side. Negotiation is compatibility, not authorization or proof of honest client implementation. No new RPC envelope or ACP structure. EventHub::subscribe gains a mandatory capability argument; all callers migrate, internal observers default incapable. ADR-243 remains proposed. Task01 and task31 are skipped by user decision; verified task01 prerequisite code remains a dependency, not a downstream macOS-CI blocker.",
   "source_inventory": {
     "draft_pr": "https://github.com/ait-app/ait/pull/647",
     "evidence_commit": "7ac9b4ace576831196b5b09965c8d029bd9044d8",
@@ -31,6 +31,80 @@
       "docs links/ADR index when changed"
     ],
     "results": [
+      {
+        "command": "npm run test --workspace=@ait/client -- src/protocol/connection-single.test.ts && npm run typecheck --workspace=@ait/client",
+        "result": "PASS: 35 SDK negotiation tests and SDK typecheck."
+      },
+      {
+        "command": "cd apps/mobile; npx --no-install vitest run --project unit src/components/question-form-card-core.test.ts src/components/question-form-card.test.tsx; npx --no-install vitest run --project browser src/components/question-form-card.browser.test.tsx",
+        "result": "PASS: 33 unit tests and 3 Chromium tests. New option/custom-text desynchronization regression failed before the fix, then passed."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p model --lib events::tests; /tmp/ait-discovery-tai/cargo-sem test -p model --lib session::permission::tests; /tmp/ait-discovery-tai/cargo-sem test -p model --lib server::tests::negotiation",
+        "result": "PASS: 5 event, 3 projection and 7 negotiation tests. Legacy timeline secret projection failed before the fix, then passed."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p metadata --lib permission_event_projection; /tmp/ait-discovery-tai/cargo-sem test -p daemon host::hub::events::tests::permission_",
+        "result": "PASS: 1 connection-specific event test and 2 durable Hub redaction tests."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem build -p daemon --bin daemon",
+        "result": "PASS; unrelated filesystem fetch_update deprecation warning."
+      },
+      {
+        "command": "cargo fmt -p model -p metadata -p provider -p api -p daemon --check",
+        "result": "PASS on final Rust sources."
+      },
+      {
+        "command": "browser.open + direct fill/click against Vite-served QuestionFormCard at 390px",
+        "result": "PASS: masked required secret, verbatim whitespace/trailing newline, cleared prefill, deny without typed answer, and option reset with matching submitted selection. Screenshots /tmp/omp-sshots-15c9bd5504d4c517.webp and /tmp/omp-sshots-15c9c1517da7ca38.webp. Isolated harness lacks i18n initialization; not an app layout audit."
+      },
+      {
+        "command": "node scripts/adr.mjs index --check && node scripts/check-docs.mjs",
+        "result": "PASS: 560 Markdown documents and 224 ADRs."
+      },
+      {
+        "command": "cd apps/mobile; npx --no-install tsgo --noEmit",
+        "result": "BLOCKED by existing markdown renderer exports/props and bottom-sheet export errors; no changed-file errors reported."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem clippy -p model -p metadata -p provider -p api --lib -- -D warnings",
+        "result": "BLOCKED in out-of-claim dependencies: schedule single_element_loop and filesystem deprecated fetch_update. Scoped --no-deps lint passes as recorded below."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p provider --lib local::omp::bootstrap::tests",
+        "result": "8 passed; cancelled-draft regression exposed an incidental Idle assertion after close_all, which legitimately records Closed. Removed that assertion, retaining no-native-identity/receipt/replay checks; its final pass is recorded below."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p provider --lib -- cancelled_bootstrap_remains_a_draft_after_reopening_durable_state connection::directory::tests secret_permission_context_survives_dispatch_and_serialized_resolution permission_returns_safe_resolution",
+        "result": "PASS: 10 tests, including cancelled draft persistence, 7 directory projection tests, real serialized native permission resolution/spoof rejection, and safe RPC/publication results. Log: /tmp/lead07-final-provider.log."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p api --lib tests::http_authentication_origins_and_readiness -- --exact; /tmp/ait-discovery-tai/cargo-sem test -p api --lib tests::physical_connections_own_negotiation_and_subscriptions -- --exact; /tmp/ait-discovery-tai/cargo-sem test -p api --lib tests::handshake_errors_are_closed_and_capabilities_are_enforced -- --exact",
+        "result": "PASS: 3 targeted API tests."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem test -p api --lib tests::single::single_mode_negotiates_all_methods_and_owns_release -- --exact",
+        "result": "PASS: the SDK worker's previously integration-blocked single-connection test. Log: /tmp/lead07-final-single.log."
+      },
+      {
+        "command": "/tmp/ait-discovery-tai/cargo-sem clippy -p model -p metadata -p provider -p api --lib --no-deps -- -D warnings && /tmp/ait-discovery-tai/cargo-sem clippy -p daemon --bin daemon --no-deps -- -D warnings",
+        "result": "PASS: changed production packages; unrelated filesystem dependency deprecation remains a warning. Log: /tmp/lead07-final-clippy.log."
+      },
+      {
+        "command": "E2E_AIT_SERVER_BIN=/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-interactions/target/debug/daemon npm run test:e2e --workspace=@ait/mobile -- e2e/browser/omp-structured-interactions.spec.ts",
+        "result": "Initial run: startup-before-admission/single-release scenario passed; two scenarios failed, exposing an unprojected finish.wait snapshot and an incorrect literal-error assumption in the browser fixture."
+      },
+      {
+        "command": "E2E_AIT_SERVER_BIN=/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-interactions/target/debug/daemon npm run test:e2e --workspace=@ait/mobile -- e2e/browser/omp-structured-interactions.spec.ts --grep 'terminal failure|two pending' --retries=0",
+        "result": "PASS: both corrected scenarios against rebuilt real daemon + Metro + Chromium + offline native OMP peer. Verifies visible single failure; two simultaneous questions; full masked capable view; actual legacy GET/list/subscription/finish.wait projection; answering one leaves the other pending; cancelling sends no typed answer. Together all 3 browser scenarios have passed. Log: /tmp/lead07-final-browser.log."
+      },
+      {
+        "command": "npx --no-install oxfmt --check apps/mobile/e2e/browser/omp-structured-interactions.spec.ts apps/mobile/src/components/question-form-card-core.test.ts apps/mobile/src/components/question-form-card.test.tsx apps/mobile/src/components/question-form-card.browser.test.tsx apps/mobile/src/components/question-form-card.tsx apps/mobile/src/runtime/host-runtime.ts packages/protocol/src/client-capabilities.ts packages/client/src/protocol/connection.ts packages/client/src/protocol/connection-single.test.ts packages/client/src/daemon-client.ts packages/client/src/connection/index.ts && npx --no-install oxlint apps/mobile/e2e/browser/omp-structured-interactions.spec.ts apps/mobile/src/components/question-form-card-core.test.ts apps/mobile/src/components/question-form-card.test.tsx apps/mobile/src/components/question-form-card.browser.test.tsx apps/mobile/src/components/question-form-card.tsx apps/mobile/src/runtime/host-runtime.ts packages/protocol/src/client-capabilities.ts packages/client/src/protocol/connection.ts packages/client/src/protocol/connection-single.test.ts packages/client/src/daemon-client.ts packages/client/src/connection/index.ts",
+        "result": "PASS: all 11 affected TS/TSX files formatted; zero lint warnings/errors."
+      }
+    ],
+    "historical_results_before_integration": [
       {
         "command": "CARGO_BUILD_JOBS=2 cargo check -p provider --offline",
         "result": "PASS: provider crate compiles with the bootstrap/transport/interactions changes."
@@ -74,7 +148,7 @@
     ]
   },
   "blockers": [
-    "Stacked on unmerged task01 (PR651), whose own acceptance is blocked on macOS signing/notarization evidence; task07 inherits that platform limitation and claims native Linux official-runtime verification only.",
-    "Draft PR publication pending at record time; commit/pr_url fields filled on publication."
+    "Full-app mobile typecheck and dependency-inclusive strict Clippy have unrelated failures recorded above. Targeted behavioral checks, actual browser scenarios, affected TS lint and scoped production Clippy pass. No full workspace tests or coverage were run.",
+    "Existing Draft 657 reports merge conflicts with its base. No merge or rebase is authorized or attempted."
   ]
 }

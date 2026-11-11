@@ -88,6 +88,7 @@ impl Harness {
             runtime: &self.state.runtime,
             outbound: &self.outbound,
             available_subscriptions: self.available,
+            secret_questions: false,
         });
         dispatch(&mut context, &self.state, &mut self.connection)
             .await

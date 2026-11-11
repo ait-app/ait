@@ -2,6 +2,25 @@
 
 use crate::rpc::ErrorCode;
 
+/// Trusted connection compatibility carried outside wire parameters into the session lane.
+/// This is not authorization; callers without negotiation default to incapable.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PermissionContext {
+    secret_questions: bool,
+}
+
+impl PermissionContext {
+    /// Capture the transport's negotiated flag, never a value decoded from request JSON.
+    pub(crate) const fn negotiated(secret_questions: bool) -> Self {
+        Self { secret_questions }
+    }
+
+    /// Whether this connection negotiated support for secret question answers.
+    pub(crate) const fn secret_questions(self) -> bool {
+        self.secret_questions
+    }
+}
+
 /// The resource an operation must read or exclusively own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Access {
@@ -49,7 +68,7 @@ pub(crate) enum Operation {
     Configure,
     Mode,
     Feature,
-    Permission,
+    Permission(PermissionContext),
     RecentSessions,
     Import,
     Refresh,
@@ -108,7 +127,9 @@ impl Operation {
             "agent.config.apply.request" => Ok(Self::Configure),
             "agent.mode.set.request" => Ok(Self::Mode),
             "agent.feature.set.request" => Ok(Self::Feature),
-            "agent.permission.resolve.request" => Ok(Self::Permission),
+            "agent.permission.resolve.request" => {
+                Ok(Self::Permission(PermissionContext::default()))
+            }
             "provider.sessions.recent.list.request" => Ok(Self::RecentSessions),
             "agent.import.request" => Ok(Self::Import),
             "agent.refresh.request" => Ok(Self::Refresh),
@@ -166,7 +187,7 @@ impl Operation {
             Self::Configure => "agent.config.apply.request",
             Self::Mode => "agent.mode.set.request",
             Self::Feature => "agent.feature.set.request",
-            Self::Permission => "agent.permission.resolve.request",
+            Self::Permission(_) => "agent.permission.resolve.request",
             Self::RecentSessions => "provider.sessions.recent.list.request",
             Self::Import => "agent.import.request",
             Self::Refresh => "agent.refresh.request",
@@ -222,7 +243,7 @@ impl Operation {
             | Self::Configure
             | Self::Mode
             | Self::Feature
-            | Self::Permission
+            | Self::Permission(_)
             | Self::Refresh
             | Self::ForkContext
             | Self::Rewind
@@ -281,7 +302,7 @@ impl Operation {
             | Self::Configure
             | Self::Mode
             | Self::Feature
-            | Self::Permission
+            | Self::Permission(_)
             | Self::Refresh
             | Self::ForkContext
             | Self::Rewind

@@ -1,3 +1,5 @@
+mod permission_projection;
+
 use std::sync::Arc;
 
 use domain::session::SessionError;
@@ -33,6 +35,7 @@ pub(crate) fn subscribe(
         request,
         outbound,
         available_subscriptions,
+        secret_questions,
         ..
     } = context;
     let request_id = request.id;
@@ -89,7 +92,10 @@ pub(crate) fn subscribe(
             .ok_or(ErrorCode::InvalidMessage)?
             .subscribe(
                 request,
-                Arc::new(move |kind, params| {
+                Arc::new(move |kind, mut params| {
+                    if kind == SessionEventKind::AgentPermissionRequest {
+                        permission_projection::request(&mut params, secret_questions);
+                    }
                     sink.send(&ServerMessage::Event {
                         method: kind.method().to_owned(),
                         params,

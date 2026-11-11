@@ -62,6 +62,11 @@ Ait spec 的精确 sandbox confinement 在创建、恢复、配置重开和会�
 控制期间继续交付交互请求；不会因先等待命令确认而卡住插件。
 内部会话在原生初始化完成前即可公布并回答插件启动问题（provisional session，同一序列化 writer）；
 首条输入只释放一次，取消不重放。元数据探测以 `--no-ui` 运行但仍加载插件。
+秘密问答使用可选 `agent-secret-questions-v1` 兼容性协商；不替代既有资源授权。
+连接边界对 permission 事件及 get/list/目录订阅的待答快照投影：未协商时只保留
+请求身份、升级说明与 DENY，已协商时保留 typed 表单；共享 live 状态不被改写。
+会话 lane 内根据当前 pending secret 标记拒绝未协商连接的 ALLOW，能力通过私有 typed
+operation 上下文传递，不从请求 JSON 读取。成功响应同样脱敏；Hub 持久通知只有失效标记。
 改变会话/回合所有权的原生命令不能绕过 ACP 生命周期路由，未知原生控制由 OMP 自己拒绝。
 错误字段沿用有界脱敏，普通插件数据不按插件名称改写。
 

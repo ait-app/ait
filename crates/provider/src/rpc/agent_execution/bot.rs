@@ -8,6 +8,7 @@ use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::protocol::prompt::AgentPrompt;
+use crate::service::agent_execution::operation::PermissionContext;
 use crate::service::agent_manager::{AgentManagerError, AgentRegistration};
 use crate::service::bot_execution::{
     Action, BotSessionSupport, Created, InstructionDelivery, TimelineCursor,
@@ -91,7 +92,12 @@ impl ExecutionState {
                     return Err(ErrorCode::AgentNotFound);
                 }
                 self.manager
-                    .permission(&agent_id, &permission_id, &response)
+                    .permission(
+                        &agent_id,
+                        &permission_id,
+                        &response,
+                        PermissionContext::default(),
+                    )
                     .await?;
                 Ok(json!({"resolved":true}))
             }

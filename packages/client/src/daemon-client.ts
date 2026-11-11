@@ -1288,6 +1288,7 @@ export class DaemonClient {
         headers,
         guestScope: this.config.guestScope,
         trace: this.config.trace,
+        capabilities: this.config.capabilities,
       });
       this.transport = transport;
       this.connectStartedAt = Date.now();

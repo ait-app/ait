@@ -144,6 +144,7 @@ fn context<'a>(method: &str, state: &'a Shared, outbound: &'a Outbound) -> Conte
         runtime: state,
         outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     }
 }
 

@@ -63,6 +63,11 @@
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。共享的 slash 命令发现路径
   不传入写入限制（[ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md)）。
+- 秘密问答的协商状态从 `Context.secret_questions` 经私有 `PermissionContext` 进入
+  `Operation::Permission`，与请求 JSON 分离；会话 lane 根据当前 pending 请求拒绝未协商连接的
+  secret ALLOW，DENY 不受此限制。连接事件和 get/list/目录订阅投影不修改共享状态；
+  secret resolution 回包脱敏，持久 Hub permission 通知只含失效标记。该能力是兼容性而非授权
+  （[ADR-243](../decisions/providers/adr-243-omp-structured-native-interactions.md)，proposed）。
 
 ## 时间线与历史投影
 

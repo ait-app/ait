@@ -214,6 +214,71 @@ describe("structured native question answers", () => {
     expect(shouldSubmitEmptyOnDismiss(questions)).toBe(false);
   });
 
+  test("keeps multiline text verbatim, including a trailing newline", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Edit the plan",
+          header: "Edit the plan",
+          options: [],
+          allowOther: true,
+          allowEmpty: false,
+          multiline: true,
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(areQuestionsAnswered(questions, {}, {})).toBe(false);
+    expect(areQuestionsAnswered(questions, {}, { 0: "  line one\nline two\n" })).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "  line one\nline two\n" })).toEqual({
+      "Edit the plan": "  line one\nline two\n",
+    });
+  });
+
+  test("rejects an empty secret submit but accepts a whitespace value verbatim", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "API token",
+          header: "API token",
+          options: [],
+          allowOther: true,
+          allowEmpty: false,
+          secret: true,
+          preserveWhitespace: true,
+          dismissBehavior: "deny",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(areQuestionsAnswered(questions, {}, {})).toBe(false);
+    expect(areQuestionsAnswered(questions, {}, { 0: "" })).toBe(false);
+    expect(buildQuestionFormAnswers(questions, {}, {})).toEqual({});
+    expect(areQuestionsAnswered(questions, {}, { 0: " " })).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, { 0: " " })).toEqual({ "API token": " " });
+    expect(shouldSubmitEmptyOnDismiss(questions)).toBe(false);
+  });
+
+  test("rejects whitespace-only single-line answers without allowEmpty", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Branch name",
+          header: "Branch name",
+          options: [],
+          allowOther: true,
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(areQuestionsAnswered(questions, {}, { 0: "   " })).toBe(false);
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "   " })).toEqual({});
+    expect(areQuestionsAnswered(questions, {}, { 0: " main " })).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, { 0: " main " })).toEqual({
+      "Branch name": "main",
+    });
+  });
+
   test("plain inputs still trim and may submit empty on dismiss", () => {
     const questions = parseQuestionFormQuestions({
       questions: [

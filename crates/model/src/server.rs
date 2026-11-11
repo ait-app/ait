@@ -6,6 +6,9 @@ use serde_json::Value;
 /// Single-connection negotiation identifiers.
 pub mod single;
 
+/// Explicit client opt-in to secret-question UI support; compatibility, not authorization.
+pub const SECRET_QUESTIONS_CAPABILITY: &str = "agent-secret-questions-v1";
+
 /// Maximum incoming JSON message size, including fragmented messages.
 pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 /// Maximum queued outgoing messages per connection.

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CLIENT_CAPS, type ClientCapability } from "@ait/protocol/client-capabilities";
 import {
   CHANNEL_CAPABILITIES,
   createDaemonConnection,
@@ -20,7 +21,11 @@ interface FakeSocket {
   hello(): Payload;
 }
 
-function connect(url: string, mode?: DaemonConnectionMode) {
+function connect(
+  url: string,
+  mode?: DaemonConnectionMode,
+  capabilities?: Partial<Record<ClientCapability, unknown>>,
+) {
   const sockets: FakeSocket[] = [];
   const factory: TransportFactory = () => {
     let onOpen = () => {};
@@ -50,6 +55,7 @@ function connect(url: string, mode?: DaemonConnectionMode) {
   const transport = createDaemonConnection(base, {
     url,
     headers: { Authorization: "Bearer test" },
+    capabilities,
     ...(mode ? { mode } : {}),
   });
   const received: Payload[] = [];
@@ -95,6 +101,80 @@ describe("single-connection daemon transport", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+  describe.each(["auto", "split", "relay"] as const)("secret questions in %s mode", (mode) => {
+    it.each([true, false, undefined, null, "true", 1, {}])(
+      "offers optional secret support only for explicit true (%j)",
+      (value) => {
+        const capabilities = {
+          [CLIENT_CAPS.secretQuestions]: value,
+          [CLIENT_CAPS.browserHost]: true,
+          "unknown.app.capability": true,
+        };
+        const h = connect(
+          mode === "relay"
+            ? "ait+desktop://account-relay/host?center=https://center.test"
+            : endpoint(),
+          mode === "split" ? "split" : "auto",
+          capabilities,
+        );
+        try {
+          // A server may omit this optional extension without rejecting the connection.
+          h.ready();
+          for (const socket of h.sockets) {
+            const hello = socket.hello();
+            const offered = hello.capabilities as string[];
+            const required = hello.required_capabilities as string[];
+            expect(new Set([...offered, ...required]).size).toBeLessThanOrEqual(
+              mode === "split" ? 64 : 256,
+            );
+            expect((hello.capabilities as string[]).includes(CLIENT_CAPS.secretQuestions)).toBe(
+              value === true,
+            );
+            expect(hello.required_capabilities).not.toContain(CLIENT_CAPS.secretQuestions);
+            expect(hello.capabilities).not.toContain(CLIENT_CAPS.browserHost);
+            expect(hello.capabilities).not.toContain("unknown.app.capability");
+          }
+          expect(h.received).toEqual([expect.objectContaining({ type: "status" })]);
+          expect(h.errors).not.toHaveBeenCalled();
+        } finally {
+          h.transport.close();
+        }
+      },
+    );
+  });
+
+  it.each([true, false])(
+    "preserves secret opt-in (%s) across split fallback and reconnect",
+    (secretQuestions) => {
+      const url = endpoint();
+      const capabilities = { [CLIENT_CAPS.secretQuestions]: secretQuestions };
+      const h = connect(url, "auto", capabilities);
+      try {
+        h.sockets[0].open();
+        h.sockets[0].message({ type: "error", code: "unsupported_capability", message: "No" });
+        h.ready([]);
+        expect(h.base).toHaveBeenCalledTimes(5);
+        for (const socket of h.sockets) {
+          expect(
+            (socket.hello().capabilities as string[]).includes(CLIENT_CAPS.secretQuestions),
+          ).toBe(secretQuestions);
+        }
+      } finally {
+        h.transport.close();
+      }
+      // A new caller can downgrade its opt-in even when split mode is remembered.
+      const next = connect(url);
+      try {
+        expect(next.base).toHaveBeenCalledTimes(4);
+        next.ready([]);
+        for (const socket of next.sockets)
+          expect(socket.hello().capabilities).not.toContain(CLIENT_CAPS.secretQuestions);
+      } finally {
+        next.transport.close();
+      }
+    },
+  );
 
   it.each([
     ["direct", "ws://127.0.0.1:7400/v1/ws"],

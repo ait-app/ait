@@ -39,6 +39,7 @@ fn context<'a>(
         runtime,
         outbound,
         available_subscriptions: 0,
+        secret_questions: false,
     }
 }
 

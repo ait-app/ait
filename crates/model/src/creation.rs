@@ -278,9 +278,12 @@ impl Creations {
         let snapshot = self
             .read(&state, &id)?
             .map(|receipt| observed(receipt.snapshot, state.active.contains(&id)));
-        let subscription =
-            self.events
-                .subscribe(Uuid::new_v4().to_string(), BTreeSet::from([id]), outbound);
+        let subscription = self.events.subscribe(
+            Uuid::new_v4().to_string(),
+            BTreeSet::from([id]),
+            outbound,
+            false,
+        );
         Ok((snapshot, subscription))
     }
 

@@ -306,6 +306,11 @@ function QuestionOtherInput({
       theme.colors.surface2,
     ],
   );
+  // Neither React Native nor react-native-web can mask a multiline field: web maps the
+  // element to a <textarea> and drops `type="password"`. A secret question therefore stays
+  // single-line so its value is never rendered in clear text.
+  const masked = secret === true;
+  const effectiveMultiline = multiline === true && !masked;
   return (
     <TextInput
       // @ts-expect-error - outlineStyle is web-only
@@ -315,9 +320,10 @@ function QuestionOtherInput({
       placeholderTextColor={theme.colors.foregroundMuted}
       initialValue={value}
       onChangeText={handleChange}
-      onSubmitEditing={multiline ? undefined : onSubmit}
-      multiline={multiline}
-      secureTextEntry={secret}
+      onSubmitEditing={effectiveMultiline ? undefined : onSubmit}
+      multiline={effectiveMultiline}
+      secureTextEntry={masked}
+      editable={!isResponding}
       blurOnSubmit={false}
     />
   );
@@ -341,6 +347,7 @@ export function QuestionFormCard({
   const [otherTexts, setOtherTexts] = useState<Record<number, string>>({});
   const [respondingAction, setRespondingAction] = useState<"submit" | "dismiss" | null>(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [inputRevision, setInputRevision] = useState(0);
 
   const toggleOption = useCallback(
     (qIndex: number, optIndex: number, multiSelect: boolean) => {
@@ -360,13 +367,11 @@ export function QuestionFormCard({
       }
 
       setSelections((prev) => ({ ...prev, [qIndex]: next }));
-      setOtherTexts((prev) => {
-        if (multiSelect && questions?.[qIndex]?.answerFormat === "array") return prev;
-        if (!prev[qIndex]) return prev;
-        const nextTexts = { ...prev };
-        delete nextTexts[qIndex];
-        return nextTexts;
-      });
+      if (!(multiSelect && questions?.[qIndex]?.answerFormat === "array")) {
+        setOtherTexts((prev) => ({ ...prev, [qIndex]: "" }));
+        // The input is uncontrolled: remount only for an option-driven reset, not typing.
+        setInputRevision((revision) => revision + 1);
+      }
 
       if (!multiSelect && next.size > 0 && qIndex === activeQuestionIndex && questions) {
         setActiveQuestionIndex(Math.min(qIndex + 1, questions.length - 1));
@@ -578,7 +583,7 @@ export function QuestionFormCard({
           ) : null}
           {showTextInput ? (
             <QuestionOtherInput
-              key={resolvedActiveQuestionIndex}
+              key={`${resolvedActiveQuestionIndex}:${inputRevision}`}
               multiline={activeQuestion.multiline}
               secret={activeQuestion.secret}
               qIndex={resolvedActiveQuestionIndex}

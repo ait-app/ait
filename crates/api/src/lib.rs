@@ -585,9 +585,10 @@ impl Api {
 fn registered_capabilities() -> Vec<String> {
     capabilities::implemented_methods()
         .map(|method| method.name.to_owned())
-        .chain(std::iter::once(
+        .chain([
             model::server::single::CAPABILITY.to_owned(),
-        ))
+            model::server::SECRET_QUESTIONS_CAPABILITY.to_owned(),
+        ])
         .collect()
 }
 

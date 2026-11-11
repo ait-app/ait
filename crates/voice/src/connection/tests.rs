@@ -77,6 +77,7 @@ async fn unavailable_speech_requests_keep_correlation_and_do_not_emit_success_ev
             runtime: &fixture.runtime,
             outbound: &fixture.outbound,
             available_subscriptions: 0,
+            secret_questions: false,
         });
         crate::dispatch::dispatch(&mut context, &state, &mut fixture.connection)
             .await

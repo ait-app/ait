@@ -42,6 +42,7 @@ async fn request(peer: &Peer, params: Value, budget: usize) {
             runtime: &peer.state.runtime,
             outbound: &peer.outbound,
             available_subscriptions: budget,
+            secret_questions: false,
         },
         &peer.state,
     )

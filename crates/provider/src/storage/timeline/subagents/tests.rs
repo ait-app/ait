@@ -72,6 +72,7 @@ fn bound_child_events_and_replacements_use_the_canonical_agent_identity() {
         "observer".to_owned(),
         std::collections::BTreeSet::from(["observed".to_owned()]),
         outbound,
+        false,
     );
     subscription.activate().expect("subscribe");
     let mut entry = crate::protocol::timeline::NativeItem {

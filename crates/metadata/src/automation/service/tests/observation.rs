@@ -58,6 +58,7 @@ async fn setup_observation_bootstraps_then_filters_and_releases_with_its_physica
         runtime: &state.runtime,
         outbound: &outbound,
         available_subscriptions: 1,
+        secret_questions: false,
     };
     crate::automation::connection::subscribe(context, &state, &mut connection)
         .await
@@ -102,6 +103,7 @@ async fn setup_observation_respects_the_shared_subscription_budget() {
         runtime: &state.runtime,
         outbound: &outbound,
         available_subscriptions: 0,
+        secret_questions: false,
     };
     crate::automation::connection::subscribe(context, &state, &mut connection)
         .await

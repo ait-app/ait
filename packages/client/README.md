@@ -38,6 +38,16 @@ Direct TCP/SSH retains four capability channels; account Hub uses one session.
 Node callers should provide a WebSocket implementation that supports Authorization
 headers; standard browser WebSockets require the ticket transport.
 
+Applications that render masked secret-question inputs must opt in with
+`capabilities: { "agent-secret-questions-v1": true }` in `DaemonClient` options.
+The capability is optional and offered on each connection; omission, `false`, or a
+non-boolean value does not opt in. The SDK does not enable it automatically.
+New hosts show incapable connections a cancel-only upgrade card in permission
+events and agent snapshots, and reject secret ALLOW responses on the server.
+DENY remains valid. This is compatibility negotiation, not authorization or proof
+that an authorized client implements masking honestly. Old hosts may omit the
+capability without preventing connection.
+
 [Maestro's connection helper](../../apps/mobile/maestro/support/ait-client.ts) and
 [App E2E](../../apps/mobile/e2e/README.md) use the same native SDK without an App
 protocol adapter. High-level API names such as `createPaseoClient` remain for

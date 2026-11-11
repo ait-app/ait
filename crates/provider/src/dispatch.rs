@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
+pub(crate) mod permission_projection;
 mod requests;
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.

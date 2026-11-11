@@ -30,6 +30,7 @@ async fn request(tunnels: &mut Tunnels, runtime: &Runtime, method: &str, params:
             runtime,
             outbound: &outbound,
             available_subscriptions: 16 - tunnels.len(),
+            secret_questions: false,
         })
         .unwrap();
     let Frame::Text(text) = timeout(Duration::from_secs(2), receiver.recv())
@@ -206,6 +207,7 @@ async fn validation_capacity_and_ownership_are_enforced() {
             runtime: &runtime,
             outbound: &outbound,
             available_subscriptions: 0,
+            secret_questions: false,
         })
         .unwrap();
     let Frame::Text(text) = receiver.recv().await.unwrap().message else {
@@ -243,6 +245,7 @@ async fn releasing_a_tunnel_cancels_pending_reads_and_closes_the_remote_socket()
             runtime: &runtime,
             outbound: &outbound,
             available_subscriptions: 15,
+            secret_questions: false,
         })
         .unwrap();
     tunnels.release(id);

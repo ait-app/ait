@@ -8,9 +8,10 @@ import ompDialogs from "../../../../crates/provider/tests/fixtures/omp_dialogs.j
 
 const mounted: { root: Root; container: HTMLDivElement }[] = [];
 
-function mountForm(name: string, onRespond: (response: AgentPermissionResponse) => void) {
-  const fixture = ompDialogs.find((entry) => entry.name === name);
-  if (!fixture) throw new Error(`missing fixture ${name}`);
+function mountRequest<T extends { request: unknown }>(
+  fixture: T,
+  onRespond: (response: AgentPermissionResponse) => void,
+) {
   const request = AgentPermissionRequestPayloadSchema.parse(fixture.request);
   const container = document.createElement("div");
   container.style.width = "390px";
@@ -26,7 +27,13 @@ function mountForm(name: string, onRespond: (response: AgentPermissionResponse) 
     ),
   );
   mounted.push({ root, container });
-  return { container, fixture };
+  return { container, fixture, request };
+}
+
+function mountForm(name: string, onRespond: (response: AgentPermissionResponse) => void) {
+  const fixture = ompDialogs.find((entry) => entry.name === name);
+  if (!fixture) throw new Error(`missing fixture ${name}`);
+  return mountRequest(fixture, onRespond);
 }
 
 function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -110,5 +117,90 @@ describe("OMP structured form browser smoke", () => {
       cancel.container.querySelector<HTMLElement>('[data-testid="question-form-dismiss"]')!.click();
     });
     expect(responses.at(-1)).toEqual({ behavior: "deny", message: "Dismissed by user" });
+  });
+
+  it("keeps a secret multiline request single-line and blocks an empty required submit", () => {
+    const responses: AgentPermissionResponse[] = [];
+    const onRespond = vi.fn((response: AgentPermissionResponse) => responses.push(response));
+    const secretMultiline = {
+      request: {
+        id: "required-passphrase",
+        provider: "omp",
+        name: "extension_ui",
+        kind: "question",
+        input: {
+          questions: [
+            {
+              header: "Passphrase",
+              question: "Passphrase",
+              answerKey: "value",
+              options: [],
+              multiSelect: false,
+              allowOther: true,
+              allowEmpty: false,
+              secret: true,
+              multiline: true,
+            },
+          ],
+        },
+      },
+    };
+    const required = mountRequest(secretMultiline, onRespond);
+    expect(required.container.querySelector("textarea")).toBeNull();
+    const input = required.container.querySelector<HTMLInputElement>('input[type="password"]');
+    expect(input).toBeTruthy();
+    const primary = required.container.querySelector<HTMLElement>(
+      '[data-testid="question-form-primary-action"]',
+    )!;
+    expect(primary.getAttribute("aria-disabled")).toBe("true");
+    act(() => primary.click());
+    expect(responses).toHaveLength(0);
+
+    setInputValue(input!, "  correct horse  ");
+    act(() => primary.click());
+    expect(responses.at(-1)).toEqual({
+      behavior: "allow",
+      updatedInput: {
+        ...secretMultiline.request.input,
+        answers: { Passphrase: "  correct horse  " },
+      },
+    });
+  });
+
+  it("clears custom text when selecting an option without leaving the question", () => {
+    const onRespond = vi.fn();
+    const { container, request } = mountRequest(
+      {
+        request: {
+          id: "choice",
+          provider: "omp",
+          name: "extension_ui",
+          kind: "question",
+          input: {
+            questions: [
+              {
+                header: "Choice",
+                question: "Choose",
+                options: [{ label: "First" }],
+                multiSelect: false,
+                allowOther: true,
+                initialValue: "prefilled",
+              },
+            ],
+          },
+        },
+      },
+      onRespond,
+    );
+    setInputValue(container.querySelector<HTMLInputElement>("input")!, "custom");
+    act(() => container.querySelector<HTMLElement>('[role="radio"]')!.click());
+    expect(container.querySelector<HTMLInputElement>("input")?.value).toBe("");
+    act(() =>
+      container.querySelector<HTMLElement>('[data-testid="question-form-primary-action"]')!.click(),
+    );
+    expect(onRespond).toHaveBeenCalledWith({
+      behavior: "allow",
+      updatedInput: { ...request.input, answers: { Choice: "First" } },
+    });
   });
 });

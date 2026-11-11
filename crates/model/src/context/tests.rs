@@ -30,6 +30,7 @@ async fn admitted_rpc_waits_for_the_shared_job_instead_of_rejecting_another_lane
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     };
     let mut queued = Box::pin(context.rpc(
         Some(service.clone()),
@@ -66,6 +67,7 @@ async fn shutdown_cancels_an_admitted_rpc_waiting_for_the_shared_job() {
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     };
     let mut queued = Box::pin(context.rpc(
         Some(service),
@@ -96,6 +98,7 @@ async fn rpc_runs_the_selected_operation_with_the_owned_request() {
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     };
     context
         .rpc(
@@ -127,6 +130,7 @@ async fn missing_services_and_business_failures_use_one_error_envelope() {
             runtime: &runtime,
             outbound: &outbound,
             available_subscriptions: 16,
+            secret_questions: false,
         };
         context
             .rpc(service, ErrorCode::RegistryIo, |(), _, _| {
@@ -152,6 +156,7 @@ fn workspace_events_follow_the_response_and_absent_events_stay_absent() {
             runtime: &runtime,
             outbound: &outbound,
             available_subscriptions: 16,
+            secret_questions: false,
         };
         context
             .workspace(json!({"ok":true}), event.clone())
@@ -178,6 +183,7 @@ fn failed_response_prevents_the_workspace_event() {
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     };
     assert!(matches!(
         context.workspace(json!({}), Some(json!({}))),
@@ -195,6 +201,7 @@ fn declining_a_request_preserves_its_context() {
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     });
     Context::assert_unhandled(&pending, "test::declining_handler");
     assert_eq!(pending.as_ref().unwrap().request.id, "r1");

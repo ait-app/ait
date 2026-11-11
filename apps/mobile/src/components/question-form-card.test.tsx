@@ -65,6 +65,20 @@ const permission: PendingPermission = {
   },
 };
 
+function permissionWith(questions: unknown[]): PendingPermission {
+  return {
+    key: "agent-a:question-a",
+    agentId: "agent-a",
+    request: {
+      id: "question-a",
+      provider: "codex",
+      name: "request_user_input",
+      kind: "question",
+      input: { questions },
+    },
+  };
+}
+
 describe("question response recovery", () => {
   beforeEach(() => vi.stubGlobal("React", React));
   afterEach(() => {
@@ -257,5 +271,154 @@ describe("question response recovery", () => {
       behavior: "deny",
       message: "Dismissed by user",
     });
+  });
+
+  it("keeps a required multiline answer in a textarea and refuses an empty submit", () => {
+    const onRespond = vi.fn();
+    const questions = [
+      {
+        header: "Notes",
+        question: "Write notes",
+        options: [],
+        allowOther: true,
+        allowEmpty: false,
+        multiline: true,
+      },
+    ];
+    render(
+      <QuestionFormCard
+        permission={permissionWith(questions)}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    const input = screen.getByRole("textbox", { name: "Write notes" });
+    expect(input.tagName).toBe("TEXTAREA");
+    const primary = screen.getByTestId("question-form-primary-action");
+    expect(primary.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(primary);
+    expect(onRespond).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "line one\nline two\n" } });
+    expect(primary.getAttribute("aria-disabled")).not.toBe("true");
+    fireEvent.click(primary);
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "allow",
+      updatedInput: { questions, answers: { Notes: "line one\nline two\n" } },
+    });
+  });
+
+  it("submits an empty allow when dismissing an optional question", () => {
+    const onRespond = vi.fn();
+    const questions = [
+      {
+        header: "Optional note",
+        question: "Optional note",
+        options: [],
+        allowOther: true,
+        allowEmpty: true,
+      },
+    ];
+    render(
+      <QuestionFormCard
+        permission={permissionWith(questions)}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("question-form-dismiss"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "allow",
+      updatedInput: { questions, answers: { "Optional note": "" } },
+    });
+  });
+
+  it("denies when dismissing a secret question, without submitting the value", () => {
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={permissionWith([
+          {
+            header: "API token",
+            question: "API token",
+            options: [],
+            allowOther: true,
+            allowEmpty: true,
+            secret: true,
+            dismissBehavior: "deny",
+          },
+        ])}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    const input = screen.getByLabelText("API token");
+    fireEvent.change(input, { target: { value: "secret-value" } });
+    fireEvent.click(screen.getByTestId("question-form-dismiss"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "deny",
+      message: "Dismissed by user",
+    });
+  });
+
+  it("never renders a secret question as a plaintext multiline field", () => {
+    const onRespond = vi.fn();
+    const questions = [
+      {
+        header: "Passphrase",
+        question: "Passphrase",
+        options: [],
+        allowOther: true,
+        allowEmpty: false,
+        secret: true,
+        multiline: true,
+      },
+    ];
+    const { container } = render(
+      <QuestionFormCard
+        permission={permissionWith(questions)}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    expect(container.querySelector("textarea")).toBeNull();
+    const input = screen.getByLabelText("Passphrase") as HTMLInputElement;
+    expect(input.type).toBe("password");
+    expect(screen.getByTestId("question-form-primary-action").getAttribute("aria-disabled")).toBe(
+      "true",
+    );
+    fireEvent.change(input, { target: { value: "  hunter2  " } });
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "allow",
+      updatedInput: { questions, answers: { Passphrase: "  hunter2  " } },
+    });
+  });
+
+  it("locks the text field while the response is in flight", () => {
+    const ui = (isResponding: boolean) => (
+      <QuestionFormCard
+        permission={permissionWith([
+          {
+            header: "API token",
+            question: "API token",
+            options: [],
+            allowOther: true,
+            allowEmpty: true,
+            secret: true,
+          },
+        ])}
+        onRespond={vi.fn()}
+        isResponding={isResponding}
+      />
+    );
+    const { rerender } = render(ui(false));
+    expect((screen.getByLabelText("API token") as HTMLInputElement).disabled).toBe(false);
+    rerender(ui(true));
+    expect((screen.getByLabelText("API token") as HTMLInputElement).disabled).toBe(true);
   });
 });

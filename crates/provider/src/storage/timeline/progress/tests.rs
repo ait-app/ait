@@ -234,10 +234,12 @@ fn version_two_migration_preserves_data_and_progress_failure_is_atomic() {
     let timeline = Timeline::open(&path).unwrap();
     assert_eq!(timeline.read("a").unwrap().0, original);
     let (outbound, mut receiver) = model::outbound::Outbound::new();
-    let observer =
-        timeline
-            .events()
-            .subscribe("sub".to_owned(), BTreeSet::from(["b".to_owned()]), outbound);
+    let observer = timeline.events().subscribe(
+        "sub".to_owned(),
+        BTreeSet::from(["b".to_owned()]),
+        outbound,
+        false,
+    );
     observer.activate().unwrap();
     timeline.database.lock().unwrap().execute_batch(
         "CREATE TRIGGER fail_progress BEFORE INSERT ON progress BEGIN SELECT RAISE(ABORT,'fixture'); END;"

@@ -16,29 +16,33 @@ struct Reader {
     runtime: Arc<Runtime>,
     execution: Option<AgentExecution>,
     directory: Option<Arc<Mutex<AgentRuntimeDirectory>>>,
+    secret_questions: bool,
 }
 
 impl Reader {
     async fn read(&self, params: Value) -> Result<Value, ErrorCode> {
-        if let Some(execution) = &self.execution {
-            return execution
+        let mut prepared = if let Some(execution) = &self.execution {
+            execution
                 .execute("internal.agent.directory.prepare", params)
                 .await
-                .map_err(Into::into);
-        }
-        self.runtime
-            .run_directory_read(
-                self.directory.clone(),
-                ErrorCode::AgentIo,
-                move |directory| {
-                    let request =
-                        serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
-                    crate::rpc::agent_runtime::listing::prepare(directory, request)
-                        .and_then(|listing| listing.finish(directory))
-                        .map_err(Into::into)
-                },
-            )
-            .await
+                .map_err(ErrorCode::from)?
+        } else {
+            self.runtime
+                .run_directory_read(
+                    self.directory.clone(),
+                    ErrorCode::AgentIo,
+                    move |directory| {
+                        let request = serde_json::from_value(params)
+                            .map_err(|_| ErrorCode::InvalidMessage)?;
+                        crate::rpc::agent_runtime::listing::prepare(directory, request)
+                            .and_then(|listing| listing.finish(directory))
+                            .map_err(Into::into)
+                    },
+                )
+                .await?
+        };
+        crate::dispatch::permission_projection::response(&mut prepared, self.secret_questions);
+        Ok(prepared)
     }
 }
 
@@ -60,6 +64,7 @@ pub(crate) async fn subscribe(
         runtime: state.runtime.clone(),
         execution: state.agent_execution.clone(),
         directory: state.agent_runtime.clone(),
+        secret_questions: context.secret_questions,
     };
     let changes = state
         .directory_changes

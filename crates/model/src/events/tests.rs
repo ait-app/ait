@@ -25,6 +25,7 @@ fn publisher_gets_one_unfiltered_commit_independently_of_client_observers() {
         "sub".to_owned(),
         BTreeSet::from(["other".to_owned()]),
         outbound,
+        false,
     );
     subscription.activate().unwrap();
     hub.publish("agent", "agent_stream", &json!({"seq":1}));
@@ -66,6 +67,7 @@ fn observers_start_paused_preserve_order_and_stop_on_drop() {
         "sub".to_owned(),
         BTreeSet::from(["agent".to_owned()]),
         outbound.clone(),
+        false,
     );
     hub.publish("other", "update", &json!({"revision":0}));
     hub.publish("agent", "update", &json!({"revision":1}));
@@ -97,6 +99,7 @@ fn pending_overflow_and_closed_transport_cancel_delivery() {
         "sub".to_owned(),
         BTreeSet::from(["agent".to_owned()]),
         outbound.clone(),
+        false,
     );
     for revision in 0..65 {
         hub.publish("agent", "update", &json!({"revision":revision}));
@@ -109,9 +112,63 @@ fn pending_overflow_and_closed_transport_cancel_delivery() {
         "second".to_owned(),
         BTreeSet::from(["agent".to_owned()]),
         outbound.clone(),
+        false,
     );
     subscription.activate().unwrap();
     drop(receiver);
     hub.publish("agent", "update", &json!({"revision":99}));
     assert!(outbound.failure().is_cancelled());
+}
+
+#[test]
+fn legacy_timeline_permission_events_remove_secret_fields_before_queueing() {
+    let hub = EventHub::default();
+    let (outbound, mut receiver) = Outbound::new();
+    let subscription = hub.subscribe(
+        "legacy".into(),
+        BTreeSet::from(["agent".into()]),
+        outbound,
+        false,
+    );
+    let (capable_outbound, mut capable_receiver) = Outbound::new();
+    let capable = hub.subscribe(
+        "capable".into(),
+        BTreeSet::from(["agent".into()]),
+        capable_outbound,
+        true,
+    );
+    let request = json!({
+        "id":"question", "provider":"omp", "kind":"question",
+        "input":{"questions":[{"secret":true,"initialValue":"private-prefill"}]},
+        "detail":{"input":"private-detail"},
+        "actions":[{"id":"allow","behavior":"allow"}]
+    });
+    hub.publish(
+        "agent",
+        "agent_stream",
+        &json!({
+            "agentId":"agent",
+            "event":{"type":"permission_requested","request":request},
+            "timestamp":"2026-11-11T00:00:00Z"
+        }),
+    );
+    subscription.activate().unwrap();
+    capable.activate().unwrap();
+    assert_eq!(
+        next(&mut capable_receiver)["params"]["event"]["request"],
+        request
+    );
+    let delivered = next(&mut receiver);
+    let card = &delivered["params"]["event"]["request"];
+    assert_eq!(card["kind"], "tool");
+    assert_eq!(
+        card["actions"],
+        json!([{"id":"deny","label":"Cancel","behavior":"deny"}])
+    );
+    assert!(card.get("input").is_none());
+    assert!(card.get("detail").is_none());
+    assert_eq!(
+        request["input"]["questions"][0]["initialValue"],
+        "private-prefill"
+    );
 }

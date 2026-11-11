@@ -37,6 +37,11 @@ impl Dialogs {
         if !matches!(method, "select" | "confirm" | "input" | "editor" | "ask") {
             return Ok(Vec::new());
         }
+        // React Native cannot mask a multiline input; never render a secret editor as
+        // plaintext. Reject the unsupported combination instead of unmasking it.
+        if method == "editor" && native["secret"] == true {
+            return Err(AgentSessionError::Rejected);
+        }
         let id = super::config::text(native, "id")?.to_owned();
         if self.0.len() >= 32 || self.0.contains_key(&id) || native.to_string().len() > 65536 {
             return Err(AgentSessionError::Failed);

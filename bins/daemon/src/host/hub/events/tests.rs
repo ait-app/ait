@@ -130,3 +130,63 @@ fn agent_notifications_validate_durable_attention_and_retry_payload_has_no_crede
             .is_none()
     );
 }
+
+#[test]
+fn permission_publications_exclude_payloads_without_changing_live_requests() {
+    let request = json!({
+        "agentId": "agent",
+        "request": {
+            "id": "permission",
+            "kind": "question",
+            "input": {
+                "questions": [{
+                    "id": "value", "secret": true,
+                    "question": "private prompt", "defaultValue": "private prefill"
+                }],
+                "answers": {"value": "private answer"}
+            },
+            "metadata": {"private": "private metadata"}
+        }
+    });
+    let live = request.clone();
+    let (event, size) = Event::project("agent_permission_request", &request).unwrap();
+    assert_eq!(
+        event.params,
+        json!({"agentId":"agent","request":{"id":"permission","redacted":true}})
+    );
+    assert_eq!(size, serde_json::to_vec(&event.params).unwrap().len());
+    let directory = tempfile::tempdir().unwrap();
+    let publication = event
+        .publication(&sources(directory.path()), "server", true)
+        .unwrap();
+    assert_eq!(publication["params"], event.params);
+    assert!(!publication.to_string().contains("private"));
+    assert_eq!(request, live);
+}
+
+#[test]
+fn permission_resolution_publications_exclude_answers_even_without_a_secret_marker() {
+    for behavior in ["allow", "deny"] {
+        let response = json!({
+            "agentId": "agent",
+            "requestId": "permission",
+            "resolution": {
+                "behavior": behavior,
+                "updatedInput": {"answers": {"value": "private answer"}},
+                "message": "private explanation"
+            }
+        });
+        let (event, _) = Event::project("agent_permission_resolved", &response).unwrap();
+        assert_eq!(
+            event.params,
+            json!({
+                "agentId":"agent", "requestId":"permission",
+                "resolution":{"behavior":behavior,"redacted":true}
+            })
+        );
+        assert_eq!(
+            response["resolution"]["updatedInput"]["answers"]["value"],
+            "private answer"
+        );
+    }
+}

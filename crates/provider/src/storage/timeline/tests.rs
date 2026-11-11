@@ -143,6 +143,7 @@ fn storage_errors_and_oversized_items_do_not_publish_uncommitted_rows() {
         "sub".to_owned(),
         std::collections::BTreeSet::from(["agent".to_owned()]),
         outbound,
+        false,
     );
     subscription.activate().unwrap();
     assert_eq!(
@@ -231,6 +232,7 @@ fn refresh_preserves_prefix_cursors_and_retires_rewritten_history_atomically() {
         "sub".to_owned(),
         std::collections::BTreeSet::from(["agent".to_owned()]),
         outbound,
+        false,
     );
     observer.activate().unwrap();
     assert_eq!(

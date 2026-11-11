@@ -22,6 +22,7 @@ struct State {
 struct Listener {
     id: String,
     include_id: bool,
+    secret_questions: bool,
     keys: BTreeSet<String>,
     outbound: Outbound,
     delivery: Mutex<Delivery>,
@@ -49,21 +50,23 @@ impl EventHub {
     }
 
     /// Register a paused observer for exact business keys with a host-generated release ID.
+    /// `secret_questions` is negotiated compatibility, not resource authorization.
     #[must_use]
     pub fn subscribe(
         &self,
         id: String,
         keys: BTreeSet<String>,
         outbound: Outbound,
+        secret_questions: bool,
     ) -> Subscription {
-        self.register(id, keys, outbound, true)
+        self.register(id, keys, outbound, Some(secret_questions))
     }
 
     /// Register a paused operation observer whose events omit the connection subscription ID.
     /// `id` remains local to the returned guard; dropping it ends the operation's observation.
     #[must_use]
     pub fn observe(&self, id: String, keys: BTreeSet<String>, outbound: Outbound) -> Subscription {
-        self.register(id, keys, outbound, false)
+        self.register(id, keys, outbound, None)
     }
 
     fn register(
@@ -71,11 +74,12 @@ impl EventHub {
         id: String,
         keys: BTreeSet<String>,
         outbound: Outbound,
-        include_id: bool,
+        connection_capability: Option<bool>,
     ) -> Subscription {
         let listener = Arc::new(Listener {
             id,
-            include_id,
+            include_id: connection_capability.is_some(),
+            secret_questions: connection_capability.unwrap_or(false),
             keys,
             outbound,
             delivery: Mutex::new(Delivery::default()),
@@ -117,6 +121,13 @@ impl EventHub {
         }
         for listener in listeners {
             let mut params = params.clone();
+            if !listener.secret_questions
+                && method == "agent_stream"
+                && params["event"]["type"] == "permission_requested"
+                && let Some(request) = params.pointer_mut("/event/request")
+            {
+                crate::session::permission::project(request, false);
+            }
             if listener.include_id {
                 params["subscriptionId"] = Value::String(listener.id.clone());
             }

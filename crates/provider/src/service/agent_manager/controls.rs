@@ -8,6 +8,7 @@ use super::AgentManager;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec, AgentTurnEvent};
 use crate::ports::controls::NativeSubagent;
 use crate::ports::native_history::SessionHistory;
+use crate::service::agent_execution::operation::PermissionContext;
 use crate::support::time::now_timestamp;
 
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
@@ -142,12 +143,30 @@ impl AgentManager {
             })
     }
 
+    fn secret_question(&self, id: &str, request: &str) -> bool {
+        self.live.get(id).is_some_and(|agent| {
+            agent.session.pending_permissions().iter().any(|pending| {
+                pending["id"].as_str() == Some(request)
+                    && pending["input"]["questions"]
+                        .as_array()
+                        .is_some_and(|questions| {
+                            questions.iter().any(|question| question["secret"] == true)
+                        })
+            })
+        })
+    }
+
+    /// Resolve a live permission and return only the publication-safe resolution.
+    /// Secret answers are delivered to the native session, never returned to RPC callers.
+    /// `context` supplies negotiated compatibility; incapable clients can still deny.
+    /// Returns an error for missing agents, invalid answers, or native/persistence failures.
     pub(crate) async fn permission(
         &mut self,
         id: &str,
         request: &str,
         response: &Value,
-    ) -> Result<(), ErrorCode> {
+        context: PermissionContext,
+    ) -> Result<Value, ErrorCode> {
         let record = self
             .registry
             .get(id)
@@ -160,6 +179,17 @@ impl AgentManager {
             return Err(ErrorCode::InvalidMessage);
         }
         self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
+        // Secret answers may only travel to the native runtime; published resolutions
+        // (timeline and session events) must never carry the value.
+        let secret_question = self.secret_question(id, request);
+        if secret_question && !context.secret_questions() && response["behavior"] == "allow" {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        let published_resolution = if secret_question {
+            json!({"behavior": response["behavior"], "redacted": true})
+        } else {
+            response.clone()
+        };
         let follow_up = self
             .live
             .get(id)
@@ -219,7 +249,7 @@ impl AgentManager {
                         "type": "permission_resolved",
                         "provider": agent.record.provider,
                         "requestId": request,
-                        "resolution": response
+                        "resolution": published_resolution
                     },
                     "timestamp": now_timestamp()
                 }),
@@ -227,9 +257,9 @@ impl AgentManager {
         }
         self.events.publish(
             domain::session::protocol::SessionEventKind::AgentPermissionResolved,
-            &json!({"agentId":id,"requestId":request,"resolution":response}),
+            &json!({"agentId":id,"requestId":request,"resolution":published_resolution}),
         );
-        Ok(())
+        Ok(published_resolution)
     }
 
     pub(crate) async fn subagents(&self, id: &str) -> Result<Vec<NativeSubagent>, ErrorCode> {

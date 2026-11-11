@@ -101,6 +101,7 @@ impl Peer {
                     runtime: &self.state.runtime,
                     outbound: &self.outbound,
                     available_subscriptions: budget,
+                    secret_questions: false,
                 },
                 &self.state,
             )
@@ -298,6 +299,7 @@ async fn failed_subscription_response_delivery_does_not_activate_the_observer() 
                     runtime: &peer.state.runtime,
                     outbound: &peer.outbound,
                     available_subscriptions: 8,
+                    secret_questions: false,
                 },
                 &peer.state
             )

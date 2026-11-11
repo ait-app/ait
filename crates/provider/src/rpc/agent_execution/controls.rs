@@ -9,7 +9,7 @@ use crate::protocol::controls::{
     CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
-use crate::service::agent_execution::operation::Operation;
+use crate::service::agent_execution::operation::{Operation, PermissionContext};
 use crate::service::agent_manager::native_sessions::canonical;
 
 impl ExecutionState {
@@ -135,14 +135,19 @@ impl ExecutionState {
         )
     }
 
-    pub(super) async fn permission(&mut self, params: Value) -> Result<Value, ErrorCode> {
+    pub(super) async fn permission(
+        &mut self,
+        params: Value,
+        context: PermissionContext,
+    ) -> Result<Value, ErrorCode> {
         let request: PermissionRequest = decode(params)?;
         let id = self.resolve(&request.agent_id)?;
         self.active_workspace(&id)?;
-        self.manager
-            .permission(&id, &request.request_id, &request.response)
+        let resolution = self
+            .manager
+            .permission(&id, &request.request_id, &request.response, context)
             .await?;
-        Ok(json!({"agentId":id,"requestId":request.request_id,"resolution":request.response}))
+        Ok(json!({"agentId":id,"requestId":request.request_id,"resolution":resolution}))
     }
 
     /// Apply one configuration request whose payload is carried in `field`: `config` for a

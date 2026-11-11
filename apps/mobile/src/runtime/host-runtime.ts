@@ -512,6 +512,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       }
     : undefined;
   const appCapabilities = {
+    [CLIENT_CAPS.secretQuestions]: true,
     ...browserAutomationCapabilities,
   };
 

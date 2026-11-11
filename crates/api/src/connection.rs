@@ -694,6 +694,10 @@ async fn process_request(
             runtime: state,
             outbound,
             available_subscriptions: MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
+            secret_questions: peer
+                .capabilities
+                .iter()
+                .any(|name| name == "agent-secret-questions-v1"),
         },
         state,
         subscriptions,

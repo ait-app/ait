@@ -57,6 +57,7 @@ async fn workspace_subscription_waits_for_busy_jobs_before_publishing_its_snapsh
             runtime: &runtime,
             outbound: &outbound,
             available_subscriptions: 16,
+            secret_questions: false,
         };
         let task =
             crate::directory::connection::directory::subscribe(context, &state, &mut connection);
@@ -141,6 +142,7 @@ async fn worktree_creation_does_not_hold_the_directory_lock_while_provisioning()
         runtime: &runtime,
         outbound: &outbound,
         available_subscriptions: 16,
+        secret_questions: false,
     };
     let shared = state.directory.clone().unwrap();
     let probe = async move {

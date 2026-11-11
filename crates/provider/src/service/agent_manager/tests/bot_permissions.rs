@@ -1,3 +1,5 @@
+use crate::service::agent_execution::operation::PermissionContext;
+
 use super::*;
 
 fn registration() -> AgentRegistration {
@@ -68,7 +70,14 @@ async fn bot_rejects_manual_grants_before_calling_the_native_provider() {
         json!({"behavior":"deny","updatedInput":{"permissions":["write"]}}),
     ] {
         assert_eq!(
-            manager.permission("agent-1", "approval", &response).await,
+            manager
+                .permission(
+                    "agent-1",
+                    "approval",
+                    &response,
+                    PermissionContext::default()
+                )
+                .await,
             Err(ErrorCode::InvalidMessage)
         );
     }

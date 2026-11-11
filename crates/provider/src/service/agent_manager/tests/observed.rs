@@ -46,6 +46,7 @@ fn managed_native_identity_is_reused_without_forwarding_a_second_stream() {
         "managed".to_owned(),
         std::collections::BTreeSet::from([managed.id.clone()]),
         outbound,
+        false,
     );
     subscription.activate().expect("subscribe");
     let entry = crate::protocol::timeline::NativeItem {
