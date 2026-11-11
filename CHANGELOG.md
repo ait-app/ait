@@ -1,7 +1,10 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.8 - 2026-11-11
 
+- Show pull requests for workspace branches that were pushed under a different remote name, such as `git push -u origin HEAD:refs/heads/fix/...`, in the sidebar and PR panel, including merge actions. Branches pushed without an upstream are still not recognized.
+- Test feature: QQ Bot channels with group chats enabled now also receive ordinary group messages when the group grants full message access, not only messages that mention the bot. They pass through the same sender allowlist and pairing.
+- Stable releases now attach a Google-signed Android APK, `Ait-VERSION-android.apk`, to the GitHub Release. It shares the Google Play signing key, so it installs over the Play version and vice versa; 0.1.x GitHub APKs used a different key and must be uninstalled first.
 - Add a per-Host usage ledger. Each daemon records its provider calls and, where the provider reports them, token usage per model request in `agents/usage.sqlite3`, and the Usage dialog has a new History tab (24 hours, 7 days or 30 days) that adds all connected Hosts together and shows the totals by provider and model or by day; unreachable Hosts are listed separately, and a Host's settings page shows its 30-day totals. Providers that do not report usage (OpenCode, ACP, DeepSeek, and summary calls) show call counts only, and figures that may be incomplete are marked "≥". Call details are kept for 90 days and daily totals indefinitely; prompts, outputs, file paths and credentials are never recorded and the data stays on the Host. The Host daemon must be upgraded for its history to appear.
 
 ## 0.2.7 - 2026-11-11
