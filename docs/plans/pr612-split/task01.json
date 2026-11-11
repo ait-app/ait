@@ -116,8 +116,8 @@
     "kind": "independent-main",
     "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305"
   },
-  "commit": null,
-  "pr_url": null,
+  "commit": "92abc77dbede57caf4c4b4bf1be7076982ffea48",
+  "pr_url": "https://github.com/ait-app/ait/pull/651",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
@@ -142,12 +142,12 @@
         "result": "PASS: 2315 packages installed in this isolated worktree."
       },
       {
-        "command": "npm test --workspace=@ait/desktop -- src/daemon/desktop-packaging.test.ts src/daemon/linux-launcher.posix.test.ts",
-        "result": "PASS: 2 files, 16 tests."
+        "command": "npm test --workspace=@ait/desktop -- src/daemon/desktop-packaging.test.ts src/daemon/linux-launcher.posix.test.ts src/daemon/rust-daemon-environment.test.ts",
+        "result": "PASS after incidental source-text case removal and payload-tree permission fix: 3 files, 19 tests, including the private-umask regression (0700 root/resources/index.html/aitd normalized, chrome-sandbox SUID left to the installer)."
       },
       {
-        "command": "node --test scripts/prepare-desktop-daemon.test.mjs scripts/verify-packaged-resources.test.cjs scripts/release-assets.test.mjs scripts/release-layout.test.mjs scripts/release-workflow.test.mjs scripts/dev-build-workflow.test.mjs scripts/source-version.test.cjs",
-        "result": "Initial run: 80/83 pass; 3 release-assets cases exposed an overstrict new 0755-only archive check. Fixed production validation to require owner execution without imposing one permission mask. No fixture versions or expectations re-pinned."
+        "command": "npm run test:release",
+        "result": "PASS after deleting the affected incidental workflow source-text cases (dev-build-workflow 2 cases, release-assets workflow case): 81 tests, 0 failed. Actual archive/resource/runtime tests preserved; no expectations re-pinned."
       },
       {
         "command": "node --test scripts/release-assets.test.mjs",
@@ -244,12 +244,15 @@
       {
         "command": "oxfmt scoped changed files; desktop packaging/launcher vitest; npm run check:docs; git diff --check",
         "result": "PASS: 30 scoped files formatted; 2 desktop test files/16 tests including production0700-to0755 payload-root regression; 7 documentation tests,559 Markdown documents,223 ADRs; whitespace check clean."
+      },
+      {
+        "command": "Final normal-umask 0077 installed-package smoke: Debian container, umask 077, prepare-daemon + electron-builder --linux --x64 (AppImage/tar.gz/deb/rpm), dpkg install + unprivileged Xvfb linux-artifact-smoke.js, then rpm install + same smoke",
+        "result": "PASS both formats in 557.36s: packaged resource/version guard passed; [linux-sandbox] enabled: user namespaces available; deb serverId f7f02a31-6e0b-4f0f-a98d-767bc48bed34 and rpm serverId 3a7cb846-3ee3-49cd-9846-2b0e45a7d292, rendererErrors=[], title Ait. First 0077 attempt had failed with a private resources/app-dist (root-only payload); production installLinuxLauncher now normalizes the whole payload tree (dirs/files readable+traversable, exec bits kept, chrome-sandbox SUID left to the installer) with an extended 0700 regression test. The earlier 022 run remains a diagnostic, superseded by this normal-umask proof."
       }
     ]
   },
   "blockers": [
-    "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete.",
-    "Final installed Linux desktop smoke under the normal0077 umask remains pending after the production payload-root permission correction; the successful022 diagnostic is not claimed as complete acceptance."
+    "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete. The normal-0077 Linux installed-package acceptance now passes after the payload-tree permission correction (deb serverId f7f02a31-6e0b-4f0f-a98d-767bc48bed34, rpm serverId 3a7cb846-3ee3-49cd-9846-2b0e45a7d292); task01 stays blocked on macOS evidence only."
   ],
   "source_inventory": {
     "draft_pr": "https://github.com/ait-app/ait/pull/647",
