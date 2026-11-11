@@ -1,0 +1,75 @@
+{
+  "id": "17",
+  "title": "Codex native Goal",
+  "priority": 17,
+  "depends_on": ["00", "16"],
+  "donor_sections": [],
+  "donor_paths": [],
+  "implementation": "Adapt native Codex Goal with one continuation arbiter shared with restart recovery and the unified persisted Goal lifecycle.",
+  "acceptance": "Native state/receipts reconcile with restart and user-priority scheduling; exactly one continuation arbiter and no fabricated budget semantics.",
+  "status": "in_review",
+  "branch": "feat/pr612-task17-codex-native-goal",
+  "stacked_on": {
+    "task": "16",
+    "branch": "feat/pr612-task16-unified-goal",
+    "head": "a2de24460ec044bff7df180af61b56d57fd73201",
+    "note": "Narrow reader checkpoint 9c82cde6 is the only reader/parser work; task16 owns the canonical port until its final integration head lands."
+  },
+  "base": "a2de24460ec044bff7df180af61b56d57fd73201",
+  "commit": "4e57c926",
+  "pr_url": "https://github.com/ait-app/ait/pull/669",
+  "reader_checkpoint": {
+    "commit": "9c82cde601aefb14c4e2bde84179d0de8af46e0b",
+    "paths": [
+      "crates/provider/src/local/codex.rs (mod goal; AgentSession::goal_read)",
+      "crates/provider/src/local/codex/goal.rs",
+      "crates/provider/src/local/codex/goal/tests.rs",
+      "crates/provider/tests/fixtures/codex_app_server.py (thread/goal/get branch)"
+    ],
+    "focused_test": "cargo test -p provider local::codex::goal --lib => 14 passed, 0 failed",
+    "for_task16": "Consume this exact read path; it is authoritative-read plus message-classified error taxonomy, and 17 adds no second reader."
+  },
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "cargo test -p provider local::codex::goal --lib (via cargo-sem, TMPDIR/XDG_CACHE_HOME under $HOME)",
+        "result": "15 passed, 0 failed, 1802 filtered out. Includes clear_that_removes_nothing_is_rejected_not_reported_as_cleared."
+      },
+      {
+        "command": "rustfmt --edition 2024 --check on all changed Rust files (rustfmt 1.10.0 from pinned 1.98.1)",
+        "result": "Passed, exit 0."
+      },
+      {
+        "command": "cargo clippy -p provider --lib --tests -- -D warnings (pinned rustc 1.98.1 from rust-toolchain.toml)",
+        "result": "FAILED, and the same failure exists at the stack base a2de2446 (verified in a detached baseline worktree): only clippy::dead_code on the task16 port that this branch does not yet consume. Base: 5 errors (GoalCapability, GoalPauseSemantics, GoalMetering, AbortInFlight, AgentSession goal methods). This branch: 7 errors, adding `facts` and the CodexSession goal methods, all in the same dead_code class (the adapter implementations have no in-process consumer until task16's manager wiring lands). Every other diagnostic in the changed files was fixed (doc backticks, unreadable literals, assigning_clones, identical match arms). No non-dead_code diagnostic remains in any file this task changed."
+      },
+      {
+        "command": "/usr/bin/codex app-server (codex-cli 0.167.0) stdio JSON-RPC smoke, throwaway CODEX_HOME, offline responses fixture",
+        "result": "21 checks passed: authoritative goal:null read, create with origin:user, native self-started turn, deferred pause finishing the same turn id with no next turn, resume re-arming in a new turn, revision advance, native meters present with null budget, restart reconciliation via goal/get before resume with no revision regression, pause durable across restart, clear => {cleared:true} then absence, repeated clear => {cleared:false}, missing-goal and invalid-thread-id -32600 facts, zero turn/start commands, --disable goals => exact -32600 \"goals feature is disabled\" and never -32601. Script /home/KirisameLonnet/.cache/ait-pr612-task17/native_goal_smoke.py; artifacts under $HOME/.cache/ait-pr612-task17/smoke-root."
+      },
+      {
+        "command": "node scripts/adr.mjs index && node scripts/adr.mjs index --check && npm run check:docs",
+        "result": "Passed: 225 ADRs indexed, index current, 7/7 doc tests pass, 561 Markdown documents verified."
+      }
+    ]
+  },
+  "docs": {
+    "adr": "docs/decisions/providers/adr-256-codex-native-goal-mapping.md",
+    "architecture": "docs/architecture/provider.md (Codex native Goal bullet)",
+    "operations": "docs/operations/daemon.md (Codex goals feature gate)"
+  },
+  "blockers": [
+    "Task16 final integration head is required before end-to-end manager proof and a non-draft Draft PR promotion; until then the port has no in-process consumer, which is why scoped clippy still reports clippy::dead_code on unconsumed goal APIs at base and here.",
+    "The daemon-side arbiter branch (recovery.rs/delivery.rs goal awareness) lives in task16's shared files and is not implemented on this branch; this branch supplies the adapter facts and executes the re-assert write only when the single arbiter calls it."
+  ],
+  "test_coverage": "not measured; coverage not requested",
+  "pr_base": {
+    "branch": "feat/pr612-task05-native-config",
+    "note": "GitHub requires a pushed base; the intended task16 stack head a2de2446 is not on origin, so the Draft is stacked on the pushed task05 branch and must be re-based onto task16 when it publishes."
+  }
+}

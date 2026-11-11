@@ -146,6 +146,15 @@
 - OpenCode 通过官方 `opencode acp` 运行；接受 1.x 与 2.0.25 及以上版本，其余版本报告不可用
   （[ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)，最低版本已由
   [ADR-143](../decisions/providers/adr-143-opencode-2-0-25-compatibility.md) 修订）。
+- Codex 原生 Goal 的延续所有权绑定到已实测的运行时：只有实测均匀暂停（暂停后同一在飞轮次正常
+  结束且不再启动下一轮）的版本才返回原生策略，其余版本从运行开始固定为宿主回退并记录原因；
+  预发布身份不继承发布版的证明。暂停/恢复/清除都不是提示操作，停止先 `turn/interrupt` 再显式
+  `set{status:paused}`（仅中断会让目标保持 `active`，重启后原生自行恢复）。代际比较用原生
+  `updatedAt` 加观察到的目标，`createdAt` 不是身份（目标被替换后不变）。重启对账只读
+  `thread/goal/get`（`thread/read` 与恢复响应都不携带 goal），且在 `thread/resume` 之前即可
+  生效。原生预算实测在超支后置 `budgetLimited`，属展示事实而非硬上限
+  （[ADR-256](../decisions/providers/adr-256-codex-native-goal-mapping.md)，扩展
+  [ADR-177](../decisions/providers/adr-177-codex-restart-continuation.md)）。
 - Codex 历史优先读取 `thread/timeline/list`，只在 `-32601` 或精确的 unknown-variant `-32600` 时
   回退 `thread/read`，其他错误保持可见
   （[ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)，历史限制已由

@@ -4,6 +4,7 @@ mod async_questions;
 mod commands;
 pub(crate) mod controls;
 mod discovery;
+mod goal;
 mod inspection;
 mod metadata;
 mod native_sessions;
@@ -767,6 +768,35 @@ impl CodexSession {
 
 #[async_trait::async_trait]
 impl AgentSession for CodexSession {
+    fn goal_capability(&self) -> crate::ports::goal::GoalCapability {
+        self.native_goal_capability()
+    }
+
+    async fn goal_read(
+        &mut self,
+    ) -> Result<Option<domain::agent_runtime::goal::NativeGoalFacts>, AgentSessionError> {
+        CodexSession::goal_read(self).await
+    }
+    async fn goal_create(
+        &mut self,
+        objective: &str,
+    ) -> Result<domain::agent_runtime::goal::NativeGoalFacts, AgentSessionError> {
+        self.create_native_goal(objective).await
+    }
+
+    async fn goal_control(
+        &mut self,
+        operation: domain::agent_runtime::goal::GoalControlOp,
+    ) -> Result<domain::agent_runtime::goal::NativeGoalFacts, AgentSessionError> {
+        self.control_native_goal(operation).await
+    }
+
+    async fn goal_reassert(
+        &mut self,
+    ) -> Result<domain::agent_runtime::goal::NativeGoalFacts, AgentSessionError> {
+        self.reassert_native_goal().await
+    }
+
     async fn start_realtime(
         &mut self,
         endpoint: model::realtime::Endpoint,
@@ -817,7 +847,7 @@ impl AgentSession for CodexSession {
                 .ok_or(AgentSessionError::Failed)?
                 .request(
                     "thread/goal/set",
-                    json!({"threadId":self.id,"status":"paused"}),
+                    json!({"threadId":self.id,"status":"paused","origin":"user"}),
                 )
                 .await?;
             self.pending_goal_start = false;

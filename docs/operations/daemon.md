@@ -146,7 +146,11 @@ npm run dev:mobile
 
 ## Provider 与扩展能力
 
-- Codex 使用本机 `codex app-server`；`AIT_SERVER_CODEX_BIN` 覆盖程序路径。
+- Codex 使用本机 `codex app-server`；`AIT_SERVER_CODEX_BIN` 覆盖程序路径。原生 Goal 需要
+  `goals` 特性：适配器先按无特性启动探测，原生宣告 `goals` 时以 `--enable goals` 重开同一会话
+  进程（`--enable` 会覆盖用户配置里的 `features.goals=false`，属既有门槛的已知限制）。原生策略
+  只在实测均匀暂停的原生版本上启用，其余版本按宿主回退运行
+  （[ADR-256](../decisions/providers/adr-256-codex-native-goal-mapping.md)）。
 - [Claude Code](claude-code.md)使用本机认证与原生会话；`AIT_SERVER_CLAUDE_BIN` 覆盖路径。
 - [DeepSeek Harness](deepseek-harness.md)使用 stdio ACP 与动态模型目录。
 - OpenCode 使用官方 `opencode acp`；`AIT_SERVER_OPENCODE_BIN` 覆盖程序路径，见

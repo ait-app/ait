@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Host-owned Goal lifecycle and provider-projected Goal facts.
+pub mod goal;
 /// Provider-owned execution observed through a registered root Agent.
 pub mod observation;
 /// Blocking storage contract for the persisted runtime record.

@@ -61,11 +61,15 @@ impl CodexSession {
             && params["status"] == "active"
             && self.active_turn.is_none();
         if let Some(method) = method {
-            self.transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .request(method, params)
-                .await?;
+            if name == "goal" {
+                self.request_goal(method, params).await?;
+            } else {
+                self.transport
+                    .as_mut()
+                    .ok_or(AgentSessionError::Failed)?
+                    .request(method, params)
+                    .await?;
+            }
         }
         if name == "compact" {
             self.manual_compactions += 1;
@@ -155,22 +159,22 @@ fn goal(thread: &str, args: &str) -> (Option<&'static str>, Value, String) {
         ),
         "pause" => (
             Some("thread/goal/set"),
-            json!({"threadId":thread,"status":"paused"}),
+            json!({"threadId":thread,"status":"paused","origin":"user"}),
             "Goal paused.".to_owned(),
         ),
         "resume" => (
             Some("thread/goal/set"),
-            json!({"threadId":thread,"status":"active"}),
+            json!({"threadId":thread,"status":"active","origin":"user"}),
             "Goal resumed.".to_owned(),
         ),
         "clear" => (
             Some("thread/goal/clear"),
-            json!({"threadId":thread}),
+            json!({"threadId":thread,"origin":"user"}),
             "Goal cleared.".to_owned(),
         ),
         _ => (
             Some("thread/goal/set"),
-            json!({"threadId":thread,"objective":args,"status":"active"}),
+            json!({"threadId":thread,"objective":args,"status":"active","origin":"user"}),
             format!("Goal set: {args}"),
         ),
     }

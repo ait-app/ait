@@ -101,6 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-256：Codex 原生 Goal 的映射与延续所有权](providers/adr-256-codex-native-goal-mapping.md)（提议中）
 - [ADR-241：原生确认的 Agent 配置提交与字段级部分成功](providers/adr-241-native-confirmed-configuration.md)（提议中）
 - [ADR-237：OMP 原生 Session 与独立 ACP 可执行文件](providers/adr-237-omp-native-session-and-standalone-acp.md)（提议中）
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
@@ -128,7 +129,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)（经 [ADR-190](providers/adr-190-omp-acp-settlement.md)、[ADR-194](providers/adr-194-omp-settlement-reconciliation.md) 修订）
 - [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
-- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)（经 [ADR-256](providers/adr-256-codex-native-goal-mapping.md) 修订）
 - [ADR-176: Pi user images in the shared timeline projection](providers/adr-176-pi-user-image-projection.md)
 - [ADR-175：独立恢复 Provider 错误详情与重启收尾](providers/adr-175-restore-provider-recovery.md)（经 [ADR-177](providers/adr-177-codex-restart-continuation.md) 修订）
 - [ADR-174: Pi native session import](providers/adr-174-pi-session-import.md)（经 [ADR-176](providers/adr-176-pi-user-image-projection.md)、[ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md) 修订）
