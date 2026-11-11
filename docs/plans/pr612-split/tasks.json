@@ -174,11 +174,11 @@
     ],
     "implementation": "Freeze PR612 sources, enumerate every section/command/net-diff path, persist the deduplicated constraints and execution queue.",
     "acceptance": "33 source sections, 88 command records, all 547 donor net-diff paths and 37 task records are mechanically accounted for; docs links pass; root stays untouched; publish only a task00 Draft PR.",
-    "status": "in_review",
+    "status": "delivered",
     "branch": "docs/pr612-split-task00",
     "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-    "commit": null,
-    "pr_url": null,
+    "commit": "d20a057e685dc7d87f8134fa9f0f66de4e63943f",
+    "pr_url": "https://github.com/ait-app/ait/pull/647",
     "checks": {
       "required": [
         "node verify.mjs (from this directory)",
@@ -187,9 +187,9 @@
         "git diff --check"
       ],
       "results": [
-        "PASS node docs/plans/pr612-split/verify.mjs: 33 sections, 88 commands, 547 paths, 37 tasks, source hashes, exact numstat, 26 main overlaps and dependency/mapping integrity.",
+        "PASS node docs/plans/pr612-split/verify.mjs: 33 sections, 88 commands, 547 paths, 37 tasks, source hashes, exact numstat, 26 individually reconciled main overlaps, 4 main-covered behaviors, 4 deletion decisions and pinned source excerpts.",
         "PASS npm run check:docs: 7 tests; local links in 559 Markdown documents and metadata of 222 ADRs.",
-        "PASS oxfmt --check docs/plans/pr612-split docs/plans/README.md: 9 changed documentation/tooling files.",
+        "PASS oxfmt --check docs/plans/pr612-split docs/plans/README.md: 10 changed documentation/tooling files.",
         "PASS git diff --check.",
         "Rust tests and coverage not run: documentation-only; no Rust behavior changed."
       ]

@@ -19,6 +19,7 @@ const sections = load("sections.json");
 const commands = load("commands.json");
 const paths = load("net-diff.json");
 const tasks = load("tasks.json");
+const reconciliation = load("main-reconciliation.json");
 const taskIds = [
   ...Array.from({ length: 34 }, (_, index) => String(index).padStart(2, "0")),
   "S1",
@@ -186,6 +187,47 @@ assert.ok(
     .filter((path) => path.path.startsWith("docs/assets/"))
     .every((path) => path.disposition === "reference"),
 );
+assert.equal(reconciliation.main_commit, sources.main_at_inspection);
+assert.deepEqual(
+  reconciliation.overlaps.map((entry) => entry.path),
+  paths.filter((path) => path.also_changed_on_main).map((path) => path.path),
+);
+for (const entry of reconciliation.overlaps) {
+  assert.equal(
+    git("rev-parse", `${sources.main_at_inspection}:${entry.path}`).trim(),
+    entry.main_blob,
+  );
+  assert.equal(git("rev-parse", `${sources.merge_base}:${entry.path}`).trim(), entry.base_blob);
+  assert.equal(entry.whole_file_main_covered, false);
+  assert.ok(entry.decision.length > 0);
+  const hunks = git(
+    "diff",
+    "--unified=0",
+    sources.merge_base,
+    sources.main_at_inspection,
+    "--",
+    entry.path,
+  )
+    .split("\n")
+    .filter((line) => line.startsWith("@@"));
+  assert.deepEqual(entry.main_hunks, hunks);
+}
+assert.equal(reconciliation.main_covered_behaviors.length, 4);
+assert.equal(reconciliation.deletion_decisions.length, 4);
+for (const item of [
+  ...reconciliation.main_covered_behaviors,
+  ...reconciliation.deletion_decisions,
+]) {
+  assert.ok(["main-covered", "delete"].includes(item.disposition));
+  for (const task of item.tasks) assert.ok(taskIds.includes(task));
+  assert.ok(item.evidence.length > 0);
+  for (const source of item.evidence) {
+    assert.ok([sources.main_at_inspection, sources.donor_commit].includes(source.commit));
+    assert.equal(git("rev-parse", `${source.commit}:${source.path}`).trim(), source.blob);
+    const lines = git("show", `${source.commit}:${source.path}`).split("\n");
+    assert.equal(lines.slice(source.lines[0] - 1, source.lines[1]).join("\n"), source.excerpt);
+  }
+}
 console.log(
-  "PR612 inventory valid: 33 sections, 88 commands, 547 paths (+41826/-1125; 26 main overlaps), 37 task records; source hashes and dependency/mapping integrity match.",
+  "PR612 inventory valid: 33 sections, 88 commands, 547 paths (+41826/-1125; 26 individually reconciled main overlaps), 37 tasks, 4 main-covered behaviors and 4 deletion decisions; source hashes, excerpts and mappings match.",
 );

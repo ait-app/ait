@@ -1,8 +1,10 @@
 # PR #612 split execution contract
 
-Status: **task00 inventory reviewed and validated; Draft publication pending**.
-The split plan and product features are not delivered. After task00's checks and Draft PR are complete,
-the next highest ready task01 may proceed to implementation. No merge or release is authorized.
+Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647)**.
+The split plan and product features are not delivered. The next highest ready task01 may proceed
+to implementation under its own acceptance gates. No merge or release is authorized.
+The task00 `commit` field pins the checked inventory/reconciliation snapshot; subsequent publication
+metadata records its immutable hash without a self-referential commit hash.
 
 ## Authority and review files
 
@@ -13,6 +15,9 @@ the next highest ready task01 may proceed to implementation. No merge or release
   decision and source row. A blocked builtin or a historical test is not a delivered replacement GUI.
 - [Net-diff dispositions](net-diff.json): every one of the 547 donor changed paths, per-path added/deleted
   counts, destination tasks, decision, directly cited sections, and latest-main overlap flag.
+- [Main coverage and reconciliation](main-reconciliation.json): four code-proven reusable behaviors,
+  four explicit deletion/rejected-import decisions, and all 26 main overlaps individually reconciled
+  with pinned blobs, hunk locations and behavior-specific preservation rules.
 - [Task records](tasks.json): 00–33 and S1–S3, with the exact required fields `id`, `priority`, `depends_on`,
   `donor_sections`, `donor_paths`, `implementation`, `acceptance`, `branch`, `base`, `commit`, `pr_url`,
   `checks`, `blockers`; `title` and `status` are additional navigation fields.
@@ -29,6 +34,15 @@ The mappings are **planned dispositions, not proof that implementation or featur
 `rewrite` means adapt behavior rather than cherry-pick; `migrate` still requires current-main reconciliation
 and tests; `reference` keeps historical evidence without importing it as current proof; `exclude` rejects
 that feature/import; `defer` records a command outside the authorized delivery queue.
+The required 主线已覆盖、迁移、重写、后续和删除 categories are represented by behavior-level
+`main-covered`, path/command `migrate`/`rewrite`/`defer`, and explicit `delete` decisions in
+`main-reconciliation.json`. `reference`/`exclude` distinguish historical evidence and rejected feature imports.
+No entire donor file delta is proven fully main-covered; an overlapping path is never called covered.
+Main already supplies native Codex Goal operations/cancellation, Profile partial-patch semantics, shared
+provider snapshot scope/cache/revision handling and sandboxed OMP native transport. Reuse those facts,
+but their remaining UI/lifecycle/isolation acceptance is still work. The 26 overlap decisions preserve
+main's extracted permission card, schedule templates, webhook security/capability gates, release scripts
+and translations. Main ADR-233/234/235 are occupied; donor numbers must not be copied.
 Multi-task source files require hunk-level separation. Empty `donor_sections`/`donor_paths` on new
 provider-specific work mean it extends the user plan rather than pretending a donor implementation exists.
 Empty release fields are JSON `null`, not invented branches, commits or PRs. `priority` is the supplied
