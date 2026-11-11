@@ -1,6 +1,6 @@
 # Harness Usage Ledger Plan
 
-> **Status:** accepted 2026-11-11, in progress. Decisions are recorded below.
+> **Status:** implemented 2026-11-11 and archived. The current behavior is in [Provider spec](../../architecture/provider.md#harness-用量账本), [daemon operations](../../operations/daemon.md#用量账本) and ADR-246. Deferred: the price-table cost estimate.
 
 **Goal:** Every daemon keeps a durable ledger of the provider ("harness") calls it makes. For each call it records the token usage **per model request**, so a user can see call counts, request counts and tokens per host, provider, model, source and day. The clients add the hosts together.
 
@@ -153,9 +153,9 @@ daily_usage(day, provider, model, source,
 
 ## Global Constraints
 
-- Read [`docs/policy/rust.md`](../policy/rust.md) before any Rust change. `unsafe_code = "forbid"`, `missing_docs`, `unreachable_pub` and `unused_crate_dependencies` are denied by `cargo clippy ... -D warnings`.
-- A library crate exposes only items another workspace crate uses ([ADR-116](../decisions/daemon/adr-116-crate-visibility.md)); no forwarding `pub use` ([ADR-107](../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)). Dependencies point inward: adapters implement ports.
-- Provider behavior tests stay in `crates/provider`, next to the owning adapter or service ([ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)).
+- Read [`docs/policy/rust.md`](../../policy/rust.md) before any Rust change. `unsafe_code = "forbid"`, `missing_docs`, `unreachable_pub` and `unused_crate_dependencies` are denied by `cargo clippy ... -D warnings`.
+- A library crate exposes only items another workspace crate uses ([ADR-116](../../decisions/daemon/adr-116-crate-visibility.md)); no forwarding `pub use` ([ADR-107](../../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)). Dependencies point inward: adapters implement ports.
+- Provider behavior tests stay in `crates/provider`, next to the owning adapter or service ([ADR-179](../../decisions/providers/adr-179-provider-owned-tests.md)).
 - The existing `AgentTurnEvent::Usage(AgentUsage)` snapshot, `lastUsage`, `usage_updated` and the context meter keep their current behavior and wire format.
 - The ledger never fails or delays a turn: write errors are logged with `tracing::warn!` and dropped; SQLite runs on one blocking writer behind a bounded channel.
 - Token buckets are disjoint: `input` excludes cache read and cache write; `reasoning` and `cache_write_1h` are subsets and never added to totals.
@@ -169,7 +169,7 @@ daily_usage(day, provider, model, source,
 
 ### Task 1: ADR and provider spec
 
-Write a new ADR under `docs/decisions/providers/` (next unused number; front matter per [the documentation policy](../policy/documentation.md#adr-元数据), `status: accepted`, `date: 2026-11-11`, `amends: [providers/adr-052-native-provider-capabilities.md]`, `paths: [crates/provider, bins/daemon, packages/protocol, packages/client, apps/mobile]`). It records: the request-usage event and disjoint buckets; the `UsageLedger` port; the `agents/usage.sqlite3` format, idempotency and retention; the `provider.usage.ledger` contract; the five accepted decisions; and that ADR-052 snapshots stay replacement values while request usage is additive. Match the language and structure of neighbouring provider ADRs. Add the conclusions to `docs/architecture/provider.md` (spec states conclusions and cites the ADR). Run `node scripts/adr.mjs index` and `npm run check:docs`. Docs only, no Rust tests.
+Write a new ADR under `docs/decisions/providers/` (next unused number; front matter per [the documentation policy](../../policy/documentation.md#adr-元数据), `status: accepted`, `date: 2026-11-11`, `amends: [providers/adr-052-native-provider-capabilities.md]`, `paths: [crates/provider, bins/daemon, packages/protocol, packages/client, apps/mobile]`). It records: the request-usage event and disjoint buckets; the `UsageLedger` port; the `agents/usage.sqlite3` format, idempotency and retention; the `provider.usage.ledger` contract; the five accepted decisions; and that ADR-052 snapshots stay replacement values while request usage is additive. Match the language and structure of neighbouring provider ADRs. Add the conclusions to `docs/architecture/provider.md` (spec states conclusions and cites the ADR). Run `node scripts/adr.mjs index` and `npm run check:docs`. Docs only, no Rust tests.
 
 ### Task 2: Request-usage types, ledger port and cumulative helper
 

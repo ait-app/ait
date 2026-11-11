@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- Add a per-Host usage ledger. Each daemon records its provider calls and, where the provider reports them, token usage per model request in `agents/usage.sqlite3`, and the Usage dialog has a new History tab (24 hours, 7 days or 30 days) that adds all connected Hosts together by provider, model, source, outcome and day; unreachable Hosts are listed separately, and a Host's settings page shows its 30-day totals. Providers that do not report usage (OpenCode, ACP, DeepSeek, and summary calls) show call counts only, and figures that may be incomplete are marked "≥". Call details are kept for 90 days and daily totals indefinitely; prompts, outputs, file paths and credentials are never recorded and the data stays on the Host. The Host daemon must be upgraded for its history to appear.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.
