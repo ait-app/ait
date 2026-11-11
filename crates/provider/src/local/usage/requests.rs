@@ -281,17 +281,22 @@ impl CodexRequests {
         let output = field(last, "outputTokens", "output_tokens");
         let cache_read =
             field(last, "cachedInputTokens", "cached_input_tokens").unwrap_or_default();
+        let cache_write =
+            field(last, "cacheWriteInputTokens", "cache_write_input_tokens").unwrap_or_default();
         let output_tokens = output.unwrap_or_default();
         let request = RequestUsage {
             segment_id: format!("codex:{turn}:{total}"),
             parent: None,
             model: None,
             boundary: UsageBoundary::Request,
-            // Codex reports input including cached tokens and has no cache-write bucket.
-            input_tokens: input.unwrap_or_default().saturating_sub(cache_read),
+            // Codex reports input including the cache read and cache write tokens.
+            input_tokens: input
+                .unwrap_or_default()
+                .saturating_sub(cache_read)
+                .saturating_sub(cache_write),
             output_tokens,
             cache_read_tokens: cache_read,
-            cache_write_tokens: 0,
+            cache_write_tokens: cache_write,
             cache_write_1h_tokens: None,
             reasoning_tokens: field(last, "reasoningOutputTokens", "reasoning_output_tokens")
                 .map(|reasoning| reasoning.min(output_tokens)),

@@ -182,15 +182,15 @@ Linux 无人值守运行支持 `aitd login` 和 `aitd run`，
 
 ### 各适配器的精度
 
-| Provider                | 边界               | 说明                                                           |
-| ----------------------- | ------------------ | -------------------------------------------------------------- |
-| Claude                  | `request`          | 含子 Agent 帧（有则计入）                                      |
-| Codex                   | `request`          | `input` 已扣除缓存读取；`cache_write` 恒为 0                   |
-| Pi、OMP                 | `request`          |                                                                |
-| MiniMax                 | `turn`             | 整轮合计                                                       |
-| Antigravity             | `cumulative_delta` | 累计值求差；进程重启后的第一轮只作基线，该调用显示为 `missing` |
-| OpenCode、ACP、DeepSeek | `missing`          | 只有调用次数                                                   |
-| 摘要与标题调用          | `missing`          | 只有调用次数                                                   |
+| Provider                | 边界               | 说明                                                                         |
+| ----------------------- | ------------------ | ---------------------------------------------------------------------------- |
+| Claude                  | `request`          | 含子 Agent 帧（有则计入）                                                    |
+| Codex                   | `request`          | `input` 已扣除缓存读写；`cache_write` 取 `cacheWriteInputTokens`，缺失时为 0 |
+| Pi、OMP                 | `request`          |                                                                              |
+| MiniMax                 | `turn`             | 整轮合计                                                                     |
+| Antigravity             | `cumulative_delta` | 累计值求差；进程重启后的第一轮只作基线，该调用显示为 `missing`               |
+| OpenCode、ACP、DeepSeek | `missing`          | 只有调用次数                                                                 |
+| 摘要与标题调用          | `missing`          | 只有调用次数                                                                 |
 
 ### 已知限制
 

@@ -200,6 +200,26 @@ fn codex_maps_last_request_and_accepts_only_growing_totals() {
 }
 
 #[test]
+fn codex_subtracts_cache_writes_from_input() {
+    let mut requests = CodexRequests::default();
+    let camel = json!({"total":{"totalTokens":100},"last":{"inputTokens":100,
+        "cachedInputTokens":30,"cacheWriteInputTokens":20,"outputTokens":5}});
+    let snake = json!({"total":{"total_tokens":200},"last":{"input_tokens":10,
+        "cached_input_tokens":4,"cache_write_input_tokens":9,"output_tokens":1}});
+
+    let buckets = [&camel, &snake].map(|usage| {
+        let request = requests.observe(usage, "turn").unwrap();
+        (
+            request.input_tokens,
+            request.cache_read_tokens,
+            request.cache_write_tokens,
+        )
+    });
+
+    assert_eq!(buckets, [(50, 30, 20), (0, 4, 9)]);
+}
+
+#[test]
 fn codex_keeps_input_non_negative_and_omits_absent_reasoning() {
     let mut requests = CodexRequests::default();
 
