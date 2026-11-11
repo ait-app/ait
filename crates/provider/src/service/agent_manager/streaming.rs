@@ -83,6 +83,53 @@ async fn settle_failure(
     persist_failure(timeline, id, agent)
 }
 
+/// Classify one committed event: keep draining, or stop because the lane is already settled.
+///
+/// # Errors
+/// Returns a retryable storage failure, which leaves the event pending for the next poll.
+fn commit_result(
+    id: &str,
+    agent: &mut super::LiveAgent,
+    result: Result<(), model::ErrorCode>,
+) -> Result<bool, AgentManagerError> {
+    match result {
+        Ok(()) => {
+            if let Some(AgentTurnEvent::Started(turn)) = agent.pending.take() {
+                agent.latest_turn = Some(turn.clone());
+                agent.turn = Some(turn);
+            }
+            Ok(true)
+        }
+        // Storage I/O may succeed on the next poll, so the event stays pending for retry.
+        Err(model::ErrorCode::AgentIo) => Err(AgentManagerError::Registry),
+        // Any other rejection is deterministic for this event; retrying it would wedge the
+        // lane, so the turn fails and the native session is settled instead.
+        Err(error) => {
+            tracing::warn!(provider = %agent.record.provider, agent_id = %id,
+                error_code = ?error, "Native provider event was rejected");
+            agent.pending = Some(AgentTurnEvent::Failed);
+            Ok(false)
+        }
+    }
+}
+
+/// Run the port hooks whose writes the native loop can only queue: realtime audio and the
+/// deferred child-control frames. Both stay on this lane, so the native writer remains single.
+/// # Errors
+/// Returns the native transport failure that stopped the session.
+async fn service_native(agent: &mut super::LiveAgent) -> Result<(), AgentManagerError> {
+    agent
+        .session
+        .service_realtime()
+        .await
+        .map_err(super::map_session)?;
+    agent
+        .session
+        .service_controls()
+        .await
+        .map_err(super::map_session)
+}
+
 pub(super) async fn drain(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
@@ -90,11 +137,7 @@ pub(super) async fn drain(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
-    agent
-        .session
-        .service_realtime()
-        .await
-        .map_err(super::map_session)?;
+    service_native(agent).await?;
     checkpoint_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
@@ -115,6 +158,13 @@ pub(super) async fn drain(
             }
             Some(AgentTurnEvent::Subagent(event)) => {
                 super::controls::publish_subagent(registry, timeline, events, agent, event)
+            }
+            Some(AgentTurnEvent::ChildControl { token, outcome }) => {
+                // Field-level access: the scrutinee borrows `pending`, so this cannot take `agent`.
+                if let Some(slot) = agent.child_controls.get_mut(token) {
+                    slot.get_or_insert_with(|| outcome.clone());
+                }
+                Ok(())
             }
             Some(AgentTurnEvent::Usage(usage)) => {
                 persist_usage(registry, timeline, id, agent, usage)
@@ -165,23 +215,8 @@ pub(super) async fn drain(
             )
             | None => break,
         };
-        match result {
-            Ok(()) => {
-                if let Some(AgentTurnEvent::Started(turn)) = agent.pending.take() {
-                    agent.latest_turn = Some(turn.clone());
-                    agent.turn = Some(turn);
-                }
-            }
-            // Storage I/O may succeed on the next poll, so the event stays pending for retry.
-            Err(model::ErrorCode::AgentIo) => return Err(AgentManagerError::Registry),
-            // Any other rejection is deterministic for this event; retrying it would wedge the
-            // lane, so the turn fails and the native session is settled instead.
-            Err(error) => {
-                tracing::warn!(provider = %agent.record.provider, agent_id = %id,
-                    error_code = ?error, "Native provider event was rejected");
-                agent.pending = Some(AgentTurnEvent::Failed);
-                break;
-            }
+        if !commit_result(id, agent, result)? {
+            break;
         }
     }
     checkpoint_handle(registry, id, agent)?;

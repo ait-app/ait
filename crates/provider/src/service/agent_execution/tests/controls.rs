@@ -1,6 +1,62 @@
 use super::*;
 
 #[tokio::test]
+async fn child_controls_report_unsupported_without_unlocking_observed_writes() {
+    use crate::ports::controls::NativeSubagent;
+    use crate::service::agent_manager::observed::register_children;
+    use crate::storage::timeline::Timeline;
+
+    let fixture = Fixture::new();
+    let (execution, registry) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let parent_id = created["agentId"].as_str().unwrap();
+    let parent = registry.get(parent_id).unwrap().unwrap();
+    let native = parent.persistence.as_ref().unwrap().session_id.clone();
+    let timeline = Timeline::memory().unwrap();
+    let children = register_children(
+        &registry,
+        &timeline,
+        &parent,
+        &[NativeSubagent {
+            id: "native-child".to_owned(),
+            parent_id: native,
+            cwd: parent.cwd.clone(),
+            persistence: None,
+            descriptor: json!({
+                "id":"native-child","provider":"codex","title":"Observed child",
+                "status":"running","createdAt":parent.created_at,"updatedAt":parent.updated_at
+            }),
+        }],
+    )
+    .unwrap();
+    let child_id = &children["native-child"];
+
+    // The default port rejects child controls, and the parked reply reports that immediately
+    // instead of holding the parent lane open for a native answer that will never arrive.
+    for method in [
+        "agent.subagents.guide.request",
+        "agent.subagents.stop.request",
+    ] {
+        let mut params = json!({"parentAgentId":parent_id,"childAgentId":child_id});
+        if method == "agent.subagents.guide.request" {
+            params["message"] = json!("guide the child");
+        }
+        assert_eq!(
+            execution.execute(method, params).await,
+            Err(ErrorCode::UnsupportedCapability)
+        );
+    }
+    assert_eq!(
+        execution
+            .execute("agent.cancel.request", json!({"agentId":child_id}))
+            .await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
+    assert_eq!(registry.get(child_id).unwrap().unwrap().persistence, None);
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn controls_use_each_sessions_native_modes_and_preserve_static_fallback() {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);

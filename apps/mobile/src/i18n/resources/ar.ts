@@ -2548,6 +2548,25 @@ export const ar: TranslationResources = {
     archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
     archiveFinishedRetry: "إعادة المحاولة ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "وكيل فرعي",
+      guide: "توجيه",
+      stop: "إيقاف",
+      guideTitle: "توجيه {{name}}",
+      stopTitle: "إيقاف {{name}}؟",
+      stopDescription: "سيؤدي هذا إلى إنهاء الوكيل الفرعي الجاري. تستمر المهمة الأصلية.",
+      guidance: "ما الذي ينبغي أن يفعله هذا الوكيل الفرعي بعد ذلك؟",
+      confirmGuide: "إرسال التوجيه",
+      confirmStop: "إيقاف الوكيل الفرعي",
+      sent: "تم تسليم التوجيه.",
+      notRunningGuide: "لم يكن هناك شيء قيد التشغيل، لذا لم يتم تسليم أي توجيه.",
+      stopped: "تم قبول الإيقاف. في انتظار تقرير الوكيل الفرعي.",
+      notRunningStop: "لم يكن هناك شيء قيد التشغيل، لذا لم يتم إيقاف أي شيء.",
+      guideFailed: "تعذّر تسليم التوجيه. أعد المحاولة بعد التحقق من الوكيل الفرعي.",
+      stopFailed: "تم رفض طلب الإيقاف. أعد المحاولة بعد التحقق من الوكيل الفرعي.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "وكيل جديد",

@@ -13,6 +13,16 @@ use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::native_sessions::canonical;
 
+/// A freshly dispatched child control, parked in the lane under its receipt token.
+pub(super) struct DeferredControl {
+    /// Adapter correlation echoed by the eventual typed answer.
+    pub(super) receipt: crate::ports::controls::ChildControlReceipt,
+    /// Parent Agent that owns the native writer.
+    pub(super) parent_agent_id: String,
+    /// Observed child Agent the control targets.
+    pub(super) child_agent_id: String,
+}
+
 impl ExecutionState {
     pub(super) async fn unified_subagents(&self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["parentAgentId", "subagentId"])?;
@@ -87,42 +97,48 @@ impl ExecutionState {
             .map_err(Into::into)
     }
 
-    /// Guide one observed native child through its parent's live managed writer.
-    pub(super) async fn subagent_guide(&mut self, params: Value) -> Result<Value, ErrorCode> {
-        let request: SubagentGuideRequest = decode(params)?;
-        let parent = self.resolve(&request.parent_agent_id)?;
-        let child = self.resolve(&request.child_agent_id)?;
-        let outcome = self
-            .manager
-            .guide_child(&parent, &child, &request.message, request.expected_revision)
-            .await
-            .map_err(|error| super::map_manager(&error))?;
-        let disposition = match outcome {
-            crate::ports::controls::ChildGuideOutcome::Accepted => "accepted",
-            crate::ports::controls::ChildGuideOutcome::NotRunning => "not_running",
+    /// Dispatch one parent-owned child control and return its deferred typed answer.
+    ///
+    /// The native write happens here, but the answer is awaited by the caller's reply task
+    /// instead of this lane, so queued permissions, polls and sibling requests keep flowing
+    /// while the native runtime answers.
+    pub(super) async fn start_child_control(
+        &mut self,
+        method: Operation,
+        params: Value,
+    ) -> Result<DeferredControl, ErrorCode> {
+        let (parent, child, dispatched) = match method {
+            Operation::ChildGuide => {
+                let request: SubagentGuideRequest = decode(params)?;
+                let parent = self.resolve(&request.parent_agent_id)?;
+                self.active_workspace(&parent)?;
+                let child = self.resolve(&request.child_agent_id)?;
+                let dispatched = self
+                    .manager
+                    .guide_child(&parent, &child, &request.message, request.expected_revision)
+                    .await
+                    .map_err(map_child_control)?;
+                (parent, child, dispatched)
+            }
+            Operation::ChildStop => {
+                let request: SubagentStopRequest = decode(params)?;
+                let parent = self.resolve(&request.parent_agent_id)?;
+                self.active_workspace(&parent)?;
+                let child = self.resolve(&request.child_agent_id)?;
+                let dispatched = self
+                    .manager
+                    .stop_child(&parent, &child, request.expected_revision)
+                    .await
+                    .map_err(map_child_control)?;
+                (parent, child, dispatched)
+            }
+            _ => return Err(ErrorCode::MethodNotFound),
         };
-        Ok(
-            json!({"parentAgentId":parent,"childAgentId":child,"disposition":disposition,"error":null}),
-        )
-    }
-
-    /// Stop one observed native child through its parent's live managed writer.
-    pub(super) async fn subagent_stop(&mut self, params: Value) -> Result<Value, ErrorCode> {
-        let request: SubagentStopRequest = decode(params)?;
-        let parent = self.resolve(&request.parent_agent_id)?;
-        let child = self.resolve(&request.child_agent_id)?;
-        let outcome = self
-            .manager
-            .stop_child(&parent, &child, request.expected_revision)
-            .await
-            .map_err(|error| super::map_manager(&error))?;
-        let disposition = match outcome {
-            crate::ports::controls::ChildStopOutcome::Cancelled => "cancelled",
-            crate::ports::controls::ChildStopOutcome::NotRunning => "not_running",
-        };
-        Ok(
-            json!({"parentAgentId":parent,"childAgentId":child,"disposition":disposition,"error":null}),
-        )
+        Ok(DeferredControl {
+            receipt: dispatched.receipt,
+            parent_agent_id: parent,
+            child_agent_id: child,
+        })
     }
 
     pub(super) async fn diagnostic(&self, params: Value) -> Result<Value, ErrorCode> {
@@ -394,4 +410,45 @@ impl ExecutionState {
         self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
         Ok(())
     }
+}
+
+/// Map one child control dispatch failure into its safe shared code.
+///
+/// A provider that does not implement the typed port rejects before any native write, which is
+/// exactly the "this provider cannot control children" fact, so it is reported as an absent
+/// capability instead of a malformed request.
+fn map_child_control(error: super::AgentManagerError) -> ErrorCode {
+    match error {
+        super::AgentManagerError::SessionRejected => ErrorCode::UnsupportedCapability,
+        error => super::map_manager(&error),
+    }
+}
+
+/// Project one typed child control answer into its wire receipt.
+///
+/// Acceptance and the `not_running` fact stay distinct, and a native refusal is reported without
+/// copying native payloads into the receipt.
+pub(super) fn child_control_receipt(
+    parent: &str,
+    child: &str,
+    outcome: &crate::ports::controls::ChildControlOutcome,
+) -> Result<Value, ErrorCode> {
+    use crate::ports::controls::{
+        ChildControlFailure, ChildControlOutcome, ChildGuideOutcome, ChildStopOutcome,
+    };
+    let disposition = match outcome {
+        ChildControlOutcome::Guide(Ok(ChildGuideOutcome::Accepted)) => "accepted",
+        ChildControlOutcome::Stop(Ok(ChildStopOutcome::Cancelled)) => "cancelled",
+        ChildControlOutcome::Guide(Ok(ChildGuideOutcome::NotRunning))
+        | ChildControlOutcome::Stop(Ok(ChildStopOutcome::NotRunning)) => "not_running",
+        ChildControlOutcome::Guide(Err(ChildControlFailure::Rejected))
+        | ChildControlOutcome::Stop(Err(ChildControlFailure::Rejected)) => {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        ChildControlOutcome::Guide(Err(ChildControlFailure::Uncertain))
+        | ChildControlOutcome::Stop(Err(ChildControlFailure::Uncertain)) => {
+            return Err(ErrorCode::AgentIo);
+        }
+    };
+    Ok(json!({"parentAgentId":parent,"childAgentId":child,"disposition":disposition,"error":null}))
 }

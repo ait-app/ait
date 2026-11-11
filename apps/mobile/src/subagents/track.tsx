@@ -17,6 +17,7 @@ import type { Theme } from "@/styles/theme";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { getPanelManifest } from "@/panels/panel-manifest";
 import type { SubagentRow } from "./select";
+import { NativeSubagentControls } from "./native-controls";
 import type { ArchiveFinishedStatus } from "./use-archive-finished";
 import {
   buildSubagentPillPresentation,
@@ -224,11 +225,12 @@ function SubagentsTrackRow({
             {displayLabel}
           </Text>
           {row.kind === "paseo" ? (
-            <PaseoSubagentFacts serverId={serverId} agentId={row.id} />
+            <PaseoSubagentFacts serverId={serverId} agentId={row.id} label={displayLabel} />
           ) : (
-            <SubagentFacts rowId={row.id} text={presentation.subtitle} />
+            <SubagentFacts rowId={row.id} text={presentation.subtitle} label={displayLabel} />
           )}
         </View>
+        <NativeSubagentControls serverId={serverId} row={row} compact={isCompact} />
         {row.kind === "paseo" &&
         (row.canArchive !== false || (onDetachSubagent && row.canDetach !== false)) ? (
           <SubagentRowActions
@@ -272,13 +274,30 @@ function SubagentsTrackRow({
 }
 
 /** The same facts line the agent's sheet shows when it opens without its composer. */
-function PaseoSubagentFacts({ serverId, agentId }: { serverId: string; agentId: string }) {
+function PaseoSubagentFacts({
+  serverId,
+  agentId,
+  label,
+}: {
+  serverId: string;
+  agentId: string;
+  label: string;
+}) {
   const text = useAgentFactsLine(serverId, agentId);
-  return <SubagentFacts rowId={agentId} text={text} />;
+  return <SubagentFacts rowId={agentId} text={text} label={label} />;
 }
 
-function SubagentFacts({ rowId, text }: { rowId: string; text: string | null }) {
-  if (!text) return null;
+function SubagentFacts({
+  rowId,
+  text,
+  label,
+}: {
+  rowId: string;
+  text: string | null;
+  label: string;
+}) {
+  // A facts line that repeats the title above it adds nothing but a second truncated line.
+  if (!text || text === label) return null;
   return (
     <Text style={styles.rowFacts} numberOfLines={1} testID={`subagents-track-row-facts-${rowId}`}>
       {text}

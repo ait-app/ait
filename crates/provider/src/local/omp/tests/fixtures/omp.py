@@ -46,6 +46,18 @@ pending_async = False
 current_prompt = None
 pending_dialog = None
 dialog_commands = []
+held_control = None
+
+def children():
+    path = root / 'subagents.json'
+    return json.loads(path.read_text()) if path.exists() else []
+
+def child(subagent_id):
+    return next((item for item in children() if item['id'] == subagent_id), None)
+
+def child_controllable(item):
+    return (item is not None and item.get('status') in ('running', 'pending')
+            and bool(item.get('sessionFile')))
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -58,9 +70,10 @@ def emit(value):
         for index, chunk in enumerate(chunks):
             print(json.dumps({'type':'rpc_chunk','chunkId':chunk_id,'index':index,'count':len(chunks),'byteLength':len(data),'data':base64.b64encode(chunk).decode()}), flush=True)
 
-def response(command, data=None, success=True):
+def response(command, data=None, success=True, error=None):
     emit({'type': 'response', 'id': command.get('id'), 'command': command['type'],
-          'success': success, 'data': data, 'error': None if success else 'Rejected'})
+          'success': success, 'data': data,
+          'error': None if success else (error or 'Rejected')})
 
 def message(role, content, **fields):
     global clock, leaf
@@ -168,7 +181,43 @@ for command in commands_from_input():
     elif kind in ('set_auto_compaction', 'set_auto_retry', 'set_ask_dialog', 'set_subagent_subscription'):
         response(command)
     elif kind == 'get_subagents':
-        response(command, {'subagents': []})
+        response(command, {'subagents': children()})
+    elif kind == 'steer_subagent':
+        item = child(command.get('subagentId'))
+        if not child_controllable(item):
+            response(command, success=False,
+                     error='Subagent not running: ' + str(command.get('subagentId')))
+        elif command.get('message', '').strip() == 'refuse':
+            response(command, success=False, error='Subagent refused the message: fixture')
+        else:
+            response(command)
+    elif kind == 'cancel_subagent' and (root / 'hold-control-answer').exists():
+        # A native answer withheld until the host resolves this question.
+        held_control = command
+        emit({'type': 'extension_ui_request', 'id': 'held-question', 'method': 'select',
+              'title': 'Held question', 'options': ['A']})
+    elif kind == 'cancel_subagent':
+        item = child(command.get('subagentId'))
+        if child_controllable(item) and (root / 'race-control').exists():
+            # The child stops between the membership read and this write: publish a question that
+            # must still reach the host, then report the native not-running fact.
+            emit({'type': 'extension_ui_request', 'id': 'race-question', 'method': 'select',
+                  'title': 'Race question', 'options': ['A', 'B']})
+            response(command, {'cancelled': False})
+            continue
+        cancelled = child_controllable(item)
+        if cancelled:
+            # A cancelled child leaves the native running membership and reports a terminal
+            # lifecycle status, as the native runtime does.
+            items = children()
+            for entry in items:
+                if entry['id'] == item['id']:
+                    entry['status'] = 'aborted'
+            (root / 'subagents.json').write_text(json.dumps(items))
+            emit({'type': 'subagent_lifecycle', 'payload': {
+                'id': item['id'], 'index': item.get('index', 0), 'agent': item.get('agent'),
+                'status': 'aborted', 'parentToolCallId': item.get('parentToolCallId')}})
+        response(command, {'cancelled': cancelled})
     elif kind == 'get_available_commands':
         response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
     elif kind == 'interactive_control':
@@ -209,6 +258,31 @@ for command in commands_from_input():
         active = True
         emit({'type': 'agent_start'})
         message('user', [{'type': 'text', 'text': text}, *command.get('images', [])])
+        if text == 'subagent-controls':
+            # One running child of this parent plus a terminal sibling, published through the
+            # native lifecycle frames this process emits for its own children.
+            (root / 'subagents.json').write_text(json.dumps([
+                {'id': 'worker', 'index': 0, 'agent': 'Task', 'status': 'running',
+                 'sessionFile': str(root / 'sessions' / 'worker.jsonl'),
+                 'parentToolCallId': 'task-1'},
+                {'id': 'done', 'index': 1, 'agent': 'Task', 'status': 'completed',
+                 'sessionFile': str(root / 'sessions' / 'done.jsonl'),
+                 'parentToolCallId': 'task-2'},
+            ]))
+            emit({'type': 'subagent_lifecycle', 'payload': {
+                'id': 'worker', 'index': 0, 'agent': 'Task', 'status': 'started',
+                'parentToolCallId': 'task-1'}})
+            emit({'type': 'subagent_lifecycle', 'payload': {
+                'id': 'done', 'index': 1, 'agent': 'Task', 'status': 'started',
+                'parentToolCallId': 'task-2'}})
+            emit({'type': 'subagent_lifecycle', 'payload': {
+                'id': 'done', 'index': 1, 'agent': 'Task', 'status': 'completed',
+                'parentToolCallId': 'task-2'}})
+            emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+            active = False
+            emit({'type': 'prompt_result', 'id': prompt_id, 'agentInvoked': True,
+                  'status': 'completed', 'sessionSettled': True})
+            continue
         if text == 'native-host':
             emit({'type':'future_native_event','opaque':{'unmodified':[1,2,3]}})
             emit({'type':'host_tool_call','id':'host-task','toolCallId':'external-tool','toolName':'unknown-vendor-tool','arguments':{'value':42}})
@@ -336,6 +410,24 @@ for command in commands_from_input():
         finish(aborted=True)
         response(command)
     elif kind == 'extension_ui_response':
+        if command.get('id') == 'race-question':
+            continue
+        if command.get('id') == 'held-question' and held_control:
+            pending_control_answer = held_control
+            held_control = None
+            item = child(pending_control_answer.get('subagentId'))
+            cancelled = child_controllable(item)
+            if cancelled:
+                items = children()
+                for entry in items:
+                    if entry['id'] == item['id']:
+                        entry['status'] = 'aborted'
+                (root / 'subagents.json').write_text(json.dumps(items))
+                emit({'type': 'subagent_lifecycle', 'payload': {
+                    'id': item['id'], 'index': item.get('index', 0), 'agent': item.get('agent'),
+                    'status': 'aborted', 'parentToolCallId': item.get('parentToolCallId')}})
+            response(pending_control_answer, {'cancelled': cancelled})
+            continue
         if pending_dialog:
             response(pending_dialog, {'agentInvoked':True})
             pending_dialog = None

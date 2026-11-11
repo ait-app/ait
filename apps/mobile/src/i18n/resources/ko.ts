@@ -2579,6 +2579,25 @@ export const ko: TranslationResources = {
     archiveFinishedAction: "완료된 하위 에이전트 보관",
     archiveFinishedRetry: "다시 시도 ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "하위 에이전트",
+      guide: "지도",
+      stop: "중지",
+      guideTitle: "{{name}} 지도",
+      stopTitle: "{{name}}을(를) 중지할까요?",
+      stopDescription: "실행 중인 하위 에이전트를 종료합니다. 상위 작업은 계속됩니다.",
+      guidance: "이 하위 에이전트가 다음에 무엇을 해야 하나요?",
+      confirmGuide: "지도 보내기",
+      confirmStop: "하위 에이전트 중지",
+      sent: "지도를 전달했습니다.",
+      notRunningGuide: "실행 중인 항목이 없어 지도를 전달하지 않았습니다.",
+      stopped: "중지를 접수했습니다. 하위 에이전트의 보고를 기다리는 중입니다.",
+      notRunningStop: "실행 중인 항목이 없어 중지된 항목이 없습니다.",
+      guideFailed: "지도를 전달하지 못했습니다. 하위 에이전트를 확인한 뒤 다시 시도하세요.",
+      stopFailed: "중지 요청이 거부되었습니다. 하위 에이전트를 확인한 뒤 다시 시도하세요.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "새 에이전트",

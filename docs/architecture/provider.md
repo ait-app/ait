@@ -46,6 +46,31 @@
   路由到根 Agent 的 lane，打开子会话不会启动子 writer
   （[ADR-209](../decisions/providers/adr-209-observed-subagent-normalization.md)，修订 ADR-041/052
   的子会话边界）。
+- 子 Agent 的引导与停止是父 Agent 拥有的类型化操作：`agent.subagents.guide/stop.request` 以
+  `parentAgentId` 定位，`Operation::ChildGuide/ChildStop` 属 `Access::Session`、`Target::Parent`，
+  在父会话 lane 内保序执行。写前依次校验父记录为受管、未归档、非内部且本进程持有 live writer
+  （不 live 即拒绝，不 resume），子记录有 `observation` 且 `parentAgentId`/`rootAgentId` 指向该父、
+  `ready`、`health == Current`、可选 `expectedRevision` 匹配，引导另需子级 `Running`。客户端只发
+  Ait 身份，原生子 ID 由服务端从观测记录解析。这是 observed 写保护的唯一窄豁免：对子 Agent 自身
+  id 的其他写操作仍一律拒绝，也不为子级创建 writer。端口
+  `AgentSession::guide_child/stop_child` 默认 `Rejected`，成功时只返回**收据**
+  `ChildControlReceipt { token }`：原生命令已写出，最终结果作为
+  `AgentTurnEvent::ChildControl { token, outcome }`
+  （`ChildGuideOutcome::{Accepted, NotRunning}`、`ChildStopOutcome::{Cancelled, NotRunning}`、
+  或 `ChildControlFailure::{Rejected, Uncertain}`）经既有事件流异步到达。
+  因此控制等待期间父 lane 仍继续处理排队中的权限问题与读取；RPC 回复由 lane 在收到该事件后结算，
+  不占用 writer，也不为控制另起任务或第二个 writer。
+  `accepted/cancelled` 只表示原生接受，终态由只读子会话生命周期事件观察，`not_running` 不是成功，
+  `Uncertain` 永不自动重发。目前仅 OMP 实现（父进程内 `get_subagents` 复核后
+  `steer_subagent`/`cancel_subagent`）；未实现端口的 adapter 走默认 `Rejected`，RPC 呈现为
+  `UnsupportedCapability`，能力标志也不出现。父级不 live、父链不符、观测过期、版本不符、引导目标
+  非运行中统一为 `UnsupportedCapability`，缺记录为 `AgentNotFound`，空白引导文本为
+  `InvalidMessage`。
+  host feature `subagentControls` 由两个方法存在推导，父快照
+  `supportsChildGuide`/`supportsChildStop` 来自 adapter 已验证事实
+  （[ADR-248](../decisions/providers/adr-248-parent-owned-subagent-controls.md)，修订
+  [ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)、
+  [ADR-209](../decisions/providers/adr-209-observed-subagent-normalization.md)）。
 - Bot 隐藏会话（`internal` 且有 `owner`）的权限请求在发布前直接回复原生 deny；请求缺少 ID 或
   拒绝失败时该轮按失败结算。只有 get、timeline、时间线搜索和 prompts 可以按完整 ID 寻址隐藏会话
   （[ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)，第 3、4 条已由

@@ -60,6 +60,15 @@ pub(crate) enum AgentTurnEvent {
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
     Subagent(super::controls::SubagentEvent),
+    /// Final outcome of one dispatched parent-owned child control, correlated by its receipt
+    /// token. Published asynchronously so the parent lane is never held while the native
+    /// runtime answers.
+    ChildControl {
+        /// Receipt token returned by `guide_child` or `stop_child`.
+        token: String,
+        /// Typed native answer.
+        outcome: super::controls::ChildControlOutcome,
+    },
     /// One incremental display event with a retry-stable observation identity.
     Progress {
         /// Unique identity for this observation, distinct from the native item identity.
@@ -106,6 +115,19 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 
     /// Drain bounded microphone input and perform native cancellation before observing events.
     async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        Ok(())
+    }
+
+    /// Advance adapter-owned deferred control work before the next native event drain.
+    ///
+    /// Child controls are dispatched from the synchronous native event loop, which can only
+    /// record the command; this is the async hook that writes it, so the parent lane never
+    /// blocks on a native write and never needs a second writer.
+    ///
+    /// # Errors
+    /// Returns a native transport failure. A control whose write failed reports its own typed
+    /// uncertain outcome to the waiting reply instead of propagating here.
+    async fn service_controls(&mut self) -> Result<(), AgentSessionError> {
         Ok(())
     }
 
@@ -296,15 +318,19 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// identity resolved by the manager from the observed child record; callers never pass raw
     /// native IDs from the client. Only a running/pending child accepts guidance.
     ///
+    /// The adapter writes exactly one native command and returns a receipt; the typed outcome
+    /// arrives later as [`AgentTurnEvent::ChildControl`] carrying the receipt token, so the
+    /// multi-writer lane keeps answering permissions and polls while the answer is pending.
+    ///
     /// # Errors
     /// Returns `Rejected` for providers without native child guidance (the default), or when the
-    /// native runtime definitively refuses the message. Other errors leave delivery uncertain and
-    /// must never trigger an automatic resubmission.
+    /// native runtime definitively refuses before any write. Other errors leave delivery
+    /// uncertain and must never trigger an automatic resubmission.
     async fn guide_child(
         &mut self,
         _child_id: &str,
         _message: &str,
-    ) -> Result<super::controls::ChildGuideOutcome, AgentSessionError> {
+    ) -> Result<super::controls::ChildControlReceipt, AgentSessionError> {
         Err(AgentSessionError::Rejected)
     }
 
@@ -312,13 +338,16 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// is hard-killed inside the native runtime; a non-running child yields `NotRunning` without
     /// error. The parent turn and sibling children are unaffected, and no child writer is created.
     ///
+    /// As with [`AgentSession::guide_child`], the returned receipt is only the write
+    /// acknowledgement; the typed outcome arrives as [`AgentTurnEvent::ChildControl`].
+    ///
     /// # Errors
     /// Returns `Rejected` for providers without native child stop (the default), or a native
     /// transport failure. Acceptance (`Cancelled`) is not proof of termination.
     async fn stop_child(
         &mut self,
         _child_id: &str,
-    ) -> Result<super::controls::ChildStopOutcome, AgentSessionError> {
+    ) -> Result<super::controls::ChildControlReceipt, AgentSessionError> {
         Err(AgentSessionError::Rejected)
     }
 

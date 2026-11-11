@@ -1,0 +1,161 @@
+{
+  "id": "24",
+  "title": "Child guide and stop",
+  "priority": 24,
+  "depends_on": [
+    "00",
+    "07"
+  ],
+  "donor_sections": [
+    13,
+    20,
+    22
+  ],
+  "donor_paths": [
+    "apps/mobile/src/hooks/use-draft-agent-features.test.tsx",
+    "apps/mobile/src/hooks/use-draft-agent-features.ts",
+    "apps/mobile/src/i18n/resources/ar.ts",
+    "apps/mobile/src/i18n/resources/en.ts",
+    "apps/mobile/src/i18n/resources/es.ts",
+    "apps/mobile/src/i18n/resources/fr.ts",
+    "apps/mobile/src/i18n/resources/ja.ts",
+    "apps/mobile/src/i18n/resources/ko.ts",
+    "apps/mobile/src/i18n/resources/pt-BR.ts",
+    "apps/mobile/src/i18n/resources/ru.ts",
+    "apps/mobile/src/i18n/resources/zh-CN.ts",
+    "apps/mobile/src/subagents/native-controls.test.tsx",
+    "apps/mobile/src/subagents/native-controls.tsx",
+    "apps/mobile/src/subagents/track.tsx",
+    "apps/mobile/test-stubs/lucide-react-native.ts",
+    "crates/api/src/capabilities/tests.rs",
+    "crates/api/src/connection.rs",
+    "crates/api/src/connection/validation/tests.rs",
+    "crates/api/src/tests.rs",
+    "crates/api/src/tests/placeholders.rs",
+    "crates/metadata/src/daemon/protocol.rs",
+    "crates/model/src/server.rs",
+    "crates/provider/src/capabilities/tests.rs",
+    "crates/provider/src/composition/tests.rs",
+    "crates/provider/src/dispatch/agent_execution.rs",
+    "crates/provider/src/dispatch/requests.rs",
+    "crates/provider/src/ports.rs",
+    "crates/provider/src/ports/agent_session.rs",
+    "crates/provider/src/protocol.rs",
+    "crates/provider/src/protocol/agent_config.rs",
+    "crates/provider/src/protocol/agent_config/tests.rs",
+    "crates/provider/src/protocol/controls.rs",
+    "crates/provider/src/rpc/agent_execution.rs",
+    "crates/provider/src/rpc/agent_execution/controls.rs",
+    "crates/provider/src/rpc/agent_execution/deferred.rs",
+    "crates/provider/src/rpc/agent_execution/deferred/tests.rs",
+    "crates/provider/src/rpc/agent_execution/scheduling.rs",
+    "crates/provider/src/service.rs",
+    "crates/provider/src/service/agent_execution.rs",
+    "crates/provider/src/service/agent_execution/lane.rs",
+    "crates/provider/src/service/agent_execution/operation.rs",
+    "crates/provider/src/service/agent_execution/routing.rs",
+    "crates/provider/src/service/agent_execution/tests/controls.rs",
+    "crates/provider/src/service/agent_execution/tests/delivery.rs",
+    "crates/provider/src/service/agent_execution/voice.rs",
+    "crates/provider/src/service/agent_manager.rs",
+    "crates/provider/src/service/agent_manager/controls.rs",
+    "crates/provider/src/service/agent_manager/delivery.rs",
+    "crates/provider/src/service/agent_manager/execution.rs",
+    "crates/provider/src/service/agent_manager/ownership.rs",
+    "crates/provider/src/service/agent_manager/streaming.rs",
+    "crates/provider/src/service/agent_manager/tests.rs",
+    "crates/provider/src/service/agent_manager/tests/review.rs",
+    "packages/client/src/daemon-client.test.ts",
+    "packages/client/src/daemon-client.ts",
+    "packages/client/src/index.test.ts",
+    "packages/client/src/index.ts",
+    "packages/client/src/protocol/connection.test.ts",
+    "packages/client/src/protocol/connection.ts",
+    "packages/client/src/protocol/messages.ts",
+    "packages/client/src/protocol/methods.ts",
+    "packages/protocol/src/agent-types.ts",
+    "packages/protocol/src/messages.provider-ui.test.ts",
+    "packages/protocol/src/messages.rename-entities.test.ts",
+    "packages/protocol/src/messages.ts"
+  ],
+  "implementation": "Typed parent-owned child guide/stop instead of the donor's generic agent.native_action gateway: agent.subagents.guide/stop.request carry Ait identities only, Operation::ChildGuide/ChildStop are Access::Session + Target::Parent in the parent lane, and AgentSession::guide_child/stop_child (default Rejected) return a ChildControlReceipt; the typed ChildGuideOutcome/ChildStopOutcome (or ChildControlFailure) arrives asynchronously as AgentTurnEvent::ChildControl. The manager validates a live managed parent, the observed child's parentAgentId/rootAgentId chain, ready/current health, an optional observation revision fence and (guide only) a running child before any native write; the observed child stays read-only and never gets a writer. The lane parks the RPC reply under the receipt token and settles it from a later drain, so queued permissions and reads keep flowing while the native runtime answers. Only OMP implements the port (get_subagents membership re-check, then native steer_subagent/cancel_subagent in the parent's managed process); other adapters keep the port default and report UnsupportedCapability. Host feature subagentControls derives from both methods; parent snapshots advertise supportsChildGuide/supportsChildStop from adapter-verified facts.",
+  "acceptance": "Wrong-parent/stale-owner requests are rejected, child identity is stable, stop/guide reach the native child once, and no second writer is created.",
+  "status": "in_progress",
+  "branch": "feat/pr612-task24-child-controls",
+  "base": {
+    "kind": "stacked-task07",
+    "commit": "cc4a5745b369dfa3b582df76036293b7d1935093",
+    "contract_lock_commit": "0992fbca0feabe320811b19b3d351c02933dfb0a"
+  },
+  "commit": null,
+  "pr_url": null,
+  "adr": "ADR-248 (proposed)",
+  "compatibility": "Additive only. Wire: two new request/response method pairs plus an optional subagentControls host feature and optional supportsChildGuide/supportsChildStop capability flags; no existing payload gains a required field. Old clients never send the methods and keep the ADR-209 read-only observed tree. New clients on an old host see the feature absent and hide the controls; direct calls get MethodNotFound. A host whose adapter does not implement the typed port keeps the default Rejected, which the two child-control RPCs map to UnsupportedCapability in the write-free path (other operations keep the existing map_manager mapping), and no flags are advertised; validation failures (non-live parent, wrong parent chain, stale observation, revision mismatch, non-running guide target) also surface as UnsupportedCapability. Rust: Operation, port and manager entry points are new, and AgentSession gains a defaulted service_controls hook; existing method signatures are unchanged. The donor runNativeAction/agent.native_action.request gateway and its auto-resume of a non-live parent are not introduced.",
+  "source_inventory": {
+    "draft_pr": "https://github.com/ait-app/ait/pull/647",
+    "evidence_commit": "7ac9b4ace576831196b5b09965c8d029bd9044d8",
+    "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4"
+  },
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "cargo test -p provider --locked --lib child_control",
+        "result": "PASS: 12 tests (7 OMP adapter incl. a permission question answerable while a control receipt is pending, and that same property through the worker lane; 5 manager/execution validation); 1 ignored installed-OMP test."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test -p provider --locked --lib installed_omp_guides_and_cancels_a_real_native_child -- --ignored",
+        "result": "PASS: official omp/18.17.0 — native child guided once and cancelled through the parent's managed writer."
+      },
+      {
+        "command": "cargo check -p provider --locked --lib",
+        "result": "PASS: no warnings."
+      },
+      {
+        "command": "cargo clippy -p provider --locked --lib -- -D warnings",
+        "result": "PASS: clean. Test targets report only pre-existing assert!(x.is_empty()) style in untouched pi/sandbox/contracts files."
+      },
+      {
+        "command": "rustfmt --edition 2024 --check <changed Rust>",
+        "result": "PASS after formatting."
+      },
+      {
+        "command": "tsgo --noEmit (packages/protocol, packages/client)",
+        "result": "PASS."
+      },
+      {
+        "command": "vitest run (packages/protocol)",
+        "result": "PASS: 853 tests."
+      },
+      {
+        "command": "vitest run (packages/client)",
+        "result": "PASS: 566 tests, including the child guide/stop channel-3 routing test and restored uniqueness pin without a method count."
+      },
+      {
+        "command": "vitest run src/subagents src/i18n (apps/mobile)",
+        "result": "PASS: 163 tests, including the new native-controls suite (receipt wording, refusal without native detail, per-fact gating)."
+      },
+      {
+        "command": "tsgo --noEmit (apps/mobile)",
+        "result": "PASS for changed files; the 62 remaining errors are pre-existing missing optional native modules (expo-clipboard, @xterm/*, react-native-keyboard-controller, htmlparser2) in this worktree."
+      },
+      {
+        "command": "oxlint/oxfmt --check <changed TS/TSX>",
+        "result": "PASS: 0 warnings."
+      },
+      {
+        "command": "npm run check:docs; node scripts/adr.mjs index --check",
+        "result": "PASS: 561 Markdown documents and 225 ADRs verified."
+      }
+    ]
+  },
+  "blockers": [
+    "Stacked on unmerged task07 (PR #657) and its own base chain; task24 inherits those platform gates.",
+    "The Rust workspace is on rust-toolchain 1.98.1 while this machine builds with 1.99.1, which adds the assert!(is_empty()) test lint; only pre-existing hits in untouched files appear, and none are in task24 code.",
+    "Split-mode hosts are unchanged: the two new SDK methods were moved to the services channel (channel 3) because the Agent channel already sat at Rust's 64-capability hello limit; old hosts still answer MethodNotFound."
+  ]
+}

@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use super::*;
 use crate::ports::agent_session::AgentSessionSpec;
+use crate::ports::controls::{ChildControlOutcome, ChildControlReceipt};
 
 mod auto_archive;
 mod bot_permissions;
@@ -139,6 +140,8 @@ struct FakeState {
     permission_responses: Vec<(String, Value)>,
     permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
+    /// Answers a guide/stop dispatch immediately when set; otherwise it stays unanswered.
+    child_control_result: Option<ChildControlOutcome>,
 }
 
 impl Default for FakeState {
@@ -170,6 +173,7 @@ impl Default for FakeState {
             permission_responses: Vec::new(),
             permission_result: Ok(()),
             during_resume: None,
+            child_control_result: None,
         }
     }
 }
@@ -258,6 +262,23 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
     }
 }
 
+impl FakeSession {
+    /// Acknowledge one child control and queue the configured answer behind the same token.
+    fn record_child_control(&self) -> Result<ChildControlReceipt, AgentSessionError> {
+        let mut state = self.0.lock().expect("state");
+        let Some(outcome) = state.child_control_result.clone() else {
+            return Err(AgentSessionError::Rejected);
+        };
+        state.events.push_back(AgentTurnEvent::ChildControl {
+            token: "receipt-1".to_owned(),
+            outcome,
+        });
+        Ok(ChildControlReceipt {
+            token: "receipt-1".to_owned(),
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
@@ -318,6 +339,21 @@ impl AgentSession for FakeSession {
             .steer_calls
             .push((turn_id.to_owned(), text.to_owned()));
         state.steer_result
+    }
+
+    async fn guide_child(
+        &mut self,
+        _child_id: &str,
+        _message: &str,
+    ) -> Result<ChildControlReceipt, AgentSessionError> {
+        self.record_child_control()
+    }
+
+    async fn stop_child(
+        &mut self,
+        _child_id: &str,
+    ) -> Result<ChildControlReceipt, AgentSessionError> {
+        self.record_child_control()
     }
 
     async fn cancel_turn(&mut self, _turn_id: &str) -> Result<(), AgentSessionError> {

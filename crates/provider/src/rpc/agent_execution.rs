@@ -25,6 +25,9 @@ use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
 use crate::service::agent_execution::operation::Operation;
+
+/// Lane-owned reply for one admitted request.
+pub(crate) type Reply = tokio::sync::oneshot::Sender<Result<Value, ErrorCode>>;
 use crate::service::agent_manager::ownership::RUNTIME_OVERLAY_FIELDS;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
@@ -32,6 +35,8 @@ use crate::support::rpc::decode;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
+    /// Child controls already written to a native runtime, awaiting their typed answer.
+    pub(crate) child_controls: std::collections::BTreeMap<String, DeferredChildControl>,
     pub(crate) message_observers:
         std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
     pub(crate) owners: crate::service::agent_manager::ownership::Owners,
@@ -43,6 +48,64 @@ pub(crate) struct ExecutionState {
         Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceDirectory>>,
     pub(crate) workspace_automation:
         Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
+}
+
+/// One dispatched child control whose RPC reply settles when the native answer arrives.
+pub(crate) struct DeferredChildControl {
+    /// Parent Agent that owns the native writer.
+    pub(crate) parent_agent_id: String,
+    /// Observed child Agent the control targets.
+    pub(crate) child_agent_id: String,
+    /// Reply sender retained by the lane, not by the command future.
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<Value, ErrorCode>>,
+}
+
+impl ExecutionState {
+    /// Write one child control and park `reply` under the adapter receipt token.
+    ///
+    /// The reply is consumed either way: a validation or write refusal answers it immediately,
+    /// and an accepted control answers it from [`ExecutionState::settle_child_controls`] once the
+    /// native runtime responds.
+    pub(crate) async fn defer_child_control(
+        &mut self,
+        method: Operation,
+        params: Value,
+        reply: Reply,
+    ) {
+        let dispatched = match self.start_child_control(method, params).await {
+            Ok(dispatched) => dispatched,
+            Err(error) => {
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        self.child_controls.insert(
+            dispatched.receipt.token,
+            DeferredChildControl {
+                parent_agent_id: dispatched.parent_agent_id,
+                child_agent_id: dispatched.child_agent_id,
+                reply,
+            },
+        );
+    }
+
+    /// Settle every parked child-control reply whose typed answer has arrived.
+    ///
+    /// Callers run this after a drain, so an answer never needs a separately scheduled task.
+    pub(crate) fn settle_child_controls(&mut self) {
+        for (token, outcome) in self.manager.take_completed_child_controls() {
+            let Some(parked) = self.child_controls.remove(&token) else {
+                continue;
+            };
+            // `controls` is the sibling module; the free function is shared with its handlers.
+            let result = controls::child_control_receipt(
+                &parked.parent_agent_id,
+                &parked.child_agent_id,
+                &outcome,
+            );
+            let _ = parked.reply.send(result);
+        }
+    }
 }
 
 impl ExecutionState {
@@ -109,8 +172,9 @@ impl ExecutionState {
             Operation::Commands => self.commands(params).await,
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
-            Operation::ChildGuide => self.subagent_guide(params).await,
-            Operation::ChildStop => self.subagent_stop(params).await,
+            // Child controls are dispatched through `defer_child_control`, which owns their
+            // reply; reaching this arm means the reply was already taken.
+            Operation::ChildGuide | Operation::ChildStop => Err(ErrorCode::AgentIo),
             Operation::Diagnostic => self.diagnostic(params).await,
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,

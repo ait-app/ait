@@ -2564,6 +2564,27 @@ export const ptBR: TranslationResources = {
     archiveFinishedAction: "Arquivar subagentes concluídos",
     archiveFinishedRetry: "Tentar novamente ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "Subagente",
+      guide: "Orientar",
+      stop: "Parar",
+      guideTitle: "Orientar {{name}}",
+      stopTitle: "Parar {{name}}?",
+      stopDescription: "Isso encerra o subagente em execução. A tarefa principal continua.",
+      guidance: "O que este subagente deve fazer agora?",
+      confirmGuide: "Enviar orientação",
+      confirmStop: "Parar subagente",
+      sent: "Orientação entregue.",
+      notRunningGuide: "Nada estava em execução, então nenhuma orientação foi entregue.",
+      stopped: "Parada aceita. Aguardando o relatório do subagente.",
+      notRunningStop: "Nada estava em execução, então nada foi parado.",
+      guideFailed:
+        "Não foi possível entregar a orientação. Tente novamente após verificar o subagente.",
+      stopFailed:
+        "A solicitação de parada foi rejeitada. Tente novamente após verificar o subagente.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "Novo Agente",

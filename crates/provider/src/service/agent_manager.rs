@@ -33,6 +33,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
+use crate::ports::controls::ChildControlOutcome;
 use crate::ports::mcp_scope::McpSubject;
 use crate::protocol::agent_config::ConfigPatch;
 use crate::service::bot_execution::TimelineCursor;
@@ -119,6 +120,8 @@ struct LiveAgent {
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    /// Deferred child control answers keyed by the adapter receipt token; `Some` is answered.
+    child_controls: BTreeMap<String, Option<ChildControlOutcome>>,
 }
 
 impl LiveAgent {
@@ -146,6 +149,7 @@ impl LiveAgent {
             failure_entry: None,
             exclusive: false,
             interruption_requested: false,
+            child_controls: BTreeMap::new(),
         }
     }
 }

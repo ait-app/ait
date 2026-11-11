@@ -2581,6 +2581,25 @@ export const es: TranslationResources = {
     archiveFinishedAction: "Archivar subagentes finalizados",
     archiveFinishedRetry: "Reintentar ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "Subagente",
+      guide: "Guiar",
+      stop: "Detener",
+      guideTitle: "Guiar {{name}}",
+      stopTitle: "¿Detener {{name}}?",
+      stopDescription: "Esto termina el subagente en ejecución. La tarea principal continúa.",
+      guidance: "¿Qué debería hacer ahora este subagente?",
+      confirmGuide: "Enviar guía",
+      confirmStop: "Detener subagente",
+      sent: "Guía entregada.",
+      notRunningGuide: "No había nada en ejecución, así que no se entregó ninguna guía.",
+      stopped: "Detención aceptada. Esperando el informe del subagente.",
+      notRunningStop: "No había nada en ejecución, así que no se detuvo nada.",
+      guideFailed: "No se pudo entregar la guía. Reinténtalo tras revisar el subagente.",
+      stopFailed: "Se rechazó la solicitud de detención. Reinténtalo tras revisar el subagente.",
+    },
+  },
   panels: {
     draft: {
       newAgent: "Nuevo agente",

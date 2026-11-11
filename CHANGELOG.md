@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- Guide or stop a running sub-agent from its row in the sub-agent tree. Guidance is delivered as a message to that sub-agent's own session, and stopping cancels only that sub-agent, not the parent turn or its siblings. Controls appear only for a connected Host whose provider supports them and only while the sub-agent is running; stopping asks for confirmation first. "Stop accepted" is not shown as "stopped": the final state still comes from the sub-agent's own lifecycle. Other providers keep sub-agents read-only.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.

@@ -2595,6 +2595,25 @@ export const ja: TranslationResources = {
     archiveFinishedAction: "完了したサブエージェントをアーカイブ",
     archiveFinishedRetry: "再試行 ({{failed}}/{{total}})",
   },
+  providerControl: {
+    tasks: {
+      worker: "サブエージェント",
+      guide: "指示",
+      stop: "停止",
+      guideTitle: "{{name}} に指示",
+      stopTitle: "{{name}} を停止しますか？",
+      stopDescription: "実行中のサブエージェントを終了します。親タスクは継続します。",
+      guidance: "このサブエージェントに次に何をさせますか？",
+      confirmGuide: "指示を送信",
+      confirmStop: "サブエージェントを停止",
+      sent: "指示を送信しました。",
+      notRunningGuide: "実行中のものがないため、指示は送信されませんでした。",
+      stopped: "停止を受け付けました。サブエージェントの報告を待っています。",
+      notRunningStop: "実行中のものがないため、停止したものはありません。",
+      guideFailed: "指示を送信できませんでした。サブエージェントを確認して再試行してください。",
+      stopFailed: "停止リクエストは拒否されました。サブエージェントを確認して再試行してください。",
+    },
+  },
   panels: {
     draft: {
       newAgent: "新しいエージェント",

@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
@@ -17,6 +17,8 @@ use crate::ports::agent_session::{
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
+
+mod child_controls;
 
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
@@ -41,7 +43,7 @@ struct StateCheck {
 struct NativeBridge {
     enabled: bool,
     controls: BTreeSet<String>,
-    events: std::collections::VecDeque<Value>,
+    events: VecDeque<Value>,
     callbacks: BTreeMap<String, String>,
     buffered_bytes: usize,
 }
@@ -72,6 +74,10 @@ pub(super) struct Session {
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
+    /// Child controls already written, keyed by the native command that will answer them.
+    child_controls: child_controls::Written,
+    /// Child controls the synchronous event loop queued for the next async flush.
+    child_control_writes: child_controls::Queue,
 }
 
 /// Start a disposable native capability reader for `model` in `cwd`.
@@ -220,6 +226,8 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
+        child_controls: BTreeMap::new(),
+        child_control_writes: VecDeque::new(),
     })
 }
 
@@ -550,6 +558,9 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "response" && self.child_control_response(event) {
+            return Ok(());
+        }
         if event["type"] == "response" && self.control_response(event)? {
             return Ok(());
         }
@@ -864,6 +875,24 @@ impl AgentSession for Session {
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.list()
     }
+    async fn service_controls(&mut self) -> Result<(), AgentSessionError> {
+        self.flush_child_controls().await?;
+        self.expire_child_controls();
+        Ok(())
+    }
+    async fn guide_child(
+        &mut self,
+        child_id: &str,
+        message: &str,
+    ) -> Result<crate::ports::controls::ChildControlReceipt, AgentSessionError> {
+        self.guide_native_child(child_id, message)
+    }
+    async fn stop_child(
+        &mut self,
+        child_id: &str,
+    ) -> Result<crate::ports::controls::ChildControlReceipt, AgentSessionError> {
+        self.stop_native_child(child_id)
+    }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let file = self.state["sessionFile"].as_str()?;
         Some(AgentPersistenceHandle {
@@ -961,6 +990,7 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        self.expire_child_controls();
         if let Some(event) = self.stream.events.pop_front() {
             return Ok(Some(event));
         }
@@ -993,7 +1023,9 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        let controls = self.clear_child_controls();
         self.stream.events.extend(self.dialogs.clear());
+        self.stream.events.extend(controls);
         self.transport.close().await
     }
 }
