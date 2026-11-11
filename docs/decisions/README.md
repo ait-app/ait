@@ -42,7 +42,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](daemon/adr-118-summary-contracts-and-persistence-configuration.md)
-- [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)
+- [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
 - [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md) 修订）
@@ -70,9 +70,9 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
 - [ADR-229：Workspace 脚本运行记录、输出与参数](workspace/adr-229-workspace-script-runs.md)
-- [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)
+- [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-217：事件驱动的 Workspace 运行时事实与低能耗 Git 读取](workspace/adr-217-event-driven-workspace-runtime.md)
-- [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md) 修订）
+- [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)
@@ -102,6 +102,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
+- [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
 - [ADR-237：OpenCode 子会话终态只读核对](providers/adr-237-opencode-child-terminal-readback.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
@@ -115,19 +117,19 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-232](providers/adr-232-agent-mcp-session-delivery.md) 修订）
 - [ADR-199：内置 Skill 随 daemon 启动分发](providers/adr-199-bundled-skill-distribution.md)
-- [ADR-198：OMP 交互等待期间持续发布事件](providers/adr-198-omp-interaction-progress.md)
+- [ADR-198：OMP 交互等待期间持续发布事件](providers/adr-198-omp-interaction-progress.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-197：MiniMax Code 原生 ACP Provider](providers/adr-197-minimax-code-acp.md)
-- [ADR-196：Provider 输出分类与每轮 Thinking 展示](providers/adr-196-provider-output-semantics.md)
+- [ADR-196：Provider 输出分类与每轮 Thinking 展示](providers/adr-196-provider-output-semantics.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-195：OpenCode 独立取消信号与确认期限](providers/adr-195-opencode-independent-cancellation.md)
-- [ADR-194：OMP 原生空闲状态核对与有界取消](providers/adr-194-omp-settlement-reconciliation.md)（经 [ADR-198](providers/adr-198-omp-interaction-progress.md) 修订）
+- [ADR-194：OMP 原生空闲状态核对与有界取消](providers/adr-194-omp-settlement-reconciliation.md)（经 [ADR-198](providers/adr-198-omp-interaction-progress.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-193：Codex 原生策略、事件与恢复兼容](providers/adr-193-codex-native-protocol-compatibility.md)
 - [ADR-192：Codex 历史按页投影后计算展示预算](providers/adr-192-codex-incremental-history-projection.md)
 - [ADR-191：Codex Provider 拥有原生实时语音](providers/adr-191-codex-native-realtime-voice.md)（经 [ADR-192](providers/adr-192-codex-incremental-history-projection.md) 修订）
-- [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](providers/adr-190-omp-acp-settlement.md)（经 [ADR-194](providers/adr-194-omp-settlement-reconciliation.md)、[ADR-198](providers/adr-198-omp-interaction-progress.md) 修订）
+- [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](providers/adr-190-omp-acp-settlement.md)（已由 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 取代）
 - [ADR-189：Pi 不暴露 Host 模式](providers/adr-189-pi-without-host-mode.md)
 - [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)（经 [ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md) 修订）
-- [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)（经 [ADR-190](providers/adr-190-omp-acp-settlement.md)、[ADR-194](providers/adr-194-omp-settlement-reconciliation.md) 修订）
-- [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)
+- [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)（经 [ADR-190](providers/adr-190-omp-acp-settlement.md)、[ADR-194](providers/adr-194-omp-settlement-reconciliation.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
+- [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
 - [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
 - [ADR-176: Pi user images in the shared timeline projection](providers/adr-176-pi-user-image-projection.md)
@@ -159,7 +161,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-099：Provider 自选辅助小模型](providers/adr-099-provider-owned-auxiliary-models.md)
 - [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
-- [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md) 修订）
+- [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md)、[ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）
 - [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)
 - [ADR-082：DeepSeek Harness 原生交互 Host](providers/adr-082-deepseek-harness-native-host.md)（经 [ADR-147](providers/adr-147-dsh-native-plugin-presets.md) 修订）

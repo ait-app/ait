@@ -11,7 +11,6 @@ use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::minimax::MiniMaxClient;
-use crate::local::omp::OmpClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::agent_session::AgentClient;
@@ -27,6 +26,7 @@ pub struct Providers {
     summary_clients: Vec<Arc<dyn AgentClient>>,
     /// Ledger that records the provider calls of auxiliary generation.
     usage_ledger: Arc<dyn UsageLedger>,
+    images: PathBuf,
 }
 
 impl Providers {
@@ -104,10 +104,8 @@ impl Providers {
             .with_image_directory(images.clone());
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
-        let omp = OmpClient::new(program("AIT_SERVER_OMP_BIN", "omp"))
-            .with_image_directory(images.clone());
         let minimax = MiniMaxClient::new(program("AIT_SERVER_MINIMAX_CODE_BIN", "mcode"))
-            .with_image_directory(images);
+            .with_image_directory(images.clone());
         if let Some(profile) = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE") {
             dsh = dsh.with_native_profile(profile);
         }
@@ -118,6 +116,7 @@ impl Providers {
             clients: Vec::new(),
             summary_clients: Vec::new(),
             usage_ledger: Arc::new(NoopUsageLedger),
+            images,
         };
         providers.add(codex);
         providers.add(claude);
@@ -125,9 +124,22 @@ impl Providers {
         providers.add(opencode);
         providers.add(dsh);
         providers.add(pi);
-        providers.add(omp);
         providers.add(minimax);
         providers
+    }
+
+    /// Add an adapter owned by another crate, built for the shared native image directory.
+    ///
+    /// `build` receives the directory where adapters store rendered native image artifacts.
+    /// Returns the assembly with the adapter appended; nothing is started or created.
+    #[must_use]
+    pub fn with<C>(mut self, build: impl FnOnce(&Path) -> C) -> Self
+    where
+        C: AgentClient + Clone + 'static,
+    {
+        let client = build(&self.images);
+        self.add(client);
+        self
     }
 
     fn add(&mut self, client: impl AgentClient + Clone + 'static) {

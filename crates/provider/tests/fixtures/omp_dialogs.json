@@ -215,11 +215,26 @@
       "id": "confirmation",
       "provider": "omp",
       "name": "extension_ui",
-      "kind": "tool",
+      "kind": "question",
       "title": "Continue?",
       "input": {
-        "title": "Continue?",
-        "message": "Run this operation?"
+        "questions": [
+          {
+            "header": "Continue?",
+            "question": "Continue?\n\nRun this operation?",
+            "answerKey": "value",
+            "options": [
+              {
+                "label": "Yes"
+              },
+              {
+                "label": "No"
+              }
+            ],
+            "multiSelect": false,
+            "allowOther": false
+          }
+        ]
       },
       "actions": [
         {
@@ -236,7 +251,12 @@
       "description": "Run this operation?"
     },
     "response": {
-      "behavior": "allow"
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Continue?": "Yes"
+        }
+      }
     },
     "nativeResponse": {
       "type": "extension_ui_response",
@@ -297,6 +317,63 @@
       "type": "extension_ui_response",
       "id": "text-input",
       "value": "User answer"
+    }
+  },
+  {
+    "name": "optional input",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "optional-input",
+      "method": "input",
+      "title": "Review notes",
+      "placeholder": "Optional comment"
+    },
+    "request": {
+      "id": "optional-input",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Optional comment",
+      "input": {
+        "questions": [
+          {
+            "header": "Optional comment",
+            "question": "Review notes",
+            "answerKey": "value",
+            "options": [],
+            "multiSelect": false,
+            "allowOther": true,
+            "placeholder": "Optional comment",
+            "allowEmpty": true,
+            "dismissLabel": "Skip"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Optional comment": "Looks good"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "optional-input",
+      "value": "Looks good"
     }
   },
   {

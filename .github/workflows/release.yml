@@ -103,7 +103,7 @@ jobs:
   # ADR-188: the hosted browser client image is deployed at the site root by ait-server.
   web-client:
     name: Publish web client image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
@@ -151,7 +151,7 @@ jobs:
       matrix:
         include:
           - label: Linux x86_64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
             platform: linux
             artifact: ait-linux-x64
@@ -317,7 +317,7 @@ jobs:
     name: Release Android to Google Play internal testing
     if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 150
     outputs:
       version: ${{ steps.plan.outputs.version }}
@@ -534,7 +534,7 @@ jobs:
     name: Start iOS internal TestFlight build
     if: ${{ !contains(inputs.tag || github.ref_name, '-') && !inputs.source_commit }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       # Xcode Cloud only compares native and package versions, so check the tag here.
@@ -568,7 +568,7 @@ jobs:
     needs: [android-play, release]
     if: needs.android-play.outputs.submitted == 'success'
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
@@ -617,7 +617,7 @@ jobs:
     name: Prepare GitHub Release
     needs: [build, windows]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.windows.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write

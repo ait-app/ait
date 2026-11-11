@@ -13,7 +13,7 @@ use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub(crate) enum AgentSessionError {
+pub enum AgentSessionError {
     /// The provider cannot currently start or resume a session.
     #[error("provider is unavailable")]
     Unavailable,
@@ -33,20 +33,20 @@ pub(crate) enum AgentSessionError {
 
 /// Provider-independent inputs required to construct or resume a native session.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct AgentSessionSpec {
+pub struct AgentSessionSpec {
     /// Provider identity.
-    pub(crate) provider: String,
+    pub provider: String,
     /// Native session working directory.
-    pub(crate) cwd: String,
+    pub cwd: String,
     /// Persistable provider configuration.
-    pub(crate) config: StoredAgentConfig,
+    pub config: StoredAgentConfig,
     /// OS write confinement for the native process tree; never persisted with the Agent.
-    pub(crate) confinement: Option<domain::workspace::sandbox::WriteConfinement>,
+    pub confinement: Option<domain::workspace::sandbox::WriteConfinement>,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentResumePurpose {
+pub enum AgentResumePurpose {
     /// Resume an active Agent for interaction.
     Interactive,
     /// Read the history of an archived Agent without claiming an interactive writer.
@@ -55,7 +55,7 @@ pub(crate) enum AgentResumePurpose {
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum AgentTurnEvent {
+pub enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
@@ -92,7 +92,7 @@ pub(crate) enum AgentTurnEvent {
 /// Live provider session. Closing releases resources without deleting native history.
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
-pub(crate) trait AgentSession: Debug + Send + Sync {
+pub trait AgentSession: Debug + Send + Sync {
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,
@@ -319,7 +319,7 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
-pub(crate) trait AgentClient: Debug + Send + Sync {
+pub trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false

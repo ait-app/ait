@@ -11,7 +11,7 @@ OMP Provider 的新建和恢复固定经过 Ait Rust ACP 引擎，底层由一�
 旧 `transport: rpc/acp` 设置仅作输入兼容，新句柄同时记录 ACP 入口与 RPC 原生后端。
 
 决策见 [ADR-190](../../../decisions/providers/adr-190-omp-acp-settlement.md)，
-[架构与兼容表](../../../architecture/omp-acp-bridge.md)记录接口及真实限制。
+架构与兼容表（`docs/architecture/omp-acp-bridge.md`，已随 ACP 桥接删除，见 Git 历史）记录接口及真实限制。
 
 ## 官方接口核对
 

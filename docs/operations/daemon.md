@@ -153,7 +153,7 @@ npm run dev:mobile
   [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
 - [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。
 - [Pi](pi.md)使用本机 `pi --mode rpc`；`AIT_SERVER_PI_BIN` 覆盖程序路径。
-- [Oh My Pi](oh-my-pi.md)通过 Ait ACP 桥接官方 RPC，支持原生 v2 传输；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
+- [Oh My Pi](oh-my-pi.md)每个 Agent 运行一个官方 `omp --mode rpc-ui` 进程，直接使用原生 RPC；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
 - [MiniMax Code](minimax-code.md)使用官方 `mcode acp`；`AIT_SERVER_MINIMAX_CODE_BIN` 覆盖程序路径。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。

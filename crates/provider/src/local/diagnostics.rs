@@ -116,7 +116,7 @@ pub(crate) async fn drain_lines(
 }
 
 /// Read only recognized error facts, preferring structured classification over message text.
-pub(crate) fn native(error: &Value, source: &'static str) -> Diagnostic {
+pub fn native(error: &Value, source: &'static str) -> Diagnostic {
     let info = error
         .get("codexErrorInfo")
         .or_else(|| error.pointer("/data/codexErrorInfo"));
@@ -211,14 +211,15 @@ struct State {
 
 /// Shared process diagnostics retain sanitized explanations separately from structured logs.
 #[derive(Debug, Clone)]
-pub(crate) struct Diagnostics {
+pub struct Diagnostics {
     provider: &'static str,
     state: Arc<Mutex<State>>,
 }
 
 impl Diagnostics {
     /// Create diagnostics for one owned native connection.
-    pub(crate) fn new(provider: &'static str) -> Self {
+    #[must_use]
+    pub fn new(provider: &'static str) -> Self {
         Self {
             provider,
             state: Arc::default(),
@@ -226,19 +227,21 @@ impl Diagnostics {
     }
 
     /// Report safe OS failure facts without formatting paths or launch arguments.
-    pub(crate) fn spawn_error(&self, error: &std::io::Error) -> AgentSessionError {
+    pub fn spawn_error(&self, error: &std::io::Error) -> AgentSessionError {
         self.observe(Diagnostic::new(Category::Unavailable, "spawn"), "spawn");
         tracing::warn!(provider = self.provider, error_kind = ?error.kind(), os_error = error.raw_os_error(), "Native provider spawn failed");
         AgentSessionError::Unavailable
     }
 
     /// Read the last non-retrying failure, with specific causes preferred over stream closure.
-    pub(crate) fn failure(&self) -> Option<Diagnostic> {
+    #[must_use]
+    pub fn failure(&self) -> Option<Diagnostic> {
         self.state.lock().ok().and_then(|state| state.failure)
     }
 
     /// Return a bounded, sanitized explanation copied from this connection's error fields.
-    pub(crate) fn message(&self) -> Option<String> {
+    #[must_use]
+    pub fn message(&self) -> Option<String> {
         let state = self.state.lock().ok()?;
         let message = state.explanation.message()?;
         let category = state.failure?.category;
@@ -252,13 +255,13 @@ impl Diagnostics {
     }
 
     /// Inspect an explicit native error, retaining its safe explanation without logging it.
-    pub(crate) fn observe_native(&self, error: &Value, source: &'static str, operation: &str) {
+    pub fn observe_native(&self, error: &Value, source: &'static str, operation: &str) {
         self.record(native(error, source), operation, true, Some(error));
     }
 
     /// Retain an adapter-owned explanation with its known failure class.
     /// `message` must describe the protocol failure without copying payloads or tool inputs.
-    pub(crate) fn observe_failure(&self, diagnostic: Diagnostic, message: &str, operation: &str) {
+    pub fn observe_failure(&self, diagnostic: Diagnostic, message: &str, operation: &str) {
         self.record(
             diagnostic,
             operation,
@@ -268,7 +271,7 @@ impl Diagnostics {
     }
 
     /// Clear failure facts before a new turn; repeated log aggregation remains bounded.
-    pub(crate) fn clear(&self) {
+    pub fn clear(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.failure = None;
             state.explanation.clear();
@@ -319,7 +322,7 @@ impl Diagnostics {
     }
 
     /// Record a safe error and aggregate repeats rather than logging native messages.
-    pub(crate) fn observe(&self, diagnostic: Diagnostic, operation: &str) {
+    pub fn observe(&self, diagnostic: Diagnostic, operation: &str) {
         self.record(diagnostic, operation, true, None);
     }
 
@@ -385,7 +388,7 @@ impl Diagnostics {
     }
 
     /// Flush aggregate counts on normal shutdown.
-    pub(crate) fn flush(&self) {
+    pub fn flush(&self) {
         if let Ok(mut state) = self.state.lock() {
             if let Some((previous, _)) = state.logged.take()
                 && state.suppressed > 0
@@ -412,7 +415,7 @@ impl Diagnostics {
     }
 
     /// Drain stderr continuously with bounded line memory, retaining only recognized classes.
-    pub(crate) async fn drain(self, output: impl AsyncRead + Unpin) {
+    pub async fn drain(self, output: impl AsyncRead + Unpin) {
         drain_lines(output, |line| self.line(line)).await;
     }
 

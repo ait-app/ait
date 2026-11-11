@@ -23,6 +23,7 @@ browser.workspace = true
 voice.workspace = true
 terminal.workspace = true
 provider.workspace = true
+provider-omp.workspace = true
 filesystem.workspace = true
 metadata.workspace = true
 model.workspace = true

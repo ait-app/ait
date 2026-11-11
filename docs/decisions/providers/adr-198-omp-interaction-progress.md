@@ -7,11 +7,14 @@ amends:
   - providers/adr-194-omp-settlement-reconciliation.md
 paths:
   - crates/provider
+  - crates/provider-omp
 ---
 
 # ADR-198：OMP 交互等待期间持续发布事件
 
 - 修订：[ADR-190](adr-190-omp-acp-settlement.md) 的异步交互和 [ADR-194](adr-194-omp-settlement-reconciliation.md) 的状态核对。
+- 后续修订：[ADR-248](adr-248-omp-paseo-native-rpc.md) 修订第 3 条：工具审批按 Paseo 的标题规则识别，
+  `confirm` 为 Yes/No 问题，`ask` 字段由回放状态机回答。ADR-190 已被 ADR-248 取代。
 
 ## 背景
 
