@@ -1,8 +1,6 @@
 //! Epoch isolation, contradictory state and bounded user cancellation.
 use super::*;
-use crate::tests::{
-    calls_after, complete, confinement, count, fixture, fixture_with, launches, next,
-};
+use crate::tests::{calls_after, complete, confinement, count, fixture, launches, next};
 
 fn with_fast(config: &StoredAgentConfig) -> StoredAgentConfig {
     StoredAgentConfig {
@@ -703,7 +701,7 @@ async fn write_confinement_survives_a_restart() {
     let outside = tempfile::tempdir_in(build).unwrap();
     let probe = outside.path().join("written-outside");
     let (root, client, mut spec) =
-        fixture_with(&[("OMP_FIXTURE_WRITE_PROBE", probe.to_str().unwrap())]);
+        crate::tests::fixture_with(&[("OMP_FIXTURE_WRITE_PROBE", probe.to_str().unwrap())]);
     std::fs::create_dir_all(root.path().join(".git")).unwrap();
     spec.confinement = confinement(root.path());
     let mut session = open(&client, &spec, None).await.unwrap();
@@ -727,7 +725,7 @@ async fn write_confinement_survives_a_restart() {
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn a_confined_session_writes_its_state_but_not_omp_configuration() {
-    let (root, client, mut spec) = fixture_with(&[("OMP_FIXTURE_STATE_PROBE", "1")]);
+    let (root, client, mut spec) = crate::tests::fixture_with(&[("OMP_FIXTURE_STATE_PROBE", "1")]);
     std::fs::create_dir_all(root.path().join(".git")).unwrap();
     let config = root.path().join("agent/config.yml");
     std::fs::create_dir_all(root.path().join("agent")).unwrap();

@@ -1,6 +1,7 @@
 use super::*;
 
 mod commands;
+#[cfg(target_os = "macos")]
 mod confinement;
 mod images;
 mod interactions;
