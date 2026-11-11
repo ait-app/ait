@@ -63,6 +63,15 @@
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。共享的 slash 命令发现路径
   不传入写入限制（[ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md)）。
+- OMP 命令目录携带真实来源（builtin/plugin/skill/template/project）、别名与元数据参数提示；
+  完整所有权与 menu 可展示性分开；仅全部 claimant 明确为 builtin 时拒绝被屏蔽名称，
+  同名插件与未知来源保留原生调度。typed、input-correlated 拒绝在输入/中断前结算既有 receipt，
+  不启动输入或关闭 writer，不消费无关事件。目录/补全请求在已注册 OMP Agent 的会话 lane
+  串行；草稿用无会话探测，不创建 Agent。客户端按连接/provider/cwd/native session 隔离缓存，
+  native 目录更新主动使目录/补全查询失效；未加载 ownership 不执行客户端快捷命令。
+  原生编辑器补全按 ready 帧 `commandCompletion` 协商，旧运行时回退目录；
+  已支持但零候选时隐藏菜单；UTF-16 编辑在 adapter 边界一次性校验
+  （[ADR-242](../decisions/providers/adr-242-native-command-provenance-and-completion.md)，提议中）。
 
 ## 时间线与历史投影
 

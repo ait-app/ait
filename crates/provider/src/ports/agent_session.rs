@@ -31,6 +31,15 @@ pub(crate) enum AgentSessionError {
     History(super::native_history::HistoryError),
 }
 
+/// Definitive refusal of one input before any native write, independent of display identity.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct InputRefusal {
+    /// Correlation supplied by the caller; `None` only for non-receipted internal calls.
+    pub(crate) message_id: Option<String>,
+    /// Adapter-authored explanation, rendered without starting a foreground turn.
+    pub(crate) note: crate::protocol::timeline::NativeItem,
+}
+
 /// Provider-independent inputs required to construct or resume a native session.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AgentSessionSpec {
@@ -56,6 +65,8 @@ pub(crate) enum AgentResumePurpose {
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum AgentTurnEvent {
+    /// Native command ownership changed; consumers must discard cached catalogs/completions.
+    CommandsChanged,
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
@@ -91,6 +102,15 @@ pub(crate) enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub(crate) trait AgentSession: Debug + Send + Sync {
+    /// Refuse an input using the current session's ownership facts, without native I/O.
+    /// Returning a refusal guarantees that this input has not been submitted.
+    fn input_refusal(
+        &self,
+        _prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Option<InputRefusal> {
+        None
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,
@@ -177,6 +197,24 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         _prompt: &crate::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         Err(AgentSessionError::Rejected)
+    }
+    /// Complete editor input without admitting a prompt or executing a command.
+    /// # Errors
+    /// Returns unsupported for adapters without native completion; native errors remain errors.
+    async fn complete_commands(
+        &mut self,
+        _input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
+    }
+    /// Refresh this session's native command directory without admitting input.
+    /// `None` keeps isolated provider discovery; native read failures remain errors.
+    /// # Errors
+    /// Returns native catalog read failures without changing prompt admission.
+    async fn refresh_commands(
+        &mut self,
+    ) -> Result<Option<Vec<serde_json::Value>>, AgentSessionError> {
+        Ok(None)
     }
     /// Current verified native descendants observed by this live session.
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
@@ -400,6 +438,11 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     fn handles_out_of_band(&self, _text: &str) -> bool {
         false
     }
+    /// Whether command discovery for registered Agents reads their live session owner.
+    /// Other adapters keep isolated discovery so catalog reads cannot block their native turn.
+    fn supports_session_commands(&self) -> bool {
+        false
+    }
     /// Restore durable session-scoped questions without opening a native writer.
     /// Native tool approvals are deliberately excluded because their transport has expired.
     fn persisted_permissions(&self, _handle: &AgentPersistenceHandle) -> Vec<serde_json::Value> {
@@ -484,6 +527,17 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         _spec: &AgentSessionSpec,
     ) -> Result<Vec<serde_json::Value>, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
+    }
+
+    /// Complete editor input for an unregistered draft without creating an Agent.
+    /// # Errors
+    /// Returns unsupported when the native runtime lacks the completion capability.
+    async fn complete_commands(
+        &self,
+        _spec: &AgentSessionSpec,
+        _input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
     }
 
     /// Discover native child-parent links without registering host Agents.

@@ -1,67 +1,120 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  type AgentCommandsClient,
-  type DraftCommandConfig,
   fetchAgentCommands,
+  useAgentCommandsQuery,
+  type AgentSlashCommand,
 } from "./use-agent-commands-query";
 
-type ListCommands = AgentCommandsClient["listCommands"];
-type ListCommandsResult = Awaited<ReturnType<ListCommands>>;
+const runtime = vi.hoisted(() => ({
+  client: { listCommands: vi.fn() },
+  context: { provider: "omp", cwd: "/repo", nativeSessionId: "one" },
+}));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => runtime.client,
+  useHostRuntimeIsConnected: () => true,
+}));
+vi.mock("./use-agent-command-context", () => ({ useAgentCommandContext: () => runtime.context }));
+vi.mock("@/components/retained-panel", () => ({ useRetainedPanelActive: () => true }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
-interface ListCommandsCall {
+let root: Root | undefined;
+let host: HTMLElement | undefined;
+let cache: QueryClient;
+let ownership: AgentSlashCommand[] | undefined;
+let readOwnership: () => AgentSlashCommand[] | undefined;
+function Probe() {
+  const result = useAgentCommandsQuery({ serverId: "host", agentId: "agent" });
+  ownership = result.ownership;
+  readOwnership = result.readOwnership;
+  return null;
+}
+async function render() {
+  if (!root) {
+    host = document.createElement("div");
+    root = createRoot(host);
+    cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  }
+  await act(async () => {
+    root?.render(createElement(QueryClientProvider, { client: cache }, createElement(Probe)));
+  });
+}
+interface CatalogResponse {
+  requestId: string;
   agentId: string;
-  draftConfig: DraftCommandConfig | undefined;
+  error: string | null;
+  commands: AgentSlashCommand[];
 }
-
-interface FakeAgentCommandsClient extends AgentCommandsClient {
-  calls: ListCommandsCall[];
-}
-
-function createClient(response: ListCommandsResult): FakeAgentCommandsClient {
-  const calls: ListCommandsCall[] = [];
+function payload(name?: string): CatalogResponse {
   return {
-    calls,
-    listCommands: (async (options: Parameters<ListCommands>[0]) => {
-      calls.push({ agentId: options.agentId, draftConfig: options.draftConfig });
-      return response;
-    }) as ListCommands,
-  };
-}
-
-function commandsPayload(commands: ListCommandsResult["commands"]): ListCommandsResult {
-  return {
-    requestId: "req_commands",
-    agentId: "",
+    requestId: "request",
+    agentId: "agent",
     error: null,
-    commands,
+    commands: name ? [{ name, description: "native", argumentHint: "", source: "plugin" }] : [],
   };
 }
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  root = undefined;
+  host?.remove();
+  cache?.clear();
+  runtime.context = { provider: "omp", cwd: "/repo", nativeSessionId: "one" };
+  runtime.client = { listCommands: vi.fn() };
+});
 
-describe("fetchAgentCommands", () => {
-  it("loads commands for a draft composer without an agent id", async () => {
-    const client = createClient(
-      commandsPayload([{ name: "compact", description: "Compact context", argumentHint: "" }]),
-    );
-
-    const draftConfig: DraftCommandConfig = {
-      provider: "opencode",
-      cwd: "/repo",
-      modeId: "build",
-    };
-
-    const commands = await fetchAgentCommands({ client, agentId: "", draftConfig });
-
-    expect(commands).toEqual([
-      { name: "compact", description: "Compact context", argumentHint: "" },
-    ]);
-    expect(client.calls).toEqual([{ agentId: "", draftConfig }]);
+describe("command ownership discovery", () => {
+  it("distinguishes unloaded ownership from a successful empty catalog", async () => {
+    const { promise, resolve } = Promise.withResolvers<CatalogResponse>();
+    runtime.client.listCommands.mockReturnValue(promise);
+    await render();
+    expect(ownership).toBeUndefined();
+    await act(async () => resolve(payload()));
+    await vi.waitFor(() => expect(ownership).toEqual([]));
   });
 
-  it("passes the agent id when fetching commands for a running agent", async () => {
-    const client = createClient(commandsPayload([]));
+  it("revokes action-time ownership immediately on invalidation, before a rerender", async () => {
+    runtime.client.listCommands.mockResolvedValue(payload());
+    await render();
+    await vi.waitFor(() => expect(readOwnership()).toEqual([]));
+    const readAtClick = readOwnership;
+    await act(async () => {
+      const invalidation = cache.invalidateQueries({ refetchType: "none" });
+      expect(readAtClick()).toBeUndefined();
+      await invalidation;
+    });
+    runtime.client.listCommands.mockResolvedValue(payload("clear"));
+    await act(async () => {
+      await cache.refetchQueries();
+    });
+    expect(readAtClick()?.[0]?.name).toBe("clear");
+  });
 
-    await fetchAgentCommands({ client, agentId: "agent-1" });
+  it.each(["cwd", "nativeSessionId", "provider", "client"])(
+    "fences a late catalog after %s changes",
+    async (field) => {
+      const { promise, resolve } = Promise.withResolvers<CatalogResponse>();
+      runtime.client.listCommands.mockReturnValueOnce(promise);
+      await render();
+      if (field === "client")
+        runtime.client = { listCommands: vi.fn().mockResolvedValue(payload("current")) };
+      else {
+        runtime.context = { ...runtime.context, [field]: "changed" };
+        runtime.client.listCommands.mockResolvedValue(payload("current"));
+      }
+      await render();
+      await vi.waitFor(() => expect(ownership?.[0]?.name).toBe("current"));
+      await act(async () => resolve(payload("stale")));
+      expect(ownership?.[0]?.name).toBe("current");
+    },
+  );
 
-    expect(client.calls).toEqual([{ agentId: "agent-1", draftConfig: undefined }]);
+  it("does not interpret a failed discovery as an empty ownership catalog", async () => {
+    runtime.client.listCommands.mockResolvedValue({ ...payload(), error: "catalog unavailable" });
+    await expect(fetchAgentCommands({ client: runtime.client, agentId: "agent" })).rejects.toThrow(
+      "catalog unavailable",
+    );
   });
 });

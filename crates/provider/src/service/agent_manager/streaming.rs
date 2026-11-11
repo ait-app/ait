@@ -83,6 +83,24 @@ async fn settle_failure(
     persist_failure(timeline, id, agent)
 }
 
+fn publish_commands_changed(
+    timeline: Option<&crate::storage::timeline::Timeline>,
+    id: &str,
+    provider: &str,
+) {
+    if let Some(timeline) = timeline {
+        timeline.events().publish(
+            id,
+            "agent_stream",
+            &serde_json::json!({
+                "agentId": id,
+                "event": {"type": "commands_changed", "provider": provider},
+                "timestamp": now_timestamp(),
+            }),
+        );
+    }
+}
+
 pub(super) async fn drain(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
@@ -90,11 +108,8 @@ pub(super) async fn drain(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
-    agent
-        .session
-        .service_realtime()
-        .await
-        .map_err(super::map_session)?;
+    let realtime = agent.session.service_realtime().await;
+    realtime.map_err(super::map_session)?;
     checkpoint_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
@@ -109,6 +124,10 @@ pub(super) async fn drain(
             };
         }
         let result = match &agent.pending {
+            Some(AgentTurnEvent::CommandsChanged) => {
+                publish_commands_changed(timeline, id, &agent.record.provider);
+                Ok(())
+            }
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
             Some(AgentTurnEvent::Started(turn)) => {
                 persist_started(registry, timeline, id, agent, turn)
@@ -417,6 +436,7 @@ impl AgentManager {
         if record.archived_at.is_some() {
             return Err(AgentManagerError::Busy);
         }
+        self.check_input_refusal(agent_id, prompt)?;
         let agent = self
             .live
             .get_mut(agent_id)

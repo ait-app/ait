@@ -253,6 +253,8 @@ pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
         .ok_or(AgentSessionError::Failed)
 }
 
+/// Project the native command catalog with real provenance, aliases and metadata hints.
+/// Returns failed for malformed or oversized native directories.
 pub(super) fn commands(value: &Value) -> Result<Vec<Value>, AgentSessionError> {
     value["commands"]
         .as_array()
@@ -260,11 +262,23 @@ pub(super) fn commands(value: &Value) -> Result<Vec<Value>, AgentSessionError> {
         .ok_or(AgentSessionError::Failed)?
         .iter()
         .map(|entry| {
-            Ok(
-                json!({"name":text(entry,"name")?,"description":entry["description"].as_str()
-                .unwrap_or_default(),"argumentHint":entry["input"]["hint"].as_str().unwrap_or_default(),
-                "kind":if entry["source"]=="skill"{"skill"}else{"command"}}),
-            )
+            let name = text(entry, "name")?;
+            let mut command = json!({
+                "name": name,
+                "description": entry["description"].as_str().unwrap_or_default(),
+                "argumentHint": entry["input"]["hint"].as_str().unwrap_or_default(),
+                "kind": if entry["source"] == "skill" {"skill"} else {"command"},
+            });
+            if let Some(source) = entry["source"].as_str().filter(|source| !source.is_empty()) {
+                command["source"] = json!(source);
+            }
+            if let Some(aliases) = entry["aliases"]
+                .as_array()
+                .filter(|aliases| !aliases.is_empty() && aliases.iter().all(Value::is_string))
+            {
+                command["aliases"] = json!(aliases);
+            }
+            Ok(command)
         })
         .collect()
 }

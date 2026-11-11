@@ -104,6 +104,7 @@ import type {
   ArchiveWorkspaceResponseMessage,
   WorkspaceSetupStatusResponseMessage,
   ListCommandsResponse,
+  CompleteCommandsResponse,
   ListProviderFeaturesResponseMessage,
   ListProviderModelsResponseMessage,
   ListProviderModesResponseMessage,
@@ -5436,6 +5437,25 @@ export class DaemonClient {
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
       responseType: "agent.commands.list.response",
+    });
+  }
+
+  /** Query native editor completion without submitting a prompt or running a command. */
+  async completeCommands(
+    options: ListCommandsOptions & { text: string; cursor: number },
+  ): Promise<CompleteCommandsResponse["payload"]> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "agent.commands.complete.request",
+        agentId: options.agentId,
+        ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
+        text: options.text,
+        cursor: options.cursor,
+      },
+      responseType: "agent.commands.complete.response",
+      // Drafts and inactive sessions may first start the provider's read-only runtime.
+      timeout: 30000,
     });
   }
 

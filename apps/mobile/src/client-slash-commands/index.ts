@@ -43,9 +43,28 @@ for (const command of CLIENT_SLASH_COMMANDS) {
   }
 }
 
+/**
+ * A native catalog entry owns its name across every provider; client shortcuts must not
+ * intercept it. Precedence comes from the actual catalog, never a provider-id table or
+ * native payload parsing.
+ */
+export function nativeCommandOwnsName(
+  commandName: string,
+  nativeCommands: ReadonlyArray<{ name: string; aliases?: string[] }> | undefined,
+): boolean {
+  return (
+    nativeCommands?.some(
+      (entry) =>
+        entry.name === commandName ||
+        entry.aliases?.some((alias) => alias.replace(/:+$/u, "") === commandName) === true,
+    ) ?? false
+  );
+}
+
 export function resolveClientSlashCommand(input: {
   text: string;
   hasAttachments: boolean;
+  nativeCommands?: ReadonlyArray<{ name: string; aliases?: string[] }>;
 }): ClientSlashCommand | null {
   if (input.hasAttachments) {
     return null;
@@ -58,6 +77,9 @@ export function resolveClientSlashCommand(input: {
 
   const commandName = trimmed.slice(1);
   if (!commandName || /\s/.test(commandName)) {
+    return null;
+  }
+  if (!input.nativeCommands || nativeCommandOwnsName(commandName, input.nativeCommands)) {
     return null;
   }
 

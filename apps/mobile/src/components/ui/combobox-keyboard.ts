@@ -1,3 +1,5 @@
+import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
+
 export function getNextActiveIndex(args: {
   currentIndex: number;
   itemCount: number;
@@ -15,4 +17,14 @@ export function getNextActiveIndex(args: {
   return key === "ArrowDown"
     ? (normalizedCurrent + 1) % itemCount
     : (normalizedCurrent - 1 + itemCount) % itemCount;
+}
+
+/** Menu navigation yields to text editing and IME; only its own search uses arrow navigation. */
+export function shouldHandleComboboxKey(event: KeyboardEvent): boolean {
+  if (isImeComposingKeyboardEvent(event)) return false;
+  if (event.key === "Escape") return true;
+  const target = event.target;
+  if (!(target instanceof Element)) return true;
+  const editor = target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+  return !editor || Boolean(target.closest("[data-combobox-search]"));
 }

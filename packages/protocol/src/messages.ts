@@ -733,6 +733,10 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
 
 export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("commands_changed"),
+    provider: AgentProviderSchema,
+  }),
+  z.object({
     type: z.literal("thread_started"),
     sessionId: z.string(),
     provider: AgentProviderSchema,
@@ -2895,6 +2899,15 @@ export const ListCommandsRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CompleteCommandsRequestSchema = z.object({
+  type: z.literal("agent.commands.complete.request"),
+  agentId: z.string(),
+  draftConfig: ListCommandsDraftConfigSchema.optional(),
+  text: z.string().max(65536),
+  cursor: z.number().int().nonnegative(),
+  requestId: z.string(),
+});
+
 export const RegisterPushTokenMessageSchema = z.object({
   type: z.literal("push.register"),
   token: z.string(),
@@ -3258,6 +3271,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
   ListCommandsRequestSchema,
+  CompleteCommandsRequestSchema,
   RegisterPushTokenMessageSchema,
   PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
@@ -3527,6 +3541,8 @@ export const ServerInfoStatusPayloadSchema = z
         pluginTimelineItems: z.boolean().optional(),
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
+        // COMPAT(agentCommandCompletion): added in v0.2.8, remove gate after 2027-05-11.
+        agentCommandCompletion: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -6309,6 +6325,11 @@ const AgentSlashCommandSchema = z.object({
   description: z.string(),
   argumentHint: z.string(),
   kind: z.enum(["command", "skill"]).optional().catch("command"),
+  // Native provenance and aliases; absent on hosts that predate provenance-aware discovery.
+  aliases: z.array(z.string()).optional(),
+  source: z.string().optional(),
+  menuVisible: z.boolean().optional(),
+  menuAliases: z.array(z.string()).optional(),
 });
 
 export const ListCommandsResponseSchema = z.object({
@@ -6320,6 +6341,34 @@ export const ListCommandsResponseSchema = z.object({
     requestId: z.string(),
   }),
 });
+
+export const CommandCompletionItemSchema = z.object({
+  id: z.string().min(1).max(256),
+  label: z.string().max(8192),
+  insertText: z.string().max(65536),
+  replaceRange: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  }),
+  description: z.string().optional(),
+  detail: z.string().optional(),
+  hint: z.string().optional(),
+  kind: z.string().optional(),
+  cursor: z.number().int().nonnegative().optional(),
+  triggerCompletion: z.boolean().default(false),
+});
+
+export const CompleteCommandsResponseSchema = z.object({
+  type: z.literal("agent.commands.complete.response"),
+  payload: z.object({
+    agentId: z.string(),
+    supported: z.boolean(),
+    items: z.array(CommandCompletionItemSchema).max(256),
+    requestId: z.string(),
+  }),
+});
+
+export type CommandCompletionItem = z.infer<typeof CommandCompletionItemSchema>;
 
 // ============================================================================
 // Terminal Outbound Messages
@@ -6719,6 +6768,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ListCommandsResponseSchema,
+  CompleteCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
   CreateTerminalResponseSchema,
@@ -7142,6 +7192,8 @@ export type ClearAgentAttentionResponseMessage = z.infer<
 export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;
 export type ListCommandsRequest = z.infer<typeof ListCommandsRequestSchema>;
 export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
+export type CompleteCommandsRequest = z.infer<typeof CompleteCommandsRequestSchema>;
+export type CompleteCommandsResponse = z.infer<typeof CompleteCommandsResponseSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
 export type PushUnregisterRequest = z.infer<typeof PushUnregisterRequestSchema>;
 export type PushUnregisterResponse = z.infer<typeof PushUnregisterResponseSchema>;

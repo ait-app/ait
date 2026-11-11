@@ -133,6 +133,7 @@ export function serverInfo(
       ].every(has),
       daemonDiagnostics: has("diagnostics.request"),
       skillManagement: has("agent.skills.get_status.request"),
+      agentCommandCompletion: has("agent.commands.complete.request"),
       pushTokenRevocation: has("push.unregister.request"),
       workspaceFileEditing: has("fs.file.write.request"),
       projectAdd: has("project.add.request"),

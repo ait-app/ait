@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- OMP slash menus now show each command's real source (builtin, plugin, skill, template or project). Plugins that share a builtin or Ait shortcut name keep their native behavior; GUI-owned, terminal-only and undelivered builtins are refused without starting input or interrupting an active turn. Argument hints come from native metadata and never enter drafts, submissions, copies or history. Native editor completion is used when advertised; older runtimes fall back to catalog filtering, while supported completion with no candidates hides the menu. Command ownership follows the current connection, provider, directory and native session.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.

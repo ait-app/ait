@@ -1,6 +1,7 @@
 use super::*;
 
 mod boundary;
+mod commands;
 mod interactions;
 mod settlement;
 

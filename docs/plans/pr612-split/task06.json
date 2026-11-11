@@ -1,0 +1,158 @@
+{
+  "id": "06",
+  "title": "Native command provenance and completion",
+  "priority": 6,
+  "depends_on": ["00", "01"],
+  "donor_sections": [8, 22, 27, 33],
+  "donor_paths": [
+    "apps/mobile/src/client-slash-commands/index.ts",
+    "apps/mobile/src/components/ui/autocomplete.tsx",
+    "apps/mobile/src/components/ui/combobox-keyboard.ts",
+    "apps/mobile/src/components/ui/combobox.tsx",
+    "apps/mobile/src/composer/actions.ts",
+    "apps/mobile/src/composer/command-argument-hint.ts",
+    "apps/mobile/src/composer/index.tsx",
+    "apps/mobile/src/composer/inline-command-hint.tsx",
+    "apps/mobile/src/composer/input/input.tsx",
+    "apps/mobile/src/composer/submit.ts",
+    "apps/mobile/src/hooks/use-agent-autocomplete.ts",
+    "apps/mobile/src/hooks/use-agent-command-completions-query.ts",
+    "apps/mobile/src/hooks/use-agent-command-context.ts",
+    "apps/mobile/src/hooks/use-agent-commands-query.ts",
+    "apps/mobile/src/utils/native-command-completion.ts",
+    "crates/api/src/capabilities/tests.rs",
+    "crates/api/src/connection/validation/tests.rs",
+    "crates/api/src/tests.rs",
+    "crates/provider/src/dispatch/agent_execution.rs",
+    "crates/provider/src/dispatch/requests.rs",
+    "crates/provider/src/local/omp/commands.rs",
+    "crates/provider/src/local/omp/completion.rs",
+    "crates/provider/src/local/omp/config.rs",
+    "crates/provider/src/local/omp/session.rs",
+    "crates/provider/src/local/omp/transport.rs",
+    "crates/provider/src/ports/agent_session.rs",
+    "crates/provider/src/protocol/commands.rs",
+    "crates/provider/src/protocol/controls.rs",
+    "crates/provider/src/rpc/agent_execution.rs",
+    "crates/provider/src/rpc/agent_execution/controls.rs",
+    "crates/provider/src/service/agent_execution/operation.rs",
+    "crates/provider/src/service/agent_execution/routing.rs",
+    "crates/provider/src/service/agent_manager/controls.rs",
+    "docs/architecture/provider.md",
+    "docs/operations/oh-my-pi.md",
+    "packages/client/src/daemon-client.ts",
+    "packages/client/src/protocol/messages.ts",
+    "packages/client/src/protocol/methods.ts",
+    "packages/protocol/src/messages.ts"
+  ],
+  "implementation": "Discover commands/completion by host/provider/cwd/native session and actual source. Keep plugin/skill/template/project commands; reject blocked builtins without navigation or model forwarding. Selective rewrite of donor sections 8/22/27/33 only: no builtin query handlers, generic native_action gateway, Pending/Admission/JoinSet framework, presets/roles/BTW/Vibe imports, or Task31 OpenCode changes. AgentSession::input_refusal returns a typed, input-correlated pre-admission fact. Manager settlement appends its explanation without scanning provider events or starting/interruption of a native turn; existing durable receipts settle Rejected. First delivery and replay return invalid_message. Catalog and completion keys include connection identity and provider/cwd/native session; native commands_changed events cancel and invalidate both queries. Unloaded/invalidated ownership never permits destructive client shortcuts. Supported empty native completion hides the menu.",
+  "acceptance": "Same-name plugin collisions survive builtin filtering; metadata-derived hints never enter submitted/copied/saved text; draft queries create no agent; completion and execution preserve source ownership and downgrade.",
+  "status": "in_progress",
+  "branch": "feat/pr612-task06-command-provenance",
+  "base": {
+    "kind": "stacked-task01",
+    "commit": "22efa58f615dab8a37fd3c76c43566581b320dae",
+    "branch": "refactor/pr612-omp-native-boundary",
+    "note": "Published task01 head (PR651) containing verified source 92abc77dbede57caf4c4b4bf1be7076982ffea48 plus its migration docs commit. Task01 is skipped by explicit user decision; its verified dependency code remains required. Unverified macOS signing/notarization is outside task06 acceptance, not a downstream blocker or a completed claim."
+  },
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "check": "cargo test -p provider --lib commands (policy unit, fixture session behavior, installed OMP gated)",
+        "result": "integration rerun: 74 passed / 0 failed / 5 ignored (1739 filtered out)"
+      },
+      {
+        "check": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test -p provider --lib installed_omp_catalog_keeps_provenance -- --ignored",
+        "result": "2 passed on official OMP 18.17.0 with AIT_TEST_OMP_BIN: catalog provenance, managed-builtin refusal, extension claims over blocked names, completion capability absent => supported:false"
+      },
+      {
+        "check": "cargo test -p api",
+        "result": "259 passed / 0 failed / 0 ignored"
+      },
+      {
+        "check": "protocol/client/mobile vitest + typecheck",
+        "result": "protocol messages.omp-commands 4 passed; client protocol connection+messages 97 passed; mobile 8 files / 56 passed; tsgo clean for protocol, client and mobile"
+      },
+      {
+        "check": "real OMP 18.17.0 same-name plugin probe (isolated PI_CODING_AGENT_DIR, loopback fixture model, no inference)",
+        "result": "extension command goal surfaces source:extension with input.hint; /goal plugin argument executes natively once (agentInvoked:false, custom message GOAL-PLUGIN-NATIVE-OK, sessionSettled:true). Official builtin registry wins direct builtin-name collisions (plugin model stays source:builtin), so fixture tests cover that semantics; real-runtime proof uses host-feature name goal absent from 18.17.0 builtins"
+      },
+      {
+        "check": "npm run check:docs + ADR index",
+        "result": "integration rerun: 561 Markdown documents and 224 ADR metadata entries verified; ADR-242 remains proposed"
+      },
+      {
+        "check": "browser real-provider e2e omp-command-provenance.real.spec.ts",
+        "result": "1 passed against installed OMP 18.17.0 (Playwright real-provider project, isolated HOME/XDG/TMPDIR, loopback fixture model, no inference): /compact listed while /model hidden, /new extension menu accept via keyboard, NEW-PLUGIN-NATIVE-OK native dispatch without navigation, /record and /goal plugin dispatch, builtin /model refused with readable text, /compact argument hint from native metadata with draft unchanged."
+      },
+      {
+        "check": "cargo fmt --all --check / clippy -p provider -p api --all-targets -D warnings",
+        "result": "rustfmt --edition 2024 --check on all 30 changed Rust files: clean. clippy -p provider -p api --lib --tests --no-deps -D warnings -A clippy::assert_is_empty: clean. Every reported diagnostic under system rustc 1.99.1 without that allowance is pre-existing test-code style drift on lines identical to base 22efa58f (clippy::assert_is_empty, new in this toolchain); crates/schedule and crates/filesystem dependency lints are also pre-existing and outside task06 files. Pinned 1.98.1 toolchain is unavailable (no rustup)."
+      },
+      {
+        "check": "integration: npm run typecheck (apps/mobile)",
+        "result": "tsgo --noEmit clean for apps/mobile, packages/protocol and packages/client after final restore"
+      },
+      {
+        "check": "integration: npx --no-install vitest run src/client-slash-commands/index.test.ts src/hooks/agent-commands-query.test.ts src/hooks/use-agent-commands-query.test.ts src/hooks/use-agent-autocomplete.test.ts src/composer/command-argument-hint.test.ts src/utils/native-command-completion.test.ts src/components/ui/combobox-editing.test.ts src/components/ui/combobox-keyboard.test.ts",
+        "result": "8 files / 56 tests passed on the final tree"
+      },
+      {
+        "check": "/tmp/ait-discovery-tai/cargo-sem test -p provider --lib command_refusal",
+        "result": "3 passed: arbitrary display identity, typed current-input correlation, Rejected receipt and replay, Idle settlement, active-turn preservation under Steer and Interrupt, no native input/close, unrelated event retained and subsequently rendered"
+      },
+      {
+        "check": "integration real-runtime smoke: /usr/bin/omp --version; isolated rpc-ui --no-session --provider ait-local-fixture --model fixture, negotiate_protocol v2, get_available_commands, prompt /new exact-argument",
+        "result": "OMP 18.17.0: sole /new claimant source=extension, native output NEW-PLUGIN-NATIVE-OK:exact-argument, sessionSettled=true, agentInvoked=false. commandCompletion absent. Loopback-only model; no inference. Temporary fixture removed. Browser Ait routing proof still required."
+      },
+      {
+        "check": "integration: npx --no-install vitest run src/hooks/use-agent-commands-query.test.ts (apps/mobile)",
+        "result": "7 passed after adding action-time invalidation regression: invalidation revokes previously captured ownership before React rerenders; refetch restores current native ownership"
+      },
+      {
+        "check": "integration: npx --no-install vitest run src/messages.omp-commands.test.ts (packages/protocol)",
+        "result": "4 passed"
+      },
+      {
+        "check": "integration: npx --no-install oxlint on 13 modified integration JS/TS files",
+        "result": "final full changed-file lint: 31 files, 0 warnings / 0 errors via oxlint --deny-warnings and npm run check:ui"
+      },
+      {
+        "check": "integration: npm run check:ui + oxfmt --check on changed UI/config files",
+        "result": "check:ui checked lint for 31 changed UI/config files, 0 warnings / 0 errors; oxfmt reports all matched files correctly formatted"
+      },
+      {
+        "check": "integration runtime smoke: target/debug/daemon rebuilt from final sources + installed OMP 18.17.0 with isolated HOME/PI_CODING_AGENT_DIR and loopback fixture model",
+        "result": "agentCommandCompletion negotiated true; catalog reports goal source=extension and builtin /model ownership present with menuVisible=false; completeCommands returns supported:false with zero items (no false completion claim); /goal plugin produced GOAL-PLUGIN-NATIVE-OK:reach-the-goal natively; /model returned invalid_message and the refusal note 'Use Ait's model selector. The builtin /model command is disabled in Ait.' without a model turn"
+      },
+      {
+        "check": "known pre-existing defect outside task06 (recorded, not claimed fixed): composer menu pointer accept on web",
+        "result": "At base 22efa58f and on this branch alike, clicking an autocomplete row reaches selection and replaceText yet the DOM value and draft stay unchanged; the keyboard accept path applies correctly. Reproduced on the base worktree with base hook+composer, so it is not a task06 regression. The e2e spec therefore drives the supported keyboard path; fixing package-level pointer accept is out of task06 scope and is reported as a blocker for interactive pointer accept, not as a passing claim."
+      }
+    ]
+  },
+  "blockers": [
+    {
+      "kind": "pre_existing_defect_outside_scope",
+      "detail": "Autocomplete row pointer accept does not update the web composer draft at base 22efa58f; verified identical on this branch. Keyboard accept (Tab/Enter) works and is what the e2e spec exercises. Not caused by task06 and not fixed here."
+    },
+    {
+      "kind": "unavailable_toolchain",
+      "detail": "rust-toolchain.toml pins Rust 1.98.1 but only system 1.99.1 is installed (no rustup). Under 1.99.1, clippy -D warnings reports pre-existing clippy::assert_is_empty style drift in untouched test files and deprecated fetch_update in crates/filesystem. Task06 files pass clippy with that single new lint allowed; the pinned-toolchain run could not be performed."
+    }
+  ],
+  "source_inventory": {
+    "draft_pr": "https://github.com/ait-app/ait/pull/647",
+    "evidence_commit": "7ac9b4ace576831196b5b09965c8d029bd9044d8",
+    "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4"
+  },
+  "adr": "ADR-242 (proposed; Draft PR is not architectural review approval)",
+  "compatibility": "Command catalog entries add optional source/aliases/menuVisible/menuAliases, keeping ownership independent of menu eligibility. New agent.commands.complete method negotiates by capability; not_implemented/unsupported falls back to catalog filtering, supported zero-item completion hides the menu. Native commands_changed uses the existing Agent stream and invalidates catalog/completion queries. All current callers consume the updated contract; no compatibility aliases or generic admission framework. Blocked-builtin input receives a typed input-correlated local refusal and Rejected receipt, with invalid_message on first delivery and replay. ADR-242 contains the boundary ledger."
+}

@@ -80,6 +80,8 @@ export async function submitAgentInput<TAttachment>(
   input: AgentInputSubmitActionInput<TAttachment>,
 ): Promise<AgentInputSubmitResult> {
   const trimmedMessage = input.message.trim();
+  // Leading whitespace can decide whether the provider treats this as a command at all.
+  const message = trimmedMessage.startsWith("/") ? input.message : trimmedMessage;
   const attachments = input.attachments;
   const shouldClearOnSubmit = input.submitBehavior !== "preserve-and-lock";
 
@@ -97,7 +99,7 @@ export async function submitAgentInput<TAttachment>(
   }
 
   if (input.isAgentRunning && !input.forceSend) {
-    input.queueMessage({ message: trimmedMessage, attachments });
+    input.queueMessage({ message, attachments });
     if (shouldClearOnSubmit) {
       input.setUserInput("");
       input.setAttachments([]);
@@ -114,7 +116,7 @@ export async function submitAgentInput<TAttachment>(
   input.setIsProcessing(true);
 
   try {
-    await input.submitMessage({ message: trimmedMessage, attachments });
+    await input.submitMessage({ message, attachments });
     // A cleared composer stays editable while the send is in flight; clearing
     // the draft again here would drop whatever the user entered meanwhile.
     if (!shouldClearOnSubmit) {
@@ -127,7 +129,7 @@ export async function submitAgentInput<TAttachment>(
     // A delivered message is already in the timeline; restoring it invites a duplicate send.
     if (shouldClearOnSubmit && !isDeliveredSendError(error)) {
       const current = input.readCurrentDraft?.();
-      input.setUserInput(joinRestoredText(trimmedMessage, current?.text ?? ""));
+      input.setUserInput(joinRestoredText(message, current?.text ?? ""));
       input.setAttachments([...attachments, ...(current?.attachments ?? [])]);
     }
     input.setSendError(

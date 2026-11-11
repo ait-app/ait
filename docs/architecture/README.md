@@ -77,6 +77,10 @@ API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储�
 Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
 
+OMP 原生命令的来源投影、内置过滤、参数提示与补全接口台账见
+[命令来源与补全](command-provenance.md)；决策与迁移表见
+[ADR-242](../decisions/providers/adr-242-native-command-provenance-and-completion.md)（proposed，Draft PR 不构成架构评审批准）。
+
 Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
 [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)。

@@ -2,6 +2,8 @@
 
 mod aliases;
 mod bridge;
+mod commands;
+mod completion;
 mod config;
 mod framing;
 mod history;
@@ -137,6 +139,10 @@ impl AgentClient for OmpClient {
         Ok(config::features(&spec.config, tiers))
     }
 
+    fn supports_session_commands(&self) -> bool {
+        true
+    }
+
     async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
         config::validate_spec(spec)?;
         let mut probe = session::probe(self, &spec.cwd, None, spec.confinement.as_ref()).await?;
@@ -144,7 +150,29 @@ impl AgentClient for OmpClient {
         let closed = probe.close().await;
         let result = result?;
         closed?;
-        config::commands(&result)
+        Ok(commands::catalog(config::commands(&result)?))
+    }
+
+    async fn complete_commands(
+        &self,
+        spec: &AgentSessionSpec,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        config::validate_spec(spec)?;
+        input.validate()?;
+        let mut probe = session::probe(self, &spec.cwd, None, spec.confinement.as_ref()).await?;
+        let native = probe.request("get_available_commands", json!({})).await;
+        let result = match native {
+            Ok(native) => {
+                let native = config::commands(&native)?;
+                completion::complete(&mut probe, input, &native).await
+            }
+            Err(error) => Err(error),
+        };
+        let closed = probe.close().await;
+        let result = result?;
+        closed?;
+        Ok(result)
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

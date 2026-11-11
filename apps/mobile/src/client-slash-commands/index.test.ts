@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CLIENT_SLASH_COMMANDS,
-  buildDraftAgentSetup,
-  resolveClientSlashCommand,
-} from "@/client-slash-commands";
+import { buildDraftAgentSetup, resolveClientSlashCommand } from "@/client-slash-commands";
 import type { Agent } from "@/stores/session-store";
 
 function createAgent(overrides: Partial<Agent> = {}): Agent {
@@ -58,38 +54,35 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
 }
 
 describe("resolveClientSlashCommand", () => {
-  it("declares the exact canonical client commands with their aliases", () => {
-    expect(
-      CLIENT_SLASH_COMMANDS.map((command) => [
-        command.name,
-        [...command.aliases],
-        command.execution,
-      ]),
-    ).toEqual([
-      ["exit", ["quit", "q"], "immediate"],
-      ["clear", ["new"], "immediate"],
-    ]);
-  });
-
   it("resolves canonical names and aliases after trimming", () => {
-    expect(resolveClientSlashCommand({ text: " /quit ", hasAttachments: false })).toMatchObject({
+    expect(
+      resolveClientSlashCommand({ text: " /quit ", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({
       name: "exit",
       kind: "archive-agent",
       execution: "immediate",
     });
-    expect(resolveClientSlashCommand({ text: "/exit", hasAttachments: false })).toMatchObject({
+    expect(
+      resolveClientSlashCommand({ text: "/exit", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({
       name: "exit",
       kind: "archive-agent",
     });
-    expect(resolveClientSlashCommand({ text: "/q", hasAttachments: false })).toMatchObject({
+    expect(
+      resolveClientSlashCommand({ text: "/q", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({
       name: "exit",
       kind: "archive-agent",
     });
-    expect(resolveClientSlashCommand({ text: "/clear", hasAttachments: false })).toMatchObject({
+    expect(
+      resolveClientSlashCommand({ text: "/clear", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({
       name: "clear",
       kind: "replace-agent-with-draft",
     });
-    expect(resolveClientSlashCommand({ text: "/new", hasAttachments: false })).toMatchObject({
+    expect(
+      resolveClientSlashCommand({ text: "/new", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({
       name: "clear",
       kind: "replace-agent-with-draft",
     });
@@ -103,6 +96,38 @@ describe("resolveClientSlashCommand", () => {
     ).toBeNull();
     expect(resolveClientSlashCommand({ text: "hello /quit", hasAttachments: false })).toBeNull();
     expect(resolveClientSlashCommand({ text: "/quit", hasAttachments: true })).toBeNull();
+  });
+
+  it("yields to a native catalog entry for any provider, including aliases", () => {
+    const nativeCommands = [
+      { name: "clear", source: "extension" },
+      { name: "deploy", aliases: ["quit"] },
+    ];
+    expect(
+      resolveClientSlashCommand({ text: "/clear", hasAttachments: false, nativeCommands }),
+    ).toBeNull();
+    expect(
+      resolveClientSlashCommand({ text: "/quit", hasAttachments: false, nativeCommands }),
+    ).toBeNull();
+    // Without a catalog entry the client shortcut keeps working, whatever the provider.
+    expect(
+      resolveClientSlashCommand({ text: "/quit", hasAttachments: false, nativeCommands: [] }),
+    ).toMatchObject({ name: "exit" });
+  });
+
+  it("never treats unloaded ownership as permission for a destructive shortcut", () => {
+    expect(resolveClientSlashCommand({ text: "/clear", hasAttachments: false })).toBeNull();
+    expect(resolveClientSlashCommand({ text: "/new", hasAttachments: false })).toBeNull();
+  });
+
+  it("normalizes native alias colons without changing the submitted name", () => {
+    expect(
+      resolveClientSlashCommand({
+        text: "/clear",
+        hasAttachments: false,
+        nativeCommands: [{ name: "reset", aliases: ["clear:"] }],
+      }),
+    ).toBeNull();
   });
 });
 

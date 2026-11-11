@@ -3,6 +3,20 @@ import { normalizeWorkspacePath } from "@/utils/workspace-identity";
 
 export const AGENT_COMMANDS_QUERY_ROOT = "agentCommands";
 
+const commandClients = new WeakMap<object, number>();
+let nextCommandClient = 0;
+
+/** A replacement connection must not inherit an old client's in-flight ownership response. */
+export function agentCommandClientKey(client: object | null | undefined): number | null {
+  if (!client) return null;
+  let key = commandClients.get(client);
+  if (key === undefined) {
+    key = ++nextCommandClient;
+    commandClients.set(client, key);
+  }
+  return key;
+}
+
 export interface AgentCommandsDraftConfig {
   provider: AgentProvider;
   cwd: string;
@@ -10,6 +24,12 @@ export interface AgentCommandsDraftConfig {
   model?: string;
   thinkingOptionId?: string;
   featureValues?: Record<string, unknown>;
+}
+
+export interface AgentCommandContext {
+  provider: string;
+  cwd: string;
+  nativeSessionId: string | null;
 }
 
 export function normalizeAgentCommandsCwd(cwd: string): string {
@@ -20,8 +40,17 @@ export function agentCommandsQueryRoot(serverId: string) {
   return [AGENT_COMMANDS_QUERY_ROOT, serverId] as const;
 }
 
-export function sessionAgentCommandsQueryKey(input: { serverId: string; agentId: string }) {
-  return [...agentCommandsQueryRoot(input.serverId), "session", input.agentId] as const;
+export function sessionAgentCommandsQueryKey(input: {
+  serverId: string;
+  agentId: string;
+  context?: AgentCommandContext;
+}) {
+  return [
+    ...agentCommandsQueryRoot(input.serverId),
+    "session",
+    input.agentId,
+    input.context,
+  ] as const;
 }
 
 export function draftAgentCommandsQueryKey(input: {
@@ -50,12 +79,11 @@ export function agentCommandsQueryKey(input: {
   serverId: string;
   agentId: string;
   draftConfig?: AgentCommandsDraftConfig;
+  context?: AgentCommandContext;
+  client?: object | null;
 }) {
-  if (input.draftConfig) {
-    return draftAgentCommandsQueryKey({
-      serverId: input.serverId,
-      draftConfig: input.draftConfig,
-    });
-  }
-  return sessionAgentCommandsQueryKey({ serverId: input.serverId, agentId: input.agentId });
+  const scope = input.draftConfig
+    ? draftAgentCommandsQueryKey({ serverId: input.serverId, draftConfig: input.draftConfig })
+    : sessionAgentCommandsQueryKey(input);
+  return [...scope, agentCommandClientKey(input.client)] as const;
 }

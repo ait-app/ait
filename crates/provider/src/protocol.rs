@@ -5,6 +5,7 @@ pub(crate) mod agent_config;
 pub(crate) mod agent_execution;
 pub(crate) mod agent_lifecycle;
 
+pub(crate) mod commands;
 pub(crate) mod controls;
 pub(crate) mod creation;
 /// Existing native session operations.

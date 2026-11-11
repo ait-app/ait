@@ -40,6 +40,10 @@ impl AgentManager {
         }
         match self.steer_input(agent, prompt).await {
             Ok(()) => timeline.finish_input(agent, message, Receipt::Accepted),
+            Err(AgentManagerError::InputRefused(id)) if id.as_deref() == Some(message) => {
+                timeline.finish_input(agent, message, Receipt::Rejected)?;
+                Err(ErrorCode::InvalidMessage)
+            }
             Err(AgentManagerError::Busy | AgentManagerError::InvalidRequest) => {
                 timeline.finish_input(agent, message, Receipt::Rejected)?;
                 Err(ErrorCode::CatalogBusy)
@@ -115,27 +119,49 @@ impl AgentManager {
             return self.deliver_command(agent, prompt).await;
         }
         let timeline = self.timeline.clone().ok_or(ErrorCode::AgentIo)?;
+        let prompt = if prompt.client_message_id.is_some() {
+            std::borrow::Cow::Borrowed(prompt)
+        } else {
+            let mut prompt = prompt.clone();
+            prompt.client_message_id = Some(uuid::Uuid::new_v4().to_string());
+            std::borrow::Cow::Owned(prompt)
+        };
+        let prompt = prompt.as_ref();
         let message = prompt
             .client_message_id
-            .clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            .as_deref()
+            .expect("delivery assigns an input identity before reserving its receipt");
         let queued = timeline.has_queued_input(agent)?;
-        match timeline.reserve_input(agent, &message, prompt, policy)? {
+        match timeline.reserve_input(agent, message, prompt, policy)? {
             Receipt::Accepted => return Ok(()),
             Receipt::Uncertain => return Err(ErrorCode::AgentIo),
             Receipt::Rejected => return Err(ErrorCode::InvalidMessage),
             Receipt::New => {}
         }
+        if self.live.contains_key(agent) {
+            match self.check_input_refusal(agent, prompt) {
+                Ok(()) => {}
+                Err(AgentManagerError::InputRefused(id)) if id.as_deref() == Some(message) => {
+                    timeline.finish_input(agent, message, Receipt::Rejected)?;
+                    return Err(ErrorCode::InvalidMessage);
+                }
+                Err(_) => return Err(ErrorCode::AgentIo),
+            }
+        }
         if self.active_turn(agent).is_some()
             && matches!(behavior, ActiveTurnBehavior::Steer)
             && !queued
         {
-            timeline.claim_input(agent, &message)?;
+            timeline.claim_input(agent, message)?;
             match self.steer_input(agent, prompt).await {
-                Ok(()) => return timeline.finish_input(agent, &message, Receipt::Accepted),
-                Err(AgentManagerError::Busy) => timeline.requeue_input(agent, &message)?,
+                Ok(()) => return timeline.finish_input(agent, message, Receipt::Accepted),
+                Err(AgentManagerError::Busy) => timeline.requeue_input(agent, message)?,
+                Err(AgentManagerError::InputRefused(id)) if id.as_deref() == Some(message) => {
+                    timeline.finish_input(agent, message, Receipt::Rejected)?;
+                    return Err(ErrorCode::InvalidMessage);
+                }
                 Err(_) => {
-                    timeline.finish_input(agent, &message, Receipt::Uncertain)?;
+                    timeline.finish_input(agent, message, Receipt::Uncertain)?;
                     return Err(ErrorCode::AgentIo);
                 }
             }
@@ -144,7 +170,7 @@ impl AgentManager {
         // before deciding whether interruption is still necessary.
         let _ = self.poll().await;
         if let Err(error) = self.interrupt_for_input(agent).await {
-            timeline.finish_input(agent, &message, Receipt::Rejected)?;
+            timeline.finish_input(agent, message, Receipt::Rejected)?;
             return Err(error);
         }
         // Native terminal acknowledgement may arrive later; the durable FIFO owns the input.
@@ -288,6 +314,14 @@ impl AgentManager {
             .await;
             match admitted {
                 Ok(()) => timeline.finish_input(&input.agent, &input.message, Receipt::Accepted)?,
+                Err(AgentManagerError::InputRefused(id))
+                    if id.as_deref() == Some(input.message.as_str()) =>
+                {
+                    timeline.finish_input(&input.agent, &input.message, Receipt::Rejected)?;
+                    if selected.is_some() {
+                        return Err(ErrorCode::InvalidMessage);
+                    }
+                }
                 Err(error) => {
                     self.fail_queued_input(&timeline, &input, &error)?;
                     if selected.is_some() {

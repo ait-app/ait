@@ -46,6 +46,7 @@ pending_async = False
 current_prompt = None
 pending_dialog = None
 dialog_commands = []
+catalog_commands = None
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -97,7 +98,8 @@ def finish(aborted=False, settled=True):
         emit({'type': 'agent_end', 'messages': []})
     emit({'type': 'session_settled'})
 
-emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864})
+emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864,
+      'capabilities': {'commandCompletion': {'version': 1 if (root / 'completion.json').exists() else 0}}})
 
 for line in sys.stdin:
     command = json.loads(line)
@@ -150,7 +152,11 @@ for line in sys.stdin:
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
     elif kind == 'get_available_commands':
-        response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
+        if catalog_commands is None:
+            catalog_commands = [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]
+        response(command, {'commands': catalog_commands})
+    elif kind == 'complete':
+        response(command, json.loads((root / 'completion.json').read_text()))
     elif kind == 'interactive_control':
         pending_control=command
         emit({'type':'extension_ui_request','id':'control-question','method':'input','title':'Native control input'})
@@ -168,11 +174,24 @@ for line in sys.stdin:
             emit({'type':'extension_ui_request','id':'dialog-1',**dialog})
             continue
         plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
-        plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
+        words = text.split(' ', 1)
+        plugin = next((entry for entry in plugins if words[0] == '/'+entry['name']), None)
         if plugin:
+            if 'directOutput' in plugin:
+                emit({'type':'command_output','text':plugin['directOutput']})
+                response(command, {'agentInvoked': False})
+                emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed','sessionSettled':True})
+                continue
             pending_plugin = (command, plugin)
             emit({'type':'extension_ui_request','id':'plugin-question','method':'select',
                   'title':plugin['description'],'options':['A, B','C']})
+            continue
+        if text == '/fixture-command-update':
+            catalog_commands = json.loads((root/'catalog-update.json').read_text())
+            emit({'type':'available_commands_update','commands':catalog_commands})
+            emit({'type':'command_output','text':'Command catalog updated'})
+            response(command, {'agentInvoked': False})
+            emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed','sessionSettled':True})
             continue
         if text == 'reject':
             response(command, success=False)

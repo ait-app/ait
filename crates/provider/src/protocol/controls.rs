@@ -28,6 +28,20 @@ pub(crate) struct CommandsRequest {
     pub(crate) draft_config: Option<SessionConfig>,
 }
 
+/// Complete editor input for an existing Agent or an unregistered draft, without execution.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CompleteCommandsRequest {
+    /// Existing Agent identifier, or a UI draft identifier.
+    pub(crate) agent_id: String,
+    /// Native working directory and configuration when the Agent does not exist.
+    pub(crate) draft_config: Option<SessionConfig>,
+    /// Current editor contents.
+    pub(crate) text: String,
+    /// Caret offset in UTF-16 code units.
+    pub(crate) cursor: usize,
+}
+
 /// Resolve a pending native approval scoped to one live Agent session.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -33,7 +33,7 @@
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期。
 - 现行规格：[Provider](architecture/provider.md)、[Workspace](architecture/workspace.md)、
   [Bot](architecture/bot.md)、[连接与传输](architecture/connection.md)，逐条写明生效的约束及其 ADR；
-  [OMP ACP 桥接](architecture/omp-acp-bridge.md)。
+  [OMP ACP 桥接](architecture/omp-acp-bridge.md)、[命令来源与补全](architecture/command-provenance.md)。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护；
   `node scripts/adr.mjs governs <路径>` 列出约束某个文件或目录的现行 ADR。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。

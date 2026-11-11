@@ -262,6 +262,7 @@ fn plan(
         method.access(),
         Access::Read | Access::Catalog | Access::Discovery
     ) && !(method == Operation::Usage && params.get("agentId").is_some())
+        && !uses_command_owner(&state, method, params)?
     {
         None
     } else if method == Operation::ClearAttention && params["agentId"].is_array() {
@@ -300,6 +301,27 @@ fn plan(
         state.manager = state.manager.fork(Some(state.owners.owner(lane.clone())));
     }
     Ok((state, lane))
+}
+
+/// Command reads for providers with live session catalogs join that session's lane,
+/// so catalog facts and prompt admission stay serialized under one native owner.
+fn uses_command_owner(
+    state: &ExecutionState,
+    method: Operation,
+    params: &Value,
+) -> Result<bool, ErrorCode> {
+    if !matches!(method, Operation::Commands | Operation::CompleteCommands) {
+        return Ok(false);
+    }
+    match state.resolve(
+        params["agentId"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?,
+    ) {
+        Ok(id) => state.manager.uses_session_commands(&id).map_err(Into::into),
+        Err(ErrorCode::AgentNotFound) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn existing_agent_lane(

@@ -1,3 +1,4 @@
+import { InlineCommandHint } from "./inline-command-hint";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import {
   useComposerEditingSession,
@@ -94,7 +95,14 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
-import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
+import { agentCommandsQueryKey } from "@/hooks/agent-commands-query";
+import { useAgentCommandContext } from "@/hooks/use-agent-command-context";
+import {
+  readAgentCommandOwnership,
+  type DraftCommandConfig,
+  type AgentSlashCommand,
+} from "@/hooks/use-agent-commands-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
@@ -151,6 +159,8 @@ import {
   Text,
   View,
   type PressableStateCallbackType,
+  type StyleProp,
+  type TextStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useStore } from "zustand";
@@ -1696,12 +1706,27 @@ function ComposerContentImpl({
     ],
   );
 
+  const queryClient = useQueryClient();
+  const commandContext = useAgentCommandContext(serverId, agentId);
+  // Precedence follows the actual native catalog for every provider, not a provider table.
+  const readNativeCommands = useCallback((): AgentSlashCommand[] | undefined => {
+    const key = agentCommandsQueryKey({
+      serverId,
+      agentId,
+      draftConfig: commandDraftConfig,
+      context: commandContext,
+      client,
+    });
+    return readAgentCommandOwnership(queryClient, key);
+  }, [queryClient, serverId, agentId, commandDraftConfig, commandContext, client]);
+
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
+        nativeCommands: readNativeCommands(),
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
@@ -1717,7 +1742,7 @@ function ComposerContentImpl({
       blurOnSubmit,
       buildOutgoingAttachments,
       runClientSlashCommand,
-
+      readNativeCommands,
       sendMessageWithContent,
     ],
   );
@@ -2007,6 +2032,7 @@ function ComposerContentImpl({
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
+        nativeCommands: readNativeCommands(),
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
@@ -2016,9 +2042,9 @@ function ComposerContentImpl({
     [
       attachments,
       buildOutgoingAttachments,
-
       queueMessage,
       runClientSlashCommand,
+      readNativeCommands,
     ],
   );
 
@@ -2396,6 +2422,19 @@ function ComposerContentImpl({
     [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
   );
 
+  const renderInlineCommandHint = useCallback(
+    (style: StyleProp<TextStyle>) => (
+      <InlineCommandHint
+        text={textSource}
+        serverId={serverId}
+        agentId={agentId}
+        draftConfig={commandDraftConfig}
+        style={style}
+      />
+    ),
+    [textSource, serverId, agentId, commandDraftConfig],
+  );
+
   const autocompleteConfiguration = useMemo(
     () => ({
       setUserInput: replaceUserInput,
@@ -2533,6 +2572,7 @@ function ComposerContentImpl({
                   onQueue={handleQueue}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
+                  inlineCommandHint={renderInlineCommandHint}
                   onSelectionChange={handleSelectionChange}
                   onFocusChange={handleFocusChange}
                   onHeightChange={onComposerHeightChange}

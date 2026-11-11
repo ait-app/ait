@@ -71,6 +71,9 @@ pub enum AgentManagerError {
     /// The provider rejected the requested session operation or configuration.
     #[error("provider rejected the Agent session operation or configuration")]
     SessionRejected,
+    /// This exact input was definitively refused before a native write; its note is settled.
+    #[error("provider refused the input")]
+    InputRefused(Option<String>),
     /// Durable Agent state could not be read or written.
     #[error("Agent runtime registry failed")]
     Registry,
@@ -841,6 +844,7 @@ impl AgentManager {
         if record.archived_at.is_some() || self.active_turn(agent_id).is_some() {
             return Err(AgentManagerError::Busy);
         }
+        self.check_input_refusal(agent_id, prompt)?;
         let now = now_timestamp();
         let restarting = prompt
             .client_message_id
@@ -928,6 +932,31 @@ impl AgentManager {
             self.poll().await?;
             Err(AgentManagerError::Session)
         }
+    }
+
+    /// Settle a provider's typed refusal without polling or consuming unrelated events.
+    fn check_input_refusal(
+        &mut self,
+        agent_id: &str,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentManagerError> {
+        let agent = self.live.get(agent_id).ok_or(AgentManagerError::Session)?;
+        let Some(refusal) = agent.session.input_refusal(prompt) else {
+            return Ok(());
+        };
+        if refusal.message_id != prompt.client_message_id {
+            return Err(AgentManagerError::Session);
+        }
+        if let Some(timeline) = &self.timeline {
+            timeline
+                .append(
+                    agent_id,
+                    &agent.record.provider,
+                    std::slice::from_ref(&refusal.note),
+                )
+                .map_err(|_| AgentManagerError::Registry)?;
+        }
+        Err(AgentManagerError::InputRefused(refusal.message_id))
     }
 
     /// Request interruption; completion is acknowledged only by the provider's terminal event.

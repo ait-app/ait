@@ -72,6 +72,7 @@ pub(super) struct Session {
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
+    native_commands: Vec<Value>,
 }
 
 /// Start a disposable native capability reader for `model` in `cwd`.
@@ -118,7 +119,7 @@ async fn connect(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     path: Option<&str>,
-) -> Result<(Transport, Value, config::ServiceTiers), AgentSessionError> {
+) -> Result<(Transport, Value, config::ServiceTiers, Vec<Value>), AgentSessionError> {
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
     if let Some(path) = path {
         args.extend(["--resume".to_owned(), path.to_owned()]);
@@ -149,7 +150,12 @@ async fn connect(
             spec.confinement.as_ref(),
         )
         .await?;
-    Ok((transport, state, tiers))
+    let native_commands = config::commands(
+        &transport
+            .request("get_available_commands", json!({}))
+            .await?,
+    )?;
+    Ok((transport, state, tiers, native_commands))
 }
 
 pub(super) async fn open(
@@ -179,7 +185,7 @@ pub(super) async fn open(
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
-    let (transport, state, service_tiers) =
+    let (transport, state, service_tiers, native_commands) =
         connect(client, spec, path.filter(|_| persisted)).await?;
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
@@ -213,6 +219,7 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
+        native_commands,
     })
 }
 
@@ -277,7 +284,7 @@ impl Session {
                 confinement: self.confinement.clone(),
             };
             let persisted = std::path::Path::new(&path).is_file();
-            let (transport, state, service_tiers) =
+            let (transport, state, service_tiers, native_commands) =
                 connect(&self.client, &spec, persisted.then_some(path.as_str())).await?;
             if persisted && state["sessionId"] != self.state["sessionId"] {
                 return Err(AgentSessionError::Failed);
@@ -296,6 +303,7 @@ impl Session {
             self.idle_without_outcome = None;
             self.state = state;
             self.service_tiers = service_tiers;
+            self.native_commands = native_commands;
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
         }
@@ -381,6 +389,12 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         self.configure(config).await?;
+        if let Some(refusal) = self.input_refusal(prompt) {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(refusal.note));
+            return Err(AgentSessionError::Rejected);
+        }
         let (text, images) = prompt_blocks::split(prompt.blocks()?);
         self.transport.diagnostics.clear();
         let prompt_id = self
@@ -553,6 +567,12 @@ impl Session {
                     self.project(event)?;
                 }
                 self.stream.events.extend(events);
+            }
+            Some("available_commands_update") => {
+                self.native_commands = config::commands(event)?;
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::CommandsChanged);
             }
             Some("agent_start") if self.active.is_none() => {
                 let turn = Uuid::new_v4().to_string();
@@ -771,9 +791,46 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn input_refusal(
+        &self,
+        prompt: &AgentPrompt,
+    ) -> Option<crate::ports::agent_session::InputRefusal> {
+        let name = super::commands::blocked(&prompt.text, &self.native_commands)?;
+        let id = prompt
+            .client_message_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        Some(crate::ports::agent_session::InputRefusal {
+            message_id: prompt.client_message_id.clone(),
+            note: super::commands::rejection_note(&id, name),
+        })
+    }
+
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         Ok(())
+    }
+    async fn refresh_commands(&mut self) -> Result<Option<Vec<Value>>, AgentSessionError> {
+        if self.closed {
+            return Ok(None);
+        }
+        let commands = config::commands(
+            &self
+                .transport
+                .request("get_available_commands", json!({}))
+                .await?,
+        )?;
+        self.native_commands.clone_from(&commands);
+        Ok(Some(super::commands::catalog(commands)))
+    }
+    async fn complete_commands(
+        &mut self,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        super::completion::complete(&mut self.transport, input, &self.native_commands).await
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
@@ -884,6 +941,12 @@ impl AgentSession for Session {
             || prompt.output_schema.is_some()
             || self.input_requests.len() >= 128
         {
+            return Err(AgentSessionError::Rejected);
+        }
+        if let Some(refusal) = self.input_refusal(prompt) {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(refusal.note));
             return Err(AgentSessionError::Rejected);
         }
         let (text, images) = prompt_blocks::split(prompt.blocks()?);

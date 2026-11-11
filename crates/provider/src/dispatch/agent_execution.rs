@@ -15,6 +15,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.context.compact.request"),
     MethodSpec::request("agent.rewind.request"),
     MethodSpec::request("agent.commands.list.request"),
+    MethodSpec::request("agent.commands.complete.request"),
     MethodSpec::request("agent.mode.set.request"),
     MethodSpec::request("agent.feature.set.request"),
     MethodSpec::request("agent.permission.resolve.request"),

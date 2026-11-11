@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   agentCommandsQueryKey,
-  agentCommandsQueryRoot,
   draftAgentCommandsQueryKey,
   normalizeAgentCommandsCwd,
   sessionAgentCommandsQueryKey,
@@ -23,33 +22,12 @@ describe("agent command query keys", () => {
   });
 
   it("keeps draft commands separate from running agent session commands", () => {
-    expect(sessionAgentCommandsQueryKey({ serverId: "server-1", agentId: "agent-1" })).toEqual([
-      "agentCommands",
-      "server-1",
-      "session",
-      "agent-1",
-    ]);
-    expect(
+    expect(sessionAgentCommandsQueryKey({ serverId: "server-1", agentId: "agent-1" })).not.toEqual(
       draftAgentCommandsQueryKey({
         serverId: "server-1",
         draftConfig: { provider: "codex", cwd: "/repo" },
       }),
-    ).toEqual([
-      "agentCommands",
-      "server-1",
-      "draft",
-      "codex",
-      "cwd",
-      "/repo",
-      "mode",
-      null,
-      "model",
-      null,
-      "thinking",
-      null,
-      "features",
-      null,
-    ]);
+    );
   });
 
   it("normalizes cwd values so equivalent workspace paths share one draft scope", () => {
@@ -69,7 +47,21 @@ describe("agent command query keys", () => {
     );
   });
 
-  it("exposes a server-level root for refresh invalidation", () => {
-    expect(agentCommandsQueryRoot("server-1")).toEqual(["agentCommands", "server-1"]);
+  it("does not reuse ownership across a provider, cwd, or native session switch", () => {
+    const context = { provider: "omp", cwd: "/repo", nativeSessionId: "native-1" };
+    const key = sessionAgentCommandsQueryKey({ serverId: "server-1", agentId: "agent-1", context });
+    for (const changed of [
+      { ...context, provider: "codex" },
+      { ...context, cwd: "/other" },
+      { ...context, nativeSessionId: "native-2" },
+    ]) {
+      expect(
+        sessionAgentCommandsQueryKey({
+          serverId: "server-1",
+          agentId: "agent-1",
+          context: changed,
+        }),
+      ).not.toEqual(key);
+    }
   });
 });

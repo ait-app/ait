@@ -5,6 +5,7 @@ import { observeOpenWorkspaceAgentIds } from "@/stores/workspace-layout-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/hooks/use-client-activity";
+import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { startPushNotifications } from "@/push-notifications";
 import {
@@ -404,6 +405,15 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     const onStream = (message: SessionOutboundMessage) => {
       if (message.type !== "agent.stream") return;
       const { agentId, event, timestamp, seq, epoch } = message.payload;
+      if (event.type === "commands_changed") {
+        for (const queryKey of [
+          [...agentCommandsQueryRoot(serverId), "session", agentId],
+          ["agentNativeCompletions", serverId, agentId],
+        ]) {
+          void queryClient.cancelQueries({ queryKey });
+          void queryClient.invalidateQueries({ queryKey });
+        }
+      }
       const parsedTimestamp = new Date(timestamp);
       const streamEvent = event;
       if (
@@ -526,7 +536,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       setViewedTimelineSync(serverId, null);
       sync.dispose();
     };
-  }, [client, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime]);
+  }, [client, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime, queryClient]);
 
   useEffect(() => {
     // A connection switch can replace the owner while isConnected stays true.

@@ -56,6 +56,7 @@ pub(crate) enum Operation {
     ForkContext,
     Rewind,
     Commands,
+    CompleteCommands,
     Subagents,
     UnifiedSubagents,
     ChildTimeline,
@@ -115,6 +116,7 @@ impl Operation {
             "agent.fork_context.request" => Ok(Self::ForkContext),
             "agent.rewind.request" => Ok(Self::Rewind),
             "agent.commands.list.request" => Ok(Self::Commands),
+            "agent.commands.complete.request" => Ok(Self::CompleteCommands),
             "agent.provider_subagents.list.request" => Ok(Self::Subagents),
             "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
@@ -173,6 +175,7 @@ impl Operation {
             Self::ForkContext => "agent.fork_context.request",
             Self::Rewind => "agent.rewind.request",
             Self::Commands => "agent.commands.list.request",
+            Self::CompleteCommands => "agent.commands.complete.request",
             Self::Subagents => "agent.provider_subagents.list.request",
             Self::UnifiedSubagents => "agent.subagents.list.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
@@ -244,9 +247,11 @@ impl Operation {
             | Self::History
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
-            Self::RecentSessions | Self::Commands | Self::Diagnostic | Self::Usage => {
-                Access::Discovery
-            }
+            Self::RecentSessions
+            | Self::Commands
+            | Self::CompleteCommands
+            | Self::Diagnostic
+            | Self::Usage => Access::Discovery,
             Self::Available
             | Self::Models
             | Self::Modes
@@ -286,6 +291,7 @@ impl Operation {
             | Self::ForkContext
             | Self::Rewind
             | Self::Commands
+            | Self::CompleteCommands
             | Self::Usage
             | Self::Get
             | Self::Update

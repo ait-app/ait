@@ -47,7 +47,11 @@ pub(crate) struct ExecutionState {
 
 impl ExecutionState {
     fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
-        if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
+        if matches!(
+            method,
+            "agent.commands.list.request" | "agent.commands.complete.request"
+        ) && params.get("draftConfig").is_some()
+        {
             return Ok(());
         }
         if let Some(id) = params["agentId"].as_str()
@@ -107,6 +111,7 @@ impl ExecutionState {
             }
             Operation::Rewind => self.rewind(params).await,
             Operation::Commands => self.commands(params).await,
+            Operation::CompleteCommands => self.complete_commands(params).await,
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
@@ -728,6 +733,7 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
         AgentManagerError::InvalidRequest
         | AgentManagerError::AlreadyExists(_)
+        | AgentManagerError::InputRefused(_)
         | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
         AgentManagerError::Session
         | AgentManagerError::History(_)

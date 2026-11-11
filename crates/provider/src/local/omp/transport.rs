@@ -41,6 +41,7 @@ pub(super) struct Transport {
     sequence: u64,
     deadline: Duration,
     closed: bool,
+    command_completion: bool,
 }
 
 impl Transport {
@@ -143,6 +144,7 @@ impl Transport {
             sequence: 0,
             deadline: client.deadline,
             closed: false,
+            command_completion: false,
         })
     }
 
@@ -165,7 +167,13 @@ impl Transport {
         if selected["protocolVersion"] != 2 {
             return Err(AgentSessionError::Failed);
         }
+        self.command_completion = ready["capabilities"]["commandCompletion"]["version"] == 1;
         Ok(())
+    }
+
+    /// Native editor completion negotiated from the official runtime's ready frame.
+    pub(super) fn command_completion(&self) -> bool {
+        self.command_completion
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {

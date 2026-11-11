@@ -129,6 +129,7 @@ struct FakeState {
     close_calls: usize,
     events: std::collections::VecDeque<AgentTurnEvent>,
     start_result: Result<(), AgentSessionError>,
+    input_refusal: Option<crate::ports::agent_session::InputRefusal>,
     start_calls: usize,
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
@@ -160,6 +161,7 @@ impl Default for FakeState {
             close_calls: 0,
             events: std::collections::VecDeque::new(),
             start_result: Ok(()),
+            input_refusal: None,
             start_calls: 0,
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
@@ -260,6 +262,13 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
+    fn input_refusal(
+        &self,
+        _prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Option<crate::ports::agent_session::InputRefusal> {
+        self.0.lock().unwrap().input_refusal.clone()
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }
@@ -1124,4 +1133,166 @@ async fn transient_registry_failure_keeps_a_changed_handle_and_close_retryable()
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
     let record = registry.get("agent-1").unwrap().unwrap();
     assert_eq!(record.persistence.unwrap().session_id, "native-2");
+}
+
+#[tokio::test]
+async fn definitive_command_refusal_settles_idle_without_synthetic_failure() {
+    let (manager, registry, client) = make_manager();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let mut manager = manager.with_timeline(timeline.clone());
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    {
+        let mut state = client.0.lock().unwrap();
+        state.input_refusal = Some(crate::ports::agent_session::InputRefusal {
+            message_id: Some("message-1".to_owned()),
+            note: crate::protocol::timeline::NativeItem {
+                key: "arbitrary-display-key".to_owned(),
+                turn_id: None,
+                timestamp: "2026-11-11T00:00:00.000Z".to_owned(),
+                item: serde_json::json!({
+                    "type":"assistant_message",
+                    "messageId":"arbitrary-display-key",
+                    "text":"Use Ait's model selector. The builtin /model command is disabled in Ait."
+                }),
+            },
+        });
+        state.events.push_back(AgentTurnEvent::Timeline(
+            crate::protocol::timeline::NativeItem {
+                key: "unrelated".to_owned(),
+                turn_id: None,
+                timestamp: "2026-11-11T00:00:00.000Z".to_owned(),
+                item: serde_json::json!({"type":"assistant_message","text":"unrelated event"}),
+            },
+        ));
+    }
+    let mut prompt = crate::protocol::prompt::AgentPrompt::text("/model fixture");
+    prompt.client_message_id = Some("message-1".to_owned());
+    assert_eq!(
+        manager
+            .deliver(
+                "agent-1",
+                &prompt,
+                crate::protocol::agent_execution::ActiveTurnBehavior::Interrupt,
+            )
+            .await,
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(client.0.lock().unwrap().start_calls, 0);
+    assert_eq!(client.0.lock().unwrap().events.len(), 1);
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+    assert_eq!(
+        timeline
+            .input_receipt("agent-1", "message-1", &prompt, "interrupt")
+            .unwrap(),
+        Some(crate::storage::timeline::inbox::Receipt::Rejected)
+    );
+    assert_eq!(
+        manager
+            .deliver(
+                "agent-1",
+                &prompt,
+                crate::protocol::agent_execution::ActiveTurnBehavior::Interrupt
+            )
+            .await,
+        Err(ErrorCode::InvalidMessage)
+    );
+    manager.poll().await.unwrap();
+    let record = registry.get("agent-1").unwrap().unwrap();
+    assert_eq!(record.last_status, AgentRuntimeStatus::Idle);
+    assert_eq!(record.last_error, None);
+    assert!(!record.requires_attention);
+    assert!(!timeline.has_queued_input("agent-1").unwrap());
+    let (_, rows) = timeline.read("agent-1").unwrap();
+    let items: Vec<_> = rows.iter().map(|row| row.entry.item.clone()).collect();
+    assert!(items.iter().any(|item| item["text"] == "unrelated event"));
+    assert!(!items.iter().any(|item| item["type"] == "user_message"));
+    assert!(
+        items.iter().any(|item| item["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("builtin /model command is disabled"))),
+        "refusal note must survive settlement: {items:?}"
+    );
+    assert!(
+        !items.iter().any(|item| item["type"] == "error"),
+        "definitive refusal must not append a synthetic failure: {items:?}"
+    );
+    manager.close_all().await.unwrap();
+}
+
+#[tokio::test]
+async fn command_refusal_preserves_the_active_turn_for_both_delivery_policies() {
+    for behavior in [
+        crate::protocol::agent_execution::ActiveTurnBehavior::Steer,
+        crate::protocol::agent_execution::ActiveTurnBehavior::Interrupt,
+    ] {
+        let (manager, registry, client) = make_manager();
+        let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+        let mut manager = manager.with_timeline(timeline.clone());
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .unwrap();
+        manager.send("agent-1", "existing turn").await.unwrap();
+        let turn = manager.active_turn("agent-1").unwrap().to_owned();
+        let mut prompt = crate::protocol::prompt::AgentPrompt::text("/model");
+        prompt.client_message_id = Some("refused-steer".to_owned());
+        client.0.lock().unwrap().input_refusal = Some(crate::ports::agent_session::InputRefusal {
+            message_id: prompt.client_message_id.clone(),
+            note: crate::protocol::timeline::NativeItem {
+                key: "refused-steer-note".to_owned(),
+                turn_id: None,
+                timestamp: "2026-11-11T00:00:00.000Z".to_owned(),
+                item: serde_json::json!({"type":"assistant_message","text":"Refused"}),
+            },
+        });
+        assert_eq!(
+            manager.deliver("agent-1", &prompt, behavior).await,
+            Err(ErrorCode::InvalidMessage)
+        );
+        assert_eq!(manager.active_turn("agent-1"), Some(turn.as_str()));
+        assert_eq!(
+            registry.get("agent-1").unwrap().unwrap().last_status,
+            AgentRuntimeStatus::Running
+        );
+        {
+            let state = client.0.lock().unwrap();
+            assert_eq!(state.start_calls, 1);
+            assert_eq!(state.steer_calls, []);
+            assert!(state.events.is_empty(), "no cancellation may be sent");
+            assert_eq!(state.close_calls, 0);
+        }
+        manager.close_all().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn command_refusal_requires_the_current_input_identity() {
+    let (manager, _, client) = make_manager();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let mut manager = manager.with_timeline(timeline.clone());
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    client.0.lock().unwrap().input_refusal = Some(crate::ports::agent_session::InputRefusal {
+        message_id: Some("other-input".to_owned()),
+        note: crate::protocol::timeline::NativeItem {
+            key: "host:omp-command-refusal:current-input".to_owned(),
+            turn_id: None,
+            timestamp: "2026-11-11T00:00:00.000Z".to_owned(),
+            item: serde_json::json!({"type":"assistant_message","text":"Uncorrelated"}),
+        },
+    });
+    let mut prompt = crate::protocol::prompt::AgentPrompt::text("/model");
+    prompt.client_message_id = Some("current-input".to_owned());
+    assert_eq!(
+        manager.send_input("agent-1", &prompt).await,
+        Err(AgentManagerError::Session)
+    );
+    assert_eq!(client.0.lock().unwrap().start_calls, 0);
+    assert_eq!(timeline.read("agent-1").unwrap().1, []);
+    manager.close_all().await.unwrap();
 }

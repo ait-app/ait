@@ -39,7 +39,7 @@ import {
   size as floatingSize,
   useFloating,
 } from "@floating-ui/react-native";
-import { getNextActiveIndex } from "./combobox-keyboard";
+import { getNextActiveIndex, shouldHandleComboboxKey } from "./combobox-keyboard";
 import {
   buildVisibleComboboxOptions,
   getComboboxFallbackIndex,
@@ -205,7 +205,7 @@ export function SearchInput({
   }, [autoFocus]);
 
   return (
-    <View style={styles.searchInputContainer}>
+    <View style={styles.searchInputContainer} dataSet={IS_WEB ? { comboboxSearch: "" } : undefined}>
       <Search size={16} color={theme.colors.foregroundMuted} />
       <AdaptiveTextInput
         ref={inputRef}
@@ -872,7 +872,7 @@ function dispatchDesktopKey(
   key: DesktopKey,
   event?: KeyboardEvent,
 ): boolean {
-  if (!input.isOpen) return false;
+  if (!input.isOpen || (event && !shouldHandleComboboxKey(event))) return false;
   if (!IS_WEB && input.isMobile) return false;
 
   if (key === "ArrowDown" || key === "ArrowUp") {

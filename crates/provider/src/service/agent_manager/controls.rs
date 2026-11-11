@@ -142,6 +142,60 @@ impl AgentManager {
             })
     }
 
+    /// Refresh only an already owned native session's command directory, without admitting input.
+    /// Returns no catalog for a detached or unsupported session and preserves native read failures.
+    pub(crate) async fn refresh_commands(
+        &mut self,
+        id: &str,
+    ) -> Result<Option<Vec<Value>>, ErrorCode> {
+        let Some(agent) = self.live.get_mut(id) else {
+            return Ok(None);
+        };
+        agent
+            .session
+            .refresh_commands()
+            .await
+            .map_err(|_| ErrorCode::AgentIo)
+    }
+
+    /// Whether `id` opts into command reads on its native session lane.
+    /// Returns registry I/O failures; an unknown Agent has no live catalog capability.
+    pub(crate) fn uses_session_commands(&self, id: &str) -> Result<bool, ErrorCode> {
+        let record = self.registry.get(id).map_err(|_| ErrorCode::AgentIo)?;
+        Ok(record.as_ref().is_some_and(|record| {
+            self.clients
+                .get(&record.provider)
+                .is_some_and(|client| client.supports_session_commands())
+        }))
+    }
+
+    /// Query completion using the live owner when available, otherwise isolated native discovery.
+    /// Never resumes an inactive Agent or changes prompt admission; returns native/validation errors.
+    pub(crate) async fn complete_commands(
+        &mut self,
+        id: &str,
+        spec: &AgentSessionSpec,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, ErrorCode> {
+        input.validate().map_err(|_| ErrorCode::InvalidMessage)?;
+        let result = if let Some(agent) = self.live.get_mut(id) {
+            agent.session.complete_commands(input).await
+        } else {
+            self.clients
+                .get(&spec.provider)
+                .ok_or(ErrorCode::UnsupportedCapability)?
+                .complete_commands(spec, input)
+                .await
+        }
+        .map_err(|error| match error {
+            AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+            AgentSessionError::Busy => ErrorCode::CatalogBusy,
+            AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+            AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
+        })?;
+        Ok(result)
+    }
+
     pub(crate) async fn permission(
         &mut self,
         id: &str,

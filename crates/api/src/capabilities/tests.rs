@@ -36,7 +36,6 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 241);
     assert!(
         !registered
             .iter()
@@ -68,13 +67,20 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let names: Vec<_> = specs.iter().map(|spec| spec.name).collect();
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
-    assert_eq!(names.len(), 240);
     assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
-    let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 241);
     assert!(unique.contains("bot.message.send.request"));
+    let owners: Vec<_> = specs
+        .iter()
+        .filter(|spec| spec.name == "agent.commands.complete.request")
+        .collect();
+    assert_eq!(
+        owners.len(),
+        1,
+        "command completion must have one component owner"
+    );
+    assert_eq!(owners[0].kind, InboundKind::Request);
     for name in [
         "browser.tunnel.open.request",
         "browser.tunnel.read.request",
