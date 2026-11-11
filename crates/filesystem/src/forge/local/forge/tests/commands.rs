@@ -477,3 +477,63 @@ fn reset_detaches_existing_prs_and_allows_new_prs_on_the_same_branch() {
         }
     }
 }
+
+#[test]
+fn status_names_a_renamed_upstream_that_gh_cannot_resolve_through_push() {
+    let renamed = ["branch.feature.merge=refs/heads/claude/fix"].as_slice();
+    let same_name = ["branch.feature.merge=refs/heads/feature"].as_slice();
+    let default_branch = ["branch.feature.merge=refs/heads/main"].as_slice();
+    let push_upstream = [
+        "branch.feature.merge=refs/heads/claude/fix",
+        "push.default=upstream",
+    ]
+    .as_slice();
+    for (settings, expected) in [
+        (&[][..], "pr\nview\n--json\n"),
+        (renamed, "pr\nview\nclaude/fix\n--json\n"),
+        (same_name, "pr\nview\n--json\n"),
+        (default_branch, "pr\nview\n--json\n"),
+        (push_upstream, "pr\nview\n--json\n"),
+    ] {
+        let fixture = Fixture::new("cat \"$root/status.json\"");
+        fixture.payload(
+            "status.json",
+            &json!({
+                "number": 7,
+                "url": "https://github.com/acme/app/pull/7",
+                "title": "Work",
+                "state": "OPEN",
+                "headRefName": "claude/fix",
+            }),
+        );
+        let main = git_required(&fixture.repository, &["rev-parse", "main"], READ_TIMEOUT).unwrap();
+        for reference in ["refs/remotes/origin/main", "refs/remotes/origin/claude/fix"] {
+            run(&fixture.repository, &["update-ref", reference, &main]);
+        }
+        run(
+            &fixture.repository,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        );
+        run(
+            &fixture.repository,
+            &["config", "branch.feature.remote", "origin"],
+        );
+        for setting in settings {
+            let (key, value) = setting.split_once('=').unwrap();
+            run(&fixture.repository, &["config", key, value]);
+        }
+
+        let read = fixture
+            .forge
+            .current_pull_request_status(fixture.cwd())
+            .unwrap();
+
+        assert_eq!(read.status.unwrap().number, Some(7), "{settings:?}");
+        let calls = fixture.calls();
+        assert!(calls.starts_with(expected), "{settings:?}: {calls}");
+    }
+}
