@@ -1,0 +1,107 @@
+{
+  "id": "03",
+  "title": "Existing AgentProfile settings",
+  "priority": 3,
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-profile",
+  "updated_at": "2026-11-11",
+  "depends_on": ["00", "02"],
+  "donor_sections": [1, 2, 5],
+  "donor_paths": [
+    "apps/mobile/src/agent-controls/model-presets.test.ts",
+    "apps/mobile/src/agent-controls/model-presets.ts",
+    "apps/mobile/src/agent-profiles/internal/profile-form-model.test.ts",
+    "apps/mobile/src/agent-profiles/internal/profile-form-model.ts",
+    "apps/mobile/src/agent-profiles/internal/use-profile-form-inputs.ts",
+    "apps/mobile/src/agent-profiles/settings/agent-profile-edit-modal.tsx",
+    "apps/mobile/src/agent-profiles/settings/agent-profile-row.tsx",
+    "apps/mobile/src/components/provider-preset-editor.tsx",
+    "apps/mobile/src/components/provider-preset-form.test.ts",
+    "apps/mobile/src/components/provider-preset-form.ts",
+    "apps/mobile/src/components/provider-presets-section.test.tsx",
+    "apps/mobile/src/components/provider-presets-section.tsx",
+    "apps/mobile/src/components/provider-settings-host.tsx",
+    "apps/mobile/src/components/provider-settings-refresh.test.tsx",
+    "apps/mobile/src/components/settings/navigation-row.tsx",
+    "apps/mobile/src/composer/agent-controls/preset-updates.test.tsx",
+    "apps/mobile/src/composer/draft/create-flow.test.ts",
+    "apps/mobile/src/composer/draft/create-flow.ts",
+    "apps/mobile/src/composer/draft/input-draft-core.ts",
+    "apps/mobile/src/composer/draft/input-draft.live.test.tsx",
+    "apps/mobile/src/composer/draft/input-draft.ts",
+    "apps/mobile/src/composer/draft/workspace-tab.tsx",
+    "apps/mobile/src/data/provider-presets.ts",
+    "apps/mobile/src/stores/provider-settings-store.ts",
+    "crates/domain/src/lib.rs",
+    "crates/domain/src/preset.rs",
+    "crates/persistence/src/storage/daemon_config.rs",
+    "crates/persistence/src/storage/daemon_config/tests.rs",
+    "crates/provider/src/ports/preset.rs",
+    "crates/provider/src/ports/preset/tests.rs",
+    "crates/provider/src/service/presets.rs",
+    "crates/provider/src/service/presets/ait.rs",
+    "crates/provider/src/service/presets/tests.rs",
+    "packages/protocol/src/messages.provider-presets.test.ts"
+  ],
+  "implementation": "Use the existing AgentProfile store and ordinary settings list with nested editing; keep host/provider/cwd context and native preset identity distinct. The popup edit modal and its picker-side controller are deleted: the list navigates to settings/hosts/[serverId]/agent-profiles/create and .../agent-profiles/edit/[profileId] (separate static segments so no stored id, including the literal 'create', can shadow the create route). The picker keeps quick-apply rows plus one manage shortcut; create-from-model seeding is dropped with its dead AgentProfileSeed surface. Edit mode never seeds catalog defaults into omitted fields, offers an explicit leave-unchanged row, preserves unknown stored model/mode/thinking ids raw and visibly unresolved (list tags + editor hint + a selected synthetic option so keyboard selection cannot erase them), keeps stored featureValues when a host reports an empty feature list, and merges saves over the stored record so passthrough fields written by newer clients survive. Feature request keys are JSON tuples, not delimiter joins, so late feature listings for an old selection cannot install under a new one. The form model is rebuilt per host+mode+profile identity and the page is keyed on serverId+profileId, fencing cross-host late catalogs.",
+  "acceptance": "Create/edit/delete/apply existing Profiles through one store and normal settings navigation; unspecified Profile fields retain current values. No modelPresets store or same-name native preset synchronization; old host behavior is explicit.",
+  "status": "validating",
+  "branch": "feat/pr612-task03-agent-profile-settings",
+  "base": "efca94b8621830cb99ce5c1df80001ca1c729241",
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "required": [
+      "affected fmt/lint/tests and runtime smoke for changed UI surface",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "npx vitest run --project unit src/agent-profiles src/utils/host-routes.test.ts src/navigation/settings-navigation.test.ts src/i18n/resources.test.ts src/components/model-browser-view.test.ts src/composer/agent-controls/localization.test.tsx; then npx vitest run --project unit src/components/model-selector-loading.test.tsx",
+        "result": "PASS: 10 files / 166 tests, then 1 file / 4 tests = 11 files / 170 tests. Covers nested page passthrough preservation, other-profile isolation, notFound without write, unresolved visibility with raw id kept through save, leave-unchanged omission, JSON-tuple feature request keys, empty-listing preservation, route builders and returnFromSettings."
+      },
+      {
+        "command": "node <throwaway>/probe.cjs — expo-router getRoutes/getReactNavigationConfig/getStateFromPath over apps/mobile/src/app (9 cases)",
+        "result": "PASS 9/9: agent-profiles/create resolves to the create route; edit/{create,edit,new,agent_profile_1,legacy_favorite%3Amock%3Amodel%2F1,a%20b,%63reate,'create '} all resolve to agent-profiles/edit/[profileId] with the exact decoded profileId. Script kept at ~/.cache/ait-pr612-dispatch/task03-proof/route-probe/probe.cjs (outside the worktree)."
+      },
+      {
+        "command": "npx tsgo --noEmit (apps/mobile)",
+        "result": "PASS: clean, exit 0."
+      },
+      {
+        "command": "node_modules/.bin/oxfmt --check <37 changed TS/TSX files>; node_modules/.bin/oxlint <same>",
+        "result": "PASS: all 37 files correctly formatted; 0 warnings, 0 errors. (39 changed TS/TSX paths total; the 2 deleted files are excluded.) The earlier 17:37 recovery log predated the acceptance spec, whose formatting was fixed and re-verified."
+      },
+      {
+        "command": "npm run test:e2e --workspace=@ait/mobile -- e2e/browser/agent-profiles-real-acceptance.spec.ts e2e/browser/web-client-smoke.spec.ts (E2E_AIT_SERVER_BIN=target/debug/daemon rebuilt from this branch)",
+        "result": "PASS 4/4: real-daemon create/edit/delete/apply with compact 390px Back; unknown-model save + leave-unchanged clearing preserving futureSetting and the other profile; picker quick-apply plus manage navigation on one store; plus the CI web-client smoke. Log ~/.cache/ait-pr612-dispatch/task03-proof/run7.log."
+      },
+      {
+        "command": "pre-existing agent-profiles-settings/picker and agent-profile-modeless-preferences specs",
+        "result": "BLOCKED, pre-existing and unrelated: these specs seed provider \"mock\" (Mock Load Test), which exists only in packages/protocol/src/provider-manifest.ts and in no Rust adapter on this branch, its base efca94b8, or origin/main. A real daemon therefore reports 8 providers (codex, claude, antigravity, opencode, deepseek-harness, pi, omp, minimax-code) and never mock, so those specs cannot pass against a real daemon on any branch. Verified by RPC probe (getProvidersSnapshot) and by absence of any Rust mock adapter in git history. CI runs only web-client-smoke, which uses codex and passes."
+      },
+      {
+        "command": "cargo build --locked -p daemon --bin daemon",
+        "result": "PASS in 2m02s via /tmp/ait-discovery-tai/cargo-sem. Needed because the seeded target/ binary came from another worktree and lacked agent configuration capabilities; no Rust source changed, so no Rust tests or clippy were run."
+      },
+      {
+        "command": "node scripts/check-docs.mjs; node --test scripts/check-docs.test.mjs",
+        "result": "PASS: 559 Markdown documents and 223 ADRs verified, local links intact."
+      },
+      {
+        "command": "coverage",
+        "result": "not measured; not requested."
+      }
+    ]
+  },
+  "blockers": [
+    "The repo's mock (Mock Load Test) provider exists only in packages/protocol TypeScript and in no Rust adapter, so agent-profiles-settings.spec.ts, agent-profiles-picker.spec.ts and agent-profile-modeless-preferences.spec.ts cannot run against a real daemon on any branch. This change adds codex-based real-daemon coverage instead; the mock-dependent specs are unchanged apart from the new assertions added to agent-profiles-settings.spec.ts.",
+    "Visual inspection of the captured screenshots was not possible: the vision model answered with a usage-limit error. Behavioral assertions against the real daemon are the browser proof."
+  ],
+  "compatibility": "No protocol, SDK or saved-configuration change. Old hosts keep the existing unsupported/unavailable cards via the agentProfiles+agentConfigApply feature gate; old clients are unaffected. The nested edit URL shape changed within this unreleased feature branch only (agent-profiles/[profileId] -> agent-profiles/edit/[profileId]); no released consumer depends on it.",
+  "platform_limits": "Actual browser web fixture runs at desktop and 390px compact viewports; not a physical Android/iOS or packaged Electron claim. No Rust changes, therefore no Rust tests or clippy.",
+  "external_blockers": [],
+  "coverage": "not measured; not requested"
+}

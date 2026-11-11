@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAgentProfileCreateRoute,
+  buildAgentProfileEditRoute,
   buildHostAgentDetailRoute,
   buildHostRootRoute,
   buildHostWorkspaceOpenRoute,
@@ -205,6 +207,49 @@ describe("projects settings routes", () => {
 
   it("keeps route ids opaque", () => {
     expect(normalizeProjectSettingsRouteId("project%2F1")).toBe("project%2F1");
+  });
+});
+
+describe("agent profile settings routes", () => {
+  it("buildAgentProfileCreateRoute addresses the host's create form", () => {
+    expect(buildAgentProfileCreateRoute("host a")).toBe(
+      "/settings/hosts/host%20a/agent-profiles/create",
+    );
+  });
+
+  it("buildAgentProfileEditRoute addresses a stored profile under the edit segment", () => {
+    expect(buildAgentProfileEditRoute("host a", "agent_profile_1")).toBe(
+      "/settings/hosts/host%20a/agent-profiles/edit/agent_profile_1",
+    );
+  });
+
+  it("keeps ids that name route segments addressable", () => {
+    // The edit route sits one segment deeper than create, so no id value can
+    // shadow the static create route — including the literal "create".
+    expect(buildAgentProfileEditRoute("h1", "create")).toBe(
+      "/settings/hosts/h1/agent-profiles/edit/create",
+    );
+    expect(buildAgentProfileEditRoute("h1", "edit")).toBe(
+      "/settings/hosts/h1/agent-profiles/edit/edit",
+    );
+    expect(buildAgentProfileEditRoute("h1", "new")).toBe(
+      "/settings/hosts/h1/agent-profiles/edit/new",
+    );
+  });
+
+  it("keeps opaque ids with reserved characters intact", () => {
+    expect(buildAgentProfileEditRoute("h1", "legacy_favorite:mock:model/1")).toBe(
+      "/settings/hosts/h1/agent-profiles/edit/legacy_favorite%3Amock%3Amodel%2F1",
+    );
+    expect(buildAgentProfileEditRoute("h1", "a b")).toBe(
+      "/settings/hosts/h1/agent-profiles/edit/a%20b",
+    );
+  });
+
+  it("requires non-empty ids", () => {
+    expect(() => buildAgentProfileCreateRoute("  ")).toThrow();
+    expect(() => buildAgentProfileEditRoute("h1", "  ")).toThrow();
+    expect(() => buildAgentProfileEditRoute("", "p1")).toThrow();
   });
 });
 

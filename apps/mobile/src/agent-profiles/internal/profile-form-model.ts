@@ -30,6 +30,8 @@ export type AgentProfileValue = {
 export interface AgentProfileFormDisplay {
   label: string;
   description?: string;
+  /** The stored id is not in the current catalog; the value stays intact but reads as unresolved. */
+  unresolved?: boolean;
 }
 
 export interface AgentProfileFormOption {
@@ -40,20 +42,9 @@ export interface AgentProfileFormOption {
   testID: string;
 }
 
-/**
- * Pre-fill values for create mode. Only used when `mode === "create"`; edit
- * mode always seeds from the stored `profile` and ignores this.
- */
-export interface AgentProfileSeed {
-  provider: string;
-  modelId?: string;
-  name?: string;
-}
-
 export interface AgentProfileFormSnapshot {
   mode: "create" | "edit";
   profile?: AgentProfile;
-  seed?: AgentProfileSeed;
 }
 
 /**
@@ -243,7 +234,8 @@ function buildThinkingOptions(options: readonly AgentSelectOption[]): AgentProfi
 }
 
 /**
- * Every selection resolves to a concrete id.
+ * Create mode resolves every selection to a concrete id; edit mode leaves
+ * omitted fields unspecified (see `seedSelections`).
  *
  * Each list used to carry a synthetic "Provider default" row. It read as a value
  * you could choose but stored an absent one, so a profile that looked fully
@@ -278,6 +270,12 @@ function seedSelections(
     modes: readonly AgentMode[];
   },
 ): AgentProfileFormState {
+  // Edit mode keeps unspecified fields unspecified: a blank means "leave the
+  // agent's current value alone", and silently storing a catalog default would
+  // turn that into a concrete override the user never chose.
+  if (next.mode === "edit") {
+    return next;
+  }
   const modelId = next.modelId || defaultModelId(input.models);
   const modeId = next.modeId || defaultModeId(input.entry, input.modes);
   const thinkingOptionId =
@@ -295,13 +293,15 @@ function seedSelections(
 /**
  * Selected labels upgrade from the stored id to the catalog label once the
  * catalog lands, and fall back to the id when the catalog does not know the
- * value. They never blank out — a profile pointing at a retired model still
- * reads as that model.
+ * value. They never blank out and never become a different value — a profile
+ * pointing at a retired model still reads as that model, flagged `unresolved`
+ * so the form can say the host does not offer it.
  */
 function refineDisplay(
   current: AgentProfileFormDisplay | null,
   selectedId: string,
   resolvedLabel: string | null,
+  catalogResolved: boolean,
 ): AgentProfileFormDisplay | null {
   if (!selectedId) {
     return null;
@@ -309,7 +309,10 @@ function refineDisplay(
   if (resolvedLabel) {
     return { label: resolvedLabel };
   }
-  return current ?? { label: selectedId };
+  const fallback = current ?? { label: selectedId };
+  // Before the catalog lands the id is simply not yet upgraded; afterwards a
+  // missing label means the host no longer knows the value.
+  return catalogResolved ? { ...fallback, unresolved: true } : fallback;
 }
 
 function buildFeatureRequest(state: AgentProfileFormState): AgentProfileFeatureRequest | null {
@@ -324,16 +327,22 @@ function buildFeatureRequest(state: AgentProfileFormState): AgentProfileFeatureR
   };
 }
 
+/**
+ * A JSON tuple, not a delimiter join: provider/model/mode/thinking ids are
+ * opaque strings that may themselves contain any delimiter, and a join lets
+ * two different requests collide onto one key — a late feature listing for
+ * the old selection would then install under the new one.
+ */
 export function buildFeatureRequestKey(request: AgentProfileFeatureRequest | null): string | null {
   if (!request) {
     return null;
   }
-  return [
+  return JSON.stringify([
     request.provider,
     request.model ?? "",
     request.modeId ?? "",
     request.thinkingOptionId ?? "",
-  ].join("|");
+  ]);
 }
 
 function buildSubmitValue(state: AgentProfileFormState): AgentProfileValue | null {
@@ -378,10 +387,9 @@ function seedDisplay(value: string | undefined): AgentProfileFormDisplay | null 
  */
 function buildInitialState(snapshot: AgentProfileFormSnapshot): AgentProfileFormState {
   const profile = snapshot.profile ?? BLANK_PROFILE;
-  const seed = snapshot.mode === "create" ? snapshot.seed : undefined;
-  const name = seed?.name ?? profile.name;
-  const provider = seed?.provider ?? profile.provider;
-  const modelId = seed?.modelId ?? profile.model ?? "";
+  const name = profile.name;
+  const provider = profile.provider;
+  const modelId = profile.model ?? "";
   return {
     mode: snapshot.mode,
     name,
@@ -456,11 +464,13 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
         next.providerDisplay,
         next.provider,
         findEntry(entries, next.provider)?.label ?? null,
+        catalogResolution === "complete",
       ),
       modelDisplay: refineDisplay(
         next.modelDisplay,
         next.modelId,
         models.find((model) => model.id === next.modelId)?.label ?? null,
+        catalogResolution === "complete",
       ),
       modeDisplay: refineDisplay(
         next.modeDisplay,
@@ -469,6 +479,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
           const mode = modes.find((entry) => entry.id === next.modeId);
           return mode ? formatAgentModeLabel(mode) : null;
         })(),
+        catalogResolution === "complete",
       ),
       thinkingDisplay: refineDisplay(
         next.thinkingDisplay,
@@ -477,6 +488,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
           const option = thinking.find((entry) => entry.id === next.thinkingOptionId);
           return option ? formatThinkingOptionLabel(option) : null;
         })(),
+        catalogResolution === "complete",
       ),
       catalogResolution,
       featureResolution,
@@ -487,11 +499,15 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
     // A field appears once the catalog can populate it, and stays visible while
     // a stored value needs a home even if this host cannot resolve it.
     const hasProvider = Boolean(withOptions.provider);
+    // Edit mode always offers the optional fields once a provider is chosen, so
+    // "leave unchanged" stays reachable even when the catalog lists nothing.
+    const editable = withOptions.mode === "edit";
     const disclosure: AgentProfileFormDisclosure = {
-      showModelField: hasProvider && (models.length > 0 || Boolean(withOptions.modelId)),
-      showModeField: hasProvider && (modes.length > 0 || Boolean(withOptions.modeId)),
+      showModelField:
+        hasProvider && (editable || models.length > 0 || Boolean(withOptions.modelId)),
+      showModeField: hasProvider && (editable || modes.length > 0 || Boolean(withOptions.modeId)),
       showThinkingField:
-        hasProvider && (thinking.length > 0 || Boolean(withOptions.thinkingOptionId)),
+        hasProvider && (editable || thinking.length > 0 || Boolean(withOptions.thinkingOptionId)),
       showFeaturesField: hasProvider && features.length > 0,
     };
     const canSubmit =
@@ -537,10 +553,19 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
       }
       resolvedFeatureKey = requestKey;
       resolvedFeatures = [...features];
-      publish((current) => ({
-        ...current,
-        featureValues: pruneFeatureValues(current.featureValues, resolvedFeatures),
-      }));
+      publish((current) =>
+        // An empty listing prunes nothing. A host that cannot resolve the
+        // stored model legitimately reports no features, and erasing stored
+        // values on that basis destroys data a newer client wrote. Only a
+        // non-empty listing proves which ids this host actually offers;
+        // failed listings keep values too (applyFeaturesUnavailable).
+        current.mode === "edit" && resolvedFeatures.length === 0
+          ? current
+          : {
+              ...current,
+              featureValues: pruneFeatureValues(current.featureValues, resolvedFeatures),
+            },
+      );
     },
     applyFeaturesUnavailable: (requestKey) => {
       if (requestKey !== state.featureRequestKey) {
@@ -561,7 +586,9 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
         }
         // Everything below the provider is provider-scoped: a model id, mode id,
         // thinking id or feature id from the old provider means nothing here.
-        // Clearing them is enough — `derive` seeds the new provider's defaults.
+        // Clearing them is enough — create mode seeds the new provider's
+        // defaults in `derive`, and edit mode leaves them unspecified so the
+        // agent's current values stay in force.
         return {
           ...current,
           provider: providerId,

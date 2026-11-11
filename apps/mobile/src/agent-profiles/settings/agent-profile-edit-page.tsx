@@ -1,0 +1,668 @@
+import { useCallback, useMemo, type ReactElement } from "react";
+import { Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { StyleSheet } from "react-native-unistyles";
+import type { AgentFeature } from "@ait/protocol/agent-types";
+import type { AgentProfile } from "@ait/protocol/messages";
+import { formatAgentFeatureLabel } from "@/agent-controls/labels";
+import { Button } from "@/components/ui/button";
+import { type FieldControlSize } from "@/components/ui/control-geometry";
+import { Field, FormTextInput } from "@/components/ui/form-field";
+import {
+  SelectField,
+  type SelectFieldDisplay,
+  type SelectFieldOption,
+} from "@/components/ui/select-field";
+import { Switch } from "@/components/ui/switch";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { toErrorMessage } from "@/utils/error-messages";
+import { AgentProfileAppearanceField } from "./agent-profile-appearance-field";
+import type {
+  AgentProfileFormModel,
+  AgentProfileFormOption,
+  AgentProfileValue,
+} from "../internal/profile-form-model";
+import { generateAgentProfileId } from "../internal/profile-id";
+import { useAgentProfiles } from "../internal/use-agent-profiles";
+import {
+  useAgentProfileFormCatalog,
+  useAgentProfileFormFeatures,
+} from "../internal/use-profile-form-inputs";
+import {
+  useAgentProfileFormModel,
+  useAgentProfileFormState,
+} from "../internal/use-profile-form-model";
+
+/** The blank selection: an omitted field keeps the agent's current value on apply. */
+const UNSET_VALUE = "";
+
+export interface AgentProfileEditPageProps {
+  serverId: string;
+  /** Null creates a new profile; an id edits that stored record. */
+  profileId: string | null;
+  onDone: () => void;
+}
+
+/**
+ * The profile fields this form renders. Anything else in a stored record is
+ * passthrough data — written by a newer client, or by a feature this build does
+ * not know about — and must survive an edit here untouched.
+ */
+const EDITOR_OWNED_FIELDS = [
+  "name",
+  "icon",
+  "color",
+  "provider",
+  "model",
+  "modeId",
+  "thinkingOptionId",
+  "featureValues",
+  "notes",
+] as const satisfies readonly (keyof AgentProfileValue)[];
+
+/**
+ * Drops the owned fields from a stored record so the submitted value can be
+ * layered on top: an owned field missing from `value` was cleared by the user,
+ * while every non-owned field stays.
+ */
+function withoutEditorOwnedFields(profile: AgentProfile): Partial<AgentProfile> {
+  const kept: Partial<AgentProfile> = { ...profile };
+  for (const field of EDITOR_OWNED_FIELDS) {
+    delete kept[field];
+  }
+  return kept;
+}
+
+function toSelectOptions(options: AgentProfileFormOption[]): SelectFieldOption<string>[] {
+  return options.map((option) => ({
+    id: option.id,
+    value: option.value,
+    label: option.label,
+    ...(option.description ? { description: option.description } : {}),
+    testID: option.testID,
+  }));
+}
+
+/**
+ * The nested create/edit form. Create and edit never share a mounted instance:
+ * the caller keys this page on mode plus profile id, so every visit constructs
+ * a form model seeded from that record alone.
+ */
+export function AgentProfileEditPage({
+  serverId,
+  profileId,
+  onDone,
+}: AgentProfileEditPageProps): ReactElement | null {
+  const { t } = useTranslation();
+  const { profiles, isSupported, saveProfiles } = useAgentProfiles(serverId);
+  const mode = profileId === null ? "create" : "edit";
+  const profile = useMemo(
+    () => (profileId === null ? undefined : profiles?.find((entry) => entry.id === profileId)),
+    [profileId, profiles],
+  );
+
+  const handleSave = useCallback(
+    async (value: AgentProfileValue) => {
+      // Saves the whole list, so a write before the config lands would replace
+      // every stored profile with this one. The guards below already render
+      // nothing in that state; this is the belt to their braces.
+      if (!profiles) {
+        return;
+      }
+      // The edited record keeps everything the form does not own. `AgentProfileSchema`
+      // is `.passthrough()`, so a field a newer client wrote is stored state this
+      // editor cannot interpret — erasing it on save would silently destroy it.
+      // Only the fields the form does own are dropped when `value` omits them,
+      // because an omitted owned field means the user cleared it.
+      const next: AgentProfile[] =
+        mode === "edit" && profile
+          ? profiles.map((entry) =>
+              entry.id === profile.id
+                ? { ...withoutEditorOwnedFields(entry), ...value, id: entry.id }
+                : entry,
+            )
+          : [...profiles, { id: generateAgentProfileId(), ...value }];
+      await saveProfiles(next);
+    },
+    [mode, profile, profiles, saveProfiles],
+  );
+
+  if (!isSupported) {
+    return (
+      <View style={styles.unavailable} testID="agent-profile-edit-unavailable">
+        <Text style={styles.unavailableText}>{t("settings.host.agentProfiles.unsupported")}</Text>
+      </View>
+    );
+  }
+  if (!profiles) {
+    // The daemon config has not arrived. Both modes must wait: an edit form would
+    // seed empty, and a create save would write `[newProfile]` over the stored list.
+    return null;
+  }
+  if (profileId !== null && !profile) {
+    return (
+      <View style={styles.unavailable} testID="agent-profile-edit-missing">
+        <Text style={styles.unavailableText}>{t("settings.host.agentProfiles.notFound")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <AgentProfileEditForm
+      serverId={serverId}
+      mode={mode}
+      {...(profile ? { profile } : {})}
+      onDone={onDone}
+      onSave={handleSave}
+    />
+  );
+}
+
+function AgentProfileEditForm({
+  serverId,
+  mode,
+  profile,
+  onDone,
+  onSave,
+}: {
+  serverId: string;
+  mode: "create" | "edit";
+  profile?: AgentProfile;
+  onDone: () => void;
+  onSave: (value: AgentProfileValue) => Promise<void>;
+}): ReactElement {
+  const { t } = useTranslation();
+  const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
+  const snapshot = useMemo(() => ({ mode, ...(profile ? { profile } : {}) }), [mode, profile]);
+  const model = useAgentProfileFormModel(serverId, snapshot);
+  const state = useAgentProfileFormState(model);
+  const catalog = useAgentProfileFormCatalog({ serverId, model });
+  const selectedEntry = catalog.entries?.find((entry) => entry.provider === state.provider);
+  const catalogError =
+    selectedEntry?.status === "error" || selectedEntry?.status === "unavailable"
+      ? (selectedEntry.error ?? catalog.error)
+      : catalog.error;
+  useAgentProfileFormFeatures({ serverId, model, state });
+
+  const providerOptions = useMemo(
+    () => toSelectOptions(state.providerOptions),
+    [state.providerOptions],
+  );
+  const modelOptions = useMemo(() => toSelectOptions(state.modelOptions), [state.modelOptions]);
+  const modeOptions = useMemo(() => toSelectOptions(state.modeOptions), [state.modeOptions]);
+  const thinkingOptions = useMemo(
+    () => toSelectOptions(state.thinkingOptions),
+    [state.thinkingOptions],
+  );
+
+  const handleAppearanceChange = useCallback(
+    (value: { icon: string; color: string }) => model.setAppearance(value),
+    [model],
+  );
+  const handleCatalogOpen = useCallback(() => {
+    catalog.refetchIfStale(state.provider);
+  }, [catalog.refetchIfStale, state.provider]);
+  const handleProviderChange = useCallback(
+    (value: string, display: SelectFieldDisplay) => {
+      model.setProvider(value, display);
+      catalog.refetchIfStale(value);
+    },
+    [catalog.refetchIfStale, model],
+  );
+  const handleModelChange = useCallback(
+    (value: string, display: SelectFieldDisplay) => model.setModel(value, value ? display : null),
+    [model],
+  );
+  const handleModeChange = useCallback(
+    (value: string, display: SelectFieldDisplay) => model.setMode(value, value ? display : null),
+    [model],
+  );
+  const handleThinkingChange = useCallback(
+    (value: string, display: SelectFieldDisplay) =>
+      model.setThinking(value, value ? display : null),
+    [model],
+  );
+
+  const handleSave = useCallback(async () => {
+    const value = model.getState().submitValue;
+    if (!value) {
+      return;
+    }
+    model.setSubmitError(null);
+    model.setSubmitting(true);
+    try {
+      await onSave(value);
+      onDone();
+    } catch (error) {
+      model.setSubmitError(toErrorMessage(error));
+    } finally {
+      model.setSubmitting(false);
+    }
+  }, [model, onDone, onSave]);
+
+  const handleSavePress = useCallback(() => {
+    void handleSave();
+  }, [handleSave]);
+
+  const handleCancel = useCallback(() => {
+    if (state.isSubmitting) {
+      return;
+    }
+    onDone();
+  }, [onDone, state.isSubmitting]);
+
+  // Edit mode offers an explicit blank row: unspecified fields keep the agent's
+  // current value when the profile is applied. Create mode seeds concrete
+  // defaults instead, so it has no unset row.
+  const unsetOption = useMemo<SelectFieldOption<string> | null>(
+    () =>
+      mode === "edit"
+        ? {
+            id: UNSET_VALUE,
+            value: UNSET_VALUE,
+            label: t("settings.host.agentProfiles.leaveUnchanged"),
+            testID: "agent-profile-leave-unchanged-option",
+          }
+        : null,
+    [mode, t],
+  );
+  const unsetDisplay = useMemo<SelectFieldDisplay>(
+    () => ({ label: t("settings.host.agentProfiles.leaveUnchanged") }),
+    [t],
+  );
+  const unresolvedHint = t("settings.host.agentProfiles.unresolvedValue");
+  const displayFor = useCallback(
+    (display: SelectFieldDisplay | null, value: string) => {
+      const resolved = mode === "edit" && !value ? unsetDisplay : display;
+      if (!resolved) {
+        return null;
+      }
+      // The stored id is not in this host's catalog: say so under the field
+      // instead of letting a raw id read like a resolved selection.
+      return resolved.unresolved
+        ? { ...resolved, description: resolved.description ?? unresolvedHint }
+        : resolved;
+    },
+    [mode, unresolvedHint, unsetDisplay],
+  );
+  // A stored id the catalog does not offer still needs a row of its own:
+  // without it the selection matches no option, and opening the field targets
+  // the blank "leave unchanged" row — one Enter would erase the stored value.
+  // Re-selecting this row keeps the id exactly as stored.
+  const withUnset = useCallback(
+    (options: SelectFieldOption<string>[], value: string, display: SelectFieldDisplay | null) => {
+      const kept =
+        value && display?.unresolved && !options.some((option) => option.value === value)
+          ? [
+              {
+                id: value,
+                value,
+                label: display.label,
+                description: display.description,
+                testID: "agent-profile-unresolved-option",
+              },
+              ...options,
+            ]
+          : options;
+      return unsetOption ? [unsetOption, ...kept] : kept;
+    },
+    [unsetOption],
+  );
+
+  return (
+    <View style={styles.body} testID="agent-profile-edit-page">
+      <View style={styles.nameRow}>
+        <View style={styles.iconField}>
+          <AgentProfileAppearanceField
+            label={t("settings.host.agentProfiles.iconLabel")}
+            icon={state.icon}
+            color={state.color}
+            onChange={handleAppearanceChange}
+            disabled={state.isSubmitting}
+            size={controlSize}
+            testID="agent-profile-icon-field"
+            triggerTestID="agent-profile-icon-trigger"
+          />
+        </View>
+        <View style={styles.nameField}>
+          <Field
+            label={t("settings.host.agentProfiles.nameLabel")}
+            testID="agent-profile-name-field"
+          >
+            <FormTextInput
+              initialValue={profile?.name ?? ""}
+              onChangeText={model.setName}
+              placeholder={t("settings.host.agentProfiles.namePlaceholder")}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!state.isSubmitting}
+              size={controlSize}
+              accessibilityLabel={t("settings.host.agentProfiles.nameLabel")}
+              testID="agent-profile-name-input"
+            />
+          </Field>
+        </View>
+      </View>
+
+      <SelectField
+        label={t("settings.host.agentProfiles.providerLabel")}
+        value={state.provider || null}
+        selectedDisplay={state.providerDisplay}
+        options={providerOptions}
+        onChange={handleProviderChange}
+        onOpen={handleCatalogOpen}
+        error={catalogError}
+        placeholder={t("settings.host.agentProfiles.providerPlaceholder")}
+        emptyText={t("settings.host.agentProfiles.noProviders")}
+        loading={state.catalogResolution !== "complete"}
+        disabled={state.isSubmitting}
+        searchable={providerOptions.length > 6}
+        title={t("settings.host.agentProfiles.providerLabel")}
+        size={controlSize}
+        testID="agent-profile-provider-field"
+        triggerTestID="agent-profile-provider-trigger"
+      />
+
+      {state.disclosure.showModelField ? (
+        <SelectField
+          label={t("settings.host.agentProfiles.modelLabel")}
+          value={state.modelId || UNSET_VALUE}
+          selectedDisplay={displayFor(state.modelDisplay, state.modelId)}
+          options={withUnset(
+            modelOptions,
+            state.modelId,
+            displayFor(state.modelDisplay, state.modelId),
+          )}
+          onChange={handleModelChange}
+          onOpen={handleCatalogOpen}
+          placeholder={t("settings.host.agentProfiles.modelLabel")}
+          emptyText={t("settings.host.agentProfiles.noModels")}
+          disabled={state.isSubmitting}
+          searchable={modelOptions.length > 6}
+          title={t("settings.host.agentProfiles.modelLabel")}
+          size={controlSize}
+          testID="agent-profile-model-field"
+          triggerTestID="agent-profile-model-trigger"
+        />
+      ) : null}
+
+      {state.disclosure.showModeField ? (
+        <SelectField
+          label={t("settings.host.agentProfiles.modeLabel")}
+          value={state.modeId || UNSET_VALUE}
+          selectedDisplay={displayFor(state.modeDisplay, state.modeId)}
+          options={withUnset(
+            modeOptions,
+            state.modeId,
+            displayFor(state.modeDisplay, state.modeId),
+          )}
+          onChange={handleModeChange}
+          placeholder={t("settings.host.agentProfiles.modeLabel")}
+          emptyText={t("settings.host.agentProfiles.noModes")}
+          disabled={state.isSubmitting}
+          searchable={modeOptions.length > 6}
+          title={t("settings.host.agentProfiles.modeLabel")}
+          size={controlSize}
+          testID="agent-profile-mode-field"
+          triggerTestID="agent-profile-mode-trigger"
+        />
+      ) : null}
+
+      {state.disclosure.showThinkingField ? (
+        <SelectField
+          label={t("settings.host.agentProfiles.thinkingLabel")}
+          value={state.thinkingOptionId || UNSET_VALUE}
+          selectedDisplay={displayFor(state.thinkingDisplay, state.thinkingOptionId)}
+          options={withUnset(
+            thinkingOptions,
+            state.thinkingOptionId,
+            displayFor(state.thinkingDisplay, state.thinkingOptionId),
+          )}
+          onChange={handleThinkingChange}
+          placeholder={t("settings.host.agentProfiles.thinkingLabel")}
+          emptyText={t("settings.host.agentProfiles.noThinkingOptions")}
+          disabled={state.isSubmitting}
+          searchable={thinkingOptions.length > 6}
+          title={t("settings.host.agentProfiles.thinkingLabel")}
+          size={controlSize}
+          testID="agent-profile-thinking-field"
+          triggerTestID="agent-profile-thinking-trigger"
+        />
+      ) : null}
+
+      {state.disclosure.showFeaturesField ? (
+        <Field
+          label={t("settings.host.agentProfiles.featuresLabel")}
+          testID="agent-profile-features-field"
+        >
+          <View style={styles.featureCard} testID="agent-profile-features-card">
+            {state.features.map((feature, index) => (
+              <AgentProfileFeatureRow
+                key={feature.id}
+                feature={feature}
+                isFirst={index === 0}
+                disabled={state.isSubmitting}
+                size={controlSize}
+                model={model}
+              />
+            ))}
+          </View>
+        </Field>
+      ) : null}
+
+      <Field
+        label={t("settings.host.agentProfiles.notesLabel")}
+        hint={t("settings.host.agentProfiles.notesHint")}
+        testID="agent-profile-notes-field"
+      >
+        <FormTextInput
+          initialValue={profile?.notes ?? ""}
+          onChangeText={model.setNotes}
+          placeholder={t("settings.host.agentProfiles.notesPlaceholder")}
+          multiline
+          numberOfLines={4}
+          style={styles.notesInput}
+          editable={!state.isSubmitting}
+          size={controlSize}
+          accessibilityLabel={t("settings.host.agentProfiles.notesLabel")}
+          testID="agent-profile-notes-input"
+        />
+      </Field>
+
+      {state.submitError ? (
+        <Text style={styles.submitError} testID="agent-profile-submit-error">
+          {state.submitError}
+        </Text>
+      ) : null}
+
+      <View style={styles.actions}>
+        <Button
+          variant="secondary"
+          style={styles.actionButton}
+          onPress={handleCancel}
+          disabled={state.isSubmitting}
+          testID="agent-profile-cancel-button"
+        >
+          {t("common.actions.cancel")}
+        </Button>
+        <Button
+          variant="default"
+          style={styles.actionButton}
+          onPress={handleSavePress}
+          disabled={!state.canSubmit}
+          testID="agent-profile-save-button"
+        >
+          {state.isSubmitting
+            ? t("settings.host.agentProfiles.saving")
+            : t("settings.host.agentProfiles.save")}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+function AgentProfileFeatureRow({
+  feature,
+  isFirst,
+  disabled,
+  size,
+  model,
+}: {
+  feature: AgentFeature;
+  isFirst: boolean;
+  disabled: boolean;
+  size: FieldControlSize;
+  model: AgentProfileFormModel;
+}): ReactElement {
+  const { t } = useTranslation();
+  const featureLabel = formatAgentFeatureLabel(feature, t);
+  const rowStyle = useMemo(
+    () => [styles.featureRow, isFirst ? null : styles.featureRowBorder],
+    [isFirst],
+  );
+  const handleToggle = useCallback(
+    (value: boolean) => model.setFeatureValue(feature.id, value),
+    [feature.id, model],
+  );
+  const handleSelect = useCallback(
+    (value: string) => model.setFeatureValue(feature.id, value),
+    [feature.id, model],
+  );
+  const selectOptions = useMemo<SelectFieldOption<string>[]>(
+    () =>
+      feature.type === "select"
+        ? feature.options.map((option) => ({
+            id: option.id,
+            value: option.id,
+            label: option.label,
+            ...(option.description ? { description: option.description } : {}),
+            testID: `agent-profile-feature-option-${feature.id}-${option.id}`,
+          }))
+        : [],
+    [feature],
+  );
+  const selectedDisplay = useMemo<SelectFieldDisplay | null>(() => {
+    if (feature.type !== "select" || !feature.value) {
+      return null;
+    }
+    const option = feature.options.find((candidate) => candidate.id === feature.value);
+    return { label: option?.label ?? feature.value };
+  }, [feature]);
+
+  if (feature.type === "select") {
+    return (
+      <View style={rowStyle} testID={`agent-profile-feature-row-${feature.id}`}>
+        <SelectField
+          label={featureLabel}
+          value={feature.value}
+          selectedDisplay={selectedDisplay}
+          options={selectOptions}
+          onChange={handleSelect}
+          placeholder={featureLabel}
+          emptyText={featureLabel}
+          disabled={disabled}
+          {...(feature.description ? { hint: feature.description } : {})}
+          title={featureLabel}
+          size={size}
+          testID={`agent-profile-feature-field-${feature.id}`}
+          triggerTestID={`agent-profile-feature-trigger-${feature.id}`}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={rowStyle} testID={`agent-profile-feature-row-${feature.id}`}>
+      <View style={styles.featureMeta}>
+        <Text style={styles.featureLabel} numberOfLines={1}>
+          {featureLabel}
+        </Text>
+        {feature.description ? (
+          <Text style={styles.featureDescription} numberOfLines={2}>
+            {feature.description}
+          </Text>
+        ) : null}
+      </View>
+      <Switch
+        value={feature.value === true}
+        onValueChange={handleToggle}
+        disabled={disabled}
+        accessibilityLabel={featureLabel}
+        testID={`agent-profile-feature-switch-${feature.id}`}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  body: {
+    gap: theme.spacing[4],
+    paddingBottom: theme.spacing[2],
+  },
+  unavailable: {
+    paddingVertical: theme.spacing[4],
+  },
+  unavailableText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+  },
+  // No width: the trigger is a glyph and a chevron, so it sizes to them.
+  iconField: {
+    flexShrink: 0,
+  },
+  nameField: {
+    flex: 1,
+  },
+  featureCard: {
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: theme.spacing[3],
+  },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+  },
+  featureRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  featureMeta: {
+    flex: 1,
+    gap: theme.spacing[1],
+  },
+  featureLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+  },
+  featureDescription: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  notesInput: {
+    minHeight: 88,
+    textAlignVertical: "top",
+  },
+  submitError: {
+    color: theme.colors.statusDanger,
+    fontSize: theme.fontSize.base,
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[2],
+  },
+  actionButton: {
+    flex: 1,
+  },
+}));

@@ -95,12 +95,9 @@ import { SpeedToggle } from "@/composer/agent-controls/speed-toggle";
 import { SPEED_FEATURE_ID } from "@/agent-controls/policy";
 import { CompactModelSheet } from "@/composer/agent-controls/model-sheet";
 import {
-  useAgentProfileEditor,
   useAgentProfilePicker,
   type AgentProfileApplyTarget,
-  type AgentProfileEditorControls,
   type AgentProfilePicker,
-  type AgentProfileSeed,
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
@@ -132,8 +129,6 @@ interface ControlledAgentControlsProps {
   agentProfiles?: AgentProfilePicker | null;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
-  onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
-  onEditAgentProfile?: (profileId: string) => void;
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onDropdownClose?: () => void;
@@ -299,22 +294,6 @@ function useEditAgentProfilesNavigation(
     router.push(buildSettingsHostSectionRoute(serverId, "agents"));
   }, [serverId]);
   return serverId && isSupported ? handleEdit : undefined;
-}
-
-function resolveAgentProfileEditorActions(
-  isSupported: boolean,
-  editor: AgentProfileEditorControls,
-): {
-  create?: (seed: AgentProfileSeed) => void;
-  edit?: (profileId: string) => void;
-} {
-  if (!isSupported) {
-    return {};
-  }
-  return {
-    create: editor.openCreateFromModel,
-    edit: editor.openEdit,
-  };
 }
 
 function buildFallbackModelSelectorProviders(
@@ -504,8 +483,6 @@ function ControlledAgentControls({
   agentProfiles = null,
   onApplyAgentProfile,
   onEditAgentProfiles,
-  onCreateAgentProfile,
-  onEditAgentProfile,
   features: nativeFeatures,
   onSetFeature,
   onDropdownClose,
@@ -771,8 +748,6 @@ function ControlledAgentControls({
             onSetFeature={onSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
-            onCreateAgentProfile={onCreateAgentProfile}
-            onEditAgentProfile={onEditAgentProfile}
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}
@@ -820,8 +795,6 @@ function ControlledAgentControls({
             onSetFeature={onSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
-            onCreateAgentProfile={onCreateAgentProfile}
-            onEditAgentProfile={onEditAgentProfile}
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}
@@ -866,8 +839,6 @@ interface DesktopAgentControlsContentProps {
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
-  onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
-  onEditAgentProfile?: (profileId: string) => void;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -928,8 +899,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     onSetFeature,
     onApplyAgentProfile,
     onEditAgentProfiles,
-    onCreateAgentProfile,
-    onEditAgentProfile,
     onDropdownClose,
     onModelSelectorOpen,
     onRetryModelProvider,
@@ -1018,8 +987,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 profiles={agentProfiles}
                 onApplyProfile={onApplyAgentProfile}
                 onEditProfiles={onEditAgentProfiles}
-                onCreateProfile={onCreateAgentProfile}
-                onEditProfile={onEditAgentProfile}
                 isLoading={isModelLoading}
                 disabled={modelDisabled}
                 onOpen={onModelSelectorOpen}
@@ -1138,8 +1105,6 @@ interface SheetAgentControlsContentProps {
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
-  onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
-  onEditAgentProfile?: (profileId: string) => void;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -1182,8 +1147,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     onSetFeature,
     onApplyAgentProfile,
     onEditAgentProfiles,
-    onCreateAgentProfile,
-    onEditAgentProfile,
     onDropdownClose,
     onModelSelectorOpen,
     onRetryModelProvider,
@@ -1285,8 +1248,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       profiles={agentProfiles}
       onApplyProfile={onApplyAgentProfile}
       onEditProfiles={onEditAgentProfiles}
-      onCreateProfile={onCreateAgentProfile}
-      onEditProfile={onEditAgentProfile}
       isLoading={isModelLoading}
       disabled={modelDisabled}
       onOpen={onModelSelectorOpen}
@@ -1740,8 +1701,6 @@ export const AgentControls = memo(function AgentControls({
     target: profileTarget,
   });
   const handleEditAgentProfiles = useEditAgentProfilesNavigation(serverId, agentProfiles !== null);
-  const profileEditor = useAgentProfileEditor(serverId);
-  const profileActions = resolveAgentProfileEditorActions(agentProfiles !== null, profileEditor);
 
   const handleSelectThinkingOption = useCallback(
     (thinkingOptionId: string) => {
@@ -1867,7 +1826,6 @@ export const AgentControls = memo(function AgentControls({
   return (
     <>
       {commandCenterRegistration}
-      {profileEditor.element}
       <ControlledAgentControls
         provider={agent.provider}
         modelSelectorProviders={agentModelSelectorProviders}
@@ -1877,8 +1835,6 @@ export const AgentControls = memo(function AgentControls({
         agentProfiles={agentProfiles}
         onApplyAgentProfile={agentProfiles?.applyProfile}
         onEditAgentProfiles={handleEditAgentProfiles}
-        onCreateAgentProfile={profileActions.create}
-        onEditAgentProfile={profileActions.edit}
         thinkingOptions={thinkingOptions.length > 0 ? thinkingOptions : undefined}
         selectedThinkingOptionId={modelSelection.selectedThinkingId ?? undefined}
         onSelectThinkingOption={handleSelectThinkingOption}
@@ -1966,8 +1922,6 @@ export function DraftAgentControls({
     modelSelectorServerId,
     agentProfiles !== null,
   );
-  const profileEditor = useAgentProfileEditor(modelSelectorServerId);
-  const profileActions = resolveAgentProfileEditorActions(agentProfiles !== null, profileEditor);
 
   const modeControl = useMemo<AgentModeControlValue | null>(
     () =>
@@ -1986,7 +1940,6 @@ export function DraftAgentControls({
 
   return (
     <>
-      {profileEditor.element}
       <ControlledAgentControls
         provider={selectedProvider ?? ""}
         modelSelectorProviders={modelSelectorProviders}
@@ -1998,8 +1951,6 @@ export function DraftAgentControls({
         agentProfiles={agentProfiles}
         onApplyAgentProfile={agentProfiles?.applyProfile}
         onEditAgentProfiles={handleEditAgentProfiles}
-        onCreateAgentProfile={profileActions.create}
-        onEditAgentProfile={profileActions.edit}
         thinkingOptions={mappedThinkingOptions.length > 0 ? mappedThinkingOptions : undefined}
         selectedThinkingOptionId={effectiveSelectedThinkingOption}
         onSelectThinkingOption={onSelectThinkingOption}

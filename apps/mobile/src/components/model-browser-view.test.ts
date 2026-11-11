@@ -7,7 +7,6 @@ import {
   resolveDesktopFixedHeight,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
-  groupProfilesByProviderModel,
   resolveModelBrowserScrolling,
 } from "./model-browser-view";
 
@@ -124,36 +123,6 @@ describe("model browser initial view", () => {
         hasProfiles: false,
       }),
     ).toEqual({ kind: "all" });
-  });
-});
-
-describe("groupProfilesByProviderModel", () => {
-  it("groups profiles by provider and model, skipping profiles without a model", () => {
-    const lookup = groupProfilesByProviderModel([
-      { provider: "claude", modelId: "opus-5" },
-      { provider: "claude", modelId: "opus-5" },
-      { provider: "claude", modelId: "sonnet-4.6" },
-      { provider: "claude", modelId: "" },
-      { provider: "codex", modelId: "gpt-5.4" },
-    ]);
-
-    expect(lookup.get("claude:opus-5")).toHaveLength(2);
-    expect(lookup.get("claude:sonnet-4.6")).toHaveLength(1);
-    expect(lookup.get("codex:gpt-5.4")).toHaveLength(1);
-    expect(lookup.has("claude:")).toBe(false);
-  });
-
-  it("trims model ids so whitespace cannot create a separate key", () => {
-    const lookup = groupProfilesByProviderModel([
-      { provider: "claude", modelId: "opus-5" },
-      { provider: "claude", modelId: "  opus-5  " },
-    ]);
-
-    expect(lookup.get("claude:opus-5")).toHaveLength(2);
-  });
-
-  it("returns an empty map for no refs", () => {
-    expect(groupProfilesByProviderModel([]).size).toBe(0);
   });
 });
 

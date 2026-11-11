@@ -64,7 +64,7 @@ export function AgentProfileRow({
     () => buildAgentProfileTags({ profile, entries, formatFeatureCount }),
     [entries, formatFeatureCount, profile],
   );
-  const summary = useMemo(() => tags.map((tag) => tag.label).join(" · "), [tags]);
+  const hasUnresolved = useMemo(() => tags.some((tag) => tag.unresolved), [tags]);
 
   const rowStyle = useMemo(
     () => [settingsStyles.row, isFirst ? null : settingsStyles.rowBorder, styles.row],
@@ -83,7 +83,16 @@ export function AgentProfileRow({
               {profile.name}
             </Text>
             <Text style={styles.summary} numberOfLines={1}>
-              {summary}
+              {tags.map((tag, index) => (
+                <Text
+                  key={tag.id}
+                  style={tag.unresolved ? styles.summaryUnresolved : undefined}
+                  {...(tag.unresolved ? { testID: `agent-profile-tag-unresolved-${tag.id}` } : {})}
+                >
+                  {index > 0 ? " · " : ""}
+                  {tag.label}
+                </Text>
+              ))}
             </Text>
           </View>
           {profile.notes ? (
@@ -97,6 +106,11 @@ export function AgentProfileRow({
                 {profile.notes}
               </Text>
             </View>
+          ) : null}
+          {hasUnresolved ? (
+            <Text style={styles.unresolvedHint} testID={`agent-profile-unresolved-${profile.id}`}>
+              {t("settings.host.agentProfiles.unresolvedValue")}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -169,6 +183,14 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+  summaryUnresolved: {
+    color: theme.colors.destructive,
+  },
+  unresolvedHint: {
+    color: theme.colors.destructive,
+    fontSize: theme.fontSize.sm,
+    marginTop: theme.spacing[1],
   },
   notes: {
     flexDirection: "row",
