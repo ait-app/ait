@@ -159,6 +159,8 @@
 - OpenCode 通过官方 `opencode acp` 运行；接受 1.x 与 2.0.25 及以上版本，其余版本报告不可用
   （[ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)，最低版本已由
   [ADR-143](../decisions/providers/adr-143-opencode-2-0-25-compatibility.md) 修订）。
+  已验证归属的子会话可只读核对 V2 持久终态，以修复遗漏的完成通知
+  （[ADR-237](../decisions/providers/adr-237-opencode-child-terminal-readback.md)）。
 - Codex 历史优先读取 `thread/timeline/list`，只在 `-32601` 或精确的 unknown-variant `-32600` 时
   回退 `thread/read`，其他错误保持可见
   （[ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)，历史限制已由

@@ -504,6 +504,16 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// Reconcile already verified child links with provider-owned durable lifecycle facts.
+    /// # Errors
+    /// Returns a provider read failure; callers may retain the previous observations.
+    async fn reconcile_subagents(
+        &self,
+        children: Vec<super::controls::NativeSubagent>,
+    ) -> Result<Vec<super::controls::NativeSubagent>, AgentSessionError> {
+        Ok(children)
+    }
+
     /// Derive a new native history before the selected user message, preserving the old thread.
     /// # Errors
     /// Returns an invalid target, active history, or native fork/rollback failure.

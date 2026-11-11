@@ -214,6 +214,28 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     );
   }, [client, params.parentAgentId, params.serverId, supported, unified]);
 
+  useEffect(() => {
+    if (
+      !client ||
+      !unified ||
+      !paseoRows.some(
+        (row) =>
+          row.kind === "paseo" &&
+          row.provider === "opencode" &&
+          row.observation &&
+          row.status === "running",
+      )
+    )
+      return;
+    const interval = setInterval(() => {
+      if (!client.isConnected) return;
+      void refreshUnifiedSubagents(client, params.serverId, params.parentAgentId).catch(
+        () => undefined,
+      );
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [client, params.parentAgentId, params.serverId, paseoRows, unified]);
+
   return useMemo(() => {
     if (params.providerParentSubagentId) return providerRows;
     if (providerRows.length === 0) return paseoRows;

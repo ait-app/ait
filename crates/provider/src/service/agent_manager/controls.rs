@@ -281,6 +281,10 @@ impl AgentManager {
             children.insert(child.id.clone(), child);
         }
         let children = descendants(&handle.session_id, children.into_values().collect())?;
+        let children = client
+            .reconcile_subagents(children)
+            .await
+            .map_err(|_| ErrorCode::AgentIo)?;
         if let Some(timeline) = &self.timeline {
             super::observed::register_children(
                 self.registry.as_ref(),
