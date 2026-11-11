@@ -29,11 +29,11 @@
     "Runtime reads during an active native turn add no input/writer or interruption and leave the turn running.",
     "No native /stats dashboard, /status console, arbitrary native_action gateway or new Todo/Goal/child editors."
   ],
-  "status": "validated",
+  "status": "delivered",
   "branch": "pr612-split-task04-statistics",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-  "commit": null,
-  "pr_url": null,
+  "commit": "c187052ed68a2843f9fb1639f01bbebf1c717059",
+  "pr_url": "https://github.com/ait-app/ait/pull/650",
   "checks": {
     "results": [
       { "command": "cargo fmt --all --check", "result": "passed" },
