@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use super::{MiniMaxClient, PROVIDER, config};
 use crate::local::acp_streaming::Stream;
+use crate::local::usage::requests::MAX_SEGMENT_ID;
 use crate::local::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
@@ -343,7 +344,14 @@ pub(super) fn turn_request(turn: &str, usage: &Value) -> Option<RequestUsage> {
         && request.output_tokens == 0
         && request.cache_read_tokens == 0
         && request.cache_write_tokens == 0;
-    (!empty && request.is_valid()).then_some(request)
+    if empty {
+        return None;
+    }
+    if request.segment_id.len() > MAX_SEGMENT_ID || !request.is_valid() {
+        tracing::warn!(provider = "minimax", turn = %turn, "dropped invalid request usage");
+        return None;
+    }
+    Some(request)
 }
 
 #[async_trait::async_trait]

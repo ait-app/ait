@@ -127,7 +127,7 @@ fn aborted_zero_usage_queues_no_request_but_keeps_the_snapshot() {
 fn a_full_display_queue_drops_the_request_instead_of_failing_the_turn() {
     let mut stream = Stream::default();
     stream.begin("turn".into());
-    while stream.events.len() + stream.tools.len() + 4 < stream.event_limit() {
+    while stream.events.len() + stream.tools.len() + 4 + REQUEST_HEADROOM < stream.event_limit() {
         stream.push(AgentTurnEvent::Cancelled).unwrap();
     }
 
@@ -137,4 +137,22 @@ fn a_full_display_queue_drops_the_request_instead_of_failing_the_turn() {
 
     assert!(requests(&stream).is_empty());
     assert!(stream.failure.is_none());
+}
+
+#[test]
+fn a_queued_request_leaves_headroom_so_later_output_still_fits() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    while stream.events.len() + stream.tools.len() + 5 + REQUEST_HEADROOM < stream.event_limit() {
+        stream.push(AgentTurnEvent::Cancelled).unwrap();
+    }
+
+    stream
+        .consume(&assistant_end(&json!({"input":1,"output":1})))
+        .unwrap();
+
+    assert_eq!(requests(&stream).len(), 1);
+    for _ in 0..REQUEST_HEADROOM {
+        stream.push(AgentTurnEvent::Cancelled).unwrap();
+    }
 }

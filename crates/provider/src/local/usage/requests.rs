@@ -11,7 +11,7 @@ use super::cumulative::UsageCounters;
 use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 /// Longest segment identity emitted, matching the Codex turn identity bound.
-const MAX_SEGMENT_ID: usize = 512;
+pub(crate) const MAX_SEGMENT_ID: usize = 512;
 
 /// Longest native response id embedded in a segment identity.
 const MAX_RESPONSE_ID: usize = 256;

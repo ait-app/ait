@@ -158,9 +158,9 @@ impl AgentSession for Session {
         PROVIDER
     }
     fn reports_token_usage(&self) -> bool {
-        self.engine
-            .native()
-            .is_some_and(AgentSession::reports_token_usage)
+        // Constant like the native session: the capability must not flip when the engine's
+        // native session is absent or taken.
+        true
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         self.engine

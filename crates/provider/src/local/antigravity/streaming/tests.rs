@@ -445,3 +445,22 @@ fn a_process_restart_or_counter_drop_rebaselines_without_a_segment() {
     assert_eq!(queued.len(), 1);
     assert_eq!((queued[0].input_tokens, queued[0].output_tokens), (5, 1));
 }
+
+#[test]
+fn a_result_missing_a_counter_keeps_the_baseline_unchanged() {
+    let mut stream = stream();
+    finish_with(&mut stream, 100, 10, 0);
+    requests(&mut stream);
+
+    stream.begin("gap".to_owned(), "conversation".to_owned());
+    let mut gap = result("SUCCESS");
+    gap["usage"] = json!({});
+    stream.finish(&gap).unwrap();
+    assert!(requests(&mut stream).is_empty());
+
+    stream.begin("after".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 300, 30, 0);
+    let queued = requests(&mut stream);
+    assert_eq!(queued.len(), 1);
+    assert_eq!((queued[0].input_tokens, queued[0].output_tokens), (200, 20));
+}

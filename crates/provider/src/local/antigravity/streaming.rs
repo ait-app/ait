@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use super::diagnostics::Failure;
 use crate::local::usage::cumulative::{CumulativeUsage, UsageCounters};
+use crate::local::usage::requests::MAX_SEGMENT_ID;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
@@ -345,9 +346,13 @@ impl Stream {
     /// baseline, so they queue nothing.
     fn push_request(&mut self, usage: &Value) {
         let field = |name: &str| usage[name].as_u64();
+        // A result without both counters cannot be differenced; keep the baseline unchanged.
+        let (Some(input), Some(output)) = (field("input_tokens"), field("output_tokens")) else {
+            return;
+        };
         let current = UsageCounters {
-            input: field("input_tokens").unwrap_or_default(),
-            output: field("output_tokens").unwrap_or_default(),
+            input,
+            output,
             cache_read: field("cache_read_tokens").unwrap_or_default(),
             cache_write: 0,
         };
@@ -366,12 +371,14 @@ impl Stream {
             cache_write_1h_tokens: None,
             reasoning_tokens: None,
             cost_usd_reported: None,
-            complete: field("input_tokens").is_some() && field("output_tokens").is_some(),
+            complete: true,
         };
-        if request.is_valid() {
-            self.segments += 1;
-            self.events.push_back(AgentTurnEvent::RequestUsage(request));
+        if request.segment_id.len() > MAX_SEGMENT_ID || !request.is_valid() {
+            tracing::warn!(provider = "antigravity", turn = %self.turn, "dropped invalid request usage");
+            return;
         }
+        self.segments += 1;
+        self.events.push_back(AgentTurnEvent::RequestUsage(request));
     }
 
     fn finish_compactions(&mut self) {
