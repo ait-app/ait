@@ -463,3 +463,55 @@ async fn local_command_admission_does_not_pretend_native_history_was_persisted()
         .unwrap();
     reopened.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn native_export_artifact_binds_the_ait_agent_id_not_the_native_session_id() {
+    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use crate::storage::timeline::Timeline;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    let (root, client, spec) = fixture();
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    let timeline = Timeline::open(&root.path().join("timeline.sqlite")).unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    manager.register_client(Box::new(client.clone())).unwrap();
+    // The authorized Ait Agent id is deliberately distinct from the OMP native sessionId.
+    let ait_id = "ait-agent-27";
+    manager
+        .create(ait_id, &spec, AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send(ait_id, "seed").await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while manager.active_turn(ait_id).is_some() {
+            manager.poll().await.unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let native_session_id = manager
+        .live_snapshot(ait_id)
+        .unwrap()
+        .persistence
+        .as_ref()
+        .unwrap()
+        .session_id
+        .clone();
+    assert_ne!(native_session_id, ait_id);
+    let mut receiver = manager.begin_native_html_export(ait_id).await.unwrap();
+    let export = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            manager.poll().await.unwrap();
+            if !receiver.is_empty() {
+                return receiver.await.unwrap().unwrap();
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .expect("native export delivered");
+    // The artifact/receipt/grant must key on the authorized Ait Agent, not the native UUID.
+    assert_eq!(export.artifact.agent_id, ait_id);
+    assert_ne!(export.artifact.agent_id, native_session_id);
+    manager.close_all().await.unwrap();
+}

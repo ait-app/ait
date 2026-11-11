@@ -57,7 +57,6 @@ struct NativeExport {
     file_name: String,
     started: Instant,
     abandoned: bool,
-    settled: bool,
 }
 
 #[derive(Debug)]
@@ -346,7 +345,10 @@ impl Session {
         output: std::path::PathBuf,
         directory: std::path::PathBuf,
     ) -> Result<String, AgentSessionError> {
-        if self.closed || self.native_export.is_some() {
+        // One in-flight render plus a bounded set of settled records awaiting late cleanup.
+        // Refuse new exports once the late set is full rather than evicting a record (which
+        // would reintroduce the late-file leak); every retained record keeps its cleanup.
+        if self.closed || self.native_export.is_some() || self.late_native_exports.len() >= 64 {
             return Err(AgentSessionError::Rejected);
         }
         // The public renderer refuses in-memory sessions; require the persisted identity.
@@ -370,7 +372,6 @@ impl Session {
             file_name,
             started: Instant::now(),
             abandoned: false,
-            settled: false,
         });
         Ok(id)
     }
@@ -382,7 +383,6 @@ impl Session {
             remove_owned(&export.output);
             self.late_native_exports.push(NativeExport {
                 abandoned: true,
-                settled: true,
                 ..export
             });
         }
@@ -425,7 +425,12 @@ impl Session {
             // The renderer must confirm the exact owned path; anything else is not adopted.
             Err(NativeHtmlExportError::Rejected)
         } else {
-            adopt_native_html(&export.output, &export.directory, &self.state, &export.file_name)
+            adopt_native_html(
+                &export.output,
+                &export.directory,
+                &self.state,
+                &export.file_name,
+            )
         };
         // Success and failure alike: the owned named staging file never survives adoption.
         remove_owned(&export.output);
@@ -451,10 +456,7 @@ impl Session {
                         NativeHtmlExportError::Io,
                     )));
             }
-            self.late_native_exports.push(NativeExport {
-                settled: true,
-                ..export
-            });
+            self.late_native_exports.push(export);
         }
     }
 
@@ -1155,14 +1157,17 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        self.stream.events.extend(self.dialogs.clear());
+        // Stop and reap the native writer first: a still-running renderer could otherwise
+        // recreate an owned staging file after we unlink it. Only then remove owned paths.
+        let closed = self.transport.close().await;
         if let Some(export) = self.native_export.take() {
             remove_owned(&export.output);
         }
         for export in self.late_native_exports.drain(..) {
             remove_owned(&export.output);
         }
-        self.stream.events.extend(self.dialogs.clear());
-        self.transport.close().await
+        closed
     }
 }
 
@@ -1190,8 +1195,10 @@ fn adopt_native_html(
     directory: &std::path::Path,
     state: &Value,
     file_name: &str,
-) -> Result<model::download::GeneratedArtifact, crate::ports::native_html_export::NativeHtmlExportError>
-{
+) -> Result<
+    model::download::GeneratedArtifact,
+    crate::ports::native_html_export::NativeHtmlExportError,
+> {
     use crate::ports::native_html_export::NativeHtmlExportError;
     use std::io::{Read, Seek, Write};
     // Confinement: the adopted file must live in the exact owned private export directory
@@ -1199,16 +1206,14 @@ fn adopt_native_html(
     let canonical_directory =
         std::fs::canonicalize(directory).map_err(|_| NativeHtmlExportError::Io)?;
     let parent = output.parent().ok_or(NativeHtmlExportError::Rejected)?;
-    let canonical_parent =
-        std::fs::canonicalize(parent).map_err(|_| NativeHtmlExportError::Io)?;
+    let canonical_parent = std::fs::canonicalize(parent).map_err(|_| NativeHtmlExportError::Io)?;
     if canonical_parent != canonical_directory
         || output.file_name().and_then(|name| name.to_str()) != Some(file_name)
     {
         return Err(NativeHtmlExportError::Rejected);
     }
     // Reject a symlinked final component before opening; O_NOFOLLOW then closes the race.
-    let link_metadata =
-        std::fs::symlink_metadata(output).map_err(|_| NativeHtmlExportError::Io)?;
+    let link_metadata = std::fs::symlink_metadata(output).map_err(|_| NativeHtmlExportError::Io)?;
     if !link_metadata.file_type().is_file() {
         return Err(NativeHtmlExportError::Rejected);
     }
@@ -1225,7 +1230,7 @@ fn adopt_native_html(
         .ok_or(NativeHtmlExportError::Rejected)?
         .to_owned();
     let mut artifact = tempfile::tempfile().map_err(|_| NativeHtmlExportError::Io)?;
-    let mut buffer = [0u8; 32 * 1024];
+    let mut buffer = vec![0u8; 32 * 1024];
     let mut size = 0u64;
     loop {
         let read = source

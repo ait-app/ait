@@ -57,7 +57,14 @@ enum Command {
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
         realtime: Option<model::realtime::Endpoint>,
-        native_export: Option<NativeExportReply>,
+        permit: OwnedSemaphorePermit,
+        queued: std::time::Instant,
+    },
+    /// One provider-native HTML render. The owned request and the typed artifact reply are
+    /// the only payloads: no JSON round-trip and no unread placeholder channel.
+    NativeHtmlExport {
+        request: crate::ports::native_html_export::Request,
+        reply: NativeExportReply,
         permit: OwnedSemaphorePermit,
         queued: std::time::Instant,
     },
@@ -322,7 +329,6 @@ impl AgentExecution {
                 reply,
                 cancel: None,
                 realtime: None,
-                native_export: None,
                 permit: command_permit,
                 queued: std::time::Instant::now(),
             })
@@ -380,7 +386,6 @@ impl AgentExecution {
                 reply,
                 cancel,
                 realtime,
-                native_export: None,
                 permit,
                 queued: std::time::Instant::now(),
             })
@@ -414,16 +419,11 @@ impl AgentExecution {
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
         let (reply, receiver) = oneshot::channel();
-        let (value_reply, _value_receiver) = oneshot::channel();
         self.0
             .sender
-            .try_send(Command::Request {
-                method: Operation::NativeHtmlExport,
-                params: serde_json::to_value(&request).map_err(|_| ErrorCode::InvalidMessage)?,
-                reply: value_reply,
-                cancel: None,
-                realtime: None,
-                native_export: Some(reply),
+            .try_send(Command::NativeHtmlExport {
+                request,
+                reply,
                 permit,
                 queued: std::time::Instant::now(),
             })

@@ -115,42 +115,79 @@ pub(super) async fn request(
     let handle = tokio::runtime::Handle::current();
     tokio::task::spawn_blocking(move || {
         handle.block_on(async move {
-            if let Command::Request {
-                method,
-                params,
-                reply,
-                cancel,
-                realtime,
-                native_export,
-                permit,
-                queued,
-            } = command
-            {
-                let _permit = permit;
-                let started = Instant::now();
-                let queue_ms = queued.elapsed().as_millis();
-                if owned {
-                    let _ = state.owners.pending(&state.manager.owned_agents());
-                    state.observe_messages();
-                    let prepared = async {
-                        state.manager.reconcile().await?;
-                        state.manager.poll().await
+            match command {
+                Command::Request {
+                    method,
+                    params,
+                    reply,
+                    cancel,
+                    realtime,
+                    permit,
+                    queued,
+                } => {
+                    let _permit = permit;
+                    let started = Instant::now();
+                    let queue_ms = queued.elapsed().as_millis();
+                    if owned {
+                        let _ = state.owners.pending(&state.manager.owned_agents());
+                        state.observe_messages();
+                        let prepared = async {
+                            state.manager.reconcile().await?;
+                            state.manager.poll().await
+                        }
+                        .await;
+                        if prepared.is_err() {
+                            let _ = state.publish();
+                            let _ = reply.send(Err(ErrorCode::AgentIo));
+                            return state;
+                        }
                     }
-                    .await;
-                    if prepared.is_err() {
-                        let _ = state.publish();
-                        let _ = reply.send(Err(ErrorCode::AgentIo));
-                        return state;
-                    }
+                    voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
+                    tracing::debug!(
+                        method = method.as_str(),
+                        class = class(method, owned),
+                        queue_ms,
+                        execution_ms = started.elapsed().as_millis(),
+                        "provider.request.completed"
+                    );
                 }
-                voice::dispatch(&mut state, method, params, (reply, cancel, realtime, native_export)).await;
-                tracing::debug!(
-                    method = method.as_str(),
-                    class = class(method, owned),
-                    queue_ms,
-                    execution_ms = started.elapsed().as_millis(),
-                    "provider.request.completed"
-                );
+                Command::NativeHtmlExport {
+                    request,
+                    reply,
+                    permit,
+                    queued,
+                } => {
+                    let _permit = permit;
+                    let started = Instant::now();
+                    let queue_ms = queued.elapsed().as_millis();
+                    if owned {
+                        let _ = state.owners.pending(&state.manager.owned_agents());
+                        state.observe_messages();
+                        let prepared = async {
+                            state.manager.reconcile().await?;
+                            state.manager.poll().await
+                        }
+                        .await;
+                        if prepared.is_err() {
+                            let _ = state.publish();
+                            let _ = reply.send(Err(ErrorCode::AgentIo));
+                            return state;
+                        }
+                    }
+                    // Admit the render and return the lane to its poll loop immediately; the
+                    // artifact is forwarded off-lane so foreground polling is never blocked.
+                    state.native_html_export(request, reply).await;
+                    let _ = state.manager.reconcile().await;
+                    let _ = state.publish();
+                    tracing::debug!(
+                        method = "agent.native_html.export.request",
+                        class = class(Operation::NativeHtmlExport, owned),
+                        queue_ms,
+                        execution_ms = started.elapsed().as_millis(),
+                        "provider.request.completed"
+                    );
+                }
+                Command::Shutdown(_) => {}
             }
             state
         })

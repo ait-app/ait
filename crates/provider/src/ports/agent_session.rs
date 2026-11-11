@@ -94,20 +94,30 @@ pub(crate) enum AgentTurnEvent {
         deserialize_with = "deserialize_native_html_export"
     )]
     NativeHtmlExport(
-        Result<super::native_html_export::ExportedNativeHtml, super::native_html_export::NativeHtmlExportError>,
+        Result<
+            super::native_html_export::ExportedNativeHtml,
+            super::native_html_export::NativeHtmlExportError,
+        >,
     ),
 }
 
 /// Equality is structural for every variant except the owned-file native export, which is
 /// compared by its safe metadata (an open file handle is neither cloneable nor comparable).
+#[allow(clippy::match_same_arms)] // each arm compares a distinct variant's payload
 impl PartialEq for AgentTurnEvent {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Started(a), Self::Started(b)) => a == b,
             (Self::Subagent(a), Self::Subagent(b)) => a == b,
             (
-                Self::Progress { observation: ao, entry: ae },
-                Self::Progress { observation: bo, entry: be },
+                Self::Progress {
+                    observation: ao,
+                    entry: ae,
+                },
+                Self::Progress {
+                    observation: bo,
+                    entry: be,
+                },
             ) => ao == bo && ae == be,
             (Self::PermissionRequested(a), Self::PermissionRequested(b)) => a == b,
             (Self::PermissionResolved(a), Self::PermissionResolved(b)) => a == b,
@@ -116,8 +126,7 @@ impl PartialEq for AgentTurnEvent {
             (Self::Usage(a), Self::Usage(b)) => a == b,
             (Self::RuntimeInfo(a), Self::RuntimeInfo(b)) => a == b,
             (Self::Completed(a), Self::Completed(b)) => a == b,
-            (Self::Cancelled, Self::Cancelled) => true,
-            (Self::Failed, Self::Failed) => true,
+            (Self::Cancelled, Self::Cancelled) | (Self::Failed, Self::Failed) => true,
             (Self::NativeHtmlExport(a), Self::NativeHtmlExport(b)) => match (a, b) {
                 (Ok(x), Ok(y)) => {
                     x.artifact.agent_id == y.artifact.agent_id

@@ -116,3 +116,49 @@ async fn idle_expiry_removes_artifact_without_a_later_request_or_provider_reexec
     );
     assert!(api.shared.provider.agent_execution.is_none());
 }
+
+#[tokio::test]
+async fn native_html_receipt_preserves_bytes_and_reuses_the_single_use_grant() {
+    let root = tempfile::tempdir().unwrap();
+    let api = api(root.path());
+    let mut file = tempfile::tempfile().unwrap();
+    let native = "<!DOCTYPE html><html><script>var v=1;</script>NATIVE_BYTES</html>";
+    file.write_all(native.as_bytes()).unwrap();
+    file.rewind().unwrap();
+    let export = provider::ports::native_html_export::ExportedNativeHtml {
+        artifact: GeneratedArtifact {
+            agent_id: "agent".to_owned(),
+            file_name: "ait-native-test.html".to_owned(),
+            mime_type: "text/html; charset=utf-8".to_owned(),
+            size: native.len() as u64,
+            file,
+        },
+    };
+    let receipt = register_native(&api.shared, export).await.unwrap();
+    assert_eq!(receipt["source"], "omp_native");
+    assert_eq!(receipt["size"], native.len() as u64);
+    assert_eq!(receipt["fileName"], "ait-native-test.html");
+    let token = receipt["token"].as_str().unwrap();
+    let files = api.shared.filesystem.files.as_ref().unwrap();
+    assert!(files.lock().unwrap().bind_download(token, "visitor"));
+    let (mut reader, name) = files
+        .lock()
+        .unwrap()
+        .consume_download(token, Some("visitor"))
+        .unwrap();
+    let mut bytes = String::new();
+    reader.read_to_string(&mut bytes).unwrap();
+    // Native bytes are preserved verbatim, including active scripts.
+    assert_eq!(bytes, native);
+    assert_eq!(name, "ait-native-test.html");
+    assert!(
+        files
+            .lock()
+            .unwrap()
+            .consume_download(token, Some("visitor"))
+            .is_err()
+    );
+    api.shared.cancellation.cancel();
+    api.shared.tasks.close();
+    api.shared.tasks.wait().await;
+}

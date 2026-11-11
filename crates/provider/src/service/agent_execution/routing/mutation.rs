@@ -135,7 +135,6 @@ impl Router {
                     reply,
                     cancel: None,
                     realtime: None,
-                    native_export: None,
                     permit,
                     queued: std::time::Instant::now(),
                 },

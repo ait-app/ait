@@ -58,17 +58,9 @@ pub(super) async fn dispatch(
         Reply,
         Option<CancellationToken>,
         Option<model::realtime::Endpoint>,
-        Option<super::NativeExportReply>,
     ),
 ) {
-    let (reply, cancel, realtime, native_export) = context;
-    if let Some(native_reply) = native_export {
-        state.native_html_export(params, native_reply).await;
-        let _ = state.manager.reconcile().await;
-        let _ = state.publish();
-        let _ = reply.send(Ok(json!({"nativeHtmlExport":true})));
-        return;
-    }
+    let (reply, cancel, realtime) = context;
     let abandoned = || {
         cancel.as_ref().is_some_and(CancellationToken::is_cancelled)
             || cancel.is_some() && reply.is_closed()

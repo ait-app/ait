@@ -85,7 +85,7 @@ impl OmpClient {
 /// Private staging directory for native HTML renders owned by the installed OMP adapter.
 /// Defaults inside the OMP state root so sandboxed sessions can write it without new policy.
 pub(crate) fn native_export_directory(
-    clients: &std::collections::BTreeMap<String, std::sync::Arc<dyn crate::ports::agent_session::AgentClient>>,
+    clients: &std::collections::BTreeMap<String, std::sync::Arc<dyn AgentClient>>,
 ) -> Option<PathBuf> {
     clients.get(PROVIDER)?.native_html_export_directory()
 }

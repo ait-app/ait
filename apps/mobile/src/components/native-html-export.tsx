@@ -17,7 +17,9 @@ export function NativeHtmlExport({ serverId, agentId }: { serverId: string; agen
   const supported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.agentNativeHtmlExport === true,
   );
-  const isOmp = useSessionStore((state) => state.agents.get(agentId)?.provider === "omp");
+  const isOmp = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.get(agentId)?.provider === "omp",
+  );
   const busy = useDownloadStore((state) =>
     Array.from(state.downloads.values()).some(
       (download) =>
@@ -37,7 +39,7 @@ export function NativeHtmlExport({ serverId, agentId }: { serverId: string; agen
       snapshot?.connectionStatus !== "online" ||
       useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.agentNativeHtmlExport !==
         true ||
-      useSessionStore.getState().agents.get(agentId)?.provider !== "omp" ||
+      useSessionStore.getState().sessions[serverId]?.agents.get(agentId)?.provider !== "omp" ||
       Array.from(useDownloadStore.getState().downloads.values()).some(
         (download) =>
           download.serverId === serverId &&

@@ -116,6 +116,8 @@ for line in sys.stdin:
             message('assistant', [{'type': 'text', 'text': 'Background finished'}],
                     provider='test', model='model', stopReason='stop')
             emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+        if current_prompt == 'export-hold' and active and (root / 'release-export-hold').exists():
+            finish()
         state = {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
                           'isSettled': not active and not pending_async,
@@ -294,10 +296,9 @@ for line in sys.stdin:
             else:
                 emit({'type': 'agent_start'})
         if text == 'export-hold':
-            # Stay active until the release marker; native export must not interrupt this.
-            while not (root / 'release-export-hold').exists():
-                time.sleep(0.01)
-            finish()
+            # Keep the turn active without blocking the RPC loop, so a concurrent native
+            # export can be processed (real OMP is async). The turn finishes when the
+            # release marker is observed on a later get_state poll.
             continue
         finish(settled=text != 'background')
     elif kind == 'export_html':
@@ -306,9 +307,11 @@ for line in sys.stdin:
         if mode == 'silent':
             continue
         if mode == 'late':
-            # Answer only after the caller's deadline, creating the file late.
+            # Answer only after the caller's deadline, creating the file late. Signal after
+            # the write so the test can prove the late file was actually created then cleaned.
             time.sleep(0.6)
             Path(output).write_text('<html>LATE_NATIVE_FILE</html>')
+            (root / 'late-file-written').touch()
             response(command, {'path': output})
             continue
         if mode == 'reject':

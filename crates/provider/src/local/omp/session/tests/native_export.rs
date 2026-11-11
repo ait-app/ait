@@ -10,7 +10,7 @@ fn staging(root: &std::path::Path) -> std::path::PathBuf {
 fn owned_output(root: &std::path::Path) -> std::path::PathBuf {
     let directory = staging(root);
     std::fs::create_dir_all(&directory).unwrap();
-    let output = directory.join(format!("ait-native-{}.html", uuid::Uuid::new_v4()));
+    let output = directory.join(format!("ait-native-{}.html", Uuid::new_v4()));
     std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -24,6 +24,13 @@ async fn begin(session: &mut Session, root: &std::path::Path, output: &std::path
         .begin_native_html_export(output, &staging(root))
         .await
         .unwrap();
+}
+
+/// The native renderer requires a persisted journal; the fake peer only writes one after a
+/// message, so seed a completed turn before exporting.
+async fn seed(session: &mut Session, spec: &AgentSessionSpec) {
+    session.start_turn("seed", &spec.config).await.unwrap();
+    let _ = complete(session).await;
 }
 
 async fn export_event(session: &mut Session) -> AgentTurnEvent {
@@ -57,11 +64,9 @@ fn read_artifact(export: ExportedNativeHtml) -> (String, u64, String) {
 async fn native_export_preserves_bytes_and_leaves_the_journal_untouched() {
     let (root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();
-    session.start_turn("seed", &spec.config).await.unwrap();
-    let _ = complete(&mut session).await;
-    let journal = std::path::PathBuf::from(
-        session.state["sessionFile"].as_str().unwrap().to_owned(),
-    );
+    seed(&mut session, &spec).await;
+    let journal =
+        std::path::PathBuf::from(session.state["sessionFile"].as_str().unwrap().to_owned());
     let before = std::fs::read(&journal).unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
@@ -89,6 +94,7 @@ async fn native_export_preserves_bytes_and_leaves_the_journal_untouched() {
 async fn native_export_runs_during_an_active_turn_without_interrupting_it() {
     let (root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
     let turn = session
         .start_turn("export-hold", &spec.config)
         .await
@@ -124,8 +130,9 @@ async fn native_export_runs_during_an_active_turn_without_interrupting_it() {
 #[tokio::test]
 async fn native_rejection_fails_the_export_and_removes_only_the_owned_file() {
     let (root, client, spec) = fixture();
-    std::fs::write(root.path().join("agent/export-mode"), b"reject").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"reject").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::Rejected)) =
@@ -144,8 +151,9 @@ async fn native_rejection_fails_the_export_and_removes_only_the_owned_file() {
 #[tokio::test]
 async fn a_foreign_confirmed_path_is_never_adopted() {
     let (root, client, spec) = fixture();
-    std::fs::write(root.path().join("agent/export-mode"), b"wrong-path").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"wrong-path").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::Rejected)) =
@@ -160,8 +168,9 @@ async fn a_foreign_confirmed_path_is_never_adopted() {
 #[tokio::test]
 async fn oversize_native_output_fails_explicitly_without_truncation() {
     let (root, client, spec) = fixture();
-    std::fs::write(root.path().join("agent/export-mode"), b"oversize").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"oversize").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::TooLarge)) =
@@ -176,8 +185,9 @@ async fn oversize_native_output_fails_explicitly_without_truncation() {
 #[tokio::test]
 async fn a_symlinked_output_is_rejected_and_the_target_survives() {
     let (root, client, spec) = fixture();
-    std::fs::write(root.path().join("agent/export-mode"), b"symlink").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"symlink").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::Rejected)) =
@@ -199,8 +209,9 @@ async fn a_symlinked_output_is_rejected_and_the_target_survives() {
 async fn a_silent_native_export_expires_without_killing_the_session() {
     let (root, mut client, spec) = fixture();
     client.deadline = Duration::from_millis(300);
-    std::fs::write(root.path().join("agent/export-mode"), b"silent").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"silent").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::Io)) =
@@ -216,9 +227,10 @@ async fn a_silent_native_export_expires_without_killing_the_session() {
 async fn a_late_file_created_after_timeout_is_still_cleaned() {
     let (root, mut client, spec) = fixture();
     client.deadline = Duration::from_millis(200);
+    let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
     // The peer stays silent past the deadline, then creates the file and answers late.
     std::fs::write(root.path().join("agent/export-mode"), b"late").unwrap();
-    let mut session = open(&client, &spec, None).await.unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     let AgentTurnEvent::NativeHtmlExport(Err(NativeHtmlExportError::Io)) =
@@ -226,8 +238,10 @@ async fn a_late_file_created_after_timeout_is_still_cleaned() {
     else {
         panic!("expected the export to expire first");
     };
-    // Drive polling until the late response arrives; the late file must be removed and no
-    // second export event may be delivered.
+    // Drive polling until the late response arrives. First wait for the fixture to actually
+    // create the late file (so the test cannot pass before the delayed write), then prove the
+    // adapter removes it and delivers no second export event.
+    let late_marker = root.path().join("agent/late-file-written");
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if let Some(event) = session.poll_turn().unwrap() {
@@ -236,14 +250,14 @@ async fn a_late_file_created_after_timeout_is_still_cleaned() {
                     "a settled export must not deliver a second event"
                 );
             }
-            if !output.exists() && std::fs::symlink_metadata(&output).is_err() {
+            if late_marker.exists() && std::fs::symlink_metadata(&output).is_err() {
                 return;
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
-    .expect("late owned file cleaned");
+    .expect("late owned file created then cleaned");
     assert!(staging(root.path()).read_dir().unwrap().next().is_none());
     session.close().await.unwrap();
 }
@@ -251,8 +265,9 @@ async fn a_late_file_created_after_timeout_is_still_cleaned() {
 #[tokio::test]
 async fn cancelling_an_in_flight_export_cleans_the_owned_file() {
     let (root, client, spec) = fixture();
-    std::fs::write(root.path().join("agent/export-mode"), b"silent").unwrap();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
+    std::fs::write(root.path().join("agent/export-mode"), b"silent").unwrap();
     let output = owned_output(root.path());
     begin(&mut session, root.path(), &output).await;
     session.cancel_native_html_export();
@@ -267,10 +282,10 @@ async fn cancelling_an_in_flight_export_cleans_the_owned_file() {
 async fn an_unpersisted_session_cannot_start_a_native_export() {
     let (root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();
+    seed(&mut session, &spec).await;
     // Remove the journal so the persisted-identity precondition fails.
-    let journal = std::path::PathBuf::from(
-        session.state["sessionFile"].as_str().unwrap().to_owned(),
-    );
+    let journal =
+        std::path::PathBuf::from(session.state["sessionFile"].as_str().unwrap().to_owned());
     std::fs::remove_file(&journal).unwrap();
     let output = owned_output(root.path());
     let result = session

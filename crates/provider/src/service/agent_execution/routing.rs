@@ -38,32 +38,105 @@ impl Router {
     }
 
     pub(super) async fn dispatch(&mut self, command: Command) {
-        let Command::Request {
-            method,
-            mut params,
-            reply,
-            cancel,
-            realtime,
-            native_export,
-            permit,
-            queued,
-        } = command
-        else {
-            return;
-        };
+        match command {
+            Command::Request {
+                method,
+                mut params,
+                reply,
+                cancel,
+                realtime,
+                permit,
+                queued,
+            } => {
+                let template = self.template.clone();
+                let planned = tokio::task::spawn_blocking(move || {
+                    let state = template.lock().map_err(|_| ErrorCode::AgentIo)?.fork(None);
+                    let scopes = if mutation::is_mutation(method) {
+                        mutation::scopes(&state, method, &params)?
+                    } else {
+                        BTreeSet::new()
+                    };
+                    canonicalize(&state, method, &mut params)?;
+                    plan(state, method, &params)
+                        .map(|(state, lane)| (state, lane, scopes, method, params))
+                })
+                .await;
+                let (state, lane, scopes, method, params) = match planned {
+                    Ok(Ok(plan)) => plan,
+                    Ok(Err(error)) => {
+                        let _ = reply.send(Err(error));
+                        return;
+                    }
+                    Err(_) => {
+                        let _ = reply.send(Err(ErrorCode::AgentIo));
+                        return;
+                    }
+                };
+                let command = Command::Request {
+                    method,
+                    params,
+                    reply,
+                    cancel,
+                    realtime,
+                    permit,
+                    queued,
+                };
+                if mutation::is_mutation(method) {
+                    self.mutate(state, command, scopes);
+                    return;
+                }
+                if let Some(key) = lane {
+                    self.send_to_lane(state, key, command);
+                } else {
+                    let reads = if matches!(method.access(), Access::Catalog | Access::Discovery)
+                        && !matches!(method, Operation::Snapshot | Operation::RefreshSnapshot)
+                    {
+                        self.providers.clone()
+                    } else {
+                        self.reads.clone()
+                    };
+                    self.tasks.spawn(async move {
+                        let _permit = reads.acquire_owned().await;
+                        let _ = super::lane::request(state, command, false).await;
+                    });
+                }
+            }
+            Command::NativeHtmlExport {
+                request,
+                reply,
+                permit,
+                queued,
+            } => {
+                self.dispatch_native_html_export(request, reply, permit, queued)
+                    .await;
+            }
+            Command::Shutdown(_) => {}
+        }
+    }
+
+    /// Route a typed native HTML export to its owning agent lane. Identity resolution and
+    /// lane ownership match a session request; the owned request travels without JSON.
+    async fn dispatch_native_html_export(
+        &mut self,
+        request: crate::ports::native_html_export::Request,
+        reply: super::NativeExportReply,
+        permit: tokio::sync::OwnedSemaphorePermit,
+        queued: std::time::Instant,
+    ) {
         let template = self.template.clone();
+        let agent_id = request.agent_id.clone();
         let planned = tokio::task::spawn_blocking(move || {
-            let state = template.lock().map_err(|_| ErrorCode::AgentIo)?.fork(None);
-            let scopes = if mutation::is_mutation(method) {
-                mutation::scopes(&state, method, &params)?
-            } else {
-                BTreeSet::new()
-            };
-            canonicalize(&state, method, &mut params)?;
-            plan(state, method, &params).map(|(state, lane)| (state, lane, scopes, method, params))
+            let mut state = template.lock().map_err(|_| ErrorCode::AgentIo)?.fork(None);
+            let id = state.resolve_for(Operation::NativeHtmlExport, &agent_id)?;
+            let lane = state.owners.agent(&id)?;
+            if let Some(record) = state.registry.get(&id).map_err(|_| ErrorCode::AgentIo)? {
+                state.owners.bind(&lane, &record)?;
+            }
+            state.manager = state.manager.fork(Some(state.owners.owner(lane.clone())));
+            Ok::<_, ErrorCode>((state, lane))
         })
         .await;
-        let (state, lane, scopes, method, params) = match planned {
+        let (state, lane) = match planned {
             Ok(Ok(plan)) => plan,
             Ok(Err(error)) => {
                 let _ = reply.send(Err(error));
@@ -74,58 +147,41 @@ impl Router {
                 return;
             }
         };
-        let command = Command::Request {
-            method,
-            params,
+        let command = Command::NativeHtmlExport {
+            request,
             reply,
-            cancel,
-            realtime,
-            native_export,
             permit,
             queued,
         };
-        if mutation::is_mutation(method) {
-            self.mutate(state, command, scopes);
+        self.send_to_lane(state, lane, command);
+    }
+
+    /// Deliver a command to its owning agent lane, creating the lane on demand.
+    fn send_to_lane(&mut self, state: ExecutionState, key: String, command: Command) {
+        self.lanes.retain(|_, lane| !lane.sender.is_closed());
+        if !self.lanes.contains_key(&key) && self.lanes.len() >= 128 {
+            reject(command, ErrorCode::CatalogBusy);
             return;
         }
-        if let Some(key) = lane {
-            self.lanes.retain(|_, lane| !lane.sender.is_closed());
-            if !self.lanes.contains_key(&key) && self.lanes.len() >= 128 {
-                reject(command, ErrorCode::CatalogBusy);
+        let barriers = match state.owners.startup(&key) {
+            Ok(barriers) => barriers,
+            Err(error) => {
+                reject(command, error);
                 return;
             }
-            let barriers = match state.owners.startup(&key) {
-                Ok(barriers) => barriers,
-                Err(error) => {
-                    reject(command, error);
-                    return;
-                }
-            };
-            let sender = self.lanes.entry(key).or_insert_with(|| {
-                let (sender, receiver) = mpsc::channel(64);
-                self.tasks
-                    .spawn(super::lane::serve(state, receiver, barriers.clone()));
-                Lane { sender, barriers }
-            });
-            if let Err(error) = sender
-                .sender
-                .try_send(super::lane::Message::Request(command))
-                && let super::lane::Message::Request(command) = error.into_inner()
-            {
-                reject(command, ErrorCode::CatalogBusy);
-            }
-        } else {
-            let reads = if matches!(method.access(), Access::Catalog | Access::Discovery)
-                && !matches!(method, Operation::Snapshot | Operation::RefreshSnapshot)
-            {
-                self.providers.clone()
-            } else {
-                self.reads.clone()
-            };
-            self.tasks.spawn(async move {
-                let _permit = reads.acquire_owned().await;
-                let _ = super::lane::request(state, command, false).await;
-            });
+        };
+        let sender = self.lanes.entry(key).or_insert_with(|| {
+            let (sender, receiver) = mpsc::channel(64);
+            self.tasks
+                .spawn(super::lane::serve(state, receiver, barriers.clone()));
+            Lane { sender, barriers }
+        });
+        if let Err(error) = sender
+            .sender
+            .try_send(super::lane::Message::Request(command))
+            && let super::lane::Message::Request(command) = error.into_inner()
+        {
+            reject(command, ErrorCode::CatalogBusy);
         }
     }
 
@@ -420,7 +476,13 @@ fn canonicalize(
 }
 
 fn reject(command: Command, error: ErrorCode) {
-    if let Command::Request { reply, .. } = command {
-        let _ = reply.send(Err(error));
+    match command {
+        Command::Request { reply, .. } => {
+            let _ = reply.send(Err(error));
+        }
+        Command::NativeHtmlExport { reply, .. } => {
+            let _ = reply.send(Err(error));
+        }
+        Command::Shutdown(_) => {}
     }
 }

@@ -29,8 +29,6 @@ pub struct ExportedNativeHtml {
 /// Failure classes the adapter reports without exposing native paths or payloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeHtmlExportError {
-    /// This provider or session cannot render native HTML.
-    Unsupported,
     /// The native renderer rejected the request or returned inconsistent facts.
     Rejected,
     /// The rendered file exceeded the shared artifact bound; nothing was truncated.
@@ -42,7 +40,6 @@ pub(crate) enum NativeHtmlExportError {
 impl From<NativeHtmlExportError> for crate::rpc::ErrorCode {
     fn from(error: NativeHtmlExportError) -> Self {
         match error {
-            NativeHtmlExportError::Unsupported => Self::UnsupportedCapability,
             NativeHtmlExportError::Rejected => Self::InvalidMessage,
             NativeHtmlExportError::TooLarge => Self::ResourceExhausted,
             NativeHtmlExportError::Io => Self::AgentIo,
