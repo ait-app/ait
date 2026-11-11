@@ -32,12 +32,15 @@ describe("desktop packaging", () => {
     expect(config).toContain("!node_modules/@ait/**/*.spec.*");
   });
 
-  it("bundles the native daemon only on macOS and Linux", () => {
+  it("bundles the native daemon and bridge only on macOS and Linux", () => {
     const config = parse(readFileSync(join(packageRoot, "electron-builder.yml"), "utf8"));
-    const daemon = { from: "release-resources/daemon/aitd", to: "bin/aitd" };
-    expect(config.mac.extraResources).toContainEqual(daemon);
-    expect(config.linux.extraResources).toContainEqual(daemon);
-    expect(config.extraResources).not.toContainEqual(daemon);
+    for (const name of ["aitd", "ait-omp-acp"]) {
+      const resource = { from: `release-resources/daemon/${name}`, to: `bin/${name}` };
+      expect(config.mac.extraResources).toContainEqual(resource);
+      expect(config.linux.extraResources).toContainEqual(resource);
+      expect(config.extraResources).not.toContainEqual(resource);
+      expect(config.mac.binaries).toContain(`Contents/Resources/bin/${name}`);
+    }
     expect(config.win.extraResources).toBeUndefined();
     expect(config.win.target).toEqual(["nsis", "zip"]);
   });

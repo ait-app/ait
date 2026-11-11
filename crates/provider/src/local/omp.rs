@@ -1,5 +1,6 @@
 //! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
 
+mod aliases;
 mod bridge;
 mod config;
 mod framing;
@@ -60,8 +61,9 @@ impl OmpClient {
         &self,
         cwd: &str,
         model: Option<&str>,
+        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<config::ServiceTiers, AgentSessionError> {
-        let mut probe = session::probe(self, cwd, model).await?;
+        let mut probe = session::probe(self, cwd, model, confinement).await?;
         let result = config::service_tiers(&mut probe).await;
         let closed = probe.close().await;
         let tiers = result?;
@@ -112,7 +114,7 @@ impl AgentClient for OmpClient {
     }
 
     async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
-        let mut probe = session::probe(self, cwd, None).await?;
+        let mut probe = session::probe(self, cwd, None, None).await?;
         let result = config::discover(&mut probe).await;
         let closed = probe.close().await;
         let details = result?;
@@ -126,14 +128,18 @@ impl AgentClient for OmpClient {
     ) -> Result<Vec<Value>, AgentSessionError> {
         config::validate_spec(spec)?;
         let tiers = self
-            .service_tiers(&spec.cwd, spec.config.model.as_deref())
+            .service_tiers(
+                &spec.cwd,
+                spec.config.model.as_deref(),
+                spec.confinement.as_ref(),
+            )
             .await?;
         Ok(config::features(&spec.config, tiers))
     }
 
     async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
         config::validate_spec(spec)?;
-        let mut probe = session::probe(self, &spec.cwd, None).await?;
+        let mut probe = session::probe(self, &spec.cwd, None, spec.confinement.as_ref()).await?;
         let result = probe.request("get_available_commands", json!({})).await;
         let closed = probe.close().await;
         let result = result?;
@@ -184,7 +190,7 @@ impl AgentClient for OmpClient {
         &self,
         spec: &AgentSessionSpec,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
     async fn create_session_with_environment(
@@ -217,10 +223,7 @@ impl AgentClient for OmpClient {
         if purpose == AgentResumePurpose::History {
             return Err(AgentSessionError::Unavailable);
         }
-        Ok(
-            Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
-                as Box<dyn AgentSession>,
-        )
+        Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
     }
 }
 

@@ -155,3 +155,7 @@
   （[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)，已由
   [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)、
   [ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md) 修订）。
+- OMP 的 Ait 会话直接持有原生 `Session`；外部 ACP 转换仍归 provider，经独立 `ait-omp-acp` CLI 暴露。
+  内部不再使用 ACP 客户端或 `_omp/rpc`。旧句柄/别名恢复不重写原生历史，创建、恢复及配置重开
+  保留调用方精确 confinement；会话作用域探测同样遵守它
+  （[ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md) 修订 ADR-190 的内部入口）。

@@ -202,12 +202,15 @@ jobs:
         id: layout
         run: node .tmp/release-tools/scripts/release-layout.mjs
 
-      - name: Build release daemon only
+      - name: Build release native tools
         if: matrix.platform == 'mac'
-        run: cargo build --locked --release -p "${{ steps.layout.outputs.package }}" --bin "${{ steps.layout.outputs.binary }}" --target "${{ matrix.rust_target }}"
+        run: |
+          bridge_args=()
+          if [ "${{ steps.layout.outputs.ompBridge }}" = true ]; then bridge_args=(-p ait-omp-acp --bin ait-omp-acp); fi
+          cargo build --locked --release -p "${{ steps.layout.outputs.package }}" --bin "${{ steps.layout.outputs.binary }}" --target "${{ matrix.rust_target }}" "${bridge_args[@]}"
 
-      # Desktop and standalone archives share this daemon; manylinux_2_28 keeps it on glibc 2.28+.
-      - name: Build release daemon only (glibc 2.28 baseline)
+      # Desktop and standalone archives share both tools on the glibc 2.28+ baseline.
+      - name: Build release native tools (glibc 2.28 baseline)
         if: matrix.platform == 'linux'
         run: bash .tmp/release-tools/scripts/build-linux-daemon.sh "${{ steps.layout.outputs.package }}" "${{ steps.layout.outputs.binary }}" "${{ matrix.rust_target }}" 1.98.1
 
@@ -215,12 +218,14 @@ jobs:
         if: matrix.platform == 'linux'
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          AIT_OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
         run: npm run package:linux
 
       - name: Package, sign, and notarize macOS desktop
         if: matrix.platform == 'mac'
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          AIT_OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -251,11 +256,12 @@ jobs:
           sudo rpm --install --nodeps release/*.rpm
           node e2e/linux-artifact-smoke.js
 
-      # The desktop bundle signs its own copy; this signs the standalone headless daemon.
+      # The desktop signs its own copies; sign and notarize both standalone executables.
       - name: Sign and notarize standalone macOS daemon
         if: matrix.platform == 'mac'
         env:
           DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
           ENTITLEMENTS: ${{ steps.layout.outputs.desktop }}/build/entitlements.mac.inherit.plist
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -283,11 +289,18 @@ jobs:
           identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')
           test -n "$identity"
           cp "$DAEMON_BIN" "$work/bin/aitd"
-          codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
-            --keychain "$keychain" --sign "$identity" "$work/bin/aitd"
-          codesign --verify --strict --verbose=2 "$work/bin/aitd"
-          ditto -c -k --keepParent "$work/bin/aitd" "$work/aitd.zip"
-          xcrun notarytool submit "$work/aitd.zip" \
+          binaries=(aitd)
+          if [ "${{ steps.layout.outputs.ompBridge }}" = true ]; then
+            cp "$OMP_ACP_BIN" "$work/bin/ait-omp-acp"
+            binaries+=(ait-omp-acp)
+          fi
+          for binary in "${binaries[@]}"; do
+            codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
+              --keychain "$keychain" --sign "$identity" "$work/bin/$binary"
+            codesign --verify --strict --verbose=2 "$work/bin/$binary"
+          done
+          ditto -c -k --keepParent "$work/bin" "$work/native-tools.zip"
+          xcrun notarytool submit "$work/native-tools.zip" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 30m --output-format json > "$work/notarization.json"
           status=$(plutil -extract status raw -o - "$work/notarization.json")
@@ -302,7 +315,7 @@ jobs:
       - name: Package standalone daemon
         env:
           DAEMON_BIN: ${{ env.STANDALONE_DAEMON_BIN || format('{0}/target/{1}/release/{2}', github.workspace, matrix.rust_target, steps.layout.outputs.binary) }}
-        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets
+        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets --source-layout .
 
       - uses: actions/upload-artifact@v6
         with:
@@ -617,7 +630,7 @@ jobs:
             args+=(--android)
           fi
           node .tmp/release-tools/scripts/release-assets.mjs verify \
-            "${RELEASE_TAG#v}" release-assets "${args[@]}"
+            "${RELEASE_TAG#v}" release-assets "${args[@]}" --source-layout .
 
       - name: Create or repair GitHub Release
         shell: bash

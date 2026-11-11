@@ -18,6 +18,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { devDisplayVersion, devPackagedVersion } from "./dev-build.mjs";
 import { releaseChannel } from "./release-version.mjs";
+import { resolveReleaseLayout } from "./release-layout.mjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
   const channel = buildLabel ? "latest" : releaseChannel(version);
@@ -64,8 +65,10 @@ export async function packDaemonAsset({
   platform,
   version,
   binary,
+  bridge = path.join(path.dirname(binary), "ait-omp-acp"),
+  sourceLayout,
   destination,
-  license,
+  license = "LICENSE",
   buildLabel,
 }) {
   const name = daemonAssetName(platform, version, buildLabel);
@@ -78,21 +81,47 @@ export async function packDaemonAsset({
     buildLabel ? devDisplayVersion(buildLabel) : version,
     `Daemon binary reports ${reported}`,
   );
+  const includeBridge = sourceLayout ? resolveReleaseLayout(sourceLayout).ompBridge : true;
+  if (includeBridge) {
+    const reportedBridge = execFileSync(bridge, ["--version"], { encoding: "utf8" }).trim();
+    assert.equal(
+      reportedBridge,
+      `ait-omp-acp ${buildLabel ? devDisplayVersion(buildLabel) : version}`,
+      `OMP ACP bridge reports ${reportedBridge}`,
+    );
+  }
   const staging = await mkdtemp(path.join(tmpdir(), "ait-daemon-"));
   try {
     await copyFile(binary, path.join(staging, daemonExecutable));
     await chmod(path.join(staging, daemonExecutable), 0o755);
     const files = [daemonExecutable];
-    if (license) {
-      await copyFile(license, path.join(staging, "LICENSE"));
-      files.push("LICENSE");
+    if (includeBridge) {
+      await copyFile(bridge, path.join(staging, "ait-omp-acp"));
+      await chmod(path.join(staging, "ait-omp-acp"), 0o755);
+      files.push("ait-omp-acp");
     }
+    await copyFile(license, path.join(staging, "LICENSE"));
+    files.push("LICENSE");
     await mkdir(destination, { recursive: true });
     execFileSync("tar", ["-czf", path.resolve(destination, name), "-C", staging, ...files]);
+    verifyDaemonArchive(path.resolve(destination, name), includeBridge);
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
   return name;
+}
+
+export function verifyDaemonArchive(archive, includeBridge = true) {
+  const expected = ["aitd", ...(includeBridge ? ["ait-omp-acp"] : []), "LICENSE"];
+  const entries = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n");
+  assert.deepEqual(entries.sort(), expected.sort(), "Unexpected standalone archive contents");
+  const modes = execFileSync("tar", ["-tvzf", archive], { encoding: "utf8" }).trim().split("\n");
+  for (const entry of modes) {
+    const name = entry.split(/\s+/).at(-1);
+    assert(entry.startsWith("-"), `Archive member must be a regular file: ${name}`);
+    if (name !== "LICENSE")
+      assert.match(entry, /^-[r-][w-]x/, `Archive binary is not executable: ${name}`);
+  }
 }
 
 async function digest(file, algorithm, encoding) {
@@ -159,6 +188,7 @@ export async function verifyReleaseAssets({
   includeDaemon = false,
   includeWindows = false,
   buildLabel,
+  sourceLayout,
 }) {
   assert(!(includeAndroid && buildLabel), "Dev builds support desktop platforms only");
   assert(!(includeWindows && buildLabel), "Windows dev builds are not configured");
@@ -221,6 +251,12 @@ export async function verifyReleaseAssets({
     assert(allowed.has(name), `Unexpected release asset: ${name}`);
     const info = await stat(path.join(directory, name));
     assert(info.isFile() && info.size > 0, `Empty or invalid release asset: ${name}`);
+    if (daemonAssetNames(version, buildLabel).includes(name)) {
+      verifyDaemonArchive(
+        path.join(directory, name),
+        sourceLayout ? resolveReleaseLayout(sourceLayout).ompBridge : true,
+      );
+    }
   }
   const sums = [];
   for (const name of names)
@@ -235,6 +271,13 @@ async function main() {
   if (args.at(-2) === "--dev") {
     buildLabel = args.pop();
     args.pop();
+  }
+  let sourceLayout;
+  const sourceIndex = args.indexOf("--source-layout");
+  if (sourceIndex !== -1) {
+    assert(args[sourceIndex + 1], "--source-layout requires a source directory");
+    sourceLayout = args[sourceIndex + 1];
+    args.splice(sourceIndex, 2);
   }
   const options = args.slice(2);
   if (command === "collect" && args.length === 4) {
@@ -258,6 +301,7 @@ async function main() {
         destination,
         license: "LICENSE",
         buildLabel,
+        sourceLayout,
       }),
     );
   } else if (
@@ -275,11 +319,12 @@ async function main() {
         includeDaemon: options.includes("--daemon"),
         includeWindows: options.includes("--windows"),
         buildLabel,
+        sourceLayout,
       }),
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--dev LABEL] | daemon linux|mac VERSION BINARY DEST [--dev LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --dev LABEL",
+      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--dev LABEL] | daemon linux|mac VERSION BINARY DEST [--source-layout ROOT] [--dev LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] [--source-layout ROOT] [--dev LABEL]",
     );
   }
 }

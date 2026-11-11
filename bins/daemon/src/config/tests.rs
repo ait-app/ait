@@ -341,16 +341,14 @@ fn invalid_startup_configuration_does_not_create_credentials() {
 }
 
 #[test]
-fn omp_acp_arguments_preserve_executable_paths_without_daemon_configuration() {
-    let cli = Cli::try_parse_from(["daemon", "omp-acp", "--omp-bin", "/tmp/official omp"]).unwrap();
-    assert!(
-        matches!(cli.command,Some(Command::OmpAcp{omp_bin:Some(path)}) if path==Path::new("/tmp/official omp"))
-    );
-    let cli = Cli::try_parse_from(["daemon", "omp-acp"]).unwrap();
-    assert!(matches!(
-        cli.command,
-        Some(Command::OmpAcp { omp_bin: None })
-    ));
+fn omp_acp_is_not_a_daemon_subcommand() {
+    for arguments in [
+        vec!["daemon", "omp-acp"],
+        vec!["daemon", "omp-acp", "--omp-bin", "/tmp/official omp"],
+    ] {
+        let error = Cli::try_parse_from(arguments).unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
+    }
 }
 
 #[cfg(unix)]

@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -40,7 +41,11 @@ function createPackagedApp(root: string) {
   );
   expect(archive.status, archive.stderr).toBe(0);
   writeFileSync(join(resources, "app-dist", "index.html"), "<!doctype html><title>Ait</title>");
-  writeFileSync(join(resources, "bin", "aitd"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  for (const name of ["aitd", "ait-omp-acp"]) {
+    writeFileSync(join(resources, "bin", name), `#!/bin/sh\necho '${name} ${version}'\n`, {
+      mode: 0o755,
+    });
+  }
   writeFileSync(
     join(app, "Ait"),
     `#!${process.execPath}\nconsole.log(JSON.stringify(process.argv.slice(2)));\n`,
@@ -59,6 +64,7 @@ test("validates Linux package resources before installing the launcher on any ho
   const root = mkdtempSync(join(tmpdir(), "ait-linux-after-pack-"));
   try {
     const context = createPackagedApp(root);
+    chmodSync(context.appOutDir, 0o700);
     const executable = join(context.appOutDir, "Ait");
     const original = readFileSync(executable);
     const legacyBin = join(context.appOutDir, "resources", "bin", "ait-worker");
@@ -69,6 +75,7 @@ test("validates Linux package resources before installing the launcher on any ho
 
     rmSync(legacyBin);
     await afterPack(context);
+    expect(statSync(context.appOutDir).mode & 0o777).toBe(0o755);
     expect(readFileSync(`${executable}.bin`)).toEqual(original);
     expect(readFileSync(executable, "utf8")).toContain("AIT_DESKTOP_SANDBOX_REASON");
   } finally {

@@ -1,5 +1,6 @@
 //! Ait-owned ACP aliases for empty native sessions replaced by CLI-bound settings.
 
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
@@ -66,6 +67,33 @@ pub(super) fn load(
         return Err(AgentSessionError::Rejected);
     }
     Ok(Some(alias))
+}
+
+/// Resolve a legacy ACP alias without changing its record or the native journal.
+/// Explicit native file handles remain authoritative; aliases only fill an absent file identity.
+/// Returns invalid provider, workspace or alias errors before any native process is started.
+pub(super) async fn resolve<'a>(
+    client: &OmpClient,
+    handle: &'a AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<Cow<'a, AgentPersistenceHandle>, AgentSessionError> {
+    if handle.provider != PROVIDER {
+        return Err(AgentSessionError::Rejected);
+    }
+    if handle
+        .metadata
+        .as_ref()
+        .is_some_and(|metadata| metadata.contains_key("sessionFile"))
+    {
+        return Ok(Cow::Borrowed(handle));
+    }
+    let client = client.clone();
+    let id = handle.session_id.clone();
+    let cwd = cwd.to_owned();
+    let alias = tokio::task::spawn_blocking(move || load(&client, &id, &cwd))
+        .await
+        .map_err(|_| AgentSessionError::Failed)??;
+    Ok(alias.map_or(Cow::Borrowed(handle), |alias| Cow::Owned(alias.handle)))
 }
 
 /// Atomically retain an ACP `id` and native handle without modifying OMP JSONL or settings.

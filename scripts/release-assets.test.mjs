@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFile,
@@ -34,6 +34,7 @@ import {
   packDaemonAsset,
   releaseAssetNames,
   verifyReleaseAssets,
+  verifyDaemonArchive,
 } from "./release-assets.mjs";
 import { releaseChannel } from "./release-version.mjs";
 import {
@@ -115,8 +116,24 @@ async function addAndroidAssets(directory) {
 }
 
 async function addDaemonAssets(directory, version = "0.0.7", buildLabel) {
-  for (const name of daemonAssetNames(version, buildLabel))
-    await writeFile(path.join(directory, name), "daemon archive");
+  const staging = await mkdtemp(path.join(tmpdir(), "ait-archive-fixture-"));
+  try {
+    for (const name of ["aitd", "ait-omp-acp"])
+      await writeFile(path.join(staging, name), name, { mode: 0o755 });
+    await writeFile(path.join(staging, "LICENSE"), "license");
+    for (const name of daemonAssetNames(version, buildLabel))
+      execFileSync("tar", [
+        "-czf",
+        path.join(directory, name),
+        "-C",
+        staging,
+        "aitd",
+        "ait-omp-acp",
+        "LICENSE",
+      ]);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
 }
 
 async function fakeDaemon(t, reported) {
@@ -124,6 +141,11 @@ async function fakeDaemon(t, reported) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const binary = path.join(root, "daemon");
   await writeFile(binary, `#!/bin/sh\necho "${reported}"\n`, { mode: 0o700 });
+  await writeFile(
+    path.join(root, "ait-omp-acp"),
+    `#!/bin/sh\necho "ait-omp-acp ${reported.split(/\s+/).at(-1)}"\n`,
+    { mode: 0o700 },
+  );
   return { root, binary };
 }
 
@@ -509,7 +531,7 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
 });
 
-test("standalone daemon archives package aitd and the license per target", async (t) => {
+test("standalone archives package aitd, the matching bridge and license per target", async (t) => {
   assert.equal(daemonAssetName("linux", "0.0.7"), "Ait-0.0.7-daemon-linux-x64.tar.gz");
   assert.equal(
     daemonAssetName("mac", "0.0.8-beta.1"),
@@ -535,9 +557,10 @@ test("standalone daemon archives package aitd and the license per target", async
   const entries = listing.stdout.trim().split("\n");
   assert.deepEqual(
     entries.map((line) => line.split(/\s+/).at(-1)),
-    ["aitd", "LICENSE"],
+    ["aitd", "ait-omp-acp", "LICENSE"],
   );
   assert.match(entries[0], /^-rwxr-xr-x/);
+  assert.match(entries[1], /^-rwxr-xr-x/);
   const stale = await fakeDaemon(t, "daemon 0.0.6");
   await assert.rejects(
     packDaemonAsset({
@@ -659,6 +682,20 @@ test("desktop release verifies published desktop assets and any retained Android
     new URL("./source-version.cjs", import.meta.url),
     path.join(tooling, "source-version.cjs"),
   );
+  await copyFile(
+    new URL("./release-layout.mjs", import.meta.url),
+    path.join(tooling, "release-layout.mjs"),
+  );
+  await mkdir(path.join(root, "bins/daemon"), { recursive: true });
+  await mkdir(path.join(root, "bins/omp-acp"), { recursive: true });
+  await mkdir(path.join(root, "apps/desktop"), { recursive: true });
+  await writeFile(
+    path.join(root, "Cargo.toml"),
+    '[workspace]\nmembers = ["bins/daemon", "bins/omp-acp"]\n',
+  );
+  await writeFile(path.join(root, "bins/daemon/Cargo.toml"), '[package]\nname = "daemon"\n');
+  await writeFile(path.join(root, "bins/omp-acp/Cargo.toml"), '[package]\nname = "ait-omp-acp"\n');
+  await writeFile(path.join(root, "apps/desktop/package.json"), "{}");
   const workflow = parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
@@ -739,7 +776,7 @@ if (args[0] === 'release' && args[1] === 'download') {
   assert.notEqual(run().status, 0);
 });
 
-test("release workflow builds only the daemon and packages the resolved desktop workspace", async () => {
+test("release workflow builds the native tools and packages the resolved desktop workspace", async () => {
   const workflow = parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
@@ -747,12 +784,16 @@ test("release workflow builds only the daemon and packages the resolved desktop 
     workflow.jobs.build.strategy.matrix.include.map((entry) => entry.platform).sort(),
     ["linux", "mac"],
   );
-  const build = workflow.jobs.build.steps.find((step) => step.name === "Build release daemon only");
+  const build = workflow.jobs.build.steps.find(
+    (step) => step.name === "Build release native tools",
+  );
   assert.equal(build.if, "matrix.platform == 'mac'");
   assert.match(build.run, /--locked --release -p "\$\{\{ steps.layout.outputs.package \}\}"/);
   assert.match(build.run, /--bin "\$\{\{ steps.layout.outputs.binary \}\}" --target/);
+  assert.match(build.run, /ompBridge/);
+  assert.match(build.run, /-p ait-omp-acp --bin ait-omp-acp/);
   const linux = workflow.jobs.build.steps.find(
-    (step) => step.name === "Build release daemon only (glibc 2.28 baseline)",
+    (step) => step.name === "Build release native tools (glibc 2.28 baseline)",
   );
   assert.equal(linux.if, "matrix.platform == 'linux'");
   assert.match(linux.run, /\.tmp\/release-tools\/scripts\/build-linux-daemon\.sh/);
@@ -764,6 +805,8 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   const script = await readFile(new URL("./build-linux-daemon.sh", import.meta.url), "utf8");
   assert.match(script, /--locked --release -p "\$PACKAGE" --bin "\$BINARY" --target "\$TARGET"/);
   assert.match(script, /^max_glibc=2\.28$/m);
+  assert.match(script, /bridge_args=\(-p ait-omp-acp --bin ait-omp-acp\)/);
+  assert.match(script, /binaries\+=\(ait-omp-acp\)/);
   const collect = workflow.jobs.build.steps.find(
     (step) => step.name === "Collect installers and updater assets",
   );
@@ -775,8 +818,14 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   assert.equal(sign.if, "matrix.platform == 'mac'");
   assert.match(sign.run, /codesign --force --timestamp --options runtime/);
   assert.match(sign.run, /notarytool submit/);
+  assert.match(sign.run, /cp "\$OMP_ACP_BIN" "\$work\/bin\/ait-omp-acp"/);
+  assert.match(sign.run, /binaries\+=\(ait-omp-acp\)/);
+  assert.match(sign.run, /codesign --verify --strict --verbose=2 "\$work\/bin\/\$binary"/);
+  assert.match(sign.run, /ditto -c -k --keepParent "\$work\/bin" "\$work\/native-tools.zip"/);
+  assert.match(sign.run, /"\$status" != "Accepted"/);
   const pack = workflow.jobs.build.steps.find((step) => step.name === "Package standalone daemon");
   assert.match(pack.run, /release-assets\.mjs daemon/);
+  assert.match(pack.run, /--source-layout \./);
   assert(names.indexOf(sign.name) < names.indexOf(pack.name));
   const upload = workflow.jobs.build.steps.findIndex((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
@@ -786,6 +835,7 @@ test("release workflow builds only the daemon and packages the resolved desktop 
     (step) => step.name === "Verify assets and write checksums",
   );
   assert.match(verify.run, /args=\(--daemon --windows\)/);
+  assert.match(verify.run, /--source-layout \./);
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
@@ -797,9 +847,13 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   for (const platform of ["mac", "linux"]) {
     assert.deepEqual(config[platform].extraResources, [
       { from: "release-resources/daemon/aitd", to: "bin/aitd" },
+      { from: "release-resources/daemon/ait-omp-acp", to: "bin/ait-omp-acp" },
     ]);
   }
-  assert.deepEqual(config.mac.binaries, ["Contents/Resources/bin/aitd"]);
+  assert.deepEqual(config.mac.binaries, [
+    "Contents/Resources/bin/aitd",
+    "Contents/Resources/bin/ait-omp-acp",
+  ]);
   assert.deepEqual(config.win.target, ["nsis", "zip"]);
   assert.equal(config.win.extraResources, undefined);
   assert.deepEqual(config.linux.target, ["AppImage", "tar.gz", "deb", "rpm"]);
@@ -908,5 +962,82 @@ if (args[1] === 'view' && process.env.RELEASE_EXISTS !== '1') process.exit(1);
       }
       if (exists) assert(commands.some((args) => args[1] === "upload"));
     }
+  }
+});
+
+test("standalone packaging fails closed for missing and mismatched bridges", async (t) => {
+  const { root, binary } = await fakeDaemon(t, "aitd 0.0.7");
+  const bridge = path.join(root, "ait-omp-acp");
+  const options = {
+    platform: "linux",
+    version: "0.0.7",
+    binary,
+    destination: path.join(root, "out"),
+  };
+  await writeFile(bridge, "#!/bin/sh\necho 'ait-omp-acp 0.0.6'\n");
+  await assert.rejects(packDaemonAsset(options), /OMP ACP bridge reports/);
+  await rm(bridge);
+  await assert.rejects(packDaemonAsset(options), /ENOENT/);
+});
+
+test("only a proven historical source layout allows a host-only archive", async (t) => {
+  const { root, binary } = await fakeDaemon(t, "server 0.0.7");
+  await rm(path.join(root, "ait-omp-acp"));
+  await mkdir(path.join(root, "bins/server"), { recursive: true });
+  await mkdir(path.join(root, "apps/paseo"), { recursive: true });
+  await writeFile(path.join(root, "Cargo.toml"), '[workspace]\nmembers = ["bins/server"]\n');
+  await writeFile(
+    path.join(root, "bins/server/Cargo.toml"),
+    '[package]\nname = "server-bin"\n[[bin]]\nname = "server"\n',
+  );
+  await writeFile(path.join(root, "apps/paseo/package.json"), "{}");
+  const license = path.join(root, "LICENSE");
+  await writeFile(license, "license");
+  const options = {
+    platform: "linux",
+    version: "0.0.7",
+    binary,
+    license,
+    destination: path.join(root, "out"),
+    sourceLayout: root,
+  };
+  const name = await packDaemonAsset(options);
+  assert.doesNotThrow(() => verifyDaemonArchive(path.join(options.destination, name), false));
+  assert.throws(
+    () => verifyDaemonArchive(path.join(options.destination, name)),
+    /archive contents/,
+  );
+  await writeFile(path.join(root, "Cargo.toml"), '[workspace]\nmembers = ["bins/omp-acp"]\n');
+  await assert.rejects(packDaemonAsset(options), /missing the OMP ACP bridge manifest/);
+});
+
+test("release verification rejects extra, missing and non-executable archive resources", async (t) => {
+  const linux = await fixture(t, "linux");
+  const mac = await fixture(t, "mac");
+  await collectReleaseAssets(linux);
+  await collectReleaseAssets({ ...mac, destination: linux.destination });
+  await addDaemonAssets(linux.destination);
+  const staging = path.join(path.dirname(linux.destination), "archive-input");
+  await mkdir(staging);
+  await writeFile(path.join(staging, "aitd"), "daemon", { mode: 0o755 });
+  await writeFile(path.join(staging, "ait-omp-acp"), "bridge", { mode: 0o644 });
+  await writeFile(path.join(staging, "LICENSE"), "license");
+  await writeFile(path.join(staging, "omp"), "must not bundle");
+  for (const entries of [
+    ["aitd", "LICENSE"],
+    ["aitd", "ait-omp-acp", "LICENSE", "omp"],
+    ["aitd", "ait-omp-acp", "LICENSE"],
+  ]) {
+    execFileSync("tar", [
+      "-czf",
+      path.join(linux.destination, daemonAssetName("linux", "0.0.7")),
+      "-C",
+      staging,
+      ...entries,
+    ]);
+    await assert.rejects(
+      verifyReleaseAssets({ version: "0.0.7", directory: linux.destination, includeDaemon: true }),
+      /archive contents|not executable/,
+    );
   }
 });

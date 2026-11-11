@@ -1,5 +1,5 @@
 [workspace]
-members = ["bins/daemon", "crates/*"]
+members = ["bins/daemon", "bins/omp-acp", "crates/*"]
 resolver = "3"
 
 [workspace.package]

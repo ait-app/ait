@@ -42,6 +42,8 @@ mac:
   extraResources:
     - from: release-resources/daemon/aitd
       to: bin/aitd
+    - from: release-resources/daemon/ait-omp-acp
+      to: bin/ait-omp-acp
   publish:
     provider: generic
     url: https://aitapp.cn/api/v1/updates/macos/
@@ -56,6 +58,7 @@ mac:
   notarize: true
   binaries:
     - Contents/Resources/bin/aitd
+    - Contents/Resources/bin/ait-omp-acp
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   target:
@@ -65,6 +68,8 @@ linux:
   extraResources:
     - from: release-resources/daemon/aitd
       to: bin/aitd
+    - from: release-resources/daemon/ait-omp-acp
+      to: bin/ait-omp-acp
   category: Development
   icon: assets
   artifactName: "Ait-${version}-linux-${arch}.${ext}"

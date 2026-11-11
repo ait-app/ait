@@ -51,6 +51,7 @@ pub(super) struct Session {
     client: OmpClient,
     transport: Transport,
     cwd: String,
+    confinement: Option<domain::workspace::sandbox::WriteConfinement>,
     state: Value,
     config: StoredAgentConfig,
     service_tiers: config::ServiceTiers,
@@ -79,11 +80,13 @@ pub(super) async fn probe(
     client: &OmpClient,
     cwd: &str,
     model: Option<&str>,
+    confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
 ) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
         provider: PROVIDER.to_owned(),
         cwd: cwd.to_owned(),
         config: StoredAgentConfig::default(),
+        // Validation only; the borrowed policy is passed unchanged to spawn below.
         confinement: None,
     })?;
     let mut args = vec![
@@ -100,7 +103,7 @@ pub(super) async fn probe(
             model.clone(),
         ]);
     }
-    let mut transport = Transport::spawn(client, cwd, &args, None)?;
+    let mut transport = Transport::spawn(client, cwd, &args, confinement)?;
     transport.initialize().await?;
     let state = transport.request("get_state", json!({})).await?;
     if route.is_some_and(|[provider, model]| {
@@ -140,7 +143,11 @@ async fn connect(
         .await?;
     let runtime = config::runtime(&state)?;
     let tiers = client
-        .service_tiers(&spec.cwd, runtime.model.as_deref())
+        .service_tiers(
+            &spec.cwd,
+            runtime.model.as_deref(),
+            spec.confinement.as_ref(),
+        )
         .await?;
     Ok((transport, state, tiers))
 }
@@ -151,6 +158,11 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
+    let resolved = match handle {
+        Some(handle) => Some(super::aliases::resolve(client, handle, &spec.cwd).await?),
+        None => None,
+    };
+    let handle = resolved.as_deref();
     let (journal, replayed) = match handle {
         Some(handle) => {
             let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
@@ -180,6 +192,7 @@ pub(super) async fn open(
         client: client.clone(),
         transport,
         cwd: spec.cwd.clone(),
+        confinement: spec.confinement.clone(),
         state,
         config: spec.config.clone(),
         service_tiers,
@@ -246,7 +259,11 @@ impl Session {
             let runtime = config::runtime(&self.state)?;
             self.service_tiers = self
                 .client
-                .service_tiers(&self.cwd, runtime.model.as_deref())
+                .service_tiers(
+                    &self.cwd,
+                    runtime.model.as_deref(),
+                    self.confinement.as_ref(),
+                )
                 .await?;
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
@@ -257,7 +274,7 @@ impl Session {
                 provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
-                confinement: None,
+                confinement: self.confinement.clone(),
             };
             let persisted = std::path::Path::new(&path).is_file();
             let (transport, state, service_tiers) =

@@ -1,6 +1,6 @@
 # Oh My Pi
 
-Oh My Pi 是独立 Provider `omp`，固定通过 Ait 的 Rust ACP 桥接层运行官方 `omp --mode rpc-ui`。
+Oh My Pi 是独立 Provider `omp`，Ait 通过原生 Session 直接运行官方 `omp --mode rpc-ui`。
 它的安装、配置、权限、工具和会话均由 OMP 管理，不依赖 Ait 的 Pi 适配器。
 
 ## 安装与配置
@@ -80,24 +80,28 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 
 ## ACP 桥接与插件
 
-ACP 是固定入口，没有 Protocol 控件；恢复同样经过 Ait 的桥接层。
-旧 `transport: rpc/acp` 选择仅做兼容，实际句柄标明 `transport: acp`、`nativeTransport: rpc`。
-桥接层负责 ACP→官方 RPC 转换，对话、控制、子 Agent 和后台任务由同一个原生实例持有。
+Ait 内部不经过 ACP，没有 Protocol 控件；创建和恢复直接调用原生 Session。
+旧 `transport: rpc/acp` 配置、带 ACP 标记的原生句柄以及合法历史别名仍可恢复，不重写原生 JSONL。
+调用方指定的沙箱在创建、恢复、配置重开及会话作用域探测中保持一致，不从 cwd 推断或失败后取消。
+外部 ACP bridge 才负责 ACP→官方 RPC 转换；每个会话的对话、控制、子 Agent 和后台任务仍由一个原生实例持有。
 无需定制 OMP、源码补丁或插件配合；这与直连 OMP 自带 ACP 不同。
 
 OMP 中已安装的插件继续按官方规则加载。命令、工具、问答、自定义消息与原生额外帧
 采用通用接口处理，不按插件名称、路径或命令写分支。具体能力和 TUI 限制见
 [架构与兼容表](../architecture/omp-acp-bridge.md)。
 
-外部 ACP 客户端可使用同一桥接引擎：
+外部 ACP 客户端使用独立 Rust 可执行文件（macOS/Linux desktop 资源及独立归档中与 `aitd` 一同提供）：
 
 ```sh
-daemon omp-acp --omp-bin /absolute/path/to/omp
+ait-omp-acp --omp-bin /absolute/path/to/omp
 ```
 
-不传 `--omp-bin` 时使用 `AIT_SERVER_OMP_BIN` 或 PATH 中的 `omp`。
-该子命令仅服务 stdin/stdout JSONL，不启动 HTTP daemon、不要求 Host 登录或创建 API token。
-Ait 内部已使用同一引擎，不需要另外启动这个进程。
+不传 `--omp-bin` 时使用 `AIT_SERVER_OMP_BIN` 或 PATH 中的 `omp`。OMP 必须由用户安装和登录；
+Ait 不附带或下载 OMP、OMP SDK 或 Bun。
+正常服务时 stdin/stdout 只承载 JSONL，诊断写入 stderr；`--help` 和 `--version` 是不启动协议的独立操作。
+该程序不启动 HTTP daemon、不要求 Host 登录或创建 API token。Ait 内部不需要另起桥接进程。
+桥接程序使用与 daemon/desktop 相同的构建版本源。
 
-决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
-当前官方 CLI 与插件验证见[报告](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。
+当前边界见 [ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md)。
+[历史官方 CLI 与插件验证](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)
+不是本次独立程序、沙箱或签名发布的验收记录。

@@ -13,6 +13,18 @@ export function resolveReleaseLayout(root) {
   assert.match(manifest, new RegExp(`^name\\s*=\\s*"${layout.package}"$`, "m"));
   assert.match(manifest, new RegExp(`^name\\s*=\\s*"${layout.binary}"$`, "m"));
   assert(existsSync(path.join(root, layout.desktop, "package.json")), "Missing desktop workspace");
+  // Only immutable sources predating the bridge may omit it. A missing current
+  // manifest is corruption, not permission to publish a host-only archive.
+  const workspace = readFileSync(path.join(root, "Cargo.toml"), "utf8");
+  const bridgeManifest = path.join(root, "bins/omp-acp/Cargo.toml");
+  layout.ompBridge = existsSync(bridgeManifest);
+  assert(
+    layout.ompBridge || !workspace.includes('"bins/omp-acp"'),
+    "Current source is missing the OMP ACP bridge manifest",
+  );
+  if (layout.ompBridge) {
+    assert.match(readFileSync(bridgeManifest, "utf8"), /^name\s*=\s*"ait-omp-acp"$/m);
+  }
   return layout;
 }
 

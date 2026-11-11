@@ -1,28 +1,35 @@
 # OMP ACP 桥接与插件兼容
 
-Ait 负责适配官方 OMP，不要求 OMP 配套修改。决策见
-[ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)。
+Ait 直接使用官方 OMP 原生 Session；外部 ACP 仍由 Ait 的 Rust bridge 适配，不要求 OMP 配套修改。
+边界见 [ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md)，
+协议映射沿用 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)。
 遗漏终态时的原生状态核对与取消期限见 [ADR-194](../decisions/providers/adr-194-omp-settlement-reconciliation.md)。
 
 ```mermaid
 flowchart LR
-  A[Ait Provider] --> B[Ait Rust ACP 引擎]
-  C[标准 ACP stdio 客户端] --> B
-  B -->|官方 RPC v2| D[单一 OMP 执行进程]
+  A[Ait Provider] -->|AgentSession| S[原生 Session]
+  C[外部 ACP stdio 客户端] --> B[ait-omp-acp CLI]
+  B --> EACP[provider ACP 引擎]
+  EACP --> S
+  S -->|官方 RPC v2| D[各会话单一 OMP 执行进程]
   D --> E[原生插件、工具、MCP 与模型]
   D --> F[子 Agent 与后台任务]
   D --> G[OMP 原生历史]
 ```
 
-每个连接拥有一个正式原生会话。内嵌客户端直接调用同一协议引擎，
-外部客户端通过 `daemon omp-acp` 读写有界 JSONL。
-两条入口都执行 ACP 请求转换；原生对话提交也是 RPC，不是直连 OMP 自带 ACP。
+每个会话拥有一个正式原生进程。Ait 直接调用原生 `Session`，不启动 ACP 子进程，也不走内嵌 ACP 客户端。
+外部客户端通过独立 `ait-omp-acp` 读写有界 JSONL；CLI 只拥有参数、stdio、stderr 诊断和退出码，
+ACP 转换及原生 RPC 均归 provider。这不是直连 OMP 自带 ACP；两种入口也不会共享一个会话 writer。
 模型、推理和特性开关使用原生 RPC 原地更新，保留同一个插件进程。
 只有 CLI 绑定的权限模式/系统提示变化才按原有规则重开，已落盘历史使用原生 resume。
 空原生会话重开可能更换 native ID；独立 ACP 连接的 ID 由 Ait 自己的别名记录保持稳定，
 不会因此丢失 load/resume。记录在原生 sessions 同级 `ait-acp-aliases/`，每条限 1 MiB，
 包含会话句柄、cwd 和配置，不含认证；原子替换、限制私有目录权限，并拒绝符号链接和跨 cwd 恢复。
 目录/服务档位探测使用独立 `--no-session` 实例，其状态不代表正式会话。
+旧 ACP 标记句柄和别名可由直接原生恢复、只读历史及外部 ACP 使用，不重写原生日志；
+明确 `sessionFile` 的原生句柄不被别名覆盖，调用方配置保持权威。
+Ait spec 的精确 sandbox confinement 在创建、恢复、配置重开和会话作用域探测中保持不变，
+不从 cwd 推断，不在失败时无沙箱重试。
 
 ## 能力映射
 
@@ -32,7 +39,7 @@ flowchart LR
 | 权限模式               | ACP mode/select → 官方 approval-mode；保留 Full/Write/Ask/Ask and Remember 及未覆盖时的原生配置                                 |
 | 压缩、重试、fast/slow  | ACP select 的字符串 `true/false` → 对应官方 RPC；由当前模型及 OMP 验证，不向官方 ACP 发送自造 boolean options                   |
 | 系统提示               | Ait 配置元数据 → 官方 CLI；重开时恢复同一份已持久历史，不重发输入                                                               |
-| 文本、推理、工具与图片 | 标准 ACP 通知；Ait 内嵌客户端使用协商的完整宿主事件，保留原有身份、富输入和图片工件                                             |
+| 文本、推理、工具与图片 | Ait 直接接收原生 Session 的共享事件；外部连接转换为标准 ACP 通知或协商的完整宿主事件，保留身份、富输入和图片工件                |
 | token/cost、上下文     | 原生用量投影 → Ait 事件；标准 ACP 使用 usage updates，额外原生字段保留在协商通道                                                |
 | 命令、技能、插件工具   | OMP 动态发现/执行；Ait 不按插件名称、命令名称或安装路径添加分支                                                                 |
 | 审批和插件问答         | 标准 permission/form，支持选择、输入、确认、编辑和结构化 ask；Ait 保留原生授权与多选语义                                        |
@@ -45,8 +52,8 @@ flowchart LR
 
 ## 通用原生扩展通道
 
-客户端在 initialize 的 `clientCapabilities._meta` 中设置 `ompNative: true`，
-桥接层以 `_meta.ompNative.version: 1` 宣告支持；这不是 OMP 的扩展要求。
+仅外部 ACP 客户端在 initialize 的 `clientCapabilities._meta` 中设置 `ompNative: true`，
+桥接层以 `_meta.ompNative.version: 1` 宣告支持；这不是 OMP 的扩展要求，也不是 Ait 内部原生能力通用网关。
 
 - `_omp/rpc`：`{sessionId, command, arguments}`，异步关联官方原生控制请求及结果。
 - `_omp/event`：`{sessionId, frame}`，传递原生事件、扩展 UI 和 callback，保留未知字段。
@@ -56,9 +63,9 @@ flowchart LR
 改变会话/回合所有权的原生命令不能绕过 ACP 生命周期路由，未知原生控制由 OMP 自己拒绝。
 错误字段沿用有界脱敏，普通插件数据不按插件名称改写。
 
-内嵌 Ait 客户端还协商 `_meta.ait: 1`，收发 `_ait/event` 及 prompt result metadata，
-从而保留原有 Timeline、图片、用量、子 Agent、持久句柄和失败事件。
-普通 ACP 客户端不需要理解这些 Ait 事件。
+历史外部客户端仍可协商 `_meta.ait: 1`，收发 `_ait/event` 及 prompt result metadata，
+保留 Timeline、图片、用量、子 Agent、持久句柄和失败事件。Ait 内部不再协商或序列化这些扩展；
+普通 ACP 客户端不需要理解它们。
 
 ## 实际边界
 
@@ -75,4 +82,5 @@ Ait 不伪造原生落盘成功。验证使用用户授权的实际模型产生 
 OMP 可能用自身通用 deferred-tool 路由执行插件工具；桥接层保留原生名称与参数，不猜测或改写插件身份。
 当前不增加原先未提供的每会话 MCP 覆盖、宿主工具自动注册、文件回退或输出 schema。
 
-[官方版本、定向检查及插件验证](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。
+[历史官方版本、定向检查及插件验证](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)
+记录此前架构，不代表本次边界切换或当前平台签名验收。

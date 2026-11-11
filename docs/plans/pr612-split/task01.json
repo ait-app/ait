@@ -1,0 +1,261 @@
+{
+  "id": "01",
+  "title": "OMP native Session and standalone ACP bridge",
+  "priority": 1,
+  "depends_on": ["00"],
+  "donor_sections": [15, 20, 21, 22],
+  "donor_paths": [
+    "apps/desktop/src/daemon/daemon-manager.test.ts",
+    "apps/desktop/src/daemon/daemon-manager.ts",
+    "apps/desktop/src/daemon/rust-daemon-environment.test.ts",
+    "apps/desktop/src/daemon/rust-daemon.ts",
+    "apps/mobile/src/hooks/use-draft-agent-features.test.tsx",
+    "apps/mobile/src/hooks/use-draft-agent-features.ts",
+    "apps/mobile/src/i18n/resources/ar.ts",
+    "apps/mobile/src/i18n/resources/en.ts",
+    "apps/mobile/src/i18n/resources/es.ts",
+    "apps/mobile/src/i18n/resources/fr.ts",
+    "apps/mobile/src/i18n/resources/ja.ts",
+    "apps/mobile/src/i18n/resources/ko.ts",
+    "apps/mobile/src/i18n/resources/pt-BR.ts",
+    "apps/mobile/src/i18n/resources/ru.ts",
+    "apps/mobile/src/i18n/resources/zh-CN.ts",
+    "apps/mobile/test-stubs/lucide-react-native.ts",
+    "bins/daemon/src/host.rs",
+    "bins/daemon/src/host/tests.rs",
+    "bins/daemon/src/main.rs",
+    "bins/daemon/tests/process/catalog.rs",
+    "crates/api/src/capabilities/tests.rs",
+    "crates/api/src/connection.rs",
+    "crates/api/src/connection/validation/tests.rs",
+    "crates/api/src/tests.rs",
+    "crates/api/src/tests/placeholders.rs",
+    "crates/metadata/src/daemon/protocol.rs",
+    "crates/model/src/server.rs",
+    "crates/provider/Cargo.toml",
+    "crates/provider/src/capabilities/tests.rs",
+    "crates/provider/src/composition/tests.rs",
+    "crates/provider/src/dispatch/agent_execution.rs",
+    "crates/provider/src/dispatch/requests.rs",
+    "crates/provider/src/local/acp_transport.rs",
+    "crates/provider/src/local/acp_transport/tests.rs",
+    "crates/provider/src/local/omp.rs",
+    "crates/provider/src/local/omp/bridge.rs",
+    "crates/provider/src/local/omp/bridge/engine.rs",
+    "crates/provider/src/local/omp/bridge/tests.rs",
+    "crates/provider/src/local/omp/history.rs",
+    "crates/provider/src/local/omp/history/tests.rs",
+    "crates/provider/src/local/omp/session.rs",
+    "crates/provider/src/local/omp/session/tests.rs",
+    "crates/provider/src/local/omp/session/tests/review.rs",
+    "crates/provider/src/local/omp/tests.rs",
+    "crates/provider/src/local/omp/tests/capabilities.rs",
+    "crates/provider/src/local/omp/tests/fixtures/generic-extension.ts",
+    "crates/provider/src/local/omp/tests/fixtures/omp.py",
+    "crates/provider/src/local/omp/tests/installed.rs",
+    "crates/provider/src/local/omp/tests/installed/review.rs",
+    "crates/provider/src/local/omp/transport.rs",
+    "crates/provider/src/local/omp/transport/tests.rs",
+    "crates/provider/src/omp_acp.rs",
+    "crates/provider/src/ports.rs",
+    "crates/provider/src/ports/agent_session.rs",
+    "crates/provider/src/protocol.rs",
+    "crates/provider/src/protocol/agent_config.rs",
+    "crates/provider/src/protocol/agent_config/tests.rs",
+    "crates/provider/src/protocol/controls.rs",
+    "crates/provider/src/rpc/agent_execution.rs",
+    "crates/provider/src/rpc/agent_execution/controls.rs",
+    "crates/provider/src/rpc/agent_execution/deferred.rs",
+    "crates/provider/src/rpc/agent_execution/deferred/tests.rs",
+    "crates/provider/src/rpc/agent_execution/scheduling.rs",
+    "crates/provider/src/service.rs",
+    "crates/provider/src/service/agent_execution.rs",
+    "crates/provider/src/service/agent_execution/lane.rs",
+    "crates/provider/src/service/agent_execution/operation.rs",
+    "crates/provider/src/service/agent_execution/routing.rs",
+    "crates/provider/src/service/agent_execution/tests/controls.rs",
+    "crates/provider/src/service/agent_execution/tests/delivery.rs",
+    "crates/provider/src/service/agent_execution/voice.rs",
+    "crates/provider/src/service/agent_manager.rs",
+    "crates/provider/src/service/agent_manager/controls.rs",
+    "crates/provider/src/service/agent_manager/delivery.rs",
+    "crates/provider/src/service/agent_manager/execution.rs",
+    "crates/provider/src/service/agent_manager/ownership.rs",
+    "crates/provider/src/service/agent_manager/streaming.rs",
+    "crates/provider/src/service/agent_manager/tests.rs",
+    "crates/provider/src/service/agent_manager/tests/review.rs",
+    "crates/provider/tests/fixtures/omp_commands.json",
+    "crates/provider/tests/fixtures/omp_dialogs.json",
+    "docs/architecture/README.md",
+    "docs/architecture/omp-acp-bridge.md",
+    "docs/architecture/provider.md",
+    "docs/operations/deepseek-harness.md",
+    "docs/operations/oh-my-pi.md",
+    "docs/plans/omp-acp-full-capabilities.md",
+    "packages/client/src/daemon-client.test.ts",
+    "packages/client/src/daemon-client.ts",
+    "packages/client/src/index.test.ts",
+    "packages/client/src/index.ts",
+    "packages/client/src/protocol/connection.test.ts",
+    "packages/client/src/protocol/connection.ts",
+    "packages/client/src/protocol/messages.ts",
+    "packages/client/src/protocol/methods.ts",
+    "packages/protocol/src/agent-types.ts",
+    "packages/protocol/src/messages.provider-ui.test.ts",
+    "packages/protocol/src/messages.rename-entities.test.ts",
+    "packages/protocol/src/messages.ts",
+    "scripts/release-assets.test.mjs",
+    "third-party/omp/README.md",
+    "third-party/opencode/README.md"
+  ],
+  "implementation": "Use direct native Session RPC for Ait OMP. Introduce a standalone Rust ait-omp-acp CLI with stdio, logging and exit handling; ACP conversion and native RPC remain in provider. Remove aitd omp-acp and the in-process ACP client. Reserve _omp/rpc for external ACP capability negotiation. Preserve legacy handles/history/aliases without rewriting logs; reapply sandbox on create, restore and config reopen. Only launch user-installed OMP, never bundle/download its SDK or Bun. Align bridge version with desktop macOS/Linux builds, archives, signing/notarization and release asset verification.",
+  "acceptance": "Native create/restore/config reopen and legacy handles/history work without a second writer; standalone CLI interoperates over stdio with correct logging/exit and sandbox behavior; unsupported negotiation downgrades explicitly. Packaging/version/signing/notarization/archive verification must pass for all required platforms before delivered. Missing macOS/Linux packaging or required signing/notarization evidence is an incomplete acceptance blocker, never an alternative success condition; no release performed.",
+  "status": "blocked",
+  "branch": "refactor/pr612-omp-native-boundary",
+  "base": {
+    "kind": "independent-main",
+    "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305"
+  },
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "node scripts/adr.mjs index",
+        "result": "Indexed 223 ADRs."
+      },
+      {
+        "command": "rustc --version; cargo --version; omp --version; command -v omp bwrap codesign xcrun",
+        "result": "rustc/cargo 1.99.1; user-installed omp/18.17.0 at /usr/bin/omp; /usr/bin/bwrap available; codesign/xcrun not found."
+      },
+      {
+        "command": "read ssh://",
+        "result": "No configured verification hosts."
+      },
+      {
+        "command": "npm ci --ignore-scripts --no-audit --no-fund",
+        "result": "PASS: 2315 packages installed in this isolated worktree."
+      },
+      {
+        "command": "npm test --workspace=@ait/desktop -- src/daemon/desktop-packaging.test.ts src/daemon/linux-launcher.posix.test.ts",
+        "result": "PASS: 2 files, 16 tests."
+      },
+      {
+        "command": "node --test scripts/prepare-desktop-daemon.test.mjs scripts/verify-packaged-resources.test.cjs scripts/release-assets.test.mjs scripts/release-layout.test.mjs scripts/release-workflow.test.mjs scripts/dev-build-workflow.test.mjs scripts/source-version.test.cjs",
+        "result": "Initial run: 80/83 pass; 3 release-assets cases exposed an overstrict new 0755-only archive check. Fixed production validation to require owner execution without imposing one permission mask. No fixture versions or expectations re-pinned."
+      },
+      {
+        "command": "node --test scripts/release-assets.test.mjs",
+        "result": "PASS after correction: 24 tests, 0 failed."
+      },
+      {
+        "command": "node scripts/verify-release-version.mjs v0.2.7",
+        "result": "PASS: release tag, Rust workspace, 7 local packages and lockfiles agree."
+      },
+      {
+        "command": "npm run check:docs",
+        "result": "PASS: 7 tests; local links in 559 Markdown documents; metadata of 223 ADRs."
+      },
+      {
+        "command": "docker pull quay.io/pypa/manylinux_2_28_x86_64",
+        "result": "PASS: sha256:9555ba6c479fa69a2aa80ad1dc57154a60d562b19df159361d9379a02beb1e36. Image prerequisite for the completed release checks below."
+      },
+      {
+        "command": "cargo test --locked -p provider --lib local::omp::",
+        "result": "PASS: 94 passed, 13 explicitly ignored installed/runtime tests, 1679 filtered. First compilation exposed an incorrect new test-only configure call; corrected to the actual next-turn config application port."
+      },
+      {
+        "command": "cargo test --locked -p ait-omp-acp",
+        "result": "Initial run PASS: 12 tests; official-runtime process test intentionally ignored in this run and explicitly exercised below. New test-target dependency ownership warnings corrected using the existing crate dependency-guard pattern."
+      },
+      {
+        "command": "cargo test --locked -p daemon omp_acp_is_not_a_daemon_subcommand; cargo test --locked -p daemon --test dependencies",
+        "result": "PASS: removed-command rejection 1 test; dependency guards 17 tests. Existing unrelated filesystem::workspace_runtime fetch_update deprecation emitted by Rust 1.99.1; not changed."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p provider --lib local::omp::tests::installed:: -- --ignored --test-threads=1",
+        "result": "Initial official omp/18.17.0 run: 8 existing cases passed; 2 new fixture cases failed in 47.42s, without hanging. Scratch writes are intentionally allowed, so the denied-write probe was moved outside /tmp. Fixture HOME equalled cwd, causing official OMP to use/persist the parent /tmp; strict history validation correctly rejected this. Isolated HOME was separated from workspace and fixture outputs made absolute. No production history validation, ID or log content was altered; later targeted runs below pass."
+      },
+      {
+        "command": "target/debug/daemon --version; target/debug/ait-omp-acp --version",
+        "result": "Initial debug binaries both reported git-2026-11-11-248a93cf; official ACP agentInfo also asserts the same model::BUILD_VERSION. rustup unavailable on host; release checks below used workflow Rust 1.98.1."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p provider --lib local::omp::tests::installed::boundary:: -- --ignored --test-threads=1",
+        "result": "PASS: 2 tests, 14.45s. Official18.17.0 create/persist/legacy-alias history/restore/config reopen, both unconfined and OS-confined. Original journal prefix and alias bytes unchanged; native ID preserved; writes outside allowed workspace/scratch denied after create, restore and reopen."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p ait-omp-acp --test installed -- --ignored",
+        "result": "PASS: 1 test, 3.01s. Official18.17.0 external ACP stdio session/command, shared version, JSONL-only stdout, successful EOF exit, native process and spawned descendant both terminated. Earlier failed fixture's owned sleep descendant was explicitly terminated and its two scratch files removed."
+      },
+      {
+        "command": "cargo fmt --all --check",
+        "result": "PASS after the final official-runtime fixture corrections."
+      },
+      {
+        "command": "AIT_BUILD_VERSION=0.2.7 RELEASE_TAG=v0.2.7 bash scripts/build-linux-daemon.sh daemon daemon x86_64-unknown-linux-gnu 1.98.1",
+        "result": "PASS: manylinux_2_28 release compilation 4m44s (350.61s total). aitd requires GLIBC_2.28/GLIBCXX_3.4.23; ait-omp-acp requires GLIBC_2.28 and no GLIBCXX symbols."
+      },
+      {
+        "command": "node scripts/release-assets.mjs daemon linux 0.2.7 target/x86_64-unknown-linux-gnu/release/daemon .tmp/pr612-task01-artifacts --source-layout .",
+        "result": "PASS: actual Ait-0.2.7-daemon-linux-x64.tar.gz, SHA256 0300bb280ad735166bea666e8c48e00478c18547a8018d21f52185ff17687098. Verified exact archive entries/modes and extracted executables; both report 0.2.7."
+      },
+      {
+        "command": "Extracted Linux archive runtime smoke: real ait-omp-acp --omp-bin /usr/bin/omp with isolated public extension; initialize/new/prompt/EOF, then inspect native and descendant process state",
+        "result": "PASS: official OMP18.17.0, agentInfo version0.2.7, JSONL-only stdout, exit0, native PID4182890 and child PID4183168 both terminated; diagnostics remained on stderr (728 bytes). Extracted aitd omp-acp rejected with exit2 and no stdout. Artifact extraction: .tmp/pr612-task01-artifacts/extracted-zxtfgq69."
+      },
+      {
+        "command": "AIT_BUILD_VERSION=0.2.7 RELEASE_TAG=v0.2.7 AIT_SERVER_BIN=<manylinux daemon> AIT_OMP_ACP_BIN=<manylinux bridge> npm run package:linux --workspace=@ait/desktop",
+        "result": "UI export, TypeScript main build, actual unpacked resource/version verification and AppImage/deb/tar.gz generation passed. Initial host RPM packaging stopped because rpmbuild was absent; the isolated Debian run below subsequently generated all four formats."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo clippy --locked -p provider -p ait-omp-acp -p daemon --all-targets --no-deps -- -D warnings",
+        "result": "Host Rust1.99 failed new assert_is_empty checks across unrelated pre-existing tests. Own new smoke setup was split and the now-used fixture root field named normally to fix function-size/underscore lints. No existing assertions re-pinned and no warning suppressions added; final CI Rust1.98.1 focused clippy passed below."
+      },
+      {
+        "command": "cargo +1.98.1 clippy --locked --release --target x86_64-unknown-linux-gnu -p provider -p ait-omp-acp -p daemon --all-targets --no-deps -- -D warnings",
+        "result": "PASS on final Rust source in cached manylinux image: 55.28s compile, 57.87s total. Earlier owned CLI documentation and JSONL byte-count lints were corrected without suppressions."
+      },
+      {
+        "command": "cargo +1.98.1 build --locked --release --target x86_64-unknown-linux-gnu -p daemon --bin daemon -p ait-omp-acp --bin ait-omp-acp",
+        "result": "PASS: final native release pair rebuilt in 7.85s; shared build identity 0.2.7."
+      },
+      {
+        "command": "cargo fmt --all --check && AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p provider --lib local::omp::tests::installed::boundary:: -- --ignored --test-threads=1 && AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p ait-omp-acp -- --include-ignored --test-threads=1",
+        "result": "PASS after final fixture refactor: fmt; 2 official native lifecycle cases in 14.64s; all 13 CLI cases, including official OMP EOF/process-group cleanup in 3.00s. Workspace identity assertion uses canonical paths, preserving the existing symlink-compatible history contract."
+      },
+      {
+        "command": "node scripts/release-assets.mjs daemon linux 0.2.7 target/x86_64-unknown-linux-gnu/release/daemon .tmp/pr612-task01-artifacts/final --source-layout .; verifyDaemonArchive; extract/version/official-runtime smoke",
+        "result": "PASS final archive SHA256 c999aaf4f1ace3e9c3a7687218841b538c88bdd2452782e3f09337f2af8b5465. Exact entries/modes verified; both binaries report 0.2.7. Extracted actual bridge with official OMP18.17.0 passes create/prompt/JSONL/EOF; native PID230837 and descendant231602 terminated, stderr728 bytes. Artifact extraction: .tmp/pr612-task01-artifacts/final/extracted-ja4dvjhe."
+      },
+      {
+        "command": "Debian node22-bookworm container: stage final pair; electron-builder --linux --x64 --publish never; dpkg install; unprivileged linux-artifact-smoke.js",
+        "result": "All four Linux formats built and native resources/version guard passed. Deb installation succeeded, but startup guard found the real reused payload root /opt/Ait was root-owned0700. Package metadata proved index.html exists0644. Host shell umask0077 and real release/linux-unpacked0700 were observed; this was not a synthetic fixture. Production Linux payload preparation now normalizes its root0755, with an explicit0700 regression in the existing integration test."
+      },
+      {
+        "command": "Diagnostic fresh-output electron-builder --linux deb rpm under umask022; installed deb then rpm; unprivileged Xvfb linux-artifact-smoke.js",
+        "result": "PASS both actual installed desktop startups in 366.64s total: sandbox enabled, real Rust daemon/renderer handshake, rendererErrors=[], title Ait. Deb serverId e16b1174-a04e-44fa-befc-962ce96a3ffb; rpm serverId08d07357-83b6-4e10-9d3f-d31a27b89122. This diagnostic does not replace final normal-umask verification of the production permission fix."
+      },
+      {
+        "command": "oxfmt scoped changed files; desktop packaging/launcher vitest; npm run check:docs; git diff --check",
+        "result": "PASS: 30 scoped files formatted; 2 desktop test files/16 tests including production0700-to0755 payload-root regression; 7 documentation tests,559 Markdown documents,223 ADRs; whitespace check clean."
+      }
+    ]
+  },
+  "blockers": [
+    "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete.",
+    "Final installed Linux desktop smoke under the normal0077 umask remains pending after the production payload-root permission correction; the successful022 diagnostic is not claimed as complete acceptance."
+  ],
+  "source_inventory": {
+    "draft_pr": "https://github.com/ait-app/ait/pull/647",
+    "evidence_commit": "7ac9b4ace576831196b5b09965c8d029bd9044d8",
+    "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4"
+  },
+  "adr": "ADR-237",
+  "compatibility": "No public SDK/UI/protocol fields changed. Existing clients/hosts retain their daemon contract; external ACP capabilities remain negotiated. Missing optional extensions use standard ACP, without presenting unsupported native features as available. Legacy handles and ACP aliases remain read-only compatible."
+}

@@ -43,3 +43,7 @@ run("npm", [
   "never",
   ...(signed ? ["-c.forceCodeSigning=true"] : []),
 ]);
+if (signed) {
+  const output = process.arch === "x64" ? "mac" : `mac-${process.arch}`;
+  run("xcrun", ["stapler", "validate", `release/${output}/Ait.app`]);
+}

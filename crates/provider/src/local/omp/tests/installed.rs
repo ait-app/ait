@@ -1,5 +1,6 @@
 use super::*;
 
+mod boundary;
 mod interactions;
 mod settlement;
 
@@ -260,7 +261,7 @@ async fn installed_omp_plugins_use_generic_commands_ui_and_custom_message_histor
 }
 
 struct Installed {
-    _root: tempfile::TempDir,
+    root: tempfile::TempDir,
     client: OmpClient,
     spec: AgentSessionSpec,
     _server: tokio_util::task::AbortOnDropHandle<()>,
@@ -359,7 +360,7 @@ async fn installed_with_plugins() -> Installed {
         confinement: None,
     };
     Installed {
-        _root: root,
+        root,
         client,
         spec,
         _server: server,

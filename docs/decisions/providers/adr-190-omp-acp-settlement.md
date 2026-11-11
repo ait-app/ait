@@ -11,6 +11,8 @@ paths:
 # ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口
 
 - 结算修订：[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充原生空闲状态核对与有界取消。
+- 入口修订：[ADR-237](adr-237-omp-native-session-and-standalone-acp.md) 将 Ait 内部改为直接原生 Session，
+  外部入口改为独立 `ait-omp-acp`，并保留共享别名恢复和精确 sandbox confinement。
 
 ## 背景
 

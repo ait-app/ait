@@ -4,6 +4,8 @@
 各能力当前生效的约束及其 ADR 见现行规格：[Provider](provider.md)、[Workspace](workspace.md)、
 [Bot](bot.md)、[连接与传输](connection.md)。ADR 被接受后，结论并入对应规格。
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
+独立外部 ACP 入口 `bins/omp-acp` 产出 `ait-omp-acp`；它只负责 CLI/stdio，协议转换和原生 RPC 归 provider，
+见 [ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md)。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 ## Rust 能力边界
@@ -25,6 +27,7 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 | `host-link`   | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
 | `api`         | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
 | `daemon`      | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
+| `ait-omp-acp` | 外部 ACP CLI、stdio、诊断与退出               | `model`、`provider`                                  |
 
 适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
