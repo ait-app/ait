@@ -119,6 +119,11 @@ Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平�
 Linux daemon 在 `ubuntu-latest` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
 正式版、beta 和 dev build 都包含这两个归档；dev build 见上文 [Dev build](#dev-build)。
 
+本地打包独立 daemon 归档复用既有发布实现：仓库根运行
+`npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]`，等价于
+`node scripts/release-assets.mjs daemon …`（校验二进制 `--version`、打包 `aitd` 与 `LICENSE`、
+dev 标签命名），不引入新的打包路径；CI 仍直接调用同一脚本。
+
 ## Arch Linux 本地源码安装
 
 在仓库根目录运行（需要 Arch 的 `base-devel`）：

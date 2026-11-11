@@ -19,6 +19,7 @@
     "check:ui": "node scripts/check-ui.mjs",
     "format": "oxfmt .",
     "check:format": "oxfmt --check .",
+    "package:daemon": "node scripts/release-assets.mjs daemon",
     "build:daemon": "cargo build -p daemon --bin daemon",
     "build:ui-deps": "npm run build:sdk && npm run build:highlight && npm run build --workspace=@ait/expo-two-way-audio",
     "postinstall": "node scripts/postinstall-patches.mjs",

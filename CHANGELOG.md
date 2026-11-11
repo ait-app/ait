@@ -4,6 +4,8 @@
 
 - Build: the enabled React Compiler now skips `packages/protocol` sources (schemas and generated validators contain no React components), so desktop startup and protocol hot reload no longer pay for compiling their large control-flow graphs. Windows and POSIX paths are both normalized; application components are still compiled.
 
+- Add `npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]` as an alias for the existing `node scripts/release-assets.mjs daemon` standalone-daemon archive command; no new packaging path.
+
 - Desktop passes provider launch overrides (`AIT_SERVER_CODEX_BIN`, `AIT_SERVER_CLAUDE_BIN`, `AIT_SERVER_ANTIGRAVITY_BIN`, `AIT_SERVER_OPENCODE_BIN`, `AIT_SERVER_DEEPSEEK_HARNESS_BIN`, `AIT_SERVER_PI_BIN`, `AIT_SERVER_OMP_BIN`, `AIT_SERVER_MINIMAX_CODE_BIN`, plus `AIT_SERVER_DEEPSEEK_HARNESS_PROFILE` and `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT`) through to its built-in daemon instead of stripping them. All other `AIT_SERVER_*` settings stay isolated to the desktop runtime.
 
 ## 0.2.9 - 2026-11-12
