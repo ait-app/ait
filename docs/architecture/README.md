@@ -129,6 +129,8 @@ macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Deskto
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
+Online Service 会员由中心账本判定，只约束 Hub access 业务连接，账号登录与本地连接不受影响，
+见 [ADR-236](../decisions/clients/adr-236-online-service-subscription.md)。
 
 群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
 node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。

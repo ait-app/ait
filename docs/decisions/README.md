@@ -176,6 +176,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
+- [ADR-236：Online Service 订阅与账号认证分离](clients/adr-236-online-service-subscription.md)
 - [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)
 - [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)
 - [ADR-223：桌面多窗口与 Workspace 状态归属](clients/adr-223-desktop-workspace-windows.md)
@@ -185,7 +186,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)
 - [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
-- [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
+- [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md)、[ADR-236](clients/adr-236-online-service-subscription.md) 修订）
 - [ADR-188：网页客户端以独立镜像部署在网站根路径](clients/adr-188-standalone-web-client-image.md)
 - [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](clients/adr-187-ios-app-store-cloud-trigger.md)（经 [ADR-235](clients/adr-235-ios-testflight-in-release-workflow.md) 修订）
 - [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](clients/adr-186-workspace-browser-egress.md)

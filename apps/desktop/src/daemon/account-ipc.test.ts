@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   unpublish: vi.fn(),
   info: vi.fn(),
+  membership: vi.fn(),
   deleteAccount: vi.fn(),
   encryptionAvailable: true,
   deps: null as AccountDependencies | null,
@@ -65,6 +66,7 @@ vi.mock("./account-session.js", () => ({
     }
     authorizeHost = mocks.publish;
     getAccountInfo = mocks.info;
+    getMembership = mocks.membership;
   },
 }));
 vi.mock("./account-transport.js", () => ({ AccountTransportManager: class {} }));
@@ -324,4 +326,11 @@ describe("desktop account credential persistence", () => {
       status: "logged_out",
     });
   });
+});
+
+it("reads subscription status through the account session owner", async () => {
+  const membership = { can_connect: false, status: "expired", expires_at: "2026-10-01T00:00:00Z" };
+  mocks.membership.mockResolvedValueOnce(membership);
+  await expect(invoke()(event, "account_membership")).resolves.toEqual(membership);
+  expect(mocks.membership).toHaveBeenCalledOnce();
 });

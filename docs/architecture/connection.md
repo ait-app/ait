@@ -84,6 +84,10 @@
   （[ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)，修订
   [ADR-074](../decisions/clients/adr-074-account-host-relay.md)、
   [ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)）。
+- 中心开启 Online Service 会员强制后，Hub access 的票据签发、续传和已建立链路的周期复核都校验会员；
+  Hub serve、控制链路、在线发现、登录与账单接口照常可用，本地、TCP、SSH 连接不受限。会员期限只由中心
+  按已核实的商店付款累计，App 提交交易凭据，daemon 不持有商店密钥或期限
+  （[ADR-236](../decisions/clients/adr-236-online-service-subscription.md)）。
 - Host 端每个 Hub 会话由 API 在进程内服务，与本机 WebSocket 共用 `serve_frames`、连接准入和访客
   约束，不再拨本地 WebSocket；访客身份直接传入，不经 `x-ait-guest` 请求头
   （[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)，修订
