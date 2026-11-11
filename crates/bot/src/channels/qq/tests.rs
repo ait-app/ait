@@ -73,9 +73,9 @@ fn group_mentions_need_the_channel_to_allow_groups() {
 
 #[test]
 fn full_group_events_route_even_without_a_bot_mention() {
-    let channel = channel(true);
+    let groups_allowed = channel(true);
     let routed = inbound(
-        &channel,
+        &groups_allowed,
         GROUP_ALL_MESSAGE,
         &full_group_event("hello everyone"),
     )
