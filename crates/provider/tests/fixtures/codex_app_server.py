@@ -244,6 +244,20 @@ for line in sys.stdin:
     elif method == "config/read":
         config_path = root / "native-config.json"
         result = {"config": json.loads(config_path.read_text()) if config_path.exists() else {}}
+    elif method == "thread/goal/get":
+        # Read-only admission probe surface. goal-state.json holds the native ThreadGoal
+        # payload (or null). goal-get-error.json holds an exact native error object.
+        error_file = root / "goal-get-error.json"
+        if error_file.exists():
+            emit({"id": request["id"], "error": json.loads(error_file.read_text())})
+            continue
+        response_file = root / "goal-get-response.json"
+        if response_file.exists():
+            emit({"id": request["id"], "result": json.loads(response_file.read_text())})
+            continue
+        state_file = root / "goal-state.json"
+        goal = json.loads(state_file.read_text()) if state_file.exists() else None
+        result = {"goal": goal}
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}

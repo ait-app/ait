@@ -4,6 +4,7 @@ mod async_questions;
 mod commands;
 pub(crate) mod controls;
 mod discovery;
+mod goal;
 mod inspection;
 mod metadata;
 mod native_sessions;
@@ -767,6 +768,12 @@ impl CodexSession {
 
 #[async_trait::async_trait]
 impl AgentSession for CodexSession {
+    async fn goal_read(
+        &mut self,
+    ) -> Result<Option<domain::agent_runtime::goal::NativeGoalFacts>, AgentSessionError> {
+        CodexSession::goal_read(self).await
+    }
+
     async fn start_realtime(
         &mut self,
         endpoint: model::realtime::Endpoint,
