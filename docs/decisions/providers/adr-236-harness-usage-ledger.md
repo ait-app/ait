@@ -15,7 +15,7 @@ paths:
 # ADR-236：按 Host 记录的 Harness 用量账本
 
 -   修订：[ADR-052](adr-052-native-provider-capabilities.md) 的用量条款。快照仍是替换值；本决定新增可累加的请求用量。
--   关系：端口位置沿用 [ADR-205](adr-205-execution-ports-in-provider.md)；账号额度查询（`provider.usage.list`）不变。
+-   关系：端口位置沿用 [ADR-205](adr-205-provider-execution-contracts.md)；账号额度查询（`provider.usage.list`）不变。
 -   方案：[Harness Usage Ledger 计划](../../plans/harness-call-usage.md)。
 
 ## 问题
