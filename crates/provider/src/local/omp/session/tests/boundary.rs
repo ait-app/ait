@@ -57,7 +57,7 @@ async fn native_restore_and_history_resolve_legacy_alias_without_rewriting_recor
 
     let history = client.history(&legacy, &spec.cwd).await.unwrap();
     assert!(history.iter().any(|item| item.item["text"] == "hello"));
-    let mut restored = open(&client, &spec, Some(&legacy)).await.unwrap();
+    let mut restored = open(&client, &spec, Some(&legacy), None).await.unwrap();
     assert_eq!(
         restored.persistence().unwrap().session_id,
         native.session_id
@@ -159,7 +159,7 @@ async fn native_restore_keeps_the_callers_confinement_instead_of_alias_configura
 #[tokio::test]
 async fn config_reopen_fails_closed_when_recorded_confinement_becomes_unresolvable() {
     let (root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     // Model a previously valid placement becoming unavailable after launch. Reopen must
     // retain this exact placement rather than infer an unrestricted policy from cwd.
     let recorded = confinement(&root.path().join("removed-worktree"));
@@ -201,14 +201,14 @@ async fn native_sandbox_placement_survives_create_restore_and_config_reopen() {
     .unwrap();
     spec.cwd = worktree.to_str().unwrap().to_owned();
     spec.confinement = Some(confinement(&worktree));
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     assert_eq!(session.confinement, spec.confinement);
     session.start_turn("hello", &spec.config).await.unwrap();
     complete(&mut session).await;
     let native = session.persistence().unwrap();
     session.close().await.unwrap();
 
-    let mut restored = open(&client, &spec, Some(&native)).await.unwrap();
+    let mut restored = open(&client, &spec, Some(&native), None).await.unwrap();
     assert_eq!(restored.confinement, spec.confinement);
     let config = StoredAgentConfig {
         mode_id: Some("write".to_owned()),

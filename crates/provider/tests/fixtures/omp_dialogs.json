@@ -233,7 +233,12 @@
           "behavior": "deny"
         }
       ],
-      "description": "Run this operation?"
+      "description": "Run this operation?",
+      "detail": {
+        "type": "unknown",
+        "input": null,
+        "output": null
+      }
     },
     "response": {
       "behavior": "allow"
@@ -268,6 +273,9 @@
             "options": [],
             "multiSelect": false,
             "allowOther": true,
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true,
             "placeholder": "Enter your name"
           }
         ]
@@ -324,6 +332,10 @@
             "options": [],
             "multiSelect": false,
             "allowOther": true,
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true,
+            "initialValue": "Initial plan",
             "multiline": true
           }
         ]
@@ -477,6 +489,120 @@
           ]
         }
       ]
+    }
+  },
+  {
+    "name": "secret input",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "secret-input",
+      "method": "input",
+      "title": "API token",
+      "secret": true
+    },
+    "request": {
+      "id": "secret-input",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "API token",
+      "input": {
+        "questions": [
+          {
+            "header": "API token",
+            "question": "API token",
+            "answerKey": "value",
+            "options": [],
+            "multiSelect": false,
+            "allowOther": true,
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true,
+            "secret": true
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "API token": "  hunter2  "
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "secret-input",
+      "value": "  hunter2  "
+    }
+  },
+  {
+    "name": "empty input",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "empty-input",
+      "method": "input",
+      "title": "Optional note"
+    },
+    "request": {
+      "id": "empty-input",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Optional note",
+      "input": {
+        "questions": [
+          {
+            "header": "Optional note",
+            "question": "Optional note",
+            "answerKey": "value",
+            "options": [],
+            "multiSelect": false,
+            "allowOther": true,
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Optional note": ""
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "empty-input",
+      "value": ""
     }
   }
 ]

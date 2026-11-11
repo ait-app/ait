@@ -101,6 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-243：OMP 结构化原生交互与启动前问答](providers/adr-243-omp-structured-native-interactions.md)（提议中）
 - [ADR-237：OMP 原生 Session 与独立 ACP 可执行文件](providers/adr-237-omp-native-session-and-standalone-acp.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
@@ -113,7 +114,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-232](providers/adr-232-agent-mcp-session-delivery.md) 修订）
 - [ADR-199：内置 Skill 随 daemon 启动分发](providers/adr-199-bundled-skill-distribution.md)
-- [ADR-198：OMP 交互等待期间持续发布事件](providers/adr-198-omp-interaction-progress.md)
+- [ADR-198：OMP 交互等待期间持续发布事件](providers/adr-198-omp-interaction-progress.md)（经 [ADR-243](providers/adr-243-omp-structured-native-interactions.md) 修订）
 - [ADR-197：MiniMax Code 原生 ACP Provider](providers/adr-197-minimax-code-acp.md)
 - [ADR-196：Provider 输出分类与每轮 Thinking 展示](providers/adr-196-provider-output-semantics.md)
 - [ADR-195：OpenCode 独立取消信号与确认期限](providers/adr-195-opencode-independent-cancellation.md)

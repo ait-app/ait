@@ -161,4 +161,75 @@ describe("structured native question answers", () => {
       targets: ["Linux, amd64", "macOS", "Windows"],
     });
   });
+
+  test("secret and whitespace-preserving inputs keep answers verbatim", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "API token",
+          header: "API token",
+          options: [],
+          allowOther: true,
+          allowEmpty: true,
+          secret: true,
+          preserveWhitespace: true,
+          dismissBehavior: "deny",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(questions[0].secret).toBe(true);
+    expect(questions[0].dismissBehavior).toBe("deny");
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "  hunter2  " })).toEqual({
+      "API token": "  hunter2  ",
+    });
+    expect(areQuestionsAnswered(questions, {}, {})).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, {})).toEqual({ "API token": "" });
+    expect(shouldSubmitEmptyOnDismiss(questions)).toBe(false);
+  });
+
+  test("editor prefill seeds the answer and keeps newlines", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Edit the plan",
+          header: "Edit the plan",
+          options: [],
+          allowOther: true,
+          allowEmpty: true,
+          multiline: true,
+          initialValue: "Initial plan",
+          dismissBehavior: "deny",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(areQuestionsAnswered(questions, {}, {})).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, {})).toEqual({
+      "Edit the plan": "Initial plan",
+    });
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "Updated\nplan" })).toEqual({
+      "Edit the plan": "Updated\nplan",
+    });
+    expect(shouldSubmitEmptyOnDismiss(questions)).toBe(false);
+  });
+
+  test("plain inputs still trim and may submit empty on dismiss", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Optional note",
+          header: "Optional note",
+          options: [],
+          allowOther: true,
+          allowEmpty: true,
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "  note  " })).toEqual({
+      "Optional note": "note",
+    });
+    expect(shouldSubmitEmptyOnDismiss(questions)).toBe(true);
+  });
 });

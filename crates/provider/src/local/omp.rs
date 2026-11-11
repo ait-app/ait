@@ -1,6 +1,7 @@
 //! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
 
 mod aliases;
+mod bootstrap;
 mod bridge;
 mod config;
 mod framing;
@@ -190,7 +191,7 @@ impl AgentClient for OmpClient {
         &self,
         spec: &AgentSessionSpec,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        bootstrap::open(self, spec, None).await
     }
 
     async fn create_session_with_environment(
@@ -223,7 +224,7 @@ impl AgentClient for OmpClient {
         if purpose == AgentResumePurpose::History {
             return Err(AgentSessionError::Unavailable);
         }
-        Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+        bootstrap::open(self, spec, Some(handle)).await
     }
 }
 

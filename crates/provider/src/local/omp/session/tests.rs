@@ -7,7 +7,7 @@ mod boundary;
 #[tokio::test]
 async fn late_steering_rejection_cannot_claim_the_next_prompts_client_message_id() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session
         .stream
@@ -57,7 +57,7 @@ async fn late_steering_rejection_cannot_claim_the_next_prompts_client_message_id
 #[tokio::test]
 async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session
         .input_requests
@@ -118,7 +118,7 @@ async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
 #[tokio::test]
 async fn unacknowledged_steering_is_bounded_before_more_input_is_submitted() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     for index in 0..128 {
         session
@@ -139,7 +139,7 @@ async fn unacknowledged_steering_is_bounded_before_more_input_is_submitted() {
 async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
     for work in ["steer", "agent_start"] {
         let (_root, client, spec) = fixture();
-        let mut session = open(&client, &spec, None).await.unwrap();
+        let mut session = open(&client, &spec, None, None).await.unwrap();
         let turn = session.start_turn("wait", &spec.config).await.unwrap();
         session.phase = TurnPhase::AwaitingSettlement;
         session.state_check = Some(StateCheck {
@@ -171,7 +171,7 @@ async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
 #[tokio::test]
 async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     let (sender, receiver) = oneshot::channel();
     drop(sender);
@@ -203,7 +203,7 @@ async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() 
 #[tokio::test]
 async fn an_unresponsive_abort_expires_and_keeps_a_visible_reason_after_close() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session
         .start_turn("wait-stuck-abort", &spec.config)
         .await
@@ -226,7 +226,7 @@ async fn an_unresponsive_abort_expires_and_keeps_a_visible_reason_after_close() 
 #[tokio::test]
 async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let previous = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "old-state".to_owned(),
@@ -252,7 +252,7 @@ async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
 #[tokio::test]
 async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session.phase = TurnPhase::AwaitingSettlement;
     for busy in [
@@ -288,7 +288,7 @@ async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
 #[tokio::test]
 async fn another_native_sessions_settlement_is_rejected() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
@@ -317,7 +317,7 @@ async fn another_native_sessions_settlement_is_rejected() {
 #[tokio::test]
 async fn a_failed_state_write_invalidates_the_connection() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     let (sender, receiver) = oneshot::channel();
     sender.send(Err(AgentSessionError::Failed)).unwrap();
@@ -343,7 +343,7 @@ async fn a_failed_state_write_invalidates_the_connection() {
 #[tokio::test]
 async fn a_state_response_can_precede_the_correlated_prompt_result() {
     let (_root, client, spec) = fixture();
-    let mut session = open(&client, &spec, None).await.unwrap();
+    let mut session = open(&client, &spec, None, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),

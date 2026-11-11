@@ -18,12 +18,28 @@ use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 1024 * 1024;
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
+/// Cold native initialization budget; connected controls keep the ordinary deadline.
+pub(super) const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Decoded native frame with the wire bytes it occupied, counted once against buffer limits.
 #[derive(Debug)]
 struct Record {
     value: Value,
     bytes: usize,
+}
+
+/// Cloneable access to the same serialized native stdin for startup interaction answers.
+#[derive(Debug, Clone)]
+pub(super) struct Writer {
+    input: Arc<Mutex<ChildStdin>>,
+    deadline: Duration,
+}
+
+impl Writer {
+    /// Write one bounded frame without creating another process or session writer.
+    pub(super) async fn send(&self, frame: &Value) -> Result<(), AgentSessionError> {
+        write(&self.input, frame, self.deadline).await
+    }
 }
 
 #[derive(Debug)]
@@ -41,6 +57,7 @@ pub(super) struct Transport {
     sequence: u64,
     deadline: Duration,
     closed: bool,
+    startup: Option<mpsc::Sender<super::bootstrap::Frame>>,
 }
 
 impl Transport {
@@ -143,11 +160,43 @@ impl Transport {
             sequence: 0,
             deadline: client.deadline,
             closed: false,
+            startup: None,
         })
     }
 
+    /// Borrow the connection's existing serialized input for startup dialog answers.
+    pub(super) fn writer(&self) -> Result<Writer, AgentSessionError> {
+        Ok(Writer {
+            input: self
+                .input
+                .as_ref()
+                .ok_or(AgentSessionError::Failed)?
+                .clone(),
+            deadline: self.deadline,
+        })
+    }
+
+    /// Publish startup UI through the owning Ait session while native initialization is pending.
+    /// Returns an unavailable error when the bootstrap receiver has gone away.
+    pub(super) async fn startup(
+        &mut self,
+        sender: mpsc::Sender<super::bootstrap::Frame>,
+    ) -> Result<(), AgentSessionError> {
+        sender
+            .send(super::bootstrap::Frame::Writer(self.writer()?))
+            .await
+            .map_err(|_| AgentSessionError::Unavailable)?;
+        self.startup = Some(sender);
+        Ok(())
+    }
+
+    /// Finish startup routing once the live session consumes and answers its own UI events.
+    pub(super) fn finish_startup(&mut self) {
+        self.startup.take();
+    }
+
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
-        let ready = tokio::time::timeout(self.deadline, self.messages.recv())
+        let ready = tokio::time::timeout(STARTUP_TIMEOUT.max(self.deadline), self.messages.recv())
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .ok_or(AgentSessionError::Failed)?
@@ -159,9 +208,13 @@ impl Transport {
         {
             return Err(AgentSessionError::Rejected);
         }
+        let control_deadline = self.deadline;
+        self.deadline = STARTUP_TIMEOUT.max(control_deadline);
         let selected = self
             .request("negotiate_protocol", json!({"protocolVersion":2}))
-            .await?;
+            .await;
+        self.deadline = control_deadline;
+        let selected = selected?;
         if selected["protocolVersion"] != 2 {
             return Err(AgentSessionError::Failed);
         }
@@ -253,6 +306,20 @@ impl Transport {
                         None => Err(AgentSessionError::Failed),
                     };
                 }
+                if value["type"] == "extension_ui_request"
+                    && let Some(sender) = &self.startup
+                {
+                    sender
+                        .send(super::bootstrap::Frame::Ui(value.clone()))
+                        .await
+                        .map_err(|_| AgentSessionError::Unavailable)?;
+                    if matches!(
+                        value["method"].as_str(),
+                        Some("select" | "confirm" | "input" | "editor" | "ask" | "cancel")
+                    ) {
+                        continue;
+                    }
+                }
                 self.buffered_bytes += record.bytes;
                 if self.events.len() >= 4096 || self.buffered_bytes > MAX_BUFFER {
                     return Err(AgentSessionError::Failed);
@@ -297,6 +364,7 @@ impl Transport {
             return Ok(());
         }
         self.closed = true;
+        self.startup.take();
         self.diagnostics.flush();
         self.background_write.take();
         self.input.take();

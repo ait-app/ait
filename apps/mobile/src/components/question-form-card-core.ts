@@ -11,6 +11,10 @@ export interface QuestionFormQuestion {
   options: QuestionOption[];
   multiSelect: boolean;
   multiline?: boolean;
+  initialValue?: string;
+  secret?: boolean;
+  preserveWhitespace?: boolean;
+  dismissBehavior?: "deny";
   allowOther: boolean;
   allowEmpty: boolean;
   placeholder?: string;
@@ -59,9 +63,13 @@ export function parseQuestionFormQuestions(input: unknown): QuestionFormQuestion
       header: q.header,
       options,
       multiSelect: q.multiSelect === true,
-      ...(q.multiline === true ? { multiline: true } : {}),
       allowOther: q.allowOther === true || q.isOther === true,
       allowEmpty: q.allowEmpty === true,
+      ...(q.multiline === true ? { multiline: true } : {}),
+      ...(q.secret === true ? { secret: true } : {}),
+      ...(q.preserveWhitespace === true ? { preserveWhitespace: true } : {}),
+      ...(q.dismissBehavior === "deny" ? { dismissBehavior: "deny" as const } : {}),
+      ...(typeof q.initialValue === "string" ? { initialValue: q.initialValue } : {}),
       placeholder: readOptionalString(q, "placeholder"),
       dismissLabel: readOptionalString(q, "dismissLabel"),
     });
@@ -71,6 +79,17 @@ export function parseQuestionFormQuestions(input: unknown): QuestionFormQuestion
 
 export function questionShowsTextInput(question: QuestionFormQuestion): boolean {
   return question.options.length === 0 || question.allowOther;
+}
+
+function questionText(
+  question: QuestionFormQuestion,
+  index: number,
+  texts: QuestionOtherTexts,
+): string | undefined {
+  const value = texts[index] ?? question.initialValue;
+  return question.multiline || question.secret || question.preserveWhitespace
+    ? value
+    : value?.trim();
 }
 
 export function isQuestionAnswered(
@@ -88,7 +107,7 @@ export function isQuestionAnswered(
     return false;
   }
 
-  const otherText = otherTexts[qIndex]?.trim();
+  const otherText = questionText(question, qIndex, otherTexts);
   if (otherText && otherText.length > 0) {
     return true;
   }
@@ -117,7 +136,7 @@ export function buildQuestionFormAnswers(
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     const selected = selections[i];
-    const otherText = otherTexts[i]?.trim();
+    const otherText = questionText(q, i, otherTexts);
 
     if (q.answerFormat === "array") {
       const labels = Array.from(selected ?? []).map((idx) => q.options[idx].label);
@@ -149,7 +168,10 @@ export function buildQuestionFormAnswers(
 export function shouldSubmitEmptyOnDismiss(questions: QuestionFormQuestion[]): boolean {
   return (
     questions.length > 0 &&
-    questions.every((question) => question.allowEmpty && question.options.length === 0)
+    questions.every(
+      (question) =>
+        question.allowEmpty && question.options.length === 0 && question.dismissBehavior !== "deny",
+    )
   );
 }
 

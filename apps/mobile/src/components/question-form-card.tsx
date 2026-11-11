@@ -264,6 +264,7 @@ interface QuestionOtherInputProps {
   placeholder: string;
   isResponding: boolean;
   multiline?: boolean;
+  secret?: boolean;
   onChange: (qIndex: number, text: string) => void;
   onSubmit: () => void;
 }
@@ -275,6 +276,7 @@ function QuestionOtherInput({
   placeholder,
   isResponding,
   multiline,
+  secret,
   onChange,
   onSubmit,
 }: QuestionOtherInputProps) {
@@ -315,7 +317,7 @@ function QuestionOtherInput({
       onChangeText={handleChange}
       onSubmitEditing={multiline ? undefined : onSubmit}
       multiline={multiline}
-      editable={!isResponding}
+      secureTextEntry={secret}
       blurOnSubmit={false}
     />
   );
@@ -529,7 +531,7 @@ export function QuestionFormCard({
 
   const dismissLabel = resolveDismissLabel(questions, t("common.actions.dismiss"));
   const selected = selections[resolvedActiveQuestionIndex] ?? new Set<number>();
-  const otherText = otherTexts[resolvedActiveQuestionIndex] ?? "";
+  const otherText = otherTexts[resolvedActiveQuestionIndex] ?? activeQuestion?.initialValue ?? "";
   const showTextInput = activeQuestion ? questionShowsTextInput(activeQuestion) : false;
 
   return (
@@ -576,7 +578,9 @@ export function QuestionFormCard({
           ) : null}
           {showTextInput ? (
             <QuestionOtherInput
+              key={resolvedActiveQuestionIndex}
               multiline={activeQuestion.multiline}
+              secret={activeQuestion.secret}
               qIndex={resolvedActiveQuestionIndex}
               accessibilityLabel={activeQuestion.question}
               value={otherText}

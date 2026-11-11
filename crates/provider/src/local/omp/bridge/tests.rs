@@ -456,7 +456,7 @@ async fn legacy_acp_configuration_and_handles_restore_direct_native_identity() {
 #[tokio::test]
 async fn native_sdk_context_changes_refresh_identity_instead_of_failing_the_owner() {
     let (_root, client, spec) = super::super::tests::fixture();
-    let mut native = super::super::session::open(&client, &spec, None)
+    let mut native = super::super::session::open(&client, &spec, None, None)
         .await
         .unwrap();
     let before = native.persistence().unwrap().session_id;
@@ -588,7 +588,7 @@ async fn cli_bound_settings_keep_the_acp_identity_after_native_empty_session_rep
 #[tokio::test]
 async fn aliases_are_bounded_and_reject_corruption_cross_workspace_and_symlinks() {
     let (root, client, spec) = super::super::tests::fixture();
-    let mut native = super::super::session::open(&client, &spec, None)
+    let mut native = super::super::session::open(&client, &spec, None, None)
         .await
         .unwrap();
     let id = uuid::Uuid::new_v4().to_string();

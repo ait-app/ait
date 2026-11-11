@@ -129,3 +129,168 @@ async fn question(session: &mut dyn AgentSession) -> Value {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; secret and empty answers stay verbatim without inference"]
+async fn installed_omp_secret_and_empty_inputs_keep_native_value_semantics() {
+    let fixture = installed_with_plugins().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    for (command, answer, expected) in [
+        (
+            "/compat-dialog-secret",
+            "  hunter2  ",
+            "secret: \"  hunter2  \"",
+        ),
+        ("/compat-dialog-empty", "", "empty: \"\""),
+    ] {
+        session
+            .start_turn(command, &fixture.spec.config)
+            .await
+            .unwrap();
+        session.runtime_info().await.unwrap();
+        let request = question(session.as_mut()).await;
+        let field = &request["input"]["questions"][0];
+        assert_eq!(field["allowEmpty"], true);
+        assert_eq!(field["dismissBehavior"], "deny");
+        assert_eq!(field["preserveWhitespace"], true);
+        if command.ends_with("secret") {
+            assert_eq!(field["secret"], true);
+        } else {
+            assert!(field.get("secret").is_none());
+        }
+        session
+            .respond_permission(
+                request["id"].as_str().unwrap(),
+                &json!({"behavior":"allow","updatedInput":{"answers":{
+                    field["header"].as_str().unwrap():answer}}}),
+            )
+            .await
+            .unwrap();
+        let events = complete(session.as_mut()).await;
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, AgentTurnEvent::Timeline(entry)
+                if entry.item["text"] == expected)),
+            "{events:?}"
+        );
+        assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+        assert_eq!(session.pending_permissions(), Vec::<Value>::new());
+    }
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; cancel returns native cancellation without inference"]
+async fn installed_omp_dialog_cancel_returns_native_cancellation() {
+    let fixture = installed_with_plugins().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    session
+        .start_turn("/compat-dialog-input", &fixture.spec.config)
+        .await
+        .unwrap();
+    session.runtime_info().await.unwrap();
+    let request = question(session.as_mut()).await;
+    session
+        .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
+        .await
+        .unwrap();
+    let events = complete(session.as_mut()).await;
+    // Official OMP resolves a cancelled input as undefined (not null); the plugin sees
+    // the cancellation and the turn still completes without a value.
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::Timeline(entry)
+            if entry.item["text"] == "input: undefined")),
+        "{events:?}"
+    );
+    assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; startup select answers before initialization completes"]
+async fn installed_omp_startup_question_publishes_before_initialization_and_releases_one_input() {
+    let mut fixture = installed_with_plugins().await;
+    let mut values: BTreeMap<String, String> = fixture
+        .client
+        .environment
+        .entries()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+    values.insert("AIT_OMP_STARTUP_DIALOG".to_owned(), "1".to_owned());
+    fixture.client.environment = AgentEnvironment::try_from(values).unwrap();
+    let mut session = tokio::time::timeout(
+        Duration::from_secs(30),
+        fixture.client.create_session(&fixture.spec),
+    )
+    .await
+    .expect("startup dialog must not block session publication")
+    .unwrap();
+    let request = session
+        .pending_permissions()
+        .into_iter()
+        .next()
+        .expect("startup request before initialization");
+    assert_eq!(request["title"], "OMP startup fixture");
+    assert!(session.persistence().is_none());
+    session
+        .start_turn("Only after the startup answer", &fixture.spec.config)
+        .await
+        .unwrap();
+    session
+        .respond_permission(
+            request["id"].as_str().unwrap(),
+            &json!({"behavior":"allow","updatedInput":{"answers":{"value":"Beta"}}}),
+        )
+        .await
+        .unwrap();
+    let events = tokio::time::timeout(Duration::from_secs(60), async {
+        let mut events = Vec::new();
+        loop {
+            session.service_realtime().await.unwrap();
+            while let Some(event) = session.poll_turn().unwrap() {
+                let done = matches!(
+                    event,
+                    AgentTurnEvent::Completed(_)
+                        | AgentTurnEvent::Failed
+                        | AgentTurnEvent::Cancelled
+                );
+                events.push(event);
+                if done {
+                    return events;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // Official OMP admits prompts without a separate agent_start; the released input is
+    // proven by its user message and completion, and the startup answer by the native
+    // session file (custom plugin messages are not projected as text cards).
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::RuntimeInfo(info)
+                if info.session_id.is_some())),
+        "{events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::Timeline(entry)
+            if entry.item["text"] == "Only after the startup answer")),
+        "{events:?}"
+    );
+    assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+    assert!(session.persistence().is_some());
+    let handle = session.persistence().unwrap();
+    let file = handle.metadata.as_ref().unwrap()["sessionFile"]
+        .as_str()
+        .unwrap();
+    let journal = std::fs::read_to_string(file).unwrap();
+    assert!(journal.contains("startup: \\\"Beta\\\""), "{journal}");
+    session.close().await.unwrap();
+}

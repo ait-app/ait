@@ -409,7 +409,7 @@ impl Engine {
             }
             Some(handle)
         };
-        let mut native = session::open(&self.client, &spec, handle.as_ref()).await?;
+        let mut native = session::open(&self.client, &spec, handle.as_ref(), None).await?;
         native.forward_native_events(self.capabilities.raw_extensions);
         self.id = if method != "session/new" && !self.capabilities.ait {
             config::text(params, "sessionId")?.to_owned()

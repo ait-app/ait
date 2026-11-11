@@ -10,9 +10,6 @@ import ompDialogs from "../../../../crates/provider/tests/fixtures/omp_dialogs.j
 import { parseQuestionFormQuestions } from "./question-form-card-core";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
-vi.mock("@/components/ui/loading-spinner", () => ({
-  LoadingSpinner: () => <span role="progressbar" />,
-}));
 vi.mock("@/components/ui/text-input", () => ({
   EditingTextInput: ({
     initialValue,
@@ -20,12 +17,14 @@ vi.mock("@/components/ui/text-input", () => ({
     accessibilityLabel,
     editable,
     multiline,
+    secureTextEntry,
   }: {
     initialValue: string;
     onChangeText: (text: string) => void;
     accessibilityLabel: string;
     editable: boolean;
     multiline?: boolean;
+    secureTextEntry?: boolean;
   }) =>
     multiline ? (
       <textarea
@@ -37,6 +36,7 @@ vi.mock("@/components/ui/text-input", () => ({
     ) : (
       <input
         aria-label={accessibilityLabel}
+        type={secureTextEntry ? "password" : "text"}
         value={initialValue}
         disabled={!editable}
         onChange={(event) => onChangeText(event.target.value)}
@@ -187,15 +187,75 @@ describe("question response recovery", () => {
     if (fixture.native.method === "select") {
       fireEvent.click(screen.getByRole("radio", { name: answer }));
     } else {
-      fireEvent.change(screen.getByRole("textbox", { name: question.question }), {
-        target: { value: answer },
-      });
+      const input = question.secret
+        ? screen.getByLabelText(question.question)
+        : screen.getByRole("textbox", { name: question.question });
+      fireEvent.change(input, { target: { value: answer } });
     }
     fireEvent.click(screen.getByTestId("question-form-primary-action"));
 
     expect(onRespond).toHaveBeenCalledExactlyOnceWith({
       ...fixture.response,
       updatedInput: { ...request.input, ...fixture.response.updatedInput },
+    });
+  });
+
+  it("masks secret input and submits the verbatim value", () => {
+    const fixture = ompDialogs.find((entry) => entry.name === "secret input")!;
+    const request = AgentPermissionRequestPayloadSchema.parse(fixture.request);
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{ key: `agent:${request.id}`, agentId: "agent", request }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+    const input = screen.getByLabelText("API token") as HTMLInputElement;
+    expect(input.type).toBe("password");
+    fireEvent.change(input, { target: { value: "  hunter2  " } });
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      ...fixture.response,
+      updatedInput: { ...request.input, ...fixture.response.updatedInput },
+    });
+  });
+
+  it("submits an empty allow for optional input without typing", () => {
+    const fixture = ompDialogs.find((entry) => entry.name === "empty input")!;
+    const request = AgentPermissionRequestPayloadSchema.parse(fixture.request);
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{ key: `agent:${request.id}`, agentId: "agent", request }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      ...fixture.response,
+      updatedInput: { ...request.input, ...fixture.response.updatedInput },
+    });
+  });
+
+  it("prefills the editor draft and cancels on dismiss instead of submitting empty", () => {
+    const fixture = ompDialogs.find((entry) => entry.name === "editor")!;
+    const request = AgentPermissionRequestPayloadSchema.parse(fixture.request);
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{ key: `agent:${request.id}`, agentId: "agent", request }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Edit the plan" }) as HTMLTextAreaElement;
+    expect(input.value).toBe("Initial plan");
+    fireEvent.click(screen.getByTestId("question-form-dismiss"));
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "deny",
+      message: "Dismissed by user",
     });
   });
 });

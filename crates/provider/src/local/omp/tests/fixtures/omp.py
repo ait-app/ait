@@ -99,8 +99,28 @@ def finish(aborted=False, settled=True):
 
 emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864})
 
-for line in sys.stdin:
-    command = json.loads(line)
+startup_pending = (root/'startup-dialog').exists() and '--no-ui' not in args
+if startup_pending:
+    emit({'type':'extension_ui_request','id':'startup-choice','method':'input','title':'Startup input'})
+
+def commands_from_input():
+    global startup_pending
+    held = []
+    for line in sys.stdin:
+        command = json.loads(line)
+        if startup_pending:
+            if command.get('type') == 'extension_ui_response' and command.get('id') == 'startup-choice':
+                with log.open('a') as output:
+                    output.write(json.dumps(command) + '\n')
+                startup_pending = False
+                yield from held
+                held.clear()
+            else:
+                held.append(command)
+            continue
+        yield command
+
+for command in commands_from_input():
     with log.open('a') as output:
         output.write(json.dumps(command) + '\n')
     kind = command['type']

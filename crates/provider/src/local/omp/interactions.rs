@@ -76,13 +76,30 @@ impl Dialogs {
         if let Some(title) = native["title"].as_str() {
             request["title"] = json!(title);
         }
+        if method == "confirm" {
+            // The title and message already describe this confirmation; its RPC input
+            // stays available for answer validation instead of appearing as tool JSON.
+            request["detail"] = json!({"type":"unknown","input":null,"output":null});
+        }
         if method == "input"
             && let Some(placeholder) = native["placeholder"].as_str()
         {
             request["input"]["questions"][0]["placeholder"] = json!(placeholder);
         }
+        if matches!(method, "input" | "editor") {
+            let question = &mut request["input"]["questions"][0];
+            question["allowEmpty"] = json!(true);
+            question["dismissBehavior"] = json!("deny");
+            question["preserveWhitespace"] = json!(true);
+            if native["secret"] == true {
+                question["secret"] = json!(true);
+            }
+        }
         if method == "editor" {
             request["input"]["questions"][0]["multiline"] = json!(true);
+            if let Some(prefill) = native["prefill"].as_str() {
+                request["input"]["questions"][0]["initialValue"] = json!(prefill);
+            }
         }
         if method == "ask" {
             request["input"] = json!({"questions":questions(native)?});

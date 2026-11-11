@@ -93,6 +93,8 @@ pub(super) async fn probe(
         "--mode".to_owned(),
         "rpc-ui".to_owned(),
         "--no-session".to_owned(),
+        // Metadata probes load plugins but must never raise their startup dialogs.
+        "--no-ui".to_owned(),
     ];
     let route = model.map(config::model_route).transpose()?;
     if let Some([provider, model]) = &route {
@@ -118,6 +120,7 @@ async fn connect(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     path: Option<&str>,
+    startup: Option<tokio::sync::mpsc::Sender<super::bootstrap::Frame>>,
 ) -> Result<(Transport, Value, config::ServiceTiers), AgentSessionError> {
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
     if let Some(path) = path {
@@ -133,6 +136,9 @@ async fn connect(
         ]);
     }
     let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
+    if let Some(sender) = startup {
+        transport.startup(sender).await?;
+    }
     transport.initialize().await?;
     let state = config::apply(&mut transport, &spec.config).await?;
     transport
@@ -156,6 +162,7 @@ pub(super) async fn open(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
+    startup: Option<tokio::sync::mpsc::Sender<super::bootstrap::Frame>>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
     let resolved = match handle {
@@ -180,7 +187,7 @@ pub(super) async fn open(
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
     let (transport, state, service_tiers) =
-        connect(client, spec, path.filter(|_| persisted)).await?;
+        connect(client, spec, path.filter(|_| persisted), startup).await?;
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
@@ -239,6 +246,17 @@ fn validate_native_control(kind: &str) -> Result<(), AgentSessionError> {
 }
 
 impl Session {
+    /// Take over dialogs already published and answered by the provisional startup session.
+    /// The native process and its serialized writer are the same; only ownership moves.
+    pub(super) fn adopt_startup(&mut self, dialogs: Dialogs) -> Result<(), AgentSessionError> {
+        if !self.dialogs.pending().is_empty() || self.closed {
+            return Err(AgentSessionError::Failed);
+        }
+        self.dialogs = dialogs;
+        self.transport.finish_startup();
+        Ok(())
+    }
+
     /// Apply native settings while idle, retaining the persisted session when reopening.
     /// Invalid settings or an active turn reject before any native mutation.
     pub(super) async fn configure(
@@ -277,8 +295,13 @@ impl Session {
                 confinement: self.confinement.clone(),
             };
             let persisted = std::path::Path::new(&path).is_file();
-            let (transport, state, service_tiers) =
-                connect(&self.client, &spec, persisted.then_some(path.as_str())).await?;
+            let (transport, state, service_tiers) = connect(
+                &self.client,
+                &spec,
+                persisted.then_some(path.as_str()),
+                None,
+            )
+            .await?;
             if persisted && state["sessionId"] != self.state["sessionId"] {
                 return Err(AgentSessionError::Failed);
             }

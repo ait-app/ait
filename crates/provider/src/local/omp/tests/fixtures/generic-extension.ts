@@ -40,6 +40,38 @@ export default function (pi: ExtensionAPI) {
       },
     });
   }
+  pi.registerCommand("compat-dialog-secret", {
+    description: "Secret input dialog",
+    handler: async (_args, ctx) => {
+      const answer = await ctx.ui.input("OMP secret fixture", "Enter token", { secret: true });
+      await pi.sendMessage({
+        customType: "compat-dialog-result",
+        content: `secret: ${JSON.stringify(answer)}`,
+        display: true,
+      });
+    },
+  });
+  pi.registerCommand("compat-dialog-empty", {
+    description: "Empty input dialog",
+    handler: async (_args, ctx) => {
+      const answer = await ctx.ui.input("OMP empty fixture", "Enter note");
+      await pi.sendMessage({
+        customType: "compat-dialog-result",
+        content: `empty: ${JSON.stringify(answer)}`,
+        display: true,
+      });
+    },
+  });
+  if (process.env.AIT_OMP_STARTUP_DIALOG === "1") {
+    pi.on("session_start", async (_event, ctx) => {
+      const answer = await ctx.ui.select("OMP startup fixture", ["Alpha", "Beta"]);
+      await pi.sendMessage({
+        customType: "compat-dialog-result",
+        content: `startup: ${JSON.stringify(answer)}`,
+        display: true,
+      });
+    });
+  }
   pi.registerTool({
     name: "compat_dynamic_tool",
     label: "Generic fixture tool",

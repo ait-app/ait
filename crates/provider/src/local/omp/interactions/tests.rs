@@ -201,3 +201,78 @@ fn selects_and_timeouts_reject_invalid_answers() {
     assert_eq!(dialogs.pending().len(), 1);
     assert_eq!(dialogs.clear().len(), 2);
 }
+
+#[test]
+fn input_and_editor_publish_empty_secret_and_prefill_semantics() {
+    let mut dialogs = Dialogs::default();
+    let events = dialogs
+        .capture(&json!({"id":"token","method":"input","title":"API token","secret":true}))
+        .unwrap();
+    let [AgentTurnEvent::PermissionRequested(input)] = events.as_slice() else {
+        panic!("missing input request");
+    };
+    let question = &input["input"]["questions"][0];
+    assert_eq!(question["secret"], true);
+    assert_eq!(question["allowEmpty"], true);
+    assert_eq!(question["dismissBehavior"], "deny");
+    assert_eq!(question["preserveWhitespace"], true);
+    assert!(question.get("multiline").is_none());
+
+    let events = dialogs
+        .capture(&json!({"id":"plan","method":"editor","title":"Plan","prefill":"Initial plan"}))
+        .unwrap();
+    let [AgentTurnEvent::PermissionRequested(editor)] = events.as_slice() else {
+        panic!("missing editor request");
+    };
+    let question = &editor["input"]["questions"][0];
+    assert_eq!(question["multiline"], true);
+    assert_eq!(question["initialValue"], "Initial plan");
+    assert_eq!(question["allowEmpty"], true);
+    assert!(question.get("secret").is_none());
+
+    // Empty and whitespace-preserved answers reach the native runtime verbatim.
+    assert_eq!(
+        dialogs
+            .response(
+                "token",
+                &json!({"behavior":"allow","updatedInput":{"answers":{"value":"  hunter2  "}}})
+            )
+            .unwrap()["value"],
+        "  hunter2  "
+    );
+    assert_eq!(
+        dialogs
+            .response(
+                "plan",
+                &json!({"behavior":"allow","updatedInput":{"answers":{"value":""}}})
+            )
+            .unwrap()["value"],
+        ""
+    );
+    // NUL bytes remain invalid even for secret fields.
+    assert!(
+        dialogs
+            .response(
+                "plan",
+                &json!({"behavior":"allow","updatedInput":{"answers":{"value":"a\0b"}}})
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn confirmations_describe_themselves_without_raw_tool_input() {
+    let mut dialogs = Dialogs::default();
+    let events = dialogs
+        .capture(&json!({"id":"run","method":"confirm","title":"Continue?","message":"Run tool"}))
+        .unwrap();
+    let [AgentTurnEvent::PermissionRequested(request)] = events.as_slice() else {
+        panic!("missing confirm request");
+    };
+    assert_eq!(request["kind"], "tool");
+    assert_eq!(
+        request["detail"],
+        json!({"type":"unknown","input":null,"output":null})
+    );
+    assert_eq!(request["input"]["title"], "Continue?");
+}

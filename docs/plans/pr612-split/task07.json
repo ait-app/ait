@@ -1,0 +1,80 @@
+{
+  "id": "07",
+  "title": "Structured native interactions",
+  "priority": 7,
+  "depends_on": ["00", "01"],
+  "donor_sections": [12, 20, 22, 31],
+  "donor_paths": "Frozen 154-path inventory: task00 tasks.json id 07 (PR647, evidence 7ac9b4ac); implemented slice is the 8 exclusive paths plus selected OMP-core/fixture/doc hunks listed in the PR description.",
+  "implementation": "Typed question/approval fields on the existing permission wire (secret, initialValue, allowEmpty, dismissBehavior, preserveWhitespace; confirm detail without raw tool JSON); OMP adapter interprets native frames, UI never parses OMP strings. New omp/bootstrap.rs provisional session publishes startup dialogs before native initialization completes and answers them through the same serialized writer; first input queued once and released through the same native session, cancelled input never replayed. Metadata probes run --no-ui while still loading plugins. No new RPC methods, events, providerUi state or generic native_action gateway; later consumers own their own typed schemas.",
+  "acceptance": "Real structured forms preserve all value/cancel semantics; reconnect and startup recover drafts without repeating side effects; approvals are not blocked by command waits and secrets are not leaked.",
+  "status": "in_review",
+  "branch": "feat/pr612-task07-structured-interactions",
+  "base": {
+    "kind": "stacked-task01",
+    "commit": "22efa58f615dab8a37fd3c76c43566581b320dae",
+    "pr_url": "https://github.com/ait-app/ait/pull/651",
+    "verified_code_commit": "92abc77dbede57caf4c4b4bf1be7076982ffea48"
+  },
+  "commit": null,
+  "pr_url": null,
+  "adr": "ADR-243 (proposed)",
+  "compatibility": "No public SDK/UI/protocol envelope changes: AgentPermissionRequestPayloadSchema.input stays an open record and only optional question fields are added; permission events, pendingPermissions snapshot and agent.permission.resolve.request unchanged; no method registration or capability-count changes. Old clients keep rendering/answering the same permission requests; new clients on old hosts simply never see the optional fields. Internal Rust changes: session::open gains a startup sender parameter (bridge/tests updated), OmpClient create/resume signatures unchanged. ACP structure untouched (task01).",
+  "source_inventory": {
+    "draft_pr": "https://github.com/ait-app/ait/pull/647",
+    "evidence_commit": "7ac9b4ace576831196b5b09965c8d029bd9044d8",
+    "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4"
+  },
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo check -p provider --offline",
+        "result": "PASS: provider crate compiles with the bootstrap/transport/interactions changes."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo test -p provider --offline --lib omp::",
+        "result": "PASS: 100 offline OMP tests including 4 new bootstrap tests (startup publish-before-admission, empty-vs-cancel single release, manager startup question, headless metadata) and extended shared-fixture dialog tests."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo clippy -p provider --offline --all-targets",
+        "result": "PASS: no warnings in changed files; remaining warnings are pre-existing assert!(x.is_empty()) style in untouched tests."
+      },
+      {
+        "command": "CARGO_BUILD_JOBS=2 cargo fmt -p provider -- --check",
+        "result": "PASS after formatting bootstrap.rs/tests."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/usr/bin/omp cargo test -p provider --offline --lib -- --ignored --test-threads=1 installed::interactions",
+        "result": "PASS: official omp/18.17.0 — confirmation/input/editor, write/exec approvals, secret+empty verbatim answers, startup-question-before-init, and cancel (native undefined resolution, verified by direct RPC probe) all pass with isolated config and loopback mock model."
+      },
+      {
+        "command": "npx vitest run --project unit src/components/question-form-card-core.test.ts src/components/question-form-card.test.tsx (apps/mobile)",
+        "result": "PASS: 25 tests including secret masking, empty allow, editor prefill and deny-dismiss."
+      },
+      {
+        "command": "npx vitest run --project browser src/components/question-form-card.browser.test.tsx (apps/mobile)",
+        "result": "PASS: real Chromium smoke at 390px covering secret/empty/multiline prefill/cancel."
+      },
+      {
+        "command": "npx vitest run src/messages.omp-dialogs.test.ts src/messages.omp-question.test.ts src/messages.stream-parsing.test.ts (packages/protocol)",
+        "result": "PASS: 24 wire tests; extended shared fixtures round-trip Rust capture/response, protocol schema and mobile form core."
+      },
+      {
+        "command": "npm run check:docs; node scripts/adr.mjs index --check",
+        "result": "PASS after task07.json added; 560 Markdown documents and 224 ADRs verified."
+      },
+      {
+        "command": "npx oxfmt --check <changed TS/MD>; git diff --check",
+        "result": "PASS."
+      }
+    ]
+  },
+  "blockers": [
+    "Stacked on unmerged task01 (PR651), whose own acceptance is blocked on macOS signing/notarization evidence; task07 inherits that platform limitation and claims native Linux official-runtime verification only.",
+    "Draft PR publication pending at record time; commit/pr_url fields filled on publication."
+  ]
+}

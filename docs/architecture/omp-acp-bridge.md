@@ -33,22 +33,22 @@ Ait spec 的精确 sandbox confinement 在创建、恢复、配置重开和会�
 
 ## 能力映射
 
-| 能力                   | 路由与所有权                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 模型、推理             | 原生 RPC 动态目录和 available levels → ACP select options；模型使用 `[provider, modelId]` JSON 字符串，不按插件或模型名推断能力 |
-| 权限模式               | ACP mode/select → 官方 approval-mode；保留 Full/Write/Ask/Ask and Remember 及未覆盖时的原生配置                                 |
-| 压缩、重试、fast/slow  | ACP select 的字符串 `true/false` → 对应官方 RPC；由当前模型及 OMP 验证，不向官方 ACP 发送自造 boolean options                   |
-| 系统提示               | Ait 配置元数据 → 官方 CLI；重开时恢复同一份已持久历史，不重发输入                                                               |
-| 文本、推理、工具与图片 | Ait 直接接收原生 Session 的共享事件；外部连接转换为标准 ACP 通知或协商的完整宿主事件，保留身份、富输入和图片工件                |
-| token/cost、上下文     | 原生用量投影 → Ait 事件；标准 ACP 使用 usage updates，额外原生字段保留在协商通道                                                |
-| 命令、技能、插件工具   | OMP 动态发现/执行；Ait 不按插件名称、命令名称或安装路径添加分支                                                                 |
-| 审批和插件问答         | 标准 permission/form，支持选择、输入、确认、编辑和结构化 ask；Ait 保留原生授权与多选语义                                        |
-| 自定义消息             | 可见 `custom`/JSONL `custom_message` 共用投影；保留 customType，隐藏上下文不展示；command_output/notify 作为临时输出显示        |
-| 后台工作               | 原生 `prompt_result` + `session_settled`，遗漏时以同一进程的明确 `get_state.isSettled` 核对；不以无输出或 agent_end 合成完成    |
-| 子 Agent               | 原生会话自己的订阅、状态、进度和消息；Ait 子 Agent 时间线通过完整宿主事件保留                                                   |
-| 取消、steering         | ACP 方法 → 当前原生回合；控制响应与交互回调分别关联                                                                             |
-| 历史和恢复             | 只读 OMP JSONL，保留当前分支、session ID、回执和 blob；ACP load 回放，resume 继续执行                                           |
-| 本机 MCP 和插件配置    | 由同一个原生 RPC 实例按官方规则加载；客户端的空 server 列表不会清掉本机 MCP                                                     |
+| 能力                   | 路由与所有权                                                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 模型、推理             | 原生 RPC 动态目录和 available levels → ACP select options；模型使用 `[provider, modelId]` JSON 字符串，不按插件或模型名推断能力                                                                                                      |
+| 权限模式               | ACP mode/select → 官方 approval-mode；保留 Full/Write/Ask/Ask and Remember 及未覆盖时的原生配置                                                                                                                                      |
+| 压缩、重试、fast/slow  | ACP select 的字符串 `true/false` → 对应官方 RPC；由当前模型及 OMP 验证，不向官方 ACP 发送自造 boolean options                                                                                                                        |
+| 系统提示               | Ait 配置元数据 → 官方 CLI；重开时恢复同一份已持久历史，不重发输入                                                                                                                                                                    |
+| 文本、推理、工具与图片 | Ait 直接接收原生 Session 的共享事件；外部连接转换为标准 ACP 通知或协商的完整宿主事件，保留身份、富输入和图片工件                                                                                                                     |
+| token/cost、上下文     | 原生用量投影 → Ait 事件；标准 ACP 使用 usage updates，额外原生字段保留在协商通道                                                                                                                                                     |
+| 命令、技能、插件工具   | OMP 动态发现/执行；Ait 不按插件名称、命令名称或安装路径添加分支                                                                                                                                                                      |
+| 审批和插件问答         | 标准 permission/form，支持选择、输入、确认、编辑和结构化 ask；Ait 保留原生授权与多选语义；input/editor 显式承载空值、secret、预填与取消（[ADR-243](../decisions/providers/adr-243-omp-structured-native-interactions.md)，proposed） |
+| 自定义消息             | 可见 `custom`/JSONL `custom_message` 共用投影；保留 customType，隐藏上下文不展示；command_output/notify 作为临时输出显示                                                                                                             |
+| 后台工作               | 原生 `prompt_result` + `session_settled`，遗漏时以同一进程的明确 `get_state.isSettled` 核对；不以无输出或 agent_end 合成完成                                                                                                         |
+| 子 Agent               | 原生会话自己的订阅、状态、进度和消息；Ait 子 Agent 时间线通过完整宿主事件保留                                                                                                                                                        |
+| 取消、steering         | ACP 方法 → 当前原生回合；控制响应与交互回调分别关联                                                                                                                                                                                  |
+| 历史和恢复             | 只读 OMP JSONL，保留当前分支、session ID、回执和 blob；ACP load 回放，resume 继续执行                                                                                                                                                |
+| 本机 MCP 和插件配置    | 由同一个原生 RPC 实例按官方规则加载；客户端的空 server 列表不会清掉本机 MCP                                                                                                                                                          |
 
 ## 通用原生扩展通道
 
@@ -60,6 +60,8 @@ Ait spec 的精确 sandbox confinement 在创建、恢复、配置重开和会�
 - `_omp/respond`：`{sessionId, frame}`，将原生 UI/tool/URI 回应交还同一实例；检查 callback 身份和种类。
 
 控制期间继续交付交互请求；不会因先等待命令确认而卡住插件。
+内部会话在原生初始化完成前即可公布并回答插件启动问题（provisional session，同一序列化 writer）；
+首条输入只释放一次，取消不重放。元数据探测以 `--no-ui` 运行但仍加载插件。
 改变会话/回合所有权的原生命令不能绕过 ACP 生命周期路由，未知原生控制由 OMP 自己拒绝。
 错误字段沿用有界脱敏，普通插件数据不按插件名称改写。
 
