@@ -65,6 +65,10 @@ test("validates Linux package resources before installing the launcher on any ho
   try {
     const context = createPackagedApp(root);
     chmodSync(context.appOutDir, 0o700);
+    chmodSync(join(context.appOutDir, "resources"), 0o700);
+    chmodSync(join(context.appOutDir, "resources", "app-dist", "index.html"), 0o600);
+    chmodSync(join(context.appOutDir, "resources", "bin", "aitd"), 0o700);
+    chmodSync(join(context.appOutDir, "chrome-sandbox"), 0o4700);
     const executable = join(context.appOutDir, "Ait");
     const original = readFileSync(executable);
     const legacyBin = join(context.appOutDir, "resources", "bin", "ait-worker");
@@ -76,6 +80,13 @@ test("validates Linux package resources before installing the launcher on any ho
     rmSync(legacyBin);
     await afterPack(context);
     expect(statSync(context.appOutDir).mode & 0o777).toBe(0o755);
+    expect(statSync(join(context.appOutDir, "resources")).mode & 0o777).toBe(0o755);
+    expect(
+      statSync(join(context.appOutDir, "resources", "app-dist", "index.html")).mode & 0o777,
+    ).toBe(0o644);
+    expect(statSync(join(context.appOutDir, "resources", "bin", "aitd")).mode & 0o777).toBe(0o755);
+    // The installer owns the SUID helper mode; packaging must not widen it.
+    expect(statSync(join(context.appOutDir, "chrome-sandbox")).mode & 0o7777).toBe(0o4700);
     expect(readFileSync(`${executable}.bin`)).toEqual(original);
     expect(readFileSync(executable, "utf8")).toContain("AIT_DESKTOP_SANDBOX_REASON");
   } finally {

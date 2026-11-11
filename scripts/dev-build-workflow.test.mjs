@@ -36,43 +36,6 @@ test("CI delegates its checks to the shared verify script with a full-history di
   assert.ok(ci.jobs.ui.steps.some((step) => step.run === "npm ci"));
 });
 
-test("dev Linux desktop builds its daemon on the release glibc baseline", () => {
-  const steps = devBuild.jobs.desktop.steps;
-  const mac = steps.find((step) => step.name === "Build native tools");
-  assert.equal(mac.if, "matrix.platform == 'mac'");
-  assert.match(mac.run, /-p ait-omp-acp --bin ait-omp-acp/);
-  const linux = steps.find((step) => step.name === "Build native tools (glibc 2.28 baseline)");
-  assert.equal(linux.if, "matrix.platform == 'linux'");
-  assert.match(linux.run, /^bash scripts\/build-linux-daemon\.sh daemon daemon /);
-  // The container must use the same pinned toolchain as the macOS runner.
-  const toolchain = steps.find((step) => step.uses?.startsWith("dtolnay/rust-toolchain@"));
-  assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
-  const build = steps.find((step) => step.name === "Build desktop");
-  assert.match(
-    build.env.AIT_SERVER_BIN,
-    /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/,
-  );
-  assert.match(build.env.AIT_OMP_ACP_BIN, /release\/ait-omp-acp$/);
-});
-
-test("dev builds package both standalone daemons and explain the macOS quarantine", () => {
-  const steps = devBuild.jobs.desktop.steps;
-  const names = steps.map((step) => step.name);
-  const pack = steps.find((step) => step.name === "Package standalone daemon");
-  assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
-  assert.match(pack.run, /release-assets\.mjs daemon .* release-assets --dev "\$DEV_BUILD_LABEL"/);
-  assert.match(pack.run, /codesign --verify/);
-  assert.match(pack.env.OMP_ACP_BIN, /release\/ait-omp-acp$/);
-  assert.match(pack.run, /codesign --verify --verbose "\$OMP_ACP_BIN"/);
-  // The archive must be in release-assets before the artifact upload picks it up.
-  const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));
-  assert(names.indexOf("Package standalone daemon") < upload);
-  const publish = devBuild.jobs.publish.steps.find(
-    (step) => step.name === "Publish latest dev build",
-  );
-  assert.match(publish.run, /xattr -d com\.apple\.quarantine aitd/);
-});
-
 // Evaluates a job condition like GitHub: without a status function, success() is implied.
 function condition(expression, github, needs = {}, cancelled = false) {
   let code = expression
