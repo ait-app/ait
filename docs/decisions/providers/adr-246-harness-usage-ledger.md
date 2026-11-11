@@ -34,7 +34,8 @@ paths:
   （`input = max(0, input − cache_read − cache_write)`）。`output` 含推理；`reasoning` 与 `cache_write_1h`
   是子集，只作诊断，永不加入合计。
 - 请求记录含 `segment_id`（同一原生事件稳定，同一 Agent 内唯一，含 provider 与 turn id）、`parent`（子 Agent 流键）、
-  `model`、`boundary`、各桶、`cost_usd_reported`、`complete`，以及控制者裁定的 `agent_id` 与 `recorded_at`。
+  `model`、`boundary`、各桶、`cost_usd_reported`、`complete`；
+  `AgentManager` 把它归入当前调用时补上 `agent_id` 与 `recorded_at`（写入时间）。
 - 同一 `segment_id` 的分帧按字段取最大值合并，重复上报同一值不会重复计数。
 - 累计计数器只做差分、不求和：任一字段回落视为进程重启并重置基线；重启后的第一个累计快照只作基线，计 0。
   差分助手放在共享的 `local/usage/cumulative.rs`。带运行总量的帧（如 Codex `total.totalTokens`）仅在总量大于
@@ -54,8 +55,8 @@ paths:
   失败、取消或被中断的调用可能丢失进行中或未刷出的请求，因此 `exact` 降为 `lower_bound`，`missing` 不变。
 - 账本错误只用 `tracing::warn!` 记录，永不使轮次失败或延迟。写入经有界通道交给单一阻塞写线程，
   `AgentManager` 轮询循环不等待 SQLite。
-- 调用来源：`user`、`bot`、`schedule`、`heartbeat`、`autonomous`、`summary`，以及启动被拒的 `rejected`
-  （无请求）。向运行中轮次的 steer、`out_of_band` 命令、额度读取和历史/恢复读取不是新调用。
+- 调用来源：`user`、`bot`、`schedule`、`heartbeat`、`autonomous`、`summary`。启动被拒的调用仍按其来源记录，
+  结果为 `rejected`（无请求）。向运行中轮次的 steer、`out_of_band` 命令、额度读取和历史/恢复读取不是新调用。
 
 ### 存储：`agents/usage.sqlite3`
 
@@ -93,7 +94,7 @@ cacheWriteTokens, reportedCostUsd, costReportedRequests, lowerBoundCalls, missin
   `since` 是本 Host 账本的起点，客户端据此说明更早的历史不存在。
 - 客户端按方法名协商（`features.providerUsageLedger`），与 `providerUsageList` 相同。
   模式放在 `packages/protocol/src/messages.ts`，客户端方法 `DaemonClient.listUsageLedger` 放在 `packages/client`。
-- 客户端在用量弹窗新增 History 标签（24h、7d、30d）；仅为下界的数字显示“≥”并说明原因。
+- 客户端在用量弹窗新增 History 标签（24h、7d、30d）；含 `lower_bound` 或 `missing` 调用的数字显示“≥”并说明原因。
   “All hosts”视图逐 Host 汇总，无法连接的 Host 单独列出而不记为 0。
 
 ### 各适配器的请求边界
