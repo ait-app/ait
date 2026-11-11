@@ -68,6 +68,9 @@ Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可�
 Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
 旧视图保持有效，权限写入仍核对最新记录，见
 [ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
+会话统计复用这些已提交记录，区分配置模型、原生确认模型和 Provider 用量快照；未知指标为
+`null`，不累计快照或混入账号/子会话用量，也不启动原生 writer，见
+[ADR-238](../decisions/providers/adr-238-read-only-session-statistics.md)。
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。

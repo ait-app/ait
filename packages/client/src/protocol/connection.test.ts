@@ -123,6 +123,44 @@ function harness(
     closed,
   };
 }
+
+it.each([true, false])("advertises statistics only when implemented (%s)", (supported) => {
+  const methods = Object.values(METHODS)
+    .map((spec) => spec.method)
+    .filter((method) => supported || method !== "agent.statistics.get.request");
+  const h = harness(methods);
+  try {
+    h.ready();
+    const status = h.received.find((message) => message.type === "status");
+    expect(object(object(status).payload).features).toMatchObject({
+      agentStatisticsGet: supported,
+    });
+    if (supported) {
+      h.send({
+        type: "agent.statistics.get.request",
+        requestId: "statistics-1",
+        agentId: "agent-1",
+      });
+      expect(h.last(0)).toMatchObject({
+        type: "request",
+        request_id: "statistics-1",
+        method: "agent.statistics.get.request",
+        params: { agentId: "agent-1" },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "statistics-1",
+        result: { agentId: "agent-1", usageScope: "provider_snapshot" },
+      });
+      expect(h.received.at(-1)).toEqual({
+        type: "agent.statistics.get.response",
+        payload: { agentId: "agent-1", usageScope: "provider_snapshot", requestId: "statistics-1" },
+      });
+    }
+  } finally {
+    h.transport.close();
+  }
+});
 describe("Rust v1 connection", () => {
   it("connects the public SDK directly to raw Rust transports with Bearer authentication", async () => {
     const h = harness();
@@ -929,9 +967,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(226);
+    expect(Object.keys(METHODS)).toHaveLength(227);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(226);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(227);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

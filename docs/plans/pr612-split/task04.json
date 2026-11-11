@@ -1,0 +1,96 @@
+{
+  "id": "04",
+  "title": "Typed read-only session statistics",
+  "priority": 4,
+  "depends_on": ["00"],
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "donor_sections": [10, 22, 25],
+  "donor_paths": [
+    "apps/mobile/src/components/provider-native-result.tsx",
+    "crates/provider/src/rpc/agent_execution/controls.rs",
+    "packages/protocol/src/messages.ts"
+  ],
+  "implementation": {
+    "rpc": "agent.statistics.get.request",
+    "port": "Existing AgentRuntimeDirectory / AgentRuntimeRegistry committed read port; Operation::Statistics uses Access::Read without native session restoration, writer ownership or Timeline writes.",
+    "consumer": "DaemonClient.getAgentStatistics -> apps/mobile/src/components/usage/session-statistics.tsx -> existing context-window-details/context-window-meter entry, available even without context facts.",
+    "semantics": "Explicit nullable metrics; known zero preserved. provider_snapshot is the latest provider report, not a guaranteed session aggregate or last-turn delta. Configured and runtime-confirmed models remain separate. Account quotas and child usage are separately labelled existing resources. No estimated costs, snapshot summation or duplicate accounting state.",
+    "source_correction": "OMP add_usage preserves unknown cumulative cache/cost when any native message omits the field, instead of fabricating cache zero or presenting partial cost as a complete total. Native known zero remains zero. No other OMP transport changes.",
+    "compatibility": "Negotiated agentStatisticsGet capability; old hosts receive no unsupported RPC. Existing connection generation/epoch and Query cancellation isolate late replies. No new Timeline/message variants; old clients retain existing messages.",
+    "adr": "docs/decisions/providers/adr-238-read-only-session-statistics.md",
+    "inventory": "Full source inventory remains in Draft #647; this record does not copy the task00 plan. Donor was read as reference only, not cherry-picked."
+  },
+  "acceptance": [
+    "Unknown metric is null/unavailable, not zero or a guessed price; actual zero remains zero.",
+    "Repeated provider snapshots replace rather than sum; no unsupported session/run aggregate is claimed.",
+    "Current selected session, configured/confirmed models, account quotas and child usage stay distinct.",
+    "Typed SDK/protocol and actual application UI show matching values; old-host downgrade sends no query.",
+    "Runtime reads during an active native turn add no input/writer or interruption and leave the turn running.",
+    "No native /stats dashboard, /status console, arbitrary native_action gateway or new Todo/Goal/child editors."
+  ],
+  "status": "validated",
+  "branch": "pr612-split-task04-statistics",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "results": [
+      { "command": "cargo fmt --all --check", "result": "passed" },
+      {
+        "command": "cargo test -p provider statistics --lib",
+        "result": "5 passed, including active-turn readonly, restart, null/zero, cumulative snapshot replacement and OMP missing cache/cost regression"
+      },
+      { "command": "cargo test -p provider local::omp::stream --lib", "result": "10 passed" },
+      {
+        "command": "cargo clippy -p provider --lib -- -D warnings",
+        "result": "passed without warnings"
+      },
+      {
+        "command": "cargo build -p daemon --bin daemon",
+        "result": "passed; baseline filesystem fetch_update deprecation warning remains"
+      },
+      {
+        "command": "npm run build:sdk",
+        "result": "passed; generated outbound validator and compiled protocol/client"
+      },
+      {
+        "command": "npm exec --workspace=@ait/protocol -- vitest run src/messages.agent-statistics.test.ts",
+        "result": "5 passed"
+      },
+      {
+        "command": "npm exec --workspace=@ait/client -- vitest run src/daemon-client.test.ts src/protocol/connection.test.ts",
+        "result": "230 passed"
+      },
+      { "command": "npm run typecheck --workspace=@ait/mobile", "result": "passed" },
+      {
+        "command": "npm exec --workspace=@ait/mobile -- vitest run --project browser src/components/usage/session-statistics.browser.test.tsx",
+        "result": "4 passed in Chromium, including null/zero, snapshot replacement, old-host downgrade and late prior-epoch response"
+      },
+      {
+        "command": "E2E_AIT_SERVER_BIN=$PWD/target/debug/daemon npm exec --workspace=@ait/mobile -- playwright test --project=browser e2e/browser/session-statistics.spec.ts",
+        "result": "3 passed; real shared application surface with isolated compiled daemon. Supported and old-host transport fixtures plus active native Codex fixture subprocess. Three direct reads left native request log unchanged; UI showed Running and reported model; no extra thread/start/resume or turn/start/steer/interrupt."
+      },
+      { "command": "cargo test -p api guest::policy --lib", "result": "39 passed" },
+      {
+        "command": "cargo clippy -p provider -p api --all-targets",
+        "result": "passed with existing Rust 1.99 lint warnings in unrelated baseline files; no source suppression"
+      },
+      {
+        "command": "oxlint and oxfmt --check on affected frontend/protocol/client/locales files",
+        "result": "passed, zero frontend lint warnings"
+      },
+      {
+        "command": "npm run check:docs",
+        "result": "7 checker tests passed; local links and 223 ADR metadata verified"
+      }
+    ],
+    "pending": [],
+    "limitations": [
+      "Strict all-target -D warnings is blocked by pre-existing Rust 1.99 deprecated fetch_update / single_element_loop / assert_is_empty diagnostics outside this feature. Normal all-target clippy passes; strict provider library clippy passes. No warnings suppressed or unrelated code changed.",
+      "Runtime provider execution uses an actual native fixture subprocess, not a paid model call. Browser acceptance does not claim native iOS/Android device validation."
+    ],
+    "coverage": "Not measured: coverage was not requested. No full Rust workspace tests or coverage executed. If requested, measure focused provider/API statistics scope."
+  },
+  "blockers": []
+}

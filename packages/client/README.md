@@ -43,3 +43,12 @@ headers; standard browser WebSockets require the ticket transport.
 protocol adapter. High-level API names such as `createPaseoClient` remain for
 source compatibility; the original Paseo wire protocol is no longer a client mode.
 See [ADR-211](../../docs/decisions/clients/adr-211-sdk-native-daemon-protocol.md).
+
+## Session statistics
+
+`DaemonClient.getAgentStatistics(agentId)` returns typed `AgentSessionStatistics`.
+Check `serverInfo.features.agentStatisticsGet === true` before offering this read;
+the SDK also rejects unsupported hosts without sending the RPC. Usage has scope
+`provider_snapshot`: it is the latest provider snapshot, not an assured session
+total or last-turn total. Unknown values stay `null`; known zero stays `0`.
+Unknown usage scopes are rejected rather than interpreted as totals.

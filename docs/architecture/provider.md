@@ -47,7 +47,7 @@
   （[ADR-209](../decisions/providers/adr-209-observed-subagent-normalization.md)，修订 ADR-041/052
   的子会话边界）。
 - Bot 隐藏会话（`internal` 且有 `owner`）的权限请求在发布前直接回复原生 deny；请求缺少 ID 或
-  拒绝失败时该轮按失败结算。只有 get、timeline、时间线搜索和 prompts 可以按完整 ID 寻址隐藏会话
+  拒绝失败时该轮按失败结算。get、statistics、timeline、时间线搜索和 prompts 可以按完整 ID 寻址隐藏会话
   （[ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)，第 3、4 条已由
   [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 修订；
@@ -121,6 +121,16 @@
   [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)）。
 - MCP 配置不得出现在原生进程参数中；Claude 的 `--mcp-config` 只接收 transport 持有的私有临时文件
   路径（[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)）。
+
+## 会话统计
+
+- `agent.statistics.get.request` 是独立只读操作，复用已提交 runtime/`AgentUsage`，不创建或恢复
+  原生 writer、不发送输入、不打断当前轮次，也不写 Timeline
+  （[ADR-238](../decisions/providers/adr-238-read-only-session-statistics.md)）。
+- 配置模型与原生确认模型分别展示；缺失指标为 `null`，已知零保留。`provider_snapshot` 表示
+  Provider 自己口径的最新报告，不保证是会话累计值或上一轮用量；快照不得相加，费用不得估算。
+- 上下文详情入口在没有用量时仍可打开。选中会话、账号额度和子会话范围分别标注；旧 Host
+  缺少协商能力时不发请求并显示不可用。旧客户端的消息、Timeline 和子 Agent 模型不变。
 
 ## 账号用量
 

@@ -2902,13 +2902,32 @@ export const en = {
   sidebarCallout: {
     dismiss: "Dismiss",
   },
+  sessionStatistics: {
+    title: "Selected session statistics",
+    scope:
+      "Latest provider-reported snapshot — not a cumulative session total or necessarily the last turn.",
+    children: "Child session usage is excluded; see child sessions separately.",
+    unavailable: "Session statistics unavailable on this host or connection.",
+    account: "Account quota — separate from session usage",
+    agentId: "Session",
+    provider: "Provider",
+    status: "Execution status",
+    configuredModel: "Configured model",
+    effectiveModel: "Actual model",
+    updatedAt: "Updated",
+    inputTokens: "Input tokens",
+    cachedInputTokens: "Cached input tokens",
+    outputTokens: "Output tokens",
+    totalCostUsd: "Reported cost (USD)",
+    contextWindowUsedTokens: "Context tokens used",
+    contextWindowMaxTokens: "Context token limit",
+  },
   contextWindow: {
     noData: "No context usage yet",
     accessibilityNoData: "View account usage",
     title: "Context window",
     used: "{{percentage}}% used",
     tokens: "{{used}} / {{max}} tokens",
-    sessionCost: "Session cost {{cost}}",
     accessibility: "Context window {{percentage}}% used",
   },
   review: {

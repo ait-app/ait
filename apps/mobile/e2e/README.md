@@ -14,6 +14,21 @@ CI runs one browser path, composer prompt to provider reply, in the `web-client-
 npm run test:e2e:smoke --workspace=@ait/mobile
 ```
 
+Session statistics are available from the context/details meter even before context usage
+arrives. They display only the selected session's latest provider snapshot, not accumulated
+totals; child sessions and account quotas remain separate. Unsupported hosts show an explicit
+unavailable state without sending the statistics RPC.
+
+The focused browser fixture uses the real Ait transport and UI, intercepting only statistics
+and capability discovery to exercise known zero, unknown values, repeated snapshots, and old hosts:
+
+```sh
+npm run test:e2e --workspace=@ait/mobile -- e2e/browser/session-statistics.spec.ts
+```
+
+The focused consumer test is `src/components/usage/session-statistics.browser.test.tsx`;
+run it with the mobile Vitest browser project.
+
 `E2E_AIT_SERVER_BIN=/absolute/path/to/server` skips the Cargo build. The binary must
 implement Ait's v1 API. No installed or published Paseo server is used.
 

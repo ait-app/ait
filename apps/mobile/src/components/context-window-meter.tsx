@@ -7,7 +7,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
-import { useHostReportsUsage } from "@/usage";
 import type { Theme } from "@/styles/theme";
 import { ContextWindowDetails } from "./context-window-details";
 import { ContextWindowSheet } from "./context-window-sheet";
@@ -17,7 +16,6 @@ interface ContextWindowMeterProps {
   agentId: string;
   maxTokens: number | null;
   usedTokens: number | null;
-  totalCostUsd?: number | null;
   showPercentage?: boolean;
   /** Optional glyph envelope for icon-toolbar alignment. */
   glyphSize?: number;
@@ -47,16 +45,6 @@ function getUsagePercentage(maxTokens: number, usedTokens: number): number | nul
 
 function clampPercentage(value: number): number {
   return Math.max(0, Math.min(100, value));
-}
-
-function formatSessionCost(value: number): string | null {
-  if (!Number.isFinite(value) || value <= 0) {
-    return null;
-  }
-  if (value < 0.01) {
-    return `$${value.toFixed(4)}`;
-  }
-  return `$${value.toFixed(2)}`;
 }
 
 function getProgressColor(percentage: number, theme: Theme): string {
@@ -146,14 +134,11 @@ export function ContextWindowMeter({
   agentId,
   maxTokens,
   usedTokens,
-  totalCostUsd,
   showPercentage = false,
   glyphSize,
 }: ContextWindowMeterProps) {
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
-  // Usage cards need a wider popover; without them it keeps the plain tooltip shape.
-  const showsUsage = useHostReportsUsage(serverId);
   const popoverWidth = Math.min(USAGE_POPOVER_WIDTH, width - 24);
   // Compact screens open the details in a sheet, which can hold a pressable Refresh.
   const isCompact = useIsCompactFormFactor();
@@ -178,8 +163,6 @@ export function ContextWindowMeter({
     }),
     [percentage],
   );
-  const formattedSessionCost =
-    typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
   const containerStyle = geometry.containerStyle;
   const ring = (
     <ContextWindowRing
@@ -195,8 +178,8 @@ export function ContextWindowMeter({
       <Text style={styles.percentageLabel}>{`${context.percentage}%`}</Text>
     ) : null;
   const accessibilityLabel = context
-    ? t("contextWindow.accessibility", { percentage: context.percentage })
-    : t("contextWindow.accessibilityNoData");
+    ? `${t("sessionStatistics.title")}. ${t("contextWindow.accessibility", { percentage: context.percentage })}`
+    : t("sessionStatistics.title");
 
   if (isCompact) {
     return (
@@ -216,7 +199,6 @@ export function ContextWindowMeter({
             serverId={serverId}
             agentId={agentId}
             context={context}
-            sessionCost={formattedSessionCost}
             showTitle={false}
             refreshable
           />
@@ -225,9 +207,7 @@ export function ContextWindowMeter({
     );
   }
 
-  const popoverStyle = showsUsage
-    ? [styles.usagePopover, { width: popoverWidth }]
-    : styles.plainPopover;
+  const popoverStyle = [styles.usagePopover, { width: popoverWidth }];
 
   // Native wide screens have no hover, so the details open in a tooltip on press. The tooltip
   // takes no presses, so its usage cards have no Refresh.
@@ -249,7 +229,7 @@ export function ContextWindowMeter({
           side="top"
           align="center"
           offset={8}
-          maxWidth={showsUsage ? popoverWidth : undefined}
+          maxWidth={popoverWidth}
           style={popoverStyle}
           testID="context-window-meter-tooltip"
         >
@@ -257,7 +237,6 @@ export function ContextWindowMeter({
             serverId={serverId}
             agentId={agentId}
             context={context}
-            sessionCost={formattedSessionCost}
             showTitle
             refreshable={false}
           />
@@ -291,7 +270,6 @@ export function ContextWindowMeter({
           serverId={serverId}
           agentId={agentId}
           context={context}
-          sessionCost={formattedSessionCost}
           showTitle
           refreshable
         />
@@ -321,7 +299,5 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
   },
-  // Plain details use a small inset; account usage cards have their own content density.
-  plainPopover: { paddingVertical: theme.spacing[1], paddingHorizontal: theme.spacing[2] },
   usagePopover: { padding: theme.spacing[3], gap: theme.spacing[3] },
 }));

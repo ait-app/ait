@@ -358,6 +358,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.get.response",
   },
+  "agent.statistics.get.request": {
+    method: "agent.statistics.get.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.statistics.get.response",
+  },
   "agent.history.get.request": {
     method: "agent.history.get.request",
     kind: "request",

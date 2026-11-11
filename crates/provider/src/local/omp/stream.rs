@@ -466,7 +466,12 @@ impl Stream {
         let output = usage["output"]
             .as_u64()
             .ok_or(Error::Field("usage.output"))?;
-        let cached = usage["cacheRead"].as_u64().unwrap_or_default();
+        let first_observation = self.usage.input_tokens.is_none();
+        let cached = usage["cacheRead"].as_u64();
+        let cost = usage["cost"]["total"].as_f64();
+        if cost.is_some_and(|cost| !cost.is_finite() || cost < 0.0) {
+            return Err(Error::Usage);
+        }
         self.usage.input_tokens = Some(
             self.usage
                 .input_tokens
@@ -479,16 +484,23 @@ impl Stream {
                 .unwrap_or_default()
                 .saturating_add(output),
         );
-        self.usage.cached_input_tokens = Some(
+        self.usage.cached_input_tokens = if first_observation {
+            cached
+        } else {
             self.usage
                 .cached_input_tokens
-                .unwrap_or_default()
-                .saturating_add(cached),
-        );
+                .zip(cached)
+                .map(|(total, delta)| total.saturating_add(delta))
+        };
         self.usage.context_window_used_tokens = usage["totalTokens"].as_u64();
-        if let Some(cost) = usage["cost"]["total"].as_f64() {
-            self.usage.total_cost_usd = Some(self.usage.total_cost_usd.unwrap_or_default() + cost);
-        }
+        self.usage.total_cost_usd = if first_observation {
+            cost
+        } else {
+            self.usage
+                .total_cost_usd
+                .zip(cost)
+                .map(|(total, delta)| total + delta)
+        };
         if !self.usage.is_valid() {
             return Err(Error::Usage);
         }

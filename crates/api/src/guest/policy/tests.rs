@@ -115,6 +115,7 @@ fn methods_are_classified_by_default_deny() {
         ("workspace.script.run.wait.request", Rule::Workspace),
         ("workspace.list.request", Rule::WorkspaceList),
         ("agent.get.request", Rule::Agent("agentId")),
+        ("agent.statistics.get.request", Rule::Agent("agentId")),
         ("agent.timeline.get.request", Rule::Agent("agentId")),
         ("agent.message.send.request", Rule::AgentDrive("agentId")),
         (

@@ -82,6 +82,7 @@ pub(super) async fn runtime(
             "agent.list.request"
                 | "agent.history.get.request"
                 | "agent.get.request"
+                | "agent.statistics.get.request"
                 | "agent.update.request"
                 | "agent.archive.request"
                 | "agent.delete.request"

@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- View selected-session statistics from the context-details control, even when context usage is unavailable. See configured and reported models, execution state, and the latest provider-reported token, cache, cost and context facts without sending a prompt or interrupting a turn. Unknown values stay unavailable; snapshots are not summed or presented as guaranteed session totals. Account quotas and child sessions remain separate, and older hosts show statistics as unavailable.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.

@@ -55,6 +55,7 @@ impl ExecutionState {
                 method,
                 "agent.create.request"
                     | "agent.get.request"
+                    | "agent.statistics.get.request"
                     | "agent.update.request"
                     | "agent.archive.request"
                     | "agent.attention.clear.request"
@@ -81,6 +82,9 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            Operation::Statistics => {
+                super::agent_runtime::statistics::get(&self.directory, &decode(params)?)
+            }
             Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
             Operation::WorkspaceCreate => self.create_workspace_agent(params).await,

@@ -5,6 +5,7 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.list.request"),
     MethodSpec::request("agent.history.get.request"),
     MethodSpec::request("agent.get.request"),
+    MethodSpec::request("agent.statistics.get.request"),
     MethodSpec::request("agent.update.request"),
     MethodSpec::request("agent.archive.request"),
     MethodSpec::request("agent.delete.request"),
@@ -18,6 +19,7 @@ use std::collections::BTreeSet;
 use model::methods::MethodSpec;
 
 pub(crate) mod listing;
+pub(crate) mod statistics;
 
 use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::{
@@ -60,6 +62,7 @@ pub(crate) fn execute(
         "agent.list.request" => list(directory, decode(params)?),
         "agent.history.get.request" => history(directory, decode(params)?),
         "agent.get.request" => get(directory, &decode(params)?),
+        "agent.statistics.get.request" => statistics::get(directory, &decode(params)?),
         "agent.update.request" => update(directory, decode(params)?),
         "agent.archive.request" => archive(directory, decode(params)?),
         "agent.delete.request" => delete(directory, decode(params)?),
@@ -489,15 +492,7 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
         pending_permissions: Vec::new(),
         persistence: None::<AgentPersistenceHandle>,
         runtime_info,
-        last_usage: record
-            .runtime_info
-            .as_ref()
-            .and_then(|info| info.extra.as_ref())
-            .and_then(|extra| extra.get("lastUsage"))
-            .and_then(|usage| {
-                serde_json::from_value::<crate::protocol::usage::AgentUsage>(usage.clone()).ok()
-            })
-            .filter(crate::protocol::usage::AgentUsage::is_valid),
+        last_usage: statistics::last_usage(record),
         last_error: None,
         // A hidden session never gets a generated title; its tab still needs a name.
         title: record
