@@ -191,7 +191,7 @@ impl UsageStatus {
 pub(crate) struct CallBegin {
     /// Host-generated identity of the call.
     pub(crate) call_id: String,
-    /// Agent that owns the call.
+    /// Agent that owns the call; empty for a summary call, which belongs to no Agent.
     pub(crate) agent_id: String,
     /// Provider that serves the call.
     pub(crate) provider: String,
@@ -326,13 +326,6 @@ pub(crate) enum UsageLedgerError {
 ///
 /// Write methods return immediately: implementations queue the work and log failures with
 /// `tracing::warn!`, so a ledger never fails or delays a turn.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "AgentManager hooks of ADR-246 (Task 6) call the ledger"
-    )
-)]
 #[async_trait::async_trait]
 pub(crate) trait UsageLedger: Debug + Send + Sync {
     /// Queue a new call in the running state.
@@ -345,22 +338,29 @@ pub(crate) trait UsageLedger: Debug + Send + Sync {
     fn finish_call(&self, finish: CallFinish);
 
     /// Queue marking every call still running as interrupted, as of `ended_at` (Unix ms).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "daemon wiring of ADR-246 (Task 8) recovers at startup"
+        )
+    )]
     fn recover_interrupted(&self, ended_at: i64);
 
     /// Summarize the calls and requests within the query range.
     /// # Errors
     /// Returns unavailable without a ledger, or a failed storage read.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the provider.usage.ledger RPC of ADR-246 (Task 7) reads summaries"
+        )
+    )]
     async fn summarize(&self, query: UsageQuery) -> Result<UsageSummary, UsageLedgerError>;
 }
 
 /// Ledger for tests and hosts without usage storage: discards writes, cannot summarize.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "AgentManager of ADR-246 (Task 6) defaults to this ledger"
-    )
-)]
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct NoopUsageLedger;
 

@@ -16,6 +16,7 @@ use crate::service::agent_manager::AgentManager;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 
 pub(crate) mod codex_history;
+pub(crate) mod usage_ledger;
 
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,

@@ -119,7 +119,8 @@ pub(super) async fn drain(
             Some(AgentTurnEvent::Usage(usage)) => {
                 persist_usage(registry, timeline, id, agent, usage)
             }
-            // Additive usage-ledger input; it never changes the Agent record or context meter.
+            // Additive usage-ledger input, recorded once taken below; it never changes the Agent
+            // record or context meter.
             Some(AgentTurnEvent::RequestUsage(_)) => Ok(()),
             Some(AgentTurnEvent::PermissionRequested(request)) => {
                 if agent.record.internal && agent.record.owner.is_some() {
@@ -168,12 +169,11 @@ pub(super) async fn drain(
             | None => break,
         };
         match result {
-            Ok(()) => {
-                if let Some(AgentTurnEvent::Started(turn)) = agent.pending.take() {
-                    agent.latest_turn = Some(turn.clone());
-                    agent.turn = Some(turn);
-                }
-            }
+            Ok(()) => match agent.pending.take() {
+                Some(AgentTurnEvent::Started(turn)) => adopt_started(agent, turn),
+                Some(AgentTurnEvent::RequestUsage(usage)) => agent.calls.record(id, usage),
+                _ => {}
+            },
             // Storage I/O may succeed on the next poll, so the event stays pending for retry.
             Err(model::ErrorCode::AgentIo) => return Err(AgentManagerError::Registry),
             // Any other rejection is deterministic for this event; retrying it would wedge the
@@ -257,6 +257,27 @@ fn persist_started(
         );
     }
     Ok(())
+}
+
+/// Make the persisted `turn` the Agent's active turn.
+///
+/// A turn that the host did not start, such as a Codex goal continuation, opens an autonomous
+/// ledger call; a host-started turn already has its call.
+fn adopt_started(agent: &mut super::LiveAgent, turn: String) {
+    if agent.turn.is_none() {
+        let model = super::ledger::model(
+            agent.record.runtime_info.as_ref(),
+            agent.record.config.as_ref(),
+        );
+        agent.calls.begin(
+            turn.clone(),
+            &agent.record,
+            model,
+            crate::ports::usage_ledger::CallSource::Autonomous,
+        );
+    }
+    agent.latest_turn = Some(turn.clone());
+    agent.turn = Some(turn);
 }
 
 fn persist_usage(

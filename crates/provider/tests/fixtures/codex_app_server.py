@@ -669,6 +669,11 @@ for line in sys.stdin:
         user = {"type": "userMessage", "id": str(uuid.uuid4()), "content": [{"type": "text", "text": text}]}
         steered_inputs.append(user)
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": user}})
+        if text == "request-usage":
+            emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+                "turnId":pending, "tokenUsage":{"total":{"totalTokens":200},
+                "last":{"inputTokens":40,"cachedInputTokens":10,"outputTokens":5,"totalTokens":45},
+                "modelContextWindow":200000}}})
         if mode != "steer-wrong-id":
             complete(pending, "stream + " + text if turn_text == "stream" else text)
     elif method == "turn/interrupt":

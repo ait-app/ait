@@ -153,13 +153,6 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 
     /// Whether this session publishes `AgentTurnEvent::RequestUsage` for its turns.
     /// Without it, the ledger records the session's calls with missing token usage.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the AgentManager ledger hooks of ADR-246 read this"
-        )
-    )]
     fn reports_token_usage(&self) -> bool {
         false
     }

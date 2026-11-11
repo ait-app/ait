@@ -14,6 +14,7 @@ mod auto_archive;
 mod bot_permissions;
 mod environment;
 mod generated_titles;
+mod ledger;
 mod mcp;
 mod observed;
 mod paseo;
