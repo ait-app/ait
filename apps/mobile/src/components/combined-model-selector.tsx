@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
-import type { AgentProfilePicker, AgentProfileSeed } from "@/agent-profiles";
+import type { AgentProfilePicker } from "@/agent-profiles";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
@@ -34,8 +34,6 @@ interface CombinedModelSelectorProps {
   onApplyProfile?: (profileId: string) => void;
   modelPresets?: ModelPresetControls;
   onEditProfiles?: () => void;
-  onCreateProfile?: (seed: AgentProfileSeed) => void;
-  onEditProfile?: (profileId: string) => void;
   renderTrigger?: (input: {
     selectedModelLabel: string;
     onPress: () => void;
@@ -77,8 +75,6 @@ export function CombinedModelSelector({
   onApplyProfile,
   modelPresets,
   onEditProfiles,
-  onCreateProfile,
-  onEditProfile,
   renderTrigger,
   onOpen,
   onClose,
@@ -180,22 +176,6 @@ export function CombinedModelSelector({
     onEditProfiles?.();
   }, [handleOpenChange, onEditProfiles]);
 
-  const handleCreateProfile = useCallback(
-    (seed: AgentProfileSeed) => {
-      handleOpenChange(false);
-      onCreateProfile?.(seed);
-    },
-    [handleOpenChange, onCreateProfile],
-  );
-
-  const handleEditProfile = useCallback(
-    (profileId: string) => {
-      handleOpenChange(false);
-      onEditProfile?.(profileId);
-    },
-    [handleOpenChange, onEditProfile],
-  );
-
   const presetControls = modelPresets
     ? {
         cwd: modelPresets.cwd,
@@ -213,8 +193,6 @@ export function CombinedModelSelector({
       onApplyProfile={handleApplyProfile}
       modelPresets={presetControls}
       onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
-      onCreateProfile={onCreateProfile ? handleCreateProfile : undefined}
-      onEditProfile={onEditProfile ? handleEditProfile : undefined}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
       scrolling={modelBrowserScrolling}

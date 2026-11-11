@@ -1,5 +1,6 @@
-import { test } from "../support/fixtures";
+import { expect, test } from "../support/fixtures";
 import {
+  agentProfileRow,
   createAgentProfile,
   createAgentProfileFromEmptyState,
   editAgentProfile,
@@ -15,6 +16,9 @@ import {
   seedAgentProfiles,
   stageLegacyFavoritesForHostMigration,
 } from "../support/helpers/agent-profiles";
+import { expectAppRoute } from "../support/helpers/route-assertions";
+import { getServerId } from "../support/helpers/server-id";
+import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
 const MOCK_PROVIDER_LABEL = "Mock Load Test";
 
@@ -124,5 +128,130 @@ test.describe("Agent profiles settings", () => {
     } finally {
       await seed.restore();
     }
+  });
+
+  test("an unknown saved model stays visible, unresolved, and intact through a save", async ({
+    page,
+  }) => {
+    const stored = {
+      id: "agent_profile_e2e_retired",
+      name: "Retired model work",
+      provider: "codex",
+      model: "retired-model-e2e",
+    };
+    const seed = await seedAgentProfiles([stored]);
+
+    try {
+      await openAgentProfileSettings(page);
+      const row = agentProfileRow(page, stored.name);
+      await expect(row.getByTestId("agent-profile-tag-unresolved-model")).toHaveText(
+        "retired-model-e2e",
+      );
+      await expect(row.getByTestId(`agent-profile-unresolved-${stored.id}`)).toBeVisible();
+
+      await row.getByRole("button", { name: "Edit profile", exact: true }).click();
+      const form = page.getByTestId("agent-profile-edit-page");
+      await expect(form).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("agent-profile-model-trigger")).toHaveAttribute(
+        "aria-label",
+        "Model (retired-model-e2e)",
+      );
+      await expect(page.getByTestId("agent-profile-model-field")).toContainText(
+        "Not offered by this host",
+      );
+
+      // Saving without touching the model keeps the stored id exactly.
+      await form.getByRole("button", { name: "Save", exact: true }).click();
+      await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+        timeout: 30_000,
+      });
+      await expectHostAgentProfiles([stored]);
+    } finally {
+      await seed.restore();
+    }
+  });
+
+  test("editing keeps fields a newer client stored and leaves omitted fields unspecified", async ({
+    page,
+  }) => {
+    const stored = {
+      id: "agent_profile_e2e_future",
+      name: "Future proof",
+      provider: "codex",
+      model: "offline-model",
+      futureSetting: { nested: ["keep", 42] },
+    };
+    const seed = await seedAgentProfiles([stored]);
+
+    try {
+      await openAgentProfileSettings(page);
+      await agentProfileRow(page, stored.name)
+        .getByRole("button", { name: "Edit profile", exact: true })
+        .click();
+      const form = page.getByTestId("agent-profile-edit-page");
+      await expect(form).toBeVisible({ timeout: 30_000 });
+
+      // Clear the model through the explicit blank row, then save.
+      await page.getByTestId("agent-profile-model-trigger").click();
+      await page.getByTestId("agent-profile-leave-unchanged-option").click();
+      await form.getByRole("button", { name: "Save", exact: true }).click();
+      await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+        timeout: 30_000,
+      });
+
+      await expectHostAgentProfiles([
+        {
+          id: stored.id,
+          name: stored.name,
+          provider: stored.provider,
+          futureSetting: { nested: ["keep", 42] },
+        },
+      ]);
+    } finally {
+      await seed.restore();
+    }
+  });
+
+  test.describe("compact layout", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("nested create and edit navigate through the compact settings stack", async ({ page }) => {
+      const seed = await seedAgentProfiles([]);
+
+      try {
+        await openAgentProfileSettings(page);
+        await expectNoAgentProfiles(page);
+
+        await page
+          .getByTestId("agent-profiles-card")
+          .getByRole("button", { name: "New profile", exact: true })
+          .click();
+        const form = page.getByTestId("agent-profile-edit-page");
+        await expect(form).toBeVisible({ timeout: 30_000 });
+        await form.getByRole("textbox", { name: "Name", exact: true }).fill("Compact work");
+        await form.getByTestId("agent-profile-provider-trigger").click();
+        // At compact width the combobox is a bottom sheet, so there is no
+        // desktop container: target the option row itself, which both surfaces render.
+        await page.getByTestId("agent-profile-provider-option-codex").click();
+        await form.getByRole("button", { name: "Save", exact: true }).click();
+        await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+          timeout: 30_000,
+        });
+        await expectAgentProfile(page, { name: "Compact work", tags: ["codex"] });
+
+        // Reopen through the row, then leave with the header Back button.
+        await agentProfileRow(page, "Compact work")
+          .getByRole("button", { name: "Edit profile", exact: true })
+          .click();
+        await expect(form).toBeVisible({ timeout: 30_000 });
+        await page.getByRole("button", { name: "Back", exact: true }).click();
+        await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+          timeout: 30_000,
+        });
+        await expect(page.getByTestId("agent-profiles-card")).toBeVisible({ timeout: 30_000 });
+      } finally {
+        await seed.restore();
+      }
+    });
   });
 });

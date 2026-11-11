@@ -527,6 +527,9 @@ export const settings = {
       sectionTitle: "エージェントプロファイル",
       unavailable: "エージェントプロファイルを管理するにはこのホストに接続してください",
       unsupported: "このホストで動作するデーモンはまだエージェントプロファイルに対応していません",
+      notFound: "プロファイルが見つかりません",
+      leaveUnchanged: "変更しない",
+      unresolvedValue: "このホストでは提供されていません",
       emptyState:
         "プロファイルがまだありません。保存したプロバイダーとモデルでエージェントを起動するために追加してください。",
       addProfileTitle: "エージェントプロファイルを追加",

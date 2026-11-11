@@ -220,7 +220,7 @@ export async function removeAgentProfile(page: Page, name: string): Promise<void
   await expect(agentProfileRow(page, name)).toHaveCount(0, { timeout: 30_000 });
 }
 
-// ─── Settings: the edit modal ──────────────────────────────────────────────
+// ─── Settings: the nested edit page ────────────────────────────────────────
 
 export interface AgentProfileDraft {
   name?: string;
@@ -231,15 +231,23 @@ export interface AgentProfileDraft {
   notes?: string;
 }
 
-function editModal(page: Page): Locator {
-  return page.getByTestId("agent-profile-edit-modal");
+function editPage(page: Page): Locator {
+  return page.getByTestId("agent-profile-edit-page");
+}
+
+/** Saving or cancelling leaves the nested page and lands back on the list. */
+async function expectBackOnAgentsSection(page: Page): Promise<void> {
+  await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("agent-profiles-card")).toBeVisible({ timeout: 30_000 });
 }
 
 async function chooseSelectFieldOption(
   page: Page,
   input: { field: "provider" | "model" | "mode" | "thinking"; option: string },
 ): Promise<void> {
-  await editModal(page).getByTestId(`agent-profile-${input.field}-trigger`).click();
+  await editPage(page).getByTestId(`agent-profile-${input.field}-trigger`).click();
   const option = page
     .getByTestId("combobox-desktop-container")
     .getByRole("button", { name: input.option, exact: true });
@@ -255,9 +263,9 @@ function capitalize(value: string): string {
 }
 
 async function fillAgentProfileForm(page: Page, draft: AgentProfileDraft): Promise<void> {
-  const modal = editModal(page);
+  const form = editPage(page);
   if (draft.name !== undefined) {
-    await modal.getByRole("textbox", { name: "Name", exact: true }).fill(draft.name);
+    await form.getByRole("textbox", { name: "Name", exact: true }).fill(draft.name);
   }
   // Provider first: it resets every provider-scoped field below it.
   if (draft.provider !== undefined) {
@@ -275,18 +283,18 @@ async function fillAgentProfileForm(page: Page, draft: AgentProfileDraft): Promi
     await chooseSelectFieldOption(page, { field: "mode", option: draft.mode });
   }
   if (draft.notes !== undefined) {
-    await modal.getByRole("textbox", { name: "When to use", exact: true }).fill(draft.notes);
+    await form.getByRole("textbox", { name: "When to use", exact: true }).fill(draft.notes);
   }
 }
 
 async function saveAgentProfile(page: Page): Promise<void> {
-  await editModal(page).getByRole("button", { name: "Save", exact: true }).click();
-  await expect(editModal(page)).toHaveCount(0, { timeout: 30_000 });
+  await editPage(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expectBackOnAgentsSection(page);
 }
 
 export async function createAgentProfile(page: Page, draft: AgentProfileDraft): Promise<void> {
   await page.getByRole("button", { name: "Add agent profile", exact: true }).click();
-  await expect(editModal(page)).toBeVisible({ timeout: 30_000 });
+  await expect(editPage(page)).toBeVisible({ timeout: 30_000 });
   await fillAgentProfileForm(page, draft);
   await saveAgentProfile(page);
 }
@@ -299,7 +307,7 @@ export async function createAgentProfileFromEmptyState(
     .getByTestId("agent-profiles-card")
     .getByRole("button", { name: "New profile", exact: true })
     .click();
-  await expect(editModal(page)).toBeVisible({ timeout: 30_000 });
+  await expect(editPage(page)).toBeVisible({ timeout: 30_000 });
   await fillAgentProfileForm(page, draft);
   await saveAgentProfile(page);
 }
@@ -312,12 +320,12 @@ export async function editAgentProfile(
   await agentProfileRow(page, name)
     .getByRole("button", { name: "Edit profile", exact: true })
     .click();
-  await expect(editModal(page)).toBeVisible({ timeout: 30_000 });
+  await expect(editPage(page)).toBeVisible({ timeout: 30_000 });
   await fillAgentProfileForm(page, changes);
   await saveAgentProfile(page);
 }
 
-/** Opens the modal for a profile purely to read back what it stored. */
+/** Opens the nested page for a profile purely to read back what it stored. */
 export async function expectAgentProfileForm(
   page: Page,
   name: string,
@@ -326,10 +334,10 @@ export async function expectAgentProfileForm(
   await agentProfileRow(page, name)
     .getByRole("button", { name: "Edit profile", exact: true })
     .click();
-  const modal = editModal(page);
-  await expect(modal).toBeVisible({ timeout: 30_000 });
-  await expect(modal.getByRole("textbox", { name: "Name", exact: true })).toHaveValue(name);
-  const notesHint = modal.getByTestId("agent-profile-notes-field-hint");
+  const form = editPage(page);
+  await expect(form).toBeVisible({ timeout: 30_000 });
+  await expect(form.getByRole("textbox", { name: "Name", exact: true })).toHaveValue(name);
+  const notesHint = form.getByTestId("agent-profile-notes-field-hint");
   await expect(notesHint).toHaveText(
     "Helps agents choose this profile when starting another agent.",
   );
@@ -338,17 +346,17 @@ export async function expectAgentProfileForm(
   );
   for (const [field, value] of Object.entries(expected)) {
     if (field === "notes") {
-      await expect(modal.getByRole("textbox", { name: "When to use", exact: true })).toHaveValue(
+      await expect(form.getByRole("textbox", { name: "When to use", exact: true })).toHaveValue(
         value,
       );
       continue;
     }
-    await expect(
-      modal.getByRole("button", { name: `${capitalize(field)} (${value})` }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(form.getByRole("button", { name: `${capitalize(field)} (${value})` })).toBeVisible(
+      { timeout: 30_000 },
+    );
   }
-  await modal.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(editModal(page)).toHaveCount(0, { timeout: 30_000 });
+  await form.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expectBackOnAgentsSection(page);
 }
 
 // ─── The model picker ──────────────────────────────────────────────────────
@@ -416,15 +424,21 @@ export async function expectProfileEditIsPencilOnly(page: Page): Promise<void> {
   await expect(viewport.getByText("Edit", { exact: true })).toHaveCount(0);
 }
 
+/**
+ * An empty supported host keeps the manage shortcut: the Profiles heading
+ * renders with zero rows and the pencil navigates to settings. There is no
+ * create row in the picker — creation lives in the settings list.
+ */
 export async function expectAgentProfilesEmptyPrompt(page: Page): Promise<void> {
   const viewport = pickerViewport(page);
-  await expect(viewport.getByText("Profiles", { exact: true })).toHaveCount(0);
+  await expect(viewport.getByText("Profiles", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(viewport.locator('[data-testid^="model-profile-row-"]')).toHaveCount(0);
   await expect(
     viewport.getByRole("button", { name: "Edit agent profiles", exact: true }),
-  ).toHaveCount(0);
-  await expect(viewport.getByRole("button", { name: "Create profile", exact: true })).toBeVisible({
-    timeout: 30_000,
-  });
+  ).toBeVisible();
+  await expect(viewport.getByRole("button", { name: "Create profile", exact: true })).toHaveCount(
+    0,
+  );
 }
 
 export async function expectProfileEditTooltip(page: Page): Promise<void> {
@@ -437,7 +451,12 @@ export async function expectProfileEditTooltip(page: Page): Promise<void> {
 }
 
 export async function openAgentProfilesFromEmptyPrompt(page: Page): Promise<void> {
-  await pickerViewport(page).getByRole("button", { name: "Create profile", exact: true }).click();
+  await pickerViewport(page)
+    .getByRole("button", { name: "Edit agent profiles", exact: true })
+    .click();
+  await expectAppRoute(page, buildSettingsHostSectionRoute(getServerId(), "agents"), {
+    timeout: 30_000,
+  });
   await expect(page.getByTestId("agent-profiles-card")).toBeVisible({ timeout: 30_000 });
 }
 
