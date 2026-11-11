@@ -55,8 +55,8 @@
     "branch": "refactor/pr612-omp-native-boundary",
     "note": "Published task01 head (PR651) containing verified source 92abc77dbede57caf4c4b4bf1be7076982ffea48 plus its migration docs commit. Task01 is skipped by explicit user decision; its verified dependency code remains required. Unverified macOS signing/notarization is outside task06 acceptance, not a downstream blocker or a completed claim."
   },
-  "commit": null,
-  "pr_url": null,
+  "commit": "6f7d7fa718709c9ab16c1d56a50a19f7cbac07f3",
+  "pr_url": "https://github.com/ait-app/ait/pull/674",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
