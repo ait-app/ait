@@ -2,15 +2,8 @@
   "id": "24",
   "title": "Child guide and stop",
   "priority": 24,
-  "depends_on": [
-    "00",
-    "07"
-  ],
-  "donor_sections": [
-    13,
-    20,
-    22
-  ],
+  "depends_on": ["00", "07"],
+  "donor_sections": [13, 20, 22],
   "donor_paths": [
     "apps/mobile/src/hooks/use-draft-agent-features.test.tsx",
     "apps/mobile/src/hooks/use-draft-agent-features.ts",

@@ -91,16 +91,16 @@ observed 父链校验，并可能为控制请求创建第二个 writer。
 
 ## 接口变化与迁移（完整 ledger）
 
-| 边界              | 旧接口/调用链                                             | 新接口/调用链                                                                                  | 迁移与兼容性                                                                  |
-| ----------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| daemon wire       | 无子级控制方法                                            | `agent.subagents.guide.request` / `agent.subagents.stop.request` 及其 response                 | 纯新增；旧客户端不发即不受影响，旧 host 返回 `MethodNotFound`                 |
-| 执行器分类        | 子级列表/历史为 `Access::Session` + `Target::Parent`      | 追加 `Operation::ChildGuide/ChildStop`，类别相同                                               | 封闭枚举穷举新增；无隐式权限，未登记方法仍 `MethodNotFound`                   |
+| 边界              | 旧接口/调用链                                             | 新接口/调用链                                                                                                               | 迁移与兼容性                                                                          |
+| ----------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| daemon wire       | 无子级控制方法                                            | `agent.subagents.guide.request` / `agent.subagents.stop.request` 及其 response                                              | 纯新增；旧客户端不发即不受影响，旧 host 返回 `MethodNotFound`                         |
+| 执行器分类        | 子级列表/历史为 `Access::Session` + `Target::Parent`      | 追加 `Operation::ChildGuide/ChildStop`，类别相同                                                                            | 封闭枚举穷举新增；无隐式权限，未登记方法仍 `MethodNotFound`                           |
 | 会话端口          | 无子级控制；`steer_turn`/`cancel_turn` 默认拒绝           | `guide_child`/`stop_child` 默认 `Err(Rejected)`，返回 `ChildControlReceipt`；结果经 `AgentTurnEvent::ChildControl` 异步到达 | 现有 adapter 不实现即保持拒绝；不改变既有方法签名；新增 `service_controls` 默认空实现 |
-| manager           | 子级写入一律 `require_managed(child)` 拒绝                | `guide_child/stop_child(parent, child, …)` 校验父链+live parent+观测事实后经父 session 执行    | 无既有调用方；observed 通用写守卫不变，仅新增两个父作用域入口                 |
-| 公共 SDK          | donor `runNativeAction(agentId, action, args)`（main 无） | `guideSubagent(parent, child, message, opts)` / `stopSubagent(parent, child, opts)`            | 不引入 `agent.native_action.request`；原生 ID、命令名与错误字符串不出 adapter |
-| host feature      | 无 `subagentControls`                                     | `serverInfo.features.subagentControls`（由两方法存在推导）                                     | 可选布尔；缺席即隐藏控制，无必填字段                                          |
-| 会话能力标志      | 无子级控制标志                                            | 父快照 `supportsChildGuide`/`supportsChildStop`（adapter 已验证，OMP 专属）                    | 加法式开放索引；observed 子级写标志继续全 false                               |
-| 移动端子 Agent 行 | donor 组件用 native action 字符串 + 免确认停止            | 类型化 SDK 调用；运行中/待定才可操作，停止需命名目标的确认，结果分 accepted / not_running 展示 | 组件出现在统一子 Agent 行；无 vibe 分支、无原生 ID 输入、无原始 JSON 卡片     |
+| manager           | 子级写入一律 `require_managed(child)` 拒绝                | `guide_child/stop_child(parent, child, …)` 校验父链+live parent+观测事实后经父 session 执行                                 | 无既有调用方；observed 通用写守卫不变，仅新增两个父作用域入口                         |
+| 公共 SDK          | donor `runNativeAction(agentId, action, args)`（main 无） | `guideSubagent(parent, child, message, opts)` / `stopSubagent(parent, child, opts)`                                         | 不引入 `agent.native_action.request`；原生 ID、命令名与错误字符串不出 adapter         |
+| host feature      | 无 `subagentControls`                                     | `serverInfo.features.subagentControls`（由两方法存在推导）                                                                  | 可选布尔；缺席即隐藏控制，无必填字段                                                  |
+| 会话能力标志      | 无子级控制标志                                            | 父快照 `supportsChildGuide`/`supportsChildStop`（adapter 已验证，OMP 专属）                                                 | 加法式开放索引；observed 子级写标志继续全 false                                       |
+| 移动端子 Agent 行 | donor 组件用 native action 字符串 + 免确认停止            | 类型化 SDK 调用；运行中/待定才可操作，停止需命名目标的确认，结果分 accepted / not_running 展示                              | 组件出现在统一子 Agent 行；无 vibe 分支、无原生 ID 输入、无原始 JSON 卡片             |
 
 旧 host + 新客户端：feature 缺席即不显示控制；直接调用得到 `MethodNotFound`，不回退到任何其他执行
 路径。新 host + 旧客户端：新方法不被调用，既有 observed 列表与时间线不变。
