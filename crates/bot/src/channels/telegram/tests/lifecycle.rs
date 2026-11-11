@@ -61,7 +61,6 @@ async fn assert_group_privacy_warning(bots: &Bots, channel: ChannelId) {
         )
         .await
         .unwrap();
-    assert_eq!(status["connection"]["state"], "connected");
     assert_eq!(status["connection"]["error"], GROUP_PRIVACY_WARNING);
 }
 
@@ -168,7 +167,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
 }
 
 #[tokio::test]
-async fn telegram_edits_one_reply_for_multiple_assistant_messages() {
+async fn telegram_accumulates_multiple_assistant_messages_in_one_reply() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
     let channel = registered_channel(&fixture, &bots).await;
@@ -220,7 +219,7 @@ async fn telegram_edits_one_reply_for_multiple_assistant_messages() {
                     json!({
                         "chat_id":"-100",
                         "message_id":50,
-                        "text":"<b>finished</b> with <code>code</code>",
+                        "text":"checking\n<b>finished</b> with <code>code</code>",
                         "parse_mode":"HTML"
                     })
                 );

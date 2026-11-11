@@ -3,7 +3,8 @@ use std::fmt::Write;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 pub(super) fn render(markdown: &str) -> String {
-    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options =
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS;
     let mut output = String::with_capacity(markdown.len());
     let mut lists = Vec::new();
     for event in Parser::new_ext(markdown, options) {
@@ -51,7 +52,7 @@ fn normalize_newlines(text: &str) -> String {
 
 fn start(output: &mut String, lists: &mut Vec<Option<u64>>, tag: Tag<'_>) {
     match tag {
-        Tag::Heading { .. } | Tag::Strong => output.push_str("<b>"),
+        Tag::Heading { .. } | Tag::Strong | Tag::TableHead => output.push_str("<b>"),
         Tag::Emphasis => output.push_str("<i>"),
         Tag::Strikethrough => output.push_str("<s>"),
         Tag::BlockQuote(_) => output.push_str("<blockquote>"),
@@ -76,7 +77,6 @@ fn start(output: &mut String, lists: &mut Vec<Option<u64>>, tag: Tag<'_>) {
         | Tag::DefinitionListTitle
         | Tag::DefinitionListDefinition
         | Tag::Table(_)
-        | Tag::TableHead
         | Tag::TableRow
         | Tag::TableCell
         | Tag::Superscript
@@ -98,18 +98,30 @@ fn end(output: &mut String, lists: &mut Vec<Option<u64>>, tag: TagEnd) {
             lists.pop();
             output.push('\n');
         }
-        TagEnd::Item | TagEnd::Paragraph | TagEnd::TableRow => output.push('\n'),
-        TagEnd::TableCell => output.push_str("  "),
+        TagEnd::Item | TagEnd::Paragraph | TagEnd::Table => output.push('\n'),
+        TagEnd::TableCell => output.push_str(" │ "),
+        TagEnd::TableHead => {
+            trim_table_separator(output);
+            output.push_str("</b>\n");
+        }
+        TagEnd::TableRow => {
+            trim_table_separator(output);
+            output.push('\n');
+        }
         TagEnd::HtmlBlock
         | TagEnd::FootnoteDefinition
         | TagEnd::DefinitionList
         | TagEnd::DefinitionListTitle
         | TagEnd::DefinitionListDefinition
-        | TagEnd::Table
-        | TagEnd::TableHead
         | TagEnd::Superscript
         | TagEnd::Subscript
         | TagEnd::MetadataBlock(_) => {}
+    }
+}
+
+fn trim_table_separator(output: &mut String) {
+    if output.ends_with(" │ ") {
+        output.truncate(output.len() - " │ ".len());
     }
 }
 

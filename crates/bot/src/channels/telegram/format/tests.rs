@@ -17,3 +17,12 @@ fn escapes_link_attributes() {
         "<a href=\"https://example.com/?a=1&amp;b=&quot;two&quot;\">docs</a>"
     );
 }
+
+#[test]
+fn renders_tables_as_readable_telegram_rows() {
+    let markdown = "| PR | 状态 | 标题 |\n|---|---|---|\n| [#658](https://example.com/658) | 待审 | **Telegram** fix |";
+    assert_eq!(
+        render(markdown),
+        "<b>PR │ 状态 │ 标题</b>\n<a href=\"https://example.com/658\">#658</a> │ 待审 │ <b>Telegram</b> fix"
+    );
+}

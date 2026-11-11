@@ -92,20 +92,22 @@ async fn send_reply(
         return Err(ErrorCode::BotIo);
     }
     let mut message_id = None;
-    let mut current_text = None;
+    let mut current_text = String::new();
     for text in parts {
         for (index, chunk) in chunks(text, 3500).into_iter().enumerate() {
             if index == 0
                 && let Some(id) = message_id
             {
-                if current_text != Some(chunk) {
-                    edit_message(client, token, &conversation.peer, id, chunk, api).await?;
-                    current_text = Some(chunk);
+                let updated = format!("{current_text}\n\n{chunk}");
+                if chunks(&updated, 3500).len() == 1 {
+                    edit_message(client, token, &conversation.peer, id, &updated, api).await?;
+                    current_text = updated;
+                    continue;
                 }
-                continue;
             }
             message_id = Some(send_message(client, token, turn, conversation, chunk, api).await?);
-            current_text = Some(chunk);
+            current_text.clear();
+            current_text.push_str(chunk);
         }
     }
     Ok(())
