@@ -230,6 +230,26 @@ const JsonWireValueSchema = z.unknown() as z.ZodType<JsonValue>;
 
 export const AgentStatusSchema = z.enum(AGENT_LIFECYCLE_STATUSES);
 
+/** Latest provider snapshot, not an assured session total or last-turn total. */
+export const AgentSessionStatisticsSchema = z.object({
+  agentId: z.string(),
+  provider: z.string(),
+  status: AgentStatusSchema,
+  configuredModel: z.string().nullable(),
+  effectiveModel: z.string().nullable(),
+  updatedAt: z.string(),
+  usageScope: z.literal("provider_snapshot"),
+  usage: z.object({
+    inputTokens: z.number().nullable(),
+    cachedInputTokens: z.number().nullable(),
+    outputTokens: z.number().nullable(),
+    totalCostUsd: z.number().nullable(),
+    contextWindowMaxTokens: z.number().nullable(),
+    contextWindowUsedTokens: z.number().nullable(),
+  }),
+});
+export type AgentSessionStatistics = z.infer<typeof AgentSessionStatisticsSchema>;
+
 const AgentModeSchema: z.ZodType<AgentMode> = z.object({
   id: z.string(),
   label: z.string(),
@@ -1469,6 +1489,12 @@ export const FetchAgentRequestMessageSchema = z.object({
   type: z.literal("agent.get.request"),
   requestId: z.string(),
   /** Accepts full ID, unique prefix, or exact full title (server resolves). */
+  agentId: z.string(),
+});
+
+export const AgentStatisticsGetRequestMessageSchema = z.object({
+  type: z.literal("agent.statistics.get.request"),
+  requestId: z.string(),
   agentId: z.string(),
 });
 
@@ -3117,6 +3143,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ShareSetRequestSchema,
   ShareRemoveRequestSchema,
   FetchAgentRequestMessageSchema,
+  AgentStatisticsGetRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
   CloseItemsRequestMessageSchema,
@@ -3469,6 +3496,7 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(workspaceRequestReceipts): added in v0.8.0; remove gate after 2027-03-07.
         workspaceRequestReceipts: z.boolean().optional(),
         creationLifecycle: z.boolean().optional(),
+        agentStatisticsGet: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
@@ -4568,6 +4596,11 @@ export const FetchAgentResponseMessageSchema = z.object({
     project: ProjectPlacementPayloadSchema.nullable().optional(),
     error: z.string().nullable(),
   }),
+});
+
+export const AgentStatisticsGetResponseMessageSchema = z.object({
+  type: z.literal("agent.statistics.get.response"),
+  payload: AgentSessionStatisticsSchema.extend({ requestId: z.string() }),
 });
 
 const AgentTimelineSeqRangeSchema = z.object({
@@ -6604,6 +6637,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LegacyOpenInEditorResponseMessageSchema,
   ArchiveWorkspaceResponseMessageSchema,
   FetchAgentResponseMessageSchema,
+  AgentStatisticsGetResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,

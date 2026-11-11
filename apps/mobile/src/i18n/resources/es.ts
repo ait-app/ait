@@ -2687,13 +2687,32 @@ export const es: TranslationResources = {
   sidebarCallout: {
     dismiss: "Despedir",
   },
+  sessionStatistics: {
+    title: "Estadísticas de la sesión seleccionada",
+    scope:
+      "Última instantánea del proveedor: no es el total acumulado ni necesariamente el último turno.",
+    children: "Se excluye el uso de sesiones secundarias; consúltelas por separado.",
+    unavailable: "Estadísticas no disponibles en este host o conexión.",
+    account: "Cuota de la cuenta: separada del uso de la sesión",
+    agentId: "Sesión",
+    provider: "Proveedor",
+    status: "Estado de ejecución",
+    configuredModel: "Modelo configurado",
+    effectiveModel: "Modelo real",
+    updatedAt: "Actualizado",
+    inputTokens: "Tokens de entrada",
+    cachedInputTokens: "Tokens de entrada en caché",
+    outputTokens: "Tokens de salida",
+    totalCostUsd: "Coste informado (USD)",
+    contextWindowUsedTokens: "Tokens de contexto usados",
+    contextWindowMaxTokens: "Límite de tokens de contexto",
+  },
   contextWindow: {
     noData: "No context usage yet",
     accessibilityNoData: "View account usage",
     title: "ventana contextual",
     used: "{{percentage}}% utilizado",
     tokens: "Fichas{{used}}/{{max}}",
-    sessionCost: "Costo de la sesión{{cost}}",
     accessibility: "Ventana de contexto{{percentage}}% utilizada",
   },
   review: {

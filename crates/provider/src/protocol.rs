@@ -12,5 +12,6 @@ pub(crate) mod native_sessions;
 pub(crate) mod prompt;
 pub(crate) mod provider;
 pub(crate) mod resume;
+pub(crate) mod statistics;
 pub(crate) mod timeline;
 pub(crate) mod usage;

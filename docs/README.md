@@ -27,6 +27,7 @@
 - [任务总览](operations/task-board.md)：跨主机任务看板、父子任务、审批、停止、已读和归档。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
+- [会话统计](architecture/provider.md#会话统计)：从上下文详情查看只读事实、未知指标和账号/子会话范围。
 
 ## 架构与工程规范
 

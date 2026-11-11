@@ -202,6 +202,7 @@ fn classify_resource(method: &str) -> Rule {
     match method {
         "agent.create.request" => Rule::AgentCreate,
         "agent.get.request"
+        | "agent.statistics.get.request"
         | "agent.finish.wait.request"
         | "agent.timeline.get.request"
         | "agent.timeline.search.request"

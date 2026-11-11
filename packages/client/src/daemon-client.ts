@@ -20,6 +20,7 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
+export type { AgentSessionStatistics } from "@ait/protocol/messages";
 import type {
   ShareAudience,
   ShareGroupsListResponse,
@@ -32,6 +33,8 @@ import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
+  AgentSessionStatisticsSchema,
+  type AgentSessionStatistics,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
@@ -2801,6 +2804,20 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest<"workspace.setup.run.response">({
       requestId,
       message: { type: "workspace.setup.run.request", workspaceId },
+    });
+  }
+
+  /** Read the latest provider usage snapshot without inferring session totals. */
+  async getAgentStatistics(agentId: string): Promise<AgentSessionStatistics> {
+    if (this.lastServerInfoMessage?.features?.agentStatisticsGet !== true) {
+      throw Object.assign(new Error("Agent statistics are unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.statistics.get.request", agentId },
+      responseType: "agent.statistics.get.response",
+      selectPayload: (payload) => AgentSessionStatisticsSchema.parse(payload),
     });
   }
 

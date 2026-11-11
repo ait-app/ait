@@ -142,6 +142,73 @@ test("reads Workspace targets with independent correlated responses", async () =
   expect(await second).toMatchObject({ workspaceId: "second", state: "archived" });
 });
 
+test("reads typed agent statistics without treating unknown usage as zero", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "statistics",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentStatisticsGet: true } });
+  await connected;
+  const result = client.getAgentStatistics("agent-1");
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "agent.statistics.get.request",
+    agentId: "agent-1",
+  });
+  const statistics = {
+    agentId: "agent-1",
+    provider: "omp",
+    status: "idle",
+    configuredModel: null,
+    effectiveModel: null,
+    updatedAt: "2026-11-11T00:00:00Z",
+    usageScope: "provider_snapshot",
+    usage: {
+      inputTokens: null,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      totalCostUsd: null,
+      contextWindowMaxTokens: null,
+      contextWindowUsedTokens: null,
+    },
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.statistics.get.response",
+      payload: { ...statistics, requestId: request.requestId },
+    }),
+  );
+  expect(await result).toEqual(statistics);
+});
+
+test.each([undefined, false])(
+  "does not request statistics from an unsupported host (%s)",
+  async (supported) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "statistics-old-host",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { agentStatisticsGet: supported } });
+    await connected;
+    await expect(client.getAgentStatistics("agent-1")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    expect(mock.sent).toHaveLength(0);
+  },
+);
+
 function createMockLogger() {
   return {
     debug: vi.fn(),

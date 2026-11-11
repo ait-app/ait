@@ -279,7 +279,6 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       status: agent?.status ?? null,
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
-      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
       supportsRealtimeVoice: agent?.capabilities?.supportsRealtimeVoice === true,
@@ -290,22 +289,18 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
 function renderContextWindowMeter(
   contextWindowMaxTokens: number | null,
   contextWindowUsedTokens: number | null,
-  totalCostUsd: number | null,
   showPercentage: boolean,
   serverId: string,
   agentId: string | null,
-  pending: boolean,
   glyphSize: number,
 ): ReactElement | null {
-  const hasData = contextWindowMaxTokens !== null && contextWindowUsedTokens !== null;
-  if (!hasData && !pending) {
+  if (!agentId) {
     return null;
   }
   return (
     <ContextWindowMeter
       maxTokens={contextWindowMaxTokens}
       usedTokens={contextWindowUsedTokens}
-      totalCostUsd={totalCostUsd}
       showPercentage={showPercentage}
       serverId={serverId}
       agentId={agentId ?? ""}
@@ -2104,7 +2099,6 @@ function ComposerContentImpl({
     agentState.contextWindowUsedTokens,
   );
 
-  const contextWindowPending = agentState.status === "initializing" || isAgentRunning;
   const contextWindowMeterGlyphSize = isCompactLayout ? ICON_SIZE.md : buttonIconSize;
 
   const contextWindowMeter = useMemo(
@@ -2112,20 +2106,16 @@ function ComposerContentImpl({
       renderContextWindowMeter(
         contextWindowMaxTokens,
         contextWindowUsedTokens,
-        agentState.totalCostUsd,
         false,
         serverId,
         agentId,
-        contextWindowPending,
         contextWindowMeterGlyphSize,
       ),
     [
       contextWindowMaxTokens,
       contextWindowUsedTokens,
-      agentState.totalCostUsd,
       serverId,
       agentId,
-      contextWindowPending,
       contextWindowMeterGlyphSize,
     ],
   );

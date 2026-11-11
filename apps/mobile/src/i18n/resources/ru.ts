@@ -2694,13 +2694,32 @@ export const ru: TranslationResources = {
   sidebarCallout: {
     dismiss: "Закрыть",
   },
+  sessionStatistics: {
+    title: "Статистика выбранной сессии",
+    scope:
+      "Последний снимок провайдера — не накопительный итог сессии и не обязательно последний ход.",
+    children: "Дочерние сессии не включены; смотрите их отдельно.",
+    unavailable: "Статистика недоступна на этом хосте или соединении.",
+    account: "Квота аккаунта — отдельно от расхода сессии",
+    agentId: "Сессия",
+    provider: "Провайдер",
+    status: "Состояние выполнения",
+    configuredModel: "Настроенная модель",
+    effectiveModel: "Фактическая модель",
+    updatedAt: "Обновлено",
+    inputTokens: "Входные токены",
+    cachedInputTokens: "Кэшированные входные токены",
+    outputTokens: "Выходные токены",
+    totalCostUsd: "Заявленная стоимость (USD)",
+    contextWindowUsedTokens: "Использовано токенов контекста",
+    contextWindowMaxTokens: "Лимит токенов контекста",
+  },
   contextWindow: {
     noData: "No context usage yet",
     accessibilityNoData: "View account usage",
     title: "Контекстное окно",
     used: "Использовано: {{percentage}}%",
     tokens: "Токены: {{used}} / {{max}}",
-    sessionCost: "Стоимость сессии: {{cost}}",
     accessibility: "Использовано {{percentage}}% контекстного окна",
   },
   review: {

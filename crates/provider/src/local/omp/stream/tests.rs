@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn statistics_usage_preserves_unknown_cumulative_fields_and_known_zero() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    stream.add_usage(&json!({"input":1,"output":2})).unwrap();
+    assert_eq!(stream.usage.cached_input_tokens, None);
+    assert_eq!(stream.usage.total_cost_usd, None);
+    stream
+        .add_usage(&json!({"input":3,"output":4,"cacheRead":0,"cost":{"total":0}}))
+        .unwrap();
+    assert_eq!(stream.usage.input_tokens, Some(4));
+    assert_eq!(stream.usage.output_tokens, Some(6));
+    assert_eq!(stream.usage.cached_input_tokens, None);
+    assert_eq!(stream.usage.total_cost_usd, None);
+    assert!(
+        matches!(stream.events.back(), Some(AgentTurnEvent::Usage(usage))
+        if usage.cached_input_tokens.is_none() && usage.total_cost_usd.is_none())
+    );
+
+    let mut known = Stream::new("known".to_owned(), ImageStore::default());
+    known
+        .add_usage(&json!({"input":1,"output":2,"cacheRead":0,"cost":{"total":0}}))
+        .unwrap();
+    assert_eq!(known.usage.cached_input_tokens, Some(0));
+    assert_eq!(known.usage.total_cost_usd, Some(0.0));
+    known
+        .add_usage(&json!({"input":1,"output":2,"cacheRead":3,"cost":{"total":0.1}}))
+        .unwrap();
+    assert_eq!(known.usage.cached_input_tokens, Some(3));
+    assert_eq!(known.usage.total_cost_usd, Some(0.1));
+    known.add_usage(&json!({"input":1,"output":2})).unwrap();
+    assert_eq!(known.usage.cached_input_tokens, None);
+    assert_eq!(known.usage.total_cost_usd, None);
+}
+
+#[test]
 fn process_control_and_file_writes_keep_their_native_semantics() {
     let arguments = json!({"path":"proc://collector/kill","content":null});
     let tool = json!({"id":"process","name":"write","arguments":arguments});

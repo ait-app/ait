@@ -3,6 +3,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { AgentUsage } from "@/usage";
 import { formatTokenCount } from "./context-window-meter.utils";
+import { SessionStatistics } from "./usage/session-statistics";
 
 interface ContextWindowDetailsProps {
   serverId: string;
@@ -12,7 +13,6 @@ interface ContextWindowDetailsProps {
     usedTokens: number;
     maxTokens: number;
   } | null;
-  sessionCost: string | null;
   /** The hover card and tooltip title themselves; the sheet's header carries the title instead. */
   showTitle: boolean;
   /** Whether the usage cards have a Refresh button; without one they show their freshness. */
@@ -20,14 +20,13 @@ interface ContextWindowDetailsProps {
 }
 
 /**
- * What the context window meter opens: how full the window is, then the usage of the agent's
- * account. The desktop hover card, the native wide tooltip, and the compact sheet all render it.
+ * What the context window meter opens: context fullness, the selected session's latest
+ * provider statistics, then separate account quotas. Shared by hover, tooltip, and sheet.
  */
 export function ContextWindowDetails({
   serverId,
   agentId,
   context,
-  sessionCost,
   showTitle,
   refreshable,
 }: ContextWindowDetailsProps) {
@@ -51,10 +50,9 @@ export function ContextWindowDetails({
         ) : (
           <Text style={styles.detail}>{t("contextWindow.noData")}</Text>
         )}
-        {sessionCost ? (
-          <Text style={styles.detail}>{t("contextWindow.sessionCost", { cost: sessionCost })}</Text>
-        ) : null}
       </View>
+      <SessionStatistics serverId={serverId} agentId={agentId} />
+      <Text style={styles.title}>{t("sessionStatistics.account")}</Text>
       <AgentUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
     </>
   );

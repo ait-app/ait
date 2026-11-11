@@ -19,7 +19,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)
 - [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)
 - [ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace](bot/adr-222-single-agent-mode-no-bot-workspaces.md)
-- [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)
+- [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)（经 [ADR-238](providers/adr-238-read-only-session-statistics.md) 修订）
 - [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)（经 [ADR-222](bot/adr-222-single-agent-mode-no-bot-workspaces.md) 修订）
 - [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md)、[ADR-227](bot/adr-227-bot-multi-message-output.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md) 修订）
 - [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)（经 [ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md) 修订）
@@ -101,6 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-238：只读会话统计使用已提交事实](providers/adr-238-read-only-session-statistics.md)（提议中）
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
@@ -154,7 +155,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)（经 [ADR-105](daemon/adr-105-file-tools-and-startup-config.md)、[ADR-106](daemon/adr-106-concrete-file-persistence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md) 修订）
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)（经 [ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-118](daemon/adr-118-summary-contracts-and-persistence-configuration.md) 修订）
 - [ADR-099：Provider 自选辅助小模型](providers/adr-099-provider-owned-auxiliary-models.md)
-- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
+- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)（经 [ADR-238](providers/adr-238-read-only-session-statistics.md) 修订）
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）

@@ -68,6 +68,7 @@ pub(crate) enum Operation {
     Snapshot,
     RefreshSnapshot,
     Get,
+    Statistics,
     List,
     History,
     Update,
@@ -127,6 +128,7 @@ impl Operation {
             "provider.snapshot.get.request" => Ok(Self::Snapshot),
             "provider.snapshot.refresh.request" => Ok(Self::RefreshSnapshot),
             "agent.get.request" => Ok(Self::Get),
+            "agent.statistics.get.request" => Ok(Self::Statistics),
             "agent.list.request" => Ok(Self::List),
             "agent.history.get.request" => Ok(Self::History),
             "agent.update.request" => Ok(Self::Update),
@@ -185,6 +187,7 @@ impl Operation {
             Self::Snapshot => "provider.snapshot.get.request",
             Self::RefreshSnapshot => "provider.snapshot.refresh.request",
             Self::Get => "agent.get.request",
+            Self::Statistics => "agent.statistics.get.request",
             Self::List => "agent.list.request",
             Self::History => "agent.history.get.request",
             Self::Update => "agent.update.request",
@@ -240,6 +243,7 @@ impl Operation {
             | Self::Wake => Access::Session,
             Self::Wait
             | Self::Get
+            | Self::Statistics
             | Self::List
             | Self::History
             | Self::PrepareDirectory
@@ -266,7 +270,7 @@ impl Operation {
     pub(crate) const fn inspects_agent(self) -> bool {
         matches!(
             self,
-            Self::Get | Self::Timeline | Self::SearchTimeline | Self::Prompts
+            Self::Get | Self::Statistics | Self::Timeline | Self::SearchTimeline | Self::Prompts
         )
     }
 
@@ -288,6 +292,7 @@ impl Operation {
             | Self::Commands
             | Self::Usage
             | Self::Get
+            | Self::Statistics
             | Self::Update
             | Self::Archive
             | Self::Delete

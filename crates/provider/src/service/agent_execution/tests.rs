@@ -9,6 +9,7 @@ mod placement;
 mod realtime;
 mod reasoning;
 mod resume;
+mod statistics;
 mod usage;
 mod waits;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
