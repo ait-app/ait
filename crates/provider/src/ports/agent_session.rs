@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
+use domain::agent_runtime::goal::{GoalControlOp, NativeGoalFacts};
 
 use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
@@ -127,6 +128,39 @@ pub(crate) enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub(crate) trait AgentSession: Debug + Send + Sync {
+    /// Read native Goal facts without mutation, including create-time admission and restart.
+    /// `Ok(None)` proves absence; an unavailable or failed probe is not evidence of absence.
+    /// # Errors
+    /// Returns unavailable when unsupported, or failure when native state is unknown.
+    async fn goal_read(&self) -> Result<Option<NativeGoalFacts>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Create a native Goal only after the host selected Native strategy and checked admission.
+    /// # Errors
+    /// Returns rejection, unavailable capability, or an unconfirmed native outcome.
+    async fn goal_create(&mut self, _objective: &str) -> Result<NativeGoalFacts, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Apply a typed native Goal control, rejecting stale observed native generation/revision.
+    /// Pause must finish the current turn; Stop interrupts and then preserves a paused objective.
+    /// # Errors
+    /// Returns unavailable, rejection, or an unconfirmed native outcome.
+    async fn goal_control(
+        &mut self,
+        _operation: GoalControlOp,
+    ) -> Result<NativeGoalFacts, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Reassert native pursuit only from the existing restart arbiter after reconciliation.
+    /// # Errors
+    /// Returns unavailable for native drivers that do not support host reassertion.
+    async fn goal_reassert(&mut self) -> Result<NativeGoalFacts, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,
@@ -360,6 +394,12 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
 pub(crate) trait AgentClient: Debug + Send + Sync {
+    /// Verified native Goal eligibility for this installed adapter/version.
+    /// A false native flag never proves that a native Goal is absent; creation still probes.
+    fn goal_capability(&self) -> super::goal::GoalCapability {
+        super::goal::GoalCapability::default()
+    }
+
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false
