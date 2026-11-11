@@ -177,7 +177,7 @@
     "status": "delivered",
     "branch": "docs/pr612-split-task00",
     "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-    "commit": "d20a057e685dc7d87f8134fa9f0f66de4e63943f",
+    "commit": "3f4a2cddfb9cedb8aaad98d86348b78f46e57346",
     "pr_url": "https://github.com/ait-app/ait/pull/647",
     "checks": {
       "required": [
