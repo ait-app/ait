@@ -2831,6 +2831,7 @@ export const zhCN: TranslationResources = {
     description:
       "由 Oh My Pi 用其自带格式渲染本会话。文件可能包含活动脚本，仅作为下载保存，不会在 Ait 内打开。上限 16 MiB。",
     download: "导出原生 HTML",
+    risk: "原生格式含脚本，打开时可能加载外部查看器（stencil.so），该查看器可读取文件内嵌的会话历史。仅下载，Ait 从不预览或打开；与惰性的通用 HTML 导出不同。",
     unavailable: "原生 HTML 导出不可用。请连接支持该功能的 OMP 主机。",
   },
   sessionStatistics: {

@@ -66,3 +66,5 @@ unicode-normalization.workspace = true
 # Signal owned native process groups directly instead of spawning `/bin/kill`.
 nix.workspace = true
 nix.features = ["signal"]
+# Open owned native-export staging files without following symlinks (O_NOFOLLOW).
+libc.workspace = true

@@ -83,6 +83,8 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            // Native HTML export travels through the typed lane reply, never JSON execute.
+            Operation::NativeHtmlExport => Err(ErrorCode::UnsupportedCapability),
             Operation::Statistics => {
                 super::agent_runtime::statistics::get(&self.directory, &decode(params)?)
             }
@@ -737,7 +739,7 @@ fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::Session
         | AgentManagerError::History(_)
         | AgentManagerError::Registry => ErrorCode::AgentIo,
-        AgentManagerError::Operation(code) => *code,
+        AgentManagerError::Operation(code) => (*code).into(),
     }
 }
 

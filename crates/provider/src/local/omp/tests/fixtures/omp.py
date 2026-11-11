@@ -293,7 +293,45 @@ for line in sys.stdin:
                         toolCallId='foreground', toolName='bash', isError=False)
             else:
                 emit({'type': 'agent_start'})
+        if text == 'export-hold':
+            # Stay active until the release marker; native export must not interrupt this.
+            while not (root / 'release-export-hold').exists():
+                time.sleep(0.01)
+            finish()
+            continue
         finish(settled=text != 'background')
+    elif kind == 'export_html':
+        output = command.get('outputPath')
+        mode = (root / 'export-mode').read_text().strip() if (root / 'export-mode').exists() else 'ok'
+        if mode == 'silent':
+            continue
+        if mode == 'late':
+            # Answer only after the caller's deadline, creating the file late.
+            time.sleep(0.6)
+            Path(output).write_text('<html>LATE_NATIVE_FILE</html>')
+            response(command, {'path': output})
+            continue
+        if mode == 'reject':
+            response(command, success=False)
+            continue
+        if mode == 'wrong-path':
+            response(command, {'path': str(root / 'somewhere-else.html')})
+            continue
+        if mode == 'oversize':
+            Path(output).write_bytes(b'x' * (16 * 1024 * 1024 + 1))
+            response(command, {'path': output})
+            continue
+        if mode == 'symlink':
+            target = root / 'symlink-target.html'
+            target.write_text('SYMLINK_TARGET_CONTENT')
+            Path(output).unlink(missing_ok=True)
+            Path(output).symlink_to(target)
+            response(command, {'path': output})
+            continue
+        Path(output).write_text(
+            '<!DOCTYPE html><html><head><script>var viewer=1;</script></head>'
+            '<body>NATIVE_FIXTURE_MARKER_27 ' + session_id + '</body></html>')
+        response(command, {'path': output})
     elif kind == 'steer':
         response(command, {'disposition': 'queued'})
         message('user', command['message'])

@@ -405,7 +405,7 @@ impl AgentExecution {
             .try_acquire_owned()
             .map_err(|_| ErrorCode::ResourceExhausted)?;
         if self.0.cancellation.is_cancelled() {
-            return Err(ErrorCode::ServerDraining);
+            return Err(ErrorCode::AgentIo);
         }
         let permit = self
             .0

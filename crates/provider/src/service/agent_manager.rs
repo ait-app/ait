@@ -1012,7 +1012,10 @@ impl AgentManager {
             .create_new(true)
             .open(&output)
             .map_err(|_| AgentManagerError::Operation(model::ErrorCode::AgentIo))?;
-        let started = agent.session.begin_native_html_export(&output).await;
+        let started = agent
+            .session
+            .begin_native_html_export(&output, &directory)
+            .await;
         if let Err(error) = started {
             let _ = std::fs::remove_file(&output);
             return Err(match error {

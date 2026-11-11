@@ -73,6 +73,9 @@ export function NativeHtmlExport({ serverId, agentId }: { serverId: string; agen
     <View style={styles.section} testID="native-html-export">
       <Text style={styles.title}>{t("nativeHtmlExport.title")}</Text>
       <Text style={styles.detail}>{t("nativeHtmlExport.description")}</Text>
+      <Text style={styles.detail} testID="native-html-export-risk">
+        {t("nativeHtmlExport.risk")}
+      </Text>
       {available ? (
         <Pressable
           accessibilityRole="button"

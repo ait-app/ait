@@ -113,7 +113,9 @@ pub(super) async fn drain(
         if matches!(agent.pending, Some(AgentTurnEvent::NativeHtmlExport(_))) {
             if let Some(AgentTurnEvent::NativeHtmlExport(result)) = agent.pending.take() {
                 if let Some(reply) = agent.native_export.take() {
-                    let _ = reply.send(result.map_err(Into::into));
+                    let _ = reply.send(result.map_err(|error| {
+                        model::ErrorCode::from(crate::rpc::ErrorCode::from(error))
+                    }));
                 }
             }
             continue;
@@ -170,6 +172,8 @@ pub(super) async fn drain(
                     .reconcile(id, &agent.record.provider, entries)
                     .map(|_| ())
             }),
+            // Intercepted above before display projection; never a turn outcome.
+            Some(AgentTurnEvent::NativeHtmlExport(_)) => unreachable!(),
             Some(
                 AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed,
             )

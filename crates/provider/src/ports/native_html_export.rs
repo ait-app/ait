@@ -39,7 +39,7 @@ pub(crate) enum NativeHtmlExportError {
     Io,
 }
 
-impl From<NativeHtmlExportError> for model::ErrorCode {
+impl From<NativeHtmlExportError> for crate::rpc::ErrorCode {
     fn from(error: NativeHtmlExportError) -> Self {
         match error {
             NativeHtmlExportError::Unsupported => Self::UnsupportedCapability,

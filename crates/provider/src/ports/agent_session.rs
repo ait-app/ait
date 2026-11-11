@@ -54,7 +54,7 @@ pub(crate) enum AgentResumePurpose {
 }
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
@@ -86,9 +86,89 @@ pub(crate) enum AgentTurnEvent {
     /// The native provider failed, exited, or requested unsupported interaction.
     Failed,
     /// A started native HTML export finished; the adapter adopted or cleaned its owned file.
+    /// The owned artifact travels only through the in-process typed reply. The wire form is
+    /// metadata-only (never bytes or a server path); deserialization yields a failed outcome
+    /// because an owned file cannot cross the wire.
+    #[serde(
+        serialize_with = "serialize_native_html_export",
+        deserialize_with = "deserialize_native_html_export"
+    )]
     NativeHtmlExport(
         Result<super::native_html_export::ExportedNativeHtml, super::native_html_export::NativeHtmlExportError>,
     ),
+}
+
+/// Equality is structural for every variant except the owned-file native export, which is
+/// compared by its safe metadata (an open file handle is neither cloneable nor comparable).
+impl PartialEq for AgentTurnEvent {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Started(a), Self::Started(b)) => a == b,
+            (Self::Subagent(a), Self::Subagent(b)) => a == b,
+            (
+                Self::Progress { observation: ao, entry: ae },
+                Self::Progress { observation: bo, entry: be },
+            ) => ao == bo && ae == be,
+            (Self::PermissionRequested(a), Self::PermissionRequested(b)) => a == b,
+            (Self::PermissionResolved(a), Self::PermissionResolved(b)) => a == b,
+            (Self::Timeline(a), Self::Timeline(b)) => a == b,
+            (Self::History(a), Self::History(b)) => a == b,
+            (Self::Usage(a), Self::Usage(b)) => a == b,
+            (Self::RuntimeInfo(a), Self::RuntimeInfo(b)) => a == b,
+            (Self::Completed(a), Self::Completed(b)) => a == b,
+            (Self::Cancelled, Self::Cancelled) => true,
+            (Self::Failed, Self::Failed) => true,
+            (Self::NativeHtmlExport(a), Self::NativeHtmlExport(b)) => match (a, b) {
+                (Ok(x), Ok(y)) => {
+                    x.artifact.agent_id == y.artifact.agent_id
+                        && x.artifact.file_name == y.artifact.file_name
+                        && x.artifact.mime_type == y.artifact.mime_type
+                        && x.artifact.size == y.artifact.size
+                }
+                (Err(x), Err(y)) => x == y,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+}
+
+/// Metadata-only wire projection of a native export outcome; the artifact file never crosses.
+fn serialize_native_html_export<S: serde::Serializer>(
+    outcome: &Result<
+        super::native_html_export::ExportedNativeHtml,
+        super::native_html_export::NativeHtmlExportError,
+    >,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(2))?;
+    map.serialize_entry("type", "native_html_export")?;
+    match outcome {
+        Ok(export) => {
+            map.serialize_entry("ok", &true)?;
+            map.serialize_entry("fileName", &export.artifact.file_name)?;
+            map.serialize_entry("size", &export.artifact.size)?;
+        }
+        Err(error) => {
+            map.serialize_entry("ok", &false)?;
+            map.serialize_entry("error", &format!("{error:?}"))?;
+        }
+    }
+    map.end()
+}
+
+fn deserialize_native_html_export<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<
+    Result<
+        super::native_html_export::ExportedNativeHtml,
+        super::native_html_export::NativeHtmlExportError,
+    >,
+    D::Error,
+> {
+    let _value = <serde_json::Value as serde::Deserialize>::deserialize(deserializer)?;
+    Ok(Err(super::native_html_export::NativeHtmlExportError::Io))
 }
 
 /// Live provider session. Closing releases resources without deleting native history.
@@ -304,14 +384,16 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     }
 
     /// Start rendering this live session with the provider's own native HTML formatter.
-    /// The adapter owns `output_path` staging and never starts, resumes or prompts a writer.
-    /// Returns the native correlation ID; completion is observed through `poll_turn`.
+    /// The caller exclusively created `output_path` inside `export_directory` and owns it;
+    /// the adapter never starts, resumes or prompts a writer. Returns the native correlation
+    /// ID; completion is observed through `poll_turn`.
     ///
     /// # Errors
     /// Returns unsupported for providers without a native renderer, or write failures.
     async fn begin_native_html_export(
         &mut self,
         _output_path: &std::path::Path,
+        _export_directory: &std::path::Path,
     ) -> Result<String, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
     }

@@ -91,8 +91,7 @@ impl Providers {
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
         let omp = OmpClient::new(program("AIT_SERVER_OMP_BIN", "omp"))
-            .with_image_directory(images.clone())
-            .with_export_directory(data_dir.join("agents/omp-native-exports"));
+            .with_image_directory(images.clone());
         let minimax = MiniMaxClient::new(program("AIT_SERVER_MINIMAX_CODE_BIN", "mcode"))
             .with_image_directory(images);
         if let Some(profile) = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE") {

@@ -9,7 +9,8 @@ use crate::service::agent_execution::operation::Operation;
 use crate::support::rpc::decode;
 
 type ExportReply = tokio::sync::oneshot::Sender<Result<ExportedNativeHtml, ErrorCode>>;
-type ExportReceiver = tokio::sync::oneshot::Receiver<Result<ExportedNativeHtml, ErrorCode>>;
+type ExportReceiver =
+    tokio::sync::oneshot::Receiver<Result<ExportedNativeHtml, model::ErrorCode>>;
 
 impl ExecutionState {
     /// Start the provider's own HTML render for one live OMP session and deliver its artifact
@@ -48,6 +49,9 @@ impl ExecutionState {
             self.manager.cancel_native_html_export(&id);
             return;
         }
-        let _ = reply.send(outcome.unwrap_or(Err(ErrorCode::AgentIo)));
+        let result = outcome
+            .unwrap_or(Err(model::ErrorCode::AgentIo))
+            .map_err(ErrorCode::from);
+        let _ = reply.send(result);
     }
 }

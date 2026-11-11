@@ -52,12 +52,14 @@ pub(super) async fn dispatch(
             match serde_json::from_value::<crate::ports::native_html_export::Request>(params) {
                 Ok(request) => match state.agent_execution.as_ref() {
                     Some(execution) => {
-                        execution.export_native_html(request).await.map(|export| {
-                            Completion::NativeHtmlExport {
+                        execution
+                            .export_native_html(request)
+                            .await
+                            .map(|export| Completion::NativeHtmlExport {
                                 request_id: context.request.id.clone(),
                                 export,
-                            }
-                        })
+                            })
+                            .map_err(ErrorCode::from)
                     }
                     None => Err(ErrorCode::NotImplemented),
                 },

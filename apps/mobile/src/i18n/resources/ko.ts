@@ -2701,6 +2701,7 @@ export const ko: TranslationResources = {
     description:
       "Oh My Pi가 자체 포매터로 이 세션을 렌더링합니다. 파일에는 활성 스크립트가 포함될 수 있으며 다운로드 전용으로 저장됩니다. Ait 내부에서 열리지 않습니다. 최대 16 MiB.",
     download: "네이티브 HTML 내보내기",
+    risk: "네이티브 형식에는 스크립트가 포함되어 있으며 열 때 외부 뷰어(stencil.so)를 로드할 수 있습니다. 뷰어는 파일에 포함된 세션 기록을 읽을 수 있습니다. 다운로드 전용이며 Ait는 미리 보거나 열지 않습니다. 비활성 일반 HTML 내보내기와 다릅니다.",
     unavailable: "네이티브 HTML 내보내기를 사용할 수 없습니다. 지원하는 OMP 호스트에 연결하세요.",
   },
   sessionStatistics: {

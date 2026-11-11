@@ -36,7 +36,6 @@ pub(crate) struct OmpClient {
     deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
-    export_directory: Option<PathBuf>,
 }
 
 impl OmpClient {
@@ -48,7 +47,6 @@ impl OmpClient {
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
-            export_directory: None,
         }
     }
 
@@ -59,18 +57,11 @@ impl OmpClient {
         self
     }
 
-    /// Stage native HTML renders in the daemon's private `directory` when configured.
-    #[must_use]
-    pub(crate) fn with_export_directory(mut self, directory: PathBuf) -> Self {
-        self.export_directory = Some(directory);
-        self
-    }
-
     /// Resolve the private native-export staging directory for this installed adapter.
+    /// It is a sibling of the native `sessions` root, i.e. inside the OMP state tree that
+    /// the sandbox already allows the confined native process to write. No daemon data-dir
+    /// or workspace path is used, so no sandbox policy needs to widen.
     fn export_directory(&self) -> Option<PathBuf> {
-        if let Some(directory) = &self.export_directory {
-            return Some(directory.clone());
-        }
         history::root(self)
             .ok()
             .map(|root| root.with_file_name("ait-native-exports"))

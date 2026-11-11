@@ -2704,6 +2704,7 @@ export const es: TranslationResources = {
     description:
       "Oh My Pi renderiza esta sesión con su propio formateador. El archivo puede contener scripts activos y solo se guarda como descarga; nunca se abre dentro de Ait. Máximo 16 MiB.",
     download: "Exportar HTML nativo",
+    risk: "El formato nativo contiene scripts y puede cargar un visor externo (stencil.so) al abrirse; ese visor puede leer el historial de sesión incrustado en el archivo. Solo descarga: Ait nunca lo previsualiza ni lo abre. No es la exportación HTML genérica inerte.",
     unavailable: "Exportación HTML nativa no disponible. Conéctate a un host OMP compatible.",
   },
   sessionStatistics: {
