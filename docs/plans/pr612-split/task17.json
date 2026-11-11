@@ -7,7 +7,7 @@
   "donor_paths": [],
   "implementation": "Adapt native Codex Goal with one continuation arbiter shared with restart recovery and the unified persisted Goal lifecycle.",
   "acceptance": "Native state/receipts reconcile with restart and user-priority scheduling; exactly one continuation arbiter and no fabricated budget semantics.",
-  "status": "in_progress",
+  "status": "in_review",
   "branch": "feat/pr612-task17-codex-native-goal",
   "stacked_on": {
     "task": "16",
@@ -16,8 +16,8 @@
     "note": "Narrow reader checkpoint 9c82cde6 is the only reader/parser work; task16 owns the canonical port until its final integration head lands."
   },
   "base": "a2de24460ec044bff7df180af61b56d57fd73201",
-  "commit": null,
-  "pr_url": null,
+  "commit": "4e57c926",
+  "pr_url": "https://github.com/ait-app/ait/pull/669",
   "reader_checkpoint": {
     "commit": "9c82cde601aefb14c4e2bde84179d0de8af46e0b",
     "paths": [
@@ -67,5 +67,9 @@
     "Task16 final integration head is required before end-to-end manager proof and a non-draft Draft PR promotion; until then the port has no in-process consumer, which is why scoped clippy still reports clippy::dead_code on unconsumed goal APIs at base and here.",
     "The daemon-side arbiter branch (recovery.rs/delivery.rs goal awareness) lives in task16's shared files and is not implemented on this branch; this branch supplies the adapter facts and executes the re-assert write only when the single arbiter calls it."
   ],
-  "test_coverage": "not measured; coverage not requested"
+  "test_coverage": "not measured; coverage not requested",
+  "pr_base": {
+    "branch": "feat/pr612-task05-native-config",
+    "note": "GitHub requires a pushed base; the intended task16 stack head a2de2446 is not on origin, so the Draft is stacked on the pushed task05 branch and must be re-based onto task16 when it publishes."
+  }
 }
