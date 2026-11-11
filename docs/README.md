@@ -28,6 +28,7 @@
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 - [会话统计](architecture/provider.md#会话统计)：从上下文详情查看只读事实、未知指标和账号/子会话范围。
+- [会话导出](architecture/provider.md#会话导出)：下载整个已保存 Timeline 或对话内容为 Markdown/HTML，不打断活动轮次。
 
 ## 架构与工程规范
 

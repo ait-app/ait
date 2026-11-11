@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
-import { open, rename } from "node:fs/promises";
+import { open, rename, unlink } from "node:fs/promises";
 import { dialog, type WebContents } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HubSessionClosedError } from "@ait/client/internal/hub";
 import { AccountDownloadManager } from "./account-download.js";
 import type { AccountSessionManager } from "./account-session.js";
 
+const relay = vi.hoisted(() => ({ length: 0 as number | null }));
 vi.mock("electron", () => ({
   BrowserWindow: { fromWebContents: () => ({}) },
   dialog: { showSaveDialog: vi.fn() },
@@ -31,7 +32,7 @@ vi.mock("ws", async () => {
         queueMicrotask(() => {
           for (const frame of [
             { type: "relay.ready", relay_session_id: "visit" },
-            { type: "download.headers", status: 200, content_length: 0 },
+            { type: "download.headers", status: 200, content_length: relay.length },
             { type: "download.end", bytes: 0 },
           ])
             this.emit("message", Buffer.from(JSON.stringify(frame)), false);
@@ -70,6 +71,7 @@ const openDownload = vi.fn(async () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  relay.length = 0;
   vi.useFakeTimers();
   vi.mocked(dialog.showSaveDialog).mockResolvedValue({
     canceled: false,
@@ -123,6 +125,20 @@ describe("account download preparations", () => {
     expect(owner.listenerCount("destroyed")).toBe(0);
     expect(owner.listenerCount("did-start-navigation")).toBe(0);
   });
+
+  it.each([0, null])(
+    "rejects a short receipt-bound relay download with length %s",
+    async (length) => {
+      relay.length = length;
+      const preparationId = await manager.prepare(owner, { ...input, expectedSize: 4 });
+      await expect(manager.download(owner, { preparationId, token: "once" })).rejects.toThrow(
+        /mismatch|incomplete/,
+      );
+      expect(rename).not.toHaveBeenCalled();
+      expect(unlink).toHaveBeenCalledWith(expect.stringMatching(/\.part$/));
+      expect(openDownload).toHaveBeenCalledOnce();
+    },
+  );
 
   it("rejects preparation use by another window without consuming the owner's selection", async () => {
     const preparationId = await manager.prepare(owner, input);
@@ -228,6 +244,24 @@ describe("account Hub downloads", () => {
     expect(openDownload).not.toHaveBeenCalled();
     expect(rename).toHaveBeenCalledWith(expect.any(String), "/chosen/report.txt");
     expect(hub.session.end).toHaveBeenCalledWith("closed");
+  });
+
+  it("rejects a short Hub artifact instead of acknowledging or renaming it", async () => {
+    const hub = hubSession();
+    const local = hubManager(async () => hub.session);
+    const preparationId = await local.prepare(owner, { ...input, expectedSize: 4 });
+    const downloading = local.download(owner, { preparationId, token: "once" });
+    const failed = expect(downloading).rejects.toThrow(/incomplete/);
+    await vi.advanceTimersByTimeAsync(0);
+    hub.text({ type: "download.headers", status: 200, content_length: null });
+    hub.binary(new Uint8Array([1, 2, 3]));
+    hub.text({ type: "download.end", bytes: 3 });
+    await failed;
+    expect(hub.session.send).not.toHaveBeenCalled();
+    expect(rename).not.toHaveBeenCalled();
+    expect(unlink).toHaveBeenCalledWith(expect.stringMatching(/\.part$/));
+    expect(openDownload).not.toHaveBeenCalled();
+    local.closeAll();
   });
 
   it("listens before the Host can answer, however slowly the file opens", async () => {

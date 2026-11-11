@@ -68,6 +68,69 @@ describe("native relay downloads", () => {
       expect(h.socket.send).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["abort", "size"])("bounds export streams and closes the relay on %s", async (reason) => {
+    const h = nativeRelayHarness();
+    const controller = new AbortController();
+    const write = vi.fn();
+    const finished = streamNativeAccountDownload(
+      {
+        hostId: "host",
+        center: "https://example.test/api",
+        token: "once",
+        signal: controller.signal,
+        maxBytes: 3,
+        write,
+        progress: vi.fn(),
+      },
+      h.deps,
+    );
+    const failed = expect(finished).rejects.toThrow(reason === "abort" ? "cancelled" : "limit");
+    await h.flush();
+    h.message({ type: "relay.ready", relay_session_id: "visit" });
+    h.message({ type: "download.headers", status: 200, content_length: null });
+    h.message(new Uint8Array([1, 2]), true);
+    if (reason === "abort") controller.abort();
+    else h.message(new Uint8Array([3, 4]), true);
+    await failed;
+    expect(write).toHaveBeenCalledExactlyOnceWith(new Uint8Array([1, 2]));
+    expect(h.account.openDownload).toHaveBeenCalledOnce();
+    expect(h.account.closeVisit).toHaveBeenCalledWith("visit");
+    expect(h.socket.send).not.toHaveBeenCalled();
+  });
+
+  it.each(["declared-short", "unknown-short", "oversized"])(
+    "rejects a receipt-inconsistent %s stream without acknowledging completion",
+    async (mode) => {
+      const h = nativeRelayHarness();
+      const finished = streamNativeAccountDownload(
+        {
+          hostId: "host",
+          center: "https://example.test/api",
+          token: "once",
+          expectedSize: 4,
+          maxBytes: 16 * 1024 * 1024,
+          write: vi.fn(),
+          progress: vi.fn(),
+        },
+        h.deps,
+      );
+      const failed = expect(finished).rejects.toThrow(/mismatch|incomplete/);
+      await h.flush();
+      h.message({ type: "relay.ready", relay_session_id: "visit" });
+      h.message({
+        type: "download.headers",
+        status: 200,
+        content_length: mode === "declared-short" ? 3 : null,
+      });
+      const bytes = mode === "oversized" ? 5 : 3;
+      h.message(new Uint8Array(bytes), true);
+      h.message({ type: "download.end", bytes });
+      await failed;
+      expect(h.socket.send).not.toHaveBeenCalled();
+      expect(h.account.closeVisit).toHaveBeenCalledWith("visit");
+    },
+  );
 });
 
 describe("native Hub downloads", () => {

@@ -161,6 +161,138 @@ it.each([true, false])("advertises statistics only when implemented (%s)", (supp
     h.transport.close();
   }
 });
+
+it.each([
+  [true, true],
+  [true, false],
+  [false, true],
+  [false, false],
+])("negotiates export with export=%s and cancel=%s", (exportSupported, cancelSupported) => {
+  const methods = Object.values(METHODS)
+    .map((spec) => spec.method)
+    .filter(
+      (method) =>
+        (exportSupported || method !== "agent.timeline.export.request") &&
+        (cancelSupported || method !== "agent.timeline.export.cancel.request"),
+    );
+  const h = harness(methods);
+  try {
+    h.ready();
+    const status = h.received.find((message) => message.type === "status");
+    expect(object(object(status).payload).features).toMatchObject({
+      agentTimelineExport: exportSupported && cancelSupported,
+    });
+  } finally {
+    h.transport.close();
+  }
+});
+
+it.each([
+  ["markdown", "conversation"],
+  ["markdown", "timeline"],
+  ["html", "conversation"],
+  ["html", "timeline"],
+])("maps %s / %s export and cancellation directly to daemon requests", (format, scope) => {
+  const h = harness();
+  try {
+    h.ready();
+    const result = {
+      agentId: "agent-1",
+      format,
+      scope,
+      source: "persisted_timeline",
+      token: "download-token",
+      fileName: format === "html" ? "timeline.html" : "timeline.md",
+      mimeType: format === "html" ? "text/html" : "text/markdown",
+      size: 512,
+      entries: 3,
+      expiresAt: "2026-11-11T00:05:00Z",
+    };
+    h.send({
+      type: "agent.timeline.export.request",
+      requestId: "export-1",
+      agentId: "agent-1",
+      format,
+      scope,
+    });
+    expect(h.last(0)).toEqual({
+      type: "request",
+      request_id: "export-1",
+      method: "agent.timeline.export.request",
+      params: { agentId: "agent-1", format, scope },
+    });
+    h.sockets[0].message({ type: "response", request_id: "export-1", result });
+    expect(h.received.at(-1)).toEqual({
+      type: "agent.timeline.export.response",
+      payload: { ...result, requestId: "export-1" },
+    });
+    h.send({
+      type: "agent.timeline.export.cancel.request",
+      requestId: "cancel-1",
+      agentId: "agent-1",
+      token: result.token,
+    });
+    expect(h.last(0)).toEqual({
+      type: "request",
+      request_id: "cancel-1",
+      method: "agent.timeline.export.cancel.request",
+      params: { agentId: "agent-1", token: result.token },
+    });
+    h.sockets[0].message({
+      type: "response",
+      request_id: "cancel-1",
+      result: { released: false },
+    });
+    expect(h.received.at(-1)).toEqual({
+      type: "agent.timeline.export.cancel.response",
+      payload: { released: false, requestId: "cancel-1" },
+    });
+  } finally {
+    h.transport.close();
+  }
+});
+
+it.each(["not_found", "expired", "resource_exhausted"])(
+  "does not replay export requests even when %s is marked retryable",
+  async (code) => {
+    vi.useFakeTimers();
+    const h = harness();
+    try {
+      h.ready();
+      for (const type of [
+        "agent.timeline.export.request",
+        "agent.timeline.export.cancel.request",
+      ]) {
+        h.send({
+          type,
+          requestId: type,
+          agentId: "agent-1",
+          ...(type === "agent.timeline.export.request"
+            ? { format: "markdown", scope: "conversation" }
+            : { token: "expired-token" }),
+        });
+        const sentCount = h.sockets[0].send.mock.calls.length;
+        h.sockets[0].message({
+          type: "error",
+          request_id: type,
+          code,
+          message: "Explicit user action required",
+          retryable: true,
+        });
+        expect(h.received.at(-1)).toMatchObject({
+          type: "rpc_error",
+          payload: { requestId: type, code },
+        });
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(h.sockets[0].send).toHaveBeenCalledTimes(sentCount);
+      }
+    } finally {
+      h.transport.close();
+      vi.useRealTimers();
+    }
+  },
+);
+
 describe("Rust v1 connection", () => {
   it("connects the public SDK directly to raw Rust transports with Bearer authentication", async () => {
     const h = harness();

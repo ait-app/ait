@@ -20,7 +20,12 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
-export type { AgentSessionStatistics } from "@ait/protocol/messages";
+export type {
+  AgentSessionStatistics,
+  AgentTimelineExportOptions,
+  AgentTimelineExportResult,
+  AgentTimelineExportCancelResult,
+} from "@ait/protocol/messages";
 import type {
   ShareAudience,
   ShareGroupsListResponse,
@@ -35,6 +40,11 @@ import {
   AgentCreateFailedStatusPayloadSchema,
   AgentSessionStatisticsSchema,
   type AgentSessionStatistics,
+  AgentTimelineExportResultSchema,
+  AgentTimelineExportCancelResultSchema,
+  type AgentTimelineExportOptions,
+  type AgentTimelineExportResult,
+  type AgentTimelineExportCancelResult,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
@@ -2818,6 +2828,45 @@ export class DaemonClient {
       message: { type: "agent.statistics.get.request", agentId },
       responseType: "agent.statistics.get.response",
       selectPayload: (payload) => AgentSessionStatisticsSchema.parse(payload),
+    });
+  }
+
+  /** Create one persisted-timeline download; failures never regenerate an artifact. */
+  async exportAgentTimeline(
+    agentId: string,
+    options: AgentTimelineExportOptions,
+  ): Promise<AgentTimelineExportResult> {
+    if (this.lastServerInfoMessage?.features?.agentTimelineExport !== true) {
+      throw Object.assign(new Error("Agent timeline export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "agent.timeline.export.request",
+        agentId,
+        format: options.format,
+        scope: options.scope,
+      },
+      responseType: "agent.timeline.export.response",
+      selectPayload: (payload) => AgentTimelineExportResultSchema.parse(payload),
+    });
+  }
+
+  /** Release an unused export token without creating a replacement artifact. */
+  async cancelAgentTimelineExport(
+    agentId: string,
+    token: string,
+  ): Promise<AgentTimelineExportCancelResult> {
+    if (this.lastServerInfoMessage?.features?.agentTimelineExport !== true) {
+      throw Object.assign(new Error("Agent timeline export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.timeline.export.cancel.request", agentId, token },
+      responseType: "agent.timeline.export.cancel.response",
+      selectPayload: (payload) => AgentTimelineExportCancelResultSchema.parse(payload),
     });
   }
 

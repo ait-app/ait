@@ -132,6 +132,22 @@
 - 上下文详情入口在没有用量时仍可打开。选中会话、账号额度和子会话范围分别标注；旧 Host
   缺少协商能力时不发请求并显示不可用。旧客户端的消息、Timeline 和子 Agent 模型不变。
 
+## 会话导出
+
+- 上下文详情中的导出入口读取整个已保存 Timeline，而不是当前 UI 页。选择 Markdown/HTML，以及
+  全部持久条目或仅用户/助手消息和语音转写；消息正文、持久 host/result cards 和附件引用保持可读。
+  不包含尚未保存的 UI 状态，不自动抓取附件，也不是原生 OMP HTML 或 DSH ZIP 导出。
+- 新增类型化 `agent.timeline.export.request`、`agent.timeline.export.cancel.request` 和 SDK 方法。
+  `agentTimelineExport` 同时要求两个协商方法；旧 Host 不发请求，旧客户端仍读取原有消息。
+  独立读取 canonical entries/progress 的事务快照，不刷新 Provider、不创建 writer、不发送输入、
+  不打断活动轮次；完整分页超过 20,000 行或 16 MiB 时明确失败，不静默截断。
+- Provider 通过类型化 Completion 交接已生成的匿名文件，API 复用 Files 一次性 grant 与现有
+  visitor/download 授权。客户端实际接收与 receipt 一致的字节后才完成；浏览器只报告交给下载器，
+  不能冒充已写入磁盘。取消/到期/失败释放文件，artifact 丢失不得自动重新导出。
+- 接口、内部所有权、HTTP 限定 CORS 扩展及各平台完成语义见
+  [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)；
+  原生手机和打包桌面验证限制见 [task26 记录](../plans/pr612-split/task26.json)。
+
 ## 账号用量
 
 - Host 用量缓存归 `AgentManager`，账号身份是只在内存比较的 SHA-256 摘要。60 秒内直接返回，

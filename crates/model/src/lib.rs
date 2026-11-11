@@ -9,6 +9,7 @@ pub mod changes;
 mod context;
 pub mod creation;
 pub mod directory_sync;
+pub mod download;
 pub mod events;
 pub mod hub;
 pub mod methods;

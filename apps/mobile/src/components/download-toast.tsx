@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { Check, X, XCircle } from "lucide-react-native";
+import { Check, Download as DownloadIcon, X, XCircle } from "lucide-react-native";
 import { useDownloadStore, formatSpeed, formatEta, type Download } from "@/stores/download-store";
 
 const AUTO_DISMISS_DELAY = 3000;
@@ -18,6 +18,7 @@ function getDownloadStatusText(download: Download, t: TFunction): string {
     return t("common.states.starting");
   }
   if (download.status === "complete") return t("common.states.downloadComplete");
+  if (download.status === "browser_handoff") return t("timelineExport.browserHandoff");
   return download.message ?? t("common.states.downloadFailed");
 }
 
@@ -75,7 +76,10 @@ export function DownloadToast() {
         {activeDownload.status === "complete" ? (
           <Check size={18} color={theme.colors.primary} />
         ) : null}
-        {activeDownload.status !== "downloading" && activeDownload.status !== "complete" ? (
+        {activeDownload.status === "browser_handoff" ? (
+          <DownloadIcon size={18} color={theme.colors.foregroundMuted} />
+        ) : null}
+        {activeDownload.status === "error" ? (
           <XCircle size={18} color={theme.colors.destructive} />
         ) : null}
         <View style={styles.textContainer}>
@@ -89,6 +93,17 @@ export function DownloadToast() {
             </View>
           )}
         </View>
+        {activeDownload.status === "downloading" && activeDownload.cancel ? (
+          <Pressable
+            onPress={activeDownload.cancel}
+            accessibilityRole="button"
+            accessibilityLabel={t("timelineExport.cancel")}
+            hitSlop={8}
+            style={styles.dismiss}
+          >
+            <Text style={styles.status}>{t("timelineExport.cancel")}</Text>
+          </Pressable>
+        ) : null}
         {activeDownload.status !== "downloading" && (
           <Pressable onPress={handleDismiss} hitSlop={8} style={styles.dismiss}>
             <X size={16} color={theme.colors.foregroundMuted} />

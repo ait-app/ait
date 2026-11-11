@@ -7,6 +7,8 @@ export interface MethodSpec {
   kind: "request" | "event" | "response";
   channel: number;
   response: string | null;
+  /** Opt out when the caller must explicitly initiate every attempt. */
+  retryAdmission?: false;
 }
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
@@ -363,6 +365,20 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "agent.statistics.get.response",
+  },
+  "agent.timeline.export.request": {
+    method: "agent.timeline.export.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.timeline.export.response",
+    retryAdmission: false,
+  },
+  "agent.timeline.export.cancel.request": {
+    method: "agent.timeline.export.cancel.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.timeline.export.cancel.response",
+    retryAdmission: false,
   },
   "agent.history.get.request": {
     method: "agent.history.get.request",

@@ -1,0 +1,193 @@
+{
+  "id": "26",
+  "title": "Persisted Timeline export",
+  "priority": 26,
+  "depends_on": ["00", "04"],
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "dependency_pr": "https://github.com/ait-app/ait/pull/650",
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "donor_sections": [10, 22],
+  "donor_paths": [
+    "apps/desktop/src/daemon/direct-download.ts",
+    "apps/desktop/src/daemon/direct-download.test.ts",
+    "apps/mobile/src/stores/download-store.ts",
+    "apps/mobile/src/components/provider-native-actions.tsx",
+    "apps/mobile/src/components/provider-command-card.tsx",
+    "crates/provider/src/service/agent_execution.rs",
+    "crates/provider/src/storage/timeline.rs",
+    "crates/provider/src/timeline_projection.rs",
+    "packages/client/src/daemon-client.ts",
+    "packages/client/src/protocol/connection.ts",
+    "packages/client/src/protocol/messages.ts",
+    "packages/client/src/protocol/methods.ts",
+    "packages/protocol/src/messages.ts"
+  ],
+  "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. These are reference paths, not a cherry-pick or an instruction to import generic native controls.",
+  "implementation": "Export the entire committed canonical Timeline snapshot to readable Markdown/HTML, selected as all saved Timeline or conversation content (user/assistant messages and voice transcripts). Paginate canonical persisted entries and progress until complete, fail explicitly at bounds, reuse existing typed projection, and deliver an authenticated single-use client download through existing Files/direct/relay managers. No provider invocation, prompt, restore, writer, native export gateway or source journal mutation.",
+  "acceptance": "Actual saved files match persisted Timeline selection, readable message/card rendering and inert HTML escaping. The full saved scope is not a UI page. Active native execution remains running with no extra input/writer/interruption. Old hosts receive no unsupported request. Downloads require receipt-consistent bytes, bounded resources, cancellation and cleanup; missing artifacts are not re-exported automatically.",
+  "status": "delivered",
+  "branch": "pr612-split-task26-timeline-export",
+  "base_branch": "pr612-split-task04-statistics",
+  "base": "a0d803124dd7fd4b30f4f2ab474d29078672624d",
+  "original_base": "0968094536aaf5f86a38cf0305e14f9162e445d6",
+  "base_update": "Fast-forward inherited task04's metadata-only ADR238 proposed-status follow-up; no functional dependency change.",
+  "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-export",
+  "commit": "3059e638b908c814ff3b2a772e7369485ecb0ab0",
+  "pr_url": "https://github.com/ait-app/ait/pull/656",
+  "updated_at": "2026-11-11",
+  "interface_changes": [
+    {
+      "owner": "Provider/API/protocol/SDK",
+      "old": "No Ait persisted-Timeline export RPC or SDK operation.",
+      "new": "Typed agent.timeline.export.request and agent.timeline.export.cancel.request, typed artifact receipt, exportAgentTimeline/cancelAgentTimelineExport, negotiated agentTimelineExport capability requiring both methods.",
+      "migration": "Additive wire/SDK feature; old hosts are gated before request and old clients keep existing Timeline/messages. No native OMP export or generic action gateway."
+    },
+    {
+      "owner": "Provider/model/API/Files",
+      "old": "Provider completion handled existing cross-service work; Files grants addressed existing files.",
+      "new": "Typed Completion variants hand an owned GeneratedArtifact to API; existing Files registry also owns generated readers with single-use grants, visitor binding, expiry and bounded slots.",
+      "migration": "Internal exhaustive Completion consumers are migrated in API. No second token registry or reverse feature-crate dependency. Existing file grant/reader ownership and authorization remain; the narrow browser HTTP CORS extension is disclosed separately."
+    },
+    {
+      "owner": "API HTTP/browser authentication",
+      "old": "The existing tokenized file download lacked browser CORS; only browser-ticket exchange declared it.",
+      "new": "Validated-origin GET and OPTIONS /api/files/download return precise CORS with GET and Authorization only; preflight bypasses grant consumption.",
+      "migration": "ADR239 explicitly amends ADR049. No wildcard/cookies/credential relaxation, other route exception or visitor-binding change. Rejected origins never redeem tokens; consumed/missing grants retain existing 403 behavior."
+    },
+    {
+      "owner": "Client UI/download adapters",
+      "old": "Context details and generic direct/relay download managers.",
+      "new": "Discoverable MD/HTML/scope controls; optional direct target and size constraints on existing desktop download preparation; cancellation/bounds on existing relay helpers; browser_handoff distinguishes browser handoff from an observed disk save.",
+      "migration": "Actual export callers provide maxBytes and expectedSize; ordinary download callers retain defaults. All transfer paths bind EOF to the typed receipt size. Native cancellation removes only paths this export created or moved. All nine locales contain the new labels. No new editor or provider-specific controls."
+    }
+  ],
+  "bounds": {
+    "source_rows": 20000,
+    "source_bytes": 16777216,
+    "output_bytes": 16777216,
+    "generation_slots": 2,
+    "artifact_slots": 8,
+    "grant_ttl_seconds": 60
+  },
+  "checks": {
+    "results": [
+      {
+        "check": "cargo test -p provider export --lib",
+        "status": "passed",
+        "result": "15 passed in final bg_579: canonical pagination, typed readable rendering, actual main host-card preservation, source/output bounds, streaming unknown-kind fallback, cancellation and active native-run non-interference. Artifact://2497."
+      },
+      {
+        "check": "Filesystem grant regression suite",
+        "status": "passed",
+        "result": "6 passed; generated file ownership, single use, visitor binding, release, expiry and capacity."
+      },
+      {
+        "check": "cargo test -p api timeline_export --lib",
+        "status": "passed",
+        "result": "3 passed; actual grant bytes, release, idle expiry and node download policy."
+      },
+      {
+        "check": "cargo test -p api guest::policy --lib",
+        "status": "passed",
+        "result": "40 passed; scoped authorization retained."
+      },
+      {
+        "check": "cargo fmt --all --check",
+        "status": "passed",
+        "result": "Passed after final Rust edits; final E2E fixture also passed oxlint with zero warnings/errors and oxfmt check."
+      },
+      {
+        "check": "cargo clippy -p model -p provider -p filesystem -p api --all-targets",
+        "status": "passed_with_warnings",
+        "result": "Initial all-target check completed in bg_73. Final cargo clippy -p provider -p filesystem -p api --lib passed in bg_579 with only existing filesystem fetch_update deprecation and schedule single-element-loop warnings, unsuppressed. No owned findings remained. Artifact://2497."
+      },
+      {
+        "check": "cargo build -p daemon --bin daemon",
+        "status": "passed",
+        "result": "Rebuilt final CORS and bounded renderer successfully in bg_579; actual browser used this binary. Existing filesystem fetch_update warning remains unsuppressed. Artifact://2497."
+      },
+      { "check": "Protocol export schema tests", "status": "passed", "result": "15 passed." },
+      {
+        "check": "SDK export/capability/connection tests",
+        "status": "passed",
+        "result": "20 passed; no admission retry or unsupported old-host request."
+      },
+      {
+        "check": "Mobile and desktop type checks",
+        "status": "passed",
+        "result": "Both affected applications passed again after receipt-size/owned-cleanup follow-up in bg_224."
+      },
+      {
+        "check": "Mobile export/native/browser relay consumer tests",
+        "status": "passed",
+        "result": "42 passed across 4 files: 27 in bg_197 plus corrected native-store 15 in bg_224. Includes receipt mismatch, unknown length EOF, frame view offsets, owned target cleanup and desktop completion forwarding. Native Android/iOS are focused consumer mocks, not device smoke."
+      },
+      {
+        "check": "Desktop account/direct download tests",
+        "status": "passed",
+        "result": "22 passed across 2 files in bg_224, including real local HTTP/filesystem truncation checks and preservation of an existing destination; dialog/WebContents are harnesses, not a packaged-app claim."
+      },
+      {
+        "check": "Chromium component tests",
+        "status": "passed",
+        "result": "4 passed across export controls and download toast."
+      },
+      {
+        "check": "Affected frontend lint/format",
+        "status": "passed",
+        "result": "35 original affected TS/TSX paths passed; the 12 receipt-size/cleanup follow-up paths also passed oxlint with zero warnings/errors and oxfmt in bg_197. No suppressions."
+      },
+      {
+        "check": "Receipt-size and native target-ownership follow-up regressions",
+        "status": "passed",
+        "result": "Initial three native cleanup test failures were async-release mock contract errors, corrected without production suppression. Native-store 15, desktop 22 and both application type checks passed in bg_224. Initial evidence artifact://928; corrected run artifact://1079."
+      },
+      {
+        "check": "Initial browser fixture run",
+        "status": "failed_then_corrected",
+        "result": "bg_75: 5 scenarios timed out before export because existing Codex fixture input stream awaits steering. Changed to existing completing command-actions, not a longer timeout or novel seed. Evidence artifact://395/raw394."
+      },
+      {
+        "check": "First seeded actual download",
+        "status": "failed_then_corrected",
+        "result": "bg_224 reached the running agent and controls but no save. Instrumented bg_305 trace confirmed missing Access-Control-Allow-Origin on existing file GET, not a missing workspace or renderer issue. Evidence artifact://1079 and artifact://1544. Added only validated-origin GET/OPTIONS CORS and real HTTP security regressions."
+      },
+      {
+        "check": "cargo test -p api tests::browser_auth --lib",
+        "status": "passed",
+        "result": "4 passed in bg_489: actual forbidden-origin GET/OPTIONS without grant consumption, allowed preflight followed by exact-byte GET, replay 403; existing ticket/upgrade policies retained. Artifact://2374."
+      },
+      {
+        "check": "Actual browser visible-surface download, isolated no-retry scenario",
+        "status": "passed",
+        "result": "bg_489: 1 passed, actual completed browser files for Markdown/HTML × conversation/timeline. Receipt sizes, saved content and escaped HTML verified while actual native fixture turn stayed running with unchanged input/start/resume/interrupt log. Artifact://2374."
+      },
+      {
+        "check": "Actual desktop and compact browser saves",
+        "status": "passed",
+        "result": "bg_579: both actual visible surfaces saved all Markdown/HTML × conversation/timeline files (8 completed files), validated byte counts/content/HTML escaping and active native-run non-interference. Later expired case hit its unbounded fixture wait; replaced with bounded dispatch/receipt/HTTP assertions and unconditional nested cleanup, not a longer timeout. Artifact://2497."
+      },
+      {
+        "check": "Actual expired/cancel/old-host browser scenarios",
+        "status": "passed",
+        "result": "Isolated expiry passed bg_606 (artifact://2528); all 3 then passed together without retries in bg_615 (artifact://2556). Missing artifact never regenerated; cancellation released the grant without a download; old host received no export RPC. No fixture project leaks in passing runs."
+      },
+      {
+        "check": "Documentation and ADR metadata",
+        "status": "passed",
+        "result": "npm run check:docs: 7 tests passed, 560 Markdown documents and 224 ADRs checked; generated index includes proposed ADR239 and inherited proposed ADR238. bg_586."
+      }
+    ],
+    "coverage": "Not measured; no full Rust workspace tests or coverage run.",
+    "runtime_download": "All five browser scenarios passed across final focused runs: desktop and compact actual completed MD/HTML saves, expired artifact, cancel and old-host gate. Actual native fixture remained running with unchanged input/start/resume/interrupt log during successful exports.",
+    "platform_limits": "No native mobile device or packaged Electron UI claim. Actual browser saves plus focused native/desktop transfer consumers; compact browser is responsive web, not a native-device smoke."
+  },
+  "blockers": [],
+  "external_blockers": [],
+  "context": [
+    "No donor-only providerCommand schema or merge guard was imported: actual main durable tool/plugin result cards are tested; shared projection behavior is unchanged.",
+    "Initial universal JSON rendering was replaced by typed readable messages and cards. Structured JSON fallback is reserved for unknown durable types.",
+    "Task04 changed only by separately committed ADR238 proposed-status metadata a0d803124dd7fd4b30f4f2ab474d29078672624d, inherited here. Task30/ADR240 and recovery-owned task01/task02/central647 are not touched."
+  ]
+}

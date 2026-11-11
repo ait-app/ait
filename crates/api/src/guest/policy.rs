@@ -104,6 +104,8 @@ enum Rule {
     Path,
     /// As [`Rule::Path`], within the guest's download token budget.
     Download,
+    /// Read a scoped Agent's saved Timeline and bind its artifact to the visiting account.
+    AgentDownload,
     /// Not available to guests.
     Deny,
 }
@@ -128,6 +130,7 @@ impl Rule {
             | Self::WorkspaceList
             | Self::AgentCreate
             | Self::Agent(_)
+            | Self::AgentDownload
             | Self::AgentDrive(_)
             | Self::AgentUpdate
             | Self::AgentCommands
@@ -201,8 +204,10 @@ fn classify(method: &str) -> Rule {
 fn classify_resource(method: &str) -> Rule {
     match method {
         "agent.create.request" => Rule::AgentCreate,
+        "agent.timeline.export.request" => Rule::AgentDownload,
         "agent.get.request"
         | "agent.statistics.get.request"
+        | "agent.timeline.export.cancel.request"
         | "agent.finish.wait.request"
         | "agent.timeline.get.request"
         | "agent.timeline.search.request"
@@ -322,6 +327,13 @@ async fn confine(
         Rule::Path => path(session, state, &params).await?,
         Rule::Download => {
             path(session, state, &params).await?;
+            if !session.take_download(std::time::Instant::now()) {
+                return Err(ErrorCode::ResourceExhausted);
+            }
+            return Ok(Confined::Private(params, Private::Download));
+        }
+        Rule::AgentDownload => {
+            agents::confine(session, state, Rule::Agent("agentId"), &mut params).await?;
             if !session.take_download(std::time::Instant::now()) {
                 return Err(ErrorCode::ResourceExhausted);
             }

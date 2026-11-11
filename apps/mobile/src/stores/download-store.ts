@@ -12,6 +12,8 @@ import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
 import { Platform } from "react-native";
 import { streamNativeAccountDownload } from "@/runtime/daemon-transport/native-account-download";
+import type { AgentTimelineExportResult } from "@ait/protocol/messages";
+import { downloadFetch } from "@/runtime/daemon-transport/direct-download";
 
 interface DownloadProgress {
   percent: number;
@@ -26,16 +28,25 @@ export interface Download {
   serverId: string;
   scopeId: string;
   fileName: string;
-  status: "downloading" | "complete" | "error";
+  status: "downloading" | "complete" | "browser_handoff" | "error";
   message?: string;
   progress?: DownloadProgress;
   startedAt: number;
+  cancel?: () => void;
 }
 
 interface DownloadState {
   downloads: Map<string, Download>;
   activeDownloadId: string | null;
 
+  startTimelineExport: (params: {
+    serverId: string;
+    agentId: string;
+    daemonProfile: HostProfile | undefined;
+    activeConnectionId?: string | null;
+    generate: () => Promise<AgentTimelineExportResult>;
+    release: (token: string) => Promise<unknown>;
+  }) => Promise<void>;
   startDownload: (params: {
     serverId: string;
     scopeId: string;
@@ -66,6 +77,96 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
   downloads: new Map(),
   activeDownloadId: null,
 
+  startTimelineExport: async ({
+    serverId,
+    agentId,
+    daemonProfile,
+    activeConnectionId,
+    generate,
+    release,
+  }) => {
+    const id = generateDownloadId();
+    const controller = new AbortController();
+    const { signal } = controller;
+    set((state) => ({
+      downloads: new Map(state.downloads).set(id, {
+        id,
+        serverId,
+        scopeId: agentId,
+        fileName: i18n.t("timelineExport.title"),
+        status: "downloading",
+        startedAt: Date.now(),
+        cancel: () => controller.abort(),
+      }),
+      activeDownloadId: id,
+    }));
+    let artifact: AgentTimelineExportResult | undefined;
+    let transferred = false;
+    let releasing: Promise<unknown> | undefined;
+    const releaseArtifact = () => {
+      if (artifact && !transferred) releasing ??= release(artifact.token).catch(() => undefined);
+    };
+    // Release immediately even if Electron is still waiting on its save dialog.
+    signal.addEventListener("abort", releaseArtifact, { once: true });
+    try {
+      // Exactly one generation per explicit click, including failures and expired tokens.
+      artifact = await generate();
+      signal.throwIfAborted();
+      if (artifact.size > TIMELINE_EXPORT_MAX_BYTES)
+        throw new Error(i18n.t("timelineExport.tooLarge"));
+      set((state) => {
+        const download = state.downloads.get(id);
+        return download
+          ? {
+              downloads: new Map(state.downloads).set(id, {
+                ...download,
+                fileName: artifact!.fileName,
+              }),
+            }
+          : state;
+      });
+      const started = Date.now();
+      const progress = (bytesWritten: number, totalBytes: number) => {
+        const speed = bytesWritten / Math.max((Date.now() - started) / 1000, 0.001);
+        get().updateProgress(id, {
+          bytesWritten,
+          totalBytes,
+          speed,
+          percent: totalBytes > 0 ? bytesWritten / totalBytes : 0,
+          eta: speed > 0 ? Math.max(0, totalBytes - bytesWritten) / speed : 0,
+        });
+      };
+      const outcome = await downloadTimelineArtifact({
+        id,
+        artifact,
+        daemonProfile,
+        activeConnectionId,
+        signal,
+        progress,
+      });
+      signal.throwIfAborted();
+      transferred = true;
+      set((state) => {
+        const download = state.downloads.get(id);
+        return download
+          ? { downloads: new Map(state.downloads).set(id, { ...download, status: outcome }) }
+          : state;
+      });
+    } catch (error) {
+      get().failDownload(
+        id,
+        signal.aborted
+          ? i18n.t("downloads.cancelled")
+          : error instanceof Error
+            ? error.message
+            : i18n.t("downloads.failed"),
+      );
+    } finally {
+      signal.removeEventListener("abort", releaseArtifact);
+      if (!transferred) releaseArtifact();
+      await releasing;
+    }
+  },
   startDownload: async ({
     serverId,
     scopeId,
@@ -374,6 +475,197 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
   },
 }));
 
+const TIMELINE_EXPORT_MAX_BYTES = 16 * 1024 * 1024;
+
+/** Browser handoff confirms received bytes, not the browser's eventual disk save. */
+type TimelineDownloadOutcome = "complete" | "browser_handoff";
+
+async function downloadTimelineArtifact(input: {
+  id: string;
+  artifact: AgentTimelineExportResult;
+  daemonProfile: HostProfile | undefined;
+  activeConnectionId?: string | null;
+  signal: AbortSignal;
+  progress(bytesWritten: number, totalBytes: number): void;
+}): Promise<TimelineDownloadOutcome> {
+  const { artifact, signal, progress } = input;
+  const connections = input.activeConnectionId
+    ? input.daemonProfile?.connections.filter(
+        (connection) => connection.id === input.activeConnectionId,
+      )
+    : input.daemonProfile?.connections;
+  const relay = connections?.find((connection) => connection.type === "accountRelay");
+  const direct = resolveDaemonDownloadTarget(
+    input.daemonProfile && connections
+      ? { ...input.daemonProfile, connections }
+      : input.daemonProfile,
+  );
+  const desktop = getDesktopHost();
+  const invoke = desktop?.invoke;
+  if (desktop && invoke) {
+    const preparationId = await invoke("account_download_prepare", {
+      hostId: relay?.type === "accountRelay" ? relay.hostId : "",
+      center: relay?.type === "accountRelay" ? relay.center : "",
+      ...(relay ? {} : { direct: { baseUrl: direct.baseUrl, authHeader: direct.authHeader } }),
+      fileName: artifact.fileName,
+      downloadId: input.id,
+      maxBytes: TIMELINE_EXPORT_MAX_BYTES,
+      expectedSize: artifact.size,
+    });
+    if (typeof preparationId !== "string") throw new Error("Invalid download preparation.");
+    const cancel = () => {
+      void invoke("account_download_cancel", { preparationId }).catch(() => undefined);
+    };
+    signal.addEventListener("abort", cancel, { once: true });
+    let remove: (() => void) | undefined;
+    try {
+      remove = await desktop.events?.on?.("account-download-progress", (raw) => {
+        const event = raw as { id: string; bytesWritten: number; totalBytes: number };
+        if (event.id === input.id) progress(event.bytesWritten, event.totalBytes);
+      });
+      signal.throwIfAborted();
+      await invoke("account_download", { preparationId, token: artifact.token });
+    } finally {
+      signal.removeEventListener("abort", cancel);
+      remove?.();
+      await invoke("account_download_cancel", { preparationId }).catch(() => undefined);
+    }
+    return "complete";
+  }
+  if (relay?.type === "accountRelay" && supportsBrowserAccount()) {
+    await downloadBrowserAccountFile({
+      hostId: relay.hostId,
+      center: relay.center,
+      token: artifact.token,
+      fileName: artifact.fileName,
+      mimeType: artifact.mimeType,
+      signal,
+      maxBytes: TIMELINE_EXPORT_MAX_BYTES,
+      expectedSize: artifact.size,
+      progress,
+    });
+    return "browser_handoff";
+  }
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  const target = isWeb ? null : reserveDownloadTargetFile(artifact.fileName);
+  const temporary = target ? new FSFile(`${target.uri}.${input.id}.part`) : null;
+  let saved = false;
+  let temporaryCreated = false;
+  let moved = false;
+  try {
+    if (temporary) {
+      temporary.create();
+      temporaryCreated = true;
+    }
+    const handle = temporary?.open();
+    try {
+      const write = (bytes: Uint8Array) => {
+        if (handle) handle.writeBytes(bytes);
+        else
+          chunks.push(
+            bytes.buffer instanceof ArrayBuffer
+              ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+              : Uint8Array.from(bytes),
+          );
+      };
+      if (relay?.type === "accountRelay") {
+        await streamNativeAccountDownload({
+          hostId: relay.hostId,
+          center: relay.center,
+          token: artifact.token,
+          signal,
+          maxBytes: TIMELINE_EXPORT_MAX_BYTES,
+          expectedSize: artifact.size,
+          write,
+          progress,
+        });
+      } else {
+        if (!direct.baseUrl) throw new Error(i18n.t("downloads.hostUnavailable"));
+        await streamTimelineDownload(
+          buildDownloadUrl(direct.baseUrl, artifact.token, null),
+          direct.authHeader,
+          signal,
+          artifact.size,
+          write,
+          progress,
+        );
+      }
+    } finally {
+      handle?.close();
+    }
+    signal.throwIfAborted();
+    if (temporary && target) {
+      if (target.exists) throw new Error(i18n.t("downloads.failed"));
+      temporary.move(target);
+      moved = true;
+      if (await Sharing.isAvailableAsync()) {
+        signal.throwIfAborted();
+        await Sharing.shareAsync(target.uri, {
+          mimeType: artifact.mimeType,
+          dialogTitle: i18n.t("downloads.shareFileNamed", { fileName: artifact.fileName }),
+        });
+      }
+    } else {
+      const url = URL.createObjectURL(new Blob(chunks, { type: artifact.mimeType }));
+      try {
+        triggerBrowserDownload(url, artifact.fileName);
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    }
+    signal.throwIfAborted();
+    saved = true;
+    return target ? "complete" : "browser_handoff";
+  } finally {
+    if (!saved) {
+      if (moved && target?.exists) target.delete();
+      else if (temporaryCreated && temporary?.exists) temporary.delete();
+    }
+    if (target) {
+      reservedDownloadTargets.delete(target.uri);
+    }
+  }
+}
+
+async function streamTimelineDownload(
+  url: string,
+  authHeader: string | null,
+  signal: AbortSignal,
+  expectedSize: number,
+  write: (bytes: Uint8Array) => void,
+  progress: (bytes: number, total: number) => void,
+): Promise<void> {
+  const response = await downloadFetch(url, {
+    signal,
+    redirect: "error",
+    credentials: "omit",
+    headers: authHeader ? { Authorization: authHeader } : undefined,
+  });
+  if (!response.ok || !response.body) {
+    await response.body?.cancel();
+    throw new Error(`${i18n.t("downloads.failed")} (HTTP ${response.status})`);
+  }
+  const reader = response.body.getReader();
+  let bytes = 0;
+  try {
+    const length = Number(response.headers.get("content-length"));
+    if (length > TIMELINE_EXPORT_MAX_BYTES) throw new Error(i18n.t("timelineExport.tooLarge"));
+    while (true) {
+      signal.throwIfAborted();
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > TIMELINE_EXPORT_MAX_BYTES) throw new Error(i18n.t("timelineExport.tooLarge"));
+      write(chunk.value);
+      progress(bytes, expectedSize);
+    }
+    if (bytes !== expectedSize) throw new Error(i18n.t("downloads.failed"));
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
 function findMostRecentDownloadId(downloads: Map<string, Download>): string | null {
   let mostRecent: Download | null = null;
   for (const download of downloads.values()) {
@@ -424,9 +716,11 @@ function resolveDaemonDownloadTarget(daemon?: HostProfile): DownloadTarget {
   parsed.pathname = parsed.pathname.replace(/\/ws\/?$/, "/");
 
   const baseUrl = parsed.origin;
-  const authHeader = authCredentials
-    ? `Basic ${btoa(`${authCredentials.username}:${authCredentials.password}`)}`
-    : null;
+  const authHeader = connection.password
+    ? `Bearer ${connection.password}`
+    : authCredentials
+      ? `Basic ${btoa(`${authCredentials.username}:${authCredentials.password}`)}`
+      : null;
 
   return { baseUrl, authHeader, authCredentials };
 }

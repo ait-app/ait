@@ -283,11 +283,40 @@ export function createAccountIpc(
             typeof args.downloadId !== "string"
           )
             throw new Error("Invalid download request");
+          const direct = args.direct as { baseUrl?: unknown; authHeader?: unknown } | undefined;
+          if (
+            direct &&
+            (typeof direct.baseUrl !== "string" ||
+              (direct.authHeader !== null && typeof direct.authHeader !== "string"))
+          )
+            throw new Error("Invalid download target");
+          if (args.maxBytes !== undefined && args.maxBytes !== 16 * 1024 * 1024)
+            throw new Error("Invalid download limit");
+          if (
+            args.expectedSize !== undefined &&
+            (typeof args.expectedSize !== "number" ||
+              !Number.isSafeInteger(args.expectedSize) ||
+              args.expectedSize < 0 ||
+              args.expectedSize > 16 * 1024 * 1024)
+          )
+            throw new Error("Invalid expected download size");
           return downloads.prepare(event.sender, {
             hostId: args.hostId,
             center: args.center,
             fileName: args.fileName,
             downloadId: args.downloadId,
+            ...(direct
+              ? {
+                  direct: {
+                    baseUrl: direct.baseUrl as string,
+                    authHeader: direct.authHeader as string | null,
+                  },
+                }
+              : {}),
+            ...(args.maxBytes !== undefined ? { maxBytes: args.maxBytes as number } : {}),
+            ...(args.expectedSize !== undefined
+              ? { expectedSize: args.expectedSize as number }
+              : {}),
           });
         }
         case "account_download": {

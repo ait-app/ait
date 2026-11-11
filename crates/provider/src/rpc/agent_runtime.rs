@@ -628,7 +628,7 @@ const fn application_sort(sort: AgentSort) -> ApplicationSort {
     }
 }
 
-const fn map_error(error: &AgentRuntimeError) -> ErrorCode {
+pub(crate) const fn map_error(error: &AgentRuntimeError) -> ErrorCode {
     match error {
         AgentRuntimeError::InvalidRequest | AgentRuntimeError::Ambiguous(_) => {
             ErrorCode::InvalidMessage

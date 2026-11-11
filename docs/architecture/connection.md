@@ -38,6 +38,10 @@
   单次使用的票据，再以 `ait.ticket.<ticket>` 子协议升级 `/v1/ws`；长期 Bearer 不进入 URL 或子协议。
   额外页面来源只接受显式配置的规范 HTTP loopback origin
   （[ADR-049](../decisions/clients/adr-049-app-rust-browser-transport.md)）。
+- `/api/files/download` 的 GET 与 OPTIONS 复用同一来源校验，向已允许的 Origin 返回精确 CORS；
+  仅允许 GET 与 Authorization 请求头，不允许 cookies/credentials。预检与被拒绝的来源不消费
+  一次性 token，真实 GET 继续校验原有 grant/visitor binding；此限定扩展见
+  [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)。
 - `x-ait-guest` 访客范围只与 daemon 自身 Bearer 同时生效；以浏览器票据升级时携带该头返回 403。
   访客的分享停止准入时，其连接立即结束（[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)）。
 - WebSocket 单条消息与单帧上限均为 `MAX_MESSAGE_BYTES`（1 MiB），超出部分只能走分块协议；

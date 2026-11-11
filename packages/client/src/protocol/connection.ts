@@ -376,6 +376,7 @@ export function createDaemonConnection(
       message.type === "error" &&
       message.code === "resource_exhausted" &&
       message.retryable === true &&
+      item.spec.retryAdmission !== false &&
       item.retries < 5
     ) {
       item.retryTimer = setTimeout(

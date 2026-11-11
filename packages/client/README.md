@@ -52,3 +52,31 @@ the SDK also rejects unsupported hosts without sending the RPC. Usage has scope
 `provider_snapshot`: it is the latest provider snapshot, not an assured session
 total or last-turn total. Unknown values stay `null`; known zero stays `0`.
 Unknown usage scopes are rejected rather than interpreted as totals.
+
+## Timeline export
+
+Check `serverInfo.features.agentTimelineExport === true` before offering export.
+This capability requires both export and cancellation RPCs; both SDK methods reject
+unsupported hosts with `unsupported_capability` without sending a request.
+
+```ts
+const artifact = await client.exportAgentTimeline(agentId, {
+  format: "markdown", // or "html"
+  scope: "conversation", // or "timeline"
+});
+// If the user cancels before downloading:
+await client.cancelAgentTimelineExport(agentId, artifact.token); // { released: boolean }
+```
+
+`AgentTimelineExportResult` contains `agentId`, `format`, `scope`,
+`source: "persisted_timeline"`, `token`, `fileName`, `mimeType`, `size`, `entries`
+and `expiresAt`. Conversation includes saved user/assistant messages and voice
+transcripts; timeline includes all durable display items/cards, not runtime UI state.
+The host rejects output above 16 MiB rather than truncating it.
+
+Consume the short-lived, single-use token with the existing authenticated
+`/api/files/download?token=...` route or account-relay download infrastructure.
+The SDK returns metadata, not file contents or a server path. Release unused
+artifacts with `cancelAgentTimelineExport`; aborting an active HTTP download
+cleans its consumed artifact. Neither SDK method retries automatically.
+Missing/expired artifacts require a new explicit user export, never automatic regeneration.

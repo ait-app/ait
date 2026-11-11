@@ -153,6 +153,8 @@ export function serverInfo(
       providerUsageList: has("provider.usage.list.request"),
       agentHistorySearch: has("agent.history.get.request"),
       agentStatisticsGet: has("agent.statistics.get.request"),
+      agentTimelineExport:
+        has("agent.timeline.export.request") && has("agent.timeline.export.cancel.request"),
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),
       agentTimelinePromptIndex: has("agent.timeline.list_prompts.request"),

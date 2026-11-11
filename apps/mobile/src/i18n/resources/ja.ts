@@ -2701,6 +2701,19 @@ export const ja: TranslationResources = {
   sidebarCallout: {
     dismiss: "閉じる",
   },
+  timelineExport: {
+    title: "セッションをエクスポート",
+    description:
+      "保存済みの履歴のみ。会話にはユーザー・アシスタントのメッセージと音声の文字起こしが含まれます。タイムラインには保存済みカードも含まれます。上限16 MiB。",
+    conversation: "会話のみ",
+    timeline: "保存済みタイムライン全体",
+    download: "エクスポートしてダウンロード",
+    cancel: "エクスポートをキャンセル",
+    unavailable: "エクスポートを利用できません。対応するホストに接続してください。",
+    tooLarge: "エクスポートが16 MiBの上限を超えています。内容は省略されていません。",
+    browserHandoff:
+      "ブラウザーに送信しました。ブラウザーのダウンロード一覧で保存を完了してください。",
+  },
   sessionStatistics: {
     title: "選択中のセッション統計",
     scope: "プロバイダーの最新スナップショットです。セッション累計や直前のターンとは限りません。",
