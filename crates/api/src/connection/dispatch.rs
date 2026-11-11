@@ -139,6 +139,18 @@ async fn complete_provider(
             let result = super::timeline_export::release(state, agent_id, token).await;
             outbound.respond(request_id, result)
         }
+        provider::dispatch::Completion::NativeHtmlExport { request_id, export } => {
+            let result = super::timeline_export::register_native(state, export).await;
+            outbound.respond(request_id, result)
+        }
+        provider::dispatch::Completion::ReleaseNativeHtmlExport {
+            request_id,
+            agent_id,
+            token,
+        } => {
+            let result = super::timeline_export::release(state, agent_id, token).await;
+            outbound.respond(request_id, result)
+        }
     }
 }
 

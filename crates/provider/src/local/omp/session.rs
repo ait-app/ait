@@ -46,6 +46,16 @@ struct NativeBridge {
     buffered_bytes: usize,
 }
 
+/// One in-flight native HTML render owned by this session; never a conversation writer.
+#[derive(Debug)]
+struct NativeExport {
+    id: String,
+    output: std::path::PathBuf,
+    file_name: String,
+    started: Instant,
+    abandoned: bool,
+}
+
 #[derive(Debug)]
 pub(super) struct Session {
     client: OmpClient,
@@ -72,6 +82,7 @@ pub(super) struct Session {
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
+    native_export: Option<NativeExport>,
 }
 
 /// Start a disposable native capability reader for `model` in `cwd`.
@@ -213,6 +224,7 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
+        native_export: None,
     })
 }
 
@@ -290,6 +302,9 @@ impl Session {
                 .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
             }
             self.transport = transport;
+            if let Some(export) = self.native_export.take() {
+                remove_owned(&export.output);
+            }
             self.state_check = None;
             self.cancel_requests.clear();
             self.input_requests.clear();
@@ -311,6 +326,94 @@ impl Session {
     ) -> Result<Value, AgentSessionError> {
         validate_native_control(kind)?;
         self.transport.request(kind, fields).await
+    }
+
+    /// Render the persisted native session with OMP's own HTML formatter. The render reads
+    /// the journal and live state only: no prompt, resume, lease or second native process.
+    async fn begin_native_export(
+        &mut self,
+        output: std::path::PathBuf,
+    ) -> Result<String, AgentSessionError> {
+        if self.closed || self.native_export.is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
+        // The public renderer refuses in-memory sessions; require the persisted identity.
+        let journal = config::text(&self.state, "sessionFile")?;
+        if !std::path::Path::new(journal).is_file() {
+            return Err(AgentSessionError::Rejected);
+        }
+        let file_name = output
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or(AgentSessionError::Rejected)?
+            .to_owned();
+        let id = self
+            .transport
+            .begin("export_html", json!({"outputPath": output}))
+            .await?;
+        self.native_export = Some(NativeExport {
+            id: id.clone(),
+            output,
+            file_name,
+            started: Instant::now(),
+            abandoned: false,
+        });
+        Ok(id)
+    }
+
+    /// Withdraw an export the caller no longer wants; its owned file is still cleaned.
+    fn abandon_native_export(&mut self) {
+        if let Some(export) = &mut self.native_export {
+            export.abandoned = true;
+        }
+    }
+
+    /// Settle one correlated native export response without disturbing turn correlation.
+    fn complete_native_export(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        use crate::ports::native_html_export::{ExportedNativeHtml, NativeHtmlExportError};
+        let export = self.native_export.take().ok_or(AgentSessionError::Failed)?;
+        if event["command"] != "export_html" {
+            return Err(AgentSessionError::Failed);
+        }
+        let outcome = if export.abandoned {
+            remove_owned(&export.output);
+            return Ok(());
+        } else if event["success"] != true {
+            self.transport
+                .diagnostics
+                .observe_native(&event["error"], "rpc", "export_html");
+            remove_owned(&export.output);
+            Err(NativeHtmlExportError::Rejected)
+        } else if event["data"]["path"].as_str() != Some(export.output.to_str().unwrap_or_default())
+        {
+            // The renderer must confirm the exact owned path; anything else is not adopted.
+            remove_owned(&export.output);
+            Err(NativeHtmlExportError::Rejected)
+        } else {
+            adopt_native_html(&export.output, &self.state, &export.file_name)
+                .inspect_err(|_| remove_owned(&export.output))
+        };
+        self.stream
+            .events
+            .push_back(AgentTurnEvent::NativeHtmlExport(
+                outcome.map(|artifact| ExportedNativeHtml { artifact }),
+            ));
+        Ok(())
+    }
+
+    /// Fail an export whose native response never arrived; the turn itself stays intact.
+    fn expire_native_export(&mut self) {
+        use crate::ports::native_html_export::NativeHtmlExportError;
+        if let Some(export) = self.native_export.take() {
+            remove_owned(&export.output);
+            if !export.abandoned {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::NativeHtmlExport(Err(
+                        NativeHtmlExportError::Io,
+                    )));
+            }
+        }
     }
 
     /// Submit a native extension control without blocking callback delivery or polling.
@@ -475,6 +578,14 @@ impl Session {
     }
 
     fn control_response(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if self
+            .native_export
+            .as_ref()
+            .is_some_and(|export| event["id"] == export.id)
+        {
+            self.complete_native_export(event)?;
+            return Ok(true);
+        }
         if self
             .state_check
             .as_ref()
@@ -727,6 +838,22 @@ impl Session {
         Ok(())
     }
 
+    /// An export that never answers fails alone; the conversation transport stays usable.
+    fn check_native_export(&mut self) {
+        if self
+            .native_export
+            .as_ref()
+            .is_some_and(|export| export.started.elapsed() >= self.client.deadline)
+        {
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Timeout, "native_export"),
+                "OMP did not finish the native HTML export in time.",
+                "export_html",
+            );
+            self.expire_native_export();
+        }
+    }
+
     fn poll_state_check(&mut self) -> Result<(), AgentSessionError> {
         if let Some(check) = &mut self.state_check
             && let Some(written) = &mut check.written
@@ -938,6 +1065,7 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        self.check_native_export();
         if let Some(event) = self.stream.events.pop_front() {
             return Ok(Some(event));
         }
@@ -968,11 +1096,103 @@ impl AgentSession for Session {
         }
         Ok(None)
     }
+    async fn begin_native_html_export(
+        &mut self,
+        output_path: &std::path::Path,
+    ) -> Result<String, AgentSessionError> {
+        self.begin_native_export(output_path.to_path_buf()).await
+    }
+    fn cancel_native_html_export(&mut self) {
+        self.abandon_native_export();
+    }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        if let Some(export) = self.native_export.take() {
+            remove_owned(&export.output);
+        }
         self.stream.events.extend(self.dialogs.clear());
         self.transport.close().await
     }
+}
+
+/// Delete only a staging file this session created; pre-existing paths are never touched.
+fn remove_owned(output: &std::path::Path) {
+    match std::fs::symlink_metadata(output) {
+        Ok(metadata) if metadata.file_type().is_file() => {
+            let _ = std::fs::remove_file(output);
+        }
+        _ => {}
+    }
+}
+
+/// Adopt the native renderer's confirmed output into an owned anonymous artifact.
+/// The bytes are preserved verbatim: native HTML may contain active scripts and upstream
+/// viewer resources, so it is delivered as a download and never rendered or sanitized here.
+fn adopt_native_html(
+    output: &std::path::Path,
+    state: &Value,
+    file_name: &str,
+) -> Result<model::download::GeneratedArtifact, crate::ports::native_html_export::NativeHtmlExportError>
+{
+    use crate::ports::native_html_export::NativeHtmlExportError;
+    use std::io::{Read, Seek, Write};
+    let journal = state["sessionFile"]
+        .as_str()
+        .ok_or(NativeHtmlExportError::Rejected)?;
+    let directory = std::path::Path::new(journal)
+        .parent()
+        .ok_or(NativeHtmlExportError::Rejected)?;
+    // Confinement: the adopted file must live in the journal's own directory under the
+    // exact owned basename, as a regular file, never a symlink or a foreign path.
+    let canonical = std::fs::canonicalize(output).map_err(|_| NativeHtmlExportError::Io)?;
+    let canonical_directory =
+        std::fs::canonicalize(directory).map_err(|_| NativeHtmlExportError::Io)?;
+    if canonical.parent() != Some(canonical_directory.as_path())
+        || canonical.file_name().and_then(|name| name.to_str()) != Some(file_name)
+    {
+        return Err(NativeHtmlExportError::Rejected);
+    }
+    let metadata = std::fs::symlink_metadata(&canonical).map_err(|_| NativeHtmlExportError::Io)?;
+    if !metadata.file_type().is_file() {
+        return Err(NativeHtmlExportError::Rejected);
+    }
+    if metadata.len() > model::download::MAX_ARTIFACT_BYTES {
+        return Err(NativeHtmlExportError::TooLarge);
+    }
+    let agent_id = state["sessionId"]
+        .as_str()
+        .ok_or(NativeHtmlExportError::Rejected)?
+        .to_owned();
+    let mut source = std::fs::File::open(&canonical).map_err(|_| NativeHtmlExportError::Io)?;
+    let mut artifact = tempfile::tempfile().map_err(|_| NativeHtmlExportError::Io)?;
+    let mut buffer = [0u8; 32 * 1024];
+    let mut size = 0u64;
+    loop {
+        let read = source
+            .read(&mut buffer)
+            .map_err(|_| NativeHtmlExportError::Io)?;
+        if read == 0 {
+            break;
+        }
+        size = size.saturating_add(read as u64);
+        if size > model::download::MAX_ARTIFACT_BYTES {
+            return Err(NativeHtmlExportError::TooLarge);
+        }
+        artifact
+            .write_all(&buffer[..read])
+            .map_err(|_| NativeHtmlExportError::Io)?;
+    }
+    if size != metadata.len() {
+        return Err(NativeHtmlExportError::Io);
+    }
+    artifact.rewind().map_err(|_| NativeHtmlExportError::Io)?;
+    Ok(model::download::GeneratedArtifact {
+        agent_id,
+        file_name: file_name.to_owned(),
+        mime_type: "text/html; charset=utf-8".to_owned(),
+        size,
+        file: artifact,
+    })
 }
 
 #[cfg(all(test, unix))]

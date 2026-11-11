@@ -82,6 +82,9 @@ pub enum AgentManagerError {
         "provider {0} cannot run in a sandboxed worktree: it does not support OS write confinement"
     )]
     ConfinementUnsupported(String),
+    /// A typed native operation failed with its own safe application error code.
+    #[error("native operation failed")]
+    Operation(model::ErrorCode),
 }
 
 /// Metadata added when a new provider session is registered.
@@ -98,6 +101,11 @@ pub(crate) struct AgentRegistration {
     /// Durable owner of an internal session; set before registration is published.
     pub(crate) owner: Option<serde_json::Value>,
 }
+
+/// Typed delivery for one in-flight native HTML export; dropping it abandons the render.
+type NativeExportReply = tokio::sync::oneshot::Sender<
+    Result<crate::ports::native_html_export::ExportedNativeHtml, model::ErrorCode>,
+>;
 
 #[derive(Debug)]
 struct LiveAgent {
@@ -118,6 +126,7 @@ struct LiveAgent {
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    native_export: Option<NativeExportReply>,
 }
 
 impl LiveAgent {
@@ -145,6 +154,7 @@ impl LiveAgent {
             failure_entry: None,
             exclusive: false,
             interruption_requested: false,
+            native_export: None,
         }
     }
 }
@@ -961,6 +971,68 @@ impl AgentManager {
         }
         agent.session.cancel_pending().await.map_err(map_session)?;
         Ok(())
+    }
+
+    /// Render the live OMP session's persisted journal with the native HTML formatter.
+    /// Read-only: no prompt, resume, lease or second writer; an active turn keeps running.
+    ///
+    /// # Errors
+    /// Returns identity, unsupported-provider, busy, native rejection or bounded-size errors.
+    pub(crate) async fn begin_native_html_export(
+        &mut self,
+        agent_id: &str,
+    ) -> Result<
+        tokio::sync::oneshot::Receiver<
+            Result<crate::ports::native_html_export::ExportedNativeHtml, model::ErrorCode>,
+        >,
+        AgentManagerError,
+    > {
+        self.require_managed(agent_id)?;
+        let agent = self
+            .live
+            .get_mut(agent_id)
+            .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+        if agent.record.provider != "omp" {
+            return Err(AgentManagerError::Operation(
+                model::ErrorCode::UnsupportedCapability,
+            ));
+        }
+        if agent.native_export.is_some() {
+            return Err(AgentManagerError::Busy);
+        }
+        let directory = crate::local::omp::native_export_directory(&self.clients)
+            .ok_or(AgentManagerError::Operation(model::ErrorCode::AgentIo))?;
+        std::fs::create_dir_all(&directory)
+            .map_err(|_| AgentManagerError::Operation(model::ErrorCode::AgentIo))?;
+        let file_name = format!("ait-native-{}.html", uuid::Uuid::new_v4());
+        let output = directory.join(&file_name);
+        // Exclusive creation proves ownership before the native renderer ever writes.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&output)
+            .map_err(|_| AgentManagerError::Operation(model::ErrorCode::AgentIo))?;
+        let started = agent.session.begin_native_html_export(&output).await;
+        if let Err(error) = started {
+            let _ = std::fs::remove_file(&output);
+            return Err(match error {
+                AgentSessionError::Unavailable => {
+                    AgentManagerError::Operation(model::ErrorCode::UnsupportedCapability)
+                }
+                other => map_session(other),
+            });
+        }
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        agent.native_export = Some(reply);
+        Ok(receiver)
+    }
+
+    /// Withdraw an in-flight native HTML export; the adapter still cleans its owned file.
+    pub(crate) fn cancel_native_html_export(&mut self, agent_id: &str) {
+        if let Some(agent) = self.live.get_mut(agent_id) {
+            agent.native_export = None;
+            agent.session.cancel_native_html_export();
+        }
     }
 
     /// Persist queued native terminal events before exposing completion to clients.

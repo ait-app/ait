@@ -44,6 +44,7 @@ impl Router {
             reply,
             cancel,
             realtime,
+            native_export,
             permit,
             queued,
         } = command
@@ -79,6 +80,7 @@ impl Router {
             reply,
             cancel,
             realtime,
+            native_export,
             permit,
             queued,
         };

@@ -108,6 +108,16 @@ pub(super) async fn drain(
                 }
             };
         }
+        // Native HTML export completion is a download fact, never display history or a turn
+        // outcome; deliver it to the waiting typed request and keep draining turn events.
+        if matches!(agent.pending, Some(AgentTurnEvent::NativeHtmlExport(_))) {
+            if let Some(AgentTurnEvent::NativeHtmlExport(result)) = agent.pending.take() {
+                if let Some(reply) = agent.native_export.take() {
+                    let _ = reply.send(result.map_err(Into::into));
+                }
+            }
+            continue;
+        }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
             Some(AgentTurnEvent::Started(turn)) => {

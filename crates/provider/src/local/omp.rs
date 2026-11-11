@@ -36,6 +36,7 @@ pub(crate) struct OmpClient {
     deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
+    export_directory: Option<PathBuf>,
 }
 
 impl OmpClient {
@@ -47,6 +48,7 @@ impl OmpClient {
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
+            export_directory: None,
         }
     }
 
@@ -55,6 +57,23 @@ impl OmpClient {
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
+    }
+
+    /// Stage native HTML renders in the daemon's private `directory` when configured.
+    #[must_use]
+    pub(crate) fn with_export_directory(mut self, directory: PathBuf) -> Self {
+        self.export_directory = Some(directory);
+        self
+    }
+
+    /// Resolve the private native-export staging directory for this installed adapter.
+    fn export_directory(&self) -> Option<PathBuf> {
+        if let Some(directory) = &self.export_directory {
+            return Some(directory.clone());
+        }
+        history::root(self)
+            .ok()
+            .map(|root| root.with_file_name("ait-native-exports"))
     }
 
     async fn service_tiers(
@@ -70,6 +89,14 @@ impl OmpClient {
         closed?;
         Ok(tiers)
     }
+}
+
+/// Private staging directory for native HTML renders owned by the installed OMP adapter.
+/// Defaults inside the OMP state root so sandboxed sessions can write it without new policy.
+pub(crate) fn native_export_directory(
+    clients: &std::collections::BTreeMap<String, std::sync::Arc<dyn crate::ports::agent_session::AgentClient>>,
+) -> Option<PathBuf> {
+    clients.get(PROVIDER)?.native_html_export_directory()
 }
 
 /// Serve the OMP bridge on a caller-owned JSONL stream without altering native installation.
@@ -107,6 +134,10 @@ impl AgentClient for OmpClient {
             "supportsToolInvocations":true,"supportsMcpServers":false,
             "supportsDynamicModes":false,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
+    }
+
+    fn native_html_export_directory(&self) -> Option<PathBuf> {
+        self.export_directory()
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {

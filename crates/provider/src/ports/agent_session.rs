@@ -85,6 +85,10 @@ pub(crate) enum AgentTurnEvent {
     Cancelled,
     /// The native provider failed, exited, or requested unsupported interaction.
     Failed,
+    /// A started native HTML export finished; the adapter adopted or cleaned its owned file.
+    NativeHtmlExport(
+        Result<super::native_html_export::ExportedNativeHtml, super::native_html_export::NativeHtmlExportError>,
+    ),
 }
 
 /// Live provider session. Closing releases resources without deleting native history.
@@ -299,6 +303,23 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         Ok(None)
     }
 
+    /// Start rendering this live session with the provider's own native HTML formatter.
+    /// The adapter owns `output_path` staging and never starts, resumes or prompts a writer.
+    /// Returns the native correlation ID; completion is observed through `poll_turn`.
+    ///
+    /// # Errors
+    /// Returns unsupported for providers without a native renderer, or write failures.
+    async fn begin_native_html_export(
+        &mut self,
+        _output_path: &std::path::Path,
+    ) -> Result<String, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Withdraw an in-flight native HTML export without touching the conversation.
+    /// The default adapter has no in-flight native export.
+    fn cancel_native_html_export(&mut self) {}
+
     /// Release the live native runtime without deleting its durable history.
     ///
     /// # Errors
@@ -408,6 +429,12 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Describe selectable modes/features and implemented native control flags without I/O.
     fn settings(&self, _config: &StoredAgentConfig) -> serde_json::Value {
         serde_json::json!({"availableModes":[],"features":[],"capabilities":{}})
+    }
+
+    /// Private staging directory for native HTML renders, when this adapter supports them.
+    /// The directory must be writable by the adapter's confined native processes.
+    fn native_html_export_directory(&self) -> Option<std::path::PathBuf> {
+        None
     }
 
     /// Inspect the proposed configuration's features without registering a durable Agent.
