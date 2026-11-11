@@ -3,7 +3,6 @@
 use super::images::installed_with_recording_model;
 use super::*;
 
-#[cfg(target_os = "macos")]
 #[tokio::test]
 #[ignore = "requires official AIT_TEST_OMP_BIN; runs loopback-only inference under Seatbelt"]
 async fn installed_omp_runs_confined_without_changing_its_configuration() {
