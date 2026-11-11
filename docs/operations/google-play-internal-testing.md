@@ -7,9 +7,8 @@ Google Play 的内部测试轨道。包名固定为 `dev.ait.mobile`。构建和
 设计见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md) 和
 [ADR-234](../decisions/clients/adr-234-play-internal-in-release-workflow.md)。
 
-独立 APK 工作流已移除，GitHub Release 不附带新的 Android 产物；重跑旧 Release 时仅保留和校验已有 APK 附件。
-AAB 不能直接安装；若需要站外 APK，可在上传后从 Play Console 获取 Google 签名的通用 APK，
-本工作流不自动下载或发布它。
+AAB 不能直接安装。上传后，`android-apk` job 从 Play 下载 Google 签名的 universal APK，
+附加到草稿 GitHub Release，见[站外 APK](#站外-apk)。
 
 ## 从 EAS 迁移
 
@@ -129,9 +128,8 @@ runner 执行 `npm ci` → `npm run build:ui-deps` → `expo prebuild --platform
 上传签名，核对包名、版本、实际 `versionCode` 和非 debug 属性。校验通过后保留原始 AAB
 字节并生成校验和，上传 action 只提交本次通过校验的那一个 AAB。
 
-AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing 的应用签名密钥**
-签名，两种凭据不同。需要站外分发相同应用签名的 APK 时，在 Play Console 的应用版本
-下载页面取得 Google 签名的 universal APK；本 workflow 当前只交付 AAB。
+AAB 使用 **上传密钥** 签名，Google Play 安装包和站外 APK 都由 **Play App Signing 的应用签名密钥**
+签名，两种凭据不同。
 
 ### R8 与 DEX 优化
 
@@ -154,10 +152,24 @@ PR CI 的 `test:mobile-release` 对安装的 Expo 模板实际运行配置插件
 参见 [DEX 指标](https://developer.android.com/google/play/vitals/code-optimization)和
 [R8 配置](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization)。
 
-AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing 的应用签名密钥**
-签名，两种凭据不同。需要站外分发相同应用签名的 APK 时，在 Play Console 的应用版本
-下载页面取得 Google 签名的 universal APK；本 workflow 当前只交付 AAB。
 见 [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)。
+
+## 站外 APK
+
+Play 处理完上传的 AAB 后，会用应用签名密钥生成 universal APK。`android-play` 提交成功后，
+`android-apk` job 通过 Play Developer API 的 `generatedApks` 最多等待 15 分钟，下载该
+`versionCode` 的 APK，检查包名、`versionName`、实际 `versionCode`、ARM 架构以及签名证书
+与 Play 报告的一致。它等待 GitHub Release job 完成，把 `Ait-VERSION-android.apk` 附加到
+**草稿** Release，并替换 `SHA256SUMS` 中对应的一行。
+
+- 只重跑 `android-apk` job 即可重试 APK，不会重新构建或再次提交 Play。
+- Release 已经正式发布时不再附加，只给出警告；重跑 Release job 会保留已附加的 APK。
+- 该 job 设置 `continue-on-error`，APK 失败不影响 Release 或整次运行的结论。
+- `ait-release` 等整次运行结束后才发布，因此 APK 会在发布前就位；它不镜像 APK 到 COS。
+- 服务账号若因权限不足收到 403，在 Play Console 为它补充下载应用签名产物所需的权限后重跑。
+- APK 与 `SHA256SUMS` 依次上传；若中途失败，重跑 `android-apk` job 恢复一致，再重跑其他 job。
+- 0.1.x 的 GitHub APK 使用其他签名，已安装的用户需卸载后才能安装新 APK；此后 GitHub 与
+  Google Play 安装的版本可以互相覆盖更新。
 
 ## 重试与验收
 
@@ -175,7 +187,7 @@ AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing
 Gradle 构建最多 120 分钟，上传最多 30 分钟，整个 job 最多 150 分钟；Play 各次提交串行。
 在 Console 发布内部测试后，用测试者账号打开 opt-in 链接并从 Google Play 安装。
 检查冷启动、浏览器登录返回、主机连接、消息收发和会话恢复，记录设备、Android 版本及
-`versionCode`。Google 签名版本可能无法覆盖既有 GitHub APK，应先处理需要保留的本地数据。
+`versionCode`。Google 签名版本无法覆盖 0.1.x 的 GitHub APK，应先处理需要保留的本地数据。
 
 个人账号后续申请正式发布的测试要求见
 [Google 官方说明](https://support.google.com/googleplay/android-developer/answer/14151465)。
