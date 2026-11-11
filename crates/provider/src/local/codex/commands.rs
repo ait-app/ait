@@ -106,6 +106,17 @@ impl CodexSession {
             return self.stream.compacted(turn.or(self.active_turn.as_deref()));
         }
         if method == "thread/tokenUsage/updated" {
+            // Queued behind the snapshot; `turn/completed` queues the terminal event after it.
+            if let Some(turn) = params["turnId"]
+                .as_str()
+                .filter(|turn| !turn.is_empty())
+                .or(self.active_turn.as_deref())
+                && let Some(request) = self.requests.observe(&params["tokenUsage"], turn)
+            {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::RequestUsage(request));
+            }
             return Ok(crate::local::usage::codex(&params["tokenUsage"]).map(AgentTurnEvent::Usage));
         }
         if method == "turn/started" {

@@ -12,6 +12,9 @@ use crate::protocol::usage::AgentUsage;
 )]
 pub(super) mod cumulative;
 
+/// Live per-request segments for the usage ledger; history replay never feeds them.
+pub(super) mod requests;
+
 pub(super) fn codex(value: &Value) -> Option<AgentUsage> {
     let last = value.get("last")?.as_object()?;
     let usage = AgentUsage {

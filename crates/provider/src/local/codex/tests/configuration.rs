@@ -386,3 +386,48 @@ async fn thread_usage_notifications_without_turn_identity_are_retained() {
     ));
     session.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn request_usage_is_deduplicated_by_running_total_and_queued_before_completion() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
+    let turn = session
+        .start_turn("request-usage", &spec.config)
+        .await
+        .unwrap();
+    let mut requests = Vec::new();
+    let mut snapshots = 0;
+    loop {
+        match terminal(session.as_mut()).await.unwrap() {
+            AgentTurnEvent::RequestUsage(request) => requests.push(request),
+            AgentTurnEvent::Usage(_) => snapshots += 1,
+            AgentTurnEvent::Completed(_) => break,
+            event => assert!(!matches!(event, AgentTurnEvent::Failed)),
+        }
+    }
+    assert_eq!(
+        snapshots, 4,
+        "every notification still publishes its snapshot"
+    );
+    let identities: Vec<_> = requests
+        .iter()
+        .map(|request| request.segment_id.as_str())
+        .collect();
+    assert_eq!(
+        identities,
+        [format!("codex:{turn}:107"), format!("codex:{turn}:150")]
+    );
+    assert_eq!(
+        (
+            requests[0].input_tokens,
+            requests[0].cache_read_tokens,
+            requests[0].output_tokens,
+            requests[0].reasoning_tokens
+        ),
+        (70, 30, 7, Some(3))
+    );
+    session.close().await.unwrap();
+}

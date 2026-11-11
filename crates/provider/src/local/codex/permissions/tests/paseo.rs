@@ -10,6 +10,7 @@ fn session() -> CodexSession {
         pending_plan: None,
         latest_plan: None,
         pending_goal_start: false,
+        requests: crate::local::usage::requests::CodexRequests::default(),
         notes: crate::local::notes::Notes::default(),
         last_anchor: None,
         manual_compactions: 0,

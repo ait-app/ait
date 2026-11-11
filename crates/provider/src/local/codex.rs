@@ -184,18 +184,7 @@ impl CodexClient {
                 ("thread/start", json!({}))
             };
             if !history {
-                params["cwd"] = json!(spec.cwd);
-                let (approval, sandbox, _) = controls::policy(&spec.config, confined);
-                params["approvalPolicy"] = json!(approval);
-                params["sandbox"] = json!(sandbox);
-                params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
-                if let Some(model) = &spec.config.model {
-                    params["model"] = json!(model);
-                }
-                if let Some(prompt) = &spec.config.system_prompt {
-                    params["developerInstructions"] = json!(prompt);
-                }
-                params["config"] = crate::local::configuration::codex(&spec.config)?;
+                launch_params(&mut params, spec, confined)?;
             }
             let response = if method == "thread/resume" {
                 native_sessions::resume(&mut transport, params).await?
@@ -245,6 +234,7 @@ impl CodexClient {
                     last_anchor: None,
                     manual_compactions: 0,
                     pending_goal_start: false,
+                    requests: crate::local::usage::requests::CodexRequests::default(),
                     config: spec.config.clone(),
                     client: self.session_client(),
                 }))
@@ -593,6 +583,8 @@ struct CodexSession {
     last_anchor: Option<String>,
     manual_compactions: u8,
     pending_goal_start: bool,
+    /// Live per-request usage deduplicated by the thread's running token total.
+    requests: crate::local::usage::requests::CodexRequests,
     stream: streaming::Stream,
     terminal: terminal::Terminal,
     config: StoredAgentConfig,
@@ -808,6 +800,10 @@ impl AgentSession for CodexSession {
 
     fn pending_foreground(&self) -> bool {
         self.pending_goal_start || self.manual_compactions > 0
+    }
+
+    fn reports_token_usage(&self) -> bool {
+        true
     }
 
     async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
@@ -1230,6 +1226,27 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
 
 #[cfg(all(test, unix))]
 mod tests;
+
+/// Add the cwd, policies, model and instructions that start or resume a live thread.
+fn launch_params(
+    params: &mut Value,
+    spec: &AgentSessionSpec,
+    confined: bool,
+) -> Result<(), AgentSessionError> {
+    params["cwd"] = json!(spec.cwd);
+    let (approval, sandbox, _) = controls::policy(&spec.config, confined);
+    params["approvalPolicy"] = json!(approval);
+    params["sandbox"] = json!(sandbox);
+    params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
+    if let Some(model) = &spec.config.model {
+        params["model"] = json!(model);
+    }
+    if let Some(prompt) = &spec.config.system_prompt {
+        params["developerInstructions"] = json!(prompt);
+    }
+    params["config"] = crate::local::configuration::codex(&spec.config)?;
+    Ok(())
+}
 
 fn saved<'a>(
     resume: Option<(&'a AgentPersistenceHandle, AgentResumePurpose)>,

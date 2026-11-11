@@ -26,6 +26,8 @@ struct ClaudeSession {
     permissions: BTreeMap<String, permissions::Pending>,
     stream: streaming::Stream,
     usage: crate::local::usage::ClaudeUsage,
+    /// Live per-request usage of the active turn; replayed history never feeds it.
+    requests: crate::local::usage::requests::ClaudeRequests,
     output_schema: Option<Value>,
     unread_steers: std::collections::BTreeSet<String>,
     compacting: bool,
@@ -74,6 +76,7 @@ pub(super) async fn open(
         permissions: BTreeMap::new(),
         stream: streaming::Stream::new(client.images.clone()),
         usage: crate::local::usage::ClaudeUsage::default(),
+        requests: crate::local::usage::requests::ClaudeRequests::default(),
         output_schema: None,
         unread_steers: std::collections::BTreeSet::default(),
         compacting: false,
@@ -277,15 +280,18 @@ impl ClaudeSession {
         self.stream
             .events
             .extend(self.children.observe(message, &self.id, &self.spec.cwd)?);
-        if message["parent_tool_use_id"].is_string()
+        let child = message["parent_tool_use_id"].is_string()
             && matches!(
                 message["type"].as_str(),
                 Some("assistant" | "user" | "stream_event" | "result")
-            )
-        {
+            );
+        if !child {
+            self.adopt_autonomous(message);
+        }
+        self.observe_request(message);
+        if child {
             return Ok(());
         }
-        self.adopt_autonomous(message);
         self.observe_error(message);
         if let Some(usage) = self.usage.observe(message) {
             self.stream.events.push_back(AgentTurnEvent::Usage(usage));
@@ -319,49 +325,7 @@ impl ClaudeSession {
                         .push_back(AgentTurnEvent::RuntimeInfo(self.info.clone()));
                 }
             }
-            Some("result") if self.active.is_some() => {
-                if self.stream.events.iter().any(|event| {
-                    matches!(
-                        event,
-                        AgentTurnEvent::Completed(_)
-                            | AgentTurnEvent::Failed
-                            | AgentTurnEvent::Cancelled
-                    )
-                }) {
-                    return Ok(());
-                }
-                let success = message["subtype"] == "success"
-                    && message["is_error"] != true
-                    && self
-                        .permissions
-                        .values()
-                        .all(|pending| pending.agent_id.is_some())
-                    && self.stream.tools.is_empty();
-                let result = if success {
-                    self.diagnostics.clear();
-                    // A previous result may already be in flight when a steer enters stdin.
-                    // Its native echo/lifecycle must be observed before this turn can finish.
-                    if !self.unread_steers.is_empty() {
-                        return Ok(());
-                    }
-                    let pending = self.stream.events.len();
-                    let text = self.stream.result_text(
-                        message,
-                        self.active.as_deref().ok_or(AgentSessionError::Failed)?,
-                    )?;
-                    for event in self.stream.events.iter().skip(pending) {
-                        if let AgentTurnEvent::Timeline(entry) = event {
-                            self.notes.push(entry.clone())?;
-                        }
-                    }
-                    AgentTurnEvent::Completed(text)
-                } else {
-                    self.observe_failure(message);
-                    self.stream.events.extend(self.children.stopped(true, true));
-                    AgentTurnEvent::Failed
-                };
-                self.stream.events.push_back(result);
-            }
+            Some("result") if self.active.is_some() => self.settle(message)?,
             Some("control_response") => return Err(AgentSessionError::Failed),
             _ if self.active.is_some()
                 || matches!(
@@ -374,6 +338,72 @@ impl ClaudeSession {
             _ => {}
         }
         Ok(())
+    }
+
+    /// Settle the active turn on a foreground `result`, after queueing its request segments.
+    fn settle(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+        if self.stream.events.iter().any(|event| {
+            matches!(
+                event,
+                AgentTurnEvent::Completed(_) | AgentTurnEvent::Failed | AgentTurnEvent::Cancelled
+            )
+        }) {
+            return Ok(());
+        }
+        self.finish_requests(Some(message));
+        let success = message["subtype"] == "success"
+            && message["is_error"] != true
+            && self
+                .permissions
+                .values()
+                .all(|pending| pending.agent_id.is_some())
+            && self.stream.tools.is_empty();
+        let result = if success {
+            self.diagnostics.clear();
+            // A previous result may already be in flight when a steer enters stdin.
+            // Its native echo/lifecycle must be observed before this turn can finish.
+            if !self.unread_steers.is_empty() {
+                return Ok(());
+            }
+            let pending = self.stream.events.len();
+            let text = self.stream.result_text(
+                message,
+                self.active.as_deref().ok_or(AgentSessionError::Failed)?,
+            )?;
+            for event in self.stream.events.iter().skip(pending) {
+                if let AgentTurnEvent::Timeline(entry) = event {
+                    self.notes.push(entry.clone())?;
+                }
+            }
+            AgentTurnEvent::Completed(text)
+        } else {
+            self.observe_failure(message);
+            self.stream.events.extend(self.children.stopped(true, true));
+            AgentTurnEvent::Failed
+        };
+        self.stream.events.push_back(result);
+        Ok(())
+    }
+
+    /// Queue the request segment that `message` closes for the active turn, if any.
+    fn observe_request(&mut self, message: &Value) {
+        if let Some(turn) = &self.active
+            && let Some(request) = self.requests.observe(message, turn)
+        {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::RequestUsage(request));
+        }
+    }
+
+    /// Queue every open request segment before the active turn's terminal event.
+    fn finish_requests(&mut self, result: Option<&Value>) {
+        if let Some(turn) = &self.active {
+            let requests = self.requests.finish(turn, result);
+            self.stream
+                .events
+                .extend(requests.into_iter().map(AgentTurnEvent::RequestUsage));
+        }
     }
 
     fn withdraw_permission(&mut self, message: &Value) -> Result<(), AgentSessionError> {
@@ -405,6 +435,7 @@ impl ClaudeSession {
         let id = format!("autonomous:{}", Uuid::new_v4());
         self.active = Some(id.clone());
         self.usage.begin();
+        self.requests.begin();
         self.stream.events.push_back(AgentTurnEvent::Started(id));
     }
 
@@ -519,6 +550,10 @@ impl AgentSession for ClaudeSession {
         self.diagnostics.message().map(Cow::Owned)
     }
 
+    fn reports_token_usage(&self) -> bool {
+        true
+    }
+
     async fn prepare_account_usage(
         &self,
     ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
@@ -623,6 +658,7 @@ impl AgentSession for ClaudeSession {
         self.unread_steers.clear();
         self.compacting = false;
         self.usage.begin();
+        self.requests.begin();
         // The CLI does not echo every submitted prompt. Use its supplied native UUID.
         self.stream.record(&message)?;
         self.active = Some(id.clone());
@@ -661,6 +697,7 @@ impl AgentSession for ClaudeSession {
         transport.close().await?;
         self.transport = None;
         self.permissions.clear();
+        self.finish_requests(None);
         self.stream
             .events
             .extend(self.children.stopped(false, true));

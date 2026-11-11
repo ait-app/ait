@@ -427,6 +427,12 @@ for line in sys.stdin:
         if text == "usage":
             emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
                 "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})
+        if text == "request-usage":
+            for total, turn in ((107, pending), (107, pending), (50, pending), (150, None)):
+                emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+                    **({"turnId":turn} if turn else {}), "tokenUsage":{"total":{"totalTokens":total},
+                    "last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,
+                    "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
