@@ -46,11 +46,11 @@
   ],
   "implementation": "Use the existing AgentProfile store and ordinary settings list with nested editing; keep host/provider/cwd context and native preset identity distinct. The popup edit modal and its picker-side controller are deleted: the list navigates to settings/hosts/[serverId]/agent-profiles/create and .../agent-profiles/edit/[profileId] (separate static segments so no stored id, including the literal 'create', can shadow the create route). The picker keeps quick-apply rows plus one manage shortcut; create-from-model seeding is dropped with its dead AgentProfileSeed surface. Edit mode never seeds catalog defaults into omitted fields, offers an explicit leave-unchanged row, preserves unknown stored model/mode/thinking ids raw and visibly unresolved (list tags + editor hint + a selected synthetic option so keyboard selection cannot erase them), keeps stored featureValues when a host reports an empty feature list, and merges saves over the stored record so passthrough fields written by newer clients survive. Feature request keys are JSON tuples, not delimiter joins, so late feature listings for an old selection cannot install under a new one. The form model is rebuilt per host+mode+profile identity and the page is keyed on serverId+profileId, fencing cross-host late catalogs.",
   "acceptance": "Create/edit/delete/apply existing Profiles through one store and normal settings navigation; unspecified Profile fields retain current values. No modelPresets store or same-name native preset synchronization; old host behavior is explicit.",
-  "status": "validating",
+  "status": "delivered",
   "branch": "feat/pr612-task03-agent-profile-settings",
   "base": "efca94b8621830cb99ce5c1df80001ca1c729241",
   "commit": "331459db",
-  "pr_url": null,
+  "pr_url": "https://github.com/ait-app/ait/pull/668",
   "checks": {
     "required": [
       "affected fmt/lint/tests and runtime smoke for changed UI surface",
