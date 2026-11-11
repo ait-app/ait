@@ -404,6 +404,67 @@ describe("workspace message schemas", () => {
     expect(response.payload.filteredAlreadyImportedCount).toBe(3);
   });
 
+  test("parses provider session preview request and response", () => {
+    const request = SessionInboundMessageSchema.parse({
+      type: "provider.sessions.preview.get.request",
+      requestId: "req-preview",
+      providerId: "deepseek-harness",
+      providerHandleId: "native-session-1",
+      cwd: "/tmp/repo",
+      limit: 50,
+    });
+    expect(request.type).toBe("provider.sessions.preview.get.request");
+    const response = SessionOutboundMessageSchema.parse({
+      type: "provider.sessions.preview.get.response",
+      payload: {
+        requestId: "req-preview",
+        providerId: "deepseek-harness",
+        providerHandleId: "native-session-1",
+        cwd: "/tmp/repo",
+        title: "Native conversation",
+        lastActivityAt: "2026-11-11T12:00:00.000Z",
+        active: false,
+        entries: [
+          {
+            key: "item-1",
+            timestamp: "2026-11-11T11:59:00.000Z",
+            item: { type: "user_message", text: "question" },
+          },
+          {
+            key: "item-2",
+            turnId: "turn-1",
+            timestamp: "2026-11-11T11:59:30.000Z",
+            item: { type: "assistant_message", text: "answer" },
+          },
+        ],
+        olderCursor: "opaque-cursor",
+        hasOlder: true,
+      },
+    });
+    if (response.type !== "provider.sessions.preview.get.response") {
+      throw new Error("expected provider.sessions.preview.get.response");
+    }
+    expect(response.payload.entries).toHaveLength(2);
+    expect(response.payload.olderCursor).toBe("opaque-cursor");
+    expect(response.payload.hasOlder).toBe(true);
+  });
+
+  test("preview request rejects oversized limits and cursors", () => {
+    const base = {
+      type: "provider.sessions.preview.get.request",
+      requestId: "req-preview-invalid",
+      providerId: "deepseek-harness",
+      providerHandleId: "native-session-1",
+      cwd: "/tmp/repo",
+    };
+    expect(() => SessionInboundMessageSchema.parse({ ...base, limit: 101 })).toThrow();
+    expect(() => SessionInboundMessageSchema.parse({ ...base, limit: 0 })).toThrow();
+    expect(() =>
+      SessionInboundMessageSchema.parse({ ...base, cursor: "x".repeat(4097) }),
+    ).toThrow();
+    expect(() => SessionInboundMessageSchema.parse({ ...base, cursor: "" })).toThrow();
+  });
+
   test("parses new and legacy import agent requests", () => {
     const newRequest = SessionInboundMessageSchema.parse({
       type: "agent.import.request",

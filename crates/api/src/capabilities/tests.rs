@@ -264,3 +264,22 @@ fn metadata_connection_methods_remain_available_without_its_business_service() {
             .all(|method| installed.iter().any(|name| name == method))
     );
 }
+
+#[test]
+fn advertised_catalogue_keeps_headroom_under_the_single_connection_budget() {
+    // Clients echo the whole catalogue in one hello, so the budget must exceed it. Shrinking this
+    // margin means the next added method fails in negotiation instead of here.
+    let advertised = crate::registered_capabilities();
+    let budget = model::server::single::MAX_CAPABILITIES;
+    assert!(
+        advertised.len() < budget,
+        "advertised {} capabilities against a budget of {}",
+        advertised.len(),
+        budget
+    );
+    let methods = implemented_methods().count();
+    assert!(
+        methods < budget,
+        "{methods} methods against a budget of {budget}"
+    );
+}

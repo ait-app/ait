@@ -156,6 +156,10 @@ impl AgentClient for DeepSeekHarnessClient {
         self.interactive
     }
 
+    fn supports_session_preview(&self) -> bool {
+        self.interactive
+    }
+
     async fn list_sessions(
         &self,
         options: &provider_core::ports::native_history::ListOptions,
@@ -170,6 +174,13 @@ impl AgentClient for DeepSeekHarnessClient {
         cwd: &str,
     ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
         native::native_sessions::inspect(self, handle, cwd).await
+    }
+
+    async fn preview_session(
+        &self,
+        request: &provider_core::ports::native_history::PreviewRequest,
+    ) -> Result<provider_core::ports::native_history::SessionPreview, AgentSessionError> {
+        native::preview::read(self, request).await
     }
 
     fn provider(&self) -> &'static str {
@@ -203,12 +214,12 @@ impl AgentClient for DeepSeekHarnessClient {
         if self.interactive {
             return json!({"availableModes":[],"features":[],"capabilities":{
                 "supportsMcpServers":false,"supportsStreaming":true,"supportsReasoningStream":true,
-                "supportsDynamicModes":true,"supportsSessionListing":true,
+                "supportsDynamicModes":true,"supportsSessionListing":true,"supportsSessionPreview":true,
                 "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}});
         }
         json!({"availableModes":[],"features":[],"capabilities":{
             "supportsMcpServers":true,"supportsStreaming":true,"supportsReasoningStream":true,
-            "supportsDynamicModes":false,"supportsSessionListing":false,
+            "supportsDynamicModes":false,"supportsSessionListing":false,"supportsSessionPreview":false,
             "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 

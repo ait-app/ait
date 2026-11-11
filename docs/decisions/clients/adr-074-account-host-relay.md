@@ -56,7 +56,8 @@ JWT 持久化依赖操作系统安全存储；安全存储可用且已保存凭�
 ### 单连接调度
 
 必需能力 `connection.single.v1` 选择单条物理业务 WebSocket，能力提议最多包含
-256 个不重复条目。连接内部按 metadata/browser/schedule、terminal/voice、filesystem、
+512 个不重复条目（原为 256，由 [ADR-282](../daemon/adr-282-single-connection-capability-budget.md)
+按方法目录扩容修订）。连接内部按 metadata/browser/schedule、terminal/voice、filesystem、
 provider 分为四个执行组，保持各组内操作顺序，避免慢 Git 操作阻塞终端和 ping。
 
 每组保留 16 个订阅的预算，单条逻辑连接最多持有 64 个订阅。所有执行组处理完释放请求后

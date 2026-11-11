@@ -644,6 +644,14 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.sessions.recent.list.response",
   },
+  "provider.sessions.preview.get.request": {
+    method: "provider.sessions.preview.get.request",
+    kind: "request",
+    // Read-only history query; the background lane keeps it clear of active
+    // session work like the other provider catalog reads.
+    channel: 3,
+    response: "provider.sessions.preview.get.response",
+  },
   "agent.skills.get_status.request": {
     method: "agent.skills.get_status.request",
     kind: "request",

@@ -46,9 +46,10 @@ async fn single_mode_negotiates_all_methods_and_owns_release() {
 async fn single_mode_still_rejects_unbounded_capability_offers() {
     let fixture = Fixture::start().await;
     let mut socket = fixture.socket().await;
+    let over = model::server::single::MAX_CAPABILITIES + 1;
     send(&mut socket, json!({"type":"hello","client_id":"single-client",
         "protocol":{"major":1,"min_minor":0,"max_minor":0},
-        "capabilities":vec!["connection.ping";257],"required_capabilities":["connection.single.v1"]})).await;
+        "capabilities":vec!["connection.ping";over],"required_capabilities":["connection.single.v1"]})).await;
     assert_eq!(receive(&mut socket).await["code"], "invalid_message");
     drop(socket);
     fixture.stop().await;

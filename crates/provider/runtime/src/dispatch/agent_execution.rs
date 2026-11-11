@@ -9,6 +9,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.thinking.set.request"),
     MethodSpec::request("agent.config.apply.request"),
     MethodSpec::request("provider.sessions.recent.list.request"),
+    MethodSpec::request("provider.sessions.preview.get.request"),
     MethodSpec::request("agent.import.request"),
     MethodSpec::request("agent.refresh.request"),
     MethodSpec::request("agent.fork_context.request"),
