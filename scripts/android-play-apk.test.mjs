@@ -143,10 +143,41 @@ native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
 `;
   const certificates = `Signer #1 certificate SHA-256 digest: ${digest}\n`;
   verifyGoogleSignedApk({ badging, certificates, plan, certificateSha256: digest });
+  // v3.1 key rotation (what Play produced for 0.2.8): one signer per SDK range plus a source stamp.
+  const rotated = `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate DN: CN=Android
+Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${"ef".repeat(32)}
+Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${digest}
+Source Stamp Signer certificate SHA-256 digest: ${"12".repeat(32)}
+`;
+  for (const certificateSha256 of [digest, "ef".repeat(32)])
+    assert.deepEqual(
+      verifyGoogleSignedApk({ badging, certificates: rotated, plan, certificateSha256 }).signers,
+      ["ef".repeat(32), digest],
+    );
+  assert.throws(
+    () =>
+      verifyGoogleSignedApk({
+        badging,
+        certificates: rotated,
+        plan,
+        certificateSha256: "12".repeat(32),
+      }),
+    /not among the APK signers/,
+  );
+  assert.throws(
+    () =>
+      verifyGoogleSignedApk({
+        badging,
+        certificates: "Verifies\n",
+        plan,
+        certificateSha256: digest,
+      }),
+    /no signing certificate/,
+  );
   assert.throws(
     () =>
       verifyGoogleSignedApk({ badging, certificates, plan, certificateSha256: "cd".repeat(32) }),
-    /Play signing certificate/,
+    /not among the APK signers/,
   );
   assert.throws(() =>
     verifyGoogleSignedApk({
