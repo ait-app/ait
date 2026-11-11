@@ -235,6 +235,7 @@ impl CodexClient {
                     manual_compactions: 0,
                     pending_goal_start: false,
                     requests: crate::local::usage::requests::CodexRequests::default(),
+                    child_requests: std::collections::BTreeMap::new(),
                     config: spec.config.clone(),
                     client: self.session_client(),
                 }))
@@ -585,6 +586,9 @@ struct CodexSession {
     pending_goal_start: bool,
     /// Live per-request usage deduplicated by the thread's running token total.
     requests: crate::local::usage::requests::CodexRequests,
+    /// Live per-request usage of each sub-agent thread, keyed by its thread id.
+    child_requests:
+        std::collections::BTreeMap<String, crate::local::usage::requests::CodexRequests>,
     stream: streaming::Stream,
     terminal: terminal::Terminal,
     config: StoredAgentConfig,
@@ -755,6 +759,7 @@ impl CodexSession {
         self.transport = Some(transport);
         // The new process may restart the thread's running total; ledger ids stay idempotent.
         self.requests = crate::local::usage::requests::CodexRequests::default();
+        self.child_requests.clear();
         Ok(())
     }
 }
@@ -1100,6 +1105,9 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if params.get("threadId").and_then(Value::as_str) != Some(&self.id) {
+                if method == "thread/tokenUsage/updated" {
+                    self.child_token_usage(params);
+                }
                 continue;
             }
             if method.starts_with("thread/realtime/") {

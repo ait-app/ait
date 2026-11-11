@@ -487,3 +487,55 @@ async fn usage_replayed_on_resume_adds_no_segment_to_the_next_turn() {
     assert_eq!(segment_ids(&requests), Vec::<&str>::new());
     resumed.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn sub_agent_usage_counts_toward_the_active_turn_until_its_terminal_event() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let child = format!("child-{}", session.persistence().unwrap().session_id);
+
+    // The child reports 40 twice and 70 while running, 90 after its turn and 120 after ours.
+    let (turn, requests, snapshots) =
+        usage_turn(session.as_mut(), "subagent-usage", &spec.config).await;
+
+    assert_eq!(
+        snapshots, 0,
+        "a child's usage never replaces the parent's snapshot"
+    );
+    assert_eq!(
+        segment_ids(&requests),
+        [
+            format!("codex:{turn}:{child}:40"),
+            format!("codex:{turn}:{child}:70")
+        ]
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.parent.as_deref() == Some(child.as_str()))
+    );
+    assert_eq!(
+        (
+            requests[0].input_tokens,
+            requests[0].cache_read_tokens,
+            requests[0].output_tokens
+        ),
+        (15, 5, 3)
+    );
+    let late = tokio::time::timeout(Duration::from_millis(300), async {
+        loop {
+            if let Some(AgentTurnEvent::RequestUsage(request)) = session.poll_turn().unwrap() {
+                return request;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await;
+    assert!(
+        late.is_err(),
+        "usage after the terminal event belongs to no call"
+    );
+    session.close().await.unwrap();
+}

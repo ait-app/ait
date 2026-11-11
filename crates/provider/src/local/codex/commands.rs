@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 
 use super::{CodexSession, discovery};
+use crate::local::usage::requests::CodexRequests;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{prompt::AgentPrompt, timeline::NativeItem};
 
@@ -155,6 +156,37 @@ impl CodexSession {
                 .map(|entry| entry.map(AgentTurnEvent::Timeline));
         }
         Ok(None)
+    }
+
+    /// Queue the request segment of a sub-agent thread's `thread/tokenUsage/updated`.
+    ///
+    /// The segment belongs to the active parent turn. Usage read outside that turn, or of a
+    /// child turn the child is no longer running, only advances that child's cursor. Threads
+    /// that are not children of this session are ignored.
+    pub(super) fn child_token_usage(&mut self, params: &Value) {
+        let Some(thread) = params["threadId"]
+            .as_str()
+            .filter(|thread| self.children.contains(thread))
+        else {
+            return;
+        };
+        let current = params["turnId"]
+            .as_str()
+            .filter(|turn| !turn.is_empty())
+            .is_none_or(|turn| self.children.turn(thread) == Some(turn));
+        let turn = self.active_turn.as_deref().filter(|_| current);
+        if !self.child_requests.contains_key(thread) {
+            self.child_requests
+                .insert(thread.to_owned(), CodexRequests::default());
+        }
+        let Some(cursor) = self.child_requests.get_mut(thread) else {
+            return;
+        };
+        if let Some(request) = cursor.observe(&params["tokenUsage"], turn, Some(thread)) {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::RequestUsage(request));
+        }
     }
 }
 

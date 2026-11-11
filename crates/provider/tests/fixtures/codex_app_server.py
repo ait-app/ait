@@ -560,7 +560,7 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity"):
+        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity", "subagent-usage"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
@@ -578,6 +578,13 @@ for line in sys.stdin:
                     "agentThreadId":thread_id, "agentPath":"/root"}
                 emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":reply}})
             emit({"method":"item/agentMessage/delta","params":{"threadId":child,"turnId":"child-turn","itemId":"child-answer","delta":"Independent child"}})
+            def child_usage(total, turn="child-turn", child=child):
+                token_usage({"threadId":child, **({"turnId":turn} if turn else {}),
+                    "tokenUsage":{"total":{"totalTokens":total},"last":{"inputTokens":20,
+                    "cachedInputTokens":5,"outputTokens":3,"totalTokens":23}}})
+            if text == "subagent-usage":
+                for total, turn in ((40, "child-turn"), (40, "child-turn"), (70, None)):
+                    child_usage(total, turn)
             def finish_child(child=child):
                 child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
                 (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
@@ -610,7 +617,11 @@ for line in sys.stdin:
                     stream_items.append(state)
                     emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
                     emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
+                if text == "subagent-usage":
+                    child_usage(90)
                 complete(pending, "Parent only")
+                if text == "subagent-usage":
+                    child_usage(120, None)
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})

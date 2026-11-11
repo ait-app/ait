@@ -98,15 +98,15 @@ cacheWriteTokens, reportedCostUsd, costReportedRequests, lowerBoundCalls, missin
 
 ### 各适配器的请求边界
 
-| 适配器                 | 映射                                                                                                        | 边界                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------- |
-| Claude                 | 每个 Anthropic message id 一个请求，取最大值合并；缓存读、创建与 1 小时创建子集分开；子 Agent 帧带 `parent` | `request`             |
-| Codex                  | 每个被接受的 `last` 一个请求，按 `total.totalTokens` 游标去重；输入减缓存                                   | `request`             |
-| Pi、OMP                | 每条 assistant 消息一个请求（OMP 在累加进快照前发出）；Pi 记录提供方费用                                    | `request`             |
-| MiniMax                | 每轮一个请求                                                                                                | `turn`                |
-| Antigravity            | 经累计助手差分；重启后首值为基线                                                                            | `cumulative_delta`    |
-| OpenCode/ACP、DeepSeek | 无 token 数据                                                                                               | `missing`             |
-| 摘要/标题调用          | 计一次调用；仅适配器能返回时才有 token                                                                      | `missing`，扩展前如此 |
+| 适配器                 | 映射                                                                                                                                    | 边界                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Claude                 | 每个 Anthropic message id 一个请求，取最大值合并；缓存读、创建与 1 小时创建子集分开；子 Agent 帧带 `parent`                             | `request`             |
+| Codex                  | 每个被接受的 `last` 一个请求，各线程按 `total.totalTokens` 游标去重；输入减缓存读写；子 Agent 线程带 `parent`；非当前轮次的帧只推进游标 | `request`             |
+| Pi、OMP                | 每条 assistant 消息一个请求（OMP 在累加进快照前发出）；Pi 记录提供方费用                                                                | `request`             |
+| MiniMax                | 每轮一个请求                                                                                                                            | `turn`                |
+| Antigravity            | 经累计助手差分；重启后首值为基线                                                                                                        | `cumulative_delta`    |
+| OpenCode/ACP、DeepSeek | 无 token 数据                                                                                                                           | `missing`             |
+| 摘要/标题调用          | 计一次调用；仅适配器能返回时才有 token                                                                                                  | `missing`，扩展前如此 |
 
 ### 已接受的五项选择
 

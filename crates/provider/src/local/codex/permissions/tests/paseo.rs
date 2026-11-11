@@ -11,6 +11,7 @@ fn session() -> CodexSession {
         latest_plan: None,
         pending_goal_start: false,
         requests: crate::local::usage::requests::CodexRequests::default(),
+        child_requests: std::collections::BTreeMap::new(),
         notes: crate::local::notes::Notes::default(),
         last_anchor: None,
         manual_compactions: 0,

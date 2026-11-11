@@ -182,19 +182,19 @@ Linux 无人值守运行支持 `aitd login` 和 `aitd run`，
 
 ### 各适配器的精度
 
-| Provider                | 边界               | 说明                                                                         |
-| ----------------------- | ------------------ | ---------------------------------------------------------------------------- |
-| Claude                  | `request`          | 含子 Agent 帧（有则计入）                                                    |
-| Codex                   | `request`          | `input` 已扣除缓存读写；`cache_write` 取 `cacheWriteInputTokens`，缺失时为 0 |
-| Pi、OMP                 | `request`          |                                                                              |
-| MiniMax                 | `turn`             | 整轮合计                                                                     |
-| Antigravity             | `cumulative_delta` | 累计值求差；进程重启后的第一轮只作基线，该调用显示为 `missing`               |
-| OpenCode、ACP、DeepSeek | `missing`          | 只有调用次数                                                                 |
-| 摘要与标题调用          | `missing`          | 只有调用次数                                                                 |
+| Provider                | 边界               | 说明                                                                                                            |
+| ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Claude                  | `request`          | 含子 Agent 帧（有则计入）                                                                                       |
+| Codex                   | `request`          | `input` 已扣除缓存读写；`cache_write` 取 `cacheWriteInputTokens`，缺失时为 0；子 Agent 线程在父轮次运行期间计入 |
+| Pi、OMP                 | `request`          |                                                                                                                 |
+| MiniMax                 | `turn`             | 整轮合计                                                                                                        |
+| Antigravity             | `cumulative_delta` | 累计值求差；进程重启后的第一轮只作基线，该调用显示为 `missing`                                                  |
+| OpenCode、ACP、DeepSeek | `missing`          | 只有调用次数                                                                                                    |
+| 摘要与标题调用          | `missing`          | 只有调用次数                                                                                                    |
 
 ### 已知限制
 
-- Claude 在轮次结束后才到达的后台子 Agent 帧不计入。
+- Claude 在轮次结束后才到达的后台子 Agent 帧不计入；Codex 子 Agent 线程在父轮次结束后才上报的用量同样不计入。
 - OMP 子 Agent 的 token 不计入。
 - 心跳提示沿用该 Agent 自己的来源（通常为 `user`）；定时任务创建的 Agent 来源为 `schedule`，按标签查找。
 - MiniMax 与 Antigravity 的缓存语义按其上报原样映射，缓存可能与 `input` 重叠。
