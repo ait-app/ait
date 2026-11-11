@@ -181,7 +181,15 @@ for (const id of taskIds) visit(id);
 assert.equal(evidence.worktree.base, sources.main_at_inspection);
 assert.equal(evidence.donor.head, sources.donor_commit);
 assert.equal(evidence.comparison.merge_base, sources.merge_base);
-assert.equal(tasks.find((task) => task.id === "13").status, "blocked");
+// Task13 is excluded by explicit user decision (2026-11-11): not delivered, not a blocker.
+const task13 = tasks.find((task) => task.id === "13");
+assert.equal(task13.status, "excluded");
+assert.equal(task13.user_decision.decision, "excluded");
+assert.equal(task13.user_decision.date, "2026-11-11");
+assert.ok(task13.user_decision.provenance.length > 0);
+assert.equal(task13.commit, null);
+assert.equal(task13.pr_url, null);
+assert.equal(task13.blockers.length, 0);
 assert.ok(
   paths
     .filter((path) => path.path.startsWith("docs/assets/"))

@@ -1,8 +1,9 @@
 # PR #612 split execution contract
 
 Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647)**.
-The split plan and product features are not delivered. The next highest ready task01 may proceed
-to implementation under its own acceptance gates. No merge or release is authorized.
+The split plan and product features are not delivered as a whole. Implementation proceeds per task
+under its own acceptance gates; current per-task state lives in [tasks.json](tasks.json) and the
+execution register below. No merge or release is authorized.
 The task00 `commit` field pins the checked inventory/reconciliation snapshot; subsequent publication
 metadata records its immutable hash without a self-referential commit hash.
 
@@ -151,7 +152,9 @@ rebind or original-log rewrite. This replaces the donor's native branch-promotio
 - DSH: isolated text-only profile.
 - Pi: dedicated launcher, public no-tools/no-extensions capability.
 - Antigravity: temporary directory/process; verify denials of file, command, browser and MCP effects.
-- MiniMax: **blocked** until safe public isolation is verified. Ordinary fork/prompt or permission-off is not isolation.
+- MiniMax: **excluded by user decision (2026-11-11)**; task13 is out of the delivery queue, not delivered
+  and not an overall blocker. Ordinary fork/prompt or permission-off never qualified as isolation.
+  Task19 (DSH and MiniMax native Goal) is unaffected by this exclusion.
 
 ### Goal: native-first strategy and single-writer fallback
 
@@ -202,6 +205,28 @@ React Compiler and adds tests. S3 adds`package:daemon`as an alias for the existi
 Detailed implementation, acceptance, source paths and release/check state are authoritative in
 [tasks.json](tasks.json); the table below is the review-time queue, not a second mutable completion ledger.
 
+### Execution register (2026-11-11)
+
+Live ownership and delivery pointers; only the owning worker writes its task branch. Sixteen parallel
+workstreams are authorized; the register prevents duplicate ownership.
+
+- **00** delivered inventory — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence `7ac9b4ac`.
+- **01** blocked — Draft [#651](https://github.com/ait-app/ait/pull/651), branch
+  `refactor/pr612-omp-native-boundary`, code `92abc77d`, interface disclosure `22efa58f` (ADR-237).
+  macOS signing/notarization evidence missing; normal-0077 Linux installed smoke pending. Not delivered.
+- **02** active — recovery owner, branch `feat/pr612-task02-model-catalog-refresh` (base `248a93cf`);
+  shared refresh patch under verification, no Draft yet.
+- **03** design-ready, waits for 02 (ADR-244 reserved); owner `profile-settings`.
+- **04** delivered — Draft [#650](https://github.com/ait-app/ait/pull/650), branch
+  `pr612-split-task04-statistics`, implementation `c187052e`.
+- **05/06/07** active — stacked on verified 01 Linux code; ADR-241/242/243 reserved respectively.
+- **09/16/21/24/25/31/32/33** queued behind their dependencies; ADR-246/245/247/248/249/250/251/252
+  reserved respectively.
+- **13** excluded by user decision (2026-11-11) — not delivered, not an overall blocker; task19 unaffected.
+- **26** active — stacks on delivered 04; ADR-239 reserved. **30** active — ADR-240 reserved.
+- **S1** delivered — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
+  `fix/pr612-s1-desktop-env-allowlist`, implementation `9ba98138`. **S2/S3** active, same support owner.
+
 | ID  | Task                                             | Dependencies           | Initial state |
 | --- | ------------------------------------------------ | ---------------------- | ------------- |
 | 00  | Inventory and split contract                     | —                      | in_review     |
@@ -217,7 +242,7 @@ Detailed implementation, acceptance, source paths and release/check state are au
 | 10  | Codex OpenCode and DSH BTW                       | 00, 09                 | planned       |
 | 11  | Pi BTW                                           | 00, 09                 | planned       |
 | 12  | Antigravity BTW                                  | 00, 09                 | planned       |
-| 13  | MiniMax BTW                                      | 00, 09                 | blocked       |
+| 13  | MiniMax BTW                                      | 00, 09                 | excluded      |
 | 14  | BTW follow-up and lifecycle                      | 00, 09                 | planned       |
 | 15  | BTW transfer to nonrunning draft                 | 00, 14                 | planned       |
 | 16  | Unified Goal strategy and fallback               | 00, 05, 07             | planned       |

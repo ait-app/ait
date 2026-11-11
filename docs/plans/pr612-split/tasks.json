@@ -308,20 +308,31 @@
     ],
     "implementation": "Use direct native Session RPC for Ait OMP. Introduce a standalone Rust ait-omp-acp CLI with stdio, logging and exit handling; ACP conversion and native RPC remain in provider. Remove aitd omp-acp and the in-process ACP client. Reserve _omp/rpc for external ACP capability negotiation. Preserve legacy handles/history/aliases without rewriting logs; reapply sandbox on create, restore and config reopen. Only launch user-installed OMP, never bundle/download its SDK or Bun. Align bridge version with desktop macOS/Linux builds, archives, signing/notarization and release asset verification.",
     "acceptance": "Native create/restore/config reopen and legacy handles/history work without a second writer; standalone CLI interoperates over stdio with correct logging/exit and sandbox behavior; unsupported negotiation downgrades explicitly. Packaging/version/signing/notarization/archive verification must pass for all required platforms before delivered. Missing macOS/Linux packaging or required signing/notarization evidence is an incomplete acceptance blocker, never an alternative success condition; no release performed.",
-    "status": "planned",
-    "branch": null,
-    "base": null,
-    "commit": null,
-    "pr_url": null,
+    "status": "blocked",
+    "branch": "refactor/pr612-omp-native-boundary",
+    "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+    "commit": "92abc77dbede57caf4c4b4bf1be7076982ffea48",
+    "pr_url": "https://github.com/ait-app/ait/pull/651",
     "checks": {
       "required": [
         "affected fmt/clippy/build/tests and runtime smoke for changed backend",
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "PASS native boundary: cargo fmt --all --check; focused provider local::omp:: 94 tests; ait-omp-acp 12 tests plus 13 including official OMP 18.17.0 installed CLI; daemon removed-subcommand rejection and 17 dependency guards.",
+        "PASS official-runtime lifecycle: installed boundary create/persist/legacy-alias/restore/config-reopen confined and unconfined (2 tests); standalone external ACP stdio session with EOF exit and process-group cleanup.",
+        "PASS CI Rust 1.98.1 manylinux_2_28: strict clippy -D warnings for provider/ait-omp-acp/daemon; release build pair; GLIBC 2.28 baseline verified; standalone archive SHA256 c999aaf4f1ace3e9c3a7687218841b538c88bdd2452782e3f09337f2af8b5465 with extracted official-runtime smoke.",
+        "PASS Linux packaging: all four formats (AppImage/tar.gz/deb/rpm) built with paired 0.2.7 resources; production payload-root chmod 0755 fix in scripts/linux-sandbox; installed deb+rpm unprivileged Xvfb startup smoke under umask 022 (diagnostic).",
+        "PASS incidental source-text test removal per review: dev-build-workflow 2 cases, release-assets workflow case, desktop-packaging bundles case deleted (not re-pinned); npm run test:release 81/81; desktop packaging/launcher/environment vitest 19/19.",
+        "PASS docs: ADR-237 interface-change/migration table and operations migration section (head 22efa58f); npm run check:docs; git diff --check.",
+        "PENDING normal-umask 0077 installed-package smoke rerun after the payload-root fix; prior captured job result was lost when its owner session was policy-stopped."
+      ]
     },
-    "blockers": []
+    "blockers": [
+      "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete.",
+      "Final installed Linux desktop smoke under the normal 0077 umask remains pending after the production payload-root permission correction; the successful 022 diagnostic is not claimed as complete acceptance."
+    ]
   },
   {
     "id": "02",
@@ -358,9 +369,9 @@
     ],
     "implementation": "Reuse one shared catalog refresh for model selector, Profiles, settings, schedules and existing consumers; retain cached candidates while refreshing and surface recoverable failures.",
     "acceptance": "All actual consumers observe refreshed data without clearing usable candidates, blocking input or creating agents. Unknown persisted provider/model/role/thinking values remain intact and visibly unresolved rather than being erased or silently replaced. Refresh keys include host, provider and cwd; late responses after any identity change cannot overwrite the current selection or catalog. Concurrent refresh, stale response, unknown-value preservation and failure/retry tests pass.",
-    "status": "planned",
-    "branch": null,
-    "base": null,
+    "status": "active",
+    "branch": "feat/pr612-task02-model-catalog-refresh",
+    "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
     "commit": null,
     "pr_url": null,
     "checks": {
@@ -369,7 +380,9 @@
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "IN PROGRESS: shared refresh single-flight/owner-guard/retention patch under verification by the recovery owner; affected vitest suites and browser smoke pending; no Draft yet."
+      ]
     },
     "blockers": []
   },
@@ -531,18 +544,34 @@
     ],
     "implementation": "Read existing AgentUsage, run, Timeline and account statistics through typed ports with actual consumers. Preserve unknown versus zero and cumulative-versus-delta semantics; do not build a native statistics/status dashboard.",
     "acceptance": "Unknown stays unknown; cumulative snapshots are not summed; current/run/account/child scopes remain distinct and read-only. Reads create no writer, chat or model call; SDK/protocol/UI render matching values.",
-    "status": "planned",
-    "branch": null,
-    "base": null,
-    "commit": null,
-    "pr_url": null,
+    "status": "delivered",
+    "branch": "pr612-split-task04-statistics",
+    "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+    "commit": "c187052ed68a2843f9fb1639f01bbebf1c717059",
+    "pr_url": "https://github.com/ait-app/ait/pull/650",
     "checks": {
       "required": [
         "affected fmt/clippy/build/tests and runtime smoke for changed backend",
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "cargo fmt --all --check: passed",
+        "cargo test -p provider statistics --lib: 5 passed, including active-turn readonly, restart, null/zero, cumulative snapshot replacement and OMP missing cache/cost regression",
+        "cargo test -p provider local::omp::stream --lib: 10 passed",
+        "cargo clippy -p provider --lib -- -D warnings: passed without warnings",
+        "cargo build -p daemon --bin daemon: passed; baseline filesystem fetch_update deprecation warning remains",
+        "npm run build:sdk: passed; generated outbound validator and compiled protocol/client",
+        "npm exec --workspace=@ait/protocol -- vitest run src/messages.agent-statistics.test.ts: 5 passed",
+        "npm exec --workspace=@ait/client -- vitest run src/daemon-client.test.ts src/protocol/connection.test.ts: 230 passed",
+        "npm run typecheck --workspace=@ait/mobile: passed",
+        "npm exec --workspace=@ait/mobile -- vitest run --project browser src/components/usage/session-statistics.browser.test.tsx: 4 passed in Chromium, including null/zero, snapshot replacement, old-host downgrade and late prior-epoch response",
+        "E2E_AIT_SERVER_BIN=$PWD/target/debug/daemon npm exec --workspace=@ait/mobile -- playwright test --project=browser e2e/browser/session-statistics.spec.ts: 3 passed; real shared application surface with isolated compiled daemon. Supported and old-host transport fixtures plus active native Codex fixture subprocess. Three direct reads left native request log unchanged; UI showed Running and reported model; no extra thread/start/resume or turn/start/steer/interrupt.",
+        "cargo test -p api guest::policy --lib: 39 passed",
+        "cargo clippy -p provider -p api --all-targets: passed with existing Rust 1.99 lint warnings in unrelated baseline files; no source suppression",
+        "oxlint and oxfmt --check on affected frontend/protocol/client/locales files: passed, zero frontend lint warnings",
+        "npm run check:docs: 7 checker tests passed; local links and 223 ADR metadata verified"
+      ]
     },
     "blockers": []
   },
@@ -1382,9 +1411,9 @@
     "depends_on": ["00", "09"],
     "donor_sections": [],
     "donor_paths": [],
-    "implementation": "Enable only after publicly verified safe isolation. Ordinary fork, ordinary prompt and permission-off are not substitutes.",
-    "acceptance": "Public isolation evidence plus runtime denial/cleanup checks exist before enabling; otherwise task remains blocked, not delivered.",
-    "status": "blocked",
+    "implementation": "Excluded by explicit user decision on 2026-11-11: MiniMax BTW is out of the split delivery queue. Ordinary fork/prompt/permission-off never qualified as isolation; no implementation is planned or delivered. This exclusion does not change task19 (DSH and MiniMax native Goal).",
+    "acceptance": "Not applicable while excluded: no delivery is expected. Re-entry would require a new user decision plus publicly verified safe isolation evidence and runtime denial/cleanup checks.",
+    "status": "excluded",
     "branch": null,
     "base": null,
     "commit": null,
@@ -1397,9 +1426,12 @@
       ],
       "results": []
     },
-    "blockers": [
-      "Publicly verified safe MiniMax isolation is required; ordinary fork/prompt/permission-off does not qualify."
-    ]
+    "blockers": [],
+    "user_decision": {
+      "decision": "excluded",
+      "date": "2026-11-11",
+      "provenance": "User instruction in the split execution session (director relay): skip MiniMax BTW (task13) only; excluded is not delivered and is not an overall blocker. Frozen donor sources/hashes remain unchanged."
+    }
   },
   {
     "id": "14",
@@ -2402,7 +2434,7 @@
     ],
     "implementation": "Export persisted Timeline to Markdown/HTML and deliver an actual authenticated client download, not a server-local path.",
     "acceptance": "Downloaded content matches committed Timeline and selection/escaping; remote host access, cancellation and failure behavior work without unbounded buffering.",
-    "status": "planned",
+    "status": "active",
     "branch": null,
     "base": null,
     "commit": null,
@@ -2608,7 +2640,7 @@
     ],
     "implementation": "Read inactive native history and previews without activating/restoring a writer, preserving original native storage and identity.",
     "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact.",
-    "status": "planned",
+    "status": "active",
     "branch": null,
     "base": null,
     "commit": null,
@@ -2935,18 +2967,27 @@
     ],
     "implementation": "Rewrite donor environment allowlist with tests: preserve only AIT_SERVER_{CODEX,CLAUDE,ANTIGRAVITY,OPENCODE,DEEPSEEK_HARNESS,PI,OMP,MINIMAX_CODE}_BIN plus DEEPSEEK_HARNESS_PROFILE and DEEPSEEK_HARNESS_TRANSPORT; keep unrelated AIT_SERVER_ variables stripped.",
     "acceptance": "Tests cover all ten allowed names and representative forbidden variables, preserve values, and match provider composition/daemon CLI consumers.",
-    "status": "planned",
-    "branch": null,
-    "base": null,
-    "commit": null,
-    "pr_url": null,
+    "status": "delivered",
+    "branch": "fix/pr612-s1-desktop-env-allowlist",
+    "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+    "commit": "9ba98138965a2c6a570552524b609bd803091c3a",
+    "pr_url": "https://github.com/ait-app/ait/pull/652",
     "checks": {
       "required": [
         "affected fmt/clippy/build/tests and runtime smoke for changed backend",
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "npx vitest run src/daemon/rust-daemon-environment.test.ts src/daemon/rust-daemon-launch-environment.test.ts src/daemon/rust-daemon.test.ts src/daemon/rust-daemon-readiness.test.ts — 4 files, 33 passed, 8 skipped (readiness ownership cases are skipIf(win32) on this Linux host only where pre-existing)",
+        "npx vitest run src/daemon/ — 16 files, 151 passed, 8 skipped",
+        "red check: strip-all filter restored temporarily; propagation and launcher tests failed (2 failed), then allowlist restored",
+        "apps/desktop typecheck: tsgo --noEmit -p tsconfig.json — clean after building @ait/protocol and @ait/client",
+        "oxfmt + oxlint on changed TS/CJS files — 0 warnings, 0 errors",
+        "npm run check:docs — 558 Markdown documents, 222 ADR metadata verified",
+        "git diff --check — clean",
+        "Rust: no Rust changes; no Rust tests or coverage run (per contract)"
+      ]
     },
     "blockers": []
   },
