@@ -309,7 +309,7 @@
     ],
     "implementation": "Use direct native Session RPC for Ait OMP. Introduce a standalone Rust ait-omp-acp CLI with stdio, logging and exit handling; ACP conversion and native RPC remain in provider. Remove aitd omp-acp and the in-process ACP client. Reserve _omp/rpc for external ACP capability negotiation. Preserve legacy handles/history/aliases without rewriting logs; reapply sandbox on create, restore and config reopen. Only launch user-installed OMP, never bundle/download its SDK or Bun. Align bridge version with desktop macOS/Linux builds, archives, signing/notarization and release asset verification.",
     "acceptance": "Native create/restore/config reopen and legacy handles/history work without a second writer; standalone CLI interoperates over stdio with correct logging/exit and sandbox behavior; unsupported negotiation downgrades explicitly. Packaging/version/signing/notarization/archive verification must pass for all required platforms before delivered. Missing macOS/Linux packaging or required signing/notarization evidence is an incomplete acceptance blocker, never an alternative success condition; no release performed.",
-    "status": "blocked",
+    "status": "excluded",
     "branch": "refactor/pr612-omp-native-boundary",
     "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
     "commit": "43a0e9529ec371df427f43562a8bddd9b0930188",
@@ -330,13 +330,16 @@
         "PASS docs: ADR-237 (status proposed pending review) interface-change/migration table and operations migration section; npm run check:docs; git diff --check. Cleanup head 43a0e9529ec371df427f43562a8bddd9b0930188."
       ]
     },
-    "blockers": [
-      "Actual macOS packaging, Developer ID signature verification and Apple notarization have not been exercised; Linux workstation has no Apple tools or configured remote host. Required evidence remains incomplete; Linux acceptance including normal-0077 installed smoke now passes. Not delivered."
-    ],
+    "blockers": [],
+    "user_decision": {
+      "decision": "excluded",
+      "date": "2026-11-11",
+      "provenance": "Explicit user instruction in the split execution session (director relay, 2026-11-11): '01 skip 31 skip'. Task01 is user-excluded: not delivered and not a required blocker. Draft PR651, branch refactor/pr612-omp-native-boundary and code head 43a0e9529ec371df427f43562a8bddd9b0930188 plus the Linux native/archive/normal-0077 proof are PRESERVED as the dependency SOURCE for tasks 05/06/07/27 and other stacked work; no migration code/branch removal, PR651 stays open, and no further macOS signing/notarization acceptance chase. Frozen donor sources/hashes remain unchanged."
+    },
     "ownership": {
-      "owner": "omp-native-boundary",
+      "owner": "omp-native-boundary (work concluded by user exclusion 2026-11-11)",
       "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-omp-boundary",
-      "note": "Head 43a0e952 = verified code 92abc77d + interface disclosure 22efa58f + Linux payload cleanup; Linux native/archive/normal-0077 deb+rpm acceptance passes. ONLY actual macOS build/Developer ID signature/notarization is blocked; not delivered."
+      "note": "Head 43a0e952 = verified code 92abc77d + interface disclosure 22efa58f + Linux payload cleanup; Linux native/archive/normal-0077 deb+rpm acceptance passes. User-excluded before macOS acceptance; branch/Draft651/code preserved as the dependency source for 05/06/07/27 etc. No macOS sign/notary chase."
     },
     "interface_disclosure": {
       "adr": "ADR-237 (proposed, pending review; docs commit 22efa58f on PR651)",
@@ -2910,7 +2913,7 @@
     ],
     "implementation": "Use the real ACP command catalog and terminal lifecycle signals. Preserve MCP and native command delivery; do not infer completion from timeout guesses.",
     "acceptance": "Command discovery/execution/draft queries are provenance-aware; terminal completion and cancellation are confirmed by protocol; startup failure keeps useful catalog and no duplicate session.",
-    "status": "blocked",
+    "status": "excluded",
     "branch": null,
     "base": null,
     "commit": null,
@@ -2921,11 +2924,16 @@
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "RESEARCH PRESERVED (observed 2026-11-11, official OpenCode 2.1.3): custom commands end_turn early (0.04-0.121s) before model requests; public ACP exposes no reliable terminal lifecycle signal; the internal native HTTP lease credential is unreachable without violating ADR-159/195 (not a credential request). This native-gap research is kept as historical evidence; the whole task including the catalog sub-slice is now user-excluded and is not pursued."
+      ]
     },
-    "blockers": [
-      "Native capability blocker (observed 2026-11-11, official OpenCode 2.1.3): custom commands end_turn early (0.04-0.121s) before model requests; public ACP exposes no reliable terminal lifecycle signal. The internal native HTTP lease credential is unreachable without violating ADR-159/195, so it is not a credential request. Delivery needs upstream completion semantics or a public attach surface; catalog+cleanup portions remain reachable after task06. Not delivered, no Draft yet; owner opencode-command-lifecycle persists. Not user-excluded (only task13 is)."
-    ]
+    "blockers": [],
+    "user_decision": {
+      "decision": "excluded",
+      "date": "2026-11-11",
+      "provenance": "Explicit user instruction in the split execution session (director relay, 2026-11-11): '01 skip 31 skip'. Task31 whole OpenCode command catalog + lifecycle is user-excluded: not delivered and not a required blocker; the earlier 'catalog+cleanup reachable after task06' sub-slice is NOT pursued. Prior native-gap research is preserved as evidence. Frozen donor sources/hashes remain unchanged."
+    }
   },
   {
     "id": "32",

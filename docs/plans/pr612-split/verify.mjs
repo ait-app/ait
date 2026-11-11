@@ -181,15 +181,28 @@ for (const id of taskIds) visit(id);
 assert.equal(evidence.worktree.base, sources.main_at_inspection);
 assert.equal(evidence.donor.head, sources.donor_commit);
 assert.equal(evidence.comparison.merge_base, sources.merge_base);
-// Task13 is excluded by explicit user decision (2026-11-11): not delivered, not a blocker.
+// User exclusions (explicit decisions, 2026-11-11): not delivered, not required blockers.
+// Task13 MiniMax BTW; task01 OMP native boundary ('01 skip'); task31 OpenCode lifecycle ('31 skip').
+for (const id of ["13", "01", "31"]) {
+  const task = tasks.find((entry) => entry.id === id);
+  assert.equal(task.status, "excluded", `${id} user-excluded`);
+  assert.equal(task.user_decision.decision, "excluded", `${id} decision`);
+  assert.equal(task.user_decision.date, "2026-11-11", `${id} decision date`);
+  assert.ok(task.user_decision.provenance.length > 0, `${id} provenance`);
+  assert.equal(task.blockers.length, 0, `${id} excluded is not a blocker`);
+}
+// Task13 never had code/PR. Task01 keeps its Draft651/branch/code as the preserved dependency
+// SOURCE for stacked tasks (05/06/07/27 etc.); exclusion does not delete that record.
 const task13 = tasks.find((task) => task.id === "13");
-assert.equal(task13.status, "excluded");
-assert.equal(task13.user_decision.decision, "excluded");
-assert.equal(task13.user_decision.date, "2026-11-11");
-assert.ok(task13.user_decision.provenance.length > 0);
 assert.equal(task13.commit, null);
 assert.equal(task13.pr_url, null);
-assert.equal(task13.blockers.length, 0);
+const task01 = tasks.find((task) => task.id === "01");
+assert.equal(task01.pr_url, "https://github.com/ait-app/ait/pull/651");
+assert.equal(task01.commit, "43a0e9529ec371df427f43562a8bddd9b0930188");
+assert.equal(task01.branch, "refactor/pr612-omp-native-boundary");
+const task31 = tasks.find((task) => task.id === "31");
+assert.equal(task31.commit, null);
+assert.equal(task31.pr_url, null);
 assert.ok(
   paths
     .filter((path) => path.path.startsWith("docs/assets/"))

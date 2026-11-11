@@ -98,8 +98,10 @@ SDK/protocol and docs checks. **No full Rust workspace tests or workspace-wide c
 work skips Rust. Existing donor pass counts, ignored tests, screenshots and local-model fixtures remain
 historical and are never recast as current live-model/platform acceptance. macOS/Windows, native keyboards,
 screen readers and signed packages are not proven by 390px browser screenshots.
-Required platform acceptance cannot be replaced by a blocker note. Task01 remains incomplete if
-required macOS/Linux packaging, signature or notarization verification has not actually passed.
+Required platform acceptance cannot be replaced by a blocker note. This gate still applies to any
+task that claims platform delivery; task01 itself is now **user-excluded (2026-11-11)** — its
+Linux-verified code stays the dependency source for stacked tasks, and its macOS signing/notarization
+acceptance is no longer chased (exclusion is not a delivery claim).
 
 ### OMP native boundary, compatibility and distribution
 
@@ -196,6 +198,11 @@ Blocked builtin text does not imply its GUI replacement exists. Terminal-only co
 Ait equivalents. No bot/webhook/Telegram additions. Preserve latest-main unrelated changes.
 Paseo #2056 closed because discussion moved, not because delivered; #3758 tracks plugins progress;
 #5003 fork-context remains pending. These are user-supplied provenance notes, not independent live verification.
+Explicit user exclusions (2026-11-11, “01 skip 31 skip” plus the earlier task13 decision): task01
+(OMP native boundary), task31 (whole OpenCode command catalog + lifecycle) and task13 (MiniMax BTW)
+are out of the delivery queue — not delivered, not required blockers. Task01's Draft651/branch/code
+and Linux proof remain the dependency source for stacked tasks; task31's native-gap research is
+preserved but its catalog sub-slice is not pursued. Task19 (DSH/MiniMax native Goal) is still required.
 
 ### Support slices
 
@@ -218,17 +225,25 @@ prevents duplicate ownership. `migration-refresh-recovery` (former central docs 
 after recurring external backend 400s; this worktree is now the sole central 647 docs metadata owner.
 New proposed ADRs stay **proposed pending review**; historical accepted ADRs are not rewritten.
 
+Concurrency (user-requested 2026-11-11): Deepseek + Qwen + GPT joint execution; the native TAI pool
+has 30+ active workers and a triple supplement is being added. Current leads: 03/06/07 via TAI
+component writers with pending mixed-model integration leads; 05 Qwen lead `dynamic-model-roles`;
+27 Qwen `omp-native-html-export`; 30 GPT `session-statistics`. Central feature status is not a fake
+all-completed claim; exclusions below are explicit user decisions, not deliveries.
+
 - **00** delivered inventory (historical) — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence
   `7ac9b4ac`. **CLOSED unmerged by author, record-only disposition** (仅作为记录 单独文档修改不计入合并);
   branch/commits preserved as the record index; not reopened, not a feature merge.
-- **01** blocked — Draft [#651](https://github.com/ait-app/ait/pull/651), branch
+- **01** **excluded by explicit user decision (2026-11-11, “01 skip 31 skip”)** — not delivered, not a
+  required blocker. Draft [#651](https://github.com/ait-app/ait/pull/651), branch
   `refactor/pr612-omp-native-boundary`, head `43a0e952` (= verified code `92abc77d` + interface
-  disclosure `22efa58f` + Linux payload cleanup; ADR-237 proposed). Linux native/archive/normal-0077
-  installed deb+rpm acceptance passes. **Only** actual macOS build/Developer ID signature/notarization
-  is blocked. Not delivered. Interface ledger (removed `aitd omp-acp` → standalone
-  `ait-omp-acp [--omp-bin]`, internal ACP client removal, `_omp/rpc` external-negotiation only,
-  sandbox on create/restore/reopen, legacy handle/native-history compatibility, UI/public SDK wire
-  unchanged) is recorded in tasks.json `01.interface_disclosure` and ADR-237 (approved context on #651).
+  disclosure `22efa58f` + Linux payload cleanup; ADR-237 proposed) and the Linux
+  native/archive/normal-0077 deb+rpm proof are **preserved as the dependency SOURCE** for tasks
+  05/06/07/27 and other stacked work. No migration code/branch removal, #651 stays open, and no
+  further macOS signing/notarization acceptance chase. Interface ledger (removed `aitd omp-acp` →
+  standalone `ait-omp-acp [--omp-bin]`, internal ACP client removal, `_omp/rpc` external-negotiation
+  only, sandbox on create/restore/reopen, legacy handle/native-history compatibility, UI/public SDK
+  wire unchanged) remains in tasks.json `01.interface_disclosure` and ADR-237.
 - **02** delivered (director-approved full scope/actual smoke/compat ledger) — Draft
   [#659](https://github.com/ait-app/ait/pull/659), branch `feat/pr612-task02-model-catalog-refresh`,
   head `efca94b8` (implementation `f14f4589`), base `248a93cf`; no Rust source/tests. Focused 58
@@ -261,8 +276,8 @@ New proposed ADRs stay **proposed pending review**; historical accepted ADRs are
   reserved respectively. 16/17 Goal designs are complete research artifacts, blocked on 05/07
   verification; no Goal code.
 - **13** excluded by explicit user decision (2026-11-11) — not delivered, not a required overall
-  blocker; task19 (DSH/MiniMax native Goal) unaffected. This is a user exclusion, not a claim that
-  all eight BTW providers are delivered.
+  blocker; task19 (DSH/MiniMax native Goal) **still required** and unaffected. This is a user
+  exclusion, not a claim that all eight BTW providers are delivered.
 - **26** delivered — Draft [#656](https://github.com/ait-app/ait/pull/656), branch
   `pr612-split-task26-timeline-export`, head `1648320c` (implementation `3059e638`), stacks on
   delivered 04 head `a0d80312`. ADR-239 proposed (amends ADR-049 for validated-origin download CORS).
@@ -276,10 +291,12 @@ New proposed ADRs stay **proposed pending review**; historical accepted ADRs are
   external 400 — no product blocker; original `dsh-history` owner also frozen); the recovery owner
   must inspect actual HEAD before mutating. No extra API changes. ADR-240 proposed; interface ledger
   in tasks.json `30.interface_disclosure`.
-- **31** blocked — native capability: official OpenCode 2.1.3 custom commands end_turn before model
-  requests and public ACP lacks a reliable terminal signal; needs upstream completion semantics or a
-  public attach surface (not a credential request). Catalog+cleanup reachable after 06; owner
-  `opencode-command-lifecycle` persists; ADR-250 reserved. Not user-excluded.
+- **31** **excluded by explicit user decision (2026-11-11, “01 skip 31 skip”)** — the whole OpenCode
+  command catalog + lifecycle task is out of the delivery queue, not delivered and not a required
+  blocker; the earlier “catalog+cleanup reachable after 06” sub-slice is **not pursued**. Prior
+  native-gap research (official OpenCode 2.1.3 early end_turn; no reliable public ACP terminal signal;
+  ADR-159/195 credential boundary) is preserved as historical evidence in tasks.json `31.checks`.
+  ADR-250 remains reserved.
 - **S1** delivered, director-accepted — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
   `fix/pr612-s1-desktop-env-allowlist`, head `234acc9c` (implementation `9ba98138`).
 - **S2** delivered, director-accepted — Draft [#653](https://github.com/ait-app/ait/pull/653), branch
