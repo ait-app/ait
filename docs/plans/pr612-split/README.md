@@ -221,8 +221,12 @@ workstreams are authorized; the register prevents duplicate ownership.
 - **04** delivered — Draft [#650](https://github.com/ait-app/ait/pull/650), branch
   `pr612-split-task04-statistics`, implementation `c187052e`.
 - **05/06/07** active — stacked on verified 01 Linux code; ADR-241/242/243 reserved respectively.
-- **09/16/21/24/25/31/32/33** queued behind their dependencies; ADR-246/245/247/248/249/250/251/252
+- **09/16/21/24/25/32/33** queued behind their dependencies; ADR-246/245/247/248/249/251/252
   reserved respectively.
+- **31** blocked — native capability: official OpenCode 2.1.3 custom commands end_turn before model
+  requests and public ACP lacks a reliable terminal signal; needs upstream completion semantics or a
+  public attach surface (not a credential request). Catalog+cleanup reachable after 06; owner
+  `opencode-command-lifecycle` persists; ADR-250 reserved. Not user-excluded.
 - **13** excluded by user decision (2026-11-11) — not delivered, not an overall blocker; task19 unaffected.
 - **26** active — stacks on delivered 04; ADR-239 reserved. **30** active — ADR-240 reserved.
 - **S1** delivered — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
