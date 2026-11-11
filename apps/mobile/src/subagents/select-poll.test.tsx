@@ -24,7 +24,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-test("refreshes a running observed child and stops polling after completion", async () => {
+test("refreshes a running observed child despite updates and stops after completion", async () => {
   vi.useFakeTimers();
   const client = {
     isConnected: true,
@@ -63,7 +63,19 @@ test("refreshes a running observed child and stops polling after completion", as
   });
   renderHook(() => useSubagentsForParent({ serverId, parentAgentId }));
 
-  await act(async () => vi.advanceTimersByTime(15_000));
+  await act(async () => vi.advanceTimersByTime(10_000));
+  act(() =>
+    store.setAgents(
+      serverId,
+      new Map([
+        [
+          child.id,
+          { ...child, observation: { rootAgentId: parentAgentId, observedAt: "streaming" } },
+        ],
+      ]),
+    ),
+  );
+  await act(async () => vi.advanceTimersByTime(5_000));
   expect(refreshUnifiedSubagents).toHaveBeenCalledOnce();
 
   act(() => store.setAgents(serverId, new Map([[child.id, { ...child, status: "idle" }]])));

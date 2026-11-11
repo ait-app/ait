@@ -66,3 +66,30 @@ fn missing_native_database_preserves_observed_status() {
         children
     );
 }
+
+#[test]
+fn database_override_resolves_like_opencode() {
+    let mut client = OpenCodeClient::new(PathBuf::from("opencode"));
+    client
+        .environment
+        .insert("XDG_DATA_HOME".into(), "/data".into());
+
+    client
+        .environment
+        .insert("OPENCODE_DB".into(), "custom.db".into());
+    assert_eq!(
+        database_path(&client),
+        Some(PathBuf::from("/data/opencode/custom.db"))
+    );
+    client
+        .environment
+        .insert("OPENCODE_DB".into(), "/elsewhere/custom.db".into());
+    assert_eq!(
+        database_path(&client),
+        Some(PathBuf::from("/elsewhere/custom.db"))
+    );
+    client
+        .environment
+        .insert("OPENCODE_DB".into(), ":memory:".into());
+    assert_eq!(database_path(&client), None);
+}

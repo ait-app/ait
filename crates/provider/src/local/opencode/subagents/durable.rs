@@ -18,22 +18,25 @@ struct OutcomeRow {
     outcome: Option<String>,
 }
 
+/// Mirror `OpenCode`'s database location: relative overrides resolve under its data directory.
 fn database_path(client: &OpenCodeClient) -> Option<PathBuf> {
-    if let Some(path) = client.environment.get("OPENCODE_DB") {
-        return Some(PathBuf::from(path));
+    let variable = |name: &str| {
+        client
+            .environment
+            .get(name)
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os(name).map(PathBuf::from))
+    };
+    let file = variable("OPENCODE_DB").unwrap_or_else(|| PathBuf::from("opencode.db"));
+    if file.as_os_str() == ":memory:" {
+        return None;
     }
-    if let Some(path) = std::env::var_os("OPENCODE_DB") {
-        return Some(PathBuf::from(path));
+    if file.is_absolute() {
+        return Some(file);
     }
-    let data = client
-        .environment
-        .get("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("XDG_DATA_HOME").map(PathBuf::from))
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
-        })?;
-    Some(data.join("opencode/opencode.db"))
+    let data = variable("XDG_DATA_HOME")
+        .or_else(|| variable("HOME").map(|home| home.join(".local/share")))?;
+    Some(data.join("opencode").join(file))
 }
 
 fn durable_status(

@@ -214,19 +214,15 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     );
   }, [client, params.parentAgentId, params.serverId, supported, unified]);
 
+  const observingRunningOpenCodeChild = paseoRows.some(
+    (row) =>
+      row.kind === "paseo" &&
+      row.provider === "opencode" &&
+      row.observation &&
+      row.status === "running",
+  );
   useEffect(() => {
-    if (
-      !client ||
-      !unified ||
-      !paseoRows.some(
-        (row) =>
-          row.kind === "paseo" &&
-          row.provider === "opencode" &&
-          row.observation &&
-          row.status === "running",
-      )
-    )
-      return;
+    if (!client || !unified || !observingRunningOpenCodeChild) return;
     const interval = setInterval(() => {
       if (!client.isConnected) return;
       void refreshUnifiedSubagents(client, params.serverId, params.parentAgentId).catch(
@@ -234,7 +230,7 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
       );
     }, 15_000);
     return () => clearInterval(interval);
-  }, [client, params.parentAgentId, params.serverId, paseoRows, unified]);
+  }, [client, observingRunningOpenCodeChild, params.parentAgentId, params.serverId, unified]);
 
   return useMemo(() => {
     if (params.providerParentSubagentId) return providerRows;

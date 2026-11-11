@@ -285,6 +285,9 @@ impl AgentManager {
             .reconcile_subagents(children)
             .await
             .map_err(|_| ErrorCode::AgentIo)?;
+        if let Some(agent) = self.live.get(id) {
+            agent.session.settle_subagents(&children);
+        }
         if let Some(timeline) = &self.timeline {
             super::observed::register_children(
                 self.registry.as_ref(),

@@ -190,6 +190,9 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
         Vec::new()
     }
+    /// Adopt terminal descendant outcomes verified from provider-owned durable state, so a later
+    /// stop of this session cannot replace them.
+    fn settle_subagents(&self, _children: &[super::controls::NativeSubagent]) {}
     /// Prepare a session-scoped question answer that requires durable user-input admission.
     /// This has no side effects; call `respond_permission` only after admission succeeds.
     /// # Errors
