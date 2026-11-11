@@ -75,18 +75,39 @@ test.describe("Task overview", () => {
     await page.goto("/tasks", { waitUntil: "commit" });
     await expect(page.getByTestId("task-board")).toBeVisible();
     await expect(page.getByTestId("task-lane-needs_action").getByTestId(/^task-card-/)).toHaveCount(
-      2,
+      1,
     );
     await expect(page.getByTestId("task-lane-running").getByTestId(/^task-card-/)).toHaveCount(3);
-    await expect(page.getByTestId("task-lane-review").getByTestId(/^task-card-/)).toHaveCount(2);
+    await expect(page.getByTestId("task-lane-review").getByTestId(/^task-card-/)).toHaveCount(3);
     await expect(page.getByTestId("task-lane-done").getByTestId(/^task-card-/)).toHaveCount(2);
-    await card(0).click();
-    await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
+    await expect(page.getByTestId("sidebar-task-counts")).toContainText("1");
+    await expect(card(0).getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
+    await expect(card(2).getByTestId("task-inline-stop")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("task-board-inline-desktop.png") });
+    await page.getByTestId("task-collapse-running").click();
+    await expect(page.getByTestId("task-lane-running").getByTestId(/^task-card-/)).toHaveCount(0);
+    const collapsed = await page.getByTestId("task-lane-running").boundingBox();
+    expect(collapsed!.width).toBeGreaterThanOrEqual(40);
+    expect(collapsed!.width).toBeLessThanOrEqual(44);
+    await page.screenshot({ path: testInfo.outputPath("task-board-collapsed.png") });
+    await page.getByTestId("task-expand-running").click();
+    await expect(card(2)).toBeVisible();
+    await card(0).getByTestId("task-inline-children").click();
+    await expect(card(0).getByTestId(`task-inline-child-${child.id}`)).toBeVisible();
+    await page.getByTestId("task-board-subtasks").click();
+    await expect(card(0).getByTestId("task-inline-children")).toHaveCount(0);
+    await page.getByTestId("task-board-subtasks").click();
+    await card(0).getByTestId("task-summary").click();
+    await expect(
+      page.getByTestId("task-detail").getByRole("button", { name: "Allow once", exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("task-mark-read")).toHaveCount(0);
     await expect(page.getByTestId(`task-child-${child.id}`)).toBeVisible();
     await expect(page.getByTestId("task-detail")).toContainText("回调参数校验已修复");
     await page.screenshot({ path: testInfo.outputPath("task-board-desktop.png"), fullPage: true });
 
+    await page.getByTestId("task-detail-close").click();
+    await page.getByTestId("task-board-search-toggle").click();
     await page.getByTestId("task-board-search").fill("发布");
     await expect(page.getByTestId(/^task-card-/)).toHaveCount(1);
     await expect(card(4)).toBeVisible();
@@ -94,28 +115,25 @@ test.describe("Task overview", () => {
     await expect(page.getByTestId(/^task-card-/)).toHaveCount(0);
     await page.getByTestId("task-board-search").fill("");
     await expect(page.getByTestId(/^task-card-/)).toHaveCount(9);
-    await page.getByRole("button", { name: "Allow once", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
+    await card(0).getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect(card(0).getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
     await expect
       .poll(async () => (await client.fetchAgent(ids[0]))?.agent.pendingPermissions.length)
       .toBe(0);
 
-    await card(2).click();
-    await page.getByTestId("task-stop").click();
+    await card(2).getByTestId("task-inline-stop").click();
     await expect.poll(async () => (await client.fetchAgent(ids[2]))?.agent.status).toBe("idle");
-    await card(5).click();
-    await page.getByTestId("task-mark-read").click();
+    await card(5).getByTestId("task-inline-mark-read").click();
     await expect(
       page.getByTestId("task-lane-done").getByTestId(`task-card-${getServerId()}-${ids[5]}`),
     ).toBeVisible();
-    await card(7).click();
-    await page.getByTestId("task-archive").click();
+    await card(7).getByTestId("task-inline-archive").click();
     await expect(card(7)).toHaveCount(0);
     await expect
       .poll(async () => Boolean((await client.fetchAgent(ids[7]))?.agent.archivedAt))
       .toBe(true);
-    await card(8).click();
-    await page.getByTestId("task-open-conversation").click();
+    await card(8).getByTestId("task-inline-open").click();
     await expect(page).toHaveURL(/\/workspace\//);
     expect(errors).toEqual([]);
   });
@@ -143,7 +161,17 @@ test.describe("Task overview", () => {
     const parentCard = page.getByTestId(`task-card-${getServerId()}-${parent.id}`);
     await expect(parentCard).toBeVisible();
     await expect(page.getByTestId(/^task-card-/)).toHaveCount(1);
-    await parentCard.click();
+    await page.screenshot({
+      path: testInfo.outputPath("task-board-inline-mobile.png"),
+      fullPage: true,
+    });
+    await parentCard.getByTestId("task-inline-children").click();
+    await parentCard.getByTestId(`task-inline-child-${child.id}`).click();
+    await expect(page.getByTestId("task-detail-sheet")).toBeVisible();
+    await page
+      .getByTestId("task-detail")
+      .getByRole("button", { name: "修复登录回调", exact: true })
+      .click();
     await expect(page.getByTestId("task-detail-sheet")).toBeVisible();
     await page.getByTestId(`task-child-${child.id}`).click();
     await expect(page.getByTestId("permission-request-deny")).toBeVisible();
@@ -151,6 +179,96 @@ test.describe("Task overview", () => {
     await page.getByTestId("permission-request-deny").click();
     await expect
       .poll(async () => (await client.fetchAgent(child.id))?.agent.pendingPermissions.length)
+      .toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(errors).toEqual([]);
+  });
+
+  test("keeps inline actions and question answers usable across tablet and phone layouts", async ({
+    page,
+  }, testInfo) => {
+    const client = workspace.client as unknown as DaemonClient;
+    const specs = [
+      ["运行任务看板回归测试", "permit-command"],
+      ["处理乱序的任务状态更新", "permit-file"],
+      ["选择平板上的详情布局", "permit-question"],
+      ["保持任务标题稳定", "stream"],
+      ["修复窄屏详情面板", "stream"],
+      ["优化移动端列表渲染", "stream"],
+      ["防止卡片标题更新时跳动", "已完成标题布局修复。"],
+      ["完善错误摘要", "已完成错误摘要。"],
+      ["扩展工具栏搜索", "已完成搜索。"],
+    ];
+    const ids: string[] = [];
+    for (const [title, prompt] of specs) {
+      const agent = await client.createAgent({
+        provider: "codex",
+        cwd: workspace.repoPath,
+        workspaceId: workspace.workspaceId,
+        title,
+        model: "offline-model",
+        thinkingOptionId: "high",
+      });
+      ids.push(agent.id);
+      await client.sendAgentMessage(agent.id, prompt);
+      if (ids.length > 6) await client.waitForFinish(agent.id);
+    }
+    await page.setViewportSize({ width: 1200, height: 820 });
+    await page.goto("/tasks", { waitUntil: "commit" });
+    const card = (index: number) => page.getByTestId(`task-card-${getServerId()}-${ids[index]}`);
+    await expect(card(2).getByTestId("task-answer")).toBeVisible();
+    await expect(card(2)).toContainText("Select one");
+    await expect(card(0)).toContainText("high");
+    await page.getByTestId("task-collapse-running").click();
+    await expect(page.getByTestId("task-expand-running")).toBeVisible();
+    const doneLane = await page.getByTestId("task-lane-done").boundingBox();
+    expect(doneLane!.x + doneLane!.width).toBeLessThanOrEqual(1200);
+    const reviewOpen = await card(6).getByTestId("task-inline-open").boundingBox();
+    expect(reviewOpen!.height).toBeLessThanOrEqual(32);
+    await page.screenshot({
+      path: testInfo.outputPath("task-board-reference-tablet.png"),
+      fullPage: true,
+    });
+
+    await page.getByTestId("task-board-filters").click();
+    await expect(page.getByTestId("task-board-filter-sheet")).toBeVisible();
+    await page.getByTestId("task-board-sort").click();
+    await page.getByText("最早活跃", { exact: true }).last().click();
+    await page.getByRole("button", { name: "显示 9 个任务", exact: true }).click();
+    await expect(page.getByTestId("task-board-filters")).toHaveAttribute("aria-pressed", "true");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId("task-tab-running").click();
+    await expect(page.getByTestId("task-inline-stop")).toHaveCount(3);
+    await expect(page.getByTestId("task-lane-running")).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("task-board-reference-phone.png"),
+      fullPage: true,
+    });
+    await page.getByTestId("task-board-search-toggle").click();
+    const search = page.getByTestId("task-board-search");
+    await search.fill("优化");
+    await expect(page.getByTestId("task-inline-stop")).toHaveCount(1);
+    const searchBounds = await search.boundingBox();
+    const filterBounds = await page.getByTestId("task-board-filters").boundingBox();
+    expect(searchBounds!.width).toBeGreaterThanOrEqual(120);
+    expect(searchBounds!.x + searchBounds!.width).toBeLessThanOrEqual(filterBounds!.x);
+    await search.fill("");
+    await expect(page.getByTestId("task-inline-stop")).toHaveCount(3);
+    await card(3).getByTestId("task-inline-stop").click();
+    await expect.poll(async () => (await client.fetchAgent(ids[3]))?.agent.status).toBe("idle");
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+    await page.getByTestId("task-tab-needs_action").click();
+    await card(2).getByTestId("task-answer").click();
+    const form = page.getByTestId("question-form-card");
+    await expect(form).toBeVisible();
+    expect((await client.fetchAgent(ids[2]))?.agent.pendingPermissions).toHaveLength(1);
+    await form.getByRole("radio", { name: "first", exact: true }).click();
+    await form.getByTestId("question-form-primary-action").click();
+    await expect
+      .poll(async () => (await client.fetchAgent(ids[2]))?.agent.pendingPermissions.length)
       .toBe(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -218,7 +336,7 @@ test.describe("Task overview", () => {
 
       await page.screenshot({ path: testInfo.outputPath("task-board-long-content.png") });
       await expectLanesToFit();
-      await card.click();
+      await card.getByTestId("task-summary").click();
       await expect(page.getByTestId("task-detail")).toBeVisible();
       await expectLanesToFit(true);
       await expect
@@ -258,7 +376,7 @@ test.describe("Task overview", () => {
       await expect(card).toBeVisible();
       await expect(page.getByTestId("task-board-notice")).toContainText("Offline demo host");
       await expect(page.getByTestId("task-board-notice")).not.toContainText("未能加载任务");
-      await card.click();
+      await card.getByTestId("task-summary").click();
       await expectLanesToFit(true);
       await page.screenshot({ path: testInfo.outputPath("task-board-dark-desktop.png") });
 

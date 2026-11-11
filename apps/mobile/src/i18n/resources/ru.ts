@@ -40,6 +40,7 @@ const scheduleCadencePluralForms = {
 
 export const ru: TranslationResources = {
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Выполнение команды",
     loadFailed: "Не удалось загрузить задачи",
     title: "Обзор задач",

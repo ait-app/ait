@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "명령 실행",
     loadFailed: "작업을 불러오지 못했습니다",
     title: "작업 개요",

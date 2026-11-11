@@ -18,6 +18,7 @@ const schedulePluralForms = {
 
 export const ptBR: TranslationResources = {
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Executar comando",
     loadFailed: "Não foi possível carregar as tarefas",
     title: "Visão das tarefas",

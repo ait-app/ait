@@ -71,16 +71,82 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(client: unknown, request = permission) {
+function mount(
+  client: unknown,
+  request = permission,
+  options: { compact?: boolean; onOpenDetails?: () => void } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PermissionRequestCard panel permission={request} client={client as DaemonClient | null} />
+      <PermissionRequestCard
+        panel
+        permission={request}
+        client={client as DaemonClient | null}
+        {...options}
+      />
     </QueryClientProvider>,
   );
 }
 
 describe("shared permission card", () => {
+  it("opens the full question from a compact card without approving it", () => {
+    const onOpenDetails = vi.fn();
+    const respondToPermissionAndWait = vi.fn();
+    mount(
+      { respondToPermissionAndWait },
+      { ...permission, request: { ...permission.request, kind: "question" } },
+      { compact: true, onOpenDetails },
+    );
+    fireEvent.click(screen.getByTestId("task-answer"));
+    expect(onOpenDetails).toHaveBeenCalledOnce();
+    expect(respondToPermissionAndWait).not.toHaveBeenCalled();
+  });
+
+  it("keeps additional command arguments visible in the compact request summary", () => {
+    mount(
+      null,
+      {
+        ...permission,
+        request: {
+          ...permission.request,
+          name: "commandExecution",
+          input: { command: "npm test", env: { TARGET: "production" } },
+        },
+      },
+      { compact: true },
+    );
+    expect(screen.getByText(/TARGET.*production/)).toBeTruthy();
+    expect((screen.getByText("Allow once") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("locks the card and detail actions together while the same request is pending", async () => {
+    let finish!: (value: unknown) => void;
+    const respondToPermissionAndWait = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const queryClient = new QueryClient();
+    const client = { respondToPermissionAndWait } as unknown as DaemonClient;
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PermissionRequestCard compact permission={permission} client={client} />
+        <PermissionRequestCard panel permission={permission} client={client} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getAllByText("Allow once")[0]);
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("Deny").every((button) => (button as HTMLButtonElement).disabled),
+      ).toBe(true),
+    );
+    expect(respondToPermissionAndWait).toHaveBeenCalledOnce();
+    finish({});
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  });
+
   it("sends the provider action ID and locks duplicate responses until resolution", async () => {
     let finish!: (value: unknown) => void;
     const respondToPermissionAndWait = vi.fn(
