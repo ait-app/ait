@@ -1,58 +1,54 @@
-# Ait 任务总览：设计与验收
+# Task board reference implementation — visual QA
 
-日期：2026-11-10。最初设计基于 `1ae8df3b`，PR 已适配 `b10dbf72`（0.2.6）的最新主分支。实现与操作说明见 [任务总览](docs/operations/task-board.md)。
+Result: **passed for the task-board scope**, with the intentional Ait adaptations below. GitHub attachment upload is blocked separately: the GitHub connector has no upload endpoint and Cua Driver reports no available browser windows. Screenshots remain outside Git; none are included in the code commit.
 
-**视觉依据与环境**
+## Target and source
 
-- 设计源：[design.png](docs/assets/task-board/design.png)，1717 × 916 px；[生成提示词](docs/assets/task-board/design-prompt.txt)。
-- 浏览器实际实现：[桌面](docs/assets/task-board/implementation-desktop.png)，1717 × 916 CSS px / 1717 × 916 PNG px；[手机宽度](docs/assets/task-board/implementation-mobile.png)，390 × 844 CSS px / 390 × 844 PNG px。deviceScaleFactor 均为 1。
-- 对照图：[全屏对照](docs/assets/task-board/comparison.webp)，上方为设计、下方为实现，不缩放或拉伸；[详情局部对照](docs/assets/task-board/comparison-detail.webp)，左为设计、右为实现，裁去实现的 36 px 现有应用顶部栏后按原像素并排。
-- 状态：浅色主题、中文、桌面 9 个父任务（2 待处理、3 运行、2 待查看、2 完成），选中审批任务；包含 2 个子任务及最近回复。手机打开父任务后进入待审批子任务。
-- Linux、仓库 Playwright Chromium、Expo Web、独立 Rust daemon、离线 Codex fixture。内置浏览器不可用后，用户明确批准使用 Playwright。页面使用真实客户端协议和测试主机数据；fixture 文案与离线模型名称不作为生产默认数据。
+The selected target is the user's 1920 × 1080 Better Paseo cover image in this conversation: iPad task board with a collapsed Running column, inline waiting/review actions, and a phone showing three running cards. The marketing background and device frames are not application UI.
 
-**发现与修复历史**
+Supplemental official source: <https://paseo.sh/plugins/roundreddot/better-paseo> and <https://github.com/RoundRedDot/better-paseo>. The current release images are newer than the selected cover and are supplemental only:
 
-1. 首次截图：手机弹层叠加了两层边距；命令审批直接展开 transport JSON；相对时间出现「更新于 now 前」。这些 P2 问题分别通过移除弹层重复内边距、将已知命令请求呈现为命令详情、使用本地化相对时间修复。遇到未知命令参数仍保留完整原始输入供审批。
-2. [中间版本](docs/assets/task-board/comparison-before.webp)：右侧详情从筛选栏下方开始，减少了可阅读高度（P2）。调整为从应用顶部栏下方占满右侧高度；四列最小宽度改为 240 px，当前桌面宽度无需横向滚动。
-3. 详情布局修复后复查：卡片、列标题和详情的小字层级偏弱（P2）。任务标题提高到 18 px，卡片元信息 14 px，列标题 16 px，详情标题 18 px，继续使用 Ait 系统字体与主题字重。
-4. 加入完整子任务与回复后，最近回复落到首屏以下（P2）。压缩详情段间距，子任务标题与状态并排，去掉审批面板中重复的提问句。最终局部对照同时显示权限选项、两个子任务、最近回复和打开会话按钮。
-5. 适配最新主分支后，保留新增「共享」入口和问答错误反馈；统一原生子任务遵守只读能力限制，未知状态不计为完成，待审批任务不显示「标记已查看」。重新运行桌面与手机浏览器流程，并重新捕获、组合、打开全屏及详情对照。以上问题均已修复，没有剩余 P0/P1/P2 发现。手机三个原生权限选项均位于可见滚动区域内，底部操作不会遮挡审批按钮。
+- `/tmp/ait-task-overview-preview/reference-ipad.png`
+- `/tmp/ait-task-overview-preview/reference-mobile.png`
 
-**五项视觉核对**
+The official iPad image and rendered tablet screenshot were inspected together in one comparison input; the official phone image and rendered phone screenshot were inspected together in another. The selected cover remains the authority for compactness and the collapsed-column composition.
 
-| 项目       | 结果                                                                                                                                                                        |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 字体与排版 | 使用已有系统 UI 字体及代码等宽字体；标题、元信息、状态的层级清楚。中文、Provider 文案和命令无截断。不同系统中文回退字形属于平台差异。                                       |
-| 间距与布局 | 四列、绿色选中边框、完整右侧详情与手机弹层均已核对；任务树和回复在桌面首屏可见。沿用现有 320 px 侧栏和顶部应用栏，区别于设计图的紧凑侧栏，属于接入当前应用的预期差异。      |
-| 颜色与主题 | 使用 Ait 的白／浅灰表面、绿色主操作、蓝色运行、棕色等待和红色失败 token。状态同时带图标和文字。                                                                             |
-| 图像与图标 | 页面没有装饰图片；沿用 Ait 原有 Provider 图标和 Lucide 图标。设计图中的品牌只在现有应用外壳适用的位置展示，没有重画品牌资产。                                               |
-| 文案与内容 | 页面文案已加入所有支持语言。Provider 返回的操作名称和错误文本保留原值；三种权限动作替代设计中示意性的两个按钮。示例多主机与项目改为测试主机实际数据，单主机时隐藏主机筛选。 |
+## Rendered evidence
 
-**交互验证**
+All captures come from the existing authorized Playwright browser, running the real client against a local test daemon with offline provider fixtures. These are rendered UI screenshots, not design mockups.
 
-- 桌面：目录状态计数、搜索与无结果、读取最近回复、真实权限允许、停止执行、标记已查看、归档、进入原会话。
-- 手机宽度：父任务聚合、子任务入口、弹层展示、真实权限拒绝、页面无横向溢出。
-- 单元测试：跨主机 ID 隔离、父子状态聚合、孤立／循环关系、归档过滤、组合筛选与排序、原生权限 action ID、重复点击、失败重试、离线禁用、问答 deadline、命令上下文保留、导航和翻译结构；新增只读／内部会话能力限制、未知原生子任务归类与问答表单回归。
-- 浏览器错误检查：两项流程的 `pageerror` 监听均为空；测试 fixture 同时收集浏览器 console 日志用于失败诊断。没有观察到页面运行异常。构建输出的 `NO_COLOR` 提示来自测试进程，不属于应用错误。
+| Capture           | Viewport and state                                                                           | File                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Desktop           | 1717 × 916, light, nine root tasks plus nested tasks, all columns                            | `/tmp/ait-task-overview-preview/inline-desktop-final.png`   |
+| Collapsed desktop | 1717 × 916, Running collapsed to 40 px                                                       | `/tmp/ait-task-overview-preview/inline-collapsed-final.png` |
+| Reference tablet  | 1200 × 820, light, nine tasks: three waiting, three running, three review; Running collapsed | `/tmp/ait-task-overview-preview/inline-tablet-final.png`    |
+| Reference phone   | 390 × 844, light, Running selected with three cards                                          | `/tmp/ait-task-overview-preview/inline-phone-final.png`     |
+| Dark desktop      | 2048 × 1152, 32 long-title tasks, offline host notice and detail panel                       | `/tmp/ait-task-overview-preview/inline-dark-final.png`      |
+| Detail            | 1717 × 916, approval, recent reply and child navigation                                      | `/tmp/ait-task-overview-preview/inline-detail-final.png`    |
 
-**检查结果**
+## Comparison history and fixes
 
-- 70 项相关单元测试通过；2 项浏览器端到端测试通过。
-- `npm run typecheck --workspace=@ait/mobile` 通过。
-- 修改文件的 `oxlint --deny-warnings`、`oxfmt --check`、`git diff --check` 通过。
-- `npm run check:docs` 通过。
-- 没有修改 `bins/` 或 `crates/` Rust 代码，按仓库要求未运行 Rust 测试或全工作区测试。
+1. Replaced the oversized title/filter area with a 48 px toolbar. Cards now use 14 px titles, 12 px metadata, provider/effort and branch pills, project icons, status beside the title, and inline actions.
+2. Compared the first tablet render with the source. A collapsed lane had zero computed width due to flex basis; an explicit 40 px minimum fixed it. The test now checks the collapsed lane width and restoration.
+3. Checked question and command cards. Questions show parsed question text and open the existing answer form; commands retain the full provider choice set and expose complete details on click. Unknown command input fields remain visible in the summary instead of being silently discarded.
+4. Compared the phone render with the source. Three running cards fit together; stop/open remain available. Added a geometry check that expanded search cannot overlap the toolbar controls.
+5. Inspected the narrow tablet review lane. The extra archive button forced Open to wrap vertically. Review cards now show Mark as read + Open; archive appears after marking read and remains available in details. Open has an 84 px minimum. The final screenshot and button-height check confirm a single-line label.
+6. Inspected final light and dark renders, long titles, side panel, collapsed lane, empty Done state, offline notice, and mobile tabs. No horizontal page overflow or clipped action labels remain in the tested viewports.
 
-**后续核对范围**
+## Visual and behavior checklist
 
-当前已验证 Chromium 桌面及手机宽度。未在原生 iOS／Android 设备、独立 Electron 打包产物、深色主题或长时间断线场景上进行设备验收。原生 Provider 子代理按需进入统一任务树，只读限制已做单元验证；浏览器交互测试使用托管父子任务，未运行真实原生子代理。费用统计、离开期间汇总和自动命名不属于此版本。
+- **Layout / spacing:** compact toolbar; four independent task lists; collapsible columns; no large page hero; mobile tabs; details inline when space permits and in a sheet otherwise.
+- **Typography:** uses existing Ait typography tokens and the user's interface font. SF/system font rendering from the reference is not bundled or forced; Linux/browser font fallback can differ. Long project names and titles have bounded wrapping.
+- **Colors:** uses Ait's light/dark surfaces, running blue, waiting amber, review/done green and failure red. Provider pills are neutral to match existing Ait styles rather than introducing a separate provider-color system.
+- **Icons / assets:** reuses ProjectIconView, provider icons and Lucide. No raster marketing or device-frame assets are shipped.
+- **Copy / data:** Chinese labels follow existing Ait localization. Offline test model names, permissions and localhost labels are test data. Provider-defined action labels are preserved verbatim. Ait host metadata and native read-only capabilities are retained.
+- **State:** failed tasks appear under Review; Waiting is reserved for input/approval. Sidebar displays waiting/running/review counts. Child aggregation remains intact when child rows are hidden.
+- **Actions:** inline allow/deny preserve provider action IDs; answer opens the existing form; stop/read/archive use the same actions and pending locks as details; Open navigates to the real conversation. Offline and observed task restrictions remain in force.
 
-**实现清单**
+## Verification
 
-- [x] `/tasks` 路由、侧栏与命令中心入口。
-- [x] 共享目录与权限协议接入。
-- [x] 四列状态、搜索、主机／项目筛选、排序。
-- [x] 父子任务、详情、审批、停止、已读、归档及会话导航。
-- [x] 桌面与手机宽度回归、视觉迭代与证据保存。
-
-final result: passed
+- 73 focused unit tests passed across the task-board model/hook, permissions, question forms and translations.
+- Four Playwright task-board scenarios passed, covering real daemon updates, inline approvals, stop/read/archive/open, questions, child navigation, filters/search, collapse/expand, responsive geometry and offline handling.
+- Mobile TypeScript, desktop main build, repository oxlint/oxfmt, UI lint checks, documentation checks and `git diff --check` passed.
+- No Rust code changed and no Rust tests were run.
+- Native touch gestures, physical iPad/iPhone rendering, the reference plugin's chat timeline and unrelated plugin features are outside this board change and are not claimed as verified.
