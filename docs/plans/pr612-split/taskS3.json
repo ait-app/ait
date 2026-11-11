@@ -16,8 +16,8 @@
   "status": "in_review",
   "branch": "fix/pr612-s3-package-daemon-alias",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-  "commit": null,
-  "pr_url": null,
+  "commit": "cdae0123f0da22636792763fb6545fd64faf5d07",
+  "pr_url": "https://github.com/ait-app/ait/pull/654",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
