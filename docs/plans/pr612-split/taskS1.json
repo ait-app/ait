@@ -13,8 +13,8 @@
   "status": "in_review",
   "branch": "fix/pr612-s1-desktop-env-allowlist",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-  "commit": null,
-  "pr_url": null,
+  "commit": "9ba98138965a2c6a570552524b609bd803091c3a",
+  "pr_url": "https://github.com/ait-app/ait/pull/652",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
