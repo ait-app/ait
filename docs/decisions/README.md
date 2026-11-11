@@ -101,7 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
-- [ADR-236：按 Host 记录的 Harness 用量账本](providers/adr-236-harness-usage-ledger.md)
+- [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
@@ -164,7 +164,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-074：OpenCode 原生 Provider](providers/adr-074-opencode-native-provider.md)（经 [ADR-110](providers/adr-110-opencode-private-protocol-boundary.md)、[ADR-115](providers/adr-115-opencode-acp-provider.md) 修订）
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)（经 [ADR-082](providers/adr-082-deepseek-harness-native-host.md) 修订）
 - [ADR-058：Server 的有界 metadata generation](providers/adr-058-daemon-metadata-generation.md)（经 [ADR-089](providers/adr-089-provider-owned-composition.md)、[ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md) 修订）
-- [ADR-052: Native provider capability completion](providers/adr-052-native-provider-capabilities.md)（经 [ADR-236](providers/adr-236-harness-usage-ledger.md) 修订）
+- [ADR-052: Native provider capability completion](providers/adr-052-native-provider-capabilities.md)（经 [ADR-246](providers/adr-246-harness-usage-ledger.md) 修订）
 - [ADR-050：独立 server 的 Claude Code Provider](providers/adr-050-claude-code-provider.md)（经 [ADR-052](providers/adr-052-native-provider-capabilities.md) 修订）
 - [ADR-046：Codex 增量显示历史与运行中追加输入](providers/adr-046-codex-streaming-and-steering.md)
 - [ADR-041：Agent 原生控制与 Provider 诊断、用量](providers/adr-041-agent-controls-provider-inspection.md)（经 [ADR-193](providers/adr-193-codex-native-protocol-compatibility.md) 修订）

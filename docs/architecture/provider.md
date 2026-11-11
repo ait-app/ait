@@ -134,7 +134,7 @@
 
 -   每台 Host 在 `agents/usage.sqlite3` 记录调用与请求级 token 用量；请求用量可累加，ADR-052 的
     `AgentUsage` 快照仍是替换值（`lastUsage`、`usage_updated` 不变）。账本经 `UsageLedger` 端口写入，
-    失败只记日志，不影响轮次（[ADR-236](../decisions/providers/adr-236-harness-usage-ledger.md)）。
+    失败只记日志，不影响轮次（[ADR-246](../decisions/providers/adr-246-harness-usage-ledger.md)）。
 -   桶互斥：`input` 不含缓存读写，`reasoning` 与 `cache_write_1h` 为子集、不计入合计；请求以
     `(agent_id, segment_id)` 幂等，汇总仅在插入生效时更新。
 -   `usage_status`：每个请求均为 `request` 边界且 `complete`、且至少一个，为 `exact`；无请求或提供方不上报
