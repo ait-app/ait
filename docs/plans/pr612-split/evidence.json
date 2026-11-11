@@ -1,0 +1,85 @@
+{
+  "root": {
+    "path": "/home/KirisameLonnet/Developers/ait",
+    "head": "19a829a462919c31693eac2c5caac86c207defac",
+    "branch": "fix/provider-recovery-and-error-details",
+    "initial_staged": 0,
+    "initial_unstaged": 66,
+    "initial_untracked": 17,
+    "upstream": "origin/fix/provider-recovery-and-error-details (gone)",
+    "treatment": "User changes remain untouched; no checkout/reset/stash/clean in root."
+  },
+  "worktree": {
+    "path": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-docs",
+    "branch": "docs/pr612-split-task00",
+    "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+    "head_at_creation": "248a93cf6ab409c8151e3a45ef6803ad418d6305"
+  },
+  "donor": {
+    "head": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+    "parents": [
+      "72de037ac0354ec63484d8427523e44b66488a6a",
+      "84f89951e080f848260c283bf01c5d35950fb00e"
+    ],
+    "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/vengeful-dodo",
+    "pr_url": "https://github.com/ait-app/ait/pull/612",
+    "pr_state": "OPEN",
+    "pr_is_draft": false,
+    "pr_updated_at": "2026-11-10T13:11:08Z"
+  },
+  "comparison": {
+    "merge_base": "84f89951e080f848260c283bf01c5d35950fb00e",
+    "donor_net": {
+      "files": 547,
+      "insertions": 41826,
+      "deletions": 1125
+    },
+    "main_since_base": {
+      "files": 153,
+      "insertions": 11200,
+      "deletions": 1056
+    },
+    "main_to_donor_direct": {
+      "files": 674,
+      "insertions": 42862,
+      "deletions": 12305
+    },
+    "warning": "The 674-path direct tree comparison includes main-only work and is not the PR donor net diff. Use the 547-path merge-base donor inventory; reconcile overlaps against latest main per slice."
+  },
+  "access": {
+    "github_account": "KirisameLonnet",
+    "token_scopes": ["gist", "read:org", "repo"],
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "pull": true,
+      "push": true,
+      "triage": true
+    },
+    "fetch": "git fetch origin main succeeded",
+    "blockers": []
+  },
+  "prior_work": {
+    "root_plan_exists": false,
+    "donor_plan_exists": false,
+    "main_plan_exists": false,
+    "all_refs_path_history": "git log --all -- docs/plans/pr612-split returned no commits",
+    "acceptance_worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-acceptance-final",
+    "acceptance_head": "8d5c308ecab17d7a00ab56a8c37ab3cc05b6c32a",
+    "interpretation": "Existing donor/acceptance work is historical, not proof of split task delivery."
+  },
+  "support": {
+    "S1": "main248a strips all AIT_SERVER_*; whitelist needs ten allowed names and tests",
+    "S2": "main248a enables reactCompiler but lacks normalized packages/protocol sources exclusion",
+    "S3": "main248a has no package:daemon alias; existing release-assets daemon implementation must be reused"
+  },
+  "setup_incidents": [
+    "Developers/.worktrees parent is root-owned; creation denied there.",
+    "Shell wrapper rewrote git worktree add to omp worktree add and copied source/build caches before timing out. Genuine git subprocess created isolated requested branch at the recorded clean worktree."
+  ],
+  "validation": {
+    "rust_tests": "not run; docs-only",
+    "coverage": "not applicable — no Rust behavior changed",
+    "task00_review": "User reviewed tasks, mappings and README; requested corrections incorporated. Mechanical inventory, documentation and formatting checks passed. Task01 implementation is permitted after task00 Draft publication."
+  }
+}
