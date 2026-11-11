@@ -20,6 +20,7 @@ if (root / "capture-environment").exists():
 mode = (root / "behavior").read_text() if (root / "behavior").exists() else "normal"
 output_lock = threading.Lock()
 pending = None
+replayed_usage = None
 thread_id = None
 ephemeral = False
 turn_text = ""
@@ -117,6 +118,22 @@ def emit(value):
 
 def history_path():
     return root / ("native-history-" + thread_id + ".json")
+
+def usage_path():
+    return root / ("native-usage-" + thread_id + ".json")
+
+def token_usage(params):
+    emit({"method":"thread/tokenUsage/updated", "params":params})
+    if params["threadId"] == thread_id and not ephemeral:
+        usage_path().write_text(json.dumps(params["tokenUsage"]))
+
+def resumed_usage():
+    # Like Codex 0.166, a resume re-reports the thread's last usage under its latest turn.
+    turns = load_history()
+    if not turns or not usage_path().exists():
+        return None
+    return {"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+        "turnId":turns[-1]["id"], "tokenUsage":json.loads(usage_path().read_text())}}
 
 def load_history():
     path = history_path()
@@ -353,6 +370,12 @@ for line in sys.stdin:
             sys.exit(0)
         result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
     emit({"id": request["id"], "result": result})
+    if method == "thread/resume" and mode == "replay-usage":
+        replayed_usage = resumed_usage()
+    if method == "turn/start" and replayed_usage:
+        # The replay arrives after the next turn starts, the latest a host can first read it.
+        emit(replayed_usage)
+        replayed_usage = None
     if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
         emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
     if method == "thread/realtime/start":
@@ -425,14 +448,14 @@ for line in sys.stdin:
             complete(pending, probe_scope(text))
             continue
         if text == "usage":
-            emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
-                "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})
+            token_usage({"threadId":thread_id,
+                "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}})
         if text == "request-usage":
             for total, turn in ((107, pending), (107, pending), (50, pending), (150, None)):
-                emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+                token_usage({"threadId":thread_id,
                     **({"turnId":turn} if turn else {}), "tokenUsage":{"total":{"totalTokens":total},
                     "last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,
-                    "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}}})
+                    "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
@@ -670,10 +693,10 @@ for line in sys.stdin:
         steered_inputs.append(user)
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": user}})
         if text == "request-usage":
-            emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+            token_usage({"threadId":thread_id,
                 "turnId":pending, "tokenUsage":{"total":{"totalTokens":200},
                 "last":{"inputTokens":40,"cachedInputTokens":10,"outputTokens":5,"totalTokens":45},
-                "modelContextWindow":200000}}})
+                "modelContextWindow":200000}})
         if mode != "steer-wrong-id":
             complete(pending, "stream + " + text if turn_text == "stream" else text)
     elif method == "turn/interrupt":

@@ -256,7 +256,7 @@ impl ClaudeRequests {
     }
 }
 
-/// Live Codex request usage, deduplicated by the thread's running `total.totalTokens`.
+/// Live Codex request usage of one thread, deduplicated by its running `total.totalTokens`.
 #[derive(Debug, Default)]
 pub(crate) struct CodexRequests {
     /// Largest running total accepted for this thread.
@@ -264,11 +264,26 @@ pub(crate) struct CodexRequests {
 }
 
 impl CodexRequests {
-    /// Observe one `thread/tokenUsage/updated` payload of turn `turn`.
+    /// Observe one `thread/tokenUsage/updated` payload of this thread.
     ///
-    /// Returns a request segment from `last` only when `total.totalTokens` is strictly greater
-    /// than the last accepted total; duplicate and out-of-order payloads return `None`.
-    pub(crate) fn observe(&mut self, usage: &Value, turn: &str) -> Option<RequestUsage> {
+    /// # Arguments
+    ///
+    /// * `usage` - The payload's `tokenUsage` object
+    /// * `turn` - Active turn the payload is attributed to; `None` for a payload outside it,
+    ///   such as the previous turn's usage that a resumed app server reports again
+    /// * `child` - Sub-agent thread id when this thread is a child of the session's thread
+    ///
+    /// # Returns
+    ///
+    /// A request segment from `last` only when `total.totalTokens` is strictly greater than the
+    /// last accepted total and `turn` is known. Duplicate and out-of-order payloads return
+    /// `None`; a newer payload without `turn` returns `None` but still advances the cursor.
+    pub(crate) fn observe(
+        &mut self,
+        usage: &Value,
+        turn: Option<&str>,
+        child: Option<&str>,
+    ) -> Option<RequestUsage> {
         let total = field(usage.get("total")?, "totalTokens", "total_tokens")?;
         if self
             .accepted_total
@@ -276,6 +291,10 @@ impl CodexRequests {
         {
             return None;
         }
+        let Some(turn) = turn else {
+            self.accepted_total = Some(total);
+            return None;
+        };
         let last = usage.get("last").filter(|last| last.is_object())?;
         let input = field(last, "inputTokens", "input_tokens");
         let output = field(last, "outputTokens", "output_tokens");
@@ -285,8 +304,11 @@ impl CodexRequests {
             field(last, "cacheWriteInputTokens", "cache_write_input_tokens").unwrap_or_default();
         let output_tokens = output.unwrap_or_default();
         let request = RequestUsage {
-            segment_id: format!("codex:{turn}:{total}"),
-            parent: None,
+            segment_id: match child {
+                None => format!("codex:{turn}:{total}"),
+                Some(child) => format!("codex:{turn}:{child}:{total}"),
+            },
+            parent: child.map(str::to_owned),
             model: None,
             boundary: UsageBoundary::Request,
             // Codex reports input including the cache read and cache write tokens.

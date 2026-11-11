@@ -74,6 +74,8 @@ async fn finished(socket: &mut Socket, id: &str) {
 #[tokio::test]
 async fn restart_interrupts_open_calls_and_replayed_history_is_counted_once() {
     let fixture = NativeFixture::new();
+    // Like Codex 0.166, every resume re-reports the thread's last usage under its latest turn.
+    std::fs::write(fixture.cwd.join("behavior"), "replay-usage").unwrap();
     let state = fixture.root.path().join("state");
     let log = fixture.root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
@@ -134,8 +136,12 @@ async fn restart_interrupts_open_calls_and_replayed_history_is_counted_once() {
         [&interrupted["calls"], &interrupted["missingCalls"]],
         [&json!(1), &json!(1)]
     );
+    // The restart continuation is a call too. The interrupted turn's usage, replayed on resume
+    // and first read during that call, is attributed to neither later call.
+    let completed = user_calls(&rows, "completed").unwrap();
+    assert_eq!(completed["calls"], 3, "{rows:?}");
     assert_eq!(
-        tokens(user_calls(&rows, "completed").unwrap()),
+        tokens(completed),
         [&json!(2), &json!(140), &json!(14), &json!(60)]
     );
     terminate(&mut process).await;

@@ -387,12 +387,13 @@ async fn thread_usage_notifications_without_turn_identity_are_retained() {
     session.close().await.unwrap();
 }
 
-/// Run one `request-usage` turn, returning its id, request segments and snapshot count.
-async fn request_usage_turn(
+/// Run one turn of `text`, returning its id, request segments and snapshot count.
+async fn usage_turn(
     session: &mut dyn AgentSession,
+    text: &str,
     config: &StoredAgentConfig,
 ) -> (String, Vec<crate::ports::usage_ledger::RequestUsage>, usize) {
-    let turn = session.start_turn("request-usage", config).await.unwrap();
+    let turn = session.start_turn(text, config).await.unwrap();
     let mut requests = Vec::new();
     let mut snapshots = 0;
     loop {
@@ -419,7 +420,8 @@ async fn request_usage_is_deduplicated_by_running_total_and_queued_before_comple
     let spec = fixture.spec();
     let mut session = client.create_session(&spec).await.unwrap();
     assert!(session.reports_token_usage());
-    let (turn, requests, snapshots) = request_usage_turn(session.as_mut(), &spec.config).await;
+    let (turn, requests, snapshots) =
+        usage_turn(session.as_mut(), "request-usage", &spec.config).await;
     assert_eq!(
         snapshots, 4,
         "every notification still publishes its snapshot"
@@ -446,11 +448,11 @@ async fn request_usage_cursor_restarts_with_a_relaunched_app_server() {
     let client = fixture.client();
     let mut spec = fixture.spec();
     let mut session = client.create_session(&spec).await.unwrap();
-    request_usage_turn(session.as_mut(), &spec.config).await;
+    usage_turn(session.as_mut(), "request-usage", &spec.config).await;
     // A changed system prompt relaunches the app server and resumes the same thread.
     spec.config.system_prompt = Some("relaunch".to_owned());
 
-    let (turn, requests, _) = request_usage_turn(session.as_mut(), &spec.config).await;
+    let (turn, requests, _) = usage_turn(session.as_mut(), "request-usage", &spec.config).await;
 
     assert_eq!(
         segment_ids(&requests),
@@ -458,4 +460,30 @@ async fn request_usage_cursor_restarts_with_a_relaunched_app_server() {
         "lower totals from the new process are accepted"
     );
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn usage_replayed_on_resume_adds_no_segment_to_the_next_turn() {
+    let fixture = Fixture::new();
+    fixture.mode("replay-usage");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    usage_turn(session.as_mut(), "request-usage", &spec.config).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+
+    // The resumed app server re-reports the previous turn's last usage under that turn.
+    let (_, requests, snapshots) = usage_turn(resumed.as_mut(), "after-resume", &spec.config).await;
+
+    assert_eq!(
+        snapshots, 1,
+        "the replayed snapshot still reaches the context meter"
+    );
+    assert_eq!(segment_ids(&requests), Vec::<&str>::new());
+    resumed.close().await.unwrap();
 }

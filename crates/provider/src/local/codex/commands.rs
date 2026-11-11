@@ -106,13 +106,14 @@ impl CodexSession {
             return self.stream.compacted(turn.or(self.active_turn.as_deref()));
         }
         if method == "thread/tokenUsage/updated" {
+            // Usage of another turn, such as the previous turn's usage that a resumed app server
+            // reports again, belongs to no call here and only advances the cursor.
+            let turn = match params["turnId"].as_str().filter(|turn| !turn.is_empty()) {
+                Some(turn) => self.active_turn.as_deref().filter(|active| *active == turn),
+                None => self.active_turn.as_deref(),
+            };
             // Queued behind the snapshot; `turn/completed` queues the terminal event after it.
-            if let Some(turn) = params["turnId"]
-                .as_str()
-                .filter(|turn| !turn.is_empty())
-                .or(self.active_turn.as_deref())
-                && let Some(request) = self.requests.observe(&params["tokenUsage"], turn)
-            {
+            if let Some(request) = self.requests.observe(&params["tokenUsage"], turn, None) {
                 self.stream
                     .events
                     .push_back(AgentTurnEvent::RequestUsage(request));

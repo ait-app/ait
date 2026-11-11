@@ -175,7 +175,7 @@ fn codex_maps_last_request_and_accepts_only_growing_totals() {
     };
 
     assert_eq!(
-        requests.observe(&usage(500), "turn-1"),
+        requests.observe(&usage(500), Some("turn-1"), None),
         Some(RequestUsage {
             segment_id: "codex:turn-1:500".to_owned(),
             parent: None,
@@ -191,10 +191,13 @@ fn codex_maps_last_request_and_accepts_only_growing_totals() {
             complete: true,
         })
     );
-    assert_eq!(requests.observe(&usage(500), "turn-1"), None);
-    assert_eq!(requests.observe(&usage(400), "turn-1"), None);
+    assert_eq!(requests.observe(&usage(500), Some("turn-1"), None), None);
+    assert_eq!(requests.observe(&usage(400), Some("turn-1"), None), None);
     assert_eq!(
-        requests.observe(&usage(612), "turn-2").unwrap().segment_id,
+        requests
+            .observe(&usage(612), Some("turn-2"), None)
+            .unwrap()
+            .segment_id,
         "codex:turn-2:612"
     );
 }
@@ -208,7 +211,7 @@ fn codex_subtracts_cache_writes_from_input() {
         "cached_input_tokens":4,"cache_write_input_tokens":9,"output_tokens":1}});
 
     let buckets = [&camel, &snake].map(|usage| {
-        let request = requests.observe(usage, "turn").unwrap();
+        let request = requests.observe(usage, Some("turn"), None).unwrap();
         (
             request.input_tokens,
             request.cache_read_tokens,
@@ -227,7 +230,8 @@ fn codex_keeps_input_non_negative_and_omits_absent_reasoning() {
         .observe(
             &json!({"total":{"total_tokens":9},"last":{"input_tokens":3,"cached_input_tokens":8,
                 "output_tokens":1}}),
-            "turn",
+            Some("turn"),
+            None,
         )
         .unwrap();
     assert_eq!(request.input_tokens, 0);
@@ -235,27 +239,61 @@ fn codex_keeps_input_non_negative_and_omits_absent_reasoning() {
     assert_eq!(request.reasoning_tokens, None);
 
     assert_eq!(
-        requests.observe(&json!({"last":{"inputTokens":1}}), "turn"),
+        requests.observe(&json!({"last":{"inputTokens":1}}), Some("turn"), None),
         None
     );
     assert_eq!(
-        requests.observe(&json!({"total":{"totalTokens":20}}), "turn"),
+        requests.observe(&json!({"total":{"totalTokens":20}}), Some("turn"), None),
         None
     );
     let partial = requests
         .observe(
             &json!({"total":{"totalTokens":21},"last":{"inputTokens":1}}),
-            "turn",
+            Some("turn"),
+            None,
         )
         .unwrap();
     assert!(!partial.complete);
     assert_eq!(
         requests.observe(
             &json!({"total":{"totalTokens":30},"last":{"inputTokens":1}}),
-            &"t".repeat(512)
+            Some(&"t".repeat(512)),
+            None,
         ),
         None
     );
+}
+
+#[test]
+fn codex_usage_outside_the_active_turn_only_advances_the_cursor() {
+    let mut requests = CodexRequests::default();
+    let usage = |total: u64| json!({"total":{"totalTokens":total},"last":{"inputTokens":10,"outputTokens":2}});
+
+    assert_eq!(requests.observe(&usage(150), None, None), None);
+    assert_eq!(requests.observe(&usage(150), Some("turn"), None), None);
+    assert_eq!(
+        requests
+            .observe(&usage(160), Some("turn"), None)
+            .unwrap()
+            .segment_id,
+        "codex:turn:160"
+    );
+}
+
+#[test]
+fn codex_child_requests_carry_their_thread_as_parent() {
+    let mut requests = CodexRequests::default();
+    let usage = json!({"total":{"totalTokens":40},"last":{"inputTokens":10,"outputTokens":2}});
+
+    let request = requests
+        .observe(&usage, Some("turn"), Some("child-thread"))
+        .unwrap();
+
+    assert_eq!(request.segment_id, "codex:turn:child-thread:40");
+    assert_eq!(request.parent.as_deref(), Some("child-thread"));
+    let long = "c".repeat(512);
+    let mut other = CodexRequests::default();
+    assert_eq!(other.observe(&usage, Some("turn"), Some(&long)), None);
 }
 
 #[test]
