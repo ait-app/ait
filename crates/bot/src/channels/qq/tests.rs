@@ -39,6 +39,12 @@ fn group_event() -> Value {
         "author":{"member_openid":"member-open"}})
 }
 
+fn full_group_event(content: &str) -> Value {
+    let mut event = group_event();
+    event["content"] = json!(content);
+    event
+}
+
 #[test]
 fn private_messages_route_to_the_sender() {
     let routed = inbound(&channel(false), PRIVATE_MESSAGE, &private_event())
@@ -52,16 +58,40 @@ fn private_messages_route_to_the_sender() {
 
 #[test]
 fn group_mentions_need_the_channel_to_allow_groups() {
-    let routed = inbound(&channel(true), GROUP_MESSAGE, &group_event())
+    let routed = inbound(&channel(true), GROUP_AT_MESSAGE, &group_event())
         .unwrap()
         .unwrap();
     assert_eq!(routed.peer, "group:group-1");
     assert_eq!(routed.sender, "member-open");
     assert_eq!(routed.text, "hi there");
     assert!(
-        inbound(&channel(false), GROUP_MESSAGE, &group_event())
+        inbound(&channel(false), GROUP_AT_MESSAGE, &group_event())
             .unwrap()
             .is_none()
+    );
+}
+
+#[test]
+fn full_group_events_route_even_without_a_bot_mention() {
+    let channel = channel(true);
+    let routed = inbound(
+        &channel,
+        GROUP_ALL_MESSAGE,
+        &full_group_event("hello everyone"),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(routed.peer, "group:group-1");
+    assert_eq!(routed.sender, "member-open");
+    assert_eq!(routed.text, "hello everyone");
+    assert!(
+        inbound(
+            &channel(false),
+            GROUP_ALL_MESSAGE,
+            &full_group_event("hello everyone"),
+        )
+        .unwrap()
+        .is_none()
     );
 }
 
@@ -490,8 +520,8 @@ async fn an_unknown_group_member_is_ignored_until_they_present_the_pairing_code(
     right["id"] = json!("msg-3");
     right["content"] = json!(format!("<@!bot> {code}"));
     let address = gateway(vec![
-        json!({"op":0,"s":2,"t":GROUP_MESSAGE,"d":wrong}),
-        json!({"op":0,"s":3,"t":GROUP_MESSAGE,"d":right}),
+        json!({"op":0,"s":2,"t":GROUP_ALL_MESSAGE,"d":wrong}),
+        json!({"op":0,"s":3,"t":GROUP_ALL_MESSAGE,"d":right}),
     ])
     .await;
     let (fixture_view, platform_view) = (&fixture, &platform);
