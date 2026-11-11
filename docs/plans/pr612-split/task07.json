@@ -15,7 +15,7 @@
     "pr_url": "https://github.com/ait-app/ait/pull/651",
     "verified_code_commit": "92abc77dbede57caf4c4b4bf1be7076982ffea48"
   },
-  "commit": null,
+  "commit": "116a8560ab4d03ec0a7fa671b978a849680609c3",
   "pr_url": "https://github.com/ait-app/ait/pull/657",
   "adr": "ADR-243 (proposed)",
   "compatibility": "agent-secret-questions-v1 is an optional, explicit app capability; only literal true opts in. Old hosts may omit it without blocking connection. New hosts project incapable secret views to cancel-only tool permissions and reject secret ALLOW server-side. Negotiation is compatibility, not authorization or proof of honest client implementation. No new RPC envelope or ACP structure. EventHub::subscribe gains a mandatory capability argument; all callers migrate, internal observers default incapable. ADR-243 remains proposed. Task01 and task31 are skipped by user decision; verified task01 prerequisite code remains a dependency, not a downstream macOS-CI blocker.",
