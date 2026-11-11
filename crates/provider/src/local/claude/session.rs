@@ -341,6 +341,16 @@ impl ClaudeSession {
     }
 
     /// Settle the active turn on a foreground `result`, after queueing its request segments.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - Foreground native `result` frame of the active turn
+    ///
+    /// # Errors
+    ///
+    /// Returns `AgentSessionError::Failed` when the active turn disappeared, and propagates
+    /// failures to project the result text or to record its timeline notes. A result that
+    /// arrives after the terminal event or while a steer is unread queues nothing terminal.
     fn settle(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.stream.events.iter().any(|event| {
             matches!(
@@ -382,6 +392,7 @@ impl ClaudeSession {
             AgentTurnEvent::Failed
         };
         self.stream.events.push_back(result);
+        self.requests.settle();
         Ok(())
     }
 
@@ -698,6 +709,7 @@ impl AgentSession for ClaudeSession {
         self.transport = None;
         self.permissions.clear();
         self.finish_requests(None);
+        self.requests.settle();
         self.stream
             .events
             .extend(self.children.stopped(false, true));

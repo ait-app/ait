@@ -80,6 +80,8 @@ pub(crate) struct ClaudeRequests {
     foreground_seen: bool,
     /// Foreground results observed in this turn.
     results: u64,
+    /// Whether the turn's terminal event is queued; later frames belong to no turn.
+    settled: bool,
 }
 
 impl ClaudeRequests {
@@ -88,10 +90,21 @@ impl ClaudeRequests {
         *self = Self::default();
     }
 
+    /// Stop observing the turn once its terminal event is queued, until the next `begin`.
+    ///
+    /// Frames consumed before the terminal event is delivered must not add segments after it.
+    pub(crate) fn settle(&mut self) {
+        self.settled = true;
+    }
+
     /// Observe one live native frame of turn `turn`.
     ///
-    /// Returns the previous message of the frame's stream once a different message starts.
+    /// Returns the previous message of the frame's stream once a different message starts, and
+    /// `None` after the turn settled.
     pub(crate) fn observe(&mut self, record: &Value, turn: &str) -> Option<RequestUsage> {
+        if self.settled {
+            return None;
+        }
         let parent = record["parent_tool_use_id"].as_str();
         // A sidechain frame without its tool call cannot be attributed to a sub-agent stream.
         if parent.is_none() && record["isSidechain"] == true {
@@ -119,8 +132,12 @@ impl ClaudeRequests {
     /// Emit every open message when a foreground result or cancellation ends the turn.
     ///
     /// With a `result` and no foreground per-message usage since the previous result, also
-    /// emits one turn segment of `result.usage` minus what was already attributed.
+    /// emits one turn segment of `result.usage` minus what was already attributed. Returns no
+    /// segments after the turn settled.
     pub(crate) fn finish(&mut self, turn: &str, result: Option<&Value>) -> Vec<RequestUsage> {
+        if self.settled {
+            return Vec::new();
+        }
         let mut requests = Vec::with_capacity(self.children.len() + 2);
         if let Some(open) = self.foreground.take() {
             requests.extend(self.close(open, None, turn, UsageBoundary::Request));

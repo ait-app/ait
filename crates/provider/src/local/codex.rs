@@ -753,6 +753,8 @@ impl CodexSession {
             return Err(error);
         }
         self.transport = Some(transport);
+        // The new process may restart the thread's running total; ledger ids stay idempotent.
+        self.requests = crate::local::usage::requests::CodexRequests::default();
         Ok(())
     }
 }
@@ -1228,6 +1230,16 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
 mod tests;
 
 /// Add the cwd, policies, model and instructions that start or resume a live thread.
+///
+/// # Arguments
+///
+/// * `params` - `thread/start` or `thread/resume` parameters to extend in place
+/// * `spec` - Session specification supplying the cwd and configuration
+/// * `confined` - Whether the session runs under write confinement
+///
+/// # Errors
+///
+/// Propagates the error returned when the configuration cannot be translated to Codex config.
 fn launch_params(
     params: &mut Value,
     spec: &AgentSessionSpec,

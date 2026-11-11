@@ -237,3 +237,22 @@ fn codex_keeps_input_non_negative_and_omits_absent_reasoning() {
         None
     );
 }
+
+#[test]
+fn claude_settled_turn_ignores_later_frames_until_the_next_turn() {
+    let mut requests = ClaudeRequests::default();
+    requests.observe(&start("msg_1", &json!({"input_tokens":1})), "turn");
+    assert_eq!(requests.finish("turn", Some(&json!({"usage":{}}))).len(), 1);
+
+    requests.settle();
+    requests.observe(&start("msg_2", &json!({"input_tokens":2})), "turn");
+    assert_eq!(
+        requests.observe(&start("msg_3", &json!({"input_tokens":3})), "turn"),
+        None
+    );
+    assert!(requests.finish("turn", None).is_empty());
+
+    requests.begin();
+    requests.observe(&start("msg_2", &json!({"input_tokens":2})), "next");
+    assert_eq!(requests.finish("next", None).len(), 1);
+}

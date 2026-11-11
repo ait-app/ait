@@ -387,6 +387,31 @@ async fn thread_usage_notifications_without_turn_identity_are_retained() {
     session.close().await.unwrap();
 }
 
+/// Run one `request-usage` turn, returning its id, request segments and snapshot count.
+async fn request_usage_turn(
+    session: &mut dyn AgentSession,
+    config: &StoredAgentConfig,
+) -> (String, Vec<crate::ports::usage_ledger::RequestUsage>, usize) {
+    let turn = session.start_turn("request-usage", config).await.unwrap();
+    let mut requests = Vec::new();
+    let mut snapshots = 0;
+    loop {
+        match terminal(session).await.unwrap() {
+            AgentTurnEvent::RequestUsage(request) => requests.push(request),
+            AgentTurnEvent::Usage(_) => snapshots += 1,
+            AgentTurnEvent::Completed(_) => return (turn, requests, snapshots),
+            event => assert!(!matches!(event, AgentTurnEvent::Failed)),
+        }
+    }
+}
+
+fn segment_ids(requests: &[crate::ports::usage_ledger::RequestUsage]) -> Vec<&str> {
+    requests
+        .iter()
+        .map(|request| request.segment_id.as_str())
+        .collect()
+}
+
 #[tokio::test]
 async fn request_usage_is_deduplicated_by_running_total_and_queued_before_completion() {
     let fixture = Fixture::new();
@@ -394,30 +419,13 @@ async fn request_usage_is_deduplicated_by_running_total_and_queued_before_comple
     let spec = fixture.spec();
     let mut session = client.create_session(&spec).await.unwrap();
     assert!(session.reports_token_usage());
-    let turn = session
-        .start_turn("request-usage", &spec.config)
-        .await
-        .unwrap();
-    let mut requests = Vec::new();
-    let mut snapshots = 0;
-    loop {
-        match terminal(session.as_mut()).await.unwrap() {
-            AgentTurnEvent::RequestUsage(request) => requests.push(request),
-            AgentTurnEvent::Usage(_) => snapshots += 1,
-            AgentTurnEvent::Completed(_) => break,
-            event => assert!(!matches!(event, AgentTurnEvent::Failed)),
-        }
-    }
+    let (turn, requests, snapshots) = request_usage_turn(session.as_mut(), &spec.config).await;
     assert_eq!(
         snapshots, 4,
         "every notification still publishes its snapshot"
     );
-    let identities: Vec<_> = requests
-        .iter()
-        .map(|request| request.segment_id.as_str())
-        .collect();
     assert_eq!(
-        identities,
+        segment_ids(&requests),
         [format!("codex:{turn}:107"), format!("codex:{turn}:150")]
     );
     assert_eq!(
@@ -428,6 +436,26 @@ async fn request_usage_is_deduplicated_by_running_total_and_queued_before_comple
             requests[0].reasoning_tokens
         ),
         (70, 30, 7, Some(3))
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn request_usage_cursor_restarts_with_a_relaunched_app_server() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let mut spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    request_usage_turn(session.as_mut(), &spec.config).await;
+    // A changed system prompt relaunches the app server and resumes the same thread.
+    spec.config.system_prompt = Some("relaunch".to_owned());
+
+    let (turn, requests, _) = request_usage_turn(session.as_mut(), &spec.config).await;
+
+    assert_eq!(
+        segment_ids(&requests),
+        [format!("codex:{turn}:107"), format!("codex:{turn}:150")],
+        "lower totals from the new process are accepted"
     );
     session.close().await.unwrap();
 }
