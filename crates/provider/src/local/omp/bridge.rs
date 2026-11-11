@@ -157,6 +157,11 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         PROVIDER
     }
+    fn reports_token_usage(&self) -> bool {
+        self.engine
+            .native()
+            .is_some_and(AgentSession::reports_token_usage)
+    }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         self.engine
             .native()

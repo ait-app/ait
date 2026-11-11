@@ -13,6 +13,9 @@ use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 /// Longest segment identity emitted, matching the Codex turn identity bound.
 const MAX_SEGMENT_ID: usize = 512;
 
+/// Longest native response id embedded in a segment identity.
+const MAX_RESPONSE_ID: usize = 256;
+
 /// Longest model name copied from a native frame.
 const MAX_MODEL: usize = 256;
 
@@ -301,6 +304,59 @@ impl CodexRequests {
         self.accepted_total = Some(total);
         Some(request)
     }
+}
+
+/// Build the request segment of one Pi or OMP assistant message from its `usage` object.
+///
+/// Both harnesses use the pi-ai usage shape, whose `input` already excludes `cacheRead` and
+/// `cacheWrite`, so the buckets map one to one. `identity` is the native message id or the
+/// per-turn message counter. Returns `None` when `message` has no usage, all token buckets are
+/// zero (an aborted message), or the segment would be invalid.
+pub(crate) fn pi_request(
+    provider: &str,
+    turn: &str,
+    identity: &str,
+    message: &Value,
+) -> Option<RequestUsage> {
+    let usage = message.get("usage").filter(|usage| usage.is_object())?;
+    let input = usage["input"].as_u64();
+    let output = usage["output"].as_u64();
+    let cache_read = usage["cacheRead"].as_u64().unwrap_or_default();
+    let cache_write = usage["cacheWrite"].as_u64().unwrap_or_default();
+    let output_tokens = output.unwrap_or_default();
+    let input_tokens = input.unwrap_or_default();
+    if input_tokens == 0 && output_tokens == 0 && cache_read == 0 && cache_write == 0 {
+        return None;
+    }
+    let request = RequestUsage {
+        segment_id: format!("{provider}:{turn}:{identity}"),
+        parent: None,
+        model: message["model"]
+            .as_str()
+            .filter(|model| !model.is_empty() && model.len() <= MAX_MODEL)
+            .map(str::to_owned),
+        boundary: UsageBoundary::Request,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens: cache_read,
+        cache_write_tokens: cache_write,
+        cache_write_1h_tokens: None,
+        reasoning_tokens: usage["reasoning"]
+            .as_u64()
+            .map(|reasoning| reasoning.min(output_tokens)),
+        cost_usd_reported: usage["cost"]["total"]
+            .as_f64()
+            .filter(|cost| cost.is_finite() && *cost >= 0.0),
+        complete: input.is_some() && output.is_some(),
+    };
+    (request.segment_id.len() <= MAX_SEGMENT_ID && request.is_valid()).then_some(request)
+}
+
+/// Native response id usable inside a segment identity, if `message` carries one.
+pub(crate) fn response_id(message: &Value) -> Option<&str> {
+    message["responseId"]
+        .as_str()
+        .filter(|id| !id.is_empty() && id.len() <= MAX_RESPONSE_ID)
 }
 
 /// Read a counter that Codex reports in either camel or snake case.

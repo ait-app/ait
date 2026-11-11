@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{ClaudeRequests, CodexRequests};
+use super::{ClaudeRequests, CodexRequests, pi_request, response_id};
 use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 fn start(id: &str, usage: &Value) -> Value {
@@ -255,4 +255,47 @@ fn claude_settled_turn_ignores_later_frames_until_the_next_turn() {
     requests.begin();
     requests.observe(&start("msg_2", &json!({"input_tokens":2})), "next");
     assert_eq!(requests.finish("next", None).len(), 1);
+}
+
+#[test]
+fn pi_request_maps_the_pi_ai_buckets_without_subtracting_cache() {
+    let message = json!({"model":"m","responseId":"resp","usage":{"input":10,"output":4,
+        "cacheRead":30,"cacheWrite":20,"reasoning":9,"cost":{"total":0.25}}});
+
+    let request = pi_request("pi", "turn", "resp", &message).unwrap();
+
+    assert_eq!(request.segment_id, "pi:turn:resp");
+    assert_eq!(request.boundary, UsageBoundary::Request);
+    assert_eq!(request.model.as_deref(), Some("m"));
+    assert_eq!(
+        (
+            request.input_tokens,
+            request.output_tokens,
+            request.cache_read_tokens,
+            request.cache_write_tokens
+        ),
+        (10, 4, 30, 20)
+    );
+    assert_eq!(request.reasoning_tokens, Some(4));
+    assert_eq!(request.cost_usd_reported, Some(0.25));
+    assert!(request.complete);
+    assert_eq!(response_id(&message), Some("resp"));
+    assert_eq!(response_id(&json!({"responseId":""})), None);
+}
+
+#[test]
+fn pi_request_drops_invalid_cost_and_all_zero_usage() {
+    for cost in [json!(-1.0), json!("free"), Value::Null] {
+        let message = json!({"usage":{"input":1,"cost":{"total":cost}}});
+        let request = pi_request("pi", "turn", "0", &message).unwrap();
+        assert_eq!(request.cost_usd_reported, None);
+        assert!(!request.complete);
+    }
+    let aborted = json!({"usage":{"input":0,"output":0,"cacheRead":0,"cost":{"total":0}}});
+    assert_eq!(pi_request("pi", "turn", "0", &aborted), None);
+    assert_eq!(pi_request("pi", "turn", "0", &json!({})), None);
+    assert_eq!(
+        pi_request("pi", &"t".repeat(600), "0", &json!({"usage":{"input":1}})),
+        None
+    );
 }

@@ -1,5 +1,6 @@
 use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
+use crate::ports::usage_ledger::UsageBoundary;
 use crate::protocol::prompt::AgentPrompt;
 
 mod discovery;
@@ -363,4 +364,61 @@ async fn rejects_foreign_session_updates_instead_of_settling_the_turn() {
     .await
     .unwrap();
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn turn_usage_is_queued_once_before_completion() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
+    let turn = session.start_turn("hello", &spec.config).await.unwrap();
+    let events = finish(session.as_mut()).await;
+    let requests: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::RequestUsage(request) => Some(request),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].segment_id, format!("minimax:{turn}"));
+    assert_eq!(requests[0].boundary, UsageBoundary::Turn);
+    assert_eq!(
+        (requests[0].input_tokens, requests[0].output_tokens),
+        (12, 7)
+    );
+    assert!(requests[0].complete);
+    assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+    assert!(matches!(
+        events[events.len() - 2],
+        AgentTurnEvent::RequestUsage(_)
+    ));
+    session.close().await.unwrap();
+}
+
+#[test]
+fn turn_request_maps_cache_buckets_and_skips_empty_usage() {
+    let request = session::turn_request(
+        "turn",
+        &json!({"inputTokens":5,"outputTokens":2,"cachedReadTokens":3,"cachedWriteTokens":1}),
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            request.input_tokens,
+            request.cache_read_tokens,
+            request.cache_write_tokens
+        ),
+        (5, 3, 1)
+    );
+    assert!(request.complete);
+
+    let partial = session::turn_request("turn", &json!({"inputTokens":5})).unwrap();
+    assert!(!partial.complete);
+    assert_eq!(
+        session::turn_request("turn", &json!({"inputTokens":0})),
+        None
+    );
+    assert_eq!(session::turn_request("turn", &Value::Null), None);
 }

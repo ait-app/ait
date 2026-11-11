@@ -7,6 +7,7 @@ use regex::Regex;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use crate::local::usage::requests;
 use crate::local::{compaction::Compactions, diagnostics::classify};
 use crate::ports::{
     agent_session::{AgentSessionError, AgentTurnEvent},
@@ -756,8 +757,22 @@ impl Stream {
                 return Err(AgentSessionError::Failed);
             }
             self.push(AgentTurnEvent::Usage(snapshot))?;
+            self.push_request(message);
         }
         Ok(())
+    }
+
+    /// Queue the ledger segment of an assistant message ahead of the turn's terminal event.
+    ///
+    /// The ledger never fails a turn, so a full display queue drops the segment.
+    fn push_request(&mut self, message: &Value) {
+        let index = self.message.to_string();
+        let identity = requests::response_id(message).unwrap_or(&index);
+        if self.events.len() + self.tools.len() + 2 < self.event_limit()
+            && let Some(request) = requests::pi_request("pi", &self.turn, identity, message)
+        {
+            self.events.push_back(AgentTurnEvent::RequestUsage(request));
+        }
     }
 
     fn tool(&mut self, event: &Value) -> Result<(), AgentSessionError> {

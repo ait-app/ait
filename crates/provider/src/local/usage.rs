@@ -3,13 +3,6 @@ use serde_json::Value;
 use crate::protocol::usage::AgentUsage;
 
 /// Shared cumulative-counter differencing for adapters that only report running totals.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "adapters with cumulative usage adopt this under ADR-246"
-    )
-)]
 pub(super) mod cumulative;
 
 /// Live per-request segments for the usage ledger; history replay never feeds them.

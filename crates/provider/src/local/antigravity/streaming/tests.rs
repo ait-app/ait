@@ -368,3 +368,80 @@ fn cancellation_closes_running_tools_without_reporting_a_provider_failure() {
     assert_eq!(stream.failure, None);
     assert_eq!(stream.events.back(), Some(&AgentTurnEvent::Cancelled));
 }
+
+fn finish_with(stream: &mut Stream, input: u64, output: u64, cache: u64) {
+    let mut result = result("SUCCESS");
+    result["usage"] =
+        json!({"input_tokens":input,"output_tokens":output,"cache_read_tokens":cache});
+    stream.finish(&result).unwrap();
+}
+
+fn requests(stream: &mut Stream) -> Vec<RequestUsage> {
+    stream
+        .events
+        .drain(..)
+        .filter_map(|event| match event {
+            AgentTurnEvent::RequestUsage(request) => Some(request),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn cumulative_results_queue_positive_deltas_before_completion() {
+    let mut stream = stream();
+    finish_with(&mut stream, 100, 10, 50);
+    assert!(
+        requests(&mut stream).is_empty(),
+        "first total is a baseline"
+    );
+
+    stream.begin("next".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 250, 25, 90);
+    assert!(matches!(
+        stream.events.back(),
+        Some(AgentTurnEvent::Completed(_))
+    ));
+    let queued = requests(&mut stream);
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].segment_id, "antigravity:next:0");
+    assert_eq!(queued[0].boundary, UsageBoundary::CumulativeDelta);
+    assert_eq!(
+        (
+            queued[0].input_tokens,
+            queued[0].output_tokens,
+            queued[0].cache_read_tokens
+        ),
+        (150, 15, 40)
+    );
+    assert!(queued[0].complete);
+
+    stream.begin("repeat".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 250, 25, 90);
+    assert!(
+        requests(&mut stream).is_empty(),
+        "an unchanged total adds nothing"
+    );
+}
+
+#[test]
+fn a_process_restart_or_counter_drop_rebaselines_without_a_segment() {
+    let mut stream = stream();
+    finish_with(&mut stream, 100, 10, 50);
+    requests(&mut stream);
+
+    stream.reset_process();
+    stream.begin("restarted".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 300, 30, 0);
+    assert!(requests(&mut stream).is_empty());
+
+    stream.begin("dropped".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 10, 1, 0);
+    assert!(requests(&mut stream).is_empty());
+
+    stream.begin("after".to_owned(), "conversation".to_owned());
+    finish_with(&mut stream, 15, 2, 0);
+    let queued = requests(&mut stream);
+    assert_eq!(queued.len(), 1);
+    assert_eq!((queued[0].input_tokens, queued[0].output_tokens), (5, 1));
+}

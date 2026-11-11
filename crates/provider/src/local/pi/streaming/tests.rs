@@ -50,3 +50,91 @@ fn submitted_input_reclaims_notice_capacity() {
         Some(AgentTurnEvent::Timeline(_))
     ));
 }
+
+fn assistant_end(usage: &Value) -> Value {
+    json!({"type":"message_end","message":{"role":"assistant","model":"m",
+        "content":[{"type":"text","text":"hi"}],"stopReason":"stop","usage":usage}})
+}
+
+fn requests(stream: &Stream) -> Vec<&crate::ports::usage_ledger::RequestUsage> {
+    stream
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::RequestUsage(request) => Some(request),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn assistant_messages_queue_one_request_each_before_the_terminal_event() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    for usage in [
+        json!({"input":12,"output":3,"cacheRead":2,"cacheWrite":1,"cost":{"total":0.5}}),
+        json!({"input":7,"output":1,"cost":{"total":"free"}}),
+    ] {
+        stream
+            .consume(&json!({"type":"message_start","message":{"role":"assistant"}}))
+            .unwrap();
+        stream.consume(&assistant_end(&usage)).unwrap();
+    }
+    stream
+        .consume(&json!({"type":"agent_settled","aborted":false}))
+        .unwrap();
+
+    let queued = requests(&stream);
+    assert_eq!(queued.len(), 2);
+    assert_eq!(queued[0].segment_id, "pi:turn:1");
+    assert_eq!(queued[1].segment_id, "pi:turn:2");
+    assert_eq!(
+        (
+            queued[0].input_tokens,
+            queued[0].cache_read_tokens,
+            queued[0].cache_write_tokens
+        ),
+        (12, 2, 1)
+    );
+    assert_eq!(queued[0].cost_usd_reported, Some(0.5));
+    assert_eq!(queued[1].cost_usd_reported, None);
+    assert!(matches!(
+        stream.events.back(),
+        Some(AgentTurnEvent::Completed(_))
+    ));
+}
+
+#[test]
+fn aborted_zero_usage_queues_no_request_but_keeps_the_snapshot() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    stream
+        .consume(&assistant_end(
+            &json!({"input":0,"output":0,"cacheRead":0,"cost":{"total":0}}),
+        ))
+        .unwrap();
+
+    assert!(requests(&stream).is_empty());
+    assert!(
+        stream
+            .events
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::Usage(_)))
+    );
+}
+
+#[test]
+fn a_full_display_queue_drops_the_request_instead_of_failing_the_turn() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    while stream.events.len() + stream.tools.len() + 4 < stream.event_limit() {
+        stream.push(AgentTurnEvent::Cancelled).unwrap();
+    }
+
+    stream
+        .consume(&assistant_end(&json!({"input":1,"output":1})))
+        .unwrap();
+
+    assert!(requests(&stream).is_empty());
+    assert!(stream.failure.is_none());
+}

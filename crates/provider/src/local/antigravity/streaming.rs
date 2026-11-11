@@ -5,7 +5,9 @@ use chrono::Utc;
 use serde_json::{Value, json};
 
 use super::diagnostics::Failure;
+use crate::local::usage::cumulative::{CumulativeUsage, UsageCounters};
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 const MAX_TEXT: usize = 128 * 1024;
@@ -29,6 +31,10 @@ pub(super) struct Stream {
     observation: usize,
     bytes: usize,
     assistant_seen: bool,
+    /// Running total of the native process, differenced into ledger segments.
+    cumulative: CumulativeUsage,
+    /// Ledger segments queued in the current turn; makes each segment identity unique.
+    segments: u64,
     reported_denials: BTreeMap<(String, String), usize>,
     compactions: crate::local::compaction::Compactions,
     pub(super) failure: Option<Failure>,
@@ -38,6 +44,7 @@ pub(super) struct Stream {
 impl Stream {
     pub(super) fn reset_process(&mut self) {
         self.reported_denials.clear();
+        self.cumulative = CumulativeUsage::default();
     }
 
     pub(super) fn begin(&mut self, turn: String, conversation: String) {
@@ -47,6 +54,7 @@ impl Stream {
         self.observation = 0;
         self.bytes = 0;
         self.assistant_seen = false;
+        self.segments = 0;
         self.compactions = crate::local::compaction::Compactions::default();
         self.failure = None;
         self.explanation.clear();
@@ -239,6 +247,7 @@ impl Stream {
             }
             // Native result usage is cumulative. Publish replacement snapshots, never sums.
             self.events.push_back(AgentTurnEvent::Usage(snapshot));
+            self.push_request(usage);
         }
         if status == "SUCCESS"
             && self.steps.values().any(|step| {
@@ -328,6 +337,41 @@ impl Stream {
                 .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
         }
         self.events.push_back(AgentTurnEvent::Failed);
+    }
+
+    /// Queue the growth of the native running total as a ledger segment.
+    ///
+    /// The first total after a process start, an unchanged total and a drop only move the
+    /// baseline, so they queue nothing.
+    fn push_request(&mut self, usage: &Value) {
+        let field = |name: &str| usage[name].as_u64();
+        let current = UsageCounters {
+            input: field("input_tokens").unwrap_or_default(),
+            output: field("output_tokens").unwrap_or_default(),
+            cache_read: field("cache_read_tokens").unwrap_or_default(),
+            cache_write: 0,
+        };
+        let Some(delta) = self.cumulative.observe(current) else {
+            return;
+        };
+        let request = RequestUsage {
+            segment_id: format!("antigravity:{}:{}", self.turn, self.segments),
+            parent: None,
+            model: None,
+            boundary: UsageBoundary::CumulativeDelta,
+            input_tokens: delta.input,
+            output_tokens: delta.output,
+            cache_read_tokens: delta.cache_read,
+            cache_write_tokens: 0,
+            cache_write_1h_tokens: None,
+            reasoning_tokens: None,
+            cost_usd_reported: None,
+            complete: field("input_tokens").is_some() && field("output_tokens").is_some(),
+        };
+        if request.is_valid() {
+            self.segments += 1;
+            self.events.push_back(AgentTurnEvent::RequestUsage(request));
+        }
     }
 
     fn finish_compactions(&mut self) {
