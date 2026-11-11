@@ -5258,6 +5258,20 @@ export class DaemonClient {
     });
   }
 
+  /** Read this daemon host's shared resource snapshot. History is opt-in. */
+  async getHostStats(
+    includeHistory = false,
+  ): Promise<import("@ait/protocol/host-monitor").HostSnapshot> {
+    if (this.lastServerInfoMessage?.features?.hostStats !== true) {
+      throw new Error("Update the host to read resource statistics.");
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "daemon.host_stats.request", includeHistory },
+      responseType: "daemon.host_stats.response",
+      timeout: 5_000,
+    });
+  }
+
   async getDaemonStatus(options?: DaemonStatusOptions): Promise<DaemonStatusPayload> {
     if (!this.lastServerInfoMessage) throw new DaemonConnectionError("Transport not connected");
     if (this.lastServerInfoMessage?.features?.daemonStatusRpc !== true) {

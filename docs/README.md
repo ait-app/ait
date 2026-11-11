@@ -26,6 +26,7 @@
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [任务总览](operations/task-board.md)：跨主机任务看板、父子任务、审批、停止、已读和归档。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
+- [主机资源监控](architecture/connection.md#主机资源监控)：侧栏读数、历史与采样生命周期。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范

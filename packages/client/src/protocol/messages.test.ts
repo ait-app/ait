@@ -490,3 +490,8 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
     ).toBe(true);
   }
 });
+
+it("advertises host monitoring only when the daemon declares its method", () => {
+  expect(info([])?.features?.hostStats).toBe(false);
+  expect(info(["daemon.host_stats.request"])?.features?.hostStats).toBe(true);
+});

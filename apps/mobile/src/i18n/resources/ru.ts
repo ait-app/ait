@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -39,6 +40,7 @@ const scheduleCadencePluralForms = {
 };
 
 export const ru: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
     runCommand: "Выполнение команды",
     loadFailed: "Не удалось загрузить задачи",

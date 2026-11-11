@@ -1,6 +1,7 @@
 //! Daemon status, configuration, diagnostics, update and lifecycle requests.
 
 pub(crate) mod connection;
+pub mod local;
 pub mod ports;
 pub(crate) mod protocol;
 pub(crate) mod rpc;

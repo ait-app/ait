@@ -175,3 +175,51 @@ fn diagnostics_include_host_owned_evidence() {
             .contains("bounded fixture evidence")
     );
 }
+
+#[derive(Debug)]
+struct TestHostSampler;
+
+impl crate::daemon::ports::host_monitor::HostSampler for TestHostSampler {
+    fn sample(
+        &mut self,
+        _: bool,
+    ) -> Result<
+        crate::daemon::ports::host_monitor::HostSnapshot,
+        crate::daemon::ports::host_monitor::HostMonitorError,
+    > {
+        Ok(serde_json::from_value(json!({
+            "platform":"test", "cpuCount":4, "uptimeSeconds":60,
+            "current":{"at":123, "cpuPercent":null, "memoryUsedBytes":512,
+                "memoryTotalBytes":1024, "rxBytesPerSecond":null, "txBytesPerSecond":null},
+            "history":[], "disks":[]
+        }))
+        .unwrap())
+    }
+}
+
+#[test]
+fn host_monitor_rpc_validates_input_and_returns_opt_in_history() {
+    let mut daemon = daemon().with_host_sampler(Box::new(TestHostSampler));
+    let call = |daemon: &mut Daemon, params| {
+        crate::daemon::rpc::execute(daemon, "daemon.host_stats.request", params)
+            .map(|executed| executed.value)
+    };
+    let summary = call(&mut daemon, json!({})).unwrap();
+    assert_eq!(summary["platform"], "test");
+    assert!(summary["history"].as_array().unwrap().is_empty());
+    assert!(summary["current"]["cpuPercent"].is_null());
+    let detail = call(&mut daemon, json!({"includeHistory":true})).unwrap();
+    assert_eq!(detail["history"].as_array().unwrap().len(), 1);
+    for params in [
+        json!([]),
+        json!({"includeHistory":"yes"}),
+        json!({"arbitrary":true}),
+    ] {
+        assert!(call(&mut daemon, params).is_err());
+    }
+}
+
+#[test]
+fn host_monitor_without_an_adapter_fails_explicitly() {
+    assert!(daemon().host_stats(false).is_err());
+}
