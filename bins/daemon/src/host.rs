@@ -487,6 +487,7 @@ fn compose_background(
         registries.1,
         execution.clone(),
         scopes.clone(),
+        Arc::new(WorkspaceWorktrees::new(worktrees.clone())),
     )?;
     let schedules = schedule::compose(
         &config.data_dir,

@@ -346,7 +346,7 @@ export const BOT_RESPONSE_SCHEMAS = [
     type: z.literal("bot.channel.types.response"),
     payload: z.object({
       requestId: z.string(),
-      supported: z.array(z.enum(["builtin", "telegram", "feishu"])),
+      supported: z.array(z.enum(["builtin", "telegram", "feishu", "github"])),
       email: z.object({ supported: z.boolean(), planned: z.boolean() }),
     }),
   }),

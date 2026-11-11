@@ -34,6 +34,7 @@ impl State {
             message_id: String::new(),
             text: String::new(),
             reply_to: None,
+            context: None,
         };
         let conversation = self.route(&incoming)?;
         Ok(json!({"conversation":project_conversation(&conversation)}))
@@ -71,6 +72,7 @@ impl State {
             session_id: uuid::Uuid::new_v4().to_string(),
             generation: 0,
             execution: bot.execution.clone(),
+            execution_workspace_id: None,
             next_sequence: 1,
             instructions_digest: None,
         };
@@ -94,6 +96,7 @@ impl State {
             message_id: request.message_id,
             text: request.text,
             reply_to: None,
+            context: None,
         })
     }
     /// Whether queued and running turns across all Bots reached the global admission limit.
@@ -139,11 +142,14 @@ impl State {
                 .conversations
                 .get(&turn.conversation_id)
                 .ok_or(ErrorCode::BotIo)?;
+            let same_review = same_github_review(turn.context.as_ref(), incoming.context.as_ref());
             if conversation.peer != incoming.peer
                 || conversation.sender != incoming.sender
                 || conversation.thread != incoming.thread
-                || turn.text != incoming.text
-                || turn.reply_to != incoming.reply_to
+                || (!same_review
+                    && (turn.text != incoming.text
+                        || turn.reply_to != incoming.reply_to
+                        || turn.context != incoming.context))
             {
                 return Err(ErrorCode::IdempotencyConflict);
             }
@@ -168,6 +174,7 @@ impl State {
             generation: conversation.generation,
             text: incoming.text,
             reply_to: incoming.reply_to,
+            context: incoming.context,
             reply: None,
             messages: Vec::new(),
             pending_permissions: Vec::new(),
@@ -395,5 +402,22 @@ impl State {
             self.save_catalog(catalog)?;
         }
         Ok(())
+    }
+}
+
+fn same_github_review(
+    existing: Option<&domain::bot::TurnContext>,
+    incoming: Option<&domain::bot::TurnContext>,
+) -> bool {
+    match (existing, incoming) {
+        (
+            Some(domain::bot::TurnContext::GithubReview(existing)),
+            Some(domain::bot::TurnContext::GithubReview(incoming)),
+        ) => {
+            existing.repository == incoming.repository
+                && existing.pull_number == incoming.pull_number
+                && existing.head_sha == incoming.head_sha
+        }
+        _ => false,
     }
 }

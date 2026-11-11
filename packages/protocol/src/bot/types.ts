@@ -71,6 +71,21 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
   }),
   // An HTTP endpoint the Ait center hosts; the center keeps its secret.
   z.strictObject({ kind: z.literal("webhook"), endpointId: z.string(), url: z.string() }),
+  z.strictObject({
+    kind: z.literal("github"),
+    appId: z.string(),
+    privateKeyRef: z.string(),
+    webhookSecretRef: z.string(),
+    installationId: z.string(),
+    mention: z.string(),
+    repositories: z.array(
+      z.strictObject({
+        fullName: z.string(),
+        projectId: z.string(),
+        allowedSenders: z.array(z.string()),
+      }),
+    ),
+  }),
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),
@@ -126,6 +141,8 @@ export type BotPermissions = z.infer<typeof BotPermissionsSchema>;
 export type BotView = z.infer<typeof BotViewSchema>;
 export type BotState = z.infer<typeof BotStateSchema>;
 export type BotExecution = z.infer<typeof BotExecutionSchema>;
+export type BotChannel = z.infer<typeof BotChannelSchema>;
+export type BotChannelConfig = z.infer<typeof BotChannelConfigSchema>;
 export type BotConversation = z.infer<typeof BotConversationSchema>;
 export type BotTurnMessage = z.infer<typeof BotTurnMessageSchema>;
 export type BotTurn = z.infer<typeof BotTurnSchema>;

@@ -195,6 +195,7 @@ export const ar: TranslationResources = {
     tooLong: "يجب ألا تتجاوز الرسائل 16 كيبي بايت.",
     memoryTooLong: "يجب ألا تتجاوز الذاكرة 32 كيبي بايت.",
     channels: "القنوات",
+    githubChannel: en.bots.githubChannel,
     addChannel: "إضافة قناة",
     channelType: "نوع القناة",
     telegram: "Telegram",

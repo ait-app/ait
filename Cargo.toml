@@ -57,6 +57,7 @@ serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 serde_yaml_ng = "0.10.0"
 ring = "0.17.14"
 sha2 = "0.10.9"
+hmac = "0.12.1"
 sherpa-onnx = "=1.13.8"
 subtle = "2.6.1"
 tar = "0.4"

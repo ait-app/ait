@@ -36,8 +36,11 @@ fn fixture(cross: bool) -> (Fixture, LocalManagedWorktrees, PathBuf) {
     let executable = fixture.root.path().join("gh");
     std::fs::write(&executable, GH_FIXTURE).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let head = read_git(&remote, &["rev-parse", "refs/pull/123/head"]);
+    let base = read_git(&remote, &["rev-parse", "refs/heads/main"]);
     std::fs::write(fixture.root.path().join("pull-request.json"), serde_json::json!({
         "data":{"repository":{"pullRequest":{"number":123,"headRefName":"topic","baseRefName":"main",
+            "headRefOid":head,"baseRefOid":base,
             "isCrossRepository":cross,"headRepositoryOwner":{"login":"ForkOwner"},
             "headRepository":{"sshUrl":"git@github.com:ForkOwner/repository.git", "url":"https://github.com/ForkOwner/repository"}
         }}}
@@ -59,6 +62,8 @@ fn target(adapter: &LocalManagedWorktrees, fixture: &Fixture) -> ChangeRequestCh
                 forge: Some("github".into()),
                 number: 123,
                 project_path: None,
+                expected_head_sha: None,
+                expected_base_sha: None,
             },
             None,
         )
@@ -98,7 +103,10 @@ fn same_repo_pr_uses_unique_local_branches_and_tracks_the_original_remote_head()
     let second = create(&adapter, &fixture);
     assert_eq!(first.branch_name, "topic-1");
     assert_eq!(second.branch_name, "topic-2");
-    assert_eq!(first.comparison_base_ref.as_deref(), Some("main"));
+    assert_eq!(
+        first.comparison_base_ref.as_deref(),
+        Some(read_git(&remote, &["rev-parse", "refs/heads/main"]).as_str())
+    );
     let cwd = Path::new(&first.worktree_path);
     assert_eq!(
         read_git(cwd, &["rev-parse", "HEAD"]),
@@ -150,7 +158,10 @@ fn fork_pr_falls_back_to_upstream_and_tracks_the_fork_with_a_prefixed_branch() {
     );
     let created = create(&adapter, &fixture);
     assert_eq!(created.branch_name, "forkowner/topic");
-    assert_eq!(created.comparison_base_ref.as_deref(), Some("main"));
+    assert_eq!(
+        created.comparison_base_ref.as_deref(),
+        Some(read_git(&remote, &["rev-parse", "refs/heads/main"]).as_str())
+    );
     let cwd = Path::new(&created.worktree_path);
     assert_eq!(
         read_git(cwd, &["rev-parse", "--abbrev-ref", "@{upstream}"]),
@@ -169,6 +180,21 @@ fn fork_pr_falls_back_to_upstream_and_tracks_the_fork_with_a_prefixed_branch() {
 #[test]
 fn invalid_and_missing_pull_requests_do_not_create_a_worktree() {
     let (fixture, adapter, _) = fixture(false);
+    assert!(
+        adapter
+            .resolve_change_request(
+                &path(&fixture.repository),
+                &WorktreeChangeRequest {
+                    forge: Some("github".into()),
+                    number: 123,
+                    project_path: None,
+                    expected_head_sha: Some("0".repeat(40)),
+                    expected_base_sha: None,
+                },
+                None,
+            )
+            .is_err()
+    );
     for (forge, number) in [
         ("gitlab", 123),
         ("github", 0),
@@ -182,6 +208,8 @@ fn invalid_and_missing_pull_requests_do_not_create_a_worktree() {
                         forge: Some(forge.into()),
                         number,
                         project_path: None,
+                        expected_head_sha: None,
+                        expected_base_sha: None,
                     },
                     None
                 )
@@ -201,6 +229,8 @@ fn invalid_and_missing_pull_requests_do_not_create_a_worktree() {
                     forge: None,
                     number: 123,
                     project_path: None,
+                    expected_head_sha: None,
+                    expected_base_sha: None,
                 },
                 None
             )

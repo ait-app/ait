@@ -38,6 +38,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             mode_id: None,
             thinking: None,
         },
+        execution_workspace_id: None,
         next_sequence: 2,
         instructions_digest: None,
     };
@@ -50,6 +51,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         generation: 0,
         text: "hello".into(),
         reply_to: None,
+        context: None,
         reply: Some("world".into()),
         messages: Vec::new(),
         pending_permissions: Vec::new(),

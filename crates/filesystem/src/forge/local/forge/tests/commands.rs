@@ -165,6 +165,8 @@ fn checkout_lookup_passes_numeric_looking_repository_names_as_strings() {
                 forge: Some("github".to_owned()),
                 number: 7,
                 project_path: None,
+                expected_head_sha: None,
+                expected_base_sha: None,
             },
             None,
         )
@@ -394,6 +396,8 @@ fn checkout_falls_back_to_pr_view_for_a_missing_head_and_rejects_mismatched_forg
         forge: Some("github".to_owned()),
         number: 42,
         project_path: None,
+        expected_head_sha: None,
+        expected_base_sha: None,
     };
     fixture.payload(
         "facts",
@@ -425,6 +429,8 @@ fn checkout_falls_back_to_pr_view_for_a_missing_head_and_rejects_mismatched_forg
         forge: Some("gitlab".to_owned()),
         number: 42,
         project_path: None,
+        expected_head_sha: None,
+        expected_base_sha: None,
     };
     assert_eq!(
         fixture

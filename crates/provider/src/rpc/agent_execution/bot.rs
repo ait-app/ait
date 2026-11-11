@@ -38,9 +38,16 @@ impl ExecutionState {
                 agent_id,
                 message_id,
                 text,
+                output_schema,
             } => {
-                self.send_bot(existing.is_some(), agent_id, message_id, text)
-                    .await
+                self.send_bot(
+                    existing.is_some(),
+                    agent_id,
+                    message_id,
+                    text,
+                    output_schema,
+                )
+                .await
             }
             Action::Poll { agent_id, after } => {
                 if existing.is_none() {
@@ -243,6 +250,7 @@ impl ExecutionState {
         agent_id: String,
         message_id: String,
         text: String,
+        output_schema: Option<Value>,
     ) -> Result<Value, ErrorCode> {
         if !exists {
             return Err(ErrorCode::AgentNotFound);
@@ -272,6 +280,7 @@ impl ExecutionState {
                 &AgentPrompt {
                     text,
                     client_message_id: Some(message_id),
+                    output_schema,
                     ..AgentPrompt::default()
                 },
                 ActiveTurnBehavior::Interrupt,

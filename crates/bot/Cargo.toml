@@ -10,6 +10,7 @@ domain.workspace = true
 model.workspace = true
 provider.workspace = true
 chrono.workspace = true
+hmac.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 secrecy.workspace = true
@@ -19,7 +20,7 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
-# Direct outbound channel transports; no webhook server or remote state service.
+# Direct outbound channel transports; webhook admission remains owned by the API crate.
 reqwest.workspace = true
 reqwest.features = ["rustls-tls", "json"]
 futures-util.workspace = true

@@ -45,6 +45,8 @@ fn gitlab_target(adapter: &LocalManagedWorktrees, fixture: &Fixture) -> ChangeRe
                 forge: Some("gitlab".to_owned()),
                 number: 123,
                 project_path: Some("group/team/project".to_owned()),
+                expected_head_sha: None,
+                expected_base_sha: None,
             },
             None,
         )

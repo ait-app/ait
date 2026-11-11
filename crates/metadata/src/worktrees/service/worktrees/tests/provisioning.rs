@@ -171,6 +171,8 @@ fn unified_creation_validates_sources_before_git_side_effects() {
         forge: Some("gitlab".into()),
         number: 1,
         project_path: None,
+        expected_head_sha: None,
+        expected_base_sha: None,
     });
     assert_eq!(
         adapter.create(&input, "now").unwrap_err().code,

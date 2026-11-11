@@ -13,6 +13,7 @@ use domain::schedule::{Schedule, Target};
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
 use model::bot::Store;
+use model::workspace::worktrees::WorktreeProvisioning;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::bot::FileStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
@@ -50,6 +51,40 @@ impl Executor for Idle {
 impl Credentials for Idle {
     fn resolve(&self, _: &str) -> Result<SecretString, model::ErrorCode> {
         Err(model::ErrorCode::BotIo)
+    }
+}
+
+impl WorktreeProvisioning for Idle {
+    fn prepare_directory(
+        &self,
+        _: &str,
+        _: &domain::workspace::worktrees::DirectoryGit,
+    ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+        Err(worktree_unavailable())
+    }
+    fn archive(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+        Err(worktree_unavailable())
+    }
+    fn create(
+        &self,
+        _: &domain::workspace::worktrees::WorktreeCreation,
+        _: &str,
+    ) -> Result<
+        domain::workspace::worktrees::CreatedWorktreeWorkspace,
+        domain::workspace::worktrees::WorktreeCreationError,
+    > {
+        Err(worktree_unavailable())
+    }
+}
+
+fn worktree_unavailable() -> domain::workspace::worktrees::WorktreeCreationError {
+    domain::workspace::worktrees::WorktreeCreationError {
+        code: "test_unavailable",
+        message: "Worktrees are unavailable in this fixture".to_owned(),
     }
 }
 
@@ -368,6 +403,7 @@ impl Scoped {
             executor: Arc::new(Idle),
             credentials: Arc::new(Idle),
             scopes: scopes.clone(),
+            worktrees: Arc::new(Idle),
         })
         .unwrap();
         let schedules = Schedules::spawn(

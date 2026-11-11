@@ -183,6 +183,7 @@ fn incoming(channel: &Channel, event: &Value) -> Option<Incoming> {
         message_id: id.to_owned(),
         text: text.to_owned(),
         reply_to: None,
+        context: None,
     })
 }
 

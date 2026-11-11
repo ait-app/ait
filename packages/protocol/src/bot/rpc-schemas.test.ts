@@ -279,4 +279,42 @@ describe("Bot wire contract", () => {
       expect(BotRequestSchema.safeParse({ ...valid, ...patch }).success).toBe(false);
     }
   });
+  it("accepts GitHub App channels with multiple repository bindings", () => {
+    const message = SessionOutboundMessageSchema.parse({
+      type: "bot.channel.list.response",
+      payload: {
+        requestId: "r1",
+        channels: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            botId: "22222222-2222-4222-8222-222222222222",
+            enabled: true,
+            cursor: null,
+            deleted: false,
+            config: {
+              kind: "github",
+              appId: "123",
+              privateKeyRef: "env:AIT_SERVER_CREDENTIAL_GITHUB_PRIVATE_KEY",
+              webhookSecretRef: "env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+              installationId: "456",
+              mention: "ait-review",
+              repositories: [
+                {
+                  fullName: "owner/one",
+                  projectId: "project-one",
+                  allowedSenders: ["maintainer"],
+                },
+                {
+                  fullName: "owner/two",
+                  projectId: "project-two",
+                  allowedSenders: ["maintainer"],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    expect(message.type).toBe("bot.channel.list.response");
+  });
 });

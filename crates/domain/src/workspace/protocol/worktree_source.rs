@@ -37,6 +37,8 @@ impl ChangeRequestCheckoutSource {
             forge: self.forge,
             number: self.number,
             project_path: self.project_path,
+            expected_head_sha: None,
+            expected_base_sha: None,
         }
     }
 }

@@ -1,4 +1,5 @@
 pub(crate) mod feishu;
+mod github;
 mod onboarding;
 pub(crate) mod photon;
 pub(crate) mod qq;
@@ -10,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use domain::ChannelId;
-use domain::bot::{Channel, ChannelConfig, DeliveryStatus};
+use domain::bot::{Channel, ChannelConfig, DeliveryStatus, TurnContext};
 use model::ErrorCode;
 use secrecy::SecretString;
 use serde_json::json;
@@ -130,6 +131,28 @@ pub(crate) struct Incoming {
     pub(crate) message_id: String,
     pub(crate) text: String,
     pub(crate) reply_to: Option<String>,
+    pub(crate) context: Option<TurnContext>,
+}
+
+pub(crate) async fn github_webhook(
+    channel: &Channel,
+    credentials: &Arc<dyn Credentials>,
+    client: &reqwest::Client,
+    event: &str,
+    delivery_id: &str,
+    signature: &str,
+    body: &[u8],
+) -> Result<Option<Incoming>, ErrorCode> {
+    github::webhook(
+        channel,
+        credentials,
+        client,
+        event,
+        delivery_id,
+        signature,
+        body,
+    )
+    .await
 }
 
 /// Return each user-visible assistant message for external delivery.
@@ -192,6 +215,16 @@ async fn attempt(
     client: &reqwest::Client,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
+    if matches!(&channel.config, ChannelConfig::Github { .. }) {
+        return github::run(
+            bots.clone(),
+            channel.clone(),
+            credentials.clone(),
+            client.clone(),
+            cancel,
+        )
+        .await;
+    }
     let reference = match &channel.config {
         ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => {
             return Ok(());
@@ -203,6 +236,7 @@ async fn attempt(
             secret_ref
         }
         ChannelConfig::PhotonImessage { key_ref, .. } => key_ref,
+        ChannelConfig::Github { .. } => unreachable!("GitHub handled before credential lookup"),
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
@@ -216,6 +250,7 @@ async fn attempt(
         ChannelConfig::PhotonImessage { .. } => {
             photon::run(bots, channel, client, &secret, cancel).await
         }
+        ChannelConfig::Github { .. } => unreachable!("GitHub handled before credential lookup"),
     }
 }
 

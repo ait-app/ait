@@ -263,6 +263,7 @@ fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Inc
             .to_owned(),
         text: text.to_owned(),
         reply_to: message["message_id"].as_str().map(str::to_owned),
+        context: None,
     }))
 }
 

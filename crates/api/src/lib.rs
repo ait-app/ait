@@ -8,6 +8,7 @@ mod composition;
 pub use composition::summary_source;
 mod connection;
 mod files;
+mod github_webhook;
 mod guest;
 mod listener;
 pub mod managed_relay;
@@ -511,6 +512,7 @@ impl Api {
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(10),
             ))
+            .merge(github_webhook::router())
             .merge(mcp::router())
             .layer(middleware::from_fn_with_state(self.shared.clone(), guard))
             .layer(TraceLayer::new_for_http().make_span_with(
@@ -623,6 +625,7 @@ async fn guard(
         &state.authorities
     };
     auth::validate_source(request.headers(), authorities, &state.browser_auth)?;
+    let github_webhook = github_webhook::is_request(request.method(), request.uri().path());
     if request.uri().path() == browser_auth::TICKET_PATH {
         let origin = request
             .headers()
@@ -644,7 +647,11 @@ async fn guard(
     let download = request.method() == Method::GET && request.uri().path() == "/api/files/download";
     let terminal_activity =
         request.method() == Method::POST && request.uri().path() == terminal_activity::PATH;
-    if !matches!(request.uri().path(), "/healthz" | "/readyz") && !download && !terminal_activity {
+    if !matches!(request.uri().path(), "/healthz" | "/readyz")
+        && !download
+        && !terminal_activity
+        && !github_webhook
+    {
         if request.uri().path() == "/v1/ws" && !request.headers().contains_key("authorization") {
             // Guest scope is honoured only together with the daemon's own credential.
             if request.headers().contains_key(model::share::GUEST_HEADER) {

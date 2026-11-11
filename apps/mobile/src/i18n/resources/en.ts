@@ -1,3 +1,4 @@
+import { githubChannelEn } from "./github-channel";
 import { hostMonitorEn } from "./host-monitor";
 export const en = {
   hostMonitor: hostMonitorEn,
@@ -205,6 +206,7 @@ export const en = {
     tooLong: "Messages must be at most 16 KiB.",
     memoryTooLong: "Memory must be at most 32 KiB.",
     channels: "Channels",
+    githubChannel: githubChannelEn,
     addChannel: "Add channel",
     channelType: "Channel type",
     telegram: "Telegram",

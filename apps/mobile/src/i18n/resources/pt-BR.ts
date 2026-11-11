@@ -166,6 +166,7 @@ export const ptBR: TranslationResources = {
     tooLong: "As mensagens devem ter no máximo 16 KiB.",
     memoryTooLong: "A memória deve ter no máximo 32 KiB.",
     channels: "Canais",
+    githubChannel: en.bots.githubChannel,
     addChannel: "Adicionar canal",
     channelType: "Tipo de canal",
     telegram: "Telegram",

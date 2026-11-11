@@ -3,6 +3,8 @@ mod conversations;
 mod execution;
 mod webhook;
 
+pub(crate) use execution::ReviewPreparation;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -46,6 +48,7 @@ pub(crate) struct State {
     inputs: BTreeMap<(ChannelId, String), BotTurnId>,
     pending: BTreeMap<(ConversationId, u64), BotTurnId>,
     uncertain: BTreeSet<(ConversationId, u64)>,
+    preparing: BTreeSet<BotTurnId>,
     outbox: BTreeMap<ChannelId, BTreeMap<(ConversationId, u64), BotTurnId>>,
     pub(crate) running: BTreeMap<ConversationId, CancellationToken>,
     pub(crate) channel_status: BTreeMap<ChannelId, Value>,
@@ -95,6 +98,7 @@ impl State {
             inputs: BTreeMap::new(),
             pending: BTreeMap::new(),
             uncertain: BTreeSet::new(),
+            preparing: BTreeSet::new(),
             outbox: BTreeMap::new(),
             running: BTreeMap::new(),
             channel_status: BTreeMap::new(),
@@ -161,7 +165,7 @@ impl State {
             "bot.channel.types.request" => {
                 let _: protocol::Empty = decode(params)?;
                 Ok(
-                    json!({"supported":["builtin","telegram","feishu"],"email":{"supported":false,"planned":true}}),
+                    json!({"supported":["builtin","telegram","feishu","github"],"email":{"supported":false,"planned":true}}),
                 )
             }
             "bot.get.request" => {
@@ -340,7 +344,14 @@ impl State {
             .ok_or(ErrorCode::BotIo)?
             .channel_id;
         let outbox = self.outbox.entry(channel).or_default();
-        if turn.status == TurnStatus::Completed && turn.delivery == DeliveryStatus::Pending {
+        let github_failure = turn.status == TurnStatus::Failed
+            && matches!(
+                turn.context,
+                Some(domain::bot::TurnContext::GithubReview(_))
+            );
+        if (turn.status == TurnStatus::Completed || github_failure)
+            && turn.delivery == DeliveryStatus::Pending
+        {
             outbox.insert((turn.conversation_id, turn.sequence), turn.id);
         } else {
             outbox.remove(&(turn.conversation_id, turn.sequence));
@@ -369,10 +380,14 @@ impl State {
             .ok_or(ErrorCode::BotNotFound)
     }
     pub(crate) fn owner(&self, conversation: &Conversation) -> Result<SessionOwner, ErrorCode> {
+        let workspace_id = match &conversation.execution_workspace_id {
+            Some(workspace_id) => workspace_id.clone(),
+            None => self.bot(conversation.bot_id)?.workspace_id.clone(),
+        };
         Ok(SessionOwner {
             bot_id: conversation.bot_id,
             conversation_id: conversation.id,
-            workspace_id: self.bot(conversation.bot_id)?.workspace_id.clone(),
+            workspace_id,
         })
     }
     pub(crate) fn channels(&self) -> Vec<Channel> {

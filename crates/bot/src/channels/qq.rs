@@ -500,6 +500,7 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
         message_id: message_id.to_owned(),
         text: text.to_owned(),
         reply_to: Some(message_id.to_owned()),
+        context: None,
     }))
 }
 
