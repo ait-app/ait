@@ -275,6 +275,16 @@ all-completed claim; exclusions below are explicit user decisions, not deliverie
 - **09/16/21/24/25/32/33** queued behind their dependencies; ADR-246/245/247/248/249/251/252
   reserved respectively. 16/17 Goal designs are complete research artifacts, blocked on 05/07
   verification; no Goal code.
+- **12** **blocked** (2026-11-11; NOT user-excluded, NOT delivered) — in addition to the task09
+  dependency, official agy 1.5.1 has product isolation gaps proven by owned-fixture research
+  (local://task12-design.md §7, evidence under /tmp/task12-agy): B2 server-side `googleSearch`
+  grounding bypasses `read_url`/`execute_url` deny and the public schema rejects `disabledTools`
+  (https://antigravity.google/schemas/v1/settings.json; logs/disabled-tools.stderr); B3
+  `invoke_subagent`/`define_subagent`/`schedule`/`send_message`/`manage_task` are ungated (P10/P12),
+  no public print-mode per-tool disable. SDK/response-proxy/security-runtime rewrite is not authorized
+  scope; no cross-provider fallback or hiding the entrance. Capability stays unavailable and the whole
+  plan unfinished unless resolved or the user explicitly skips task12. Prior positive/negative proof
+  preserved; no new native probes re-run. ADR-255 reserved.
 - **13** excluded by explicit user decision (2026-11-11) — not delivered, not a required overall
   blocker; task19 (DSH/MiniMax native Goal) **still required** and unaffected. This is a user
   exclusion, not a claim that all eight BTW providers are delivered.

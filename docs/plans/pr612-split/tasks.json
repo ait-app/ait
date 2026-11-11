@@ -1544,7 +1544,7 @@
     "donor_paths": [],
     "implementation": "Use a temporary directory/process with verified denials for file, command, browser and MCP effects; preserve selected model and fixed BTW snapshot.",
     "acceptance": "Runtime probes demonstrate all prohibited effects denied and resources cleaned; otherwise capability remains unavailable with a specific blocker.",
-    "status": "planned",
+    "status": "blocked",
     "branch": null,
     "base": null,
     "commit": null,
@@ -1555,9 +1555,21 @@
         "affected SDK/UI/protocol checks and documented old-host/client downgrade",
         "docs links/ADR index when changed"
       ],
-      "results": []
+      "results": [
+        "RESEARCH PRESERVED (2026-11-11, official agy 1.5.1, /usr/bin/agy BuildID 696031ae34e5e5e26a9d7c436e85317f; shared design local://task12-design.md §2-§7): owned-fixture positive/negative proof under /tmp/task12-agy (user+net namespace, loopback fixture model). File/command/MCP deny proven process-level even under always-proceed (P1/P3-P6/P8: logs/deny-all.requests.jsonl, logs/mcp-deny2.requests.jsonl). NOT user-excluded, NOT delivered; no new native probes re-run for this record.",
+        "B2/GAP-1: server-side googleSearch grounding bypasses read_url(*)/execute_url(*) deny (P7: logs/deny-all.requests.jsonl req 6 tools:[{googleSearch:{}}]); public settings schema https://antigravity.google/schemas/v1/settings.json has no tool-disable key and runtime rejected disabledTools before startup: 'Error: --settings: unknown setting \"disabledTools\"' (/tmp/task12-agy/logs/disabled-tools.stderr).",
+        "B3/GAP-3: invoke_subagent/define_subagent/schedule/send_message/manage_task ungated by the permission engine (P10/P12: logs/deny-subagent.*, logs/deny-define.*, logs/strict-subagent.*); no public per-tool disable for print mode in 1.5.1.",
+        "B4/GAP-2: browser surface absent in headless API-key mode (P9: logs/deny-browser-mcp.requests.jsonl); execute_url(*) deny documented/schema-valid but no positive runtime browser-denial probe obtainable with owned fixtures.",
+        "B5: sandbox availability varies by host; Windows cancel unsupported by existing adapter (ADR-087). ACP alternative rejected for isolation in 1.5.1 (logs/acp-deny.frames.jsonl: turbo-like auto-approval, deny rules not applied, disableBuiltInTools did not remove core tools)."
+      ]
     },
-    "blockers": []
+    "blockers": [
+      "Dependency: task09 BTW contract unverified (in addition to the product blockers below).",
+      "B2/GAP-1 (2026-11-11, agy 1.5.1): server-side googleSearch grounding bypasses read_url/execute_url deny; public schema rejects disabledTools as unknown — no public print-mode tool-disable exists. Evidence: /tmp/task12-agy/logs/deny-all.requests.jsonl (req 6), /tmp/task12-agy/logs/disabled-tools.stderr, https://antigravity.google/schemas/v1/settings.json; design local://task12-design.md §7.",
+      "B3/GAP-3 (2026-11-11, agy 1.5.1): invoke_subagent/define_subagent/schedule/send_message/manage_task ungated (P10/P12); no public per-tool disable. Evidence: /tmp/task12-agy/logs/deny-subagent.*, logs/strict-subagent.*; design §7.",
+      "B4/GAP-2: no positive runtime browser-denial probe with owned fixtures (browser surface absent headless); B5: sandbox/Windows-cancel platform limits (ADR-087).",
+      "Resolution scope: SDK/response-proxy/security-runtime rewrite is NOT authorized; no cross-provider fallback or hiding the entrance. Antigravity BTW capability stays unavailable and the whole plan unfinished unless these gaps are resolved or the user explicitly skips task12. Not user-excluded today; task13/01/31 exclusions unchanged; task19 MiniMax Goal still required."
+    ]
   },
   {
     "id": "13",
