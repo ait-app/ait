@@ -116,6 +116,11 @@ test("host selection stays pinned while offline and can resume following the wor
     await expect(trigger).toContainText("Monitor secondary");
     await expect(trigger).not.toContainText(/CPU\s+\d/);
     await expect(detail).toContainText("Last sample");
+    const lastSample = await detail.getByTestId("host-monitor-footer").textContent();
+    await page.keyboard.press("Escape");
+    await expect(detail).not.toBeVisible();
+    await trigger.click();
+    await expect(detail.getByTestId("host-monitor-footer")).toHaveText(lastSample!);
     await detail.getByRole("button", { name: "Monitor host", exact: true }).click();
     await page
       .getByTestId("combobox-desktop-container")

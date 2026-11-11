@@ -26,6 +26,7 @@ it.each(["workspace", "project"] as const)(
       "subscription.release.request",
       "session.events.set_subscription.request",
       "workspace.label.list.request",
+      "daemon.host_stats.request",
     ]);
     const info = serverInfo(
       {
@@ -41,6 +42,7 @@ it.each(["workspace", "project"] as const)(
       directorySync: false,
       explicitEventSubscriptions: false,
       workspaceLabels: false,
+      hostStats: false,
       projectList: scope === "project",
       workspaceMultiplicity: true,
     });

@@ -37,30 +37,33 @@ export interface HostMonitorViewProps {
   onOpenChange: (open: boolean) => void;
   connected: boolean;
   supported: boolean;
+  restricted: boolean;
   failed: boolean;
   snapshot?: HostSnapshot;
   onRetry: () => void;
 }
 
 export function HostMonitorView(props: HostMonitorViewProps) {
-  const { host, snapshot, connected, supported, failed, open, onOpenChange } = props;
+  const { host, snapshot, connected, supported, restricted, failed, open, onOpenChange } = props;
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { height: viewportHeight } = useWindowDimensions();
   const current = snapshot?.current;
-  const stale = !connected || failed || !supported;
+  const stale = !connected || failed || !supported || restricted;
   const state = !connected
     ? "offline"
-    : !supported
-      ? "upgrade"
-      : failed
-        ? "failed"
-        : !current
-          ? "loading"
-          : null;
+    : restricted
+      ? "restricted"
+      : !supported
+        ? "upgrade"
+        : failed
+          ? "failed"
+          : !current
+            ? "loading"
+            : null;
   const statusColor = state ? theme.colors.foregroundMuted : theme.colors.statusDotSuccess;
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={onOpenChange} compactMode="sheet">
       <DropdownMenuTrigger
         accessibilityLabel={t("hostMonitor.title")}
         testID="sidebar-host-monitor"
@@ -141,7 +144,7 @@ export function HostMonitorView(props: HostMonitorViewProps) {
           {state ? (
             <View style={styles.notice} testID="host-monitor-state">
               <Text style={[styles.caption, styles.grow]}>{t(`hostMonitor.${state}`)}</Text>
-              {failed && connected && supported ? (
+              {failed && connected && supported && !restricted ? (
                 <Pressable accessibilityRole="button" onPress={props.onRetry}>
                   <Text style={styles.retry}>{t("hostMonitor.retry")}</Text>
                 </Pressable>

@@ -1,8 +1,15 @@
-import type { HostSample } from "@ait/protocol/host-monitor";
+import type { HostSample, HostSnapshot } from "@ait/protocol/host-monitor";
 
 export interface MonitorHost {
   serverId: string;
   label: string;
+}
+
+/** Call with the two caches for one host; ties keep the detail snapshot's history. */
+export function newestHostSnapshot(summary?: HostSnapshot, detail?: HostSnapshot) {
+  if (!summary) return detail;
+  if (!detail) return summary;
+  return summary.current.at > detail.current.at ? summary : detail;
 }
 
 /** Keep an offline selected host visible; never silently substitute another machine. */

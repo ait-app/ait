@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { HostMonitorView } from "./view";
 import { useHostStats, useMonitorSelection } from "./queries";
+import { newestHostSnapshot } from "./model";
 
 export function HostMonitorSidebar({ active }: { active: boolean }) {
   const [open, setOpen] = useState(false);
@@ -20,8 +21,9 @@ export function HostMonitorSidebar({ active }: { active: boolean }) {
       onOpenChange={setOpen}
       connected={query.connected}
       supported={query.supported}
+      restricted={query.restricted}
       failed={query.isError}
-      snapshot={query.data ?? summary.data}
+      snapshot={query.restricted ? undefined : newestHostSnapshot(summary.data, detail.data)}
       onRetry={() => {
         void query.refetch();
       }}

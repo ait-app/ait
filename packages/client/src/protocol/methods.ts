@@ -73,7 +73,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
   "daemon.host_stats.request": {
     method: "daemon.host_stats.request",
     kind: "request",
-    channel: 1,
+    channel: 3,
     response: "daemon.host_stats.response",
   },
   "daemon.get_status.request": {

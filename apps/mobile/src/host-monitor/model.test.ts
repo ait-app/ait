@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { HostSample } from "@ait/protocol/host-monitor";
+import type { HostSample, HostSnapshot } from "@ait/protocol/host-monitor";
 import {
   bytes,
   historyPath,
   memoryPercent,
   networkHistory,
+  newestHostSnapshot,
   percent,
   resolveMonitorHost,
 } from "./model";
@@ -18,6 +19,25 @@ const sample: HostSample = {
   txBytesPerSecond: null,
 };
 describe("host monitor presentation", () => {
+  it("retains the newest same-host snapshot across open, close and offline transitions", () => {
+    const snapshot = (at: number, history: HostSample[] = []): HostSnapshot => ({
+      platform: "test",
+      cpuCount: 1,
+      uptimeSeconds: 1,
+      current: { ...sample, at },
+      history,
+      disks: [],
+    });
+    const summary = snapshot(10);
+    const detail = snapshot(20, [sample]);
+    expect(newestHostSnapshot(undefined, undefined)).toBeUndefined();
+    expect(newestHostSnapshot(summary, undefined)).toBe(summary);
+    expect(newestHostSnapshot(undefined, detail)).toBe(detail);
+    expect(newestHostSnapshot(summary, detail)).toBe(detail);
+    const freshSummary = snapshot(30);
+    expect(newestHostSnapshot(freshSummary, detail)).toBe(freshSummary);
+    expect(newestHostSnapshot(snapshot(20), detail)).toBe(detail);
+  });
   it("follows the workspace but preserves explicitly chosen and offline hosts", () => {
     const hosts = [
       { serverId: "local", label: "Local" },
