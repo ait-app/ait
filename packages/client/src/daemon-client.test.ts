@@ -17,6 +17,10 @@ import {
   type DaemonTransport,
   type Logger,
 } from "./daemon-client";
+import type {
+  AgentTimelineExportResult,
+  AgentTimelineExportCancelResult,
+} from "@ait/protocol/messages";
 
 expectTypeOf<"getGitDiff" extends keyof DaemonClient ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<
@@ -206,6 +210,133 @@ test.each([undefined, false])(
       code: "unsupported_capability",
     });
     expect(mock.sent).toHaveLength(0);
+  },
+);
+
+test.each([
+  ["markdown", "conversation"],
+  ["markdown", "timeline"],
+  ["html", "conversation"],
+  ["html", "timeline"],
+] as const)("exports %s / %s with a typed single-use artifact", async (format, scope) => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "timeline-export",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentTimelineExport: true } });
+  await connected;
+  const result = client.exportAgentTimeline("agent-1", { format, scope });
+  expectTypeOf(result).toEqualTypeOf<Promise<AgentTimelineExportResult>>();
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toEqual({
+    type: "agent.timeline.export.request",
+    requestId: expect.any(String),
+    agentId: "agent-1",
+    format,
+    scope,
+  });
+  const artifact: AgentTimelineExportResult = {
+    agentId: "agent-1",
+    format,
+    scope,
+    source: "persisted_timeline",
+    token: "single-use-token",
+    fileName: format === "html" ? "timeline.html" : "timeline.md",
+    mimeType: format === "html" ? "text/html" : "text/markdown",
+    size: 1024,
+    entries: 2,
+    expiresAt: "2026-11-11T00:05:00Z",
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.timeline.export.response",
+      payload: { ...artifact, requestId: request.requestId },
+    }),
+  );
+  expect(await result).toEqual(artifact);
+  const cancelled = client.cancelAgentTimelineExport("agent-1", artifact.token);
+  expectTypeOf(cancelled).toEqualTypeOf<Promise<AgentTimelineExportCancelResult>>();
+  const cancelRequest = parseSentFrame(mock.sent[1]);
+  expect(cancelRequest).toEqual({
+    type: "agent.timeline.export.cancel.request",
+    requestId: expect.any(String),
+    agentId: "agent-1",
+    token: artifact.token,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.timeline.export.cancel.response",
+      payload: { requestId: cancelRequest.requestId, released: true },
+    }),
+  );
+  expect(await cancelled).toEqual({ released: true });
+  expect(mock.sent).toHaveLength(2);
+});
+
+test.each([undefined, false])(
+  "does not export or cancel on an unsupported host (%s)",
+  async (supported) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "export-old-host",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { agentTimelineExport: supported } });
+    await connected;
+    await expect(
+      client.exportAgentTimeline("agent-1", { format: "markdown", scope: "conversation" }),
+    ).rejects.toMatchObject({ code: "unsupported_capability" });
+    await expect(client.cancelAgentTimelineExport("agent-1", "token")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    expect(mock.sent).toHaveLength(0);
+  },
+);
+
+test.each(["not_found", "expired", "resource_exhausted"])(
+  "does not retry or regenerate after export failure %s",
+  async (code) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "export-failure",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { agentTimelineExport: true } });
+    await connected;
+    for (const result of [
+      () => client.exportAgentTimeline("agent-1", { format: "html", scope: "timeline" }),
+      () => client.cancelAgentTimelineExport("agent-1", "expired-token"),
+    ]) {
+      const pending = result();
+      const request = parseSentFrame(mock.sent.at(-1)!);
+      mock.triggerMessage(
+        wrapSessionMessage({
+          type: "rpc_error",
+          payload: { requestId: request.requestId, code, error: "Export failed" },
+        }),
+      );
+      await expect(pending).rejects.toMatchObject({ code });
+    }
+    expect(mock.sent.map((frame) => parseSentFrame(frame).type)).toEqual([
+      "agent.timeline.export.request",
+      "agent.timeline.export.cancel.request",
+    ]);
   },
 );
 

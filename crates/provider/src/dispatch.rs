@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
+pub(crate) mod exports;
 mod requests;
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
@@ -111,6 +112,22 @@ pub enum Completion {
         /// Terminals to close using the terminal crate.
         terminal_ids: Vec<String>,
     },
+    /// Register a completed saved-Timeline artifact in the existing Files download service.
+    TimelineExport {
+        /// Correlation ID of the original request.
+        request_id: String,
+        /// Typed completed content and selection.
+        export: crate::ports::timeline_export::ExportedTimeline,
+    },
+    /// Release a generated download that the client no longer needs.
+    ReleaseTimelineExport {
+        /// Correlation ID of the original request.
+        request_id: String,
+        /// Exact owning Agent identity.
+        agent_id: String,
+        /// Previously issued single-use token.
+        token: String,
+    },
 }
 
 /// Dispatch an admitted provider request using concrete shared request resources.
@@ -133,6 +150,13 @@ pub async fn dispatch(
 ) -> Result<Option<Completion>, DispatchError> {
     if context.is_none() {
         return Ok(None);
+    }
+    match exports::dispatch(context, state).await {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::exports");
+        }
+        Err(error) => return Err(error),
     }
     match requests::skills(context, state).await {
         Ok(()) => return Ok(None),

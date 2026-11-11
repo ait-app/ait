@@ -37,13 +37,13 @@ enum Collapse {
 #[serde(rename_all = "camelCase")]
 /// Complete display item and its exact canonical source coverage.
 pub(crate) struct Entry {
-    provider: String,
+    pub(crate) provider: String,
     /// Final projected native item.
     #[serde(deserialize_with = "deserialize_item")]
     pub(crate) item: Value,
-    timestamp: String,
+    pub(crate) timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    turn_id: Option<String>,
+    pub(crate) turn_id: Option<String>,
     /// Earliest canonical source position.
     pub(crate) seq_start: u64,
     /// Latest canonical source position.

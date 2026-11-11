@@ -500,6 +500,14 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
     assert_eq!(history["filter"]["workspaceIds"], workspaces);
     for (method, params) in [
         (
+            "agent.timeline.export.request",
+            json!({"agentId":"outside","format":"html","scope":"timeline"}),
+        ),
+        (
+            "agent.timeline.export.cancel.request",
+            json!({"agentId":"outside","token":"secret"}),
+        ),
+        (
             "agent.message.send.request",
             json!({"agentId": "a", "text": "hi"}),
         ),
@@ -671,4 +679,16 @@ fn only_agents_created_by_the_same_visitor_of_the_share_can_be_instructed() {
     assert!(!agents::created_under(&other_share, share, "u"));
     assert!(!agents::created_under(&owner, share, "u"));
     assert!(!agents::created_under(&json!({}), share, "u"));
+}
+
+#[tokio::test]
+async fn node_timeline_exports_use_private_visitor_bound_download_delivery() {
+    let guest = Guest::with(ResourceKind::Node).await;
+    let decision = guest
+        .decide(
+            "agent.timeline.export.request",
+            json!({"agentId":"agent","format":"markdown","scope":"timeline"}),
+        )
+        .await;
+    assert!(matches!(decision, Decision::Private(_, Private::Download)));
 }

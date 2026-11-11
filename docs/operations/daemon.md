@@ -78,13 +78,15 @@ SIGINT、SIGTERM 和关闭 RPC 会停止接纳新连接、释放订阅、回收�
 
 ## HTTP 与浏览器认证
 
-| Endpoint                  | 认证                       | 行为                             |
-| ------------------------- | -------------------------- | -------------------------------- |
-| `GET /healthz`            | 无                         | 存活检查                         |
-| `GET /readyz`             | 无                         | ready 时 200，draining 时 503    |
-| `GET /v1/server/info`     | Bearer                     | 身份、监听地址、版本、能力和预算 |
-| `GET /v1/ws`              | Bearer，或浏览器一次性票据 | WebSocket 升级                   |
-| `POST /v1/auth/ws-ticket` | Bearer 与已允许的 Origin   | 浏览器 WebSocket 一次性票据      |
+| Endpoint                      | 认证                                   | 行为                             |
+| ----------------------------- | -------------------------------------- | -------------------------------- |
+| `GET /healthz`                | 无                                     | 存活检查                         |
+| `GET /readyz`                 | 无                                     | ready 时 200，draining 时 503    |
+| `GET /v1/server/info`         | Bearer                                 | 身份、监听地址、版本、能力和预算 |
+| `GET /v1/ws`                  | Bearer，或浏览器一次性票据             | WebSocket 升级                   |
+| `POST /v1/auth/ws-ticket`     | Bearer 与已允许的 Origin               | 浏览器 WebSocket 一次性票据      |
+| `GET /api/files/download`     | 一次性文件 token；保留 visitor binding | 完整文件流，token 单次消费       |
+| `OPTIONS /api/files/download` | 已允许的 Host/Origin                   | 下载 GET 预检，不消费 token      |
 
 ```sh
 curl http://127.0.0.1:7316/readyz
@@ -94,6 +96,13 @@ curl -H "Authorization: Bearer $AIT_SERVER_TOKEN" http://127.0.0.1:7316/v1/serve
 路由检查 Host 和 Origin，拒绝重复认证头。浏览器 transport 先交换短时一次性票据，
 再通过 WebSocket 子协议发送票据；服务 Bearer 不放入 URL。文件下载使用文件接口单独
 签发的一次性 token。桌面通过主进程 transport bridge 提供认证。
+
+浏览器下载的 GET/OPTIONS 复用现有 Host/Origin 校验，只向明确允许的来源返回精确 CORS，
+仅允许 GET 与 Authorization 请求头，不使用通配来源、cookies 或 credentials 放宽。
+被拒绝的来源与 OPTIONS 不消费 grant；实际 GET 仍使用原有一次性 token/visitor 校验，
+无效、过期或已消费 token 仍返回 403。其他路由的 Bearer 要求不变。
+这是 [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)
+对 ADR-049 换票端点专属 CORS 规则的限定扩展，而不是新的通用下载认证系统。
 
 独立 Web 开发入口：
 

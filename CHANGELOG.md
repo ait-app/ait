@@ -3,6 +3,7 @@
 ## Unreleased
 
 - View selected-session statistics from the context-details control, even when context usage is unavailable. See configured and reported models, execution state, and the latest provider-reported token, cache, cost and context facts without sending a prompt or interrupting a turn. Unknown values stay unavailable; snapshots are not summed or presented as guaranteed session totals. Account quotas and child sessions remain separate, and older hosts show statistics as unavailable.
+- Export the entire saved Timeline, or its conversation messages and voice transcripts, as readable Markdown or inert HTML from context details without interrupting an active turn. Saved result cards and attachment references are preserved; size limits fail explicitly instead of truncating. Downloads are single-use, cancellable and checked against the receipt size; missing artifacts never trigger an automatic re-export. Older hosts show the feature as unavailable. This adds typed export/cancel RPCs and SDK methods plus narrowly validated-origin GET/OPTIONS CORS on the existing file-download endpoint; existing message schemas, token/visitor authorization and provider-native interfaces are unchanged.
 
 ## 0.2.7 - 2026-11-11
 

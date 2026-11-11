@@ -149,13 +149,7 @@ pub(super) fn read(database: &Connection, agent: &str) -> Result<Vec<Row>, Error
     for row in rows {
         let (seq, provider, bytes, partial) = row.map_err(io)?;
         let mut entry: NativeItem = serde_json::from_str(&bytes).map_err(io)?;
-        if additive(&entry) {
-            if partial {
-                extend(prefixes.entry(entry.key.clone()).or_default(), &entry)?;
-            } else if let Some(prefix) = prefixes.remove(&entry.key) {
-                suffix(&mut entry, &prefix)?;
-            }
-        }
+        normalize(&mut entry, partial, &mut prefixes)?;
         result.push(Row {
             seq,
             provider,
@@ -163,6 +157,22 @@ pub(super) fn read(database: &Connection, agent: &str) -> Result<Vec<Row>, Error
         });
     }
     Ok(result)
+}
+
+/// Normalize a committed source row using the same delta/completion rules for pages and exports.
+pub(super) fn normalize(
+    entry: &mut NativeItem,
+    partial: bool,
+    prefixes: &mut BTreeMap<String, String>,
+) -> Result<(), ErrorCode> {
+    if additive(entry) {
+        if partial {
+            extend(prefixes.entry(entry.key.clone()).or_default(), entry)?;
+        } else if let Some(prefix) = prefixes.remove(&entry.key) {
+            suffix(entry, &prefix)?;
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn covered(

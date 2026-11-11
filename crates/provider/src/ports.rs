@@ -9,3 +9,4 @@ pub(crate) mod environment;
 pub mod mcp_scope;
 /// Native history discovery and inspection facts.
 pub(crate) mod native_history;
+pub mod timeline_export;

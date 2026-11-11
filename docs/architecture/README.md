@@ -71,6 +71,10 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 会话统计复用这些已提交记录，区分配置模型、原生确认模型和 Provider 用量快照；未知指标为
 `null`，不累计快照或混入账号/子会话用量，也不启动原生 writer，见
 [ADR-238](../decisions/providers/adr-238-read-only-session-statistics.md)。
+会话导出同样是独立只读操作：完整读取已保存 Timeline，按类型渲染 Markdown/HTML，再通过类型化
+Completion 把匿名 artifact 交给 API/Files 既有一次性下载管线，不调用原生导出或另建 token 系统。
+新增 RPC/SDK、内部文件所有权、浏览器下载 CORS 与平台完成语义见
+[ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)。
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。

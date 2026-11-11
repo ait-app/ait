@@ -638,10 +638,11 @@ async fn guard(
         } else {
             next.run(request).await
         };
-        browser_auth::cors(response.headers_mut(), origin);
+        browser_auth::cors(response.headers_mut(), origin, "POST");
         return Ok(response);
     }
-    let download = request.method() == Method::GET && request.uri().path() == "/api/files/download";
+    let download = matches!(*request.method(), Method::GET | Method::OPTIONS)
+        && request.uri().path() == "/api/files/download";
     let terminal_activity =
         request.method() == Method::POST && request.uri().path() == terminal_activity::PATH;
     if !matches!(request.uri().path(), "/healthz" | "/readyz") && !download && !terminal_activity {
@@ -662,7 +663,21 @@ async fn guard(
     if request.uri().query().is_some() && !download {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
-    Ok(next.run(request).await)
+    let download_origin = if download {
+        request.headers().get("origin").cloned()
+    } else {
+        None
+    };
+    let mut response = if download && request.method() == Method::OPTIONS {
+        // A validated preflight must never redeem the one-use file grant.
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        next.run(request).await
+    };
+    if let Some(origin) = download_origin {
+        browser_auth::cors(response.headers_mut(), origin, "GET");
+    }
+    Ok(response)
 }
 
 async fn browser_ticket(

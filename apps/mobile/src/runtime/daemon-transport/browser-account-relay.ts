@@ -26,24 +26,30 @@ export async function downloadBrowserAccountFile(input: {
   token: string;
   fileName: string;
   mimeType: string | null;
+  signal?: AbortSignal;
+  maxBytes?: number;
+  expectedSize?: number;
   progress(bytesWritten: number, totalBytes: number): void;
 }): Promise<void> {
-  const chunks: ArrayBuffer[] = [];
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
   let received = 0;
   await streamNativeAccountDownload(
     {
       ...input,
       write(bytes) {
         received += bytes.byteLength;
-        if (received > MAX_DOWNLOAD_BYTES)
-          throw new Error(
-            "Browser downloads are limited to 200 MiB. Use the desktop app for larger files.",
-          );
-        chunks.push(Uint8Array.from(bytes).buffer);
+        if (received > (input.maxBytes ?? MAX_DOWNLOAD_BYTES))
+          throw new Error("Download size limit exceeded.");
+        chunks.push(
+          bytes.buffer instanceof ArrayBuffer
+            ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+            : Uint8Array.from(bytes),
+        );
       },
     },
     dependencies,
   );
+  input.signal?.throwIfAborted();
   const url = URL.createObjectURL(
     new Blob(chunks, { type: input.mimeType || "application/octet-stream" }),
   );

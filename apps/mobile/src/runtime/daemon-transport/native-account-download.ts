@@ -29,6 +29,9 @@ export function streamNativeAccountDownload(
     hostId: string;
     center: string;
     token: string;
+    signal?: AbortSignal;
+    maxBytes?: number;
+    expectedSize?: number;
     write(bytes: Uint8Array): void;
     progress(bytesWritten: number, totalBytes: number): void;
   },
@@ -62,6 +65,13 @@ export function streamNativeAccountDownload(
       if (error) reject(error);
       else resolve();
     }
+    const abort = () => finish(new Error("Download cancelled."));
+    input.signal?.addEventListener("abort", abort, { once: true });
+    cleanup.push(() => input.signal?.removeEventListener("abort", abort));
+    if (input.signal?.aborted) {
+      abort();
+      return;
+    }
     function receive(data: unknown, binary: boolean): void {
       if (closed) return;
       try {
@@ -78,13 +88,17 @@ export function streamNativeAccountDownload(
             throw new Error("Invalid download frame.");
           if (total !== null && bytes + chunk.length > total)
             throw new Error("File size mismatch.");
+          if (bytes + chunk.length > (input.maxBytes ?? Infinity))
+            throw new Error("Download size limit exceeded.");
+          if (input.expectedSize !== undefined && bytes + chunk.length > input.expectedSize)
+            throw new Error("File size mismatch.");
           input.write(chunk);
           // Hub downloads grant credit only for bytes already written.
           hub?.consumed(chunk.length);
           bytes += chunk.length;
           if (Date.now() - lastProgress > 200) {
             lastProgress = Date.now();
-            input.progress(bytes, total ?? 0);
+            input.progress(bytes, input.expectedSize ?? total ?? 0);
           }
           return;
         }
@@ -109,6 +123,10 @@ export function streamNativeAccountDownload(
             throw new Error("Invalid file size.");
           }
           total = message.content_length as number | null;
+          if (total !== null && total > (input.maxBytes ?? Infinity))
+            throw new Error("Download size limit exceeded.");
+          if (input.expectedSize !== undefined && total !== null && total !== input.expectedSize)
+            throw new Error("File size mismatch.");
           stage = "body";
           return;
         }
@@ -116,9 +134,10 @@ export function streamNativeAccountDownload(
           stage === "body" &&
           message.type === "download.end" &&
           message.bytes === bytes &&
-          (total === null || total === bytes)
+          (total === null || total === bytes) &&
+          (input.expectedSize === undefined || input.expectedSize === bytes)
         ) {
-          input.progress(bytes, total ?? bytes);
+          input.progress(bytes, input.expectedSize ?? total ?? bytes);
           if (hub) {
             hub.send(JSON.stringify({ type: "download.complete" }));
             // The Host acknowledges with close `done`; the file is complete either way.
