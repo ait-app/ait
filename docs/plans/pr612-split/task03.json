@@ -49,7 +49,7 @@
   "status": "validating",
   "branch": "feat/pr612-task03-agent-profile-settings",
   "base": "efca94b8621830cb99ce5c1df80001ca1c729241",
-  "commit": null,
+  "commit": "331459db",
   "pr_url": null,
   "checks": {
     "required": [
