@@ -8,6 +8,7 @@ mod interactions;
 mod mcp;
 pub(super) mod native_sessions;
 pub(super) mod presets;
+pub(super) mod preview;
 mod projection;
 pub(super) mod quota;
 mod runtime;

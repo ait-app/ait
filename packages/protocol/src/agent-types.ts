@@ -125,6 +125,8 @@ export interface ProviderSnapshotEntry {
   supportsRealtimeVoice?: boolean;
   /** Whether the host adapter supports listing and importing native sessions. */
   supportsSessionImport?: boolean;
+  /** Whether the host adapter can page native session history read-only, without a writer. */
+  supportsSessionPreview?: boolean;
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;

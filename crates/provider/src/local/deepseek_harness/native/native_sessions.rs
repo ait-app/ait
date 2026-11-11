@@ -167,11 +167,7 @@ async fn inspect_owned(
         ..Default::default()
     };
     super::config::validate(&config)?;
-    let created_at = timestamp(
-        journal.header["createdAt"]
-            .as_i64()
-            .ok_or(AgentSessionError::Failed)?,
-    )?;
+    let created_at = journal.created_at;
     let prompts = journal
         .entries
         .iter()
@@ -183,7 +179,7 @@ async fn inspect_owned(
             ("cwd".into(), json!(cwd)),
             ("transport".into(), json!("native-host")),
         ]),
-        parent_id: journal.header["parentSession"].as_str().map(str::to_owned),
+        parent_id: journal.parent_id,
         descriptor: SessionDescriptor {
             provider_id: PROVIDER.into(),
             provider_label: "DeepSeek Harness".into(),
@@ -204,7 +200,7 @@ async fn inspect_owned(
     })
 }
 
-fn validate_id(id: &str) -> Result<(), AgentSessionError> {
+pub(super) fn validate_id(id: &str) -> Result<(), AgentSessionError> {
     if id.is_empty() || id.len() > 1024 || id.chars().any(char::is_control) {
         return Err(AgentSessionError::Rejected);
     }

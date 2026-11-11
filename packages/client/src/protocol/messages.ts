@@ -122,6 +122,9 @@ export function serverInfo(
       providersSnapshot: has("provider.snapshot.get.request"),
       importSessionWorkspaceTarget: has("agent.import.request"),
       importSessionSearch: has("provider.sessions.recent.list.request"),
+      // Host-version gate only; per-provider support comes from the snapshot's
+      // supportsSessionPreview capability, never from this method's presence alone.
+      importSessionPreview: has("provider.sessions.preview.get.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
       daemonConfigReload: has("daemon.config.reload.request"),

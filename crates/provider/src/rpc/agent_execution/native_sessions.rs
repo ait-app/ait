@@ -8,13 +8,21 @@ use uuid::Uuid;
 
 use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::native_history::SessionHistory;
-use crate::protocol::native_sessions::{ForkRequest, ImportRequest};
+use crate::protocol::native_sessions::{ForkRequest, ImportRequest, PreviewRequest};
 use crate::service::agent_manager::native_sessions::canonical;
 
 impl ExecutionState {
     pub(super) async fn recent_sessions(&self, params: Value) -> Result<Value, ErrorCode> {
         self.manager
             .recent_sessions(decode(params)?)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(super) async fn session_preview(&self, params: Value) -> Result<Value, ErrorCode> {
+        let request: PreviewRequest = decode(params)?;
+        self.manager
+            .preview_session(request)
             .await
             .map_err(Into::into)
     }

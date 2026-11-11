@@ -52,9 +52,12 @@ async fn external_import_reads_full_history_without_writes_then_restores_the_nat
         entries[0].last_prompt_preview.as_deref(),
         Some("External question")
     );
-    assert_eq!(
-        fixture.requests("session/list"),
-        vec![json!({"_request":{}})]
+    assert!(
+        fixture
+            .requests("session/list")
+            .iter()
+            .all(|request| request == &json!({"_request":{}})),
+        "discovery only issues the read-only list request"
     );
     let mut handle = handle();
     let imported = fixture
@@ -79,6 +82,7 @@ async fn external_import_reads_full_history_without_writes_then_restores_the_nat
         "session/prompt",
         "session/selectModel",
         "commands/execute",
+        "session/follow",
     ] {
         assert!(
             fixture.requests(method).is_empty(),
@@ -106,10 +110,124 @@ async fn external_import_reads_full_history_without_writes_then_restores_the_nat
         .resume_session(&restored, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
+    assert_eq!(
+        fixture.requests("session/create").len(),
+        1,
+        "resume keeps the existing adopt path; reads never created a writer"
+    );
+    assert!(
+        fixture
+            .requests("session/selectModel")
+            .iter()
+            .all(|request| request["request"]["sessionId"] == "session"),
+        "any model selection stays bound to the resumed native identity"
+    );
     assert_eq!(resumed.persistence().unwrap().session_id, "session");
     resumed.start_turn("continue", &spec.config).await.unwrap();
     assert_eq!(fixture.requests("session/prompt").len(), 1);
     resumed.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn history_and_import_reads_do_not_follow_or_activate_an_existing_writer() {
+    let fixture = Fixture::new().await;
+    fixture.seed_records(records());
+    let mut writer = fixture.client.create_session(&fixture.spec).await.unwrap();
+    let handle = writer.persistence().unwrap();
+    let (history, imported) = tokio::join!(
+        fixture.client.history(&handle, &fixture.spec.cwd),
+        fixture.client.inspect_session(&handle, &fixture.spec.cwd),
+    );
+    assert_eq!(history.unwrap(), imported.unwrap().entries);
+    assert_eq!(fixture.requests("session/follow").len(), 1);
+    assert_eq!(fixture.requests("session/create").len(), 1);
+    assert!(fixture.requests("session/selectModel").is_empty());
+    assert!(fixture.requests("session/prompt").is_empty());
+    assert!(
+        fixture
+            .requests("session/page")
+            .iter()
+            .all(|request| { request["request"]["throughSeq"] == 3 })
+    );
+    writer.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn invalid_read_only_baselines_fail_without_activating_fallbacks() {
+    for baseline in [
+        Value::Null,
+        json!({"kind":"migration-required","values":{}}),
+        json!({"kind":"sequenced","asOfSeq":-2,"values":{}}),
+        json!({"kind":"sequenced","asOfSeq":i64::MAX,"values":{}}),
+        json!({"kind":"sequenced","asOfSeq":0,"values":null}),
+    ] {
+        let fixture = Fixture::new().await;
+        fixture.reply("session/projections", baseline);
+        assert!(
+            fixture
+                .client
+                .inspect_session(&handle(), &fixture.spec.cwd)
+                .await
+                .is_err()
+        );
+        assert!(fixture.requests("session/follow").is_empty());
+        assert!(fixture.requests("session/create").is_empty());
+    }
+    for scenario in ["404", "500", "rejected"] {
+        let fixture = Fixture::new().await;
+        fixture.fail("session/projections", scenario);
+        assert!(
+            fixture
+                .client
+                .inspect_session(&handle(), &fixture.spec.cwd)
+                .await
+                .is_err()
+        );
+        assert!(fixture.requests("session/follow").is_empty());
+    }
+}
+
+#[tokio::test]
+async fn empty_read_only_history_keeps_the_native_negative_cursor() {
+    let fixture = Fixture::new().await;
+    fixture.seed_records(Vec::new());
+    let imported = fixture
+        .client
+        .inspect_session(&handle(), &fixture.spec.cwd)
+        .await
+        .unwrap();
+    assert!(imported.entries.is_empty());
+    assert!(!imported.active);
+    assert_eq!(
+        fixture.requests("session/page")[0]["request"]["throughSeq"],
+        -1
+    );
+    assert!(fixture.requests("session/follow").is_empty());
+}
+
+#[tokio::test]
+async fn resume_checks_native_identity_before_subscribing_to_activating_history() {
+    let fixture = Fixture::new().await;
+    let mut writer = fixture.client.create_session(&fixture.spec).await.unwrap();
+    let handle = writer.persistence().unwrap();
+    writer.close().await.unwrap();
+    for summary in [
+        json!({"sessionId":"different","cwd":fixture.spec.cwd}),
+        json!({"sessionId":"session","cwd":"/elsewhere"}),
+        json!({"sessionId":"session","cwd":fixture.spec.cwd,"origin":"subagent"}),
+    ] {
+        fixture.set_sessions(json!([summary]));
+        assert!(
+            fixture
+                .client
+                .resume_session(&handle, &fixture.spec, AgentResumePurpose::Interactive)
+                .await
+                .is_err()
+        );
+    }
+    assert_eq!(fixture.requests("session/follow").len(), 1);
+    assert_eq!(fixture.requests("session/create").len(), 1);
+    assert!(fixture.requests("session/selectModel").is_empty());
 }
 
 #[tokio::test]

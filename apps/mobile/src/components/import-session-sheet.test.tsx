@@ -19,7 +19,28 @@ const { theme } = vi.hoisted(() => ({
     borderRadius: { md: 6, lg: 8, full: 9999 },
     fontSize: { xs: 11, sm: 13, base: 15 },
     fontWeight: { normal: "400", medium: "500", semibold: "600" },
+    fontFamily: { mono: "monospace" },
     iconSize: { sm: 14, md: 16, lg: 24 },
+    shadow: {
+      sm: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
+      },
+      md: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 8,
+        elevation: 8,
+      },
+      lg: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowRadius: 24,
+        elevation: 8,
+      },
+    },
     opacity: { 50: 0.5 },
     colors: {
       foreground: "#fff",
@@ -31,6 +52,7 @@ const { theme } = vi.hoisted(() => ({
       border: "#444",
       borderAccent: "#555",
       interactionHighlight: "rgba(255,255,255,0.08)",
+      statusDanger: "#f87171",
       palette: { red: { 300: "#f87171" } },
     },
   },
@@ -58,9 +80,13 @@ vi.mock("react-native-unistyles", () => ({
     },
 }));
 
-vi.mock("@/constants/layout", () => ({
-  useIsCompactFormFactor: () => false,
-}));
+vi.mock("@/constants/layout", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/constants/layout")>();
+  return {
+    ...actual,
+    useIsCompactFormFactor: () => false,
+  };
+});
 
 vi.mock("@/components/provider-icons", () => ({
   getProviderIcon: () => () => null,
@@ -74,6 +100,8 @@ vi.mock("lucide-react-native", () => {
   };
   return {
     ChevronDown: icon("ChevronDown"),
+    ChevronUp: icon("ChevronUp"),
+    Eye: icon("Eye"),
     Inbox: icon("Inbox"),
     Layers: icon("Layers"),
     RotateCw: icon("RotateCw"),
@@ -81,6 +109,10 @@ vi.mock("lucide-react-native", () => {
     X: icon("X"),
   };
 });
+
+// The preview sheet renders timeline markdown; unit tests stub the syntax-token theme module
+// exactly like diff-viewer.test.tsx instead of loading the full highlighter theme.
+vi.mock("@/styles/syntax-token-styles", () => ({ syntaxTokenStyleFor: () => undefined }));
 
 vi.mock("@/components/ui/loading-spinner", () => ({
   LoadingSpinner: () =>
@@ -246,6 +278,8 @@ function renderSheet(
   options?: RenderOptions,
 ) {
   applyHostMocks(options);
+  // Existing import-flow tests never open preview; the stub keeps the client contract complete.
+  const sheetClient = { fetchProviderSessionPreview: vi.fn(), ...client };
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -260,7 +294,7 @@ function renderSheet(
     <QueryClientProvider client={queryClient}>
       <ImportSessionSheet
         visible={options?.visible ?? true}
-        client={client}
+        client={sheetClient}
         serverId="server-1"
         cwd={cwd}
         workspaceId={options?.workspaceId}
@@ -523,7 +557,7 @@ describe("ImportSessionSheet", () => {
         <QueryClientProvider client={queryClient}>
           <ImportSessionSheet
             visible={visible}
-            client={client}
+            client={{ fetchProviderSessionPreview: vi.fn(), ...client }}
             serverId="server-1"
             cwd="/repo/paseo"
             onClose={vi.fn()}
@@ -1391,7 +1425,7 @@ describe("ImportSessionSheet", () => {
       <QueryClientProvider client={queryClient}>
         <ImportSessionSheet
           visible
-          client={client}
+          client={{ fetchProviderSessionPreview: vi.fn(), ...client }}
           serverId={serverId}
           onClose={vi.fn()}
           onImported={vi.fn()}

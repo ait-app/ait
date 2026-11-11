@@ -141,6 +141,7 @@ pub(super) async fn execution(
                 | "agent.thinking.set.request"
                 | "agent.config.apply.request"
                 | "provider.sessions.recent.list.request"
+                | "provider.sessions.preview.get.request"
                 | "agent.import.request"
                 | "agent.refresh.request"
                 | "agent.fork_context.request"

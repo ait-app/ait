@@ -5273,6 +5273,86 @@ test("fetches scoped recent provider sessions", async () => {
   });
 });
 
+test("fetches a read-only native session preview page and echoes its cursor", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.fetchProviderSessionPreview({
+    providerId: "deepseek-harness",
+    providerHandleId: "native-session-1",
+    cwd: "/tmp/repo",
+    cursor: "opaque-cursor",
+    limit: 50,
+  });
+
+  expect(mock.sent).toHaveLength(1);
+  const request = JSON.parse(String(mock.sent[0])) as {
+    type: "session";
+    message: {
+      type: "provider.sessions.preview.get.request";
+      requestId: string;
+      providerId: string;
+      providerHandleId: string;
+      cwd: string;
+      cursor?: string;
+      limit?: number;
+    };
+  };
+  expect(request.message).toMatchObject({
+    type: "provider.sessions.preview.get.request",
+    providerId: "deepseek-harness",
+    providerHandleId: "native-session-1",
+    cwd: "/tmp/repo",
+    cursor: "opaque-cursor",
+    limit: 50,
+  });
+
+  mock.triggerMessage(
+    JSON.stringify({
+      type: "session",
+      message: {
+        type: "provider.sessions.preview.get.response",
+        payload: {
+          requestId: request.message.requestId,
+          providerId: "deepseek-harness",
+          providerHandleId: "native-session-1",
+          cwd: "/tmp/repo",
+          title: null,
+          lastActivityAt: "2026-11-11T12:00:00.000Z",
+          active: false,
+          entries: [
+            {
+              key: "item-1",
+              timestamp: "2026-11-11T11:59:00.000Z",
+              item: { type: "user_message", text: "question" },
+            },
+          ],
+          olderCursor: null,
+          hasOlder: false,
+        },
+      },
+    }),
+  );
+
+  const payload = await promise;
+  expect(payload.entries).toHaveLength(1);
+  expect(payload.hasOlder).toBe(false);
+  expect(payload.olderCursor).toBeNull();
+});
+
 test("imports an agent by provider handle id", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

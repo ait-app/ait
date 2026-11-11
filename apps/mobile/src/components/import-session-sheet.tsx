@@ -7,7 +7,7 @@ import type {
   FetchRecentProviderSessionEntry,
 } from "@ait/client/internal/daemon-client";
 import type { AgentProvider } from "@ait/protocol/agent-types";
-import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react-native";
+import { ChevronDown, Eye, Inbox, Layers, RotateCw } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { useHostProjects } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
 import { i18n } from "@/i18n/i18next";
+import { SessionPreviewSheet } from "@/components/session-preview-sheet";
 import {
   aggregateSessionEntries,
   ALL_FILTER_VALUE,
@@ -49,7 +50,7 @@ const SEARCH_DEBOUNCE_MS = 200;
 
 type RecentProviderSessionsClient = Pick<
   DaemonClient,
-  "fetchRecentProviderSessions" | "importAgent"
+  "fetchRecentProviderSessions" | "importAgent" | "fetchProviderSessionPreview"
 >;
 
 type ImportedAgent = Awaited<ReturnType<RecentProviderSessionsClient["importAgent"]>>;
@@ -315,6 +316,8 @@ function ImportSessionSheetRow({
   disabled,
   importing,
   folder,
+  canPreview,
+  onPreviewSession,
   onImportSession,
 }: {
   serverId: string | null;
@@ -323,6 +326,9 @@ function ImportSessionSheetRow({
   importing: boolean;
   /** The row's directory, shown only when rows can come from more than one. */
   folder: string | null;
+  /** Host method plus the provider's advertised read-only preview capability. */
+  canPreview: boolean;
+  onPreviewSession: (entry: FetchRecentProviderSessionEntry) => void;
   onImportSession: (entry: FetchRecentProviderSessionEntry) => void;
 }) {
   const { theme } = useUnistyles();
@@ -338,6 +344,9 @@ function ImportSessionSheetRow({
   const handlePress = useCallback(() => {
     onImportSession(entry);
   }, [entry, onImportSession]);
+  const handlePreview = useCallback(() => {
+    onPreviewSession(entry);
+  }, [entry, onPreviewSession]);
   const pressableStyle = useCallback(
     ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
@@ -381,6 +390,19 @@ function ImportSessionSheetRow({
           </Text>
         ) : null}
       </View>
+      {canPreview ? (
+        <Pressable
+          onPress={handlePreview}
+          disabled={disabled}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("importSession.sessionPreview.open")}
+          style={styles.previewButton}
+          testID={`import-session-preview-${entry.providerId}-${entry.providerHandleId}`}
+        >
+          <Eye size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -391,6 +413,8 @@ function SessionRows({
   disabled,
   importingSessionKey,
   resolveFolder,
+  canPreviewProvider,
+  onPreviewSession,
   onImportSession,
 }: {
   serverId: string | null;
@@ -398,6 +422,8 @@ function SessionRows({
   disabled: boolean;
   importingSessionKey: string | null;
   resolveFolder: (entry: FetchRecentProviderSessionEntry) => string | null;
+  canPreviewProvider: (providerId: string) => boolean;
+  onPreviewSession: (entry: FetchRecentProviderSessionEntry) => void;
   onImportSession: (entry: FetchRecentProviderSessionEntry) => void;
 }) {
   return (
@@ -410,6 +436,8 @@ function SessionRows({
           disabled={disabled}
           importing={importingSessionKey === `${entry.providerId}:${entry.providerHandleId}`}
           folder={resolveFolder(entry)}
+          canPreview={canPreviewProvider(entry.providerId)}
+          onPreviewSession={onPreviewSession}
           onImportSession={onImportSession}
         />
       ))}
@@ -438,15 +466,19 @@ export function ImportSessionSheet({
   const [searchInput, setSearchInput] = useState("");
   const [pageLimit, setPageLimit] = useState(PER_PROVIDER_LIMIT);
   const [selectedProvider, setSelectedProvider] = useState<string>(ALL_FILTER_VALUE);
+  const [previewEntry, setPreviewEntry] = useState<FetchRecentProviderSessionEntry | null>(null);
 
   const scopeCwd = isShowingAllDirectories ? null : (cwd ?? null);
   const supportsSearch = useHostFeature(serverId, "importSessionSearch");
+  // Method presence gates the host version only; the provider snapshot decides per provider.
+  const supportsPreviewMethod = useHostFeature(serverId, "importSessionPreview");
   const query = useDebouncedValue(supportsSearch ? searchInput : "", SEARCH_DEBOUNCE_MS).trim();
 
   useEffect(() => {
     if (visible) return;
     setIsShowingAllDirectories(false);
     setSearchInput("");
+    setPreviewEntry(null);
   }, [visible]);
 
   // A narrower or wider list starts at page one; keeping a grown limit would
@@ -459,6 +491,13 @@ export function ImportSessionSheet({
     cwd: scopeCwd,
     enabled: visible,
   });
+  const canPreviewProvider = useCallback(
+    (providerId: string) =>
+      supportsPreviewMethod &&
+      snapshotEntries?.find((snapshotEntry) => snapshotEntry.provider === providerId)
+        ?.supportsSessionPreview === true,
+    [supportsPreviewMethod, snapshotEntries],
+  );
   const supportsWorkspaceTarget = useHostFeature(serverId, "importSessionWorkspaceTarget");
   const requiresHostUpgrade = requiresImportSessionsHostUpgrade({
     supportsSnapshot,
@@ -659,6 +698,11 @@ export function ImportSessionSheet({
     [importMutation],
   );
 
+  const handlePreviewSession = useCallback((entry: FetchRecentProviderSessionEntry) => {
+    setPreviewEntry(entry);
+  }, []);
+  const handlePreviewClose = useCallback(() => setPreviewEntry(null), []);
+
   const providerErrorRows = useMemo(
     () => collectProviderErrorRows(providersToFetch, queries, providerLabelById),
     [queries, providersToFetch, providerLabelById],
@@ -756,91 +800,107 @@ export function ImportSessionSheet({
   const showLoadMore = hasMoreSessions(queries, pageLimit);
 
   return (
-    <AdaptiveModalSheet
-      visible={visible}
-      onClose={onClose}
-      header={header}
-      testID="import-session-sheet"
-      desktopMaxWidth={560}
-      snapPoints={IMPORT_SHEET_SNAP_POINTS}
-    >
-      {showFilter ? (
-        <View ref={filterAnchorRef} collapsable={false} style={styles.filterTriggerWrap}>
-          <Pressable
-            onPress={handleFilterOpen}
-            style={filterTriggerStyle}
-            testID="import-session-filter-trigger"
-            accessibilityRole="button"
-            accessibilityLabel={`Filter: ${selectedProviderLabel}`}
-          >
-            {selectedProvider === ALL_FILTER_VALUE ? (
-              <Layers size={14} color={theme.colors.foregroundMuted} />
-            ) : (
-              (() => {
-                const ProviderIcon = getProviderIcon(selectedProvider, serverId);
-                return <ProviderIcon size={14} color={theme.colors.foregroundMuted} />;
-              })()
-            )}
-            <Text style={styles.filterTriggerText} numberOfLines={1}>
-              {selectedProviderLabel}
-            </Text>
-            <ChevronDown size={14} color={theme.colors.foregroundMuted} />
-          </Pressable>
-          <Combobox
-            options={filterComboboxOptions}
-            value={selectedProvider}
-            onSelect={handleFilterSelect}
-            renderOption={renderFilterOption}
-            searchable={false}
-            title="Filter by provider"
-            open={isFilterOpen}
-            onOpenChange={setIsFilterOpen}
-            anchorRef={filterAnchorRef}
-            desktopPlacement="bottom-start"
-            desktopPreventInitialFlash
-          />
-        </View>
-      ) : null}
-      <SheetStatusMessages
-        isClientReady={Boolean(client)}
-        isSnapshotUnsupported={isSnapshotUnsupported}
-        hasNoImportableProviders={hasNoImportableProviders}
-        isLoadingSessions={isLoadingSessions}
-        hasRows={visibleEntries.length > 0}
-        importError={importMutation.error}
-        importCwd={importMutation.variables?.cwd}
-      />
-      {providerErrorRows.length > 0 ? (
-        <ProviderErrorBanner rows={providerErrorRows} onRetry={handleRetryProvider} />
-      ) : null}
-      {visibleEntries.length > 0 ? (
-        <SessionRows
-          serverId={serverId}
-          entries={visibleEntries}
-          disabled={importMutation.isPending}
-          importingSessionKey={importingSessionKey}
-          resolveFolder={resolveFolder}
-          onImportSession={handleImportSession}
+    <>
+      <AdaptiveModalSheet
+        visible={visible}
+        onClose={onClose}
+        header={header}
+        testID="import-session-sheet"
+        desktopMaxWidth={560}
+        snapPoints={IMPORT_SHEET_SNAP_POINTS}
+      >
+        {showFilter ? (
+          <View ref={filterAnchorRef} collapsable={false} style={styles.filterTriggerWrap}>
+            <Pressable
+              onPress={handleFilterOpen}
+              style={filterTriggerStyle}
+              testID="import-session-filter-trigger"
+              accessibilityRole="button"
+              accessibilityLabel={`Filter: ${selectedProviderLabel}`}
+            >
+              {selectedProvider === ALL_FILTER_VALUE ? (
+                <Layers size={14} color={theme.colors.foregroundMuted} />
+              ) : (
+                (() => {
+                  const ProviderIcon = getProviderIcon(selectedProvider, serverId);
+                  return <ProviderIcon size={14} color={theme.colors.foregroundMuted} />;
+                })()
+              )}
+              <Text style={styles.filterTriggerText} numberOfLines={1}>
+                {selectedProviderLabel}
+              </Text>
+              <ChevronDown size={14} color={theme.colors.foregroundMuted} />
+            </Pressable>
+            <Combobox
+              options={filterComboboxOptions}
+              value={selectedProvider}
+              onSelect={handleFilterSelect}
+              renderOption={renderFilterOption}
+              searchable={false}
+              title="Filter by provider"
+              open={isFilterOpen}
+              onOpenChange={setIsFilterOpen}
+              anchorRef={filterAnchorRef}
+              desktopPlacement="bottom-start"
+              desktopPreventInitialFlash
+            />
+          </View>
+        ) : null}
+        <SheetStatusMessages
+          isClientReady={Boolean(client)}
+          isSnapshotUnsupported={isSnapshotUnsupported}
+          hasNoImportableProviders={hasNoImportableProviders}
+          isLoadingSessions={isLoadingSessions}
+          hasRows={visibleEntries.length > 0}
+          importError={importMutation.error}
+          importCwd={importMutation.variables?.cwd}
         />
-      ) : null}
-      {showLoadMore ? (
-        <View style={styles.footer}>
-          <Button
-            variant="ghost"
-            onPress={handleLoadMore}
-            disabled={isRefreshing}
-            testID="import-session-load-more"
-          >
-            {t("importSession.actions.loadMore")}
-          </Button>
-        </View>
-      ) : null}
-      {showEmptyState ? <SheetEmptyState title={emptyStateTitle} /> : null}
-    </AdaptiveModalSheet>
+        {providerErrorRows.length > 0 ? (
+          <ProviderErrorBanner rows={providerErrorRows} onRetry={handleRetryProvider} />
+        ) : null}
+        {visibleEntries.length > 0 ? (
+          <SessionRows
+            serverId={serverId}
+            entries={visibleEntries}
+            disabled={importMutation.isPending}
+            importingSessionKey={importingSessionKey}
+            resolveFolder={resolveFolder}
+            canPreviewProvider={canPreviewProvider}
+            onPreviewSession={handlePreviewSession}
+            onImportSession={handleImportSession}
+          />
+        ) : null}
+        {showLoadMore ? (
+          <View style={styles.footer}>
+            <Button
+              variant="ghost"
+              onPress={handleLoadMore}
+              disabled={isRefreshing}
+              testID="import-session-load-more"
+            >
+              {t("importSession.actions.loadMore")}
+            </Button>
+          </View>
+        ) : null}
+        {showEmptyState ? <SheetEmptyState title={emptyStateTitle} /> : null}
+      </AdaptiveModalSheet>
+      <SessionPreviewSheet
+        visible={previewEntry !== null}
+        client={client}
+        serverId={serverId}
+        entry={previewEntry}
+        onClose={handlePreviewClose}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  previewButton: {
+    alignSelf: "center",
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
   subtitleRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -193,3 +193,26 @@ CLI 不能直接启动 Electron 专属 `desktop` profile；桌面安装包内的
 安装或更新插件后刷新 Provider 目录可发现新预设；现有会话仍受原生组合生命周期约束。
 插件管理工具若由所选模式提供，会通过 DSH 的普通工具和审批通道运行。
 Ait 不托管插件专属 Web 界面或插件安装面板。详见 [ADR-147](../decisions/providers/adr-147-dsh-native-plugin-presets.md)。
+
+## 非活动历史与只读预览
+
+历史读取、导入检查与最近会话预览只使用非激活的原生端点：`session/list` 校验根身份与 cwd，
+`session/projections` 取得固定权威截面，`session/page` 在该截面上分页。缺失权威投影接口或
+基线非法时直接失败，不回退到 `session/follow`。官方 DSH `0.2.2-rc.1`
+（npm `@deepseek-ai/dsh`，`dsh-api-session-controller` 公共端点声明）中，Web 客户端的
+follow 打开携带 `activate: true`，会把冷会话升级为活动 Agent；因此只读路径不使用 follow。
+`session/follow` 仅用于显式创建/恢复写入者，恢复前先做只读根身份校验。
+
+客户端通过类型化方法 `provider.sessions.preview.get.request` 分页预览未导入的原生会话：
+请求携带 `providerId`、`providerHandleId`、`cwd`、可选不透明 `cursor` 与 `limit`（≤100）；
+响应返回既有 Timeline 投影条目、`active` 只读观察标志与 `olderCursor`/`hasOlder`。
+游标绑定 provider、原生 ID、cwd 与固定 `throughSeq`；跨身份、跨目录或伪造游标在任何原生读取前被拒绝。
+预览不创建、不恢复、不激活原生写入者，也不发送 prompt；允许的原生请求仅限
+`session/list`、`session/projections`、`session/page`、`session/modelCatalog` 与
+`session/attachment`（图片只读水合）。
+
+能力降级：方法存在性只作为主机版本网关；逐 Provider 支持由 Provider 快照的
+`supportsSessionPreview` 广告（DSH 原生交互传输为 true，ACP 为 false）。旧主机缺少该方法时
+客户端不发送请求；未广告能力的 Provider 不显示预览入口。只读 wire 摘要不含原生创建时间，
+导入记录中的创建时间为观察/导入时间，不代表原生创建时刻。详见
+[ADR-240](../decisions/providers/adr-240-dsh-inactive-history-preview.md)。

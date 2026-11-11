@@ -57,7 +57,7 @@ impl Fixture {
                 json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
             ])),
             frames: broadcast::channel(128).0,
-            sessions: Arc::new(Mutex::new(json!([]))),
+            sessions: Arc::new(Mutex::new(Value::Null)),
             snapshot_fields: Arc::new(Mutex::new(json!({}))),
             balance: Arc::new(Mutex::new(json!({"status":"ready",
                 "value":[{"currency":"CNY","balance":"12.34"}],
@@ -200,6 +200,8 @@ async fn stream(socket: WebSocket, host: Host) {
                 let Some(Ok(Message::Text(text)))=received else { break; };
                 let request:Value=serde_json::from_str(&text).unwrap();
                 if request["type"] == "cancel" { continue; }
+                host.requests.lock().unwrap().push(json!({
+                    "method":request["endpoint"],"payload":request["payload"]}));
                 let value=match request["endpoint"].as_str() {
                     Some("$events")=>json!({"type":"ready","clientId":"client"}),
                     Some("session/follow")=>snapshot(&host),
@@ -262,14 +264,20 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
         Some("permissionPresets/catalog") => {
             json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
         }
-        Some("session/list") => json!({"items":*host.sessions.lock().unwrap()}),
+        Some("session/list") => session_list(&host),
+        Some("session/projections") => {
+            let snapshot = snapshot(&host);
+            json!({"kind":"sequenced","asOfSeq":snapshot["cursor"],
+                "values":snapshot["projections"]["values"]})
+        }
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})
         }
         Some("session/page") => {
-            let before = request["payload"]["args"]["request"]["beforeSeq"]
-                .as_u64()
-                .unwrap();
+            let args = &request["payload"]["args"]["request"];
+            let before = args["beforeSeq"].as_u64().unwrap_or_else(|| {
+                u64::try_from(args["throughSeq"].as_i64().unwrap() + 1).unwrap()
+            });
             page(&host, before)
         }
         Some("session/create") => {
@@ -316,6 +324,18 @@ pub(super) async fn next(session: &mut dyn AgentSession) -> AgentTurnEvent {
     .expect("native event should arrive")
 }
 
+fn session_list(host: &Host) -> Value {
+    let sessions = host.sessions.lock().unwrap().clone();
+    if !sessions.is_null() {
+        return json!({"items":sessions});
+    }
+    let snapshot = snapshot(host);
+    json!({"items":[{"sessionId":snapshot["header"]["id"],
+        "cwd":snapshot["header"]["cwd"],"origin":snapshot["header"]["origin"],
+        "parentSessionId":snapshot["header"]["parentSession"],
+        "updatedAt":1_700_000_000_000_i64,"blank":false}]})
+}
+
 fn page(host: &Host, before: u64) -> Value {
     let records = host.records.lock().unwrap();
     let end = records
@@ -331,8 +351,8 @@ fn snapshot(host: &Host) -> Value {
         .lock()
         .unwrap()
         .last()
-        .map_or(0, |r| r["event"]["seq"].as_u64().unwrap());
-    let page = page(host, cut + 1);
+        .map_or(-1, |r| r["event"]["seq"].as_i64().unwrap());
+    let page = page(host, u64::try_from(cut + 1).unwrap());
     let mut snapshot = json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd,"createdAt":1_700_000_000_000_i64},"cursor":cut,"records":page["records"],"hasMore":page["hasMore"],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}});
     snapshot.as_object_mut().unwrap().extend(
         host.snapshot_fields

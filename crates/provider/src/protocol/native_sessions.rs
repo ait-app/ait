@@ -1,4 +1,4 @@
-//! Existing native session discovery, import, refresh and context export.
+//! Existing native session discovery, preview, import, refresh and context export.
 
 use std::collections::BTreeMap;
 
@@ -20,6 +20,22 @@ pub(crate) struct RecentRequest {
     pub(crate) limit: Option<usize>,
     /// Case-insensitive substring of title, prompt preview, handle or directory.
     pub(crate) query: Option<String>,
+}
+
+/// One read-only page of a native session's history; never creates or restores a writer.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PreviewRequest {
+    /// Registered provider identity.
+    pub(crate) provider_id: String,
+    /// Native session identity from read-only discovery.
+    pub(crate) provider_handle_id: String,
+    /// Exact native working directory of the listed session.
+    pub(crate) cwd: String,
+    /// Opaque continuation of the same fixed cut; omitted reads the newest page.
+    pub(crate) cursor: Option<String>,
+    /// Positive display-item limit, at most 100; defaults to 50.
+    pub(crate) limit: Option<usize>,
 }
 
 /// Import an existing provider handle. Legacy field aliases must agree when both are supplied.
@@ -69,6 +85,34 @@ pub(crate) struct ContextCompactRequest {
     pub thinking_option_id: Option<String>,
     /// One bounded segment of imported conversation context.
     pub context: String,
+}
+
+/// Encode one preview continuation as an opaque wire token; clients echo it verbatim.
+/// # Errors
+/// Returns a serialization failure when the cursor cannot be represented.
+pub(crate) fn encode_preview_cursor(
+    cursor: &crate::ports::native_history::PreviewCursor,
+) -> Result<String, serde_json::Error> {
+    use base64::Engine;
+    let bytes = serde_json::to_vec(cursor)?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+/// Decode an opaque preview continuation without trusting its fields; adapters revalidate
+/// identity and cut binding before any native read.
+/// # Errors
+/// Returns a rejection for oversized, malformed or non-object tokens.
+pub(crate) fn decode_preview_cursor(
+    encoded: &str,
+) -> Result<crate::ports::native_history::PreviewCursor, ()> {
+    use base64::Engine;
+    if encoded.len() > 4096 {
+        return Err(());
+    }
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| ())?;
+    serde_json::from_slice(&bytes).map_err(|_| ())
 }
 
 #[cfg(test)]
