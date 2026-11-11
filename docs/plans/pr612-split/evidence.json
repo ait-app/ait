@@ -80,6 +80,6 @@
   "validation": {
     "rust_tests": "not run; docs-only",
     "coverage": "not applicable — no Rust behavior changed",
-    "task00_review": "User reviewed tasks, mappings and README; requested corrections incorporated. Mechanical inventory, documentation and formatting checks passed. Task01 implementation is permitted after task00 Draft publication."
+    "task00_review": "Director reviewed tasks, mappings, README and main reconciliation; requested corrections incorporated. Mechanical inventory, documentation and formatting checks passed. This records director review, not personal user approval. Task01 implementation is permitted after task00 Draft publication."
   }
 }
