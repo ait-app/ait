@@ -16,6 +16,7 @@ pub(crate) mod onboarding;
 const API: &str = "https://api.telegram.org";
 /// Longest wait between admission attempts while the Bot's global backlog is full.
 const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
+const PROCESSING_REACTION: &str = "\u{1f440}";
 
 pub(super) async fn run(
     bots: &Bots,
@@ -130,7 +131,11 @@ impl Receiver<'_> {
         let mut backoff = Duration::from_secs(1);
         loop {
             match admit(self.bots, incoming.clone()).await? {
-                Disposition::Accepted | Disposition::Skip => return Ok(true),
+                Disposition::Accepted => {
+                    self.react(&incoming).await;
+                    return Ok(true);
+                }
+                Disposition::Skip => return Ok(true),
                 Disposition::Busy => {
                     self.notify_busy(&incoming).await;
                     return Ok(true);
@@ -143,6 +148,24 @@ impl Receiver<'_> {
                     backoff = (backoff * 2).min(MAX_BACKLOG_RETRY);
                 }
             }
+        }
+    }
+
+    /// Best-effort reaction showing that a durably admitted message is being processed.
+    async fn react(&self, incoming: &Incoming) {
+        let Some(message_id) = incoming.reply_to.as_deref() else {
+            return;
+        };
+        let result = react(
+            self.client,
+            self.token,
+            &incoming.peer,
+            message_id,
+            self.api,
+        )
+        .await;
+        if let Err(error) = result {
+            tracing::warn!(channel = %self.channel.id, ?error, "Telegram reaction failed");
         }
     }
 
@@ -181,6 +204,30 @@ fn message_body(
         body["message_thread_id"] = json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
     }
     Ok(body)
+}
+
+async fn react(
+    client: &reqwest::Client,
+    token: &SecretString,
+    chat_id: &str,
+    message_id: &str,
+    api: &str,
+) -> Result<(), ErrorCode> {
+    let message_id = message_id.parse::<i64>().map_err(|_| ErrorCode::BotIo)?;
+    call_at(
+        client,
+        token,
+        "setMessageReaction",
+        json!({
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "reaction": [{"type": "emoji", "emoji": PROCESSING_REACTION}],
+            "is_big": false,
+        }),
+        api,
+    )
+    .await
+    .map(|_| ())
 }
 
 fn incoming(

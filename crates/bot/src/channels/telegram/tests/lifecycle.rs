@@ -27,6 +27,23 @@ async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
     fixture.channel(&value["channel"])
 }
 
+fn reaction_route(reactions: Arc<AtomicUsize>) -> axum::routing::MethodRouter {
+    post(move |Json(body): Json<Value>| {
+        let reactions = reactions.clone();
+        async move {
+            assert_eq!(body["chat_id"], "-100");
+            assert!(body["message_id"] == 42 || body["message_id"] == 44);
+            assert_eq!(
+                body["reaction"],
+                json!([{"type":"emoji","emoji":"\u{1f440}"}])
+            );
+            assert_eq!(body["is_big"], false);
+            reactions.fetch_add(1, Ordering::SeqCst);
+            Json(json!({"ok":true,"result":true}))
+        }
+    })
+}
+
 #[tokio::test]
 async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thread() {
     let fixture = Fixture::new();
@@ -34,10 +51,15 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
     let channel = registered_channel(&fixture, &bots).await;
     let delivered = Arc::new(Notify::new());
     let observed = delivered.clone();
+    let reactions = Arc::new(AtomicUsize::new(0));
     let app = Router::new()
         .route(
             "/botfake/getMe",
             post(|| async { Json(json!({"ok":true,"result":{"id":2,"username":"ait_bot"}})) }),
+        )
+        .route(
+            "/botfake/setMessageReaction",
+            reaction_route(reactions.clone()),
         )
         .route(
             "/botfake/getWebhookInfo",
@@ -49,9 +71,13 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
                 if body["offset"] == 0 {
                     let mut message = update();
                     message["message"]["message_id"] = json!(42);
-                    Json(json!({"ok":true,"result":[message]}))
+                    let mut follow_up = update();
+                    follow_up["update_id"] = json!(11);
+                    follow_up["message"]["message_id"] = json!(44);
+                    follow_up["message"]["text"] = json!("@ait_bot follow up");
+                    Json(json!({"ok":true,"result":[message,follow_up]}))
                 } else {
-                    assert_eq!(body["offset"], 11);
+                    assert_eq!(body["offset"], 12);
                     tokio::time::sleep(Duration::from_millis(20)).await;
                     Json(json!({"ok":true,"result":[]}))
                 }
@@ -64,8 +90,14 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
                 async move {
                     assert_eq!(body["chat_id"], "-100");
                     assert_eq!(body["message_thread_id"], 3);
-                    assert_eq!(body["reply_parameters"]["message_id"], 42);
-                    assert_eq!(body["text"], "reply:@ait_bot hello");
+                    assert!(
+                        body["reply_parameters"]["message_id"] == 42
+                            || body["reply_parameters"]["message_id"] == 44
+                    );
+                    assert!(
+                        body["text"] == "reply:@ait_bot hello"
+                            || body["text"] == "reply:@ait_bot follow up"
+                    );
                     observed.notify_one();
                     Json(json!({"ok":true,"result":{"message_id":43}}))
                 }
@@ -86,8 +118,20 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
         loop {
             let conversations = fixture.store.conversations().unwrap();
             let turns = fixture.store.turns(conversations[0].id).unwrap();
-            if turns[0].delivery == domain::bot::DeliveryStatus::Delivered {
-                assert_eq!(turns[0].reply.as_deref(), Some("reply:@ait_bot hello"));
+            if turns.len() == 2
+                && turns
+                    .iter()
+                    .all(|turn| turn.delivery == domain::bot::DeliveryStatus::Delivered)
+            {
+                assert!(turns.iter().any(|turn| {
+                    turn.reply_to.as_deref() == Some("42")
+                        && turn.reply.as_deref() == Some("reply:@ait_bot hello")
+                }));
+                assert!(turns.iter().any(|turn| {
+                    turn.reply_to.as_deref() == Some("44")
+                        && turn.reply.as_deref() == Some("reply:@ait_bot follow up")
+                }));
+                assert_eq!(reactions.load(Ordering::SeqCst), 2);
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
