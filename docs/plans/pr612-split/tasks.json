@@ -191,7 +191,8 @@
         "PASS npm run check:docs: 7 tests; local links in 559 Markdown documents and metadata of 222 ADRs.",
         "PASS oxfmt --check docs/plans/pr612-split docs/plans/README.md: 10 changed documentation/tooling files.",
         "PASS git diff --check.",
-        "Rust tests and coverage not run: documentation-only; no Rust behavior changed."
+        "Rust tests and coverage not run: documentation-only; no Rust behavior changed.",
+        "Author disposition (user-owned): PR647 CLOSED unmerged 2026-11-11, record-only — 仅作为记录 单独文档修改不计入合并. Branch/commits preserved as the historical record index; never reopened, never counted as a feature merge. Task00 historical delivery stands with this disposition."
       ]
     },
     "blockers": []
@@ -523,9 +524,9 @@
     ],
     "implementation": "Use the existing AgentProfile store and ordinary settings list with nested editing; keep host/provider/cwd context and native preset identity distinct.",
     "acceptance": "Create/edit/delete/apply existing Profiles through one store and normal settings navigation; unspecified Profile fields retain current values. No modelPresets store or same-name native preset synchronization; old host behavior is explicit.",
-    "status": "planned",
-    "branch": null,
-    "base": null,
+    "status": "active",
+    "branch": "feat/pr612-task03-agent-profile-settings",
+    "base": "efca94b8621830cb99ce5c1df80001ca1c729241",
     "commit": null,
     "pr_url": null,
     "checks": {
@@ -535,10 +536,16 @@
         "docs links/ADR index when changed"
       ],
       "results": [
-        "ACTIONABLE: dependency task02 delivered (Draft PR659, head efca94b8). Owner profile-settings; design-ready (ADR-244 reserved); no branch/Draft yet."
+        "IN PROGRESS: owner configuration-confirmation (earlier profile-settings owner is dead). Worktree pr612-split-profile, branch feat/pr612-task03-agent-profile-settings started at the exact task02/659 base efca94b8; uncommitted settings/profile work in progress; no Draft yet. ADR-244 reserved."
       ]
     },
-    "blockers": []
+    "blockers": [],
+    "ownership": {
+      "owner": "configuration-confirmation (sole owner per director correction 2026-11-11; profile-settings is dead)",
+      "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-profile",
+      "observed_branch_head": "efca94b8621830cb99ce5c1df80001ca1c729241",
+      "note": "Started at the exact task02/659 base; uncommitted work in the worktree; no Draft yet."
+    }
   },
   {
     "id": "04",
@@ -1171,17 +1178,18 @@
       ]
     },
     "blockers": [
-      "Draft PR657 published but NOT delivered: unverified startup failure and secret gating remain open (director note 2026-11-11), plus security/concurrency verification pending (owner structured-interactions). Stacked on unmerged task01 PR651 (base 22efa58f, verified code 92abc77d); inherits task01 macOS signing/notarization blocker and claims native Linux official-runtime verification only. User deadline does not relax security/scope."
+      "Draft PR657 published but NOT delivered: security and provisional startup bugs are NOT verified (director correction 2026-11-11). New sole mutator ephemeral-plugin-editor (previous structured-interactions owner killed after external 400). Stacked on unmerged task01 PR651 (base 22efa58f, verified code 92abc77d); inherits task01 macOS signing/notarization blocker and claims native Linux official-runtime verification only. User deadline does not relax security/scope."
     ],
     "ownership": {
-      "owner": "structured-interactions",
+      "owner": "ephemeral-plugin-editor (new sole mutator per director correction 2026-11-11; structured-interactions killed after external 400)",
       "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-interactions",
-      "note": "Draft PR657 open on feat/pr612-task07-structured-interactions, base refactor/pr612-omp-native-boundary. ADR-243 proposed."
+      "note": "Draft PR657 open on feat/pr612-task07-structured-interactions @ cc4a5745, base refactor/pr612-omp-native-boundary. ADR-243 proposed. Worktree carries uncompiled capability-gating changes; security/provisional startup bugs unverified."
     },
     "interface_disclosure": {
       "adr": "ADR-243 (proposed, pending review)",
-      "ui_vs_provider": "No public SDK/UI/protocol envelope changes: AgentPermissionRequestPayloadSchema.input stays an open record with only optional question fields added; permission events, pendingPermissions snapshot and agent.permission.resolve.request unchanged; no method registration or capability-count changes. Internal Rust: session::open gains a startup sender parameter (bridge/tests updated); OmpClient create/resume signatures unchanged; ACP structure untouched (task01).",
-      "callers_migration_compat": "Old clients keep rendering/answering the same permission requests; new clients on old hosts simply never see the optional fields. No migration required for existing callers."
+      "status": "PENDING — ledger not final until the capability gating compiles and is verified",
+      "ui_vs_provider": "Published commit cc4a5745 only added optional question fields (AgentPermissionRequestPayloadSchema.input open record; permission events, pendingPermissions snapshot and agent.permission.resolve.request unchanged; internal session::open startup sender parameter). The worktree NOW ADDS planned capability gating that is currently UNCOMPILED: Context.secret_questions plus hello-negotiated agent-secret-questions-v1 (secret dialogs projected cancel-only and secret answers refused without the capability). Therefore the earlier 'no capability-count change / envelope unchanged' statement is NOT the current state; treat the ledger as pending until the gating is finished and verified.",
+      "callers_migration_compat": "Planned: old hosts without agent-secret-questions-v1 get cancel-only secret dialogs and refused secret answers; old clients keep existing permission rendering. Exact old/new caller matrix to be finalized when the gating compiles; do not claim unchanged envelope before then."
     }
   },
   {

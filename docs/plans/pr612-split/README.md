@@ -1,9 +1,11 @@
 # PR #612 split execution contract
 
-Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647)**.
-PR #647 was closed unmerged on 2026-11-11 with the owner comment “仅作为记录 单独文档修改不计入合并”
-(record only; standalone documentation changes are not counted as merges) and reopened the same day
-as the live central execution index; it remains a Draft and is never merged or released.
+Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647) —
+历史 Draft / 记录索引，作者已关闭不合并**. The author closed #647 unmerged on 2026-11-11 with the explicit
+comment “仅作为记录 单独文档修改不计入合并” (record only; standalone documentation changes are not counted
+as merges). That user-owned closed state is authoritative: the PR stays CLOSED unmerged, is never
+reopened, and docs are never counted as feature merges. The branch and its updated commits are preserved
+as the record index. Task00's historical delivery stands with this author record-only disposition.
 The split plan and product features are not delivered as a whole. Implementation proceeds per task
 under its own acceptance gates; current per-task state lives in [tasks.json](tasks.json) and the
 execution register below. No merge or release is authorized.
@@ -216,8 +218,9 @@ prevents duplicate ownership. `migration-refresh-recovery` (former central docs 
 after recurring external backend 400s; this worktree is now the sole central 647 docs metadata owner.
 New proposed ADRs stay **proposed pending review**; historical accepted ADRs are not rewritten.
 
-- **00** delivered inventory — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence `7ac9b4ac`.
-  Closed unmerged as record-only (owner comment 2026-11-11), reopened as the central index; still Draft.
+- **00** delivered inventory (historical) — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence
+  `7ac9b4ac`. **CLOSED unmerged by author, record-only disposition** (仅作为记录 单独文档修改不计入合并);
+  branch/commits preserved as the record index; not reopened, not a feature merge.
 - **01** blocked — Draft [#651](https://github.com/ait-app/ait/pull/651), branch
   `refactor/pr612-omp-native-boundary`, head `43a0e952` (= verified code `92abc77d` + interface
   disclosure `22efa58f` + Linux payload cleanup; ADR-237 proposed). Linux native/archive/normal-0077
@@ -233,7 +236,9 @@ New proposed ADRs stay **proposed pending review**; historical accepted ADRs are
   changed-catalog (bg_666, artifact://2818) and supported compact Diagnostic/Refresh/return
   (bg_688, artifact://2891) passed. ADR-236 proposed; internal UI contract changed, public
   Provider/API/SDK unchanged (tasks.json `02.interface_disclosure`).
-- **03** now actionable (02 delivered); owner `profile-settings`, design-ready (ADR-244 reserved).
+- **03** active — owner `configuration-confirmation` (the earlier `profile-settings` owner is dead),
+  worktree `pr612-split-profile`, branch `feat/pr612-task03-agent-profile-settings` started at the exact
+  task02/659 base `efca94b8`; uncommitted settings/profile work in progress, no Draft yet. ADR-244 reserved.
 - **04** delivered — Draft [#650](https://github.com/ait-app/ait/pull/650), branch
   `pr612-split-task04-statistics`, current head `a0d80312` (implementation `c187052e`; ADR-238 kept
   proposed during review).
@@ -244,10 +249,14 @@ New proposed ADRs stay **proposed pending review**; historical accepted ADRs are
 - **06** active — owner `command-provenance` (agent frozen after recurring external 400; work persists
   on `feat/pr612-task06-command-provenance`, base `22efa58f`); no Draft yet. ADR-242 proposed.
 - **07** in review, **not delivered** — Draft [#657](https://github.com/ait-app/ait/pull/657), branch
-  `feat/pr612-task07-structured-interactions` @ `cc4a5745`, base task01 `22efa58f`; owner
-  `structured-interactions`; **unverified startup failure and secret gating remain open**, plus
-  security/concurrency verification pending. ADR-243 proposed. Additive optional question fields
-  only; permission envelope/events/resolve unchanged (tasks.json `07.interface_disclosure`).
+  `feat/pr612-task07-structured-interactions` @ `cc4a5745`, base task01 `22efa58f`. New sole mutator is
+  `ephemeral-plugin-editor` (previous `structured-interactions` owner killed after external 400).
+  **Security and provisional startup bugs are NOT verified.** ADR-243 proposed. The earlier
+  “envelope unchanged” disclosure describes only the published `cc4a5745` commit; the worktree now has
+  **uncompiled** `Context.secret_questions` + hello-negotiated `agent-secret-questions-v1` capability
+  gating (secret dialogs cancel-only / answers refused without it). The interface ledger is **pending**
+  until that gating compiles and is verified — do not read it as already-unchanged envelope
+  (tasks.json `07.interface_disclosure`).
 - **09/16/21/24/25/32/33** queued behind their dependencies; ADR-246/245/247/248/249/251/252
   reserved respectively. 16/17 Goal designs are complete research artifacts, blocked on 05/07
   verification; no Goal code.
