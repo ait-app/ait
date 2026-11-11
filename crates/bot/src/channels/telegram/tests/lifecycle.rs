@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::{Json, Router, routing::post};
+use domain::bot::{TurnMessage, TurnMessageStatus};
 use model::bot::Store;
 use tokio::sync::Notify;
 
@@ -44,6 +45,26 @@ fn reaction_route(reactions: Arc<AtomicUsize>) -> axum::routing::MethodRouter {
     })
 }
 
+fn identity_route() -> axum::routing::MethodRouter {
+    post(|| async {
+        Json(json!({"ok":true,"result":{
+            "id":2,"username":"ait_bot","can_read_all_group_messages":false
+        }}))
+    })
+}
+
+async fn assert_group_privacy_warning(bots: &Bots, channel: ChannelId) {
+    let status = bots
+        .execute(
+            "bot.channel.status.request",
+            json!({"workspaceId":WORKSPACE,"channelId":channel}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(status["connection"]["state"], "connected");
+    assert_eq!(status["connection"]["error"], GROUP_PRIVACY_WARNING);
+}
+
 #[tokio::test]
 async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thread() {
     let fixture = Fixture::new();
@@ -53,10 +74,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
     let observed = delivered.clone();
     let reactions = Arc::new(AtomicUsize::new(0));
     let app = Router::new()
-        .route(
-            "/botfake/getMe",
-            post(|| async { Json(json!({"ok":true,"result":{"id":2,"username":"ait_bot"}})) }),
-        )
+        .route("/botfake/getMe", identity_route())
         .route(
             "/botfake/setMessageReaction",
             reaction_route(reactions.clone()),
@@ -132,6 +150,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
                         && turn.reply.as_deref() == Some("reply:@ait_bot follow up")
                 }));
                 assert_eq!(reactions.load(Ordering::SeqCst), 2);
+                assert_group_privacy_warning(&bots, channel.id).await;
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -144,6 +163,84 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
     .await
     .unwrap();
     result.unwrap();
+    bots.shutdown().await.unwrap();
+    server.abort();
+}
+
+#[tokio::test]
+async fn telegram_edits_one_reply_for_multiple_assistant_messages() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let channel = registered_channel(&fixture, &bots).await;
+    bots.accept(Incoming {
+        channel_id: channel.id,
+        peer: "-100".into(),
+        sender: "1".into(),
+        thread: Some("3".into()),
+        message_id: "update-1".into(),
+        text: "hello".into(),
+        reply_to: Some("42".into()),
+    })
+    .await
+    .unwrap();
+    let conversation = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .find(|conversation| conversation.peer == "-100")
+        .unwrap();
+    let mut turn = fixture.store.turns(conversation.id).unwrap().remove(0);
+    turn.messages = vec![
+        TurnMessage {
+            id: "progress".into(),
+            text: "checking".into(),
+            status: TurnMessageStatus::Completed,
+        },
+        TurnMessage {
+            id: "answer".into(),
+            text: "**finished** with `code`".into(),
+            status: TurnMessageStatus::Completed,
+        },
+    ];
+    let app = Router::new()
+        .route(
+            "/botfake/sendMessage",
+            post(|Json(body): Json<Value>| async move {
+                assert_eq!(body["text"], "checking");
+                assert_eq!(body["reply_parameters"]["message_id"], 42);
+                Json(json!({"ok":true,"result":{"message_id":50}}))
+            }),
+        )
+        .route(
+            "/botfake/editMessageText",
+            post(|Json(body): Json<Value>| async move {
+                assert_eq!(
+                    body,
+                    json!({
+                        "chat_id":"-100",
+                        "message_id":50,
+                        "text":"<b>finished</b> with <code>code</code>",
+                        "parse_mode":"HTML"
+                    })
+                );
+                Json(json!({"ok":true,"result":{"message_id":50}}))
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    send_reply(
+        &reqwest::Client::builder().no_proxy().build().unwrap(),
+        &SecretString::from("fake".to_owned()),
+        &turn,
+        &conversation,
+        &format!("http://{address}"),
+    )
+    .await
+    .unwrap();
     bots.shutdown().await.unwrap();
     server.abort();
 }

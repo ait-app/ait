@@ -404,6 +404,7 @@ dependencies = [
  "persistence",
  "prost",
  "provider",
+ "pulldown-cmark",
  "reqwest",
  "ring",
  "secrecy",
