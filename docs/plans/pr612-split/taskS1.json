@@ -1,0 +1,36 @@
+{
+  "id": "S1",
+  "title": "Desktop provider environment allowlist",
+  "priority": 34,
+  "depends_on": ["00"],
+  "donor_sections": [21],
+  "donor_paths": [
+    "apps/desktop/src/daemon/rust-daemon.ts",
+    "apps/desktop/src/daemon/rust-daemon-environment.test.ts"
+  ],
+  "implementation": "Rewrote the Desktop built-in daemon spawn filter in apps/desktop/src/daemon/rust-daemon.ts: AIT_SERVER_* variables are stripped except a ten-name provider allowlist (CODEX, CLAUDE, ANTIGRAVITY, OPENCODE, DEEPSEEK_HARNESS, PI, OMP, MINIMAX_CODE _BIN plus DEEPSEEK_HARNESS_PROFILE and DEEPSEEK_HARNESS_TRANSPORT), matching provider composition (crates/provider/src/composition.rs) and the daemon CLI (bins/daemon/src/main.rs AIT_SERVER_OMP_BIN). Values pass through unchanged; token/address/data isolation and AIT_SERVER_HUB_NOTIFICATIONS behavior are untouched. Donor daemon-manager.ts/daemon-manager.test.ts hunks are DirectDownloadManager work owned by task01/26, not S1, and were not imported. Added targeted propagation/isolation tests to the existing rust-daemon-environment.test.ts and a real launcher interaction (rust-daemon-launch-environment.test.ts + fixtures/environment-daemon.cjs) that starts a child through RustDaemonManager.start(), completes the authenticated readiness handshake, and asserts the environment the child actually received. No Rust code or Rust tests changed. No new ADR: this is an environment passthrough contract within existing ADR-048/207 lifecycle ownership, documented in docs/operations/daemon.md and CHANGELOG.md.",
+  "acceptance": "Tests cover all ten allowed names and representative forbidden variables (LISTEN, DATA_DIR, LOG_LEVEL, MCP_SOCKET, BIN, near-miss suffixes, unrelated secrets), preserve values, and match provider composition/daemon CLI consumers. Verified red/green: with the main strip-all filter restored, the propagation test and the launcher test fail; with the allowlist they pass. Actual launcher smoke ran on Linux (real child process, readiness handshake, SIGTERM stop). Old clients/hosts: no wire or storage change; older Desktop builds keep stripping all AIT_SERVER_*, so provider overrides only take effect after upgrading Desktop; standalone daemons are unaffected.",
+  "status": "in_review",
+  "branch": "fix/pr612-s1-desktop-env-allowlist",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      "npx vitest run src/daemon/rust-daemon-environment.test.ts src/daemon/rust-daemon-launch-environment.test.ts src/daemon/rust-daemon.test.ts src/daemon/rust-daemon-readiness.test.ts — 4 files, 33 passed, 8 skipped (readiness ownership cases are skipIf(win32) on this Linux host only where pre-existing)",
+      "npx vitest run src/daemon/ — 16 files, 151 passed, 8 skipped",
+      "red check: strip-all filter restored temporarily; propagation and launcher tests failed (2 failed), then allowlist restored",
+      "apps/desktop typecheck: tsgo --noEmit -p tsconfig.json — clean after building @ait/protocol and @ait/client",
+      "oxfmt + oxlint on changed TS/CJS files — 0 warnings, 0 errors",
+      "npm run check:docs — 558 Markdown documents, 222 ADR metadata verified",
+      "git diff --check — clean",
+      "Rust: no Rust changes; no Rust tests or coverage run (per contract)"
+    ]
+  },
+  "blockers": []
+}

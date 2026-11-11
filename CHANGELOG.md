@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- Desktop passes provider launch overrides (`AIT_SERVER_CODEX_BIN`, `AIT_SERVER_CLAUDE_BIN`, `AIT_SERVER_ANTIGRAVITY_BIN`, `AIT_SERVER_OPENCODE_BIN`, `AIT_SERVER_DEEPSEEK_HARNESS_BIN`, `AIT_SERVER_PI_BIN`, `AIT_SERVER_OMP_BIN`, `AIT_SERVER_MINIMAX_CODE_BIN`, plus `AIT_SERVER_DEEPSEEK_HARNESS_PROFILE` and `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT`) through to its built-in daemon instead of stripping them. All other `AIT_SERVER_*` settings stay isolated to the desktop runtime.
+
 ## 0.2.9 - 2026-11-12
 
 - Rewrite the Oh My Pi (OMP) Provider to run one `omp --mode rpc-ui` process per session and use OMP's native RPC directly, matching real OMP 18.18.8. Tool approvals offer OMP's scope options, questions use OMP's form, and `/compact`, `/autocompact`, `/handoff`, `/steer` and `/follow-up` are built in. History, session listing, background subagent transcripts and usage all come from OMP. Resuming a session whose saved model is no longer available now fails instead of switching models.

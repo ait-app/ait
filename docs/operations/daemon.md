@@ -46,6 +46,12 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 （[ADR-216](../decisions/clients/adr-216-default-data-directory-ait.md)）。开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
 `AIT_SERVER_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
 
+桌面启动内置 daemon 时按白名单透传 Provider 启动环境：八个 `AIT_SERVER_*_BIN`
+（`CODEX`、`CLAUDE`、`ANTIGRAVITY`、`OPENCODE`、`DEEPSEEK_HARNESS`、`PI`、`OMP`、`MINIMAX_CODE`）
+以及 `AIT_SERVER_DEEPSEEK_HARNESS_PROFILE`、`AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT`，取值原样保留。
+其余 `AIT_SERVER_*`（监听、数据目录、日志、token 等）仍被剥离，由桌面显式注入自身配置；
+非 `AIT_SERVER_` 前缀的环境不受影响。独立启动的 daemon 直接读取进程环境，不经过该白名单。
+
 ### Hub 事件与中心原生通知
 
 发布 Hub serve 后，daemon 根据 `welcome.center_methods` 自动上报已提交事件及
@@ -155,6 +161,8 @@ npm run dev:mobile
 - [Pi](pi.md)使用本机 `pi --mode rpc`；`AIT_SERVER_PI_BIN` 覆盖程序路径。
 - [Oh My Pi](oh-my-pi.md)每个 Agent 运行一个官方 `omp --mode rpc-ui` 进程，直接使用原生 RPC；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
 - [MiniMax Code](minimax-code.md)使用官方 `mcode acp`；`AIT_SERVER_MINIMAX_CODE_BIN` 覆盖程序路径。
+- 上述 `AIT_SERVER_*_BIN` 与 DeepSeek Harness 的 `PROFILE`/`TRANSPORT` 覆盖由桌面按白名单
+  透传给内置 daemon（见[启动与配置](#启动与配置)）；其余 `AIT_SERVER_*` 环境不会进入内置 daemon。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。
 
