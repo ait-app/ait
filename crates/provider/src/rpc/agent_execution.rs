@@ -112,6 +112,7 @@ impl ExecutionState {
             Operation::Diagnostic => self.diagnostic(params).await,
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
+            Operation::SessionPreview => self.session_preview(params).await,
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,
             Operation::ForkContext => self.fork_context(params).await,

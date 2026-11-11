@@ -731,6 +731,22 @@ export type FetchRecentProviderSessionsOptions = Omit<
   requestId?: string;
 };
 export type FetchRecentProviderSessionEntry = FetchRecentProviderSessionsPayload["entries"][number];
+type FetchProviderSessionPreviewPayload = Extract<
+  SessionOutboundMessage,
+  { type: "provider.sessions.preview.get.response" }
+>["payload"];
+type FetchProviderSessionPreviewRequest = Extract<
+  SessionInboundMessage,
+  { type: "provider.sessions.preview.get.request" }
+>;
+export type FetchProviderSessionPreviewOptions = Omit<
+  FetchProviderSessionPreviewRequest,
+  "type" | "requestId"
+> & {
+  requestId?: string;
+};
+export type FetchProviderSessionPreviewEntry =
+  FetchProviderSessionPreviewPayload["entries"][number];
 type FetchWorkspacesPayload = Extract<
   SessionOutboundMessage,
   { type: "workspace.list.response" }
@@ -2407,6 +2423,39 @@ export class DaemonClient {
       options: { skipQueue: true },
       select: (msg) => {
         if (msg.type !== "provider.sessions.recent.list.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== resolvedRequestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+  }
+
+  /**
+   * Read one bounded page of a native session's history without importing or activating it.
+   * The host validates native identity; `cursor` must be echoed verbatim from an earlier page.
+   */
+  async fetchProviderSessionPreview(
+    options: FetchProviderSessionPreviewOptions,
+  ): Promise<FetchProviderSessionPreviewPayload> {
+    const resolvedRequestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "provider.sessions.preview.get.request",
+      requestId: resolvedRequestId,
+      providerId: options.providerId,
+      providerHandleId: options.providerHandleId,
+      cwd: options.cwd,
+      ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
+      ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    });
+    return this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "provider.sessions.preview.get.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {

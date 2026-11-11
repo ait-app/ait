@@ -91,3 +91,61 @@ pub(crate) struct SessionHistory {
     /// Ordered completed display items.
     pub(crate) entries: Vec<NativeItem>,
 }
+
+/// One read-only native session preview request; never creates or restores a writer.
+#[derive(Debug, Clone)]
+pub(crate) struct PreviewRequest {
+    /// Registered adapter identity.
+    pub(crate) provider: String,
+    /// Native session identity, validated against native discovery before reading.
+    pub(crate) session_id: String,
+    /// Exact native working directory of the listed session.
+    pub(crate) cwd: String,
+    /// Opaque cursor from an earlier page of the same fixed cut; none reads the newest page.
+    pub(crate) cursor: Option<PreviewCursor>,
+    /// Maximum display items in this page, in the range 1..=100.
+    pub(crate) limit: usize,
+}
+
+/// Opaque continuation of one fixed native preview cut, bound to its exact identity.
+/// Clients echo it verbatim; only the adapter interprets its fields.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PreviewCursor {
+    /// Provider identity bound into the cut.
+    pub(crate) provider: String,
+    /// Native session identity bound into the cut.
+    pub(crate) provider_handle_id: String,
+    /// Exact native working directory bound into the cut.
+    pub(crate) cwd: String,
+    /// Fixed native sequence cut; every page of this preview reads through it.
+    pub(crate) through_seq: i64,
+    /// Exclusive native sequence boundary of the next older page.
+    pub(crate) before_seq: i64,
+    /// Exact bounded record window to replay when a wire page exceeded the display limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) window: Option<PreviewWindow>,
+}
+
+/// Continuation within one immutable native record window, before advancing to older records.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PreviewWindow {
+    /// Inclusive first native sequence in the window; its exclusive end is `before_seq`.
+    pub(crate) start_seq: i64,
+    /// Number of newest projected items already returned from this exact window.
+    pub(crate) skipped_items: usize,
+}
+
+/// One bounded read-only preview page of an inactive or observed native session.
+#[derive(Debug, Clone)]
+pub(crate) struct SessionPreview {
+    /// Validated native identity and display metadata.
+    pub(crate) descriptor: SessionDescriptor,
+    /// True when the native cut contains an unfinished turn; observation only.
+    pub(crate) active: bool,
+    /// Newest-first display items projected from the fixed native cut.
+    pub(crate) entries: Vec<NativeItem>,
+    /// Continuation for the next older page of the same cut, when more history exists.
+    pub(crate) older_cursor: Option<PreviewCursor>,
+}

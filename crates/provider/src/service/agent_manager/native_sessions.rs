@@ -10,8 +10,12 @@ use serde_json::{Value, json};
 
 use super::AgentManager;
 use crate::ports::agent_session::{AgentClient, AgentSessionError};
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
-use crate::protocol::native_sessions::RecentRequest;
+use crate::ports::native_history::{
+    ListOptions, PreviewRequest, SessionDescriptor, SessionHistory,
+};
+use crate::protocol::native_sessions::{
+    PreviewEntries, PreviewRequest as WirePreviewRequest, RecentRequest,
+};
 use crate::support::time::now_timestamp;
 
 impl AgentManager {
@@ -112,6 +116,82 @@ impl AgentManager {
         crate::rpc::timeline::bounded(
             json!({"entries":entries,"filteredAlreadyImportedCount":filtered,"providerErrors":errors}),
         )
+    }
+
+    /// Read one bounded read-only preview page of a native session without importing it.
+    /// The provider validates native identity and cut binding; no registry state changes.
+    pub(crate) async fn preview_session(
+        &self,
+        request: WirePreviewRequest,
+    ) -> Result<Value, ErrorCode> {
+        let limit = request.limit.unwrap_or(50);
+        if !(1..=100).contains(&limit)
+            || request.provider_id.trim().is_empty()
+            || request.provider_handle_id.trim().is_empty()
+        {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let cwd = canonical(&request.cwd)?;
+        let client = self
+            .clients
+            .get(&request.provider_id)
+            .ok_or(ErrorCode::UnsupportedCapability)?;
+        if !client.supports_session_preview() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        let cursor = match request.cursor {
+            Some(encoded) => Some(
+                crate::protocol::native_sessions::decode_preview_cursor(&encoded)
+                    .map_err(|()| ErrorCode::InvalidMessage)?,
+            ),
+            None => None,
+        };
+        let _history = self
+            .history_budget
+            .acquire()
+            .await
+            .map_err(|_| ErrorCode::AgentIo)?;
+        let preview = super::execution::native(
+            &request.provider_id,
+            "preview_session",
+            client.preview_session(&PreviewRequest {
+                provider: request.provider_id.clone(),
+                session_id: request.provider_handle_id.clone(),
+                cwd: cwd.clone(),
+                cursor,
+                limit,
+            }),
+        )
+        .await
+        .map_err(|error| match error {
+            AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+            AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+            AgentSessionError::Busy => ErrorCode::CatalogBusy,
+            AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
+        })?;
+        if preview.descriptor.provider_id != request.provider_id
+            || preview.descriptor.provider_handle_id != request.provider_handle_id
+            || canonical(&preview.descriptor.cwd)? != cwd
+        {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let older_cursor = preview
+            .older_cursor
+            .as_ref()
+            .map(crate::protocol::native_sessions::encode_preview_cursor)
+            .transpose()
+            .map_err(|_| ErrorCode::AgentIo)?;
+        crate::rpc::timeline::bounded(json!({
+            "providerId":preview.descriptor.provider_id,
+            "providerHandleId":preview.descriptor.provider_handle_id,
+            "cwd":preview.descriptor.cwd,
+            "title":preview.descriptor.title,
+            "lastActivityAt":preview.descriptor.last_activity_at,
+            "active":preview.active,
+            "entries":PreviewEntries(&preview.entries),
+            "olderCursor":older_cursor,
+            "hasOlder":older_cursor.is_some(),
+        }))
     }
 
     async fn list_importable_sessions(

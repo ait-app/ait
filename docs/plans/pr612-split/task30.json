@@ -1,0 +1,120 @@
+{
+  "id": "30",
+  "title": "Inactive DSH history",
+  "priority": 30,
+  "depends_on": ["00"],
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "donor_sections": [18],
+  "donor_paths": [
+    "crates/provider/src/local/deepseek_harness/native/history.rs",
+    "crates/provider/src/local/deepseek_harness/native/native_sessions.rs",
+    "crates/provider/src/local/deepseek_harness/native/native_sessions/previews.rs",
+    "crates/provider/src/local/deepseek_harness/native/session.rs",
+    "crates/provider/src/local/deepseek_harness/native/runtime.rs",
+    "crates/provider/src/local/deepseek_harness/native/tests/fixture.rs",
+    "crates/provider/src/local/deepseek_harness/native/tests/imports.rs",
+    "crates/provider/src/local/deepseek_harness/native/tests/installed_history.rs"
+  ],
+  "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. Donor exports/commands/projection-State hunks belong to tasks 19/28/29 and were not imported; donor resume create/adopt lifecycle change was deliberately NOT ported (no public proof required for task30; main adopt semantics preserved with a read-only identity precheck).",
+  "implementation": "DSH read-only history/import/preview reads use session/list (root identity + cwd validation), session/projections (authoritative fixed cut) and session/page (fixed throughSeq pagination); missing/invalid baselines fail without falling back to activating session/follow. Typed provider.sessions.preview.get uses an opaque identity/cwd/cut-bound cursor with an optional exact native record window and projected-item offset, preserving oversized and terminal native-page items without server state or key parsing. Scope/window bounds are rejected before native reads; offsets are validated against the bounded projection. Preview wire serialization omits absent turnId without changing stored NativeItem or widening client types. Provider capability plus host method gate the UI. All newest-first pages are reversed together; host generation/epoch and cancellation isolate late replies. Resume retains main adopt semantics with read-only identity precheck. No writer creation, activation, prompt, cancel or native journal mutation from browsing.",
+  "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact. Actual browser + real daemon/native fixture passed complete66-row chronological paging,60-item fixed cut despite growth, cwd/cursor binding, unchanged running control and zero writer/cancel calls. A focused final browser smoke passed same-session reopen to a fresh cut and long unfinished-turn observation outside the newest native page, including the visible active notice and unchanged running control. Installed official DSH readonly smoke passed on owned v4 journal copies with a fresh shipped profile and nonsecret fixture key; both journals remained byte-identical. Old hosts receive no unsupported requests; old clients keep existing messages.",
+  "status": "delivered",
+  "branch": "feat/pr612-task30-dsh-inactive-history",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-dsh-history",
+  "commit": "9e8991b8d3b46d30d7b2190b15c05aff607da92c",
+  "pr_url": "https://github.com/ait-app/ait/pull/655",
+  "updated_at": "2026-11-11",
+  "interface_changes": [
+    {
+      "surface": "DSH native read endpoints (provider-internal)",
+      "old": "history/import/preview reads subscribed session/follow, whose Web-client opening carries activate:true and can promote cold sessions to active Agents",
+      "new": "session/list + session/projections + session/page at a fixed throughSeq; no follow fallback; follow remains only on explicit create/resume writer paths",
+      "compatibility": "no public API removed; installed DSH 0.2.2-rc.1 public endpoint declarations cited in ADR-240"
+    },
+    {
+      "surface": "provider.sessions.preview.get.request/response",
+      "old": "absent",
+      "new": "additive typed read-only preview method (Operation SessionPreview, Access::Discovery); SDK fetchProviderSessionPreview; host feature importSessionPreview",
+      "compatibility": "old hosts lack the method and clients gate on the method catalog before sending; old clients ignore additive schemas"
+    },
+    {
+      "surface": "provider snapshot entry",
+      "old": "no preview capability field",
+      "new": "additive optional supportsSessionPreview (DSH native true, ACP false); UI shows preview only when advertised",
+      "compatibility": "optional field; old hosts/clients unaffected"
+    },
+    {
+      "surface": "import-session sheet UI",
+      "old": "row press imports; no preview",
+      "new": "separate read-only Eye preview action opens a paged preview sheet; each explicit opening starts a fresh cut and releases pages on close; row-press import unchanged; preview never imports/resumes/prompts",
+      "compatibility": "additive UI; hidden when host method or provider capability is absent"
+    },
+    {
+      "surface": "preview wire projection and internal opaque cursor",
+      "old": "initial Draft serialized absent native turnId as null and advanced native beforeSeq past projected items truncated by the display limit",
+      "new": "borrowed typed wire projection omits absent turnId; optional window(startSeq, skippedItems) replays the exact bounded record window before advancing to older records",
+      "compatibility": "public RPC/SDK cursor remains opaque string; no public field removal or widening; NativeItem storage, CLI/binaries and Files interfaces unchanged; all repeated window reads share the16-page/8MiB response budget"
+    },
+    {
+      "surface": "preview activity observation (semantics, schema unchanged)",
+      "old": "initial Draft inferred active from displayed native records and treated an absent turn boundary as inactive",
+      "new": "every page resolves the latest turn boundary at its fixed cut; display/replay/activity reads share16-page/8MiB budgets; unresolved activity fails explicitly",
+      "compatibility": "public active boolean, RPC/SDK fields and opaque cursor contract unchanged; no cursor-supplied activity fact; no writer, Files or CLI change"
+    }
+  ],
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      "cargo check -p provider --locked: clean",
+      "cargo test -p provider --lib deepseek_harness: 118 passed, 0 failed, 8 ignored (includes 8 preview tests: fixed cut, cursor binding/drift/forgery, identity, invalid baselines, empty -1 cut, active writer untouched, ACP/limits)",
+      "cargo test -p provider --lib agent_execution::operation: 2/2 pass",
+      "cargo test -p provider --lib protocol::native_sessions: 2/2 pass",
+      "cargo clippy -p provider --lib --locked -- -D warnings: clean (all-targets additionally flags pre-existing main test lints outside task30 scope)",
+      "npm test @ait/protocol + @ait/client: 567 passed, 1 skipped (preview schema/SDK tests; incidental method-count assertions deleted, not repinned)",
+      "npm run typecheck --workspace=@ait/mobile: clean after SDK rebuild",
+      "npm test @ait/mobile import-session-sheet.test.tsx: 30/30 pass",
+      "installed DSH 0.2.2-rc.1 read-only smoke (AIT_TEST_DSH_BIN=/usr/bin/dsh, DSH_HOME copy): installed_existing_session_is_importable_without_writes PASS on real persisted history; session journals byte-identical before/after (sha256); only Host profile bootstrap files created in the isolated copy; no model request",
+      "cargo build -p daemon --locked: success",
+      "node scripts/adr.mjs index + --check: 223 ADRs, index current; npm run check:docs: 559 documents verified",
+      "cargo fmt --all applied; oxfmt applied to changed frontend files; git diff --check clean",
+      "Recovery: preview wire serialization regression 1/1 PASS, provider library clippy -D warnings PASS, daemon build PASS (pre-existing filesystem deprecated fetch_update warning retained); cargo fmt --all --check PASS; changed e2e fixture/spec lint 0 warnings/errors",
+      "Recovery bg740/artifact3353: focused native preview suite11/11 PASS, including oversized windows, multiple display items from one event, terminal continuation, malformed/overflow cursors and16-page replay budget; provider library clippy -D warnings PASS; daemon build PASS",
+      "Recovery bg753/artifact3417: actual browser smoke1/1 PASS through the real daemon and native Host subprocess fixture:66 rows in chronological order,60-item fixed cut after growth, cwd/session cursor rejection, terminal cursor, unchanged running control and zero writer/cancel calls",
+      "Recovery bg754: SessionPreviewSheet consumer regressions2/2 PASS (global page order/stable keys and same-client reconnect late reply); mobile typecheck PASS; cargo fmt --all --check PASS; changed frontend lint0 warnings/errors",
+      "Recovery bg773: installed /usr/bin/dsh0.2.2-rc.1 readonly test1/1 PASS using freshly shipped web profile, ONLY owned official task29 v4 journals/attachment and nonsecret DEEPSEEK_API_KEY=ait-task30-readonly-fixture; no copied user credentials/config/cache/locks and no model request. Journal SHA256 before=after:17f0a925f3e54f5741ea7db6b4ab4f77a4011f452a67697c514cce5f84465584 and f72a39b436fc38a88b3ea3de1764b105867350705b4b1157c546a181b53c803a",
+      "Recovery bg781: final scoped formatting check8 files PASS; scoped frontend lint4 files0 warnings/errors; ADR index current; docs checks7/7 PASS,559 Markdown documents and223 ADRs verified",
+      "Recovery bg811: SessionPreviewSheet consumer regressions3/3 PASS, including same-session reopen under actual production Infinity-stale/no-mount-refetch defaults; mobile typecheck PASS",
+      "Recovery bg819/artifact3757: focused native preview suite13/13 PASS, including long unfinished turns beyond the display window, activity retained at the fixed cut on older pages after native completion, and explicit failure within the shared16-page budget; cargo fmt --all --check, strict provider library clippy and daemon build PASS",
+      "Recovery bg826: scoped formatting8 files and lint4 files PASS (0 warnings/errors); ADR index current; docs checks7/7 PASS,559 Markdown documents and223 ADRs verified",
+      "Recovery bg828/artifact3783: changed-path actual browser smoke1/1 PASS (2.6m): same-session reopen observes new native answer33 instead of cached answer32, fresh first-page count50, long unfinished turn active with limit1 outside its newest native page, visible active notice, unchanged running control and zero writer/cancel calls. Earlier66-row/fixed-cut and official-native proofs reused, not rerun.",
+      "Removed owned throwaway dsh-snapshot-probe.mjs, copied daemon, isolated smoke homes and sensitive probe cookies/logs; all own direct native probe groups stopped; prior recorded PID917051 absent. Original user home/root dirty worktree and task29 proof source remain untouched"
+    ],
+    "recovery_pending": [],
+    "historical_failures": [
+      "Earlier discovery snapshot race and copied-daemon ENOENT are retained as setup failures. Latest preserved retry trace test.trace36-38 PASSED the preview capability assertion, disproving stale-binary/capability failure as its cause; lines41-42 failed SDK validation because absent turnId serialized as null. Fixed only the preview wire projection, not global NativeItem storage or client schema.",
+      "Recovery bg718: wire/active-control reads passed; 2-event fixture pages reached the existing16-native-page budget and returned16 items rather than the test's assumed56. Fixture changed to16-event pages while preserving multi-page behavior.",
+      "Recovery bg723: a16-event native page exposed actual data loss: requested4 items, but continuation skipped the whole8-item projection (52 remaining instead of56). Internal bounded window+projected-offset continuation implemented; focused checks pending. Browser assertions now consume all opaque cursors rather than assuming page length equals requested limit.",
+      "Inherited installed-copy probes bg600/bg646 failed at list_sessions with copied .credentials.yaml.lock startup failure; a later manual probe used an invalid envelope without type=client-request. Neither establishes product acceptance; original recorded readonly installed PASS remains historical.",
+      "Recovery bg746 passed browser pagination/growth/cwd/audit but its final equality compared different RPC requestIds. The fixture now compares every typed native fact while excluding transport correlation identity; final bg753 passed.",
+      "Recovery bg747 copied-profile Host failed before list_sessions; direct startup emitted no launch URL while public configuration dump worked. Fresh shipped profile then booted, but bg764 selected a native session whose actual list row was blank:true and correctly filtered. A credentials-free owned-journal home required the existing nonsecret discovery-fixture key convention for boot. No Ait timeout increase, provider suppression or unchanged hanging-copy rerun was used; clean official bg773 passed.",
+      "Read-only GPT review found same-session reopen could reuse Infinity-stale preview pages and a long unfinished turn could lack any boundary in the displayed window, incorrectly returning active:false. Per-opening query lifetime and fixed-cut bounded activity discovery implemented; public bool/RPC fields unchanged. Focused verification recorded separately.",
+      "Recovery bg810:12/13 native preview tests passed, including both new activity regressions. The oversized-window test's permanent session/page reply incorrectly returned one old window for later head activity reads; clearing that override restored real fixture pagination. No production validation weakened; bg81913/13 passed."
+    ]
+  },
+  "blockers": [],
+  "external_blockers": [],
+  "context": [
+    "Gap proven on main: native/history.rs and native_sessions/previews.rs used session/follow for read-only reads; installed @deepseek-ai/dsh 0.2.2-rc.1 dsh-api-session-controller promotes cold sessions when follow activate:true.",
+    "ADR-240 reserved and written; 236-239 remain reserved for catalog/OMP/statistics/export; donor ADR numbers not copied.",
+    "created_at for read-only wire summaries is observation/import time, labeled as such in docs; not native creation time.",
+    "Read allowlist for runtime audit: session/list, session/projections, session/page, session/modelCatalog, session/attachment; writer methods must be absent during inactive browsing.",
+    "Live model inference and physical mobile hardware explicitly untested. Active-turn immutability was observed with an unfinished native fixture turn; real installed-DSH readonly smoke used owned official v4 journals, fresh shipped profile and a nonsecret discovery key, with both journals byte-identical."
+  ]
+}

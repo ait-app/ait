@@ -344,6 +344,12 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         false
     }
 
+    /// Whether this adapter can page through native session history read-only,
+    /// without creating, restoring or activating a native writer.
+    fn supports_session_preview(&self) -> bool {
+        false
+    }
+
     /// Whether native history can be replayed as a complete authoritative transcript.
     /// Adapters without replay retain the server's already persisted display timeline.
     fn supports_history_replay(&self) -> bool {
@@ -575,6 +581,17 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         _handle: &AgentPersistenceHandle,
         _cwd: &str,
     ) -> Result<super::native_history::SessionHistory, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Read one bounded page of native history without claiming a writer or submitting input.
+    /// The adapter validates the native identity and binds any continuation to the same cut.
+    /// # Errors
+    /// Returns unavailable preview, mismatched identity, stale cursors or native read failures.
+    async fn preview_session(
+        &self,
+        _request: &super::native_history::PreviewRequest,
+    ) -> Result<super::native_history::SessionPreview, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
     }
 

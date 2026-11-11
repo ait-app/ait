@@ -314,6 +314,8 @@ export const BotSessionSupportSchema = z.object({
 export const ProviderSnapshotEntrySchema = z.object({
   supportsRealtimeVoice: z.boolean().optional(),
   supportsSessionImport: z.boolean().optional(),
+  // COMPAT(sessionPreview): added in v0.2.7; absent on hosts without read-only native preview.
+  supportsSessionPreview: z.boolean().optional(),
   provider: AgentProviderSchema,
   status: ProviderStatusSchema,
   enabled: z.boolean().optional().default(true),
@@ -1463,6 +1465,19 @@ export const FetchRecentProviderSessionsRequestMessageSchema = z.object({
   since: z.string().optional(),
   limit: z.number().int().positive().max(200).optional(),
   query: z.string().optional(),
+});
+
+// Read-only paged preview of one native session. The host validates native identity and
+// cut binding; browsing never creates, restores or activates a native writer.
+export const FetchProviderSessionPreviewRequestMessageSchema = z.object({
+  type: z.literal("provider.sessions.preview.get.request"),
+  requestId: z.string(),
+  providerId: z.string(),
+  providerHandleId: z.string(),
+  cwd: z.string(),
+  /** Opaque continuation of the same fixed cut; omitted reads the newest page. */
+  cursor: z.string().min(1).max(4096).optional(),
+  limit: z.number().int().positive().max(100).optional(),
 });
 
 export const FetchAgentRequestMessageSchema = z.object({
@@ -3109,6 +3124,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentsRequestMessageSchema,
   FetchAgentHistoryRequestMessageSchema,
   FetchRecentProviderSessionsRequestMessageSchema,
+  FetchProviderSessionPreviewRequestMessageSchema,
   FetchWorkspacesRequestMessageSchema,
   WorkspaceGetRequestMessageSchema,
   ProjectListRequestMessageSchema,
@@ -3597,6 +3613,9 @@ export const ServerInfoStatusPayloadSchema = z
         importSessionWorkspaceTarget: z.boolean().optional(),
         // COMPAT(importSessionSearch): added in v0.8.0, remove gate after 2027-03-02.
         importSessionSearch: z.boolean().optional(),
+        // COMPAT(importSessionPreview): added in v0.2.7; host-version gate for read-only
+        // native session preview. Per-provider support comes from supportsSessionPreview.
+        importSessionPreview: z.boolean().optional(),
         // COMPAT(forgeProviders): added in v0.2.0-beta.1. Drop the gate after
         // 2027-01-17 once the supported daemon floor is >= v0.2.0.
         // Daemon advertises pluggable non-GitHub forge support (the forge registry);
@@ -4078,6 +4097,31 @@ export const FetchRecentProviderSessionsResponseMessageSchema = z.object({
         }),
       )
       .optional(),
+  }),
+});
+
+export const ProviderSessionPreviewEntryPayloadSchema = z.object({
+  key: z.string(),
+  turnId: z.string().optional(),
+  timestamp: z.string(),
+  item: AgentTimelineItemPayloadSchema,
+});
+
+export const FetchProviderSessionPreviewResponseMessageSchema = z.object({
+  type: z.literal("provider.sessions.preview.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    providerId: z.string(),
+    providerHandleId: z.string(),
+    cwd: z.string(),
+    title: z.string().nullable(),
+    lastActivityAt: z.string(),
+    /** The native cut contains an unfinished turn; observation only, never a writer claim. */
+    active: z.boolean(),
+    entries: z.array(ProviderSessionPreviewEntryPayloadSchema),
+    /** Opaque continuation for the next older page of the same fixed cut. */
+    olderCursor: z.string().nullable(),
+    hasOlder: z.boolean(),
   }),
 });
 
@@ -6589,6 +6633,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentsResponseMessageSchema,
   FetchAgentHistoryResponseMessageSchema,
   FetchRecentProviderSessionsResponseMessageSchema,
+  FetchProviderSessionPreviewResponseMessageSchema,
   FetchWorkspacesResponseMessageSchema,
   WorkspaceGetResponseMessageSchema,
   ProjectAddResponseSchema,
@@ -6794,6 +6839,12 @@ export type FetchAgentHistoryResponseMessage = z.infer<
 export type FetchRecentProviderSessionsResponseMessage = z.infer<
   typeof FetchRecentProviderSessionsResponseMessageSchema
 >;
+export type FetchProviderSessionPreviewResponseMessage = z.infer<
+  typeof FetchProviderSessionPreviewResponseMessageSchema
+>;
+export type ProviderSessionPreviewEntryPayload = z.infer<
+  typeof ProviderSessionPreviewEntryPayloadSchema
+>;
 export type FetchWorkspacesResponseMessage = z.infer<typeof FetchWorkspacesResponseMessageSchema>;
 export type ProjectAddResponse = z.infer<typeof ProjectAddResponseSchema>;
 export type ProjectCreateDirectoryResponse = z.infer<typeof ProjectCreateDirectoryResponseSchema>;
@@ -6923,6 +6974,9 @@ export type FetchAgentsRequestMessage = z.infer<typeof FetchAgentsRequestMessage
 export type FetchAgentHistoryRequestMessage = z.infer<typeof FetchAgentHistoryRequestMessageSchema>;
 export type FetchRecentProviderSessionsRequestMessage = z.infer<
   typeof FetchRecentProviderSessionsRequestMessageSchema
+>;
+export type FetchProviderSessionPreviewRequestMessage = z.infer<
+  typeof FetchProviderSessionPreviewRequestMessageSchema
 >;
 export type FetchWorkspacesRequestMessage = z.infer<typeof FetchWorkspacesRequestMessageSchema>;
 export type ProjectListRequestMessage = z.infer<typeof ProjectListRequestMessageSchema>;

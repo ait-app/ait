@@ -71,6 +71,8 @@ pub(in crate::local::deepseek_harness) async fn open(
         request["agentPreset"] = json!(mode.strip_prefix(presets::PREFIX));
     }
     if let Some(handle) = handle {
+        // Validate the durable root identity read-only before the existing writer adopt path.
+        super::history::validate_root(&runtime, &handle.session_id, &spec.cwd).await?;
         request["sessionId"] = json!(handle.session_id);
     }
     let created = runtime
@@ -81,34 +83,7 @@ pub(in crate::local::deepseek_harness) async fn open(
     if handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
     }
-    runtime
-        .subscribe(
-            "history",
-            "session/follow",
-            json!({"request":{"address":{"kind":"session","sessionId":id},"maxMessages":1}}),
-        )
-        .await?;
-    let snapshot = loop {
-        let frame = runtime.next().await?;
-        if frame["streamId"] == "history" {
-            if frame["type"] != "item" || frame["value"]["type"] != "snapshot" {
-                return Err(AgentSessionError::Failed);
-            }
-            break frame["value"].clone();
-        }
-        if frame["streamId"] != "events"
-            || frame["type"] != "item"
-            || frame["value"]["type"] != "emit"
-        {
-            return Err(AgentSessionError::Failed);
-        }
-    };
-    if snapshot["header"]["id"] != id
-        || snapshot["header"]["cwd"] != spec.cwd
-        || snapshot["header"]["origin"] == "subagent"
-    {
-        return Err(AgentSessionError::Failed);
-    }
+    let snapshot = follow_snapshot(&mut runtime, &id, &spec.cwd).await?;
     let values = &snapshot["projections"]["values"];
     let selected = values["modelSelection"]["next"].as_object().map_or_else(
         || catalog["default"].clone(),
@@ -146,6 +121,43 @@ pub(in crate::local::deepseek_harness) async fn open(
         hydration: JoinSet::new(),
         account,
     })
+}
+
+/// Open the writer's activating follow and verify its snapshot identity before admission.
+async fn follow_snapshot(
+    runtime: &mut Runtime,
+    id: &str,
+    cwd: &str,
+) -> Result<Value, AgentSessionError> {
+    runtime
+        .subscribe(
+            "history",
+            "session/follow",
+            json!({"request":{"address":{"kind":"session","sessionId":id},"maxMessages":1}}),
+        )
+        .await?;
+    let snapshot = loop {
+        let frame = runtime.next().await?;
+        if frame["streamId"] == "history" {
+            if frame["type"] != "item" || frame["value"]["type"] != "snapshot" {
+                return Err(AgentSessionError::Failed);
+            }
+            break frame["value"].clone();
+        }
+        if frame["streamId"] != "events"
+            || frame["type"] != "item"
+            || frame["value"]["type"] != "emit"
+        {
+            return Err(AgentSessionError::Failed);
+        }
+    };
+    if snapshot["header"]["id"] != id
+        || snapshot["header"]["cwd"] != cwd
+        || snapshot["header"]["origin"] == "subagent"
+    {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(snapshot)
 }
 
 fn validate_identity(

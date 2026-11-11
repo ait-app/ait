@@ -101,6 +101,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-240：DSH 非活动历史只读浏览与固定截面预览](providers/adr-240-dsh-inactive-history-preview.md)（提议中）
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)

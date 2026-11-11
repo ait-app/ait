@@ -14,6 +14,7 @@ mod imports;
 mod installed_history;
 mod interactions;
 mod presets;
+mod preview;
 mod questions;
 mod quota;
 mod recovery;

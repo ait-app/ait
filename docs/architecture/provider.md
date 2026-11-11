@@ -143,6 +143,11 @@
   （[ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md) 取代
   [ADR-067](../decisions/providers/adr-067-deepseek-harness-acp.md) 的默认传输；
   [DSH 手册](../operations/deepseek-harness.md)）。
+- DSH 非活动历史、导入检查与只读预览仅使用 `session/list`、`session/projections`、
+  `session/page` 的非激活读取；固定截面分页游标绑定 provider/原生 ID/cwd/throughSeq，
+  缺失权威投影时失败而不回退 follow。类型化 `provider.sessions.preview.get` 由快照
+  `supportsSessionPreview` 逐 Provider 广告，浏览不创建或激活原生写入者
+  （[ADR-240](../decisions/providers/adr-240-dsh-inactive-history-preview.md)）。
 - OpenCode 通过官方 `opencode acp` 运行；接受 1.x 与 2.0.25 及以上版本，其余版本报告不可用
   （[ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)，最低版本已由
   [ADR-143](../decisions/providers/adr-143-opencode-2-0-25-compatibility.md) 修订）。
