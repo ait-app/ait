@@ -12,7 +12,12 @@ import { Switch } from "@/components/ui/switch";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
-import { FeishuManualGuide, FeishuScanSetup, useFeishuSetupSupported } from "./feishu-setup";
+import {
+  FeishuManualGuide,
+  FeishuScanSetup,
+  useFeishuSetupSupported,
+  useLarkSetupSupported,
+} from "./feishu-setup";
 import { TextLink } from "./channel-setup";
 import {
   ChannelScanSetup,
@@ -32,10 +37,18 @@ type BotChannel = z.infer<typeof BotChannelSchema>;
 
 const CREDENTIAL_REF = /^env:AIT_SERVER_CREDENTIAL_[A-Z0-9_]{1,96}$/;
 const MAX_SENDERS = 256;
-type ExternalKind = "telegram" | "feishu" | "weixin" | "qq" | "photon_imessage" | "webhook";
+type ExternalKind =
+  | "telegram"
+  | "feishu"
+  | "lark"
+  | "weixin"
+  | "qq"
+  | "photon_imessage"
+  | "webhook";
 const KIND_LABELS = {
   telegram: "bots.telegram",
   feishu: "bots.feishu",
+  lark: "bots.lark",
   weixin: "bots.weixin",
   qq: "bots.qq",
   photon_imessage: "bots.imessage",
@@ -207,6 +220,7 @@ function ChannelForm({
   // One id per opened form: a retry after a lost response must not create a second channel.
   const [channelId] = useState(() => randomUUID());
   const feishuSetupSupported = useFeishuSetupSupported(serverId);
+  const larkSetupSupported = useLarkSetupSupported(serverId);
   const [kind, setKind] = useState<ExternalKind>(
     feishuSetupSupported && kinds.includes("feishu") ? "feishu" : (kinds[0] ?? "telegram"),
   );
@@ -221,8 +235,10 @@ function ChannelForm({
   const [useEnvironment, setUseEnvironment] = useState(false);
   const [enterQqManually, setEnterQqManually] = useState(false);
   const telegramGuided = kind === "telegram" && telegramSetupSupported && !useEnvironment;
-  // Hosts with Feishu setup also accept a pasted App Secret; a reference still uses the variable.
-  const pastedSecret = kind === "feishu" && feishuSetupSupported && !CREDENTIAL_REF.test(secretRef);
+  const appSetupSupported = kind === "lark" ? larkSetupSupported : feishuSetupSupported;
+  // A pasted App Secret is verified in its own region; a reference still uses the variable.
+  const pastedSecret =
+    (kind === "feishu" || kind === "lark") && appSetupSupported && !CREDENTIAL_REF.test(secretRef);
   const allowedSenders = parseSenders(senders);
   const valid =
     allowedSenders.length > 0 &&
@@ -238,14 +254,19 @@ function ChannelForm({
       if (kind === "weixin" || kind === "qq" || kind === "photon_imessage" || kind === "webhook")
         return;
       if (pastedSecret) {
-        await client.botRequest("bot.channel.feishu.connect.request", {
-          workspaceId,
-          channelId,
-          appId: appId.trim(),
-          appSecret: secretRef.trim(),
-          allowedSenders,
-          allowGroups,
-        });
+        await client.botRequest(
+          kind === "lark"
+            ? "bot.channel.lark.connect.request"
+            : "bot.channel.feishu.connect.request",
+          {
+            workspaceId,
+            channelId,
+            appId: appId.trim(),
+            appSecret: secretRef.trim(),
+            allowedSenders,
+            allowGroups,
+          },
+        );
         return;
       }
       await client.botRequest("bot.channel.create.request", {
@@ -373,8 +394,11 @@ function ChannelForm({
           testID="bot-telegram-use-guided"
         />
       ) : null}
-      {kind === "feishu" && feishuSetupSupported ? (
-        <FeishuManualGuide onScanInstead={() => setEnterManually(false)} />
+      {(kind === "feishu" || kind === "lark") && appSetupSupported ? (
+        <FeishuManualGuide
+          platform={kind}
+          onScanInstead={kind === "feishu" ? () => setEnterManually(false) : undefined}
+        />
       ) : null}
       {kind === "telegram" ? (
         <Field label={t("bots.tokenRef")} hint={t("bots.channelRefHint")}>
@@ -400,16 +424,20 @@ function ChannelForm({
             />
           </Field>
           <Field
-            label={feishuSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")}
-            hint={feishuSetupSupported ? t("bots.feishuAppSecretHint") : t("bots.channelRefHint")}
+            label={appSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")}
+            hint={
+              appSetupSupported
+                ? t("bots.feishuAppSecretHint", { platform: t(KIND_LABELS[kind]) })
+                : t("bots.channelRefHint")
+            }
           >
             <FormTextInput
               initialValue={secretRef}
               onChangeText={setSecretRef}
               editable={!create.isPending}
-              secureTextEntry={feishuSetupSupported}
+              secureTextEntry={appSetupSupported}
               accessibilityLabel={
-                feishuSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")
+                appSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")
               }
               autoCapitalize="none"
               autoCorrect={false}
@@ -476,6 +504,7 @@ export function BotChannels({
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const weixinSupported = useWeixinSetupSupported(serverId);
+  const larkSupported = useLarkSetupSupported(serverId);
   const qqSupported = useQqSetupSupported(serverId);
   const imessageSupported = useImessageSetupSupported(serverId);
   const webhookSupported = useWebhookSetupSupported(serverId);
@@ -509,6 +538,7 @@ export function BotChannels({
         ...types.data.filter(
           (kind): kind is "telegram" | "feishu" => kind === "telegram" || kind === "feishu",
         ),
+        ...(larkSupported ? (["lark"] as const) : []),
         ...(weixinSupported ? (["weixin"] as const) : []),
         ...(qqSupported ? (["qq"] as const) : []),
         ...(imessageSupported ? (["photon_imessage"] as const) : []),

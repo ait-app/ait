@@ -22,6 +22,25 @@ use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
 
 const API: &str = "https://open.feishu.cn";
+const LARK_API: &str = "https://open.larksuite.com";
+
+/// Region selected by the channel kind and its credential-verification RPC.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Platform {
+    /// China-region Feishu application.
+    Feishu,
+    /// International Lark application.
+    Lark,
+}
+
+impl Platform {
+    fn api(self) -> &'static str {
+        match self {
+            Self::Feishu => API,
+            Self::Lark => LARK_API,
+        }
+    }
+}
 
 struct Token {
     secret: SecretString,
@@ -44,7 +63,24 @@ pub(super) async fn run(
     secret: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
-    run_at(bots, channel, (client, secret, API), cancel, connect_socket).await
+    let platform = match &channel.config {
+        ChannelConfig::Feishu { .. } => Platform::Feishu,
+        ChannelConfig::Lark { .. } => Platform::Lark,
+        ChannelConfig::Builtin
+        | ChannelConfig::Webhook { .. }
+        | ChannelConfig::Telegram { .. }
+        | ChannelConfig::Weixin { .. }
+        | ChannelConfig::Qq { .. }
+        | ChannelConfig::PhotonImessage { .. } => return Err(ErrorCode::InvalidMessage),
+    };
+    run_at(
+        bots,
+        channel,
+        (client, secret, platform.api()),
+        cancel,
+        connect_socket,
+    )
+    .await
 }
 
 async fn run_at<F, Fut>(
@@ -59,8 +95,15 @@ where
     Fut: Future<Output = Result<Socket, ErrorCode>>,
 {
     let (client, secret, api) = transport;
-    let ChannelConfig::Feishu { app_id, .. } = &channel.config else {
-        return Err(ErrorCode::InvalidMessage);
+    let (app_id, account_kind, socket_suffix) = match &channel.config {
+        ChannelConfig::Feishu { app_id, .. } => (app_id, "feishu", ".feishu.cn"),
+        ChannelConfig::Lark { app_id, .. } => (app_id, "lark", ".larksuite.com"),
+        ChannelConfig::Builtin
+        | ChannelConfig::Webhook { .. }
+        | ChannelConfig::Telegram { .. }
+        | ChannelConfig::Weixin { .. }
+        | ChannelConfig::Qq { .. }
+        | ChannelConfig::PhotonImessage { .. } => return Err(ErrorCode::InvalidMessage),
     };
     let connection = Arc::new(Connection {
         channel,
@@ -77,7 +120,8 @@ where
         .as_str()
         .ok_or(ErrorCode::BotIo)?
         .to_owned();
-    bots.account(channel.id, format!("feishu:{app_id}")).await?;
+    bots.account(channel.id, format!("{account_kind}:{app_id}"))
+        .await?;
     let endpoint = json_response(
         client
             .post(format!("{api}/callback/ws/endpoint"))
@@ -103,7 +147,10 @@ where
     if url.scheme() != "wss"
         || url
             .host_str()
-            .is_none_or(|host| !host.ends_with(".feishu.cn"))
+            .is_none_or(|host| !host.ends_with(socket_suffix))
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
     {
         return Err(ErrorCode::BotIo);
     }
@@ -185,7 +232,7 @@ async fn receive(
                     Some(incoming) => connection.admit(bots, incoming).await,
                     None => true,
                 };
-                // A non-200 response makes Feishu deliver the event again later.
+                // A non-200 response makes the platform deliver the event again later.
                 frame.payload = Some(serde_json::to_vec(&json!({"code":if acknowledged {200} else {500},"headers":null,"data":null})).map_err(|_| ErrorCode::BotIo)?);
                 socket
                     .send(WsMessage::Binary(frame.encode_to_vec().into()))
@@ -203,11 +250,16 @@ async fn receive(
 }
 
 fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Incoming>, ErrorCode> {
-    let ChannelConfig::Feishu {
+    let (ChannelConfig::Feishu {
         allowed_senders,
         allow_groups,
         ..
-    } = &channel.config
+    }
+    | ChannelConfig::Lark {
+        allowed_senders,
+        allow_groups,
+        ..
+    }) = &channel.config
     else {
         return Err(ErrorCode::InvalidMessage);
     };

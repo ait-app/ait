@@ -175,7 +175,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## Channel 与凭据
 
 - 每个 Bot 恰有一个内置 Channel，不能创建、修改或删除；外部 Channel 删除为软删除。同一外部账号（Telegram token 引用、
-  飞书或 QQ App ID、微信账号、Photon 项目）在同一 daemon 内只能属于一个未删除的 Channel，停用的也算
+  飞书、Lark 或 QQ App ID、微信账号、Photon 项目）在同一 daemon 内只能属于一个未删除的 Channel，停用的也算
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
   [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)）。
 - 凭据引用只能是 `env:AIT_SERVER_CREDENTIAL_*` 环境变量，或只指向所在 Channel 自身的
@@ -184,9 +184,13 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，修订
   [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 第 8 条）。
 - 除 QQ 外，外部 Channel 至少需要一个允许的发送者。`bot.channel.types` 只返回 `builtin`、`telegram`、`feishu`，
-  客户端按接入方法是否实现显示微信、QQ 与 iMessage
+  客户端按接入方法是否实现显示 Lark、微信、QQ 与 iMessage
   （[ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)、
   [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)）。
+- Lark 以 `kind: "lark"` 保存，使用 `open.larksuite.com` 验证凭据和收发消息，WebSocket 仅接受
+  `wss://*.larksuite.com`；飞书保留中国区端点。账号独占按区域区分，类型与 App ID 不可原地更换。
+  `bot.channel.lark.connect` 验证并保存手动输入的凭据；客户端通过该方法发现 Lark 能力，
+  飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
 

@@ -20,6 +20,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.channel.feishu.scan.status.request"),
     MethodSpec::request("bot.channel.feishu.scan.cancel.request"),
     MethodSpec::request("bot.channel.feishu.connect.request"),
+    MethodSpec::request("bot.channel.lark.connect.request"),
     MethodSpec::request("bot.channel.telegram.pair.start.request"),
     MethodSpec::request("bot.channel.telegram.pair.status.request"),
     MethodSpec::request("bot.channel.telegram.pair.cancel.request"),

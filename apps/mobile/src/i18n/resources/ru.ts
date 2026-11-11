@@ -192,6 +192,7 @@ export const ru: TranslationResources = {
     channelType: "Тип канала",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "Ссылка на токен Бота",
     secretRef: "Ссылка на секрет приложения",
     appId: "ID приложения",
@@ -212,22 +213,23 @@ export const ru: TranslationResources = {
     feishuScanRetry: "Повторить",
     feishuScanDenied: "Запрос отклонён в Feishu.",
     feishuScanExpired: "Срок действия QR-кода истёк. Начните заново.",
-    feishuScanLark: "Похоже, это аккаунт Lark. Ait поддерживает только Feishu в Китае.",
+    feishuScanLark:
+      "Этот QR-код предназначен для Feishu. Для аккаунта Lark выберите Lark и введите данные приложения вручную.",
     feishuScanUnavailable:
       "Не удалось завершить настройку Feishu. Повторите попытку или введите учётные данные вручную.",
     feishuManualEntry: "Ввести учётные данные вручную",
     feishuScanInstead: "Сканировать QR-код",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "Вставьте App Secret. Ait проверит его в Feishu и сохранит в закрытом виде на этом хосте. Подойдёт и ссылка env:AIT_SERVER_CREDENTIAL_*.",
+      "Вставьте App Secret. Ait проверит его в {{platform}} и сохранит в закрытом виде на этом хосте. Подойдёт и ссылка env:AIT_SERVER_CREDENTIAL_*.",
     feishuManualStep1:
-      "Создайте собственное приложение на open.feishu.cn/app и включите возможность бота.",
+      "Создайте собственное приложение на {{developerUrl}} и включите возможность бота.",
     feishuManualStep2:
       "В разделе разрешений добавьте im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
     feishuManualStep3:
-      "Скопируйте сюда App ID и App Secret, добавьте свой Open ID Feishu (ou_...) как разрешённого отправителя и добавьте канал.",
+      "Скопируйте сюда App ID и App Secret, добавьте свой Open ID {{platform}} (ou_...) как разрешённого отправителя и добавьте канал.",
     feishuManualStep4:
-      "Затем в разделе событий и обратных вызовов Feishu выберите постоянное соединение и подпишитесь на im.message.receive_v1. Feishu сохранит это только после подключения канала.",
+      "Затем в разделе событий и обратных вызовов {{platform}} выберите постоянное соединение и подпишитесь на im.message.receive_v1. {{platform}} сохранит это только после подключения канала.",
     feishuManualStep5: "Опубликуйте версию приложения, чтобы боту можно было писать.",
     telegramGuideStep1:
       "Отсканируйте этот код или нажмите кнопку, чтобы открыть BotFather в Telegram.",

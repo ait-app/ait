@@ -209,6 +209,7 @@ export const en = {
     channelType: "Channel type",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "Bot token reference",
     secretRef: "App secret reference",
     appId: "App ID",
@@ -229,21 +230,22 @@ export const en = {
     feishuScanRetry: "Try again",
     feishuScanDenied: "The request was declined in Feishu.",
     feishuScanExpired: "This QR code expired. Start again for a new one.",
-    feishuScanLark: "This looks like a Lark account. Ait only supports Feishu in China.",
+    feishuScanLark:
+      "This QR setup is for Feishu. For a Lark account, select Lark and enter the app credentials manually.",
     feishuScanUnavailable:
       "Could not finish setup with Feishu. Try again, or enter the credentials manually.",
     feishuManualEntry: "Enter credentials manually",
     feishuScanInstead: "Scan a QR code instead",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "Paste the App Secret. Ait stores it privately on this host and checks it with Feishu. An env:AIT_SERVER_CREDENTIAL_* reference also works.",
-    feishuManualStep1: "Create a custom app at open.feishu.cn/app and turn on the Bot capability.",
+      "Paste the App Secret. Ait stores it privately on this host and checks it with {{platform}}. An env:AIT_SERVER_CREDENTIAL_* reference also works.",
+    feishuManualStep1: "Create a custom app at {{developerUrl}} and turn on the Bot capability.",
     feishuManualStep2:
       "Under Permissions, add im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
     feishuManualStep3:
-      "Copy the App ID and App Secret here, add your Feishu open ID (ou_...) as an allowed sender, and add the channel.",
+      "Copy the App ID and App Secret here, add your {{platform}} open ID (ou_...) as an allowed sender, and add the channel.",
     feishuManualStep4:
-      "Then, under Events & Callbacks in Feishu, choose Long Connection and subscribe to im.message.receive_v1. Feishu can only save this once the channel is connected.",
+      "Then, under Events & Callbacks in {{platform}}, choose Long Connection and subscribe to im.message.receive_v1. {{platform}} can only save this once the channel is connected.",
     feishuManualStep5: "Publish a version of the app so people can message the bot.",
     telegramGuideStep1: "Scan this code or use the button to open BotFather in Telegram.",
     telegramGuideStep2: "Send /newbot, then choose a name and a username ending in bot.",

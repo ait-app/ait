@@ -1,5 +1,6 @@
 import {
   BOT_FEISHU_SETUP_METHODS,
+  BOT_LARK_SETUP_METHODS,
   BOT_IMESSAGE_SETUP_METHODS,
   BOT_WEBHOOK_SETUP_METHODS,
   BOT_METHODS,
@@ -102,6 +103,10 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_FEISHU_SETUP_METHODS.every(has),
+      workspaceBotLarkSetup:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_LARK_SETUP_METHODS.every(has),
       workspaceBotTelegramSetup:
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&

@@ -19,6 +19,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.channel.feishu.scan.status.request",
         "bot.channel.feishu.scan.cancel.request",
         "bot.channel.feishu.connect.request",
+        "bot.channel.lark.connect.request",
         "bot.channel.telegram.pair.start.request",
         "bot.channel.telegram.pair.status.request",
         "bot.channel.telegram.pair.cancel.request",
