@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.2.9 - 2026-11-12
+
+- Rewrite the Oh My Pi (OMP) Provider to run one `omp --mode rpc-ui` process per session and use OMP's native RPC directly, matching real OMP 18.18.8. Tool approvals offer OMP's scope options, questions use OMP's form, and `/compact`, `/autocompact`, `/handoff`, `/steer` and `/follow-up` are built in. History, session listing, background subagent transcripts and usage all come from OMP. Resuming a session whose saved model is no longer available now fails instead of switching models.
+- Remove the `aitd omp-acp` subcommand along with the OMP ACP bridge. External ACP clients that started OMP through it need another entry point.
+- Sandboxed workspaces can no longer modify OMP's config, models, MCP and `.env` files, its extensions, hooks, tools and plugins, or its native addon.
+- Stable releases attach the Google-signed Android APK again: the release check now accepts the key-rotation signatures Google Play uses for this app.
+
 ## 0.2.8 - 2026-11-11
 
 - Show a Host resource monitor at the bottom of the sidebar: a CPU and memory summary that opens to Host status, recent history, disk capacity and upload and download speeds. It follows the current workspace's Host or can be pinned to one, keeps the last sample time when a Host is offline, and stops refreshing while hidden. The Host daemon must be upgraded; workspace and project share guests see a permission notice instead.
