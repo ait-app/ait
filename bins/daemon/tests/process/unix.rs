@@ -62,6 +62,10 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
         )
         .env("AIT_SERVER_PI_BIN", directory.parent().unwrap().join("pi"))
         .env(
+            "AIT_SERVER_OMP_BIN",
+            directory.parent().unwrap().join("omp"),
+        )
+        .env(
             "CLAUDE_CONFIG_DIR",
             directory.parent().unwrap().join("claude-config"),
         )

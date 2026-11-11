@@ -4,14 +4,17 @@ status: accepted
 date: 2026-10-21
 paths:
   - crates/provider
+  - crates/provider-omp
 ---
 
 # ADR-180：Oh My Pi 原生 RPC Provider
 
-[ADR-190](adr-190-omp-acp-settlement.md) 将宿主入口固定为 Ait ACP 桥接层，
-底层继续使用官方 RPC；本文的原生所有权和功能基线保留。
-
-[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充遗漏终态时的原生状态核对与用户取消期限。
+- 修订：[ADR-190](adr-190-omp-acp-settlement.md) 曾将宿主入口改为 Ait ACP 桥接层，已被
+  [ADR-248](adr-248-omp-paseo-native-rpc.md) 取代；Provider 重新直接驱动原生 RPC，本文的原生所有权保留。
+- 修订：[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充遗漏终态时的原生状态核对与用户取消期限。
+- 修订：[ADR-248](adr-248-omp-paseo-native-rpc.md) 修改第 3 条的取消命令（`abort`）、第 4 条的帧限制（v1 回退、
+  64 MiB 上限、容忍坏帧），并调整启动参数、特性、用量、provider options 与诊断。
+  适配器现位于 `crates/provider-omp`（[ADR-249](adr-249-omp-adapter-crate.md)）。
 
 ## 背景
 

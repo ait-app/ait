@@ -2,7 +2,7 @@
 
 /// Termination request delivered to every process in an owned group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Signal {
+pub enum Signal {
     /// Ask native handlers to clean up and exit (`SIGTERM`).
     Terminate,
     /// Stop the group immediately (`SIGKILL`).
@@ -15,7 +15,7 @@ pub(super) enum Signal {
 /// still reap their direct child afterwards. This is a single non-blocking system call,
 /// so it is safe in async shutdown paths and `Drop`. Platforms without process groups
 /// do nothing.
-pub(super) fn signal(group: Option<u32>, signal: Signal) {
+pub fn signal(group: Option<u32>, signal: Signal) {
     #[cfg(unix)]
     if let Some(group) = group
         .and_then(|group| i32::try_from(group).ok())

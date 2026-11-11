@@ -10,7 +10,7 @@ use crate::protocol::timeline::NativeItem;
 #[error(
     "History reload failed: {method}, page {page}: {failure}; accumulated display bytes={bytes}. Native history is unchanged. Retry after resolving the reported limit or provider error, or continue in the native client."
 )]
-pub(crate) struct HistoryError {
+pub struct HistoryError {
     /// Native read method, supplied by the adapter rather than the response.
     pub(crate) method: &'static str,
     /// One-based page number.
@@ -45,49 +45,49 @@ pub(crate) enum HistoryFailure {
 /// Paseo-compatible discovery descriptor, without local native storage paths or credentials.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SessionDescriptor {
+pub struct SessionDescriptor {
     /// Registered adapter identity.
-    pub(crate) provider_id: String,
+    pub provider_id: String,
     /// User-facing adapter label.
-    pub(crate) provider_label: String,
+    pub provider_label: String,
     /// Native session identity.
-    pub(crate) provider_handle_id: String,
+    pub provider_handle_id: String,
     /// Native working directory.
-    pub(crate) cwd: String,
+    pub cwd: String,
     /// Native title, when present.
-    pub(crate) title: Option<String>,
+    pub title: Option<String>,
     /// First user text, when supplied by native discovery.
-    pub(crate) first_prompt_preview: Option<String>,
+    pub first_prompt_preview: Option<String>,
     /// Last user text, when supplied by native discovery.
-    pub(crate) last_prompt_preview: Option<String>,
+    pub last_prompt_preview: Option<String>,
     /// Native update timestamp in RFC3339.
-    pub(crate) last_activity_at: String,
+    pub last_activity_at: String,
 }
 
 /// Bounded native discovery options. Final import and query filtering belongs to the service.
 #[derive(Debug, Clone)]
-pub(crate) struct ListOptions {
+pub struct ListOptions {
     /// Canonical exact cwd filter; none discovers across directories.
-    pub(crate) cwd: Option<String>,
+    pub cwd: Option<String>,
     /// Maximum distinct sessions inspected, in the range 1..=4096.
-    pub(crate) scan_limit: usize,
+    pub scan_limit: usize,
 }
 
 /// Complete native facts used to validate an import or refresh before publishing host state.
 #[derive(Debug, Clone)]
-pub(crate) struct SessionHistory {
+pub struct SessionHistory {
     /// Provider-owned resume facts for this identity, including an intentional fresh branch.
-    pub(crate) resume_metadata: std::collections::BTreeMap<String, serde_json::Value>,
+    pub resume_metadata: std::collections::BTreeMap<String, serde_json::Value>,
     /// Immediate native parent for a provider-owned child, when present.
-    pub(crate) parent_id: Option<String>,
+    pub parent_id: Option<String>,
     /// Native identity and display metadata.
-    pub(crate) descriptor: SessionDescriptor,
+    pub descriptor: SessionDescriptor,
     /// Native creation timestamp in RFC3339, or observation time when the protocol omits it.
-    pub(crate) created_at: String,
+    pub created_at: String,
     /// Native model and effort, constrained by this adapter's execution policy.
-    pub(crate) config: StoredAgentConfig,
+    pub config: StoredAgentConfig,
     /// True when the provider reports an active or incomplete turn.
-    pub(crate) active: bool,
+    pub active: bool,
     /// Ordered completed display items.
-    pub(crate) entries: Vec<NativeItem>,
+    pub entries: Vec<NativeItem>,
 }

@@ -10,11 +10,19 @@
   也不反向依赖 `bot`。依赖守卫是 `bins/daemon/tests/dependencies.rs`
   （[ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
   [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)）。
-- `provider::Providers` 是内置 adapter 的唯一装配入口：Codex、Claude Code、Antigravity、OpenCode、
-  DeepSeek Harness、Pi、Oh My Pi、MiniMax Code。可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖由
+- `provider::Providers` 装配 `provider` 内的 adapter：Codex、Claude Code、Antigravity、OpenCode、
+  DeepSeek Harness、Pi、MiniMax Code。可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖由
   provider 维护；构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
+- Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider` 与 `domain`（`model`、
+  `persistence` 仅测试使用），只公开 `OmpClient` 与 `installed_program`；`provider` 不依赖它，
+  它也不依赖 daemon。daemon 在 `compose_providers` 中用 `Providers::with` 追加 `OmpClient`，共享同一
+  图片目录。`provider` 只公开 OMP 生产代码用到的 ports、protocol 与 `local` 工具模块。OMP 测试归
+  `provider-omp`；需要 `AgentManager` 或 Timeline 的场景使用 `provider::testing`，它只在 dev-only 的
+  `test-support` feature 下编译，非 dev 依赖边启用或转发该 feature 会被依赖守卫拒绝
+  （[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)，已由
+  [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
 - 摘要生成器只收录实现结构化辅助生成的 adapter，辅助会话不进入前台 Agent registry；生成接口
   `SummaryGenerator` 的共享契约在 `model::summary`
   （[ADR-101](../decisions/providers/adr-101-provider-summary-generator.md)、
@@ -82,9 +90,10 @@
   片段（assistant 还需 `messageId` 一致）；跨工具调用的每轮单一 Thinking 由共享客户端组合
   （[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)、
   [ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
-- 原生角色与事件类型由 adapter 解释，客户端不按文本猜测用途；例如 OMP `async-result` 投影为
-  `background:<jobId>` 的 `tool_call`
-  （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
+- 原生角色与事件类型由 adapter 解释，客户端不按文本猜测用途；例如 OMP `async-result` 的
+  `<system-notice>` 投影为 `notification`
+  （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)，OMP 部分已由
+  [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
 - adapter 识别原生压缩开始/结束并输出 `compaction` 条目；原生执行结束时仍未关闭的压缩标为
   `failed`（[ADR-150](../decisions/providers/adr-150-provider-compaction-lifecycle.md)）。
 
@@ -145,9 +154,10 @@
 
 ## 测试归属
 
-- Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归 `crates/provider`，放在所属模块
-  的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
-  （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)）。
+- Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归所属 adapter 的 crate
+  （`crates/provider`，Oh My Pi 为 `crates/provider-omp`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
+  （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
+  [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。
 
 ## 各原生适配器的特有约束
 
@@ -165,6 +175,13 @@
   回退 `thread/read`，其他错误保持可见
   （[ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)，历史限制已由
   [ADR-192](../decisions/providers/adr-192-codex-incremental-history-projection.md) 修订）。
+- Oh My Pi 每个会话由一个 `omp --mode rpc-ui` 进程经原生 JSONL RPC 驱动，不经过 ACP；整轮在
+  `prompt_result` 加 `session_settled` 或 `get_state.isSettled` 核对后完成，最低版本 18.12.6。
+  完整规则见 [Oh My Pi 现行规格](omp.md)
+  （[ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)、
+  [ADR-194](../decisions/providers/adr-194-omp-settlement-reconciliation.md)、
+  [ADR-198](../decisions/providers/adr-198-omp-interaction-progress.md)，均已由
+  [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
 - Pi 的模型与 thinking 修改在下一条 prompt 前应用；slash 命令每次请求用临时
   `pi --mode rpc --no-session` 进程探测，不缓存结果
   （[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)，已由

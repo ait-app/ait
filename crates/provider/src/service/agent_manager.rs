@@ -586,7 +586,7 @@ impl AgentManager {
     /// # Errors
     /// Rejects invalid or duplicate IDs, unavailable providers, session failures, and storage
     /// failures. If registration fails after creation, the new session is closed.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) async fn create(
         &mut self,
         agent_id: &str,
@@ -841,7 +841,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns resume, provider, storage, or busy/read-only failures.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) async fn send(
         &mut self,
         agent_id: &str,

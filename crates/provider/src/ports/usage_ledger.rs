@@ -37,30 +37,30 @@ impl UsageBoundary {
 /// One model request inside a provider turn, in disjoint token buckets.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RequestUsage {
+pub struct RequestUsage {
     /// Stable identity of the native request, unique within an Agent; the idempotency key.
     /// It includes the provider and turn identity so replays map to the same segment.
-    pub(crate) segment_id: String,
+    pub segment_id: String,
     /// Stream key of the native sub-agent that issued the request, if any.
     pub(crate) parent: Option<String>,
     /// Model the provider reported for this request, if any.
-    pub(crate) model: Option<String>,
+    pub model: Option<String>,
     /// How the provider delimited these tokens.
     pub(crate) boundary: UsageBoundary,
     /// Input tokens, excluding cache read and cache write tokens.
-    pub(crate) input_tokens: u64,
+    pub input_tokens: u64,
     /// Output tokens, including reasoning tokens.
-    pub(crate) output_tokens: u64,
+    pub output_tokens: u64,
     /// Input tokens served from the provider's prompt cache.
-    pub(crate) cache_read_tokens: u64,
+    pub cache_read_tokens: u64,
     /// Input tokens written to the provider's prompt cache.
-    pub(crate) cache_write_tokens: u64,
+    pub cache_write_tokens: u64,
     /// Subset of `cache_write_tokens` written with a one-hour lifetime; never added to totals.
     pub(crate) cache_write_1h_tokens: Option<u64>,
     /// Subset of `output_tokens` spent on reasoning; never added to totals.
     pub(crate) reasoning_tokens: Option<u64>,
     /// Cost in USD as reported by the provider itself; never estimated from prices.
-    pub(crate) cost_usd_reported: Option<f64>,
+    pub cost_usd_reported: Option<f64>,
     /// Whether the terminal native frame covered every token bucket.
     pub(crate) complete: bool,
 }

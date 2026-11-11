@@ -5,13 +5,13 @@ use serde_json::Value;
 
 /// Provider-owned model and mode definitions, with no credentials or private diagnostics.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct Details {
+pub struct Details {
     /// Paseo model definitions fetched from the native provider.
-    pub(crate) models: Vec<Value>,
+    pub models: Vec<Value>,
     /// Modes actually supported by this server adapter.
-    pub(crate) modes: Vec<Value>,
+    pub modes: Vec<Value>,
     /// Runtime toggles and selects supported by the adapter.
-    pub(crate) features: Vec<Value>,
+    pub features: Vec<Value>,
 }
 
 /// Select one installed Provider in an optional working directory.

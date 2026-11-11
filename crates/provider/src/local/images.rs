@@ -12,10 +12,11 @@ use sha2::{Digest, Sha256};
 use crate::ports::agent_session::AgentSessionError;
 
 /// Display text for a native image whose source is missing or can no longer be read.
-pub(super) const UNAVAILABLE_IMAGE: &str = "[Image attachment]";
+pub const UNAVAILABLE_IMAGE: &str = "[Image attachment]";
 
+/// Private directory for rendered native image artifacts referenced from timeline Markdown.
 #[derive(Debug, Clone)]
-pub(super) struct ImageStore {
+pub struct ImageStore {
     directory: PathBuf,
 }
 
@@ -26,11 +27,17 @@ impl Default for ImageStore {
 }
 
 impl ImageStore {
-    pub(super) const fn new(directory: PathBuf) -> Self {
+    /// Store artifacts under `directory`; nothing is created until an image is rendered.
+    #[must_use]
+    pub const fn new(directory: PathBuf) -> Self {
         Self { directory }
     }
 
-    pub(super) fn render(&self, image: &Value) -> Result<String, AgentSessionError> {
+    /// Render a native image as a Markdown image link to its URL or private artifact.
+    ///
+    /// # Errors
+    /// Returns unsupported content, invalid data or private artifact storage failures.
+    pub fn render(&self, image: &Value) -> Result<String, AgentSessionError> {
         Ok(format!("![Image]({})", encode_source(&self.source(image)?)))
     }
 

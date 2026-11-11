@@ -7,12 +7,15 @@ amends:
   - providers/adr-190-omp-acp-settlement.md
 paths:
   - crates/provider
+  - crates/provider-omp
 ---
 
 # ADR-194：OMP 原生空闲状态核对与有界取消
 
 - 修订：[ADR-180](adr-180-omp-native-rpc-provider.md)、
   [ADR-190](adr-190-omp-acp-settlement.md) 的结算与取消规则。
+- 后续修订：[ADR-248](adr-248-omp-paseo-native-rpc.md) 修订第 4 条：中断改用 `abort`，
+  `abort` 确认后到达的 `agent_start` 同样确认取消；其余结算规则保留。ADR-190 已被 ADR-248 取代。
 
 ## 背景
 

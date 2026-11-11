@@ -339,7 +339,7 @@ impl CodexRequests {
 /// `cacheWrite`, so the buckets map one to one. `identity` is the native message id or the
 /// per-turn message counter. Returns `None` when `message` has no usage, all token buckets are
 /// zero (an aborted message), or the segment would be invalid.
-pub(crate) fn pi_request(
+pub fn pi_request(
     provider: &str,
     turn: &str,
     identity: &str,
@@ -380,7 +380,8 @@ pub(crate) fn pi_request(
 }
 
 /// Native response id usable inside a segment identity, if `message` carries one.
-pub(crate) fn response_id(message: &Value) -> Option<&str> {
+#[must_use]
+pub fn response_id(message: &Value) -> Option<&str> {
     message["responseId"]
         .as_str()
         .filter(|id| !id.is_empty() && id.len() <= MAX_RESPONSE_ID)

@@ -30,7 +30,6 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "opencode",
             "deepseek-harness",
             "pi",
-            "omp",
             "minimax-code",
         ]
     );
@@ -42,7 +41,6 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "opencode",
         "deepseek-harness",
         "pi",
-        "omp",
         "minimax-code",
     ] {
         manager.validate_provider(provider).unwrap();
@@ -52,6 +50,24 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"
     ));
     assert!(!data.exists());
+}
+
+#[test]
+fn external_adapters_join_the_assembly_with_the_shared_image_directory() {
+    let root = tempfile::tempdir().unwrap();
+    let mut received = None;
+    let providers = Providers::configured(root.path(), |_| None).with(|images| {
+        received = Some(images.to_owned());
+        PiClient::new("external".into())
+    });
+
+    assert_eq!(
+        received.unwrap(),
+        root.path().join("agents/provider-images")
+    );
+    assert_eq!(providers.clients.len(), 8);
+    assert_eq!(providers.clients.last().unwrap().provider(), "pi");
+    assert!(!root.path().join("agents").exists());
 }
 
 #[tokio::test]
