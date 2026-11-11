@@ -2,6 +2,10 @@
 
 ## 0.2.8 - 2026-11-11
 
+- Show a Host resource monitor at the bottom of the sidebar: a CPU and memory summary that opens to Host status, recent history, disk capacity and upload and download speeds. It follows the current workspace's Host or can be pinned to one, keeps the last sample time when a Host is offline, and stops refreshing while hidden. The Host daemon must be upgraded; workspace and project share guests see a permission notice instead.
+- Act on Task overview cards directly: approve, stop, mark as reviewed, archive or open the conversation without opening the details, and answer questions through the existing form. The toolbar fits on one row, desktop columns can collapse, phones use status tabs with counts, and failed tasks move to To review.
+- Settle observed OpenCode subagents from OpenCode's saved final state, so finished or failed children are no longer shown as canceled when the parent closes. While such a child is running, the subagent list refreshes every 15 seconds to catch missed completion events.
+- Test feature: Telegram Bot channels react with 👀 when a message is accepted, edit a single reply as the answer grows instead of sending separate messages, and render Markdown through Telegram's HTML mode. A warning appears when group access is on but Telegram Privacy Mode keeps ordinary mentions from reaching the bot.
 - Show pull requests for workspace branches that were pushed under a different remote name, such as `git push -u origin HEAD:refs/heads/fix/...`, in the sidebar and PR panel, including merge actions. Branches pushed without an upstream are still not recognized.
 - Test feature: QQ Bot channels with group chats enabled now also receive ordinary group messages when the group grants full message access, not only messages that mention the bot. They pass through the same sender allowlist and pairing.
 - Stable releases now attach a Google-signed Android APK, `Ait-VERSION-android.apk`, to the GitHub Release. It shares the Google Play signing key, so it installs over the Play version and vice versa; 0.1.x GitHub APKs used a different key and must be uninstalled first.
