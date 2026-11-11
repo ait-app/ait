@@ -90,6 +90,29 @@ OMP 中已安装的插件继续按官方规则加载。命令、工具、问答�
 采用通用接口处理，不按插件名称、路径或命令写分支。具体能力和 TUI 限制见
 [架构与兼容表](../architecture/omp-acp-bridge.md)。
 
+### 升级迁移：旧 CLI 已移除
+
+**这是 CLI 破坏性变更，不提供透明转发兼容。** 旧命令 `aitd omp-acp` 已删除。
+原来调用它的 shell 脚本、编辑器 ACP 配置和外部 launcher，必须改为下面的独立
+`ait-omp-acp [--omp-bin path]`，不能继续在 `aitd` 路径后追加 `omp-acp`。
+从同一构建版本的发行物中取得 daemon 与桥接程序；macOS/Linux desktop 资源和支持的独立归档
+包含配对程序。`--omp-bin` 与 `AIT_SERVER_OMP_BIN` 指向用户安装的 OMP 本体，不是桥接程序。
+
+调用链变化：
+
+- Ait 内部：`AgentSession → 内部 ACP 客户端 → ACP engine → OMP` 改为
+  `AgentSession → Provider 原生 Session → OMP RPC`；不另起桥接进程，也没有新的 Protocol UI。
+- 外部 ACP：`ACP 客户端 → aitd omp-acp → Provider ACP → OMP RPC` 改为
+  `ACP 客户端 → ait-omp-acp → Provider ACP → OMP RPC`。独立程序只管 CLI/stdio；
+  协议转换和原生能力仍归 Provider，不反向依赖 daemon/API。
+- 标准 ACP 继续可用；只有明确协商的外部连接使用 `_omp/rpc`、`_omp/event`、`_omp/respond`。
+  它们不是 Ait 内部任意原生命令入口。
+
+已有 `transport: rpc/acp` 配置、ACP 标记句柄和合法 `ait-acp-aliases` 仍在恢复时只读解析，
+不重写原生 JSONL。显式 `sessionFile`、调用方配置及精确沙箱约束保持权威；不根据旧配置或 cwd
+取消沙箱，不因探测失败降级为无沙箱。此处的持久数据兼容**不意味着旧 CLI 仍可调用**。
+公共 SDK、daemon wire 字段和既有 UI 保持兼容；CLI/分发与 Provider 内部结构变化是另一层接口。
+
 外部 ACP 客户端使用独立 Rust 可执行文件（macOS/Linux desktop 资源及独立归档中与 `aitd` 一同提供）：
 
 ```sh

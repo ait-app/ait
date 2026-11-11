@@ -49,11 +49,29 @@ OMP 创建、恢复、配置重开及会话作用域能力探测，不得按 cwd
    只读历史和外部 ACP 使用；已有明确 `sessionFile` 的原生句柄保持权威，别名只补充缺失文件身份。
    不改写原生 JSONL，不重放用户输入，不根据别名配置覆盖调用方配置或沙箱。
 
+## 接口变化与迁移
+
+这是结构性切换，包含明确的 CLI 破坏性变更；不能因公共 SDK 字段未变就称为“没有接口变化”。
+
+| 边界 | 旧接口/调用链 | 新接口/调用链 | 迁移与兼容性 |
+| --- | --- | --- | --- |
+| Ait Provider 内部 | `AgentSession → bridge::Session → ACP engine → 原生 Session` | `AgentSession → session::Session → OMP RPC` | 删除内部 ACP 客户端，内部调用者改用原生 Session；不增加 UI Protocol 控件。 |
+| 外部程序入口 | `aitd omp-acp` | `ait-omp-acp [--omp-bin path]` | **破坏性 CLI 变更**，旧子命令已删除且没有转发别名。使用它的脚本、编辑器配置和外部 ACP launcher 必须更新可执行文件与参数。 |
+| 构建与分发 | ACP 入口依附 daemon 可执行文件 | 同版本的 `aitd` 与独立 `ait-omp-acp` | 支持的归档与 macOS/Linux desktop 资源必须携带配对产物，分别核验版本、签名与归档；OMP 本体仍由用户安装。 |
+| 外部协议 | daemon 子命令承载标准 ACP 与协商扩展 | 独立程序承载相同标准 ACP 与协商扩展 | 标准 ACP 客户端不必使用私有扩展；`_omp/rpc`、`_omp/event`、`_omp/respond` 仅供明确协商的外部 ACP 连接，不是 Ait 内部网关。 |
+| 持久恢复 | `transport: rpc/acp`、ACP 标记句柄、`ait-acp-aliases` | 继续读取旧身份，内部新句柄记录原生事实 | 兼容恢复只解析已有身份，不重写原生 JSONL；显式 `sessionFile` 与调用方沙箱保持权威。文件格式兼容不等于旧 CLI 兼容。 |
+| UI/公共 SDK/daemon wire | 既有消息与字段 | 保持不变 | 不要求旧客户端升级；这项兼容性不覆盖上面的 CLI、内部 Rust 边界和分发变化。 |
+
+独立程序只负责 CLI/stdio 生命周期，Provider 继续拥有 ACP 转换、原生会话和 RPC。
+依赖方向是独立程序调用 Provider；不得引入 Provider 到 daemon/API 的反向依赖。
+沙箱问题归原生 adapter 的创建/恢复/重开边界，UI 展示问题归客户端，不能用 UI 兼容性掩盖适配器迁移。
+
 ## 后果
 
 内部输入和事件不再经历 ACP JSON 往返，唯一原生 writer、既有 Timeline/图片/审批/子 Agent 投影和
 原生结算保持不变。标准 ACP 与历史扩展客户端仍由外部 bridge 兼容；这不是 OMP 官方 TUI 或协议新能力声明。
-没有新的公共 SDK/UI 消息或客户端必须升级的 wire 字段；旧客户端仍使用原有 daemon 协议。
+公共 SDK/UI 消息与 daemon wire 字段未变，只说明这些客户端接口保持兼容；内部 Rust 调用链、
+外部 CLI 入口以及可执行文件的分发/调用上下文按上表发生明确变化。
 
 定向验收必须覆盖 native 创建/恢复/配置重开、别名与日志不变、沙箱失败关闭、独立 CLI 纯协议输出/EOF/错误，
 以及 Linux/macOS 资源和签名归档路径。无法执行的签名或 notarization 不能用“已接线”代替通过，任务保持未完成。
