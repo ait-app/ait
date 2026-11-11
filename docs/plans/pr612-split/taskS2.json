@@ -16,8 +16,8 @@
   "status": "in_review",
   "branch": "fix/pr612-s2-react-compiler-protocol-exclusion",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-  "commit": null,
-  "pr_url": null,
+  "commit": "94e048ea0b6308f06665a83fe862ea360e9762e9",
+  "pr_url": "https://github.com/ait-app/ait/pull/653",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
