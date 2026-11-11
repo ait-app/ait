@@ -72,3 +72,16 @@ test.each([
 ] as const)("problem %j", (problem, sentence) => {
   expect(usageCopy.problem(problem, new Date("2026-10-01T12:00:00Z"))).toBe(sentence);
 });
+
+test("resolves History copy in the current language", async () => {
+  expect(usageCopy.history.range("24h")).toBe("24h");
+  expect(usageCopy.history.range("30d")).toBe("30d");
+  expect(usageCopy.history.calls("3")).toBe("Calls 3");
+  expect(usageCopy.history.unreachable(["Laptop", "Server"])).toBe(
+    "Not counted, unable to reach: Laptop, Server",
+  );
+  await i18n.changeLanguage("zh-CN");
+  expect(usageCopy.history.tab).toBe("历史");
+  expect(usageCopy.history.range("7d")).toBe("7 天");
+  expect(usageCopy.history.notRecorded(["Laptop"])).toBe("Laptop 未记录用量历史");
+});
