@@ -1,6 +1,6 @@
 ---
 id: ADR-238
-status: accepted
+status: proposed
 date: 2026-11-11
 amends:
   - providers/adr-091-independent-session-execution.md
