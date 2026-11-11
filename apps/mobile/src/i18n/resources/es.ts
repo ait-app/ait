@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -17,6 +18,7 @@ const schedulePluralForms = {
 };
 
 export const es: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
     runCommand: "Ejecutar comando",
     loadFailed: "No se pudieron cargar las tareas",

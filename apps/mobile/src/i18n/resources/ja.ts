@@ -1,7 +1,9 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
     runCommand: "コマンドを実行",
     loadFailed: "タスクを読み込めませんでした",

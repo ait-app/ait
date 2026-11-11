@@ -1,4 +1,6 @@
+import { hostMonitorEn } from "./host-monitor";
 export const en = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
     runCommand: "Run command",
     loadFailed: "Could not load tasks",

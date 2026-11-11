@@ -27,6 +27,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
 - [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)

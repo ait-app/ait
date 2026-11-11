@@ -145,3 +145,6 @@ node 分享允许更广的节点操作，分享和账号授权保留给所有者
 源码与产物使用 daemon 名称；`server.*`、`server_info`、`/v1/server/info`、`AIT_SERVER_*` 与已有数据目录
 保留协议兼容拼写。旧 CLI、独立 worker 和旧 Project SQLite 架构已退役，不属于当前 workspace。
 历史边界应按 ADR 的修订关系阅读；早期移植和已完成方案见[归档](../archive/README.md)。
+
+主机资源监控归 `metadata::daemon`，按需采样并由共享客户端侧栏展示；缓存、历史和停刷规则见
+[连接规格](connection.md#主机资源监控)与 [ADR-247](../decisions/daemon/adr-247-host-resource-monitor.md)。

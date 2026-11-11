@@ -6,6 +6,7 @@ import {
   PublicationAuthorizeResponseSchema,
   PublicationStopResponseSchema,
 } from "./publication.js";
+import { HostStatsRequestSchema, HostStatsResponseSchema } from "./host-monitor.js";
 import { BOT_REQUEST_SCHEMAS, BOT_RESPONSE_SCHEMAS } from "./bot/rpc-schemas.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "./agent-profile.js";
 export {
@@ -3148,6 +3149,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
+  HostStatsRequestSchema,
   DaemonGetStatusRequestSchema,
   RelayStatusRequestSchema,
   RelayStartRequestSchema,
@@ -3530,6 +3532,7 @@ export const ServerInfoStatusPayloadSchema = z
         forgeSearch: z.boolean().optional(),
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: z.boolean().optional(),
+        hostStats: z.boolean().optional(),
         onlineServiceSync: z.boolean().optional(),
         // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
         daemonConfigReload: z.boolean().optional(),
@@ -6677,6 +6680,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceMarkUnreadResponseSchema,
   SendAgentMessageResponseMessageSchema,
   SetVoiceModeResponseMessageSchema,
+  HostStatsResponseSchema,
   DaemonGetStatusResponseSchema,
   RelayStatusResponseSchema,
   RelayStartResponseSchema,

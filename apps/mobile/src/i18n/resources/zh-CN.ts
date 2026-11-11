@@ -1,7 +1,9 @@
+import { hostMonitorZh } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
+  hostMonitor: hostMonitorZh,
   taskBoard: {
     runCommand: "运行命令",
     loadFailed: "未能加载任务",

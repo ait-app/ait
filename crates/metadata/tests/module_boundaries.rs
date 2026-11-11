@@ -14,6 +14,7 @@ use model as _;
 use persistence as _;
 use serde as _;
 use serde_json as _;
+use sysinfo as _;
 use tempfile as _;
 use thiserror as _;
 use tokio as _;

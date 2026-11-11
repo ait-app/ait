@@ -710,6 +710,9 @@ fn compose_daemon(
         },
         Box::new(config_store),
     );
+    let daemon = daemon.with_host_sampler(Box::new(
+        metadata::daemon::local::LocalHostSampler::default(),
+    ));
     daemon.get_config().context("initialize daemon config")?;
     Ok(daemon)
 }

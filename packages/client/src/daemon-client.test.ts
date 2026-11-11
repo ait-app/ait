@@ -7492,3 +7492,53 @@ vi.mock("./protocol/connection.js", async () => {
   const { createProtocolStub } = await import("./test-support/protocol-stub.js");
   return { createDaemonConnection: createProtocolStub };
 });
+
+test("host resource statistics gate old hosts and correlate a typed snapshot", async () => {
+  for (const supported of [false, true]) {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "host-stats",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { hostStats: supported } });
+    await connected;
+    if (!supported) {
+      await expect(client.getHostStats()).rejects.toThrow("Update the host");
+      expect(mock.sent).toEqual([]);
+      continue;
+    }
+    const pending = client.getHostStats(true);
+    const request = parseSentFrame(mock.sent[0]);
+    expect(request).toMatchObject({ type: "daemon.host_stats.request", includeHistory: true });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "daemon.host_stats.response",
+        payload: {
+          requestId: request.requestId,
+          platform: "linux",
+          cpuCount: 4,
+          uptimeSeconds: 100,
+          current: {
+            at: 123,
+            cpuPercent: null,
+            memoryUsedBytes: 1,
+            memoryTotalBytes: 2,
+            rxBytesPerSecond: null,
+            txBytesPerSecond: 0,
+          },
+          history: [],
+          disks: [],
+        },
+      }),
+    );
+    await expect(pending).resolves.toMatchObject({
+      platform: "linux",
+      current: { cpuPercent: null, txBytesPerSecond: 0 },
+    });
+  }
+});

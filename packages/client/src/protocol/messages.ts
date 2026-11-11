@@ -126,6 +126,7 @@ export function serverInfo(
       agentConfigApply: has("agent.config.apply.request"),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
+      hostStats: !scopedGuest && has("daemon.host_stats.request"),
       onlineServiceSync: [
         "relay.status.request",
         "relay.start.request",
