@@ -206,7 +206,8 @@ React Compiler and adds tests. S3 adds`package:daemon`as an alias for the existi
 ## Execution queue
 
 Detailed implementation, acceptance, source paths and release/check state are authoritative in
-[tasks.json](tasks.json); the table below is the review-time queue, not a second mutable completion ledger.
+[tasks.json](tasks.json) and the execution register above. The table below is the **frozen review-time
+queue** (initial states), not a second mutable completion ledger; live delivery state is in the register.
 
 ### Execution register (2026-11-11, central docs owner update)
 
@@ -278,45 +279,45 @@ New proposed ADRs stay **proposed pending review**; historical accepted ADRs are
   `fix/pr612-s3-package-daemon-alias`, head `3e49d50f` (implementation `cdae0123`).
 - All other tasks remain research/design-only until their dependencies verify.
 
-| ID  | Task                                             | Dependencies           | Initial state                       |
-| --- | ------------------------------------------------ | ---------------------- | ----------------------------------- |
-| 00  | Inventory and split contract                     | —                      | delivered (Draft #647, record-only) |
-| 01  | OMP native Session and standalone ACP bridge     | 00                     | planned                             |
-| 02  | Shared model catalog refresh                     | 00                     | delivered (Draft #659)              |
-| 03  | Existing AgentProfile settings                   | 00, 02                 | planned                             |
-| 04  | Typed read-only usage                            | 00                     | delivered (Draft #650)              |
-| 05  | Native-confirmed configuration                   | 00, 01                 | planned                             |
-| 06  | Native command provenance and completion         | 00, 01                 | planned                             |
-| 07  | Structured native interactions                   | 00, 01                 | planned                             |
-| 08  | Ephemeral widgets and editor                     | 00, 07                 | planned                             |
-| 09  | BTW contract with OMP native and Claude fallback | 00, 01, 07             | planned                             |
-| 10  | Codex OpenCode and DSH BTW                       | 00, 09                 | planned                             |
-| 11  | Pi BTW                                           | 00, 09                 | planned                             |
-| 12  | Antigravity BTW                                  | 00, 09                 | planned                             |
-| 13  | MiniMax BTW                                      | 00, 09                 | excluded (user decision)            |
-| 14  | BTW follow-up and lifecycle                      | 00, 09                 | planned                             |
-| 15  | BTW transfer to nonrunning draft                 | 00, 14                 | planned                             |
-| 16  | Unified Goal strategy and fallback               | 00, 05, 07             | planned                             |
-| 17  | Codex native Goal                                | 00, 16                 | planned                             |
-| 18  | OMP native Goal                                  | 00, 01, 16             | planned                             |
-| 19  | DSH and MiniMax native Goal                      | 00, 16                 | planned                             |
-| 20  | Guided Goal                                      | 00, 16                 | planned                             |
-| 21  | Dynamic model roles                              | 00, 03, 05             | planned                             |
-| 22  | Claude advisor                                   | 00, 21                 | planned                             |
-| 23  | OMP native presets                               | 00, 21                 | planned                             |
-| 24  | Child guide and stop                             | 00, 07                 | planned                             |
-| 25  | History object targeting                         | 00, 06, 07             | planned                             |
-| 26  | Persisted Timeline export                        | 00, 04                 | delivered (Draft #656, stacks #650) |
-| 27  | OMP native HTML export                           | 00, 01, 26             | planned                             |
-| 28  | DSH commands and attachment receipts             | 00, 06, 07             | planned                             |
-| 29  | DSH ZIP export                                   | 00, 26, 28             | planned                             |
-| 30  | Inactive DSH history                             | 00                     | planned                             |
-| 31  | OpenCode command lifecycle                       | 00, 06                 | planned                             |
-| 32  | Provider account objects                         | 00, 07                 | planned                             |
-| 33  | OMP-only Vibe                                    | 00, 01, 05, 07, 21, 24 | planned                             |
-| S1  | Desktop provider environment allowlist           | 00                     | delivered (Draft #652)              |
-| S2  | React Compiler schema exclusion                  | 00                     | delivered (Draft #653)              |
-| S3  | Reuse daemon packaging entry point               | 00                     | delivered (Draft #654)              |
+| ID  | Task                                             | Dependencies           | Initial state |
+| --- | ------------------------------------------------ | ---------------------- | ------------- |
+| 00  | Inventory and split contract                     | —                      | in_review     |
+| 01  | OMP native Session and standalone ACP bridge     | 00                     | planned       |
+| 02  | Shared model catalog refresh                     | 00                     | planned       |
+| 03  | Existing AgentProfile settings                   | 00, 02                 | planned       |
+| 04  | Typed read-only usage                            | 00                     | planned       |
+| 05  | Native-confirmed configuration                   | 00, 01                 | planned       |
+| 06  | Native command provenance and completion         | 00, 01                 | planned       |
+| 07  | Structured native interactions                   | 00, 01                 | planned       |
+| 08  | Ephemeral widgets and editor                     | 00, 07                 | planned       |
+| 09  | BTW contract with OMP native and Claude fallback | 00, 01, 07             | planned       |
+| 10  | Codex OpenCode and DSH BTW                       | 00, 09                 | planned       |
+| 11  | Pi BTW                                           | 00, 09                 | planned       |
+| 12  | Antigravity BTW                                  | 00, 09                 | planned       |
+| 13  | MiniMax BTW                                      | 00, 09                 | blocked       |
+| 14  | BTW follow-up and lifecycle                      | 00, 09                 | planned       |
+| 15  | BTW transfer to nonrunning draft                 | 00, 14                 | planned       |
+| 16  | Unified Goal strategy and fallback               | 00, 05, 07             | planned       |
+| 17  | Codex native Goal                                | 00, 16                 | planned       |
+| 18  | OMP native Goal                                  | 00, 01, 16             | planned       |
+| 19  | DSH and MiniMax native Goal                      | 00, 16                 | planned       |
+| 20  | Guided Goal                                      | 00, 16                 | planned       |
+| 21  | Dynamic model roles                              | 00, 03, 05             | planned       |
+| 22  | Claude advisor                                   | 00, 21                 | planned       |
+| 23  | OMP native presets                               | 00, 21                 | planned       |
+| 24  | Child guide and stop                             | 00, 07                 | planned       |
+| 25  | History object targeting                         | 00, 06, 07             | planned       |
+| 26  | Persisted Timeline export                        | 00, 04                 | planned       |
+| 27  | OMP native HTML export                           | 00, 01, 26             | planned       |
+| 28  | DSH commands and attachment receipts             | 00, 06, 07             | planned       |
+| 29  | DSH ZIP export                                   | 00, 26, 28             | planned       |
+| 30  | Inactive DSH history                             | 00                     | planned       |
+| 31  | OpenCode command lifecycle                       | 00, 06                 | planned       |
+| 32  | Provider account objects                         | 00, 07                 | planned       |
+| 33  | OMP-only Vibe                                    | 00, 01, 05, 07, 21, 24 | planned       |
+| S1  | Desktop provider environment allowlist           | 00                     | planned       |
+| S2  | React Compiler schema exclusion                  | 00                     | planned       |
+| S3  | Reuse daemon packaging entry point               | 00                     | planned       |
 
 ## Reproducible task00 checks
 
