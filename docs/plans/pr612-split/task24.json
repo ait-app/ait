@@ -87,8 +87,8 @@
     "commit": "cc4a5745b369dfa3b582df76036293b7d1935093",
     "contract_lock_commit": "0992fbca0feabe320811b19b3d351c02933dfb0a"
   },
-  "commit": null,
-  "pr_url": null,
+  "commit": "b5867975ee913a7de2e576bff41e20ff300cce94",
+  "pr_url": "https://github.com/ait-app/ait/pull/673",
   "adr": "ADR-248 (proposed)",
   "compatibility": "Additive only. Wire: two new request/response method pairs plus an optional subagentControls host feature and optional supportsChildGuide/supportsChildStop capability flags; no existing payload gains a required field. Old clients never send the methods and keep the ADR-209 read-only observed tree. New clients on an old host see the feature absent and hide the controls; direct calls get MethodNotFound. A host whose adapter does not implement the typed port keeps the default Rejected, which the two child-control RPCs map to UnsupportedCapability in the write-free path (other operations keep the existing map_manager mapping), and no flags are advertised; validation failures (non-live parent, wrong parent chain, stale observation, revision mismatch, non-running guide target) also surface as UnsupportedCapability. Rust: Operation, port and manager entry points are new, and AgentSession gains a defaulted service_controls hook; existing method signatures are unchanged. The donor runNativeAction/agent.native_action.request gateway and its auto-resume of a non-live parent are not introduced.",
   "source_inventory": {
