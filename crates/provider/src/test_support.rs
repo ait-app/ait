@@ -105,7 +105,7 @@ pub(crate) fn worker_with_ledger(
         .unwrap();
     let mut manager = AgentManager::new(Box::new(registry.clone()))
         .with_creations(creations)
-        .with_usage_ledger(ledger)
+        .with_ledger(ledger)
         .with_timeline(
             crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
                 .unwrap(),

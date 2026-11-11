@@ -200,7 +200,7 @@ enum Command {
 
 /// SQLite usage ledger at `agents/usage.sqlite3`, written by one dedicated thread.
 #[derive(Debug)]
-pub(crate) struct SqliteUsageLedger {
+pub struct SqliteUsageLedger {
     /// Bounded queue to the writer thread.
     sender: SyncSender<Command>,
     /// Writer thread until [`Self::close`] joins it.
@@ -208,6 +208,20 @@ pub(crate) struct SqliteUsageLedger {
 }
 
 impl SqliteUsageLedger {
+    /// Open the ledger under `data_dir` for a starting host.
+    ///
+    /// Calls that an earlier run left running can no longer finish, so they are queued to be
+    /// marked interrupted before any call of this run is recorded. Call [`Self::close`] off the
+    /// async runtime when the host stops, because it waits for queued writes.
+    ///
+    /// # Errors
+    /// Rejects foreign, newer or corrupt files and unsafe paths; returns storage failures.
+    pub fn open_at_startup(data_dir: &Path) -> Result<Self, AgentError> {
+        let ledger = Self::open(data_dir)?;
+        ledger.recover_interrupted(chrono::Utc::now().timestamp_millis());
+        Ok(ledger)
+    }
+
     /// Open or create the ledger under `data_dir`, prune expired detail rows and start the writer.
     ///
     /// # Errors
@@ -263,8 +277,9 @@ impl SqliteUsageLedger {
 
     /// Apply every queued write, then stop the writer and wait for it; later calls do nothing.
     ///
-    /// Writes queued afterwards are dropped and summaries report the ledger unavailable.
-    pub(crate) fn close(&self) {
+    /// Writes queued afterwards are dropped and summaries report the ledger unavailable. This
+    /// blocks while queued writes are applied, so async callers run it on a blocking thread.
+    pub fn close(&self) {
         let Some(thread) = self
             .writer
             .lock()

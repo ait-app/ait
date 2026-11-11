@@ -31,7 +31,7 @@ async fn harness(mode: &str, registration: AgentRegistration) -> Harness {
     let ledger = Arc::new(RecordingLedger::default());
     let mut manager = AgentManager::new(Box::new(registry.clone()))
         .with_timeline(Timeline::memory().unwrap())
-        .with_usage_ledger(ledger.clone());
+        .with_ledger(ledger.clone());
     manager.register_client(Box::new(fixture.client())).unwrap();
     manager
         .create(AGENT, &fixture.spec(), registration)
@@ -258,8 +258,7 @@ async fn ledger_writes_never_change_the_turn() {
     ] {
         let fixture = Fixture::new();
         let registry = MemoryRegistry::default();
-        let mut manager =
-            AgentManager::new(Box::new(registry.clone())).with_usage_ledger(ledger.clone());
+        let mut manager = AgentManager::new(Box::new(registry.clone())).with_ledger(ledger.clone());
         manager.register_client(Box::new(fixture.client())).unwrap();
         manager
             .create(AGENT, &fixture.spec(), AgentRegistration::default())
@@ -297,7 +296,7 @@ fn request_usage(segment_id: &str) -> RequestUsage {
 async fn sessions_without_token_usage_finish_calls_as_such_and_late_requests_are_dropped() {
     let (manager, _, client) = make_manager();
     let ledger = Arc::new(RecordingLedger::default());
-    let mut manager = manager.with_usage_ledger(ledger.clone());
+    let mut manager = manager.with_ledger(ledger.clone());
     manager
         .create("agent-1", &spec(), AgentRegistration::default())
         .await

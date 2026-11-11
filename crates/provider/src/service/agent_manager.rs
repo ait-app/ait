@@ -37,6 +37,7 @@ use crate::ports::mcp_scope::McpSubject;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::protocol::agent_config::ConfigPatch;
 use crate::service::bot_execution::TimelineCursor;
+use crate::storage::usage_ledger::SqliteUsageLedger;
 use crate::support::time::now_timestamp;
 
 enum Registration<'a> {
@@ -236,18 +237,20 @@ impl AgentManager {
         self.creations.clone()
     }
 
-    /// Record every provider call of this manager's Agents in `ledger` instead of discarding them.
+    /// Record every provider call of this manager's Agents in the host `ledger` instead of
+    /// discarding them.
     ///
     /// Install it before creating or resuming sessions; live sessions keep the previous ledger.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "daemon wiring of ADR-246 (Task 8) installs the ledger"
-        )
-    )]
     #[must_use]
-    pub(crate) fn with_usage_ledger(mut self, ledger: Arc<dyn UsageLedger>) -> Self {
+    pub fn with_usage_ledger(mut self, ledger: Arc<SqliteUsageLedger>) -> Self {
+        self.usage_ledger = ledger;
+        self
+    }
+
+    /// [`Self::with_usage_ledger`] with any ledger, such as a test double.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_ledger(mut self, ledger: Arc<dyn UsageLedger>) -> Self {
         self.usage_ledger = ledger;
         self
     }

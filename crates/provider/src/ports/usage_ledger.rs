@@ -349,13 +349,6 @@ pub(crate) trait UsageLedger: Debug + Send + Sync {
     fn finish_call(&self, finish: CallFinish);
 
     /// Queue marking every call still running as interrupted, as of `ended_at` (Unix ms).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "daemon wiring of ADR-246 (Task 8) recovers at startup"
-        )
-    )]
     fn recover_interrupted(&self, ended_at: i64);
 
     /// Summarize the calls and requests within the query range.

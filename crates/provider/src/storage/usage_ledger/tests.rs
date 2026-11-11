@@ -372,6 +372,31 @@ async fn recovery_interrupts_only_running_calls() {
     assert_eq!(ended, [Some(at), Some(at + HOUR), Some(at + HOUR)]);
 }
 
+/// A starting host interrupts the calls an earlier run left running, before its own calls.
+#[test]
+fn opening_at_startup_interrupts_calls_an_earlier_run_left_running() {
+    let now = chrono::Utc::now().timestamp_millis();
+    let fixture = Fixture::new(now);
+    let earlier = fixture.open();
+    earlier.begin_call(call("done", "codex", None, now - HOUR));
+    earlier.finish_call(finish("done", CallOutcome::Completed, now - HOUR));
+    earlier.begin_call(call("left", "codex", None, now - HOUR));
+    earlier.close();
+
+    let started = SqliteUsageLedger::open_at_startup(fixture.directory.path()).unwrap();
+    started.begin_call(call("new", "codex", None, now));
+    started.close();
+
+    assert_eq!(
+        statuses(&fixture.inspect()),
+        [
+            ("done".into(), "completed".into(), Some("missing".into())),
+            ("left".into(), "interrupted".into(), Some("missing".into())),
+            ("new".into(), "running".into(), None),
+        ]
+    );
+}
+
 /// Pruning runs at most daily and never removes rollup rows.
 #[tokio::test]
 async fn pruning_runs_daily_and_keeps_the_rollup() {

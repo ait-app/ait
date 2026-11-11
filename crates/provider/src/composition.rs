@@ -15,14 +15,18 @@ use crate::local::omp::OmpClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::agent_session::AgentClient;
+use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::service::summary_generation::Generation;
+use crate::storage::usage_ledger::SqliteUsageLedger;
 
 /// Configured built-in providers, with adapter identities and launch details kept in this crate.
 #[derive(Debug)]
 pub struct Providers {
     clients: Vec<Box<dyn AgentClient>>,
     summary_clients: Vec<Arc<dyn AgentClient>>,
+    /// Ledger that records the provider calls of auxiliary generation.
+    usage_ledger: Arc<dyn UsageLedger>,
 }
 
 impl Providers {
@@ -35,6 +39,13 @@ impl Providers {
         Self::configured(data_dir, |name| std::env::var_os(name))
     }
 
+    /// Record the provider calls of generators assembled afterwards in the host `ledger`.
+    #[must_use]
+    pub fn with_usage_ledger(mut self, ledger: Arc<SqliteUsageLedger>) -> Self {
+        self.usage_ledger = ledger;
+        self
+    }
+
     /// Assemble isolated structured generation using adapters that implement that capability.
     ///
     /// `config` supplies live provider and model preferences. Returns a shared generator;
@@ -44,7 +55,10 @@ impl Providers {
         &self,
         config: Arc<dyn SummaryConfiguration>,
     ) -> Arc<dyn SummaryGenerator> {
-        Arc::new(Generation::new(config, self.summary_clients.clone()))
+        Arc::new(
+            Generation::new(config, self.summary_clients.clone())
+                .with_usage_ledger(self.usage_ledger.clone()),
+        )
     }
 
     /// Register the configured built-in adapters with the foreground `manager`.
@@ -103,6 +117,7 @@ impl Providers {
         let mut providers = Self {
             clients: Vec::new(),
             summary_clients: Vec::new(),
+            usage_ledger: Arc::new(NoopUsageLedger),
         };
         providers.add(codex);
         providers.add(claude);

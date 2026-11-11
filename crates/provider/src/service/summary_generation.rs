@@ -56,13 +56,6 @@ impl Generation {
     }
 
     /// Record every provider call of this generator in `ledger` instead of discarding them.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "daemon wiring of ADR-246 (Task 8) installs the ledger"
-        )
-    )]
     #[must_use]
     pub(crate) fn with_usage_ledger(mut self, ledger: Arc<dyn UsageLedger>) -> Self {
         self.ledger = ledger;
