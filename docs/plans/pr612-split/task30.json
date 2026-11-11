@@ -18,13 +18,13 @@
   ],
   "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. Donor exports/commands/projection-State hunks belong to tasks 19/28/29 and were not imported; donor resume create/adopt lifecycle change was deliberately NOT ported (no public proof required for task30; main adopt semantics preserved with a read-only identity precheck).",
   "implementation": "DSH read-only history/import/preview reads use session/list (root identity + cwd validation), session/projections (authoritative fixed cut) and session/page (fixed throughSeq pagination); missing/invalid baselines fail without falling back to activating session/follow. Typed provider.sessions.preview.get uses an opaque identity/cwd/cut-bound cursor with an optional exact native record window and projected-item offset, preserving oversized and terminal native-page items without server state or key parsing. Scope/window bounds are rejected before native reads; offsets are validated against the bounded projection. Preview wire serialization omits absent turnId without changing stored NativeItem or widening client types. Provider capability plus host method gate the UI. All newest-first pages are reversed together; host generation/epoch and cancellation isolate late replies. Resume retains main adopt semantics with read-only identity precheck. No writer creation, activation, prompt, cancel or native journal mutation from browsing.",
-  "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact. Actual browser + real daemon/native fixture passed complete66-row chronological paging,60-item fixed cut despite history growth, cwd/cursor binding, unchanged running control and zero session/create|follow|prompt|cancel|selectModel|commands/execute|session/new|session/load calls. Installed official DSH readonly smoke passed on owned v4 journal copies with a fresh shipped profile and a nonsecret fixture key; both journals remained byte-identical. Old hosts receive no unsupported requests; old clients keep existing messages.",
-  "status": "in_progress",
+  "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact. Actual browser + real daemon/native fixture passed complete66-row chronological paging,60-item fixed cut despite growth, cwd/cursor binding, unchanged running control and zero writer/cancel calls. A focused final browser smoke passed same-session reopen to a fresh cut and long unfinished-turn observation outside the newest native page, including the visible active notice and unchanged running control. Installed official DSH readonly smoke passed on owned v4 journal copies with a fresh shipped profile and nonsecret fixture key; both journals remained byte-identical. Old hosts receive no unsupported requests; old clients keep existing messages.",
+  "status": "delivered",
   "branch": "feat/pr612-task30-dsh-inactive-history",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-dsh-history",
-  "commit": "de50e8a5864ada4713579b659924ad55d56ee0e5",
+  "commit": "9e8991b8d3b46d30d7b2190b15c05aff607da92c",
   "pr_url": "https://github.com/ait-app/ait/pull/655",
   "updated_at": "2026-11-11",
   "interface_changes": [
@@ -93,12 +93,10 @@
       "Recovery bg811: SessionPreviewSheet consumer regressions3/3 PASS, including same-session reopen under actual production Infinity-stale/no-mount-refetch defaults; mobile typecheck PASS",
       "Recovery bg819/artifact3757: focused native preview suite13/13 PASS, including long unfinished turns beyond the display window, activity retained at the fixed cut on older pages after native completion, and explicit failure within the shared16-page budget; cargo fmt --all --check, strict provider library clippy and daemon build PASS",
       "Recovery bg826: scoped formatting8 files and lint4 files PASS (0 warnings/errors); ADR index current; docs checks7/7 PASS,559 Markdown documents and223 ADRs verified",
+      "Recovery bg828/artifact3783: changed-path actual browser smoke1/1 PASS (2.6m): same-session reopen observes new native answer33 instead of cached answer32, fresh first-page count50, long unfinished turn active with limit1 outside its newest native page, visible active notice, unchanged running control and zero writer/cancel calls. Earlier66-row/fixed-cut and official-native proofs reused, not rerun.",
       "Removed owned throwaway dsh-snapshot-probe.mjs, copied daemon, isolated smoke homes and sensitive probe cookies/logs; all own direct native probe groups stopped; prior recorded PID917051 absent. Original user home/root dirty worktree and task29 proof source remain untouched"
     ],
-    "recovery_pending": [
-      "bg828: changed-path actual browser smoke for fresh cut on same-session reopen and long unfinished turn outside newest native page",
-      "Implementation commit, Draft655 evidence update and push"
-    ],
+    "recovery_pending": [],
     "historical_failures": [
       "Earlier discovery snapshot race and copied-daemon ENOENT are retained as setup failures. Latest preserved retry trace test.trace36-38 PASSED the preview capability assertion, disproving stale-binary/capability failure as its cause; lines41-42 failed SDK validation because absent turnId serialized as null. Fixed only the preview wire projection, not global NativeItem storage or client schema.",
       "Recovery bg718: wire/active-control reads passed; 2-event fixture pages reached the existing16-native-page budget and returned16 items rather than the test's assumed56. Fixture changed to16-event pages while preserving multi-page behavior.",
