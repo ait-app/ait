@@ -70,7 +70,10 @@ test("refreshes a running observed child despite updates and stops after complet
       new Map([
         [
           child.id,
-          { ...child, observation: { rootAgentId: parentAgentId, observedAt: "streaming" } },
+          {
+            ...child,
+            observation: { rootAgentId: parentAgentId, observedAt: "streaming" },
+          } as unknown as Agent,
         ],
       ]),
     ),
