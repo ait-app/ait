@@ -1,6 +1,9 @@
 # PR #612 split execution contract
 
 Status: **task00 inventory reviewed, validated and published in [Draft PR #647](https://github.com/ait-app/ait/pull/647)**.
+PR #647 was closed unmerged on 2026-11-11 with the owner comment “仅作为记录 单独文档修改不计入合并”
+(record only; standalone documentation changes are not counted as merges) and reopened the same day
+as the live central execution index; it remains a Draft and is never merged or released.
 The split plan and product features are not delivered as a whole. Implementation proceeds per task
 under its own acceptance gates; current per-task state lives in [tasks.json](tasks.json) and the
 execution register below. No merge or release is authorized.
@@ -205,76 +208,115 @@ React Compiler and adds tests. S3 adds`package:daemon`as an alias for the existi
 Detailed implementation, acceptance, source paths and release/check state are authoritative in
 [tasks.json](tasks.json); the table below is the review-time queue, not a second mutable completion ledger.
 
-### Execution register (2026-11-11)
+### Execution register (2026-11-11, central docs owner update)
 
-Live ownership and delivery pointers; only the owning worker writes its task branch. Sixteen parallel
-workstreams are authorized; the register prevents duplicate ownership.
+Live ownership and delivery pointers; only the owning worker writes its task branch. The register
+prevents duplicate ownership. `migration-refresh-recovery` (former central docs owner) is frozen
+after recurring external backend 400s; this worktree is now the sole central 647 docs metadata owner.
+New proposed ADRs stay **proposed pending review**; historical accepted ADRs are not rewritten.
 
 - **00** delivered inventory — Draft [#647](https://github.com/ait-app/ait/pull/647), evidence `7ac9b4ac`.
+  Closed unmerged as record-only (owner comment 2026-11-11), reopened as the central index; still Draft.
 - **01** blocked — Draft [#651](https://github.com/ait-app/ait/pull/651), branch
-  `refactor/pr612-omp-native-boundary`, code `92abc77d`, interface disclosure `22efa58f`, cleanup
-  `43a0e952` (ADR-237 proposed). Normal-0077 Linux installed deb+rpm smoke passes; macOS
-  signing/notarization evidence missing. Not delivered.
-- **02** active — recovery owner, branch `feat/pr612-task02-model-catalog-refresh` (base `248a93cf`);
-  shared refresh patch under verification, no Draft yet.
-- **03** design-ready, waits for 02 (ADR-244 reserved); owner `profile-settings`.
+  `refactor/pr612-omp-native-boundary`, head `43a0e952` (= verified code `92abc77d` + interface
+  disclosure `22efa58f` + Linux payload cleanup; ADR-237 proposed). Linux native/archive/normal-0077
+  installed deb+rpm acceptance passes. **Only** actual macOS build/Developer ID signature/notarization
+  is blocked. Not delivered. Interface ledger (removed `aitd omp-acp` → standalone
+  `ait-omp-acp [--omp-bin]`, internal ACP client removal, `_omp/rpc` external-negotiation only,
+  sandbox on create/restore/reopen, legacy handle/native-history compatibility, UI/public SDK wire
+  unchanged) is recorded in tasks.json `01.interface_disclosure` and ADR-237 (approved context on #651).
+- **02** delivered (director-approved full scope/actual smoke/compat ledger) — Draft
+  [#659](https://github.com/ait-app/ait/pull/659), branch `feat/pr612-task02-model-catalog-refresh`,
+  head `efca94b8` (implementation `f14f4589`), base `248a93cf`; no Rust source/tests. Focused 58
+  fencing tests incl. same-client epoch regression, type/lint/docs passed; actual desktop +
+  changed-catalog (bg_666, artifact://2818) and supported compact Diagnostic/Refresh/return
+  (bg_688, artifact://2891) passed. ADR-236 proposed; internal UI contract changed, public
+  Provider/API/SDK unchanged (tasks.json `02.interface_disclosure`).
+- **03** now actionable (02 delivered); owner `profile-settings`, design-ready (ADR-244 reserved).
 - **04** delivered — Draft [#650](https://github.com/ait-app/ait/pull/650), branch
-  `pr612-split-task04-statistics`, implementation `c187052e`.
-- **05/06/07** active — stacked on verified 01 Linux code; ADR-241/242/243 reserved respectively.
+  `pr612-split-task04-statistics`, current head `a0d80312` (implementation `c187052e`; ADR-238 kept
+  proposed during review).
+- **05** active, **unverified** — sole owner `dynamic-model-roles`, branch
+  `feat/pr612-task05-native-config` stacked on task01 published head `22efa58f`; an acknowledged
+  partial-fields bug is being fixed; no Draft yet. ADR-241 proposed. The user deadline does not
+  relax security/scope.
+- **06** active — owner `command-provenance` (agent frozen after recurring external 400; work persists
+  on `feat/pr612-task06-command-provenance`, base `22efa58f`); no Draft yet. ADR-242 proposed.
+- **07** in review, **not delivered** — Draft [#657](https://github.com/ait-app/ait/pull/657), branch
+  `feat/pr612-task07-structured-interactions` @ `cc4a5745`, base task01 `22efa58f`; owner
+  `structured-interactions`; **unverified startup failure and secret gating remain open**, plus
+  security/concurrency verification pending. ADR-243 proposed. Additive optional question fields
+  only; permission envelope/events/resolve unchanged (tasks.json `07.interface_disclosure`).
 - **09/16/21/24/25/32/33** queued behind their dependencies; ADR-246/245/247/248/249/251/252
-  reserved respectively.
+  reserved respectively. 16/17 Goal designs are complete research artifacts, blocked on 05/07
+  verification; no Goal code.
+- **13** excluded by explicit user decision (2026-11-11) — not delivered, not a required overall
+  blocker; task19 (DSH/MiniMax native Goal) unaffected. This is a user exclusion, not a claim that
+  all eight BTW providers are delivered.
+- **26** delivered — Draft [#656](https://github.com/ait-app/ait/pull/656), branch
+  `pr612-split-task26-timeline-export`, head `1648320c` (implementation `3059e638`), stacks on
+  delivered 04 head `a0d80312`. ADR-239 proposed (amends ADR-049 for validated-origin download CORS).
+  Four-surface interface ledger in tasks.json `26.interface_disclosure`.
+- **27** active — sole owner `omp-native-html-export`, implementing integration of 01 + 04 + 26;
+  ADR-265 proposed. No public branch/Draft yet.
+- **30** in progress, **not delivered** — existing Draft [#655](https://github.com/ait-app/ait/pull/655),
+  branch `feat/pr612-task30-dsh-inactive-history`, implementation `de50e8a5`, actual HEAD `62334d12`
+  (no-preview branch); browser read-only preview still unverified and a pagination correction is
+  required. Sole recovery owner is now `session-statistics` (`opencode-command-lifecycle` frozen after
+  external 400 — no product blocker; original `dsh-history` owner also frozen); the recovery owner
+  must inspect actual HEAD before mutating. No extra API changes. ADR-240 proposed; interface ledger
+  in tasks.json `30.interface_disclosure`.
 - **31** blocked — native capability: official OpenCode 2.1.3 custom commands end_turn before model
   requests and public ACP lacks a reliable terminal signal; needs upstream completion semantics or a
   public attach surface (not a credential request). Catalog+cleanup reachable after 06; owner
   `opencode-command-lifecycle` persists; ADR-250 reserved. Not user-excluded.
-- **13** excluded by user decision (2026-11-11) — not delivered, not an overall blocker; task19 unaffected.
-- **26** active — stacks on delivered 04; ADR-239 reserved. **30** active — ADR-240 reserved.
-- **S1** delivered — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
-  `fix/pr612-s1-desktop-env-allowlist`, implementation `9ba98138`.
-- **S2** delivered — Draft [#653](https://github.com/ait-app/ait/pull/653), branch
-  `fix/pr612-s2-react-compiler-protocol-exclusion`, implementation `a6e4a0c5`.
-- **S3** delivered — Draft [#654](https://github.com/ait-app/ait/pull/654), branch
-  `fix/pr612-s3-package-daemon-alias`, implementation `cdae0123`.
+- **S1** delivered, director-accepted — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
+  `fix/pr612-s1-desktop-env-allowlist`, head `234acc9c` (implementation `9ba98138`).
+- **S2** delivered, director-accepted — Draft [#653](https://github.com/ait-app/ait/pull/653), branch
+  `fix/pr612-s2-react-compiler-protocol-exclusion`, head `c721b12c` (implementation `94e048ea`).
+- **S3** delivered, director-accepted — Draft [#654](https://github.com/ait-app/ait/pull/654), branch
+  `fix/pr612-s3-package-daemon-alias`, head `3e49d50f` (implementation `cdae0123`).
+- All other tasks remain research/design-only until their dependencies verify.
 
-| ID  | Task                                             | Dependencies           | Initial state |
-| --- | ------------------------------------------------ | ---------------------- | ------------- |
-| 00  | Inventory and split contract                     | —                      | in_review     |
-| 01  | OMP native Session and standalone ACP bridge     | 00                     | planned       |
-| 02  | Shared model catalog refresh                     | 00                     | planned       |
-| 03  | Existing AgentProfile settings                   | 00, 02                 | planned       |
-| 04  | Typed read-only usage                            | 00                     | planned       |
-| 05  | Native-confirmed configuration                   | 00, 01                 | planned       |
-| 06  | Native command provenance and completion         | 00, 01                 | planned       |
-| 07  | Structured native interactions                   | 00, 01                 | planned       |
-| 08  | Ephemeral widgets and editor                     | 00, 07                 | planned       |
-| 09  | BTW contract with OMP native and Claude fallback | 00, 01, 07             | planned       |
-| 10  | Codex OpenCode and DSH BTW                       | 00, 09                 | planned       |
-| 11  | Pi BTW                                           | 00, 09                 | planned       |
-| 12  | Antigravity BTW                                  | 00, 09                 | planned       |
-| 13  | MiniMax BTW                                      | 00, 09                 | excluded      |
-| 14  | BTW follow-up and lifecycle                      | 00, 09                 | planned       |
-| 15  | BTW transfer to nonrunning draft                 | 00, 14                 | planned       |
-| 16  | Unified Goal strategy and fallback               | 00, 05, 07             | planned       |
-| 17  | Codex native Goal                                | 00, 16                 | planned       |
-| 18  | OMP native Goal                                  | 00, 01, 16             | planned       |
-| 19  | DSH and MiniMax native Goal                      | 00, 16                 | planned       |
-| 20  | Guided Goal                                      | 00, 16                 | planned       |
-| 21  | Dynamic model roles                              | 00, 03, 05             | planned       |
-| 22  | Claude advisor                                   | 00, 21                 | planned       |
-| 23  | OMP native presets                               | 00, 21                 | planned       |
-| 24  | Child guide and stop                             | 00, 07                 | planned       |
-| 25  | History object targeting                         | 00, 06, 07             | planned       |
-| 26  | Persisted Timeline export                        | 00, 04                 | planned       |
-| 27  | OMP native HTML export                           | 00, 01, 26             | planned       |
-| 28  | DSH commands and attachment receipts             | 00, 06, 07             | planned       |
-| 29  | DSH ZIP export                                   | 00, 26, 28             | planned       |
-| 30  | Inactive DSH history                             | 00                     | planned       |
-| 31  | OpenCode command lifecycle                       | 00, 06                 | planned       |
-| 32  | Provider account objects                         | 00, 07                 | planned       |
-| 33  | OMP-only Vibe                                    | 00, 01, 05, 07, 21, 24 | planned       |
-| S1  | Desktop provider environment allowlist           | 00                     | planned       |
-| S2  | React Compiler schema exclusion                  | 00                     | planned       |
-| S3  | Reuse daemon packaging entry point               | 00                     | planned       |
+| ID  | Task                                             | Dependencies           | Initial state                       |
+| --- | ------------------------------------------------ | ---------------------- | ----------------------------------- |
+| 00  | Inventory and split contract                     | —                      | delivered (Draft #647, record-only) |
+| 01  | OMP native Session and standalone ACP bridge     | 00                     | planned                             |
+| 02  | Shared model catalog refresh                     | 00                     | delivered (Draft #659)              |
+| 03  | Existing AgentProfile settings                   | 00, 02                 | planned                             |
+| 04  | Typed read-only usage                            | 00                     | delivered (Draft #650)              |
+| 05  | Native-confirmed configuration                   | 00, 01                 | planned                             |
+| 06  | Native command provenance and completion         | 00, 01                 | planned                             |
+| 07  | Structured native interactions                   | 00, 01                 | planned                             |
+| 08  | Ephemeral widgets and editor                     | 00, 07                 | planned                             |
+| 09  | BTW contract with OMP native and Claude fallback | 00, 01, 07             | planned                             |
+| 10  | Codex OpenCode and DSH BTW                       | 00, 09                 | planned                             |
+| 11  | Pi BTW                                           | 00, 09                 | planned                             |
+| 12  | Antigravity BTW                                  | 00, 09                 | planned                             |
+| 13  | MiniMax BTW                                      | 00, 09                 | excluded (user decision)            |
+| 14  | BTW follow-up and lifecycle                      | 00, 09                 | planned                             |
+| 15  | BTW transfer to nonrunning draft                 | 00, 14                 | planned                             |
+| 16  | Unified Goal strategy and fallback               | 00, 05, 07             | planned                             |
+| 17  | Codex native Goal                                | 00, 16                 | planned                             |
+| 18  | OMP native Goal                                  | 00, 01, 16             | planned                             |
+| 19  | DSH and MiniMax native Goal                      | 00, 16                 | planned                             |
+| 20  | Guided Goal                                      | 00, 16                 | planned                             |
+| 21  | Dynamic model roles                              | 00, 03, 05             | planned                             |
+| 22  | Claude advisor                                   | 00, 21                 | planned                             |
+| 23  | OMP native presets                               | 00, 21                 | planned                             |
+| 24  | Child guide and stop                             | 00, 07                 | planned                             |
+| 25  | History object targeting                         | 00, 06, 07             | planned                             |
+| 26  | Persisted Timeline export                        | 00, 04                 | delivered (Draft #656, stacks #650) |
+| 27  | OMP native HTML export                           | 00, 01, 26             | planned                             |
+| 28  | DSH commands and attachment receipts             | 00, 06, 07             | planned                             |
+| 29  | DSH ZIP export                                   | 00, 26, 28             | planned                             |
+| 30  | Inactive DSH history                             | 00                     | planned                             |
+| 31  | OpenCode command lifecycle                       | 00, 06                 | planned                             |
+| 32  | Provider account objects                         | 00, 07                 | planned                             |
+| 33  | OMP-only Vibe                                    | 00, 01, 05, 07, 21, 24 | planned                             |
+| S1  | Desktop provider environment allowlist           | 00                     | delivered (Draft #652)              |
+| S2  | React Compiler schema exclusion                  | 00                     | delivered (Draft #653)              |
+| S3  | Reuse daemon packaging entry point               | 00                     | delivered (Draft #654)              |
 
 ## Reproducible task00 checks
 
