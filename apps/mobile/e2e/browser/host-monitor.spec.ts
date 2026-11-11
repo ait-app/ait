@@ -9,7 +9,7 @@ test("host monitor reads real daemon counters and opens beside the sidebar", asy
 }, testInfo) => {
   const workspace = await seedWorkspace({ repoPrefix: "host-monitor-", title: "Host monitor" });
   try {
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
       const settings = JSON.parse(localStorage.getItem("@paseo:app-settings") ?? "{}");
       localStorage.setItem(
@@ -34,10 +34,33 @@ test("host monitor reads real daemon counters and opens beside the sidebar", asy
       details.getByTestId("host-monitor-history").first().locator("svg path"),
     ).toHaveAttribute("d", /L/);
     await expect(details.getByText(/最近 (1[0-9]|[2-9][0-9]) 秒/)).toBeVisible({ timeout: 20_000 });
+    await expect(
+      details.getByTestId("host-monitor-network-history").locator("svg path"),
+    ).toHaveCount(2);
+    const overflowingScrollContainers = () =>
+      details.evaluate(
+        (root) =>
+          [root, ...root.querySelectorAll<HTMLElement>("*")].filter(
+            (element) =>
+              ["auto", "scroll"].includes(getComputedStyle(element).overflowY) &&
+              element.scrollHeight > element.clientHeight + 1,
+          ).length,
+      );
+    await expect.poll(overflowingScrollContainers).toBe(0);
     await page.screenshot({
       path: testInfo.outputPath("host-monitor-desktop.png"),
       fullPage: true,
     });
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await expect.poll(overflowingScrollContainers).toBe(0);
+    await expect(details.getByTestId("host-monitor-footer")).toBeInViewport();
+    await expect
+      .poll(async () => {
+        const bounds = await details.boundingBox();
+        return bounds ? bounds.y + bounds.height : Infinity;
+      })
+      .toBeLessThanOrEqual(600);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.keyboard.press("Escape");
     await expect(details).not.toBeVisible();
     await expect(trigger).toBeVisible();

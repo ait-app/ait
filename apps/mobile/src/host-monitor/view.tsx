@@ -9,7 +9,7 @@ import {
   HardDrive,
   X,
 } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import Svg, { Line, Path } from "react-native-svg";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -19,7 +19,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
-import { bytes, historyPath, memoryPercent, percent, type MonitorHost } from "./model";
+import {
+  bytes,
+  historyPath,
+  memoryPercent,
+  networkHistory,
+  percent,
+  type MonitorHost,
+} from "./model";
 
 export interface HostMonitorViewProps {
   host: MonitorHost;
@@ -39,6 +46,7 @@ export function HostMonitorView(props: HostMonitorViewProps) {
   const { host, snapshot, connected, supported, failed, open, onOpenChange } = props;
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const { height: viewportHeight } = useWindowDimensions();
   const current = snapshot?.current;
   const stale = !connected || failed || !supported;
   const state = !connected
@@ -91,16 +99,27 @@ export function HostMonitorView(props: HostMonitorViewProps) {
         side="right"
         align="end"
         offset={12}
-        width={392}
-        maxHeight={620}
+        width={420}
+        maxHeight={Math.max(240, viewportHeight - 32)}
         sheetTitle={t("hostMonitor.title")}
         scrollable
         testID="host-monitor-details"
       >
         <View style={styles.detail}>
-          <View style={styles.row}>
-            <Text style={styles.eyebrow}>{t("hostMonitor.title")}</Text>
-            <View style={styles.grow} />
+          <View style={styles.identity}>
+            <View style={styles.hostIcon}>
+              <Monitor size={18} strokeWidth={1.5} color={theme.colors.foregroundMuted} />
+            </View>
+            <View style={styles.grow}>
+              <Text style={styles.title} numberOfLines={1}>
+                {host.label}
+              </Text>
+              <Text style={styles.caption} numberOfLines={1}>
+                {snapshot
+                  ? `${snapshot.platform} · ${t("hostMonitor.cores", { count: snapshot.cpuCount })}`
+                  : t("hostMonitor.selectHost")}
+              </Text>
+            </View>
             <View style={styles.status}>
               <View style={[styles.dot, { backgroundColor: statusColor }]} />
               <Text style={styles.caption}>
@@ -115,21 +134,6 @@ export function HostMonitorView(props: HostMonitorViewProps) {
             >
               <X size={15} color={theme.colors.foregroundMuted} />
             </Pressable>
-          </View>
-          <View style={styles.identity}>
-            <View style={styles.hostIcon}>
-              <Monitor size={20} strokeWidth={1.5} color={theme.colors.foregroundMuted} />
-            </View>
-            <View style={styles.grow}>
-              <Text style={styles.title} numberOfLines={1}>
-                {host.label}
-              </Text>
-              <Text style={styles.caption} numberOfLines={1}>
-                {snapshot
-                  ? `${snapshot.platform} · ${t("hostMonitor.cores", { count: snapshot.cpuCount })}`
-                  : t("hostMonitor.selectHost")}
-              </Text>
-            </View>
           </View>
           {props.hosts.length > 1 ? (
             <HostSelection hosts={props.hosts} picked={props.picked} onSelect={props.onSelect} />
@@ -272,22 +276,7 @@ function HostDetails({ snapshot, stale }: { snapshot: HostSnapshot; stale: boole
           <Text style={styles.small}>{t("hostMonitor.chartScale")}</Text>
         </View>
       </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t("hostMonitor.network")}</Text>
-        <View style={styles.networkMetrics}>
-          <NetworkMetric
-            direction="down"
-            label={t("hostMonitor.download")}
-            value={current.rxBytesPerSecond}
-          />
-          <View style={styles.networkDivider} />
-          <NetworkMetric
-            direction="up"
-            label={t("hostMonitor.upload")}
-            value={current.txBytesPerSecond}
-          />
-        </View>
-      </View>
+      <NetworkChart snapshot={snapshot} />
       <View style={styles.section}>
         <View style={styles.row}>
           <HardDrive size={14} color={theme.colors.foregroundMuted} />
@@ -329,7 +318,7 @@ function HostDetails({ snapshot, stale }: { snapshot: HostSnapshot; stale: boole
           <Text style={styles.caption}>{t("hostMonitor.unavailable")}</Text>
         )}
       </View>
-      <View style={styles.footer}>
+      <View style={styles.footer} testID="host-monitor-footer">
         <Text style={styles.small}>
           {t("hostMonitor.updated", {
             time: new Date(current.at).toLocaleTimeString(i18n.language, {
@@ -386,7 +375,7 @@ function MetricCard({
         accessibilityRole="image"
         accessibilityLabel={chartLabel}
       >
-        <Svg width="100%" height={48} viewBox="0 0 300 40" preserveAspectRatio="none">
+        <Svg width="100%" height={32} viewBox="0 0 300 40" preserveAspectRatio="none">
           {[2, 20, 38].map((y) => (
             <Line
               key={y}
@@ -420,23 +409,99 @@ function MetricCard({
   );
 }
 
+function NetworkChart({ snapshot }: { snapshot: HostSnapshot }) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  const chart = networkHistory(snapshot.history);
+  const downloadColor = theme.colors.terminal.blue;
+  const uploadColor = theme.colors.terminal.magenta;
+  const ready = chart.download.includes("L") || chart.upload.includes("L");
+  return (
+    <View style={styles.section}>
+      <View style={styles.row}>
+        <Text style={styles.sectionTitle}>{t("hostMonitor.network")}</Text>
+        <View style={styles.grow} />
+        <Text style={styles.small}>0–{bytes(chart.maximum)}/s</Text>
+      </View>
+      <View style={styles.networkMetrics}>
+        <NetworkMetric
+          direction="down"
+          label={t("hostMonitor.download")}
+          value={snapshot.current.rxBytesPerSecond}
+          color={downloadColor}
+        />
+        <NetworkMetric
+          direction="up"
+          label={t("hostMonitor.upload")}
+          value={snapshot.current.txBytesPerSecond}
+          color={uploadColor}
+        />
+      </View>
+      <View
+        style={styles.networkHistory}
+        testID="host-monitor-network-history"
+        accessibilityRole="image"
+        accessibilityLabel={t("hostMonitor.networkHistory")}
+      >
+        <Svg width="100%" height={44} viewBox="0 0 300 40" preserveAspectRatio="none">
+          {[2, 20, 38].map((y) => (
+            <Line
+              key={y}
+              x1={0}
+              x2={300}
+              y1={y}
+              y2={y}
+              stroke={theme.colors.border}
+              strokeWidth={0.7}
+              strokeDasharray="4 6"
+            />
+          ))}
+          {chart.download.includes("L") ? (
+            <Path
+              d={chart.download}
+              fill="none"
+              stroke={downloadColor}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+            />
+          ) : null}
+          {chart.upload.includes("L") ? (
+            <Path
+              d={chart.upload}
+              fill="none"
+              stroke={uploadColor}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              strokeLinejoin="round"
+            />
+          ) : null}
+        </Svg>
+        {!ready ? (
+          <View style={styles.collecting}>
+            <Text style={styles.small}>{t("hostMonitor.collecting")}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function NetworkMetric({
   direction,
   label,
   value,
+  color,
 }: {
   direction: "up" | "down";
   label: string;
   value: number | null;
+  color: string;
 }) {
-  const { theme } = useUnistyles();
   const Icon = direction === "down" ? ArrowDown : ArrowUp;
   return (
     <View style={styles.networkMetric}>
-      <View style={styles.row}>
-        <Icon size={13} color={theme.colors.foregroundMuted} />
-        <Text style={styles.caption}>{label}</Text>
-      </View>
+      <Icon size={12} color={color} />
+      <Text style={styles.caption}>{label}</Text>
       <Text style={styles.networkValue}>
         {bytes(value)}
         <Text style={styles.rateUnit}>{value === null ? "" : "/s"}</Text>
@@ -479,15 +544,14 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "hidden",
   },
   miniFill: { height: 3, borderRadius: 2 },
-  detail: { padding: 18, gap: 16 },
-  eyebrow: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, fontWeight: "500" },
+  detail: { padding: 14, gap: 10 },
   status: { flexDirection: "row", alignItems: "center", gap: 5 },
   close: { padding: 5, borderRadius: 6, marginRight: -5 },
-  identity: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: -5 },
+  identity: { flexDirection: "row", alignItems: "center", gap: 10 },
   hostIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: theme.colors.surface2,
     alignItems: "center",
     justifyContent: "center",
@@ -521,13 +585,12 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textDecorationLine: "underline",
   },
-  charts: { gap: 8 },
+  charts: { gap: 4 },
   metricCards: { flexDirection: "row", gap: 10 },
   metricCard: {
     flex: 1,
     minWidth: 0,
-    padding: 12,
-    paddingBottom: 10,
+    padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -541,11 +604,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   metricValue: {
     color: theme.colors.foreground,
-    fontSize: 32,
-    lineHeight: 42,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: "500",
     letterSpacing: -1,
-    marginTop: 5,
+    marginTop: 2,
     fontVariant: ["tabular-nums"],
   },
   metricUnit: {
@@ -559,7 +622,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm - 1,
     marginTop: 1,
   },
-  history: { height: 48, marginTop: 12, overflow: "hidden" },
+  history: { height: 32, marginTop: 8, overflow: "hidden" },
   collecting: {
     position: "absolute",
     top: 0,
@@ -570,26 +633,33 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     backgroundColor: theme.colors.surface0,
   },
-  section: { borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 16, gap: 12 },
+  section: { borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 10, gap: 8 },
   sectionTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, fontWeight: "500" },
   networkMetrics: { flexDirection: "row", gap: 18 },
-  networkMetric: { flex: 1, minWidth: 0, gap: 5 },
-  networkDivider: { width: 1, backgroundColor: theme.colors.border },
+  networkMetric: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "wrap",
+  },
+  networkHistory: { height: 44, overflow: "hidden" },
   networkValue: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     fontWeight: "500",
     fontVariant: ["tabular-nums"],
   },
   rateUnit: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, fontWeight: "400" },
-  disk: { gap: 8 },
+  disk: { gap: 5 },
   diskName: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   track: { height: 5, borderRadius: 3, backgroundColor: theme.colors.surface2, overflow: "hidden" },
   fill: { height: 5, borderRadius: 3, backgroundColor: theme.colors.foregroundMuted, opacity: 0.7 },
   footer: {
     borderTopWidth: 1,
     borderColor: theme.colors.border,
-    paddingTop: 12,
+    paddingTop: 8,
     flexDirection: "row",
     justifyContent: "space-between",
     flexWrap: "wrap",

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { HostSample } from "@ait/protocol/host-monitor";
-import { bytes, historyPath, memoryPercent, percent, resolveMonitorHost } from "./model";
+import {
+  bytes,
+  historyPath,
+  memoryPercent,
+  networkHistory,
+  percent,
+  resolveMonitorHost,
+} from "./model";
 
 const sample: HostSample = {
   at: 180000,
@@ -39,5 +46,29 @@ describe("host monitor presentation", () => {
     expect(path.match(/L/g)).toHaveLength(1);
     expect(path).toContain("M300.0,29.0");
     expect(historyPath([{ ...sample, cpuPercent: null }], "cpu")).toBe("");
+  });
+  it("compares upload and download on one scale and excludes expired peaks", () => {
+    const history = [
+      { ...sample, at: 0, rxBytesPerSecond: 1024 ** 3 },
+      { ...sample, at: 200000, rxBytesPerSecond: 4096, txBytesPerSecond: 1024 },
+      { ...sample, at: 202000, rxBytesPerSecond: 4096, txBytesPerSecond: 1024 },
+    ];
+    const chart = networkHistory(history);
+    expect(chart.maximum).toBe(4096);
+    expect(chart.download).toContain("L300.0,2.0");
+    expect(chart.upload).toContain("L300.0,29.0");
+  });
+  it("keeps missing network samples and pauses distinct from real zero traffic", () => {
+    expect(networkHistory([sample])).toEqual({ maximum: 1024, download: "", upload: "" });
+    const history = [
+      { ...sample, rxBytesPerSecond: 0, txBytesPerSecond: 0 },
+      { ...sample, at: 182000, rxBytesPerSecond: 0, txBytesPerSecond: null },
+      { ...sample, at: 184000, rxBytesPerSecond: 0, txBytesPerSecond: 0 },
+      { ...sample, at: 200000, rxBytesPerSecond: 0, txBytesPerSecond: 0 },
+    ];
+    const chart = networkHistory(history);
+    expect(chart.download.match(/L/g)).toHaveLength(2);
+    expect(chart.download).toContain("M300.0,38.0");
+    expect(chart.upload).not.toContain("L");
   });
 });
