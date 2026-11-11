@@ -2714,6 +2714,13 @@ export const ja: TranslationResources = {
     browserHandoff:
       "ブラウザーに送信しました。ブラウザーのダウンロード一覧で保存を完了してください。",
   },
+  nativeHtmlExport: {
+    title: "ネイティブHTMLエクスポート（OMP）",
+    description:
+      "Oh My Pi が独自のフォーマッターでこのセッションをレンダリングします。ファイルにはアクティブなスクリプトが含まれる場合があり、ダウンロードとしてのみ保存されます。Ait 内で開かれることはありません。上限16 MiB。",
+    download: "ネイティブHTMLをエクスポート",
+    unavailable: "ネイティブHTMLエクスポートを利用できません。対応するOMPホストに接続してください。",
+  },
   sessionStatistics: {
     title: "選択中のセッション統計",
     scope: "プロバイダーの最新スナップショットです。セッション累計や直前のターンとは限りません。",

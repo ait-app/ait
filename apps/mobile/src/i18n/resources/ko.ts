@@ -2696,6 +2696,13 @@ export const ko: TranslationResources = {
     tooLarge: "내보내기가 16 MiB 제한을 초과합니다. 내용은 잘리지 않았습니다.",
     browserHandoff: "브라우저로 전송했습니다. 브라우저 다운로드 목록에서 저장을 완료하세요.",
   },
+  nativeHtmlExport: {
+    title: "네이티브 HTML 내보내기 (OMP)",
+    description:
+      "Oh My Pi가 자체 포매터로 이 세션을 렌더링합니다. 파일에는 활성 스크립트가 포함될 수 있으며 다운로드 전용으로 저장됩니다. Ait 내부에서 열리지 않습니다. 최대 16 MiB.",
+    download: "네이티브 HTML 내보내기",
+    unavailable: "네이티브 HTML 내보내기를 사용할 수 없습니다. 지원하는 OMP 호스트에 연결하세요.",
+  },
   sessionStatistics: {
     title: "선택한 세션 통계",
     scope: "제공자가 보고한 최신 스냅샷입니다. 세션 누계나 마지막 턴의 사용량은 아닐 수 있습니다.",

@@ -5,6 +5,7 @@ import { AgentUsage } from "@/usage";
 import { formatTokenCount } from "./context-window-meter.utils";
 import { SessionStatistics } from "./usage/session-statistics";
 import { TimelineExport } from "./timeline-export";
+import { NativeHtmlExport } from "./native-html-export";
 
 interface ContextWindowDetailsProps {
   serverId: string;
@@ -54,6 +55,7 @@ export function ContextWindowDetails({
       </View>
       <SessionStatistics serverId={serverId} agentId={agentId} />
       <TimelineExport serverId={serverId} agentId={agentId} />
+      <NativeHtmlExport serverId={serverId} agentId={agentId} />
       <Text style={styles.title}>{t("sessionStatistics.account")}</Text>
       <AgentUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
     </>

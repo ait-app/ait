@@ -2826,6 +2826,13 @@ export const zhCN: TranslationResources = {
     tooLarge: "导出超过 16 MiB 上限，未截断任何内容。",
     browserHandoff: "已交给浏览器，请查看浏览器下载列表以完成保存。",
   },
+  nativeHtmlExport: {
+    title: "原生 HTML 导出（OMP）",
+    description:
+      "由 Oh My Pi 用其自带格式渲染本会话。文件可能包含活动脚本，仅作为下载保存，不会在 Ait 内打开。上限 16 MiB。",
+    download: "导出原生 HTML",
+    unavailable: "原生 HTML 导出不可用。请连接支持该功能的 OMP 主机。",
+  },
   sessionStatistics: {
     title: "当前所选会话统计",
     scope: "提供商报告的最新快照，并非会话累计总量，也不一定是上一轮用量。",

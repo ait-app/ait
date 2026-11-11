@@ -2914,6 +2914,13 @@ export const en = {
     tooLarge: "Export exceeds the 16 MiB limit. Nothing was truncated.",
     browserHandoff: "Sent to browser — check your browser’s downloads to finish saving.",
   },
+  nativeHtmlExport: {
+    title: "Native HTML export (OMP)",
+    description:
+      "Oh My Pi renders this session with its own formatter. The file may contain active scripts and is saved as a download only — it is never opened inside Ait. Maximum 16 MiB.",
+    download: "Export native HTML",
+    unavailable: "Native HTML export unavailable. Connect to an OMP host that supports it.",
+  },
   sessionStatistics: {
     title: "Selected session statistics",
     scope:
