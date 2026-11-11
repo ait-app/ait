@@ -20,6 +20,7 @@ const schedulePluralForms = {
 export const fr: TranslationResources = {
   hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Exécuter une commande",
     loadFailed: "Impossible de charger les tâches",
     title: "Vue des tâches",

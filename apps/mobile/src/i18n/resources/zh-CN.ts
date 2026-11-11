@@ -5,6 +5,16 @@ import { pluginSettings } from "./plugin-settings";
 export const zhCN: TranslationResources = {
   hostMonitor: hostMonitorZh,
   taskBoard: {
+    taskCount: "{{count}} 个任务",
+    filters: "筛选",
+    resetFilters: "重置筛选",
+    showTasks: "显示 {{count}} 个任务",
+    showSubtasks: "显示子任务",
+    collapseLane: "收起{{lane}}列",
+    expandLane: "展开{{lane}}列",
+    open: "打开",
+    answer: "回答",
+    readOnly: "只读",
     runCommand: "运行命令",
     loadFailed: "未能加载任务",
     title: "任务总览",

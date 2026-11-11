@@ -56,6 +56,7 @@ const scheduleCadencePluralForms = {
 export const ar: TranslationResources = {
   hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "تشغيل أمر",
     loadFailed: "تعذر تحميل المهام",
     title: "نظرة عامة على المهام",

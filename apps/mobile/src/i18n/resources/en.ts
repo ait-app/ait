@@ -2,6 +2,16 @@ import { hostMonitorEn } from "./host-monitor";
 export const en = {
   hostMonitor: hostMonitorEn,
   taskBoard: {
+    taskCount: "{{count}} tasks",
+    filters: "Filters",
+    resetFilters: "Reset filters",
+    showTasks: "Show {{count}} tasks",
+    showSubtasks: "Show subtasks",
+    collapseLane: "Collapse {{lane}}",
+    expandLane: "Expand {{lane}}",
+    open: "Open",
+    answer: "Answer",
+    readOnly: "Read-only",
     runCommand: "Run command",
     loadFailed: "Could not load tasks",
     title: "Task overview",

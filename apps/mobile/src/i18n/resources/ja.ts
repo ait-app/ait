@@ -5,6 +5,7 @@ import { pluginSettings } from "./plugin-settings";
 export const ja: TranslationResources = {
   hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "コマンドを実行",
     loadFailed: "タスクを読み込めませんでした",
     title: "タスク一覧",
