@@ -21,5 +21,8 @@
 | Bot 后续能力                                                    | [内置、Telegram、飞书、微信、QQ、iMessage 已接入](../operations/bots.md)；`docs/reports` 中没有任何 Channel 的真实平台验收记录；Email、流式事件订阅、uncertain 投递的自动恢复、Lark 国际区域与富媒体未实现                                                                                                     |
 | 让 daemon 令牌不在 Agent 可达范围内                             | [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 已接受风险的后续：允许运行命令的 Agent 仍可读取 `local-api.token` 与 Claude 的临时 MCP 配置文件，从而绕过 Bot 的 Ait 限制；沙箱化 Worktree 只限制写入，不隔离凭据（[ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)） |
 
+Harness 用量账本已完成并[归档](../archive/plans/harness-call-usage.md)（[ADR-246](../decisions/providers/adr-246-harness-usage-ledger.md)）；
+延后的价格表费用估算尚无计划。
+
 Bot 的 Email 线程、去重和防循环约束保留在[原方案](../archive/plans/bot-backend.md#email-可行性)。
 后续实施前重新确认范围、协议与平台限制，不能把可行性方案当作可用 Channel。

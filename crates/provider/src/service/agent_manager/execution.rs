@@ -51,6 +51,7 @@ impl AgentManager {
             workspace_names: self.workspace_names.clone(),
             workspaces: self.workspaces.clone(),
             usage_cache: self.usage_cache.clone(),
+            usage_ledger: self.usage_ledger.clone(),
             auto_archives: super::auto_archive::AutoArchives::default(),
         }
     }

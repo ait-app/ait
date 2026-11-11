@@ -157,6 +157,11 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         PROVIDER
     }
+    fn reports_token_usage(&self) -> bool {
+        // Constant like the native session: the capability must not flip when the engine's
+        // native session is absent or taken.
+        true
+    }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         self.engine
             .native()

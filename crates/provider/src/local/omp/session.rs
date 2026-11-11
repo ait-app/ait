@@ -754,6 +754,10 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn reports_token_usage(&self) -> bool {
+        true
+    }
+
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         Ok(())

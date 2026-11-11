@@ -77,6 +77,8 @@ pub(crate) enum AgentTurnEvent {
     History(Vec<crate::protocol::timeline::NativeItem>),
     /// Complete current usage snapshot; consumers replace rather than sum repeated observations.
     Usage(crate::protocol::usage::AgentUsage),
+    /// One additive model request for the usage ledger; consumers sum distinct segments.
+    RequestUsage(super::usage_ledger::RequestUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
     RuntimeInfo(StoredAgentRuntimeInfo),
     /// The native provider drained its turn successfully.
@@ -147,6 +149,12 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// Returns unavailable when the adapter has no session-scoped accounting support.
     async fn account_usage(&self) -> Result<serde_json::Value, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
+    }
+
+    /// Whether this session publishes `AgentTurnEvent::RequestUsage` for its turns.
+    /// Without it, the ledger records the session's calls with missing token usage.
+    fn reports_token_usage(&self) -> bool {
+        false
     }
 
     /// Return the most recent failure's user-visible explanation, if available.

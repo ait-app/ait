@@ -255,6 +255,41 @@ async fn discovery_commands_and_diagnostics_do_not_create_history_or_prompt() {
     assert!(!calls.contains("\"type\": \"prompt\""));
 }
 
+/// Check that `events` carry unique OMP request segments, all queued before the terminal event.
+fn assert_request_usage_precedes_terminal(events: &[AgentTurnEvent]) {
+    let requests: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter_map(|(position, event)| match event {
+            AgentTurnEvent::RequestUsage(request) => Some((position, request)),
+            _ => None,
+        })
+        .collect();
+    assert!(!requests.is_empty());
+    assert!(
+        requests
+            .iter()
+            .all(|(position, _)| *position < events.len() - 1)
+    );
+    let ids: std::collections::BTreeSet<_> = requests
+        .iter()
+        .map(|(_, request)| request.segment_id.as_str())
+        .collect();
+    assert_eq!(ids.len(), requests.len());
+    let (_, request) = requests[0];
+    assert!(request.segment_id.starts_with("omp:"));
+    assert_eq!(request.model.as_deref(), Some("model"));
+    assert_eq!(
+        (
+            request.input_tokens,
+            request.output_tokens,
+            request.cache_read_tokens
+        ),
+        (10, 5, 2)
+    );
+    assert_eq!(request.cost_usd_reported, Some(0.001));
+}
+
 #[tokio::test]
 async fn rich_turns_replay_without_duplicate_items_and_resume_the_same_session() {
     let (_root, client, mut spec) = fixture();
@@ -276,12 +311,14 @@ async fn rich_turns_replay_without_duplicate_items_and_resume_the_same_session()
     };
     session.start_input(&prompt, &spec.config).await.unwrap();
     assert!(session.start_turn("busy", &spec.config).await.is_err());
+    assert!(session.reports_token_usage());
     let events = complete(session.as_mut()).await;
     assert!(
         events
             .iter()
             .any(|event| matches!(event, AgentTurnEvent::Progress { .. }))
     );
+    assert_request_usage_precedes_terminal(&events);
     assert!(events.iter().any(|event|matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["clientMessageId"]=="client-1")));
     assert!(events.iter().any(|event|matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["detail"]["type"]=="read")));
     let handle = session.persistence().unwrap();

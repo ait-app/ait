@@ -6,6 +6,7 @@ mod controls;
 mod delivery;
 mod execution;
 mod generated_titles;
+mod ledger;
 mod mcp;
 pub(crate) mod native_sessions;
 pub(crate) mod observed;
@@ -33,8 +34,10 @@ use crate::ports::agent_session::{
     AgentTurnEvent,
 };
 use crate::ports::mcp_scope::McpSubject;
+use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::protocol::agent_config::ConfigPatch;
 use crate::service::bot_execution::TimelineCursor;
+use crate::storage::usage_ledger::SqliteUsageLedger;
 use crate::support::time::now_timestamp;
 
 enum Registration<'a> {
@@ -118,6 +121,8 @@ struct LiveAgent {
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    /// Usage ledger calls of this session's turns.
+    calls: ledger::Calls,
 }
 
 impl LiveAgent {
@@ -126,6 +131,7 @@ impl LiveAgent {
         permit: tokio::sync::OwnedSemaphorePermit,
         record: PersistedAgentRuntimeRecord,
         registered: bool,
+        ledger: Arc<dyn UsageLedger>,
     ) -> Self {
         Self {
             mcp: None,
@@ -145,6 +151,7 @@ impl LiveAgent {
             failure_entry: None,
             exclusive: false,
             interruption_requested: false,
+            calls: ledger::Calls::new(ledger),
         }
     }
 }
@@ -172,6 +179,8 @@ pub struct AgentManager {
     workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
+    /// Host usage ledger that every live session records its provider calls in.
+    usage_ledger: Arc<dyn UsageLedger>,
 }
 
 impl AgentManager {
@@ -204,6 +213,7 @@ impl AgentManager {
             workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
+            usage_ledger: Arc::new(NoopUsageLedger),
         }
     }
 
@@ -225,6 +235,24 @@ impl AgentManager {
     #[must_use]
     pub(crate) fn creations(&self) -> model::creation::Creations {
         self.creations.clone()
+    }
+
+    /// Record every provider call of this manager's Agents in the host `ledger` instead of
+    /// discarding them.
+    ///
+    /// Install it before creating or resuming sessions; live sessions keep the previous ledger.
+    #[must_use]
+    pub fn with_usage_ledger(mut self, ledger: Arc<SqliteUsageLedger>) -> Self {
+        self.usage_ledger = ledger;
+        self
+    }
+
+    /// [`Self::with_usage_ledger`] with any ledger, such as a test double.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_ledger(mut self, ledger: Arc<dyn UsageLedger>) -> Self {
+        self.usage_ledger = ledger;
+        self
     }
 
     /// Install durable display history before admitting requests or creating native sessions.
@@ -837,7 +865,7 @@ impl AgentManager {
         if self.timeline.is_some() && !self.history_loaded(agent_id) {
             self.load_timeline_for_input(agent_id).await?;
         }
-        let record = self.resume(agent_id).await?;
+        let mut record = self.resume(agent_id).await?;
         if record.archived_at.is_some() || self.active_turn(agent_id).is_some() {
             return Err(AgentManagerError::Busy);
         }
@@ -876,40 +904,27 @@ impl AgentManager {
             .ok_or(AgentManagerError::Session)?;
         agent.last_message = None;
         agent.last_message_observer = None;
-        if let Some(names) = &self.workspace_names
-            && let Some(workspace) = record.workspace_id.clone()
-            && !record.internal
-        {
-            let context = self
-                .timeline
-                .as_ref()
-                .and_then(|timeline| timeline.first_user_text(agent_id).ok().flatten())
-                .unwrap_or_else(|| prompt.text.clone());
-            names.schedule(
-                workspace,
-                context,
-                Some(domain::summary::SummarySelection {
-                    provider: record.provider.clone(),
-                    model: record
-                        .config
-                        .as_ref()
-                        .and_then(|config| config.model.clone()),
-                    thinking_option_id: record
-                        .config
-                        .as_ref()
-                        .and_then(|config| config.thinking_option_id.clone()),
-                }),
+        if let Some(names) = &self.workspace_names {
+            name_workspace(
+                names.as_ref(),
+                self.timeline.as_ref(),
+                &record,
+                &prompt.text,
             );
         }
-        let mut effective = record.config.unwrap_or_default();
+        let mut effective = record.config.take().unwrap_or_default();
         if let Some(binding) = &agent.mcp {
             binding.apply(&mut effective);
         }
         let admission = agent.session.start_input(prompt, &effective).await;
         if let Ok(turn) = admission {
+            let runtime = agent.session.runtime_info().await;
+            agent
+                .calls
+                .begin_input(turn.clone(), &record, runtime.as_ref().ok(), &effective);
             agent.latest_turn = Some(turn.clone());
             agent.turn = Some(turn);
-            match agent.session.runtime_info().await {
+            match runtime {
                 Ok(info) => agent.pending_runtime = Some(info),
                 Err(_) => agent.pending = Some(AgentTurnEvent::Failed),
             }
@@ -924,6 +939,11 @@ impl AgentManager {
             {
                 agent.pending_runtime = Some(info);
             }
+            let token_usage = agent.session.reports_token_usage();
+            let runtime = agent.pending_runtime.as_ref();
+            agent
+                .calls
+                .reject(&record, runtime, &effective, token_usage);
             agent.pending = Some(AgentTurnEvent::Failed);
             self.poll().await?;
             Err(AgentManagerError::Session)
@@ -1039,6 +1059,7 @@ impl AgentManager {
                 event,
                 committed.as_ref(),
             );
+            ledger::finish_turn(agent);
             agent.turn = None;
             agent.pending = None;
             agent.exclusive = false;
@@ -1186,7 +1207,7 @@ impl AgentManager {
             if close_result.is_err() {
                 self.live.insert(
                     agent_id.to_owned(),
-                    LiveAgent::new(session, permit, record, false),
+                    LiveAgent::new(session, permit, record, false, self.usage_ledger.clone()),
                 );
                 return Err(AgentManagerError::Session);
             }
@@ -1194,7 +1215,13 @@ impl AgentManager {
         }
         self.live.insert(
             agent_id.to_owned(),
-            LiveAgent::new(session, permit, record.clone(), true),
+            LiveAgent::new(
+                session,
+                permit,
+                record.clone(),
+                true,
+                self.usage_ledger.clone(),
+            ),
         );
         Ok(record)
     }
@@ -1209,11 +1236,39 @@ impl AgentManager {
         if session.close().await.is_err() {
             self.live.insert(
                 agent_id.to_owned(),
-                LiveAgent::new(session, permit, record, false),
+                LiveAgent::new(session, permit, record, false, self.usage_ledger.clone()),
             );
         }
         AgentManagerError::Session
     }
+}
+
+/// Schedule a generated name for the Workspace of `record` from its first user text.
+///
+/// The context is the first user text in `timeline`, else `prompt`. Internal Agents and Agents
+/// outside a Workspace leave names unchanged.
+fn name_workspace(
+    names: &dyn model::workspace::lifecycle::WorkspaceNaming,
+    timeline: Option<&crate::storage::timeline::Timeline>,
+    record: &PersistedAgentRuntimeRecord,
+    prompt: &str,
+) {
+    let Some(workspace) = record.workspace_id.clone().filter(|_| !record.internal) else {
+        return;
+    };
+    let context = timeline
+        .and_then(|timeline| timeline.first_user_text(&record.id).ok().flatten())
+        .unwrap_or_else(|| prompt.to_owned());
+    let config = record.config.as_ref();
+    names.schedule(
+        workspace,
+        context,
+        Some(domain::summary::SummarySelection {
+            provider: record.provider.clone(),
+            model: config.and_then(|config| config.model.clone()),
+            thinking_option_id: config.and_then(|config| config.thinking_option_id.clone()),
+        }),
+    );
 }
 
 /// Session facts for MCP credential decisions, read from a durable record.

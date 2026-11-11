@@ -77,6 +77,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         "127.0.0.1:7316".parse().unwrap(),
         &instance,
         uuid::Uuid::new_v4().to_string().into(),
+        None,
     )
     .unwrap();
     let cases = installation_cases(&mut services);
@@ -117,6 +118,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             instance: instance.clone(),
             managed,
             publication,
+            usage_ledger: None,
         };
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
@@ -139,7 +141,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
                 .iter()
                 .any(|name| name == method.name)
         }));
-        assert_eq!(info.capabilities.len(), 241);
+        assert_eq!(info.capabilities.len(), 242);
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(5), task)
             .await

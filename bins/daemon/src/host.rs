@@ -53,6 +53,7 @@ use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
+use provider::storage::usage_ledger::SqliteUsageLedger;
 use tokio::net::TcpListener;
 
 use crate::config::Config;
@@ -73,6 +74,8 @@ pub(super) struct Server {
     instance: Arc<InstanceLease>,
     managed: HostLink,
     publication: hub::Worker,
+    /// Host usage ledger, closed off the async runtime after the API has stopped.
+    usage_ledger: Option<Arc<SqliteUsageLedger>>,
 }
 
 /// Process-owned listener and data-directory lease, retained across runtime restarts and diagnostics.
@@ -166,10 +169,16 @@ impl Server {
             None => None,
         };
         let launch_instance = instance.clone();
-        let (services, sources, device) = tokio::task::spawn_blocking(move || {
+        let (services, sources, device, usage_ledger) = tokio::task::spawn_blocking(move || {
             let device = crate::device::load_state(&config.data_dir, launch_instance.server_id)?;
-            let (mut services, sources) =
-                compose_services(&config, address, &launch_instance, launch_mcp_token)?;
+            let usage_ledger = open_usage_ledger(&config.data_dir);
+            let (mut services, sources) = compose_services(
+                &config,
+                address,
+                &launch_instance,
+                launch_mcp_token,
+                usage_ledger.as_ref(),
+            )?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
                     let mut dependencies = service.into_dependencies();
@@ -177,7 +186,7 @@ impl Server {
                     metadata::Service::new(dependencies)
                 });
             }
-            Ok::<_, anyhow::Error>((services, sources, device))
+            Ok::<_, anyhow::Error>((services, sources, device, usage_ledger))
         })
         .await
         .context("join server initialization")??;
@@ -223,6 +232,7 @@ impl Server {
             instance,
             managed,
             publication,
+            usage_ledger,
         })
     }
 
@@ -244,6 +254,7 @@ impl Server {
             instance,
             managed,
             publication,
+            usage_ledger,
         } = self;
         let cancel = tokio_util::sync::CancellationToken::new();
         let manager_cancel = cancel.clone();
@@ -316,6 +327,15 @@ impl Server {
         publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
         drop(api);
+        // Closing waits for queued ledger writes, so it runs off the async runtime; any owner
+        // that outlives this close drops without waiting.
+        if let Some(ledger) = usage_ledger
+            && tokio::task::spawn_blocking(move || ledger.close())
+                .await
+                .is_err()
+        {
+            tracing::error!("usage ledger close failed");
+        }
         drop(instance);
         // The serving error explains a failed shutdown better than its consequences.
         result?;
@@ -329,6 +349,7 @@ fn compose_services(
     address: SocketAddr,
     instance: &Arc<InstanceLease>,
     mcp_token: secrecy::SecretString,
+    usage_ledger: Option<&Arc<SqliteUsageLedger>>,
 ) -> anyhow::Result<(Services, hub::sources::Sources)> {
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
@@ -339,7 +360,7 @@ fn compose_services(
         _instance: instance.clone(),
     }));
     let server_id = instance.server_id.to_string();
-    let providers = Providers::new(&config.data_dir);
+    let providers = compose_providers(&config.data_dir, usage_ledger);
     let MetadataServices {
         config: config_store,
         generator: summary_generator,
@@ -379,7 +400,7 @@ fn compose_services(
     ))
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
-        (storage.agents.clone(), timeline, agent_mcp),
+        (storage.agents.clone(), timeline, agent_mcp, usage_ledger),
         (&storage.workspaces, &storage.projects),
         instance,
         providers,
@@ -700,11 +721,37 @@ fn open_timeline(
         .map_err(|_| anyhow::anyhow!("initialize Agent timeline"))
 }
 
+/// Open `agents/usage.sqlite3` under `data_dir`, queueing recovery of calls left running.
+///
+/// Returns `None` after logging the failure, so the host starts without recording calls.
+fn open_usage_ledger(data_dir: &std::path::Path) -> Option<Arc<SqliteUsageLedger>> {
+    match SqliteUsageLedger::open_at_startup(data_dir) {
+        Ok(ledger) => Some(Arc::new(ledger)),
+        Err(error) => {
+            tracing::error!(%error, "usage ledger unavailable; provider calls are not recorded");
+            None
+        }
+    }
+}
+
+/// Configure the built-in providers; summary calls go to `usage_ledger` when the host has one.
+fn compose_providers(
+    data_dir: &std::path::Path,
+    usage_ledger: Option<&Arc<SqliteUsageLedger>>,
+) -> Providers {
+    let providers = Providers::new(data_dir);
+    match usage_ledger {
+        Some(ledger) => providers.with_usage_ledger(ledger.clone()),
+        None => providers,
+    }
+}
+
 fn compose_provider(
     agent_runtime: (
         FileBackedAgentRuntimeRegistry,
         provider::storage::timeline::Timeline,
         AgentMcp,
+        Option<&Arc<SqliteUsageLedger>>,
     ),
     registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
     instance: &Arc<InstanceLease>,
@@ -717,7 +764,7 @@ fn compose_provider(
     ),
 ) -> anyhow::Result<AgentExecution> {
     let (directory, generator, names, workspace_automation) = metadata;
-    let (agent_runtime_registry, timeline, mcp) = agent_runtime;
+    let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
     let (workspace_registry, project_registry) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)
@@ -726,6 +773,9 @@ fn compose_provider(
         .with_summary_generation(generator)
         .with_workspace_names(Arc::new(names))
         .with_workspaces(Arc::new(workspace_registry.clone()));
+    if let Some(ledger) = usage_ledger {
+        manager = manager.with_usage_ledger(ledger.clone());
+    }
     providers.register(&mut manager)?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,

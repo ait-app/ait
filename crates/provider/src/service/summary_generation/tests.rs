@@ -157,3 +157,96 @@ async fn deadlines_shutdown_and_admission_are_bounded() {
         Err(SummaryError::Cancelled)
     );
 }
+
+#[tokio::test]
+async fn every_provider_attempt_is_a_summary_call_with_its_outcome() {
+    use crate::ports::usage_ledger::{CallOutcome, CallSource};
+    use crate::test_support::usage_ledger::RecordingLedger;
+
+    let root = tempfile::tempdir().unwrap();
+    let ledger = Arc::new(RecordingLedger::default());
+    let client = Arc::new(Client {
+        provider: "codex".into(),
+        outputs: Mutex::new(VecDeque::from([
+            Ok("invalid".into()),
+            Err(AgentSessionError::Failed),
+            Ok("{\"title\":\"Fixed title\"}".into()),
+        ])),
+        calls: Arc::new(Mutex::new(Vec::new())),
+        wait: false,
+    });
+    let config = Arc::new(Configuration::default());
+    config
+        .patch(
+            &json!({"metadataGeneration":{"providers":[{"provider":"codex","model":"preferred"}]}}),
+        )
+        .unwrap();
+    let service = Generation::new(config, vec![client]).with_usage_ledger(ledger.clone());
+
+    service.generate(request(root.path())).await.unwrap();
+
+    let begins = ledger.begins();
+    assert_eq!(
+        begins
+            .iter()
+            .map(|call| call.model.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("preferred"), Some("preferred"), Some("small")]
+    );
+    for call in &begins {
+        assert!(call.call_id.starts_with("summary:"));
+        assert_eq!(call.agent_id, "");
+        assert_eq!(call.provider, "codex");
+        assert_eq!(call.source, CallSource::Summary);
+        assert_eq!(call.workspace_id, None);
+    }
+    assert_ne!(begins[0].call_id, begins[2].call_id);
+    let finishes = ledger.finishes();
+    assert_eq!(
+        finishes
+            .iter()
+            .map(|finish| (finish.call_id.as_str(), finish.outcome))
+            .collect::<Vec<_>>(),
+        begins
+            .iter()
+            .map(|call| call.call_id.as_str())
+            .zip([
+                CallOutcome::Completed,
+                CallOutcome::Failed,
+                CallOutcome::Completed
+            ])
+            .collect::<Vec<_>>()
+    );
+    assert!(finishes.iter().all(|finish| !finish.token_usage_available));
+    assert!(ledger.requests().is_empty());
+}
+
+#[tokio::test]
+async fn a_summary_call_cut_off_by_the_deadline_is_interrupted() {
+    use crate::ports::usage_ledger::CallOutcome;
+    use crate::test_support::usage_ledger::RecordingLedger;
+
+    let root = tempfile::tempdir().unwrap();
+    let ledger = Arc::new(RecordingLedger::default());
+    let client = Arc::new(Client {
+        provider: "codex".into(),
+        outputs: Mutex::new(VecDeque::new()),
+        calls: Arc::new(Mutex::new(Vec::new())),
+        wait: true,
+    });
+    let mut service = Generation::new(Arc::new(Configuration::default()), vec![client])
+        .with_usage_ledger(ledger.clone());
+    service.deadline = Duration::from_millis(40);
+
+    assert_eq!(
+        service.generate(request(root.path())).await,
+        Err(SummaryError::Unavailable)
+    );
+
+    let begins = ledger.begins();
+    let finishes = ledger.finishes();
+    assert_eq!(begins.len(), 1);
+    assert_eq!(finishes.len(), 1);
+    assert_eq!(finishes[0].call_id, begins[0].call_id);
+    assert_eq!(finishes[0].outcome, CallOutcome::Interrupted);
+}

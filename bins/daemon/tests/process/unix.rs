@@ -162,6 +162,9 @@ mod worktrees;
 #[path = "workspace_automation.rs"]
 mod workspace_automation;
 
+#[path = "usage_ledger.rs"]
+mod usage_ledger;
+
 async fn ready(process: &mut Process, log: &Path) -> String {
     let start = Instant::now();
     loop {

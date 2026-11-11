@@ -184,18 +184,7 @@ impl CodexClient {
                 ("thread/start", json!({}))
             };
             if !history {
-                params["cwd"] = json!(spec.cwd);
-                let (approval, sandbox, _) = controls::policy(&spec.config, confined);
-                params["approvalPolicy"] = json!(approval);
-                params["sandbox"] = json!(sandbox);
-                params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
-                if let Some(model) = &spec.config.model {
-                    params["model"] = json!(model);
-                }
-                if let Some(prompt) = &spec.config.system_prompt {
-                    params["developerInstructions"] = json!(prompt);
-                }
-                params["config"] = crate::local::configuration::codex(&spec.config)?;
+                launch_params(&mut params, spec, confined)?;
             }
             let response = if method == "thread/resume" {
                 native_sessions::resume(&mut transport, params).await?
@@ -245,6 +234,8 @@ impl CodexClient {
                     last_anchor: None,
                     manual_compactions: 0,
                     pending_goal_start: false,
+                    requests: crate::local::usage::requests::CodexRequests::default(),
+                    child_requests: std::collections::BTreeMap::new(),
                     config: spec.config.clone(),
                     client: self.session_client(),
                 }))
@@ -593,6 +584,11 @@ struct CodexSession {
     last_anchor: Option<String>,
     manual_compactions: u8,
     pending_goal_start: bool,
+    /// Live per-request usage deduplicated by the thread's running token total.
+    requests: crate::local::usage::requests::CodexRequests,
+    /// Live per-request usage of each sub-agent thread, keyed by its thread id.
+    child_requests:
+        std::collections::BTreeMap<String, crate::local::usage::requests::CodexRequests>,
     stream: streaming::Stream,
     terminal: terminal::Terminal,
     config: StoredAgentConfig,
@@ -761,6 +757,9 @@ impl CodexSession {
             return Err(error);
         }
         self.transport = Some(transport);
+        // The new process may restart the thread's running total; ledger ids stay idempotent.
+        self.requests = crate::local::usage::requests::CodexRequests::default();
+        self.child_requests.clear();
         Ok(())
     }
 }
@@ -808,6 +807,10 @@ impl AgentSession for CodexSession {
 
     fn pending_foreground(&self) -> bool {
         self.pending_goal_start || self.manual_compactions > 0
+    }
+
+    fn reports_token_usage(&self) -> bool {
+        true
     }
 
     async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
@@ -1102,6 +1105,9 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if params.get("threadId").and_then(Value::as_str) != Some(&self.id) {
+                if method == "thread/tokenUsage/updated" {
+                    self.child_token_usage(params);
+                }
                 continue;
             }
             if method.starts_with("thread/realtime/") {
@@ -1230,6 +1236,37 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
 
 #[cfg(all(test, unix))]
 mod tests;
+
+/// Add the cwd, policies, model and instructions that start or resume a live thread.
+///
+/// # Arguments
+///
+/// * `params` - `thread/start` or `thread/resume` parameters to extend in place
+/// * `spec` - Session specification supplying the cwd and configuration
+/// * `confined` - Whether the session runs under write confinement
+///
+/// # Errors
+///
+/// Propagates the error returned when the configuration cannot be translated to Codex config.
+fn launch_params(
+    params: &mut Value,
+    spec: &AgentSessionSpec,
+    confined: bool,
+) -> Result<(), AgentSessionError> {
+    params["cwd"] = json!(spec.cwd);
+    let (approval, sandbox, _) = controls::policy(&spec.config, confined);
+    params["approvalPolicy"] = json!(approval);
+    params["sandbox"] = json!(sandbox);
+    params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
+    if let Some(model) = &spec.config.model {
+        params["model"] = json!(model);
+    }
+    if let Some(prompt) = &spec.config.system_prompt {
+        params["developerInstructions"] = json!(prompt);
+    }
+    params["config"] = crate::local::configuration::codex(&spec.config)?;
+    Ok(())
+}
 
 fn saved<'a>(
     resume: Option<(&'a AgentPersistenceHandle, AgentResumePurpose)>,

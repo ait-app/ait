@@ -6862,6 +6862,66 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
   });
 });
 
+test("sends provider.usage.ledger.request and resolves provider.usage.ledger.response", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const ledgerPromise = client.listUsageLedger({
+    requestId: "ledger-1",
+    from: 1_762_560_000_000,
+    to: 1_762_646_400_000,
+    groupBy: ["provider", "day"],
+  });
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "provider.usage.ledger.request",
+      requestId: "ledger-1",
+      from: 1_762_560_000_000,
+      to: 1_762_646_400_000,
+      groupBy: ["provider", "day"],
+    },
+  });
+
+  const payload = {
+    requestId: "ledger-1",
+    rows: [
+      {
+        key: { provider: "codex", day: "2025-11-08" },
+        calls: 3,
+        failedCalls: 1,
+        requests: 5,
+        inputTokens: 100,
+        outputTokens: 200,
+        cacheReadTokens: 300,
+        cacheWriteTokens: 40,
+        reportedCostUsd: 0,
+        costReportedRequests: 0,
+        lowerBoundCalls: 1,
+        missingCalls: 0,
+      },
+    ],
+    since: 1_762_000_000_000,
+  };
+  mock.triggerMessage(wrapSessionMessage({ type: "provider.usage.ledger.response", payload }));
+
+  await expect(ledgerPromise).resolves.toEqual(payload);
+});
+
 test("sends agent.items.close.request and resolves agent.items.close.response", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

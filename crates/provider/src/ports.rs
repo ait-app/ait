@@ -9,3 +9,5 @@ pub(crate) mod environment;
 pub mod mcp_scope;
 /// Native history discovery and inspection facts.
 pub(crate) mod native_history;
+/// Per-host harness usage ledger and the request usage it records.
+pub(crate) mod usage_ledger;

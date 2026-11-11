@@ -171,6 +171,7 @@ fn methods_are_classified_by_default_deny() {
         "agent.detach.request",
         "agent.timeline.append.request",
         "provider.usage.list.request",
+        "provider.usage.ledger.request",
         "provider.diagnostic.request",
         "provider.sessions.recent.list.request",
         "file.upload.request",

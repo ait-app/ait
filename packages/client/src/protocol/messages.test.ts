@@ -183,6 +183,13 @@ describe("Ait host capabilities", () => {
       }
     },
   );
+  it("enables the usage ledger only when the host implements its method", () => {
+    expect(info(["provider.usage.ledger.request"])?.features?.providerUsageLedger).toBe(true);
+    expect(info(["provider.usage.list.request"])?.features).toMatchObject({
+      providerUsageList: true,
+      providerUsageLedger: false,
+    });
+  });
   it("enables cached timeline reads only with the versioned feature and timeline method", () => {
     for (const supported of [false, true]) {
       for (const implemented of [false, true]) {

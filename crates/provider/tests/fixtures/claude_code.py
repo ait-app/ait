@@ -143,6 +143,10 @@ for line in sys.stdin:
             finish("Foreground finished")
             finish("Autonomous follow-up")
             continue
+        if prompt == "usage-follow-up":
+            for text in ("Foreground finished", "First follow-up", "Second follow-up"):
+                finish(text, True)
+            continue
         if prompt == "live-subagent":
             call = "child-call"
             task = "child-task"

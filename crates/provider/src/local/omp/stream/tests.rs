@@ -270,3 +270,83 @@ fn background_batches_and_missing_job_metadata_keep_one_bounded_result_card() {
     }
     assert!(stream.events.is_empty());
 }
+
+fn assistant(timestamp: i64, usage: &Value) -> Value {
+    json!({"role":"assistant","timestamp":timestamp,"model":"m",
+        "content":[{"type":"text","text":"hi"}],"usage":usage})
+}
+
+fn queued(stream: &Stream) -> Vec<crate::ports::usage_ledger::RequestUsage> {
+    stream
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::RequestUsage(request) => Some(request.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn live_stream() -> (tempfile::TempDir, Stream) {
+    let root = tempfile::tempdir().unwrap();
+    let mut stream = Stream::new(
+        "session".to_owned(),
+        ImageStore::new(root.path().join("images")),
+    );
+    stream.begin("turn".to_owned());
+    (root, stream)
+}
+
+#[test]
+fn live_assistant_messages_queue_requests_after_their_snapshot() {
+    let (_root, mut stream) = live_stream();
+    let usage = json!({"input":10,"output":5,"cacheRead":2,"cacheWrite":1,"cost":{"total":0.1}});
+    stream.message(&assistant(1000, &usage)).unwrap();
+    stream.message(&assistant(1000, &usage)).unwrap();
+    stream
+        .message(
+            &json!({"role":"assistant","timestamp":2000,"responseId":"resp",
+            "content":[],"usage":{"input":1,"output":1}}),
+        )
+        .unwrap();
+
+    let requests = queued(&stream);
+    let ids: Vec<_> = requests.iter().map(|r| r.segment_id.as_str()).collect();
+    assert_eq!(ids, ["omp:turn:1000:0", "omp:turn:1000:1", "omp:turn:resp"]);
+    assert_eq!(
+        (
+            requests[0].input_tokens,
+            requests[0].cache_read_tokens,
+            requests[0].cache_write_tokens
+        ),
+        (10, 2, 1)
+    );
+    assert_eq!(requests[0].model.as_deref(), Some("m"));
+    assert_eq!(requests[0].cost_usd_reported, Some(0.1));
+    assert!(matches!(
+        stream.events.iter().rev().nth(1),
+        Some(AgentTurnEvent::Usage(_))
+    ));
+}
+
+#[test]
+fn history_replay_and_aborted_zero_usage_queue_no_requests() {
+    let root = tempfile::tempdir().unwrap();
+    let mut replay = Stream::new(
+        "session".to_owned(),
+        ImageStore::new(root.path().join("images")),
+    );
+    replay
+        .message(&assistant(1000, &json!({"input":10,"output":5})))
+        .unwrap();
+    assert!(queued(&replay).is_empty());
+
+    let (_root, mut stream) = live_stream();
+    stream
+        .message(&assistant(
+            1000,
+            &json!({"input":0,"output":0,"cacheRead":0}),
+        ))
+        .unwrap();
+    assert!(queued(&stream).is_empty());
+}

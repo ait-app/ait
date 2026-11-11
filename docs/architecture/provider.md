@@ -130,6 +130,19 @@
   的缓存策略已由 [ADR-167](../decisions/providers/adr-167-account-scoped-successful-usage.md)、
   [ADR-219](../decisions/providers/adr-219-shared-account-usage-cache.md) 修订）。
 
+## Harness 用量账本
+
+- 每台 Host 在 `agents/usage.sqlite3` 记录调用与请求级 token 用量；请求用量可累加，ADR-052 的
+  `AgentUsage` 快照仍是替换值（`lastUsage`、`usage_updated` 不变）。账本经 `UsageLedger` 端口写入，
+  失败只记日志，不影响轮次（[ADR-246](../decisions/providers/adr-246-harness-usage-ledger.md)）。
+- 桶互斥：`input` 不含缓存读写，`reasoning` 与 `cache_write_1h` 为子集、不计入合计；请求以
+  `(agent_id, segment_id)` 幂等，汇总仅在插入生效时更新。
+- `usage_status`：每个请求均为 `request` 边界且 `complete`、且至少一个，为 `exact`；无请求或提供方不上报
+  token 用量为 `missing`；其余为 `lower_bound`。失败、取消或被中断的调用至多为 `lower_bound`。
+  只存提供方报告的费用。
+- `calls` 与 `requests` 保留 90 天，`daily_usage`（UTC 日）无限期；不含文本、路径或凭据，不进入 Hub outbox。
+  查询为 `provider.usage.ledger`，客户端按 `features.providerUsageLedger` 协商并逐 Host 汇总。
+
 ## 测试归属
 
 - Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归 `crates/provider`，放在所属模块

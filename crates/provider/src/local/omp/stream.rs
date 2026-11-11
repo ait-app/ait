@@ -10,6 +10,7 @@ use chrono::{TimeZone, Utc};
 use serde_json::{Value, json};
 
 use crate::local::images::{ImageStore, UNAVAILABLE_IMAGE};
+use crate::local::usage::requests;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -271,6 +272,7 @@ impl Stream {
             self.aborted |= message["stopReason"] == "aborted";
             if let Some(usage) = message.get("usage") {
                 self.add_usage(usage)?;
+                self.push_request(&key, message);
             }
         } else {
             let id = super::config::text(message, "toolCallId")
@@ -459,6 +461,25 @@ impl Stream {
             ),
             entry,
         });
+    }
+
+    /// Queue the ledger segment of a live assistant message ahead of the turn's terminal event.
+    ///
+    /// Replayed history and sub-agent streams have no turn and never reach the ledger.
+    fn push_request(&mut self, key: &str, message: &Value) {
+        let Some(turn) = &self.turn else {
+            return;
+        };
+        let identity = requests::response_id(message).map_or_else(
+            || {
+                let count = key.rsplit(':').next().unwrap_or_default();
+                format!("{}:{count}", message["timestamp"])
+            },
+            str::to_owned,
+        );
+        if let Some(request) = requests::pi_request("omp", turn, &identity, message) {
+            self.events.push_back(AgentTurnEvent::RequestUsage(request));
+        }
     }
 
     fn add_usage(&mut self, usage: &Value) -> Result<(), Error> {

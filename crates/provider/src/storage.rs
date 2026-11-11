@@ -3,6 +3,8 @@
 mod agents;
 mod catalog;
 mod migration;
+/// SQLite harness usage ledger of ADR-246.
+pub mod usage_ledger;
 
 use std::path::Path;
 use std::time::Duration;

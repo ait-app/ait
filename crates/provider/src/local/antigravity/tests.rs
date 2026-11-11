@@ -449,3 +449,43 @@ mod diagnostics;
 mod quota;
 
 mod authentication;
+
+#[tokio::test]
+async fn cumulative_usage_queues_a_delta_segment_only_after_the_baseline() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
+    let mut segments = Vec::new();
+    for prompt in ["first", "second"] {
+        session.start_turn(prompt, &spec.config).await.unwrap();
+        let events = completed(session.as_mut()).await;
+        let queued: Vec<_> = events
+            .iter()
+            .enumerate()
+            .filter_map(|(position, event)| match event {
+                AgentTurnEvent::RequestUsage(request) => Some((position, request.clone())),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            queued
+                .iter()
+                .all(|(position, _)| *position + 1 < events.len())
+        );
+        segments.push(queued);
+    }
+
+    assert!(segments[0].is_empty(), "the first total is only a baseline");
+    assert_eq!(segments[1].len(), 1);
+    let request = &segments[1][0].1;
+    assert!(request.segment_id.starts_with("antigravity:") && request.segment_id.ends_with(":0"));
+    assert_eq!(
+        (
+            request.input_tokens,
+            request.output_tokens,
+            request.cache_read_tokens
+        ),
+        (100, 10, 50)
+    );
+    session.close().await.unwrap();
+}
