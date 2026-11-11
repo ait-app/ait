@@ -20,6 +20,7 @@ const SCHEDULE_LABEL: &str = "paseo.schedule-id";
 /// One Agent's handle on the host ledger and the provider call that is open for its turn.
 #[derive(Debug)]
 pub(super) struct Calls {
+    /// Host ledger that receives every write.
     ledger: Arc<dyn UsageLedger>,
     /// Call of the active native turn; its id is the turn id.
     active: Option<String>,
@@ -120,16 +121,43 @@ impl Calls {
 
 /// Finish the active call of `agent` with the outcome of its pending terminal event.
 ///
-/// Any pending event other than a failure or cancellation completes the turn, as in `poll`.
+/// `poll` reaches its terminal branch only after `drain` stopped at a terminal event, so every
+/// other pending state is a host invariant violation; it is logged and counts as completed,
+/// matching how `poll` settles it.
 pub(super) fn finish_turn(agent: &mut super::LiveAgent) {
-    let outcome = match agent.pending {
+    let outcome = match &agent.pending {
+        Some(AgentTurnEvent::Completed(_)) => CallOutcome::Completed,
         Some(AgentTurnEvent::Failed) => CallOutcome::Failed,
         Some(AgentTurnEvent::Cancelled) => CallOutcome::Cancelled,
-        _ => CallOutcome::Completed,
+        Some(
+            AgentTurnEvent::Started(_)
+            | AgentTurnEvent::RuntimeInfo(_)
+            | AgentTurnEvent::Usage(_)
+            | AgentTurnEvent::RequestUsage(_)
+            | AgentTurnEvent::Subagent(_)
+            | AgentTurnEvent::PermissionRequested(_)
+            | AgentTurnEvent::PermissionResolved(_)
+            | AgentTurnEvent::Progress { .. }
+            | AgentTurnEvent::Timeline(_)
+            | AgentTurnEvent::History(_),
+        )
+        | None => {
+            tracing::warn!(agent_id = %agent.record.id,
+                "Ledger call finished without a terminal provider event");
+            CallOutcome::Completed
+        }
     };
     agent
         .calls
         .finish(outcome, agent.session.reports_token_usage());
+}
+
+/// Finish the active call of `agent`, if any, because the host closed its session mid-turn.
+pub(super) fn interrupt(agent: &mut super::LiveAgent) {
+    agent.calls.finish(
+        CallOutcome::Interrupted,
+        agent.session.reports_token_usage(),
+    );
 }
 
 /// Start record of call `call_id` for the Agent of `record`, started now.

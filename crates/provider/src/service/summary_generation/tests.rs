@@ -222,7 +222,7 @@ async fn every_provider_attempt_is_a_summary_call_with_its_outcome() {
 }
 
 #[tokio::test]
-async fn a_summary_call_cut_off_by_the_deadline_is_cancelled() {
+async fn a_summary_call_cut_off_by_the_deadline_is_interrupted() {
     use crate::ports::usage_ledger::CallOutcome;
     use crate::test_support::usage_ledger::RecordingLedger;
 
@@ -248,5 +248,5 @@ async fn a_summary_call_cut_off_by_the_deadline_is_cancelled() {
     assert_eq!(begins.len(), 1);
     assert_eq!(finishes.len(), 1);
     assert_eq!(finishes[0].call_id, begins[0].call_id);
-    assert_eq!(finishes[0].outcome, CallOutcome::Cancelled);
+    assert_eq!(finishes[0].outcome, CallOutcome::Interrupted);
 }

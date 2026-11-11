@@ -13,9 +13,13 @@ const AGENT: &str = "agent";
 
 /// Manager with one Codex fake Agent whose provider calls go to a recording ledger.
 struct Harness {
+    /// Codex fake program and working directory; kept alive for the test.
     _fixture: Fixture,
+    /// Manager that owns the Agent.
     manager: AgentManager,
+    /// Durable records of the manager.
     registry: MemoryRegistry,
+    /// Every ledger write of the manager.
     ledger: Arc<RecordingLedger>,
 }
 
@@ -369,4 +373,67 @@ fn call_model_prefers_the_runtime_model_over_the_configured_one() {
         Some("configured")
     );
     assert_eq!(hooks::model(None, None), None);
+}
+
+/// How a test closes the live session while its turn is still running.
+#[derive(Debug, Clone, Copy)]
+enum Closing {
+    /// A direct close, as kill, refresh and restore use.
+    Close,
+    /// Archiving the durable record, which `reconcile` closes.
+    Archive,
+    /// Host shutdown.
+    Shutdown,
+}
+
+#[tokio::test]
+async fn closing_a_session_mid_turn_interrupts_its_call() {
+    for closing in [Closing::Close, Closing::Archive, Closing::Shutdown] {
+        let mut harness = harness("normal", AgentRegistration::default()).await;
+        harness.manager.send(AGENT, "hang").await.unwrap();
+        let turn = harness.manager.active_turn(AGENT).unwrap().to_owned();
+
+        match closing {
+            Closing::Close => harness.manager.close(AGENT).await.unwrap(),
+            Closing::Archive => {
+                harness
+                    .registry
+                    .update(AGENT, &|current| {
+                        let mut next = current.clone();
+                        next.archived_at = Some("2026-11-11T00:00:00.000Z".to_owned());
+                        next
+                    })
+                    .unwrap();
+                harness.manager.reconcile().await.unwrap();
+            }
+            Closing::Shutdown => harness.manager.close_all().await.unwrap(),
+        }
+
+        assert!(
+            harness.manager.live_snapshot(AGENT).is_none(),
+            "{closing:?}"
+        );
+        assert_eq!(
+            trace(&harness.ledger),
+            [("begin", turn.clone()), ("finish", turn.clone())],
+            "{closing:?}"
+        );
+        let finish = &harness.ledger.finishes()[0];
+        assert_eq!(finish.outcome, CallOutcome::Interrupted, "{closing:?}");
+        assert!(finish.token_usage_available);
+    }
+}
+
+#[tokio::test]
+async fn closing_an_idle_session_finishes_no_call() {
+    let mut harness = harness("normal", AgentRegistration::default()).await;
+    let turn = run(&mut harness.manager, "done").await;
+
+    harness.manager.close(AGENT).await.unwrap();
+
+    assert_eq!(
+        trace(&harness.ledger),
+        [("begin", turn.clone()), ("finish", turn)]
+    );
+    assert_eq!(harness.ledger.finishes()[0].outcome, CallOutcome::Completed);
 }

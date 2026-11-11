@@ -284,6 +284,38 @@ async fn usage_status_requires_complete_request_boundaries() {
     );
 }
 
+/// A call the host stopped is never exact, even when every recorded request is.
+#[tokio::test]
+async fn host_interrupted_calls_are_at_most_lower_bound() {
+    let fixture = Fixture::new(DAY_ONE);
+    let ledger = fixture.open();
+    let at = DAY_ONE + HOUR;
+    for call_id in ["closed", "silent"] {
+        ledger.begin_call(call(call_id, "codex", None, at));
+    }
+    ledger.record_request(request("closed", "closed:1", at));
+    for call_id in ["closed", "silent"] {
+        ledger.finish_call(finish(call_id, CallOutcome::Interrupted, at + HOUR));
+    }
+    ledger.close();
+
+    assert_eq!(
+        statuses(&fixture.inspect()),
+        [
+            (
+                "closed".into(),
+                "interrupted".into(),
+                Some("lower_bound".into())
+            ),
+            (
+                "silent".into(),
+                "interrupted".into(),
+                Some("missing".into())
+            ),
+        ]
+    );
+}
+
 /// Recovery interrupts running calls and leaves finished calls alone.
 #[tokio::test]
 async fn recovery_interrupts_only_running_calls() {

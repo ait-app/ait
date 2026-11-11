@@ -169,11 +169,7 @@ pub(super) async fn drain(
             | None => break,
         };
         match result {
-            Ok(()) => match agent.pending.take() {
-                Some(AgentTurnEvent::Started(turn)) => adopt_started(agent, turn),
-                Some(AgentTurnEvent::RequestUsage(usage)) => agent.calls.record(id, usage),
-                _ => {}
-            },
+            Ok(()) => take_processed(id, agent),
             // Storage I/O may succeed on the next poll, so the event stays pending for retry.
             Err(model::ErrorCode::AgentIo) => return Err(AgentManagerError::Registry),
             // Any other rejection is deterministic for this event; retrying it would wedge the
@@ -257,6 +253,30 @@ fn persist_started(
         );
     }
     Ok(())
+}
+
+/// Take the processed pending event of Agent `id`, adopting a started turn or recording usage.
+fn take_processed(id: &str, agent: &mut super::LiveAgent) {
+    match agent.pending.take() {
+        Some(AgentTurnEvent::Started(turn)) => adopt_started(agent, turn),
+        Some(AgentTurnEvent::RequestUsage(usage)) => agent.calls.record(id, usage),
+        // `drain` fully handles every other processed event; terminal events never get here
+        // because its loop breaks on them.
+        Some(
+            AgentTurnEvent::RuntimeInfo(_)
+            | AgentTurnEvent::Usage(_)
+            | AgentTurnEvent::Subagent(_)
+            | AgentTurnEvent::PermissionRequested(_)
+            | AgentTurnEvent::PermissionResolved(_)
+            | AgentTurnEvent::Progress { .. }
+            | AgentTurnEvent::Timeline(_)
+            | AgentTurnEvent::History(_)
+            | AgentTurnEvent::Completed(_)
+            | AgentTurnEvent::Cancelled
+            | AgentTurnEvent::Failed,
+        )
+        | None => {}
+    }
 }
 
 /// Make the persisted `turn` the Agent's active turn.

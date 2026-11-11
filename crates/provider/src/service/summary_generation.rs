@@ -29,6 +29,7 @@ pub(crate) struct Generation {
     queue: Semaphore,
     cancel: CancellationToken,
     deadline: Duration,
+    /// Usage ledger that records every `generate_summary` call.
     ledger: Arc<dyn UsageLedger>,
 }
 
@@ -144,8 +145,9 @@ impl Generation {
     }
 }
 
-/// One `generate_summary` call in the usage ledger, finished as cancelled if dropped unfinished.
+/// One `generate_summary` call in the usage ledger, finished as interrupted if dropped unfinished.
 struct SummaryCall<'a> {
+    /// Ledger that records the call.
     ledger: &'a dyn UsageLedger,
     /// Call that is still running.
     call_id: Option<String>,
@@ -192,7 +194,7 @@ impl<'a> SummaryCall<'a> {
 impl Drop for SummaryCall<'_> {
     /// A deadline or shutdown dropped the call while the provider was still working.
     fn drop(&mut self) {
-        self.end(CallOutcome::Cancelled);
+        self.end(CallOutcome::Interrupted);
     }
 }
 

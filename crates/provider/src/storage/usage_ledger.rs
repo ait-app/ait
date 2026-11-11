@@ -477,10 +477,16 @@ fn finish_call(transaction: &Transaction<'_>, finish: &CallFinish) -> rusqlite::
         tracing::warn!("usage ledger ignored a call finished as running");
         return Ok(());
     }
-    let status = if finish.token_usage_available {
-        request_status(transaction, &finish.call_id)?
-    } else {
+    let status = if !finish.token_usage_available {
         UsageStatus::Missing
+    } else if finish.outcome == CallOutcome::Interrupted {
+        // The host stopped the call, so in-flight requests may be lost, as in recovery.
+        match request_status(transaction, &finish.call_id)? {
+            UsageStatus::Exact | UsageStatus::LowerBound => UsageStatus::LowerBound,
+            UsageStatus::Missing => UsageStatus::Missing,
+        }
+    } else {
+        request_status(transaction, &finish.call_id)?
     };
     let finished = transaction.prepare_cached(FINISH_CALL)?.execute(params![
         finish.call_id,

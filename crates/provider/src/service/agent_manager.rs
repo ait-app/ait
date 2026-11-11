@@ -120,6 +120,7 @@ struct LiveAgent {
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    /// Usage ledger calls of this session's turns.
     calls: ledger::Calls,
 }
 
@@ -177,6 +178,7 @@ pub struct AgentManager {
     workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
+    /// Host usage ledger that every live session records its provider calls in.
     usage_ledger: Arc<dyn UsageLedger>,
 }
 
