@@ -10,8 +10,4 @@ pub mod mcp_scope;
 /// Native history discovery and inspection facts.
 pub(crate) mod native_history;
 /// Per-host harness usage ledger and the request usage it records.
-#[expect(
-    dead_code,
-    reason = "the SQLite ledger and AgentManager hooks of ADR-246 consume this port"
-)]
 pub(crate) mod usage_ledger;

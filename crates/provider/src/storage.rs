@@ -3,6 +3,15 @@
 mod agents;
 mod catalog;
 mod migration;
+/// SQLite harness usage ledger of ADR-246.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "daemon wiring of ADR-246 (Task 8) opens the ledger"
+    )
+)]
+pub(crate) mod usage_ledger;
 
 use std::path::Path;
 use std::time::Duration;

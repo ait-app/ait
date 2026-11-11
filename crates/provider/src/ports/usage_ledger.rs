@@ -326,6 +326,13 @@ pub(crate) enum UsageLedgerError {
 ///
 /// Write methods return immediately: implementations queue the work and log failures with
 /// `tracing::warn!`, so a ledger never fails or delays a turn.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "AgentManager hooks of ADR-246 (Task 6) call the ledger"
+    )
+)]
 #[async_trait::async_trait]
 pub(crate) trait UsageLedger: Debug + Send + Sync {
     /// Queue a new call in the running state.
@@ -347,6 +354,13 @@ pub(crate) trait UsageLedger: Debug + Send + Sync {
 }
 
 /// Ledger for tests and hosts without usage storage: discards writes, cannot summarize.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "AgentManager of ADR-246 (Task 6) defaults to this ledger"
+    )
+)]
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct NoopUsageLedger;
 
