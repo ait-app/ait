@@ -9,7 +9,7 @@ import { pipeline } from "node:stream/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import { validateAndroidApk } from "./android-release.mjs";
+import { validateAndroidBadging } from "./android-release.mjs";
 
 const API = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications";
 const SCOPE = "https://www.googleapis.com/auth/androidpublisher";
@@ -89,14 +89,25 @@ export async function downloadUniversalApk({
   return normalizeCertificateHash(generated.certificateSha256Hash);
 }
 
+// apksigner prints "Signer #N" normally, but "Signer (minSdkVersion=…, maxSdkVersion=…)" for each
+// key when Play signs with v3.1 key rotation. The source stamp is Play's own, not an app signer.
+export function apkSignerCertificates(output) {
+  return [
+    ...output.matchAll(
+      /^Signer (?:#\d+|\(minSdkVersion=[^)\n]*\)) certificate SHA-256 digest: ([\da-f]{64})\s*$/gim,
+    ),
+  ].map((match) => match[1].toLowerCase());
+}
+
 export function verifyGoogleSignedApk({ badging, certificates, plan, certificateSha256 }) {
-  const verified = validateAndroidApk(badging, certificates, plan);
-  assert.equal(
-    verified.certificateSha256,
-    certificateSha256,
-    "APK signer differs from the Play signing certificate",
+  const { architectures } = validateAndroidBadging(badging, plan);
+  const signers = apkSignerCertificates(certificates);
+  assert(signers.length > 0, `apksigner reported no signing certificate:\n${certificates}`);
+  assert(
+    signers.includes(certificateSha256),
+    `Play signing certificate ${certificateSha256} is not among the APK signers ${signers.join(", ")}`,
   );
-  return verified;
+  return { certificateSha256, signers: [...new Set(signers)], architectures };
 }
 
 async function main() {
