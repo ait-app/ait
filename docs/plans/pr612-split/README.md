@@ -225,7 +225,11 @@ workstreams are authorized; the register prevents duplicate ownership.
 - **13** excluded by user decision (2026-11-11) — not delivered, not an overall blocker; task19 unaffected.
 - **26** active — stacks on delivered 04; ADR-239 reserved. **30** active — ADR-240 reserved.
 - **S1** delivered — Draft [#652](https://github.com/ait-app/ait/pull/652), branch
-  `fix/pr612-s1-desktop-env-allowlist`, implementation `9ba98138`. **S2/S3** active, same support owner.
+  `fix/pr612-s1-desktop-env-allowlist`, implementation `9ba98138`.
+- **S2** delivered — Draft [#653](https://github.com/ait-app/ait/pull/653), branch
+  `fix/pr612-s2-react-compiler-protocol-exclusion`, implementation `a6e4a0c5`.
+- **S3** delivered — Draft [#654](https://github.com/ait-app/ait/pull/654), branch
+  `fix/pr612-s3-package-daemon-alias`, implementation `cdae0123`.
 
 | ID  | Task                                             | Dependencies           | Initial state |
 | --- | ------------------------------------------------ | ---------------------- | ------------- |
