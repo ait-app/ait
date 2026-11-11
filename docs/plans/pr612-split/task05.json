@@ -139,8 +139,9 @@
   "base": {
     "kind": "stacked-unmerged",
     "task": "01",
-    "commit": "22efa58f",
-    "note": "task01 user-excluded from delivery but its code/Draft651 remains the valid dependency base for task05; no task01 acceptance gates task05."
+    "branch": "refactor/pr612-omp-native-boundary",
+    "commit": "43a0e952",
+    "note": "task01 user-excluded from delivery but its code/Draft651 is the valid dependency base. task05 merged stack head 43a0e952 (docs/decisions/README.md ADR index conflict resolved: ADR-241 proposed + ADR-237 proposed). No task01 acceptance gates task05."
   },
   "commit": "60f3350d",
   "pr_url": "https://github.com/ait-app/ait/pull/661",
@@ -222,6 +223,14 @@
       {
         "command": "cargo nextest (mapper-selected) — nextest NOT installed on host",
         "result": "Equivalent targeted cargo test --locked -p provider --lib running (full provider lib suite). ait-omp-acp/daemon are task01 dep-base packages, unchanged by task05."
+      },
+      {
+        "command": "Required missing checks (user correction: stack base 43a0, not origin/main): cargo fmt --all --check + docs merge ONCE",
+        "result": "PASS: cargo fmt --all --check clean; merged 43a0e952 resolving docs/decisions/README.md conflict (ADR-241 + ADR-237 both proposed); ADR index regenerated 224; check:docs PASS 560 docs/224 ADRs; oxlint changed UI files 0 warnings/0 errors. Merge commit 63d3a35a pushed; PR #661 merge-base now 43a0e952."
+      },
+      {
+        "command": "Scope note: full-provider lib run (in-flight before correction) finished 1732 passed/1 failed",
+        "result": "The 1 failure is local::pi::tests::rejection_errors_handled_commands_and_extension_dialogs_do_not_hang — Pi provider, NOT in task05 diff, pre-existing/unrelated. No new whole-provider/SDK/full-Rust/workspace-coverage gates started per user correction. Workspace clippy gate blocked only by pre-existing filesystem fetch_update deprecation (Rust 1.99.1 host; CI 1.98.1), out of task05 scope."
       }
     ]
   },
