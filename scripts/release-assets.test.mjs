@@ -686,7 +686,7 @@ test("desktop release verifies published desktop assets and any retained Android
   assert.match(await readFile(path.join(assets, "SHA256SUMS"), "utf8"), /Ait-0\.0\.7-android\.apk/);
 });
 
-test("desktop reruns preserve a checksum-verified Android APK", async (t) => {
+test("desktop reruns fetch only the attached APK and its checksums, then verify it", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "ait-retain-android-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const directory of ["bin", "published", "release-assets"])
@@ -695,7 +695,8 @@ test("desktop reruns preserve a checksum-verified Android APK", async (t) => {
   const original = "previously published APK";
   await writeFile(path.join(root, "published", apk), original);
   const hash = createHash("sha256").update(original).digest("hex");
-  await writeFile(path.join(root, "published/SHA256SUMS"), `${hash}  ${apk}\n`);
+  await writeFile(path.join(root, "published/SHA256SUMS"), `${hash}  ${apk}\n${hash}  large.dmg\n`);
+  await writeFile(path.join(root, "published", "large.dmg"), "desktop installer");
   await writeFile(
     path.join(root, "bin/gh"),
     `#!/usr/bin/env node
@@ -703,13 +704,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === 'release' && args[1] === 'view' && args.includes('--json')) {
-  console.log(fs.readdirSync(process.env.PUBLISHED_ASSETS).length);
+  console.log(fs.readdirSync(process.env.PUBLISHED_ASSETS).join('\\n'));
 }
 if (args[0] === 'release' && args[1] === 'download') {
   const destination = args[args.indexOf('--dir') + 1];
-  for (const name of fs.readdirSync(process.env.PUBLISHED_ASSETS)) {
-    fs.copyFileSync(path.join(process.env.PUBLISHED_ASSETS, name), path.join(destination, name));
-  }
+  fs.mkdirSync(destination, { recursive: true });
+  args.forEach((value, index) => {
+    if (args[index - 1] !== '--pattern') return;
+    fs.copyFileSync(path.join(process.env.PUBLISHED_ASSETS, value), path.join(destination, value));
+  });
 }
 `,
     { mode: 0o700 },
@@ -734,6 +737,7 @@ if (args[0] === 'release' && args[1] === 'download') {
     });
   assert.equal(run().status, 0);
   assert.equal(await readFile(path.join(root, "release-assets", apk), "utf8"), original);
+  await assert.rejects(readFile(path.join(root, "previous-assets", "large.dmg")));
   await rm(path.join(root, "release-assets", apk));
   await writeFile(path.join(root, "published", apk), "tampered");
   assert.notEqual(run().status, 0);

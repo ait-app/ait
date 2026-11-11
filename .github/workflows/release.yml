@@ -319,6 +319,10 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 150
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      version_code: ${{ steps.plan.outputs.version_code }}
+      submitted: ${{ steps.submit.outcome }}
     # Serialize uploads across tags; each run and retry gets its own versionCode.
     # The default queue would cancel a tag's pending upload when a newer tag arrives.
     concurrency:
@@ -491,6 +495,7 @@ jobs:
           retention-days: 14
 
       - name: Submit this verified AAB to Google Play
+        id: submit
         uses: r0adkll/upload-google-play@v1
         timeout-minutes: 30
         with:
@@ -556,6 +561,58 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: node .tmp/release-tools/scripts/xcode-cloud-release.mjs "$RELEASE_TAG"
 
+  # ADR-236: once Play accepts the bundle, attach Google's signed universal APK to the draft Release.
+  # Rerunning only this job retries the APK without rebuilding or resubmitting to Play.
+  android-apk:
+    name: Attach Google-signed Android APK
+    needs: [android-play, release]
+    if: needs.android-play.outputs.submitted == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.android-play.outputs.version }}
+      VERSION_CODE: ${{ needs.android-play.outputs.version_code }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Download Google-signed universal APK
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          build_tools=$(ls -d "$ANDROID_HOME"/build-tools/* | grep -v -- -rc | sort -V | tail -n 1)
+          node .tmp/release-tools/scripts/android-play-apk.mjs --version "$VERSION" \
+            --version-code "$VERSION_CODE" --build-tools "$build_tools" --output-dir apk
+
+      - name: Attach APK and refresh checksums
+        run: |
+          set -euo pipefail
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          test -s "apk/$apk"
+          draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$draft" != true ]; then
+            echo "::warning::$RELEASE_TAG is already published; the APK was not attached"
+            exit 0
+          fi
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir sums
+          {
+            awk -v name="$apk" '$2 != name' sums/SHA256SUMS
+            (cd apk && sha256sum "$apk")
+          } | LC_ALL=C sort -k2,2 > SHA256SUMS
+          gh release upload "$RELEASE_TAG" "apk/$apk" SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
   release:
     name: Prepare GitHub Release
     needs: [build, windows]
@@ -593,21 +650,19 @@ jobs:
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
 
+      # Reruns keep an APK attached earlier; fetch only it and the checksums that cover it.
       - name: Preserve previously published Android APK
         run: |
-          if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          if test -f "release-assets/$apk"; then
             exit 0
           fi
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            asset_count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
-            if [ "$asset_count" -gt 0 ]; then
-              mkdir -p previous-assets
-              gh release download "$RELEASE_TAG" --dir previous-assets --repo "$GITHUB_REPOSITORY"
-              if test -f "previous-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
-                (cd previous-assets && sha256sum --check SHA256SUMS)
-                cp "previous-assets/Ait-${RELEASE_TAG#v}-android.apk" release-assets/
-              fi
-            fi
+          names=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name') || exit 0
+          if grep -qxF "$apk" <<<"$names"; then
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$apk" --pattern SHA256SUMS --dir previous-assets
+            (cd previous-assets && sha256sum --check --ignore-missing SHA256SUMS)
+            cp "previous-assets/$apk" release-assets/
           fi
 
       - name: Verify assets and write checksums
