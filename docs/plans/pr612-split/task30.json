@@ -20,12 +20,12 @@
   "implementation": "DSH read-only history/import/preview reads use session/list (root identity + cwd validation), session/projections (authoritative fixed cut) and session/page (fixed throughSeq pagination); missing/invalid baselines fail without falling back to activating session/follow. New typed provider.sessions.preview.get pages inactive native history newest-first with an opaque cursor bound to provider/nativeID/cwd/throughSeq/beforeSeq; stale, forged or cross-scope cursors are rejected before any native read. Per-provider capability supportsSessionPreview in the provider snapshot gates the UI; method presence is only the host-version gate. Resume keeps main's adopt lifecycle but validates root identity read-only first. No writer creation, activation, prompt or native log mutation from browsing.",
   "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact. Browser + loopback native fixture smoke audits zero session/create|follow|prompt|selectModel|commands/execute|session/new|session/load requests while browsing inactive entries, fixed cut across pages, and active agent unchanged. Old hosts receive no unsupported requests; old clients keep existing messages.",
   "status": "in_progress",
-  "branch": "feat/pr612-task30-dsh-inactive-history-preview",
+  "branch": "feat/pr612-task30-dsh-inactive-history",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-dsh-history",
-  "commit": null,
-  "pr_url": null,
+  "commit": "de50e8a5864ada4713579b659924ad55d56ee0e5",
+  "pr_url": "https://github.com/ait-app/ait/pull/655",
   "updated_at": "2026-11-11",
   "interface_changes": [
     {
