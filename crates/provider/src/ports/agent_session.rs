@@ -128,11 +128,17 @@ pub(crate) enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub(crate) trait AgentSession: Debug + Send + Sync {
-    /// Read native Goal facts without mutation, including create-time admission and restart.
+    /// Verified eligibility for this admitted session's version, cwd and effective configuration.
+    /// A false native flag never proves absence; creation still performs the native read.
+    fn goal_capability(&self) -> super::goal::GoalCapability {
+        super::goal::GoalCapability::default()
+    }
+
+    /// Read native Goal facts without native mutation; transport sequences may advance.
     /// `Ok(None)` proves absence; an unavailable or failed probe is not evidence of absence.
     /// # Errors
     /// Returns unavailable when unsupported, or failure when native state is unknown.
-    async fn goal_read(&self) -> Result<Option<NativeGoalFacts>, AgentSessionError> {
+    async fn goal_read(&mut self) -> Result<Option<NativeGoalFacts>, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
     }
 
@@ -394,12 +400,6 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
 pub(crate) trait AgentClient: Debug + Send + Sync {
-    /// Verified native Goal eligibility for this installed adapter/version.
-    /// A false native flag never proves that a native Goal is absent; creation still probes.
-    fn goal_capability(&self) -> super::goal::GoalCapability {
-        super::goal::GoalCapability::default()
-    }
-
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false
