@@ -21,7 +21,7 @@
   "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. These are reference paths, not a cherry-pick; the donor generic native_action gateway is explicitly rejected and replaced by a feature-typed native HTML export consumer.",
   "implementation": "Render the live OMP session's persisted journal with OMP's own public export_html RPC on the already-owned session transport (correlated non-blocking begin/poll, never the blocking request lane, no second process/resume/lease/prompt). The adapter exclusively creates an owned staging file inside the OMP state root (sandbox-allowed), validates regular-file/exact-directory/exact-basename/16MiB, adopts the bytes verbatim into an anonymous GeneratedArtifact via an O_NOFOLLOW retained handle, and removes the owned staging on every terminal outcome including late post-timeout creation. Reuse task26 Files single-use grants, expiry, guest download budget, API completion composition and the shared client generated-artifact download pipeline. Native bytes are a download only, never rendered/sanitized/auto-opened; the UI shows an explicit nine-locale risk warning.",
   "acceptance": "Native export returns a downloadable file whose bytes match the native renderer output and receipt size/name; errors, cleanup, remote access and unsupported-version behavior are exercised. Active native execution keeps running with no extra input/writer/interruption. Old hosts receive no unsupported request. Owned staging is removed on success/failure/cancel/timeout/late-create/close; missing artifacts are not re-exported automatically. Real browser download of the native file is proven against an active official OMP turn.",
-  "status": "acceptance_passed",
+  "status": "draft",
   "branch": "pr612-split-task27-omp-native-export",
   "base_branch": "pr612-split-task27-integration",
   "base": "3b5285fa",
@@ -36,8 +36,8 @@
   },
   "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-native-export",
-  "commit": null,
-  "pr_url": null,
+  "commit": "7f78d9f7487160a13d8c74f86ddc06520ffde42d",
+  "pr_url": "https://github.com/ait-app/ait/pull/663",
   "updated_at": "2026-11-11",
   "interface_changes": [
     {
