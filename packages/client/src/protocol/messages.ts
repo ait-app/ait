@@ -151,6 +151,7 @@ export function serverInfo(
       checkoutForgeSetAutoMerge: has("checkout.forge.set_auto_merge.request"),
       checkoutRefresh: has("checkout.refresh.request"),
       providerUsageList: has("provider.usage.list.request"),
+      providerUsageLedger: has("provider.usage.ledger.request"),
       agentHistorySearch: has("agent.history.get.request"),
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),

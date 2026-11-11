@@ -247,8 +247,9 @@ pub(crate) enum UsageGroup {
     Day,
 }
 
-/// Time range and grouping of a ledger summary.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Time range and grouping of a ledger summary; the `provider.usage.ledger` request.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct UsageQuery {
     /// Inclusive range start in Unix milliseconds (UTC).
     pub(crate) from: i64,
@@ -259,22 +260,31 @@ pub(crate) struct UsageQuery {
 }
 
 /// Group identity of one summary row; only the queried dimensions are set.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+///
+/// On the wire, dimensions that were not queried are omitted rather than sent as `null`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct UsageKey {
     /// Provider identity.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) provider: Option<String>,
     /// Attributed model.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,
     /// Call source.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source: Option<CallSource>,
     /// Call outcome.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) outcome: Option<CallOutcome>,
     /// UTC calendar day as `YYYY-MM-DD`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) day: Option<String>,
 }
 
 /// Totals of one summary group.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct UsageRow {
     /// Group identity.
     pub(crate) key: UsageKey,
@@ -302,8 +312,9 @@ pub(crate) struct UsageRow {
     pub(crate) missing_calls: u64,
 }
 
-/// Grouped ledger totals for one query.
-#[derive(Debug, Clone, PartialEq)]
+/// Grouped ledger totals for one query; the `provider.usage.ledger` response.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct UsageSummary {
     /// One row per group.
     pub(crate) rows: Vec<UsageRow>,
@@ -350,13 +361,6 @@ pub(crate) trait UsageLedger: Debug + Send + Sync {
     /// Summarize the calls and requests within the query range.
     /// # Errors
     /// Returns unavailable without a ledger, or a failed storage read.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the provider.usage.ledger RPC of ADR-246 (Task 7) reads summaries"
-        )
-    )]
     async fn summarize(&self, query: UsageQuery) -> Result<UsageSummary, UsageLedgerError>;
 }
 

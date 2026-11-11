@@ -112,6 +112,8 @@ import type {
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
+  ProviderUsageLedgerResponseMessage,
+  UsageLedgerGroup,
   DaemonGetStatusResponse,
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
@@ -501,6 +503,7 @@ type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
+type ProviderUsageLedgerPayload = ProviderUsageLedgerResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -5413,6 +5416,27 @@ export class DaemonClient {
         ...(options?.agentId ? { agentId: options.agentId } : {}),
         ...(options?.providerId ? { providerId: options.providerId } : {}),
         ...(options?.forceRefresh ? { forceRefresh: true } : {}),
+      },
+    });
+  }
+
+  /**
+   * Summarize this host's harness usage ledger over `[from, to)` (Unix ms, UTC), grouped by
+   * `groupBy`. Requires `features.providerUsageLedger`.
+   */
+  async listUsageLedger(options: {
+    from: number;
+    to: number;
+    groupBy: UsageLedgerGroup[];
+    requestId?: string;
+  }): Promise<ProviderUsageLedgerPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "provider.usage.ledger.request",
+        from: options.from,
+        to: options.to,
+        groupBy: options.groupBy,
       },
     });
   }

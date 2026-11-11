@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::local::codex::CodexClient;
 use crate::ports::agent_session::AgentSessionSpec;
+use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use crate::service::agent_manager::AgentManager;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
@@ -71,6 +72,16 @@ pub(crate) fn worker_with_client(
     creations: model::creation::Creations,
     client: Box<dyn crate::ports::agent_session::AgentClient>,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
+    worker_with_ledger(fixture, creations, client, Arc::new(NoopUsageLedger))
+}
+
+/// [`worker_with_client`] whose Agent manager records provider calls in `ledger`.
+pub(crate) fn worker_with_ledger(
+    fixture: &Fixture,
+    creations: model::creation::Creations,
+    client: Box<dyn crate::ports::agent_session::AgentClient>,
+    ledger: Arc<dyn UsageLedger>,
+) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));
     registry.initialize().unwrap();
     let projects = FileBackedProjectRegistry::new(fixture.root.path().join("projects.json"));
@@ -94,6 +105,7 @@ pub(crate) fn worker_with_client(
         .unwrap();
     let mut manager = AgentManager::new(Box::new(registry.clone()))
         .with_creations(creations)
+        .with_usage_ledger(ledger)
         .with_timeline(
             crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
                 .unwrap(),

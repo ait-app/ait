@@ -11,11 +11,24 @@ use domain::agent_runtime::{
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::ports::usage_ledger::{
     CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, RequestUsage, UsageLedger,
+    UsageLedgerError, UsageQuery, UsageSummary,
 };
 use crate::support::time::now_unix_ms;
 
 /// Label that a schedule puts on every Agent it creates.
 const SCHEDULE_LABEL: &str = "paseo.schedule-id";
+
+impl super::AgentManager {
+    /// Summarize this host's ledger for `query`.
+    /// # Errors
+    /// Returns unavailable when the host has no ledger, or a failed storage read.
+    pub(crate) async fn usage_ledger_summary(
+        &self,
+        query: UsageQuery,
+    ) -> Result<UsageSummary, UsageLedgerError> {
+        self.usage_ledger.summarize(query).await
+    }
+}
 
 /// One Agent's handle on the host ledger and the provider call that is open for its turn.
 #[derive(Debug)]

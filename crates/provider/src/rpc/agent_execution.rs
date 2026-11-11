@@ -111,6 +111,7 @@ impl ExecutionState {
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
             Operation::Usage => self.usage(params).await,
+            Operation::UsageLedger => self.usage_ledger(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,

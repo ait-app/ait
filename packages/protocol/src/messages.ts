@@ -1760,6 +1760,18 @@ export const ProviderUsageListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const UsageLedgerGroupSchema = z.enum(["provider", "model", "source", "outcome", "day"]);
+
+// `from` is inclusive and `to` exclusive, both Unix ms (UTC). The host rejects an empty or
+// inverted range, a range above 400 days and repeated groups.
+export const ProviderUsageLedgerRequestMessageSchema = z.object({
+  type: z.literal("provider.usage.ledger.request"),
+  from: z.number().int(),
+  to: z.number().int(),
+  groupBy: z.array(UsageLedgerGroupSchema).min(1),
+  requestId: z.string(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("agent.resume.request"),
   handle: AgentPersistenceHandleSchema,
@@ -3167,6 +3179,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
+  ProviderUsageLedgerRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -3556,6 +3569,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceFileEditing: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
+        // COMPAT(providerUsageLedger): added in v0.2.8, remove gate after 2027-02-11.
+        providerUsageLedger: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
         // COMPAT(agentThinkingUpdate): added in v0.2.4, remove gate after 2027-01-28.
@@ -6304,6 +6319,41 @@ export const ProviderUsageListResponseMessageSchema = z.object({
   }),
 });
 
+// Only grouped dimensions are present. `source` and `outcome` stay open strings so a newer host
+// can add values without failing older clients.
+export const UsageLedgerKeySchema = z.object({
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  source: z.string().optional(),
+  outcome: z.string().optional(),
+  day: z.string().optional(),
+});
+
+export const UsageLedgerRowSchema = z.object({
+  key: UsageLedgerKeySchema,
+  calls: z.number().int().nonnegative(),
+  failedCalls: z.number().int().nonnegative(),
+  requests: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cacheWriteTokens: z.number().int().nonnegative(),
+  reportedCostUsd: z.number().nonnegative(),
+  costReportedRequests: z.number().int().nonnegative(),
+  lowerBoundCalls: z.number().int().nonnegative(),
+  missingCalls: z.number().int().nonnegative(),
+});
+
+// `since` is when this host's ledger started (Unix ms); no earlier history exists.
+export const ProviderUsageLedgerResponseMessageSchema = z.object({
+  type: z.literal("provider.usage.ledger.response"),
+  payload: z.object({
+    requestId: z.string(),
+    rows: z.array(UsageLedgerRowSchema),
+    since: z.number().int(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -6718,6 +6768,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
+  ProviderUsageLedgerResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -6903,6 +6954,10 @@ export type ProviderUsageBalance = z.infer<typeof ProviderUsageBalanceSchema>;
 export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
 export type ProviderUsageListResponseMessage = z.infer<
   typeof ProviderUsageListResponseMessageSchema
+>;
+export type UsageLedgerGroup = z.infer<typeof UsageLedgerGroupSchema>;
+export type ProviderUsageLedgerResponseMessage = z.infer<
+  typeof ProviderUsageLedgerResponseMessageSchema
 >;
 export type ScheduleCreateResponse = z.infer<typeof ScheduleCreateResponseSchema>;
 export type ScheduleListResponse = z.infer<typeof ScheduleListResponseSchema>;

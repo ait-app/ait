@@ -49,3 +49,13 @@ fn child_and_plugin_operations_use_their_own_identity_fields() {
     assert_eq!(Operation::Snapshot.access(), Access::Catalog);
     assert_eq!(Operation::Archive.access(), Access::Mutation);
 }
+
+#[test]
+fn ledger_summaries_are_host_reads_without_an_agent_target() {
+    assert_eq!(
+        Operation::parse("provider.usage.ledger.request"),
+        Ok(Operation::UsageLedger)
+    );
+    assert_eq!(Operation::UsageLedger.access(), Access::Read);
+    assert_eq!(Operation::UsageLedger.target(), None);
+}

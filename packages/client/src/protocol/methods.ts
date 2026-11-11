@@ -598,6 +598,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.usage.list.response",
   },
+  "provider.usage.ledger.request": {
+    method: "provider.usage.ledger.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.usage.ledger.response",
+  },
   "provider.sessions.recent.list.request": {
     method: "provider.sessions.recent.list.request",
     kind: "request",
