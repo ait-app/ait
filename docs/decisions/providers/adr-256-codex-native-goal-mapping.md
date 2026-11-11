@@ -44,7 +44,7 @@ ADR-177 假设 Codex 的继续执行始终由宿主仲裁：重启后向持久 F
 
 4. **错误按精确消息分类。** 实测 goal 错误是 `-32600` 加固定文本，从不是 `-32601`：
    `goals feature is disabled` 表示能力缺失；`no goal exists`、`ephemeral thread does not
-   support goals`、`invalid thread id` 是各自独立的事实，不得合并为一个拒绝。传输失败或
+support goals`、`invalid thread id` 是各自独立的事实，不得合并为一个拒绝。传输失败或
    超时是对账中最不确定的一类，绝不当作“目标已清除”。
 
 5. **只读探测是创建前的前提。** `goal_read()` 走一次 `thread/goal/get`，`Ok(None)` 才证明
