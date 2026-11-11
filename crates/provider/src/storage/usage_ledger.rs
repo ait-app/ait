@@ -3,6 +3,10 @@
 //! One writer thread owns the connection. Writes and summaries share one bounded queue, so a
 //! summary observes every write queued before it, and a full queue drops writes instead of
 //! delaying a turn.
+//!
+//! `daily_usage` keeps every counter per UTC day indefinitely; `calls` and `requests` keep the
+//! details for 90 days. The rollup has no outcome dimension, so summaries grouped by outcome
+//! cover only the 90-day retention window.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,6 +33,8 @@ const FILE: &str = "agents/usage.sqlite3";
 const QUEUE_CAPACITY: usize = 1024;
 /// One UTC day in milliseconds.
 const DAY_MS: i64 = 86_400_000;
+/// Latest summary bound, 9999-12-31T00:00:00Z: the last day SQLite `date()` can name.
+const LATEST_MS: i64 = 253_402_214_400_000;
 /// How long `calls` and `requests` are kept; `daily_usage` is kept indefinitely.
 const RETENTION_MS: i64 = 90 * DAY_MS;
 
@@ -78,17 +84,22 @@ CREATE TABLE daily_usage (
     output INTEGER NOT NULL DEFAULT 0, cache_read INTEGER NOT NULL DEFAULT 0,
     cache_write INTEGER NOT NULL DEFAULT 0, cost_usd_reported REAL NOT NULL DEFAULT 0,
     cost_reported_requests INTEGER NOT NULL DEFAULT 0,
-    lower_bound_calls INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day, provider, model, source)
+    lower_bound_calls INTEGER NOT NULL DEFAULT 0, missing_calls INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(day, provider, model, source)
 ) STRICT;
 ";
 
+/// Insert a running call; a repeated `call_id` changes nothing.
 const INSERT_CALL: &str = "INSERT INTO calls(call_id, agent_id, provider, model, source, outcome,
     started_at, workspace_id) VALUES(?1, ?2, ?3, ?4, ?5, 'running', ?6, ?7)
     ON CONFLICT(call_id) DO NOTHING";
+/// Count a new call on the rollup row of its start day, provider, model or `''`, and source.
 const ROLLUP_CALL: &str = "INSERT INTO daily_usage(day, provider, model, source, calls)
     VALUES(date(?1 / 1000, 'unixepoch'), ?2, ?3, ?4, 1)
     ON CONFLICT(day, provider, model, source) DO UPDATE SET calls = calls + 1";
+/// Whether the call a request names was begun.
 const CALL_EXISTS: &str = "SELECT EXISTS(SELECT 1 FROM calls WHERE call_id = ?1)";
+/// Insert a request; a repeated `(agent_id, segment_id)` changes nothing.
 const INSERT_REQUEST: &str = "INSERT INTO requests(agent_id, segment_id, call_id, parent, model,
     boundary, input, output, cache_read, cache_write, cache_write_1h, reasoning,
     cost_usd_reported, complete, recorded_at)
@@ -106,27 +117,36 @@ const ROLLUP_REQUEST: &str = "INSERT INTO daily_usage(day, provider, model, sour
         cache_write = cache_write + excluded.cache_write,
         cost_usd_reported = cost_usd_reported + excluded.cost_usd_reported,
         cost_reported_requests = cost_reported_requests + excluded.cost_reported_requests";
+/// Requests of a call, and how many of them have a complete request boundary.
 const REQUEST_COVERAGE: &str = "SELECT count(*),
     count(*) FILTER (WHERE boundary = 'request' AND complete = 1)
     FROM requests WHERE call_id = ?1";
+/// Finish a call that is still running; a finished or unknown call changes nothing.
 const FINISH_CALL: &str = "UPDATE calls SET outcome = ?2, ended_at = ?3, usage_status = ?4
     WHERE call_id = ?1 AND outcome = 'running'";
-/// Counts a finished call on the rollup row its start was counted on.
+/// Count a finished call's failure and status on the rollup row its start was counted on.
 const ROLLUP_FINISH: &str = "INSERT INTO daily_usage(day, provider, model, source, failed_calls,
-    lower_bound_calls)
-    SELECT date(started_at / 1000, 'unixepoch'), provider, coalesce(model, ''), source, ?2, ?3
+    lower_bound_calls, missing_calls)
+    SELECT date(started_at / 1000, 'unixepoch'), provider, coalesce(model, ''), source,
+        ?2, ?3, ?4
     FROM calls WHERE call_id = ?1
     ON CONFLICT(day, provider, model, source) DO UPDATE SET
         failed_calls = failed_calls + excluded.failed_calls,
-        lower_bound_calls = lower_bound_calls + excluded.lower_bound_calls";
+        lower_bound_calls = lower_bound_calls + excluded.lower_bound_calls,
+        missing_calls = missing_calls + excluded.missing_calls";
+/// Count the status that [`INTERRUPT_RUNNING`] gives each running call on its start-day row.
 const ROLLUP_INTERRUPTED: &str = "INSERT INTO daily_usage(day, provider, model, source,
-    lower_bound_calls)
-    SELECT date(started_at / 1000, 'unixepoch'), provider, coalesce(model, ''), source, count(*)
+    lower_bound_calls, missing_calls)
+    SELECT date(started_at / 1000, 'unixepoch'), provider, coalesce(model, ''), source,
+        count(*) FILTER (WHERE EXISTS(
+            SELECT 1 FROM requests WHERE requests.call_id = calls.call_id)),
+        count(*) FILTER (WHERE NOT EXISTS(
+            SELECT 1 FROM requests WHERE requests.call_id = calls.call_id))
     FROM calls WHERE outcome = 'running'
-        AND EXISTS(SELECT 1 FROM requests WHERE requests.call_id = calls.call_id)
     GROUP BY 1, 2, 3, 4
     ON CONFLICT(day, provider, model, source) DO UPDATE SET
-        lower_bound_calls = lower_bound_calls + excluded.lower_bound_calls";
+        lower_bound_calls = lower_bound_calls + excluded.lower_bound_calls,
+        missing_calls = missing_calls + excluded.missing_calls";
 /// An interrupted call may have lost in-flight requests, so it is never exact.
 const INTERRUPT_RUNNING: &str = "UPDATE calls SET outcome = 'interrupted', ended_at = ?1,
     usage_status = CASE WHEN EXISTS(SELECT 1 FROM requests WHERE requests.call_id = calls.call_id)
@@ -135,6 +155,7 @@ const INTERRUPT_RUNNING: &str = "UPDATE calls SET outcome = 'interrupted', ended
 /// Requests leave together with their call, so no request outlives the call it is attributed to.
 const PRUNE_REQUESTS: &str =
     "DELETE FROM requests WHERE call_id IN (SELECT call_id FROM calls WHERE started_at < ?1)";
+/// Delete calls started before the retention cutoff.
 const PRUNE_CALLS: &str = "DELETE FROM calls WHERE started_at < ?1";
 
 /// Summary rows from the detail tables for `[?1, ?2)`. Every summary query returns the columns
@@ -150,36 +171,39 @@ SELECT date(r.recorded_at / 1000, 'unixepoch'), c.provider, coalesce(r.model, c.
     sum(r.cache_write), total(r.cost_usd_reported), count(r.cost_usd_reported), 0, 0
 FROM requests r JOIN calls c ON c.call_id = r.call_id
 WHERE r.recorded_at >= ?1 AND r.recorded_at < ?2 GROUP BY 1, 2, 3, 4, 5";
-/// Summary rows for the whole UTC days in `[?1, ?2)`: the rollup, plus missing calls, which the
-/// rollup does not count and the detail tables keep for the retention period.
+/// Summary rows from the rollup for the whole UTC days in `[?1, ?2)`, without an outcome.
 const WHOLE_DAY_SUMMARY: &str = "
 SELECT day, provider, model, source, NULL, calls, failed_calls, requests, input, output,
-    cache_read, cache_write, cost_usd_reported, cost_reported_requests, lower_bound_calls, 0
+    cache_read, cache_write, cost_usd_reported, cost_reported_requests, lower_bound_calls,
+    missing_calls
 FROM daily_usage
-WHERE day >= date(?1 / 1000, 'unixepoch') AND day < date(?2 / 1000, 'unixepoch')
-UNION ALL
-SELECT date(started_at / 1000, 'unixepoch'), provider, coalesce(model, ''), source, NULL,
-    0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0, count(*)
-FROM calls WHERE usage_status = 'missing' AND started_at >= ?1 AND started_at < ?2
-GROUP BY 1, 2, 3, 4";
+WHERE day >= date(?1 / 1000, 'unixepoch') AND day < date(?2 / 1000, 'unixepoch')";
 
 /// Work for the writer thread, in queue order.
 enum Command {
+    /// Record the start of a call.
     Begin(CallBegin),
+    /// Record one request; boxed to keep queue slots small.
     Request(Box<RequestRecord>),
+    /// Record the terminal state of a call.
     Finish(CallFinish),
+    /// Mark running calls interrupted as of this Unix time in milliseconds.
     Recover(i64),
+    /// Answer a query after every earlier command, replying on the sender.
     Summarize(
         UsageQuery,
         oneshot::Sender<Result<UsageSummary, UsageLedgerError>>,
     ),
+    /// Stop the writer after every earlier command.
     Close,
 }
 
 /// SQLite usage ledger at `agents/usage.sqlite3`, written by one dedicated thread.
 #[derive(Debug)]
 pub(crate) struct SqliteUsageLedger {
+    /// Bounded queue to the writer thread.
     sender: SyncSender<Command>,
+    /// Writer thread until [`Self::close`] joins it.
     writer: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -305,8 +329,11 @@ impl UsageLedger for SqliteUsageLedger {
 
 /// State owned by the writer thread.
 struct Writer {
+    /// The ledger connection; no other thread touches it.
     connection: Connection,
+    /// Current Unix time in milliseconds (UTC).
     clock: Box<dyn Fn() -> i64 + Send>,
+    /// Ledger start in Unix milliseconds, reported with every summary.
     since: i64,
     /// Earliest time of the next pruning pass.
     next_prune: i64,
@@ -444,7 +471,7 @@ fn record_request(transaction: &Transaction<'_>, request: &RequestRecord) -> rus
     Ok(())
 }
 
-/// Finish a running call with its derived [`UsageStatus`] and count failures and lower bounds.
+/// Finish a running call with its derived [`UsageStatus`] and roll up its failure and status.
 fn finish_call(transaction: &Transaction<'_>, finish: &CallFinish) -> rusqlite::Result<()> {
     if finish.outcome == CallOutcome::Running {
         tracing::warn!("usage ledger ignored a call finished as running");
@@ -467,11 +494,13 @@ fn finish_call(transaction: &Transaction<'_>, finish: &CallFinish) -> rusqlite::
     }
     let failed = finish.outcome == CallOutcome::Failed;
     let lower_bound = status == UsageStatus::LowerBound;
-    if failed || lower_bound {
+    let missing = status == UsageStatus::Missing;
+    if failed || lower_bound || missing {
         transaction.prepare_cached(ROLLUP_FINISH)?.execute(params![
             finish.call_id,
             failed,
             lower_bound,
+            missing,
         ])?;
     }
     Ok(())
@@ -502,6 +531,8 @@ fn recover_interrupted(transaction: &Transaction<'_>, ended_at: i64) -> rusqlite
 }
 
 /// Answer `query`, logging storage failures without their details.
+///
+/// Grouping by outcome reads only the detail tables, so it covers the 90-day retention window.
 fn summarize(
     connection: &Connection,
     query: &UsageQuery,
@@ -517,23 +548,31 @@ fn summarize(
 
 /// Group the range: whole UTC days from the rollup, partial days from the detail tables.
 ///
-/// The rollup has no outcome, so grouping by outcome reads only the detail tables and covers
-/// the 90-day retention period.
+/// Any `i64` range is accepted: it is clamped to `[1970-01-01, 9999-12-31]`, which holds every
+/// ledger timestamp and keeps day alignment from overflowing. An empty or inverted range yields
+/// no groups.
 fn summary_rows(connection: &Connection, query: &UsageQuery) -> rusqlite::Result<Vec<UsageRow>> {
-    let whole_start = query.from.saturating_add(DAY_MS - 1).div_euclid(DAY_MS) * DAY_MS;
-    let whole_end = query.to.div_euclid(DAY_MS) * DAY_MS;
+    let from = query.from.clamp(0, LATEST_MS);
+    let to = query.to.clamp(0, LATEST_MS);
+    let whole_start = (from + DAY_MS - 1) / DAY_MS * DAY_MS;
+    let whole_end = to / DAY_MS * DAY_MS;
     let group_by = &query.group_by;
     let mut groups = HashMap::<UsageKey, UsageRow>::new();
     if whole_start < whole_end && !group_by.contains(&UsageGroup::Outcome) {
-        let head = (query.from, whole_start);
+        let head = (from, whole_start);
         accumulate(connection, DETAIL_SUMMARY, head, group_by, &mut groups)?;
         let whole = (whole_start, whole_end);
         accumulate(connection, WHOLE_DAY_SUMMARY, whole, group_by, &mut groups)?;
-        let tail = (whole_end, query.to);
+        let tail = (whole_end, to);
         accumulate(connection, DETAIL_SUMMARY, tail, group_by, &mut groups)?;
     } else {
-        let range = (query.from, query.to);
-        accumulate(connection, DETAIL_SUMMARY, range, group_by, &mut groups)?;
+        accumulate(
+            connection,
+            DETAIL_SUMMARY,
+            (from, to),
+            group_by,
+            &mut groups,
+        )?;
     }
     let mut rows: Vec<UsageRow> = groups
         .into_iter()

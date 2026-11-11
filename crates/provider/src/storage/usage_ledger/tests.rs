@@ -4,19 +4,25 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use super::*;
 use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
+/// One hour in milliseconds.
 const HOUR: i64 = 3_600_000;
 /// 2025-11-08T00:00:00Z.
 const DAY_ONE: i64 = 20_400 * DAY_MS;
+/// 2025-11-09T00:00:00Z.
 const DAY_TWO: i64 = DAY_ONE + DAY_MS;
+/// 2025-11-10T00:00:00Z.
 const DAY_THREE: i64 = DAY_TWO + DAY_MS;
 
 /// Ledger under a temporary data directory with a test-controlled clock.
 struct Fixture {
+    /// Host data directory that holds `agents/usage.sqlite3`.
     directory: tempfile::TempDir,
+    /// Current Unix time in milliseconds seen by the ledger's clock.
     now: Arc<AtomicI64>,
 }
 
 impl Fixture {
+    /// Empty data directory with the clock at `now`.
     fn new(now: i64) -> Self {
         Self {
             directory: tempfile::tempdir().unwrap(),
@@ -24,6 +30,7 @@ impl Fixture {
         }
     }
 
+    /// Open the ledger with the fixture clock.
     fn open(&self) -> SqliteUsageLedger {
         let now = self.now.clone();
         SqliteUsageLedger::open_with_clock(self.directory.path(), move || {
@@ -32,6 +39,7 @@ impl Fixture {
         .unwrap()
     }
 
+    /// Move the ledger's clock to `now`.
     fn set_now(&self, now: i64) {
         self.now.store(now, Ordering::SeqCst);
     }
@@ -42,6 +50,7 @@ impl Fixture {
     }
 }
 
+/// User call of `agent-1` without a workspace.
 fn call(call_id: &str, provider: &str, model: Option<&str>, started_at: i64) -> CallBegin {
     CallBegin {
         call_id: call_id.into(),
@@ -54,6 +63,7 @@ fn call(call_id: &str, provider: &str, model: Option<&str>, started_at: i64) -> 
     }
 }
 
+/// Complete request-boundary usage of `agent-1` with a reported cost of 0.25 USD.
 fn request(call_id: &str, segment_id: &str, recorded_at: i64) -> RequestRecord {
     RequestRecord {
         call_id: call_id.into(),
@@ -76,6 +86,7 @@ fn request(call_id: &str, segment_id: &str, recorded_at: i64) -> RequestRecord {
     }
 }
 
+/// Terminal state of a call whose provider reports token usage.
 fn finish(call_id: &str, outcome: CallOutcome, ended_at: i64) -> CallFinish {
     CallFinish {
         call_id: call_id.into(),
@@ -85,6 +96,7 @@ fn finish(call_id: &str, outcome: CallOutcome, ended_at: i64) -> CallFinish {
     }
 }
 
+/// Rows of a summary over `[from, to)`.
 async fn summary(
     ledger: &SqliteUsageLedger,
     (from, to): (i64, i64),
@@ -101,6 +113,7 @@ async fn summary(
         .rows
 }
 
+/// `(call_id, outcome, usage_status)` of every call, ordered by `call_id`.
 fn statuses(connection: &Connection) -> Vec<(String, String, Option<String>)> {
     connection
         .prepare("SELECT call_id, outcome, usage_status FROM calls ORDER BY call_id")
@@ -111,6 +124,7 @@ fn statuses(connection: &Connection) -> Vec<(String, String, Option<String>)> {
         .unwrap()
 }
 
+/// A replayed segment is stored and summed once per Agent.
 #[tokio::test]
 async fn replayed_requests_are_counted_once() {
     let fixture = Fixture::new(DAY_ONE + 12 * HOUR);
@@ -145,6 +159,7 @@ async fn replayed_requests_are_counted_once() {
     assert_eq!(detail, [expected]);
 }
 
+/// Ignored and dropped requests leave the rollup unchanged.
 #[test]
 fn rollup_changes_only_when_a_request_row_is_inserted() {
     let fixture = Fixture::new(DAY_ONE);
@@ -189,6 +204,7 @@ fn rollup_changes_only_when_a_request_row_is_inserted() {
     assert_eq!(requests, 1);
 }
 
+/// Finish derives exact, lower-bound and missing statuses and rolls them up.
 #[tokio::test]
 async fn usage_status_requires_complete_request_boundaries() {
     let fixture = Fixture::new(DAY_ONE);
@@ -268,6 +284,7 @@ async fn usage_status_requires_complete_request_boundaries() {
     );
 }
 
+/// Recovery interrupts running calls and leaves finished calls alone.
 #[tokio::test]
 async fn recovery_interrupts_only_running_calls() {
     let fixture = Fixture::new(DAY_ONE);
@@ -323,6 +340,7 @@ async fn recovery_interrupts_only_running_calls() {
     assert_eq!(ended, [Some(at), Some(at + HOUR), Some(at + HOUR)]);
 }
 
+/// Pruning runs at most daily and never removes rollup rows.
 #[tokio::test]
 async fn pruning_runs_daily_and_keeps_the_rollup() {
     let now = DAY_THREE + 100 * DAY_MS;
@@ -359,12 +377,18 @@ async fn pruning_runs_daily_and_keeps_the_rollup() {
     assert_eq!(calls, ["next", "recent"]);
 }
 
+/// Opening prunes expired details while the rollup keeps their counts.
 #[tokio::test]
-async fn opening_prunes_expired_details() {
+async fn opening_prunes_expired_details_and_keeps_rolled_up_statuses() {
     let fixture = Fixture::new(DAY_ONE);
     let ledger = fixture.open();
-    ledger.begin_call(call("call-1", "claude", None, DAY_ONE));
+    for call_id in ["call-1", "silent", "orphan"] {
+        ledger.begin_call(call(call_id, "claude", None, DAY_ONE));
+    }
     ledger.record_request(request("call-1", "call-1:1", DAY_ONE));
+    ledger.finish_call(finish("call-1", CallOutcome::Completed, DAY_ONE));
+    ledger.finish_call(finish("silent", CallOutcome::Completed, DAY_ONE));
+    ledger.recover_interrupted(DAY_ONE + HOUR);
     ledger.close();
     fixture.set_now(DAY_ONE + RETENTION_MS + 1);
 
@@ -373,7 +397,10 @@ async fn opening_prunes_expired_details() {
     let rollup = summary(&reopened, (DAY_ONE, DAY_TWO), &[]).await;
 
     assert!(details.is_empty());
-    assert_eq!((rollup[0].calls, rollup[0].requests), (1, 1));
+    assert_eq!(
+        (rollup[0].calls, rollup[0].requests, rollup[0].missing_calls),
+        (3, 1, 2)
+    );
     reopened.close();
     let requests: u64 = fixture
         .inspect()
@@ -382,6 +409,7 @@ async fn opening_prunes_expired_details() {
     assert_eq!(requests, 0);
 }
 
+/// Whole days come from the rollup and partial days from the details, consistently.
 #[tokio::test]
 async fn summaries_split_whole_days_from_partial_days() {
     let fixture = Fixture::new(DAY_ONE);
@@ -469,6 +497,7 @@ async fn summaries_split_whole_days_from_partial_days() {
     assert_eq!(rollup, detail);
 }
 
+/// Summaries carry the first-open time and become unavailable after close.
 #[tokio::test]
 async fn summaries_report_the_ledger_start_and_stop_after_close() {
     let fixture = Fixture::new(DAY_ONE);
@@ -499,6 +528,32 @@ async fn summaries_report_the_ledger_start_and_stop_after_close() {
     assert_eq!(closed, Err(UsageLedgerError::Unavailable));
 }
 
+/// Extreme and inverted ranges are answered and the writer keeps running.
+#[tokio::test]
+async fn extreme_ranges_are_summarized_without_stopping_the_writer() {
+    let fixture = Fixture::new(DAY_ONE);
+    let ledger = fixture.open();
+    ledger.begin_call(call("before", "claude", None, DAY_ONE + HOUR));
+
+    let lowest = summary(&ledger, (i64::MIN, i64::MIN + 1), &[UsageGroup::Day]).await;
+    let highest = summary(&ledger, (i64::MAX - 1, i64::MAX), &[]).await;
+    let everything = summary(&ledger, (i64::MIN, i64::MAX), &[UsageGroup::Day]).await;
+    let inverted = summary(&ledger, (DAY_TWO, DAY_ONE), &[UsageGroup::Day]).await;
+    ledger.begin_call(call("after", "claude", None, DAY_ONE));
+    let after = summary(&ledger, (DAY_ONE, DAY_TWO), &[]).await;
+
+    assert!(lowest.is_empty());
+    assert_eq!(highest, [UsageRow::default()]);
+    let days: Vec<_> = everything
+        .iter()
+        .map(|row| (row.key.day.as_deref(), row.calls))
+        .collect();
+    assert_eq!(days, [(Some("2025-11-08"), 1)]);
+    assert!(inverted.is_empty());
+    assert_eq!(after[0].calls, 2);
+}
+
+/// Foreign, newer and corrupt files are refused and left untouched.
 #[test]
 fn refuses_foreign_or_corrupt_files_without_rewriting_them() {
     for schema in [
