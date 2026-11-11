@@ -210,6 +210,18 @@
       {
         "command": "Final targeted battery after clippy refactors",
         "result": "PASS: observed_settings 8/8, configuration 7/7, service::agent_manager 149, capabilities 4/4. Installed official-OMP smoke PASS (omp/18.17.0, no inference, user files byte-identical)."
+      },
+      {
+        "command": "Authoritative check-selection (node scripts/verify.mjs --plan) reconciliation: committed branch vs origin/main selects workspace-wide Rust (trigger = task01 Cargo.toml/Cargo.lock/bins/omp-acp dep base, not task05 source).",
+        "result": "cargo fmt --all --check PASS; cargo test --doc -p provider PASS; mobile src/i18n/resources.test.ts PASS 41/41 (9 locale additions). Workspace clippy --locked --workspace --all-targets -D warnings running to confirm no cross-crate impact from AgentTurnEvent port addition."
+      },
+      {
+        "command": "cargo clippy --locked --workspace --all-targets -- -D warnings (mapper-selected workspace gate)",
+        "result": "Blocked by PRE-EXISTING filesystem crate deprecation (workspace_runtime.rs:154 fetch_update under host Rust 1.99.1; CI uses 1.98.1). Confirmed present on task01 base 22efa58f and NOT in task05 diff — out of task05 scope, not fixed here. task05 crates clippy clean: cargo clippy -p provider --lib --no-deps PASS. cargo fmt --all --check PASS."
+      },
+      {
+        "command": "cargo nextest (mapper-selected) — nextest NOT installed on host",
+        "result": "Equivalent targeted cargo test --locked -p provider --lib running (full provider lib suite). ait-omp-acp/daemon are task01 dep-base packages, unchanged by task05."
       }
     ]
   },
