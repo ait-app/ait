@@ -1,14 +1,19 @@
-//! Runtime entry points for adapter crates' tests, compiled only with the `test-support` feature.
+//! Runtime entry points for the tests of adapter crates and `provider-builtin`, compiled only
+//! with the `test-support` feature.
 //!
 //! Production dependents never enable the feature, and the dependency guard rejects non-dev
 //! edges that do. Each item delegates to a crate-private runtime operation, so testing an
-//! adapter from its own crate does not widen the runtime's production API.
+//! adapter or the built-in assembly from its own crate does not widen the runtime's production
+//! API.
+
+use std::sync::Arc;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use model::ErrorCode;
 use model::events::EventHub;
 use serde_json::Value;
 
+use crate::composition::Providers;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::storage::timeline::Timeline;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
@@ -27,6 +32,14 @@ impl Manager {
     #[must_use]
     pub const fn new(manager: AgentManager) -> Self {
         Self(manager)
+    }
+
+    /// Check that `provider` names a registered adapter.
+    ///
+    /// # Errors
+    /// Returns `ProviderUnavailable` when no adapter is registered under `provider`.
+    pub fn validate_provider(&self, provider: &str) -> Result<(), AgentManagerError> {
+        self.0.validate_provider(provider)
     }
 
     /// Register one native adapter under its provider identity.
@@ -110,6 +123,18 @@ impl Manager {
     pub fn control_snapshot(&self, record: &PersistedAgentRuntimeRecord, snapshot: &mut Value) {
         self.0.control_snapshot(record, snapshot);
     }
+}
+
+/// Adapters in `providers`, in assembly order.
+#[must_use]
+pub fn clients(providers: &Providers) -> &[Box<dyn AgentClient>] {
+    &providers.clients
+}
+
+/// The adapters of `providers` that implement structured auxiliary generation.
+#[must_use]
+pub fn summary_clients(providers: &Providers) -> &[Arc<dyn AgentClient>] {
+    &providers.summary_clients
 }
 
 /// Open an empty in-memory display timeline.

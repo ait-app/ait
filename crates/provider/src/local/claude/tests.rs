@@ -32,3 +32,21 @@ pub(super) fn fixture() -> (tempfile::TempDir, ClaudeClient, AgentSessionSpec) {
     let spec = spec(root.path());
     (root, client, spec)
 }
+
+#[tokio::test]
+async fn uninstalled_adapter_still_imports_sessions_and_hosts_bot_sessions_natively() {
+    let root = tempfile::tempdir().unwrap();
+    let client = ClaudeClient::new(root.path().join("missing-provider"));
+
+    assert!(!client.is_available().await.unwrap());
+    assert!(client.supports_session_import());
+    assert_eq!(
+        client.bot_session_support(),
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("default"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
+    );
+}

@@ -1481,3 +1481,12 @@ mod startup;
 
 #[cfg(unix)]
 mod subagents;
+
+#[tokio::test]
+async fn uninstalled_adapter_still_imports_sessions() {
+    let root = tempfile::tempdir().unwrap();
+    let client = OpenCodeClient::new(root.path().join("missing-provider"));
+
+    assert!(!client.is_available().await.unwrap());
+    assert!(client.supports_session_import());
+}

@@ -24,7 +24,7 @@ use metadata as _;
 use model as _;
 use persistence as _;
 use provider as _;
-use provider_omp as _;
+use provider_builtin as _;
 use reqwest as _;
 use ring as _;
 #[cfg(unix)]
@@ -147,7 +147,6 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "provider",
             "provider-core",
             "provider-builtin",
-            "provider-omp",
             "api",
             "terminal",
             "domain",
@@ -379,6 +378,15 @@ fn provider_runtime_cannot_depend_on_its_omp_adapter_or_the_daemon() {
         ];
         assert_eq!(violations(&packages), [format!("{name} -> {dependency}")]);
     }
+}
+
+#[test]
+fn daemon_reaches_adapters_only_through_the_built_in_assembly() {
+    let packages = [json!({"id":"daemon", "name":"daemon", "dependencies":[
+        {"name":"provider-builtin", "path":"../provider-builtin"},
+        {"name":"provider-omp", "path":"../provider-omp"}
+    ]})];
+    assert_eq!(violations(&packages), ["daemon -> provider-omp"]);
 }
 
 #[test]

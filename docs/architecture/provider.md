@@ -11,17 +11,22 @@
   （[ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
   [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
-- `provider::Providers` 装配 `provider` 内的 adapter：Codex、Claude Code、Antigravity、OpenCode、
-  DeepSeek Harness、Pi、MiniMax Code。可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖由
-  provider 维护；构造与注册不启动原生进程，也不创建存储
+- 内置 adapter 列表只在 `crates/provider-builtin`：`provider_builtin::providers` 先用
+  `provider::Providers::configured` 构建仍在 `provider` 内的 Codex、Claude Code、Antigravity、OpenCode、
+  DeepSeek Harness、Pi、MiniMax Code，再用 `Providers::with` 追加 `provider-omp` 的 `OmpClient`，
+  共享同一图片目录；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
+  负责注册与摘要生成器装配。`provider-builtin` 的生产依赖只有 `provider` 与 `provider-omp`。
+  可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖随 adapter 列表维护（OMP 的经 `provider_omp::installed_program`）；
+  构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
+  [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)、
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
 - 原生 adapter 共享的进程、沙箱、ACP、图片、诊断与用量工具在 `crates/provider-native`，生产依赖只有
   `provider-core` 与 `domain`，只公开 adapter 用到的项；运行时代码不使用它，`provider` 依赖它只因部分 adapter
   仍在 crate 内（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider-core`、`provider-native` 与 `domain`
   （`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `OmpClient` 与
-  `installed_program`；`provider` 不依赖它，它也不依赖 daemon。daemon 在 `compose_providers` 中用
+  `installed_program`；`provider` 与 daemon 都不依赖它，它也不依赖 daemon。`provider-builtin` 用
   `Providers::with` 追加 `OmpClient`，共享同一图片目录。OMP 从 `provider-core` 导入 ports 与 protocol 值，
   从 `provider-native` 导入共享工具。OMP 测试归
   `provider-omp`；需要 `AgentManager` 或 Timeline 的场景使用 `provider::testing`，它只在 dev-only 的
@@ -163,6 +168,9 @@
   （`crates/provider`，Oh My Pi 为 `crates/provider-omp`；共享工具的测试归 `crates/provider-native`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
   [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。
+- 需要多个真实 adapter 与真实运行时协作的装配测试归 `crates/provider-builtin`，经 `provider::testing`
+  读取装配结果；运行时测试用桩 adapter 验证目录与容器行为，adapter 自身的端口值在该 adapter 的测试中断言
+  （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 
 ## 各原生适配器的特有约束
 

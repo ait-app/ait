@@ -18,7 +18,6 @@ use persistence::storage::bot::FileStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use provider::Providers;
 use provider::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 use provider::service::agent_execution::ExecutionDependencies;
 use provider::service::agent_manager::AgentManager;
@@ -293,7 +292,7 @@ fn provider(base: &std::path::Path, registries: &Registries) -> provider::Servic
     let mut manager = AgentManager::new(Box::new(registries.agents.clone())).with_timeline(
         provider::storage::timeline::Timeline::open(&data.join("timeline.sqlite3")).unwrap(),
     );
-    Providers::configured(&data, |name| {
+    provider_builtin::configured(&data, |name| {
         (name == "AIT_SERVER_CODEX_BIN").then(|| codex.clone().into_os_string())
     })
     .register(&mut manager)

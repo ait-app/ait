@@ -45,6 +45,11 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
         manager.register(Box::new(CodexClient::new("codex".into()))),
         Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"
     ));
+    manager.validate_provider("codex").unwrap();
+    assert!(matches!(
+        manager.validate_provider("missing"),
+        Err(AgentManagerError::ProviderUnavailable(provider)) if provider == "missing"
+    ));
     assert_eq!(manager.active_turn("missing"), None);
     assert!(manager.live_snapshot("missing").is_none());
     assert!(manager.send("missing", "hello").await.is_err());

@@ -1,0 +1,25 @@
+[package]
+name = "provider-builtin"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The runtime's adapter container, still building the adapters that live inside it.
+provider.workspace = true
+# Adapters extracted into their own crates, appended to the runtime's set.
+provider-omp.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Read the assembly and check registrations through the runtime's test entry points.
+provider = { workspace = true, features = ["test-support"] }
+persistence.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+domain.workspace = true
+# The summary configuration port the auxiliary generator reads.
+model.workspace = true
+serde_json.workspace = true

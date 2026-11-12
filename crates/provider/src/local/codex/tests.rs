@@ -563,3 +563,21 @@ async fn closing_or_dropping_a_session_terminates_its_tool_process_group() {
         .expect("tool process is still running after session close");
     }
 }
+
+#[tokio::test]
+async fn uninstalled_adapter_still_imports_sessions_and_hosts_bot_sessions_natively() {
+    let root = tempfile::tempdir().unwrap();
+    let client = CodexClient::new(root.path().join("missing-provider"));
+
+    assert!(!client.is_available().await.unwrap());
+    assert!(client.supports_session_import());
+    assert_eq!(
+        client.bot_session_support(),
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("read-only"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
+    );
+}

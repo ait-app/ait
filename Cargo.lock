@@ -120,6 +120,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-builtin",
  "relay",
  "reqwest",
  "schedule",
@@ -779,7 +780,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
- "provider-omp",
+ "provider-builtin",
  "reqwest",
  "ring",
  "rustix",
@@ -2310,6 +2311,20 @@ dependencies = [
  "url",
  "uuid",
  "webrtc",
+]
+
+[[package]]
+name = "provider-builtin"
+version = "0.2.9"
+dependencies = [
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-omp",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -33,12 +33,7 @@ const ADAPTERS: &[&str] = &[
 ];
 
 /// Runtime tests that build a non-Codex adapter until they move to `provider-builtin`.
-const PENDING: &[&str] = &[
-    "service/provider_catalog/tests.rs",
-    "service/provider_catalog/tests/diagnostics.rs",
-    "service/agent_execution/tests/subscriptions/creation.rs",
-    "composition/tests.rs",
-];
+const PENDING: &[&str] = &["service/agent_execution/tests/subscriptions/creation.rs"];
 
 #[test]
 fn layers_reference_only_what_their_future_crate_may_depend_on() {

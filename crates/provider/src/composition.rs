@@ -1,4 +1,4 @@
-//! Provider-owned assembly of built-in adapters and auxiliary generation.
+//! Adapter container and the auxiliary generation assembled from it.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -19,26 +19,18 @@ use crate::service::summary_generation::Generation;
 use crate::storage::usage_ledger::SqliteUsageLedger;
 use provider_core::ports::agent_session::AgentClient;
 
-/// Configured built-in providers, with adapter identities and launch details kept in this crate.
+/// Configured provider adapters, registered with the foreground manager and used for auxiliary
+/// generation. `provider-builtin` decides which adapters it holds.
 #[derive(Debug)]
 pub struct Providers {
-    clients: Vec<Box<dyn AgentClient>>,
-    summary_clients: Vec<Arc<dyn AgentClient>>,
+    pub(crate) clients: Vec<Box<dyn AgentClient>>,
+    pub(crate) summary_clients: Vec<Arc<dyn AgentClient>>,
     /// Ledger that records the provider calls of auxiliary generation.
     usage_ledger: Arc<dyn UsageLedger>,
     images: PathBuf,
 }
 
 impl Providers {
-    /// Configure adapters from the process environment and installed native programs.
-    ///
-    /// `data_dir` is the daemon's persistent storage root, used for native image artifacts.
-    /// Returns configured adapters without starting provider processes or creating storage.
-    #[must_use]
-    pub fn new(data_dir: &Path) -> Self {
-        Self::configured(data_dir, |name| std::env::var_os(name))
-    }
-
     /// Record the provider calls of generators assembled afterwards in the host `ledger`.
     #[must_use]
     pub fn with_usage_ledger(mut self, ledger: Arc<SqliteUsageLedger>) -> Self {
@@ -61,7 +53,7 @@ impl Providers {
         )
     }
 
-    /// Register the configured built-in adapters with the foreground `manager`.
+    /// Register the configured adapters with the foreground `manager`.
     ///
     /// Returns success after registering every adapter, without probing native programs.
     ///
@@ -75,7 +67,8 @@ impl Providers {
         Ok(())
     }
 
-    /// Configure adapters like [`Providers::new`], reading launcher overrides from `environment`.
+    /// Configure the built-in adapters that still live in this crate, reading launcher
+    /// overrides from `environment`; `provider-builtin` appends the extracted adapters.
     ///
     /// `data_dir` is the daemon's persistent storage root and `environment` resolves variables
     /// such as `AIT_SERVER_CODEX_BIN`, letting in-process hosts select offline native programs

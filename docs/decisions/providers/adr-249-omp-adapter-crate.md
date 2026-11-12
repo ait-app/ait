@@ -12,6 +12,7 @@ paths:
   - bins/daemon
   - crates/provider-native
   - crates/provider-core
+  - crates/provider-builtin
 ---
 
 # ADR-249：OMP 适配器独立为 `provider-omp` crate

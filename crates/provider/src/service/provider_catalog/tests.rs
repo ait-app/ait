@@ -5,6 +5,7 @@ use domain::agent_runtime::AgentPersistenceHandle;
 use provider_core::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
+use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 
 mod concurrency;
 mod diagnostics;
@@ -26,6 +27,44 @@ impl AgentClient for Client {
             modes: vec![json!({"id":"read-only","label":"Read only"})],
             features: vec![],
         })
+    }
+    async fn create_session(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _spec: &AgentSessionSpec,
+        _purpose: AgentResumePurpose,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+}
+
+/// An uninstalled adapter that still imports native sessions and hosts Bot sessions natively.
+#[derive(Debug)]
+struct NativeClient;
+#[async_trait::async_trait]
+impl AgentClient for NativeClient {
+    fn provider(&self) -> &'static str {
+        "claude"
+    }
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(false)
+    }
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("read-only"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
+    }
+    fn supports_session_import(&self) -> bool {
+        true
     }
     async fn create_session(
         &self,
@@ -175,21 +214,9 @@ async fn native_import_support_does_not_require_an_installed_executable() {
         discover(&Client(true), "/tmp").await.value["supportsSessionImport"],
         false
     );
-    let root = tempfile::tempdir().unwrap();
-    let missing = root.path().join("missing-provider");
-    let clients: Vec<Box<dyn AgentClient>> = vec![
-        Box::new(crate::local::codex::CodexClient::new(missing.clone())),
-        Box::new(crate::local::claude::ClaudeClient::new(missing.clone())),
-        Box::new(crate::local::opencode::OpenCodeClient::new(missing.clone())),
-        Box::new(crate::local::deepseek_harness::DeepSeekHarnessClient::new(
-            missing,
-        )),
-    ];
-    for client in clients {
-        let entry = discover(client.as_ref(), root.path().to_str().unwrap()).await;
-        assert_eq!(entry.value["supportsSessionImport"], true);
-        assert_eq!(entry.value["status"], "unavailable");
-    }
+    let entry = discover(&NativeClient, "/tmp").await;
+    assert_eq!(entry.value["supportsSessionImport"], true);
+    assert_eq!(entry.value["status"], "unavailable");
 }
 
 #[tokio::test]
@@ -215,23 +242,10 @@ async fn snapshot_entries_publish_bot_session_support() {
         json!({"instructions":"turn_prefix","readOnlyMode":null,
             "toolPreapproval":false,"aitTools":false})
     );
-    let missing = cwd.path().join("missing-provider");
-    for (client, mode) in [
-        (
-            Box::new(crate::local::codex::CodexClient::new(missing.clone()))
-                as Box<dyn AgentClient>,
-            "read-only",
-        ),
-        (
-            Box::new(crate::local::claude::ClaudeClient::new(missing)),
-            "default",
-        ),
-    ] {
-        let entry = discover(client.as_ref(), cwd.path().to_str().unwrap()).await;
-        assert_eq!(
-            entry.value["botSession"],
-            json!({"instructions":"system_prompt","readOnlyMode":mode,
-                "toolPreapproval":true,"aitTools":true})
-        );
-    }
+    let entry = discover(&NativeClient, cwd.path().to_str().unwrap()).await;
+    assert_eq!(
+        entry.value["botSession"],
+        json!({"instructions":"system_prompt","readOnlyMode":"read-only",
+            "toolPreapproval":true,"aitTools":true})
+    );
 }
