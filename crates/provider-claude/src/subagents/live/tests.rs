@@ -72,6 +72,43 @@ fn announcements_aliases_nested_frames_and_background_lifetimes_are_separate() {
 }
 
 #[test]
+fn task_started_background_flag_survives_foreground_stop() {
+    let mut live = Live::new(ImageStore::default());
+    let mut record = start("background-task", "background-call");
+    record["is_backgrounded"] = json!(true);
+
+    live.observe(&record, "root", "/tmp").unwrap();
+    live.stopped(false, false);
+
+    assert_eq!(live.children()[0].descriptor["status"], "running");
+}
+
+#[test]
+fn resumed_task_alias_adds_its_new_prompt_to_the_child_timeline() {
+    let mut live = Live::new(ImageStore::default());
+    live.observe(&start("task", "first-call"), "root", "/tmp")
+        .unwrap();
+
+    let resumed = json!({
+        "type":"system",
+        "subtype":"task_started",
+        "task_type":"local_agent",
+        "task_id":"task",
+        "tool_use_id":"resumed-call",
+        "subagent_type":"Explore",
+        "prompt":"continue the review"
+    });
+    let events = live.observe(&resumed, "root", "/tmp").unwrap();
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        AgentTurnEvent::Subagent(SubagentEvent::Timeline { id, entry })
+            if id == "first-call" && entry.item["type"] == "user_message"
+                && entry.item["text"] == "continue the review"
+    )));
+}
+
+#[test]
 fn native_task_filters_prevent_ambient_shell_and_foreign_frames_from_becoming_children() {
     let mut live = Live::new(ImageStore::default());
     for mut record in [
@@ -88,6 +125,7 @@ fn native_task_filters_prevent_ambient_shell_and_foreign_frames_from_becoming_ch
             [] as [AgentTurnEvent; 0]
         );
     }
+    assert!(live.announces_tasks());
     assert_eq!(
         live.observe(
             &json!({"type":"assistant","parent_tool_use_id":"shell-call"}),

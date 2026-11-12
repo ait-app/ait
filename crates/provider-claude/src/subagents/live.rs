@@ -43,6 +43,9 @@ impl Live {
         for record in super::history::read_active_records(&directory.join(format!("{root}.jsonl")))
             .map_err(|_| AgentSessionError::Failed)?
         {
+            if record["type"] == "system" && record["subtype"] == "task_started" {
+                self.announces_tasks = true;
+            }
             if record["isSidechain"] != true {
                 self.declare(&record, root)?;
             }
@@ -63,7 +66,10 @@ impl Live {
                     Child {
                         descriptor,
                         stream: streaming::Stream::new(self.images.clone()),
-                        background: false,
+                        // A reopened native task is resumed independently of the parent turn.
+                        // Keep it out of foreground cancellation until a new task update says
+                        // otherwise.
+                        background: true,
                         announced: true,
                         workflow: true,
                     },
@@ -103,7 +109,8 @@ impl Live {
                 Child {
                     descriptor,
                     stream,
-                    background: false,
+                    // A reopened native task is resumed independently of the parent turn.
+                    background: true,
                     announced: true,
                     workflow: false,
                 },
@@ -128,6 +135,11 @@ impl Live {
             .values()
             .map(|child| child.descriptor.clone())
             .collect()
+    }
+
+    /// Return whether the native session has announced the task protocol.
+    pub(crate) fn announces_tasks(&self) -> bool {
+        self.announces_tasks
     }
 
     pub(crate) fn observe(
@@ -300,9 +312,26 @@ impl Live {
         }
         self.tasks.insert(task.to_owned(), id.clone());
         self.aliases.insert(call.to_owned(), id.clone());
+        let background = record["is_backgrounded"].as_bool();
         if let Some(child) = self.children.get_mut(&id) {
             child.announced |= announced;
+            if let Some(background) = background {
+                child.background = background;
+            }
             set_status(child, "running", events);
+            let prompt = if child.workflow {
+                record["description"].as_str()
+            } else {
+                record["prompt"].as_str()
+            };
+            if let Some(prompt) = prompt.filter(|prompt| !prompt.is_empty()) {
+                child.stream.record(&json!({
+                    "type":"user",
+                    "uuid":format!("task:{task}:prompt:{call}"),
+                    "message":{"content":prompt}
+                }))?;
+                drain(&id, &mut child.stream, events);
+            }
             return Ok(());
         }
         if self.children.len() >= 256 {
@@ -342,7 +371,7 @@ impl Live {
                 "createdAt":now,"updatedAt":now,"toolCallId":id,"cwd":cwd,"subtitle":title}),
             },
             stream: streaming::Stream::new(self.images.clone()),
-            background: false,
+            background: background.unwrap_or(false),
             announced,
             workflow: record["task_type"] == "local_workflow",
         };

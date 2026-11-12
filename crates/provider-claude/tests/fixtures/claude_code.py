@@ -141,6 +141,7 @@ for line in sys.stdin:
             continue
         if prompt == "autonomous":
             finish("Foreground finished")
+            emit({"type":"system", "subtype":"init", "session_id":session, "model":model})
             finish("Autonomous follow-up")
             continue
         if prompt == "usage-follow-up":

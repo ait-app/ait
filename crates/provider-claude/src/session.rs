@@ -438,9 +438,19 @@ impl ClaudeSession {
         if self.active.is_some()
             || self.closed
             || self.history_only
-            || !matches!(message["type"].as_str(), Some("assistant" | "stream_event"))
             || self.stream.observed_assistant(message)
         {
+            return;
+        }
+        // Claude brackets a main-session turn with `system/init` and `result`. Once the
+        // task protocol is active, background children can emit assistant/stream frames without
+        // a parent_tool_use_id; those frames must stay in the child scope instead of creating a
+        // phantom autonomous turn. Older Claude releases have no task protocol, so retain the
+        // legacy frame-based fallback for those sessions.
+        let opens_main_turn = message["type"] == "system" && message["subtype"] == "init";
+        let legacy_frame = matches!(message["type"].as_str(), Some("assistant" | "stream_event"))
+            && !self.children.announces_tasks();
+        if !opens_main_turn && !legacy_frame {
             return;
         }
         let id = format!("autonomous:{}", Uuid::new_v4());
@@ -716,6 +726,9 @@ impl AgentSession for ClaudeSession {
         self.permissions.clear();
         self.finish_requests(None);
         self.requests.settle();
+        // The direct stream transport kills the Claude process after an interrupt. Unlike
+        // Paseo's persistent SDK query, no background task can remain alive behind this session,
+        // so terminalize every child instead of leaving an unobservable running descriptor.
         self.stream
             .events
             .extend(self.children.stopped(false, true));
