@@ -162,8 +162,9 @@ Play 处理完上传的 AAB 后，会用应用签名密钥生成 universal APK�
 与 Play 报告的一致。它等待 GitHub Release job 完成，把 `Ait-VERSION-android.apk` 附加到
 **草稿** Release，并替换 `SHA256SUMS` 中对应的一行。
 
-- Play 使用 v3.1 密钥轮换签名时，APK 按 SDK 范围含多个签名证书（另有 Play 的 Source Stamp），
-  要求 Play 报告的证书在 `apksigner` 验证的签名者之中。
+- Play 生成的 APK 可能含多个签名证书（v3.1 密钥轮换、v3.2 混合 PQC 签名等），另有 Play 的
+  Source Stamp。`apksigner` 的签名者标签随 build-tools 版本变化，因此读取全部证书 SHA-256 行、
+  排除 Source Stamp，并要求 Play 报告的证书在其中。
 - 只重跑 `android-apk` job 即可重试 APK，不会重新构建或再次提交 Play。
 - Release 已经正式发布时不再附加，只给出警告；重跑 Release job 会保留已附加的 APK。
 - 该 job 设置 `continue-on-error`，APK 失败不影响 Release 或整次运行的结论。

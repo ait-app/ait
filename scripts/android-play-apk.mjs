@@ -89,14 +89,13 @@ export async function downloadUniversalApk({
   return normalizeCertificateHash(generated.certificateSha256Hash);
 }
 
-// apksigner prints "Signer #N" normally, but "Signer (minSdkVersion=…, maxSdkVersion=…)" for each
-// key when Play signs with v3.1 key rotation. The source stamp is Play's own, not an app signer.
+// apksigner's signer labels change between build-tools versions ("Signer #1",
+// "Signer (minSdkVersion=…)", "V3.0 Signer:", "V3.2 Hybrid PQC Signer: (…)"), so read every
+// certificate digest line and skip only Play's source stamp, which does not sign the app.
 export function apkSignerCertificates(output) {
-  return [
-    ...output.matchAll(
-      /^Signer (?:#\d+|\(minSdkVersion=[^)\n]*\)) certificate SHA-256 digest: ([\da-f]{64})\s*$/gim,
-    ),
-  ].map((match) => match[1].toLowerCase());
+  return [...output.matchAll(/^(.*?)\bcertificate SHA-256 digest: ([\da-f]{64})\s*$/gim)]
+    .filter((match) => !/^\s*Source Stamp\b/i.test(match[1]))
+    .map((match) => match[2].toLowerCase());
 }
 
 export function verifyGoogleSignedApk({ badging, certificates, plan, certificateSha256 }) {
