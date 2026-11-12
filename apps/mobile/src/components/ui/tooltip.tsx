@@ -31,6 +31,7 @@ import { FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 import { useControllableOpenState } from "@/components/ui/use-controllable-open-state";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -488,17 +489,17 @@ export function TooltipContent({
   );
 
   const frameStyle = useMemo(
-    () => [
-      {
+    () =>
+      inlineUnistylesStyle({
         position: "absolute" as const,
         top: position?.y ?? -9999,
         left: position?.x ?? -9999,
         maxWidth,
-      },
-    ],
+      }),
     [maxWidth, position?.x, position?.y],
   );
   const contentStyle = useMemo(() => [styles.content, style], [style]);
+  const webContentStyle = useMemo(() => [contentStyle, frameStyle], [contentStyle, frameStyle]);
 
   const handleDismiss = useCallback(() => ctx.setOpen(false), [ctx]);
 
@@ -508,20 +509,20 @@ export function TooltipContent({
   // steal focus / disrupt hover). Rendering via Portal + position:fixed keeps the
   // exact same positioning math as DropdownMenu, without hover feedback loops.
   if (isWeb) {
+    // Exit animations clone and reattach DOM outside React's ownership. If an
+    // animation never starts or finishes, the tooltip shell can remain over the
+    // document. A plain View makes closing/unmounting remove the whole surface.
     return createPortal(
       <View pointerEvents="none" style={styles.portalOverlay}>
-        <FloatingSurface
+        <View
           pointerEvents="none"
-          entering={FadeIn.duration(80)}
-          exiting={FadeOut.duration(80)}
           collapsable={false}
           testID={testID}
           onLayout={handleLayout}
-          style={contentStyle}
-          frameStyle={frameStyle}
+          style={webContentStyle}
         >
           {children}
-        </FloatingSurface>
+        </View>
       </View>,
       getOverlayRoot(),
     );
