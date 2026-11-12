@@ -18,6 +18,8 @@ chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# Materialize the private per-session role overlay OMP reads through --config.
+tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true

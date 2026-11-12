@@ -207,6 +207,8 @@ fn parse(
 }
 
 async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
+    // A snapshot refresh is the explicit signal that cached discovery data may be stale.
+    client.refresh_discovery_cache(cwd);
     let available = client.is_available().await;
     let (status, error, details) = if matches!(available, Ok(true)) {
         match client.discover(cwd).await {

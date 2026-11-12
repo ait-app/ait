@@ -12,6 +12,7 @@ use super::{
     LABEL, OmpClient, PROVIDER, commands, config, history,
     interactions::{Captured, Dialogs},
     prompt::Payload,
+    roles,
     stream::{self, Stream},
     transport::{Timeouts, Transport},
     usage,
@@ -140,6 +141,10 @@ pub(super) struct Session {
     /// Built-in slash commands awaiting OMP's answer, by request id (M5).
     pending: BTreeMap<String, slash::Pending>,
     model: Model,
+    /// Private role overlay the running process reads; dropped with the process it belongs to.
+    overlay: Option<tempfile::NamedTempFile>,
+    /// Discovered at open; absent when native metadata could not be read, which only hides roles.
+    catalog: Option<std::sync::Arc<roles::Catalog>>,
 }
 
 /// Start a disposable native capability reader in `cwd` that saves no session, bounded by
@@ -265,7 +270,15 @@ pub(super) async fn open(
     let session = path.filter(|_| persisted);
     // OMP refuses to start on a missing --model, so a resume keeps the session's model and
     // switches afterwards only to a listed one (D29).
+    // Explicit role assignments ride a private overlay read at startup; inherited roles add
+    // no file and the native layered settings apply unchanged.
+    let overlay = roles::overlay(&spec.config).await?;
+    let overlay_path = overlay
+        .as_ref()
+        .map(|file| file.path().to_str().ok_or(AgentSessionError::Failed))
+        .transpose()?;
     let launch = config::Launch {
+        overlay: overlay_path,
         model: spec
             .config
             .model
@@ -330,10 +343,39 @@ pub(super) async fn open(
         usage: usage::Poller::default(),
         pending: BTreeMap::new(),
         model: Model::Current,
+        overlay,
+        catalog: client.role_catalog(&spec.cwd).await.ok(),
     })
 }
 
 impl Session {
+    /// Catalog discovered with this session; `None` when the native read failed.
+    fn catalog(&self) -> Option<&roles::Catalog> {
+        self.catalog.as_deref()
+    }
+
+    /// Reject new role assignments the live catalog cannot resolve.
+    ///
+    /// Bounded shape is already checked by `config::validate`. This second gate compares the
+    /// proposed assignments with the real role and model pools; a stored value the catalog
+    /// cannot resolve stays display-only, so re-submitting it (other than "inherit") is
+    /// rejected until a native read resolves it again.
+    async fn validate_roles(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        let proposed = roles::overrides(config);
+        if proposed.is_empty() || proposed == roles::overrides(&self.config) {
+            return Ok(());
+        }
+        match self.client.role_catalog(&self.cwd).await {
+            Ok(catalog) => catalog.validate(config),
+            // No catalog means no authority to accept a new assignment; inherit still works
+            // because it produces no overlay entry.
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; new assignments rejected");
+                Err(AgentSessionError::Rejected)
+            }
+        }
+    }
+
     /// Apply native settings while idle, retaining the persisted session when reopening.
     /// Invalid settings or an active turn reject before any native mutation.
     pub(super) async fn configure(
@@ -347,10 +389,13 @@ impl Session {
         if self.config == *config {
             return Ok(());
         }
-        // Mode, system prompt and provider options are launch arguments (M10).
+        self.validate_roles(config).await?;
+        // Mode, system prompt, provider options and role assignments are launch arguments
+        // (M10). An overlay change needs a process that reads the new file at startup.
         if self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
             && self.config.provider_options == config.provider_options
+            && roles::same_overlay(&self.config, config)
         {
             self.state = config::apply(&mut self.transport, &self.config, config).await?;
             self.config.clone_from(config);
@@ -375,7 +420,15 @@ impl Session {
         }
         let path = config::text(&self.state, "sessionFile")?.to_owned();
         let persisted = std::path::Path::new(&path).is_file();
-        let launch = self.carried_launch(config, persisted.then_some(path.as_str()))?;
+        // Materialized before launch so the new process can read it, and kept until that
+        // process is replaced; inherited roles create no file.
+        let overlay = roles::overlay(config).await?;
+        let overlay_path = overlay
+            .as_ref()
+            .map(|file| file.path().to_str().ok_or(AgentSessionError::Failed))
+            .transpose()?;
+        let mut launch = self.carried_launch(config, persisted.then_some(path.as_str()))?;
+        launch.overlay = overlay_path;
         let (mut transport, state) = connect(
             &self.client,
             &self.cwd,
@@ -414,6 +467,13 @@ impl Session {
         self.state = state;
         self.stream.state_todos(&self.state);
         self.config.clone_from(config);
+        // Installed after the old process is gone, so its overlay outlives exactly one reader.
+        self.overlay = overlay;
+        // Same cwd/environment identity: a cached catalog still describes this profile, and a
+        // failed read keeps the previous one rather than hiding role controls.
+        if let Ok(catalog) = self.client.role_catalog(&self.cwd).await {
+            self.catalog = Some(catalog);
+        }
         Ok(())
     }
 
@@ -1116,8 +1176,13 @@ impl AgentSession for Session {
         // A selection already applied shows OMP's answer, which may have refused it.
         let requested = config::requested_fast_mode(config);
         let pending = requested.filter(|_| requested != config::requested_fast_mode(&self.config));
-        Some(json!({"availableModes":config::modes(),
-            "features":config::features(pending, Some(&self.state))}))
+        let mut features = config::features(pending, Some(&self.state));
+        // Role assignments are catalog data; a missing catalog renders stored keys only.
+        features.extend(match self.catalog() {
+            Some(catalog) => catalog.features(config),
+            None => roles::stored_features(config),
+        });
+        Some(json!({"availableModes":config::modes(),"features":features}))
     }
 
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
