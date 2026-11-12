@@ -117,11 +117,9 @@ jobs:
       - *verify-version
       - run: npm ci
 
-      - name: Export web client
-        run: npm run build:web-console --workspace=@ait/mobile
-
-      - name: Build and check image
+      - name: Build and check web client image
         run: |
+          npm run build:web-console --workspace=@ait/mobile
           source_commit=$(git rev-parse HEAD)
           docker build \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \

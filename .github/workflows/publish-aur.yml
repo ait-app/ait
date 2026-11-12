@@ -37,12 +37,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prepare build user
-        run: |
-          useradd --create-home builder
-          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
-          chown -R builder: "$GITHUB_WORKSPACE"
-
       # Resolved once so publishing uses the version that was built, even if a newer release appears.
       - name: Resolve release version
         id: release
@@ -57,7 +51,11 @@ jobs:
       - name: Build ait-bin
         env:
           AIT_VERSION: ${{ steps.release.outputs.version }}
-        run: sudo -u builder -H bash scripts/aur-publish.sh build ait-bin "$AIT_VERSION"
+        run: |
+          useradd --create-home builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+          sudo -u builder -H bash scripts/aur-publish.sh build ait-bin "$AIT_VERSION"
 
   publish:
     name: Publish ait-bin
@@ -77,15 +75,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prepare publish user
-        run: |
-          useradd --create-home builder
-          chown -R builder: "$GITHUB_WORKSPACE"
-
       - name: Configure AUR SSH
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
+          useradd --create-home builder
+          chown -R builder: "$GITHUB_WORKSPACE"
           if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
             echo "Set AUR_SSH_PRIVATE_KEY in the aur environment." >&2
             exit 1
