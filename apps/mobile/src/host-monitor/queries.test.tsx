@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
+import { AbortController as NativeAbortController } from "abort-controller";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -30,6 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 it.each(["workspace", "project", "node"] as const)(
@@ -64,3 +66,47 @@ it.each(["workspace", "project", "node"] as const)(
     client.clear();
   },
 );
+
+it("accepts a successful host snapshot with React Native's AbortSignal", async () => {
+  vi.stubGlobal("AbortController", NativeAbortController);
+  expect(new NativeAbortController().signal).not.toHaveProperty("throwIfAborted");
+  state.hosts = [];
+  const snapshot = {
+    current: { at: 1234, cpuPercent: 25, memoryUsedBytes: 512, memoryTotalBytes: 1024 },
+  };
+  state.getHostStats.mockResolvedValue(snapshot);
+  const client = new QueryClient();
+  const { result, unmount } = renderHook(() => useHostStats("shared", false, true), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(result.current.isSuccess).toBe(true);
+  expect(result.current.data).toEqual(snapshot);
+  unmount();
+  client.clear();
+});
+
+it("discards a native host snapshot when its query is cancelled while the RPC is pending", async () => {
+  vi.stubGlobal("AbortController", NativeAbortController);
+  state.hosts = [];
+  let resolve!: (snapshot: unknown) => void;
+  state.getHostStats.mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  const client = new QueryClient();
+  const { unmount } = renderHook(() => useHostStats("shared", false, true), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(state.getHostStats).toHaveBeenCalledOnce();
+  unmount();
+  await act(async () => resolve({ current: { at: 1234 } }));
+  expect(client.getQueryData(["host-stats", "shared", false])).toBeUndefined();
+  client.clear();
+});

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Native apps display host CPU and memory statistics correctly with React Native’s cancellation signals.
+
+- Native apps keep the current page and task details when folding or unfolding a device, keep conversations readable beside side panels, prevent messages from showing through the chat header, and keep dropdown options readable and clear of the keyboard.
+
 - Build: the enabled React Compiler now skips `packages/protocol` sources (schemas and generated validators contain no React components), so desktop startup and protocol hot reload no longer pay for compiling their large control-flow graphs. Windows and POSIX paths are both normalized; application components are still compiled.
 
 - Add `npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]` as an alias for the existing `node scripts/release-assets.mjs daemon` standalone-daemon archive command; no new packaging path.

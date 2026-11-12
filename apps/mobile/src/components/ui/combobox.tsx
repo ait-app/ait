@@ -1,3 +1,4 @@
+import { nativeComboboxCollisionPadding } from "./combobox-viewport";
 import {
   useCallback,
   useEffect,
@@ -10,6 +11,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import {
   View,
+  Keyboard,
   Text,
   Pressable,
   Modal,
@@ -636,12 +638,15 @@ function useDesktopFloatingUpdate(
   isMobile: boolean,
   orderedVisibleOptionsLength: number,
   searchQuery: string,
+  viewportRevision: string,
   update: () => unknown,
 ) {
   useLayoutEffect(() => {
     if (!isOpen || isMobile) return;
     void update();
-  }, [isOpen, isMobile, orderedVisibleOptionsLength, searchQuery, update]);
+    const frame = requestAnimationFrame(() => void update());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, isMobile, orderedVisibleOptionsLength, searchQuery, viewportRevision, update]);
 }
 
 function useResetSearchOnOpen(
@@ -841,7 +846,7 @@ function maybePinDesktopOptionsToBottom(
 }
 
 interface FloatingMiddlewareInput {
-  collisionPadding: number;
+  collisionPadding: number | ReturnType<typeof nativeComboboxCollisionPadding>;
   isDesktopAboveSearch: boolean;
   setAvailableSize: FloatingSizeSetters["setAvailableSize"];
   setReferenceWidth: FloatingSizeSetters["setReferenceWidth"];
@@ -1342,16 +1347,44 @@ export function Combobox({
   useResetSearchOnOpen(isOpen, setSearchQueryWithCallback, bumpSearchResetKey);
 
   const collisionPadding = useMemo(computeCollisionPadding, []);
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+  useEffect(() => {
+    if (isWeb || isMobile || !isOpen) return;
+    setKeyboardTop(Keyboard.metrics()?.screenY ?? null);
+    const show = Keyboard.addListener("keyboardDidShow", (event) =>
+      setKeyboardTop(event.endCoordinates.screenY),
+    );
+    const change = Keyboard.addListener("keyboardDidChangeFrame", (event) =>
+      setKeyboardTop(event.endCoordinates.screenY),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardTop(null));
+    return () => {
+      show.remove();
+      change.remove();
+      hide.remove();
+    };
+  }, [isOpen, isMobile]);
+  const floatingCollisionPadding = useMemo(
+    () =>
+      isWeb
+        ? collisionPadding
+        : nativeComboboxCollisionPadding({
+            windowHeight,
+            keyboardTop,
+            padding: collisionPadding,
+          }),
+    [collisionPadding, windowHeight, keyboardTop],
+  );
 
   const middleware = useMemo(
     () =>
       buildFloatingMiddleware({
-        collisionPadding,
+        collisionPadding: floatingCollisionPadding,
         isDesktopAboveSearch,
         setAvailableSize,
         setReferenceWidth,
       }),
-    [collisionPadding, isDesktopAboveSearch],
+    [floatingCollisionPadding, isDesktopAboveSearch],
   );
 
   const { refs, floatingStyles, update } = useFloating({
@@ -1479,7 +1512,14 @@ export function Combobox({
 
   useDesktopOptionsPinToBottom(isOpen, orderedVisibleOptions, pinDesktopOptionsToBottom);
 
-  useDesktopFloatingUpdate(isOpen, isMobile, orderedVisibleOptions.length, searchQuery, update);
+  useDesktopFloatingUpdate(
+    isOpen,
+    isMobile,
+    orderedVisibleOptions.length,
+    searchQuery,
+    `${windowWidth}:${windowHeight}:${keyboardTop}`,
+    update,
+  );
 
   useActiveIndexSync(
     isOpen,
@@ -1540,6 +1580,11 @@ export function Combobox({
         desktopPositionStyle,
         shouldHideDesktopContent,
         availableHeight: availableSize?.height,
+        nativePopover: !isWeb,
+        availableWidth: Math.min(
+          windowWidth - collisionPadding * 2,
+          availableSize?.width ?? Number.POSITIVE_INFINITY,
+        ),
       }),
     [
       desktopMinWidth,
@@ -1549,6 +1594,9 @@ export function Combobox({
       desktopPositionStyle,
       shouldHideDesktopContent,
       availableSize?.height,
+      availableSize?.width,
+      windowWidth,
+      collisionPadding,
     ],
   );
 

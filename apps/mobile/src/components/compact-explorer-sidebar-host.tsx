@@ -183,6 +183,22 @@ export function CompactExplorerSidebarHost({
     themedExplorer = <AppearanceStyleBoundary>{explorer}</AppearanceStyleBoundary>;
   }
 
+  // Keep the native navigator below the same hosts when folding between the
+  // inline dock and compact overlay. Only the explorer sibling changes.
+  if (!isWeb) {
+    return (
+      <View style={styles.row} onLayout={handleContainerLayout}>
+        <CompactExplorerOpenGestureSurface
+          enabled={presentation === "overlay" && enabled && Boolean(model?.workspaceRoot)}
+          onOpenExplorer={handleOpenExplorer}
+        >
+          {children}
+        </CompactExplorerOpenGestureSurface>
+        {themedExplorer}
+      </View>
+    );
+  }
+
   if (presentation === "dock") {
     return (
       <View style={styles.row} onLayout={handleContainerLayout}>
