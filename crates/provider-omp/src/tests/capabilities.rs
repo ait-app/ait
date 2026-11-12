@@ -57,7 +57,15 @@ async fn catalog_models_use_paseo_labels_and_thinking_options() {
     assert_eq!(details.models[3]["label"], "Plain");
     assert!(details.models[3].get("thinkingOptions").is_none());
     assert!(details.models[3].get("defaultThinkingOptionId").is_none());
-    assert!(details.features.is_empty());
+    // Discovered model roles are the only baseline features; the native model list itself
+    // stays in `details.models`.
+    assert!(
+        details.features.iter().all(|feature| feature["id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("modelRole."))),
+        "{:?}",
+        details.features
+    );
     let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
     assert!(!calls.contains("get_available_thinking_levels"));
     assert!(!calls.contains("set_fast_mode"));
@@ -280,4 +288,99 @@ async fn images_reach_text_only_models_too_and_provider_options_reach_the_launch
     assert_eq!(launches.len(), 2);
     assert_eq!(launches[0][4..6], ["--smol", "test/plain"]);
     assert!(!launches[1].contains(&"--smol".to_owned()));
+}
+
+fn with_role(config: &StoredAgentConfig, role: &str, selector: &str) -> StoredAgentConfig {
+    let mut values = config.feature_values.clone().unwrap_or_default();
+    values.insert(format!("modelRole.{role}"), json!(selector));
+    StoredAgentConfig {
+        feature_values: Some(values),
+        ..config.clone()
+    }
+}
+
+#[tokio::test]
+async fn successful_metadata_reads_produce_a_role_catalog() {
+    let (_root, client, spec) = fixture();
+    // The fixture answers `config list --json` and `models --kind all --json` with real JSON,
+    // so this exercises the successful discovery path rather than an empty fallback.
+    let details = client.discover(&spec.cwd).await.unwrap();
+    let roles: Vec<&str> = details
+        .features
+        .iter()
+        .filter_map(|feature| feature["id"].as_str())
+        .filter(|id| id.starts_with("modelRole."))
+        .collect();
+    assert!(
+        roles.contains(&"modelRole.default") && roles.contains(&"modelRole.task"),
+        "{roles:?}"
+    );
+    let options = details
+        .features
+        .iter()
+        .find(|feature| feature["id"] == "modelRole.default")
+        .and_then(|feature| feature["options"].as_array())
+        .unwrap();
+    assert!(
+        options.iter().any(|option| option["id"] == "test/model"),
+        "the native model pool must reach the options: {options:?}"
+    );
+}
+
+#[tokio::test]
+async fn create_rejects_an_assignment_the_catalog_cannot_resolve() {
+    let (root, client, mut spec) = fixture();
+    spec.config = with_role(&spec.config, "default", "unknown/model");
+
+    // Validation runs before the process is created, so a rejected assignment starts nothing
+    // and writes no overlay.
+    assert_eq!(
+        client.validate_selection(&spec).await,
+        Err(AgentSessionError::Rejected)
+    );
+    let calls = root.path().join("agent/calls.jsonl");
+    let logged = std::fs::read_to_string(&calls).unwrap_or_default();
+    assert!(!logged.contains("--config"), "{logged}");
+    let recorded: Vec<Value> = logged
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    assert!(launches(&recorded).is_empty(), "{recorded:?}");
+}
+
+#[tokio::test]
+async fn create_accepts_a_resolvable_assignment_before_starting() {
+    let (_root, client, mut spec) = fixture();
+    spec.config = with_role(&spec.config, "default", "test/model");
+    assert!(client.validate_selection(&spec).await.is_ok());
+}
+
+#[tokio::test]
+async fn create_accepts_inherit_without_reading_the_catalog() {
+    let (_root, client, spec) = fixture();
+    // No role assignments means no overlay, so no catalog read is required.
+    assert!(client.validate_selection(&spec).await.is_ok());
+}
+
+#[tokio::test]
+async fn an_unreadable_catalog_rejects_new_assignments() {
+    let (root, client, mut spec) = fixture();
+    spec.config = with_role(&spec.config, "default", "test/model");
+    // Fail only this client's metadata reads by extending its own environment, which the
+    // fixture receives; process-wide mutation would race with the other tests.
+    let mut entries: BTreeMap<String, String> = client
+        .environment
+        .entries()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+    entries.insert("OMP_FIXTURE_METADATA_FAILS".to_owned(), "1".to_owned());
+    let failing = OmpClient {
+        environment: AgentEnvironment::try_from(entries).unwrap(),
+        ..client.clone()
+    };
+    assert_eq!(
+        failing.validate_selection(&spec).await,
+        Err(AgentSessionError::Rejected)
+    );
+    let _ = root;
 }

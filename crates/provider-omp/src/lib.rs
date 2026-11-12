@@ -216,6 +216,26 @@ impl AgentClient for OmpClient {
         config::validate(config)
     }
 
+    /// Reject role assignments the live catalog cannot resolve before any session starts.
+    ///
+    /// Structural shape is already checked by [`config::validate`]. This gate runs before the
+    /// process is created, so an unresolvable assignment never reaches a `--config` overlay.
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        config::validate_spec(spec)?;
+        if roles::overrides(&spec.config).is_empty() {
+            return Ok(());
+        }
+        match self.role_catalog(&spec.cwd).await {
+            Ok(catalog) => catalog.validate(&spec.config),
+            // No catalog means no authority to accept an assignment; inherit is already
+            // excluded above because it writes no overlay entry.
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; assignment rejected");
+                Err(AgentSessionError::Rejected)
+            }
+        }
+    }
+
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         // Fast is the only feature, and only a live session's native state can offer it. A mode
         // change relaunches OMP between turns (D23); MCP servers and rewind are not offered yet.

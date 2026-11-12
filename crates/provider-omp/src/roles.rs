@@ -38,7 +38,6 @@ struct Model {
     kind: String,
     input: Vec<String>,
     thinking: Vec<String>,
-    web_search: bool,
 }
 
 /// One discovered role: native id plus a display label (native tag or the id itself).
@@ -63,9 +62,8 @@ impl Catalog {
         let settings = read(client, cwd, &["config", "list", "--json"]).await?;
         let models = read(client, cwd, &["models", "--kind", "all", "--json"]).await?;
         let entry = |key: &str| json!({"key":key,"value":settings[key]["value"]});
-        let mut catalog = Self::parse(&entry("modelRoles"), &entry("modelTags"), &entry("cycleOrder"), &models)
+        let catalog = Self::parse(&entry("modelRoles"), &entry("modelTags"), &entry("cycleOrder"), &models)
             .inspect_err(|error| tracing::warn!(phase="role_catalog",error=?error,"OMP native metadata validation failed"))?;
-        catalog.enrich_web_search(client, cwd).await.ok();
         catalog.check_size()?;
         Ok(catalog)
     }
@@ -152,7 +150,6 @@ impl Catalog {
                 kind: kind.to_owned(),
                 input,
                 thinking,
-                web_search: false,
             });
         }
         Ok(Self {
@@ -160,36 +157,6 @@ impl Catalog {
             inherited,
             models: parsed_models,
         })
-    }
-
-    /// Enrich chat models with web-search support from a disposable native RPC read.
-    /// Failure is non-fatal: the catalog still serves kinds/roles without the enrichment.
-    async fn enrich_web_search(
-        &mut self,
-        client: &OmpClient,
-        cwd: &str,
-    ) -> Result<(), AgentSessionError> {
-        let mut probe = super::session::probe(client, cwd, client.timeouts).await?;
-        let result = probe.request("get_available_models", json!({})).await;
-        let closed = probe.close().await;
-        let models = result?;
-        closed?;
-        let web: BTreeSet<String> = models["models"]
-            .as_array()
-            .filter(|models| models.len() <= MAX_MODELS)
-            .ok_or(AgentSessionError::Failed)?
-            .iter()
-            .filter(|model| !model["webSearch"].is_null())
-            .filter_map(|model| {
-                let provider = model["provider"].as_str()?;
-                let id = model["id"].as_str()?;
-                Some(format!("{provider}/{id}"))
-            })
-            .collect();
-        for model in &mut self.models {
-            model.web_search = web.contains(&model.selector);
-        }
-        Ok(())
     }
 
     fn check_size(&self) -> Result<(), AgentSessionError> {
@@ -442,7 +409,7 @@ fn model_options(model: &Model) -> impl Iterator<Item = Value> + '_ {
 fn accepts(role: &str, model: &Model) -> bool {
     match role {
         "image" => model.kind == "image",
-        "web" => model.kind == "search" || (model.kind == "chat" && model.web_search),
+        "web" => model.kind == "search",
         "speech" => model.kind == "tts",
         "dictation" => model.kind == "stt",
         "tiny" | "memory" => matches!(model.kind.as_str(), "tiny" | "chat"),

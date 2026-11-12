@@ -25,6 +25,33 @@ root.mkdir(parents=True, exist_ok=True)
 log = root / 'calls.jsonl'
 with log.open('a') as output:
     output.write(json.dumps({'args': args}) + '\n')
+# Read-only metadata reads OMP exposes outside a conversation. Ait's role catalog calls these
+# before any process starts, so they must answer with real JSON rather than RPC frames.
+if args == ['config', 'list', '--json']:
+    if os.environ.get('OMP_FIXTURE_METADATA_FAILS'):
+        sys.stderr.write('Error: config unavailable\n')
+        sys.exit(1)
+    overrides = json.loads(os.environ.get('OMP_FIXTURE_CONFIG_OVERRIDES', '{}'))
+    settings = {
+        'modelRoles': {'value': overrides.get('modelRoles',
+            {'default': 'test/model', 'task': 'test/model:high'})},
+        'modelTags': {'value': overrides.get('modelTags',
+            {'default': {'name': 'Director'}, 'task': {'name': 'Worker'}})},
+        'cycleOrder': {'value': overrides.get('cycleOrder', ['default', 'task'])},
+    }
+    print(json.dumps(settings))
+    sys.exit(0)
+if args == ['models', '--kind', 'all', '--json']:
+    if os.environ.get('OMP_FIXTURE_METADATA_FAILS'):
+        sys.stderr.write('Error: catalog unavailable\n')
+        sys.exit(1)
+    print(json.dumps({'models': [
+        {'selector': 'test/model', 'name': 'Fixture model', 'kind': 'chat',
+         'input': ['text', 'image'], 'thinking': ['low', 'high']},
+        {'selector': 'test/image', 'name': 'Fixture image', 'kind': 'image',
+         'input': ['text'], 'thinking': []},
+    ]}))
+    sys.exit(0)
 # Ait-only test hook: report whether this process may write outside its sandbox.
 outside = os.environ.get('OMP_FIXTURE_WRITE_PROBE')
 if outside:
