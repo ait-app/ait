@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Plus,
   RefreshCw,
-  Search,
   SlidersHorizontal,
   GitFork,
   PanelRight,
@@ -109,7 +108,6 @@ export function TasksScreenContent() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [mobileLane, setMobileLane] = useState<TaskLane>("needs_action");
   const [collapsedLanes, setCollapsedLanes] = useState<TaskLane[]>([]);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showChildren, setShowChildren] = useState(true);
   const selected = selectedKey ? byKey.get(selectedKey) : undefined;
@@ -189,6 +187,24 @@ export function TasksScreenContent() {
     value: value as TaskSort,
     label: t(`taskBoard.sort.${value as TaskSort}`),
   }));
+  const hostFilter =
+    hostId === ALL_HOSTS_OPTION_ID ? undefined : hosts.find((host) => host.serverId === hostId);
+  const scope = [hostFilter?.label, project.value ? project.label : undefined]
+    .filter(Boolean)
+    .join(" / ");
+  const scopeTitle = scope
+    ? t("taskBoard.scopedTaskCount", { scope, count: visible.length })
+    : t("taskBoard.totalTaskCount", { count: visible.length });
+  const filtered = Boolean(scope) || sort !== "recent";
+  const searchField = (
+    <SearchField
+      value={search}
+      onChangeText={setSearch}
+      placeholder={t("taskBoard.search")}
+      clearAccessibilityLabel={t("taskBoard.clearSearch")}
+      testID="task-board-search"
+    />
+  );
   const offlineHosts = unavailableHosts.filter(
     (host) => hostId === ALL_HOSTS_OPTION_ID || host.serverId === hostId,
   );
@@ -217,37 +233,28 @@ export function TasksScreenContent() {
       <View style={styles.body}>
         <View style={styles.main}>
           <View style={styles.toolbar} testID="task-board-toolbar">
-            <View style={[styles.toolbarLeading, searchOpen && styles.searchExpanded]}>
-              {searchOpen ? (
-                <SearchField
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder={t("taskBoard.search")}
-                  clearAccessibilityLabel={t("taskBoard.clearSearch")}
-                  testID="task-board-search"
-                />
-              ) : (
-                <BoardButton
-                  icon={Search}
-                  label={t("taskBoard.search")}
-                  onPress={() => setSearchOpen(true)}
-                  testID="task-board-search-toggle"
-                />
-              )}
-            </View>
-            {!compact || !searchOpen ? (
+            <Pressable
+              onPress={() => setFiltersOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`${scopeTitle}, ${t("taskBoard.filters")}`}
+              accessibilityState={{ selected: filtered }}
+              aria-pressed={filtered}
+              style={({ hovered, pressed }) => [
+                styles.scopeButton,
+                (Boolean(hovered) || pressed) && styles.scopeButtonHovered,
+              ]}
+              testID="task-board-filters"
+            >
               <Text style={styles.taskCount} numberOfLines={1}>
-                {t("taskBoard.taskCount", { count: visible.length })}
+                {scopeTitle}
               </Text>
-            ) : null}
-            <View style={styles.toolbarActions}>
-              <BoardButton
-                icon={SlidersHorizontal}
-                label={t("taskBoard.filters")}
-                onPress={() => setFiltersOpen(true)}
-                testID="task-board-filters"
-                active={hostId !== ALL_HOSTS_OPTION_ID || Boolean(projectKey) || sort !== "recent"}
+              <SlidersHorizontal
+                size={14}
+                color={filtered ? theme.colors.accent : theme.colors.foregroundMuted}
               />
+            </Pressable>
+            {compact ? null : <View style={styles.searchSlot}>{searchField}</View>}
+            <View style={styles.toolbarActions}>
               <BoardButton
                 icon={GitFork}
                 label={t("taskBoard.showSubtasks")}
@@ -271,6 +278,7 @@ export function TasksScreenContent() {
               />
             </View>
           </View>
+          {compact ? <View style={styles.compactSearchRow}>{searchField}</View> : null}
           <AdaptiveModalSheet
             visible={filtersOpen}
             onClose={() => setFiltersOpen(false)}
@@ -556,17 +564,35 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
   },
-  toolbarLeading: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" },
-  searchExpanded: { flexGrow: 2 },
+  scopeButton: {
+    flexShrink: 1,
+    maxWidth: "45%",
+    minHeight: COMPACT_LARGE_ICON_BUTTON_SIZE,
+    paddingHorizontal: theme.spacing[2],
+    marginLeft: -theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  scopeButtonHovered: { backgroundColor: theme.colors.surface2 },
+  searchSlot: { flex: 1, minWidth: 120, flexDirection: "row", alignItems: "center" },
+  compactSearchRow: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+  },
   toolbarActions: {
-    flex: 1,
-    minWidth: 4 * COMPACT_LARGE_ICON_BUTTON_SIZE + 3 * theme.spacing[1],
+    flexShrink: 0,
+    marginLeft: "auto",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
     gap: theme.spacing[1],
   },
   taskCount: {
+    flexShrink: 1,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
     color: theme.colors.foreground,

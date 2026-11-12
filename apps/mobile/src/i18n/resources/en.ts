@@ -2,7 +2,8 @@ import { hostMonitorEn } from "./host-monitor";
 export const en = {
   hostMonitor: hostMonitorEn,
   taskBoard: {
-    taskCount: "{{count}} tasks",
+    totalTaskCount: "Total {{count}} tasks",
+    scopedTaskCount: "{{scope}} {{count}} tasks",
     filters: "Filters",
     resetFilters: "Reset filters",
     showTasks: "Show {{count}} tasks",

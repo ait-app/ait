@@ -112,7 +112,7 @@ test.describe("Task overview", () => {
     await page.screenshot({ path: testInfo.outputPath("task-board-desktop.png"), fullPage: true });
 
     await page.getByTestId("task-detail-close").click();
-    await page.getByTestId("task-board-search-toggle").click();
+    await expect(page.getByTestId("task-board-filters")).toHaveText("共 9 个任务");
     await page.getByTestId("task-board-search").fill("发布");
     await expect(page.getByTestId(/^task-card-/)).toHaveCount(1);
     await expect(card(4)).toBeVisible();
@@ -260,14 +260,13 @@ test.describe("Task overview", () => {
       path: testInfo.outputPath("task-board-reference-phone.png"),
       fullPage: true,
     });
-    await page.getByTestId("task-board-search-toggle").click();
     const search = page.getByTestId("task-board-search");
     await search.fill("优化");
     await expect(page.getByTestId("task-inline-stop")).toHaveCount(1);
     const searchBounds = await search.boundingBox();
     const filterBounds = await page.getByTestId("task-board-filters").boundingBox();
     expect(searchBounds!.width).toBeGreaterThanOrEqual(120);
-    expect(searchBounds!.x + searchBounds!.width).toBeLessThanOrEqual(filterBounds!.x);
+    expect(searchBounds!.y).toBeGreaterThanOrEqual(filterBounds!.y + filterBounds!.height);
     await search.fill("");
     await expect(page.getByTestId("task-inline-stop")).toHaveCount(3);
     await card(3).getByTestId("task-inline-stop").click();
