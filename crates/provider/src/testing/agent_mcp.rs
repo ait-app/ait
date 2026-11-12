@@ -39,7 +39,7 @@ struct Policy(Mutex<Value>);
 
 impl DaemonConfigStore for Policy {
     fn get(&self) -> Result<Value, DaemonConfigStoreError> {
-        Ok(self.0.lock().unwrap().clone())
+        Ok(self.0.lock().expect("policy lock poisoned").clone())
     }
 
     fn patch(&self, _: &Value) -> Result<Value, DaemonConfigStoreError> {
@@ -69,13 +69,18 @@ impl McpScopes for Scopes {
     }
 
     fn release(&self, agent_id: &str) {
-        self.released.lock().unwrap().push(agent_id.to_owned());
+        self.released
+            .lock()
+            .expect("released scopes lock poisoned")
+            .push(agent_id.to_owned());
     }
 }
 
 fn connection(port: u16, token: &str, policy: Value) -> AgentMcp {
     AgentMcp::new(
-        format!("127.0.0.1:{port}").parse().unwrap(),
+        format!("127.0.0.1:{port}")
+            .parse()
+            .expect("daemon MCP address parses"),
         token.to_owned().into(),
         Arc::new(Policy(Mutex::new(policy))),
     )
@@ -87,20 +92,28 @@ fn manager(
     mcp: AgentMcp,
 ) -> AgentManager {
     let mut manager = AgentManager::new(Box::new(registry.clone())).with_agent_mcp(mcp);
-    manager.register_client((adapter.client)()).unwrap();
+    manager
+        .register_client((adapter.client)())
+        .expect("register the adapter under test");
     manager
 }
 
 async fn turn(manager: &mut AgentManager, id: &str) {
-    manager.send(id, "hello").await.unwrap();
+    manager
+        .send(id, "hello")
+        .await
+        .expect("send the test prompt");
     tokio::time::timeout(Duration::from_secs(20), async {
         while manager.active_turn(id).is_some() {
-            manager.poll().await.unwrap();
+            manager
+                .poll()
+                .await
+                .expect("poll the manager during the turn");
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
-    .unwrap();
+    .expect("the turn completes within 20 seconds");
 }
 
 fn with_servers(spec: &AgentSessionSpec, user_ait: bool) -> AgentSessionSpec {
@@ -155,9 +168,11 @@ fn since(adapter: &Adapter<'_>, seen: usize) -> Vec<Opening> {
 /// # Panics
 /// Panics when an expectation fails or the temporary registry cannot be set up.
 pub async fn verify(adapter: &Adapter<'_>) {
-    let root = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().expect("create the temporary registry root");
     let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
-    registry.initialize().unwrap();
+    registry
+        .initialize()
+        .expect("initialize the file-backed registry");
     let first = uuid::Uuid::new_v4().to_string();
     let renewed = uuid::Uuid::new_v4().to_string();
     let spec = with_servers(&adapter.spec, false);
@@ -166,7 +181,7 @@ pub async fn verify(adapter: &Adapter<'_>) {
     runtime
         .create("agent-shared", &spec, AgentRegistration::default())
         .await
-        .unwrap();
+        .expect("create the shared-token agent");
     if adapter.prompts {
         turn(&mut runtime, "agent-shared").await;
     }
@@ -176,30 +191,58 @@ pub async fn verify(adapter: &Adapter<'_>) {
         injected(7316, &first, "agent-shared"),
         "the opening receives the daemon address, MCP token and caller identity"
     );
-    runtime.close("agent-shared").await.unwrap();
+    runtime
+        .close("agent-shared")
+        .await
+        .expect("close the shared-token agent");
 
     let seen = (adapter.openings)().len();
     let mut runtime = manager(adapter, &registry, connection(8321, &renewed, json!({})));
     if adapter.prompts {
         turn(&mut runtime, "agent-shared").await;
     } else {
-        runtime.resume("agent-shared").await.unwrap();
+        runtime
+            .resume("agent-shared")
+            .await
+            .expect("resume the shared-token agent after restart");
     }
     let resumed = since(adapter, seen);
     assert_eq!(resumed[0]["ait"], injected(8321, &renewed, "agent-shared"));
-    runtime.close("agent-shared").await.unwrap();
+    runtime
+        .close("agent-shared")
+        .await
+        .expect("close the resumed agent");
 
     let seen = (adapter.openings)().len();
-    let mut imported = registry.get("agent-shared").unwrap().unwrap();
+    let mut imported = registry
+        .get("agent-shared")
+        .expect("read the shared agent record")
+        .expect("the shared agent record exists");
     imported.id = "agent-imported".into();
-    runtime.restore_new(imported).await.unwrap();
+    runtime
+        .restore_new(imported)
+        .await
+        .expect("restore the imported agent");
     let opened = since(adapter, seen);
     assert_eq!(opened[0]["ait"], injected(8321, &renewed, "agent-imported"));
-    runtime.close("agent-imported").await.unwrap();
+    runtime
+        .close("agent-imported")
+        .await
+        .expect("close the imported agent");
 
-    let record = registry.get("agent-shared").unwrap().unwrap();
-    assert_eq!(record.config.unwrap().mcp_servers, spec.config.mcp_servers);
-    let durable = std::fs::read_to_string(root.path().join("agents.json")).unwrap();
+    let record = registry
+        .get("agent-shared")
+        .expect("read the shared agent record")
+        .expect("the shared agent record exists");
+    assert_eq!(
+        record
+            .config
+            .expect("the shared agent record keeps its configuration")
+            .mcp_servers,
+        spec.config.mcp_servers
+    );
+    let durable = std::fs::read_to_string(root.path().join("agents.json"))
+        .expect("read the durable registry file");
     assert!(!durable.contains(&first) && !durable.contains(&renewed));
 
     verify_policy(adapter, &registry).await;
@@ -219,8 +262,11 @@ async fn verify_policy(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
             AgentRegistration::default(),
         )
         .await
-        .unwrap();
-    runtime.close("agent-user").await.unwrap();
+        .expect("create the agent with a user ait entry");
+    runtime
+        .close("agent-user")
+        .await
+        .expect("close the agent with a user ait entry");
     assert_eq!(since(adapter, seen)[0]["ait"], user_ait());
 
     let seen = (adapter.openings)().len();
@@ -233,8 +279,11 @@ async fn verify_policy(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
             AgentRegistration::default(),
         )
         .await
-        .unwrap();
-    runtime.close("agent-disabled").await.unwrap();
+        .expect("create the agent with injection disabled");
+    runtime
+        .close("agent-disabled")
+        .await
+        .expect("close the agent with injection disabled");
     assert!(
         since(adapter, seen)
             .iter()
@@ -264,18 +313,26 @@ async fn verify_scoped(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
                 AgentRegistration::default(),
             )
             .await
-            .unwrap();
-        runtime.close(agent).await.unwrap();
+            .expect("create the scoped agent");
+        runtime.close(agent).await.expect("close the scoped agent");
         let opened = since(adapter, seen);
         match token {
             Some(token) => {
                 assert_eq!(opened[0]["ait"], injected(7316, &token, agent));
-                assert_eq!(*scopes.released.lock().unwrap(), vec![agent.to_owned()]);
+                assert_eq!(
+                    *scopes
+                        .released
+                        .lock()
+                        .expect("released scopes lock poisoned"),
+                    vec![agent.to_owned()]
+                );
             }
             None => assert!(opened.iter().all(|opening| !opening.contains_key("ait"))),
         }
         assert!(
-            !serde_json::to_string(&opened).unwrap().contains(&shared),
+            !serde_json::to_string(&opened)
+                .expect("serialize the scoped openings")
+                .contains(&shared),
             "a scoped session never falls back to the shared token"
         );
     }
@@ -284,14 +341,22 @@ async fn verify_scoped(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
 /// Read-only history sessions of archived Agents receive no daemon MCP.
 async fn verify_history(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeRegistry) {
     let token = uuid::Uuid::new_v4().to_string();
-    let mut record = registry.get("agent-shared").unwrap().unwrap();
+    let mut record = registry
+        .get("agent-shared")
+        .expect("read the shared agent record")
+        .expect("the shared agent record exists");
     record.archived_at = Some("2026-11-10T00:00:00Z".into());
-    registry.upsert(&record).unwrap();
+    registry
+        .upsert(&record)
+        .expect("archive the shared agent record");
     let seen = (adapter.openings)().len();
     let mut runtime = manager(adapter, registry, connection(7316, &token, json!({})));
     // Adapters without native history replay refuse the read-only session instead.
     if runtime.resume("agent-shared").await.is_ok() {
-        runtime.close("agent-shared").await.unwrap();
+        runtime
+            .close("agent-shared")
+            .await
+            .expect("close the history session");
     }
     let openings = (adapter.openings)();
     assert!(
@@ -319,13 +384,19 @@ pub fn acp_opening(servers: &Value) -> Opening {
                 .flatten()
                 .map(|header| {
                     (
-                        header["name"].as_str().unwrap().to_owned(),
+                        header["name"]
+                            .as_str()
+                            .expect("ACP header has a string name")
+                            .to_owned(),
                         header["value"].clone(),
                     )
                 })
                 .collect();
             (
-                server["name"].as_str().unwrap().to_owned(),
+                server["name"]
+                    .as_str()
+                    .expect("ACP MCP server has a string name")
+                    .to_owned(),
                 json!({"url":server["url"],"headers":headers}),
             )
         })
@@ -341,6 +412,6 @@ pub fn json_lines(path: &Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .unwrap_or_default()
         .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
+        .map(|line| serde_json::from_str(line).expect("the fake records JSON lines"))
         .collect()
 }

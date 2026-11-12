@@ -208,8 +208,8 @@
 ## 各原生适配器的特有约束
 
 - DeepSeek Harness 默认启动原生 Web Host；仅在 `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp` 时使用
-  ACP，且只有 ACP 模式接受 Ait 每会话 MCP
-  （[ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md) 取代
+  ACP；两种模式都接受 Ait 每会话 MCP，原生 Host 经 `--patch` 叠加层、ACP 经 `mcpServers`
+  （[ADR-232](../decisions/providers/adr-232-agent-mcp-session-delivery.md)；[ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md) 取代
   [ADR-067](../decisions/providers/adr-067-deepseek-harness-acp.md) 的默认传输；
   [DSH 手册](../operations/deepseek-harness.md)）。
 - OpenCode 通过官方 `opencode acp` 运行；接受 1.x 与 2.0.25 及以上版本，其余版本报告不可用

@@ -90,7 +90,7 @@ DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这�
 证据：[Codex/Claude 转换](../../../../crates/provider-native/src/configuration.rs#L138)、
 [DSH ACP 转换](../../../../crates/provider-deepseek-harness/src/config.rs#L61)、
 [OpenCode](../../../../crates/provider/src/local/opencode/config.rs#L38)、
-[DSH native](../../../../crates/provider-deepseek-harness/src/native/config.rs#L19)、
+[DSH native](../../../../crates/provider-deepseek-harness/src/native/config.rs#L17)、
 [Pi](../../../../crates/provider/src/local/pi/config.rs#L27)、
 [Antigravity](../../../../crates/provider-antigravity/src/config.rs#L26)。
 

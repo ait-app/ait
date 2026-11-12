@@ -336,13 +336,15 @@ async fn bad_protocol_frames_and_timeout_fail_without_hanging() {
             scenario.to_owned(),
         )]))
         .unwrap();
-        assert!(
-            tokio::time::timeout(Duration::from_secs(3), client.create_session(&spec))
-                .await
-                .unwrap()
-                .is_err(),
-            "{scenario}"
-        );
+        let error = tokio::time::timeout(Duration::from_secs(3), client.create_session(&spec))
+            .await
+            .unwrap()
+            .err();
+        assert!(error.is_some(), "{scenario}");
+        if scenario == "malformed" {
+            // The runtime reports this class of startup failure as `agent_io`.
+            assert_eq!(error, Some(AgentSessionError::Failed));
+        }
     }
 }
 
