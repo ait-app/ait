@@ -18,6 +18,7 @@ import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import type { PendingPermission } from "@/types/shared";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -371,6 +372,7 @@ export function PermissionRequestCard({
           onPress={onOpenDetails}
           accessibilityRole="button"
           accessibilityLabel={t("taskBoard.details")}
+          style={permissionStyles.compactSummaryButton}
         >
           <Text style={permissionStyles.compactSummary} numberOfLines={3}>
             <Text style={permissionStyles.compactTitle}>{title}</Text>
@@ -429,7 +431,14 @@ const permissionStyles = StyleSheet.create((theme) => ({
     alignItems: "flex-start",
   },
   compactOptions: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[1.5] },
-  compactSummary: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, lineHeight: 18 },
+  // Raw JSON and paths have no spaces; let them wrap inside the card instead of overflowing it.
+  compactSummaryButton: { alignSelf: "stretch", minWidth: 0 },
+  compactSummary: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+    ...(isWeb ? { overflowWrap: "anywhere" as const } : {}),
+  },
   compactTitle: { fontWeight: theme.fontWeight.semibold },
   allowButton: { borderColor: theme.colors.statusSuccess },
   denyButton: { borderColor: theme.colors.statusDanger },
