@@ -107,6 +107,7 @@ Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
+飞书与国际版 Lark 共用消息传输实现，凭据验证、API、WebSocket 端点和账号独占按区域隔离，见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 中心托管的 Webhook Channel 使用现有 serve 链路和受限服务会话，daemon 只保存端点；见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
 Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。

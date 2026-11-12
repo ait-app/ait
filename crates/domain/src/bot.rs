@@ -152,6 +152,18 @@ pub enum ChannelConfig {
         #[serde(default)]
         allow_groups: bool,
     },
+    /// Lark international self-built application's persistent WebSocket connection.
+    Lark {
+        /// Public application identity in Lark's international region.
+        app_id: String,
+        /// Runtime reference to the application secret.
+        secret_ref: String,
+        /// Explicit tenant-scoped sender open IDs.
+        allowed_senders: Vec<String>,
+        /// Whether mentioned group messages are accepted.
+        #[serde(default)]
+        allow_groups: bool,
+    },
     /// `iLink` bot long polling, for private chats only.
     Weixin {
         /// Bot identity issued by the QR login.

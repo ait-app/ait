@@ -169,6 +169,7 @@ export const es: TranslationResources = {
     channelType: "Tipo de canal",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "Referencia del token del Bot",
     secretRef: "Referencia del secreto de la app",
     appId: "ID de la app",
@@ -189,22 +190,23 @@ export const es: TranslationResources = {
     feishuScanRetry: "Reintentar",
     feishuScanDenied: "La solicitud se rechazó en Feishu.",
     feishuScanExpired: "Este código QR caducó. Empieza de nuevo para obtener otro.",
-    feishuScanLark: "Parece una cuenta de Lark. Ait solo admite Feishu en China.",
+    feishuScanLark:
+      "Este código QR es para Feishu. Para una cuenta de Lark, selecciona Lark e introduce las credenciales de la app manualmente.",
     feishuScanUnavailable:
       "No se pudo completar la configuración con Feishu. Reintenta o introduce las credenciales manualmente.",
     feishuManualEntry: "Introducir credenciales manualmente",
     feishuScanInstead: "Escanear un código QR",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "Pega el App Secret. Ait lo verifica con Feishu y lo guarda de forma privada en este host. También sirve una referencia env:AIT_SERVER_CREDENTIAL_*.",
+      "Pega el App Secret. Ait lo verifica con {{platform}} y lo guarda de forma privada en este host. También sirve una referencia env:AIT_SERVER_CREDENTIAL_*.",
     feishuManualStep1:
-      "Crea una app personalizada en open.feishu.cn/app y activa la capacidad de bot.",
+      "Crea una app personalizada en {{developerUrl}} y activa la capacidad de bot.",
     feishuManualStep2:
       "En Permisos, añade im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
     feishuManualStep3:
-      "Copia aquí el App ID y el App Secret, añade tu Open ID de Feishu (ou_...) como remitente permitido y añade el canal.",
+      "Copia aquí el App ID y el App Secret, añade tu Open ID de {{platform}} (ou_...) como remitente permitido y añade el canal.",
     feishuManualStep4:
-      "Después, en Eventos y devoluciones de llamada de Feishu, elige Conexión larga y suscríbete a im.message.receive_v1. Feishu solo puede guardarlo cuando el canal está conectado.",
+      "Después, en Eventos y devoluciones de llamada de {{platform}}, elige Conexión larga y suscríbete a im.message.receive_v1. {{platform}} solo puede guardarlo cuando el canal está conectado.",
     feishuManualStep5: "Publica una versión de la app para que se pueda escribir al bot.",
     telegramGuideStep1: "Escanea este código o usa el botón para abrir BotFather en Telegram.",
     telegramGuideStep2:

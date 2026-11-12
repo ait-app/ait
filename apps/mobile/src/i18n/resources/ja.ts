@@ -151,6 +151,7 @@ export const ja: TranslationResources = {
     channelType: "チャンネルの種類",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "Bot トークンの参照",
     secretRef: "アプリシークレットの参照",
     appId: "アプリ ID",
@@ -171,21 +172,22 @@ export const ja: TranslationResources = {
     feishuScanRetry: "再試行",
     feishuScanDenied: "Feishu でリクエストが拒否されました。",
     feishuScanExpired: "この QR コードは期限切れです。もう一度開始してください。",
-    feishuScanLark: "Lark アカウントのようです。Ait は中国版 Feishu のみ対応しています。",
+    feishuScanLark:
+      "この QR コードは Feishu 用です。Lark アカウントでは Lark を選択し、アプリの認証情報を手動で入力してください。",
     feishuScanUnavailable:
       "Feishu の設定を完了できませんでした。再試行するか、認証情報を手動で入力してください。",
     feishuManualEntry: "認証情報を手動で入力",
     feishuScanInstead: "QR コードをスキャンする",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "App Secret を貼り付けます。Ait は Feishu で検証し、このホストに非公開で保存します。env:AIT_SERVER_CREDENTIAL_* 参照も使えます。",
-    feishuManualStep1: "open.feishu.cn/app でカスタムアプリを作成し、ボット機能を有効にします。",
+      "App Secret を貼り付けます。Ait は {{platform}} で検証し、このホストに非公開で保存します。env:AIT_SERVER_CREDENTIAL_* 参照も使えます。",
+    feishuManualStep1: "{{developerUrl}} でカスタムアプリを作成し、ボット機能を有効にします。",
     feishuManualStep2:
       "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly を追加します。",
     feishuManualStep3:
-      "App ID と App Secret をここにコピーし、自分の Feishu Open ID（ou_...）を許可された送信者に追加して、チャンネルを追加します。",
+      "App ID と App Secret をここにコピーし、自分の {{platform}} Open ID（ou_...）を許可された送信者に追加して、チャンネルを追加します。",
     feishuManualStep4:
-      "次に Feishu の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで Feishu はこの設定を保存できません。",
+      "次に {{platform}} の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで {{platform}} はこの設定を保存できません。",
     feishuManualStep5: "アプリのバージョンを公開すると、ボットにメッセージを送れるようになります。",
     telegramGuideStep1:
       "このコードをスキャンするかボタンを押して、Telegram で BotFather を開きます。",

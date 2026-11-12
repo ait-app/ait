@@ -226,7 +226,24 @@ impl Bots {
                     .map_err(|_| ErrorCode::BotIo)?
             }
             "bot.channel.feishu.scan.cancel.request" => feishu.cancel(decode(params)?).await,
-            "bot.channel.feishu.connect.request" => feishu.connect(self, decode(params)?).await,
+            "bot.channel.feishu.connect.request" => {
+                feishu
+                    .connect(
+                        self,
+                        decode(params)?,
+                        crate::channels::feishu::Platform::Feishu,
+                    )
+                    .await
+            }
+            "bot.channel.lark.connect.request" => {
+                feishu
+                    .connect(
+                        self,
+                        decode(params)?,
+                        crate::channels::feishu::Platform::Lark,
+                    )
+                    .await
+            }
             "bot.channel.telegram.pair.start.request" => {
                 telegram.start(self, decode(params)?).await
             }

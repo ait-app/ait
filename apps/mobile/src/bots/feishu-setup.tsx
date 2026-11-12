@@ -33,6 +33,13 @@ export function useFeishuSetupSupported(serverId: string): boolean {
   );
 }
 
+/** Whether the host can verify and store credentials for Lark international. */
+export function useLarkSetupSupported(serverId: string): boolean {
+  return useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotLarkSetup === true,
+  );
+}
+
 export function FeishuScanSetup({
   serverId,
   workspaceId,
@@ -163,20 +170,32 @@ export function FeishuScanSetup({
   );
 }
 
-export function FeishuManualGuide({ onScanInstead }: { onScanInstead: () => void }) {
+export function FeishuManualGuide({
+  platform = "feishu",
+  onScanInstead,
+}: {
+  platform?: "feishu" | "lark";
+  onScanInstead?: () => void;
+}) {
   const { t } = useTranslation();
+  const values = {
+    platform: t(platform === "lark" ? "bots.lark" : "bots.feishu"),
+    developerUrl: platform === "lark" ? "open.larksuite.com/app" : "open.feishu.cn/app",
+  };
   return (
-    <View style={styles.permissionBlock} testID="bot-feishu-manual-guide">
+    <View style={styles.permissionBlock} testID={`bot-${platform}-manual-guide`}>
       {MANUAL_STEP_KEYS.map((key, index) => (
         <Text key={key} style={styles.hint}>
-          {`${index + 1}. ${t(key)}`}
+          {`${index + 1}. ${t(key, values)}`}
         </Text>
       ))}
-      <TextLink
-        label={t("bots.feishuScanInstead")}
-        onPress={onScanInstead}
-        testID="bot-feishu-scan-instead"
-      />
+      {onScanInstead ? (
+        <TextLink
+          label={t("bots.feishuScanInstead")}
+          onPress={onScanInstead}
+          testID="bot-feishu-scan-instead"
+        />
+      ) : null}
     </View>
   );
 }

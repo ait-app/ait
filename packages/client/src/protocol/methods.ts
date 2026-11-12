@@ -9,6 +9,10 @@ export interface MethodSpec {
   response: string | null;
 }
 
+// Channel onboarding waits on an external platform. Rust runs it on the same lane as file work, and
+// moving it keeps the background channel within the 64 capabilities Rust accepts per connection.
+const EXTERNAL_PLATFORM_BOT_METHOD = /^bot\.channel\.(feishu|lark|telegram|weixin|qq|imessage)\./;
+
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
   ...RELAY_METHODS,
   "publication.status.request": {
@@ -59,7 +63,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
       {
         method,
         kind: "request" as const,
-        channel: 3,
+        channel: EXTERNAL_PLATFORM_BOT_METHOD.test(method) ? 2 : 3,
         response: method.replace(/\.request$/, ".response"),
       },
     ]),

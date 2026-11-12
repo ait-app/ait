@@ -148,6 +148,7 @@ export const ko: TranslationResources = {
     channelType: "채널 유형",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "Bot 토큰 참조",
     secretRef: "앱 시크릿 참조",
     appId: "앱 ID",
@@ -168,21 +169,22 @@ export const ko: TranslationResources = {
     feishuScanRetry: "다시 시도",
     feishuScanDenied: "Feishu에서 요청이 거부되었습니다.",
     feishuScanExpired: "QR 코드가 만료되었습니다. 다시 시작하세요.",
-    feishuScanLark: "Lark 계정으로 보입니다. Ait는 중국 Feishu만 지원합니다.",
+    feishuScanLark:
+      "이 QR 코드는 Feishu용입니다. Lark 계정은 Lark를 선택하고 앱 인증 정보를 직접 입력하세요.",
     feishuScanUnavailable:
       "Feishu 설정을 완료할 수 없습니다. 다시 시도하거나 자격 증명을 직접 입력하세요.",
     feishuManualEntry: "자격 증명 직접 입력",
     feishuScanInstead: "QR 코드 스캔하기",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "App Secret을 붙여 넣으세요. Ait가 Feishu로 확인한 뒤 이 호스트에 비공개로 저장합니다. env:AIT_SERVER_CREDENTIAL_* 참조도 사용할 수 있습니다.",
-    feishuManualStep1: "open.feishu.cn/app에서 사용자 지정 앱을 만들고 봇 기능을 켜세요.",
+      "App Secret을 붙여 넣으세요. Ait가 {{platform}}로 확인한 뒤 이 호스트에 비공개로 저장합니다. env:AIT_SERVER_CREDENTIAL_* 참조도 사용할 수 있습니다.",
+    feishuManualStep1: "{{developerUrl}}에서 사용자 지정 앱을 만들고 봇 기능을 켜세요.",
     feishuManualStep2:
       "권한 관리에서 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly을(를) 추가하세요.",
     feishuManualStep3:
-      "App ID와 App Secret을 여기에 복사하고, 내 Feishu Open ID(ou_...)를 허용된 발신자로 추가한 뒤 채널을 추가하세요.",
+      "App ID와 App Secret을 여기에 복사하고, 내 {{platform}} Open ID(ou_...)를 허용된 발신자로 추가한 뒤 채널을 추가하세요.",
     feishuManualStep4:
-      "그런 다음 Feishu의 이벤트 및 콜백에서 장기 연결을 선택하고 im.message.receive_v1을(를) 구독하세요. 채널이 연결된 후에만 Feishu에서 저장할 수 있습니다.",
+      "그런 다음 {{platform}}의 이벤트 및 콜백에서 장기 연결을 선택하고 im.message.receive_v1을(를) 구독하세요. 채널이 연결된 후에만 {{platform}}에서 저장할 수 있습니다.",
     feishuManualStep5: "앱 버전을 게시해야 봇에게 메시지를 보낼 수 있습니다.",
     telegramGuideStep1: "이 코드를 스캔하거나 버튼을 눌러 Telegram에서 BotFather를 여세요.",
     telegramGuideStep2: "/newbot을 보낸 뒤 이름과 bot으로 끝나는 사용자 이름을 정하세요.",

@@ -1,6 +1,6 @@
-//! Feishu channel onboarding: the daemon runs scan-to-create and clients only show the QR code.
+//! Feishu scan onboarding and regional Feishu/Lark manual credential verification.
 //!
-//! The registration exchange follows Feishu's SDK; see ADR-224.
+//! The registration exchange follows Feishu's SDK; see ADR-224 and ADR-272.
 
 use std::io::Write;
 use std::time::Duration;
@@ -79,12 +79,13 @@ impl Scan {
 pub(crate) struct Onboarding {
     accounts: String,
     open: String,
+    lark_open: String,
     scans: Sessions<Scan>,
 }
 
 impl Default for Onboarding {
     fn default() -> Self {
-        Self::at(ACCOUNTS, API)
+        Self::at(ACCOUNTS, API, super::LARK_API)
     }
 }
 
@@ -104,10 +105,11 @@ enum Poll {
 }
 
 impl Onboarding {
-    fn at(accounts: &str, open: &str) -> Self {
+    fn at(accounts: &str, open: &str, lark_open: &str) -> Self {
         Self {
             accounts: accounts.to_owned(),
             open: open.to_owned(),
+            lark_open: lark_open.to_owned(),
             scans: Sessions::default(),
         }
     }
@@ -240,11 +242,12 @@ impl Onboarding {
         Ok(json!({"cancelled":true}))
     }
 
-    /// Verify manually entered credentials with Feishu, then store and enable the channel.
+    /// Verify credentials in the selected region, then store and enable the channel.
     pub(crate) async fn connect(
         &self,
         bots: &Bots,
         request: FeishuConnect,
+        platform: super::Platform,
     ) -> Result<Value, ErrorCode> {
         if request.app_secret.is_empty()
             || request.app_secret.len() > MAX_SECRET_BYTES
@@ -255,9 +258,13 @@ impl Onboarding {
         bots.check_channel_admission(request.workspace_id.clone())
             .await?;
         let secret = SecretString::from(request.app_secret);
+        let api = match platform {
+            super::Platform::Feishu => &self.open,
+            super::Platform::Lark => &self.lark_open,
+        };
         let token = json_response(
             http_client()?
-                .post(format!("{}{TOKEN_PATH}", self.open))
+                .post(format!("{api}{TOKEN_PATH}"))
                 .json(&json!({"app_id":request.app_id,"app_secret":expose(&secret)}))
                 .send()
                 .await
@@ -267,15 +274,24 @@ impl Onboarding {
         if token["code"] != 0 {
             return Err(ErrorCode::InvalidMessage);
         }
-        let channel = StoredChannel {
-            workspace_id: request.workspace_id,
-            channel_id: request.channel_id,
-            config: ChannelConfig::Feishu {
+        let config = match platform {
+            super::Platform::Feishu => ChannelConfig::Feishu {
                 app_id: request.app_id,
                 secret_ref: stored_credential_reference(request.channel_id),
                 allowed_senders: request.allowed_senders,
                 allow_groups: request.allow_groups,
             },
+            super::Platform::Lark => ChannelConfig::Lark {
+                app_id: request.app_id,
+                secret_ref: stored_credential_reference(request.channel_id),
+                allowed_senders: request.allowed_senders,
+                allow_groups: request.allow_groups,
+            },
+        };
+        let channel = StoredChannel {
+            workspace_id: request.workspace_id,
+            channel_id: request.channel_id,
+            config,
         };
         bots.create_stored_channel(channel, secret).await
     }
@@ -308,7 +324,7 @@ async fn save(bots: &Bots, scan: &mut Scan, workspace: String) -> Value {
 
 fn classify(response: &Value) -> Poll {
     let user = &response["user_info"];
-    // The channel transport speaks only to Feishu's China region.
+    // This scan uses Feishu's registration service; Lark uses manual onboarding.
     if user["tenant_brand"] == "lark" {
         return Poll::Failed(FAILED_LARK);
     }

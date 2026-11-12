@@ -138,6 +138,12 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             allowed_senders,
             ..
         }
+        | ChannelConfig::Lark {
+            app_id,
+            secret_ref,
+            allowed_senders,
+            ..
+        }
         | ChannelConfig::Qq {
             app_id,
             secret_ref,
@@ -214,6 +220,7 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Webhook { endpoint_id, .. } => Some(("webhook", endpoint_id)),
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
+        ChannelConfig::Lark { app_id, .. } => Some(("lark", app_id)),
         ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
         ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
         ChannelConfig::PhotonImessage { project_id, .. } => Some(("photon", project_id)),

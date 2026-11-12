@@ -197,6 +197,7 @@ export const zhCN: TranslationResources = {
     channelType: "Channel 类型",
     telegram: "Telegram",
     feishu: "飞书",
+    lark: "Lark",
     tokenRef: "Bot Token 引用",
     secretRef: "App Secret 引用",
     appId: "App ID",
@@ -216,20 +217,20 @@ export const zhCN: TranslationResources = {
     feishuScanRetry: "重试",
     feishuScanDenied: "已在飞书中拒绝此请求。",
     feishuScanExpired: "二维码已过期，请重新开始。",
-    feishuScanLark: "这看起来是 Lark 账号。Ait 目前只支持中国区飞书。",
+    feishuScanLark: "此二维码用于飞书。Lark 账号请选择 Lark 类型，并手动填写应用凭据。",
     feishuScanUnavailable: "无法完成飞书设置。请重试，或手动填写凭据。",
     feishuManualEntry: "手动填写凭据",
     feishuScanInstead: "改用扫码",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "粘贴 App Secret。Ait 会向飞书验证，并私密保存在此主机上。也可以填写 env:AIT_SERVER_CREDENTIAL_* 引用。",
-    feishuManualStep1: "在 open.feishu.cn/app 创建企业自建应用，并开启机器人能力。",
+      "粘贴 App Secret。Ait 会向{{platform}}验证，并私密保存在此主机上。也可以填写 env:AIT_SERVER_CREDENTIAL_* 引用。",
+    feishuManualStep1: "在 {{developerUrl}} 创建企业自建应用，并开启机器人能力。",
     feishuManualStep2:
       "在权限管理中添加 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly。",
     feishuManualStep3:
-      "将 App ID 和 App Secret 填到这里，把你的飞书 Open ID（ou_...）填为允许的发送者，然后添加 Channel。",
+      "将 App ID 和 App Secret 填到这里，把你的{{platform}} Open ID（ou_...）填为允许的发送者，然后添加 Channel。",
     feishuManualStep4:
-      "然后在飞书“事件与回调”中选择长连接并订阅 im.message.receive_v1。飞书要求 Channel 已连接后才能保存此设置。",
+      "然后在{{platform}}“事件与回调”中选择长连接并订阅 im.message.receive_v1。{{platform}}要求 Channel 已连接后才能保存此设置。",
     feishuManualStep5: "发布应用版本，之后大家才能给机器人发消息。",
     telegramGuideStep1: "扫描此二维码或点击按钮，在 Telegram 中打开 BotFather。",
     telegramGuideStep2: "发送 /newbot，然后设置名称和以 bot 结尾的用户名。",

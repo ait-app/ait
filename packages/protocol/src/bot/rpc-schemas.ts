@@ -150,6 +150,16 @@ export const BOT_REQUEST_SCHEMAS = [
     allowGroups: z.boolean().optional(),
   }),
   z.strictObject({
+    type: z.literal("bot.channel.lark.connect.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    appId: z.string(),
+    appSecret: z.string(),
+    allowedSenders: z.array(z.string()),
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
     type: z.literal("bot.channel.weixin.scan.start.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
@@ -409,6 +419,10 @@ export const BOT_RESPONSE_SCHEMAS = [
     payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
   }),
   z.object({
+    type: z.literal("bot.channel.lark.connect.response"),
+    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+  }),
+  z.object({
     type: z.literal("bot.channel.feishu.connect.response"),
     payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
   }),
@@ -628,6 +642,7 @@ export const BOT_TELEGRAM_SETUP_METHODS = [
   "bot.channel.telegram.pair.status.request",
   "bot.channel.telegram.pair.cancel.request",
 ] as const;
+export const BOT_LARK_SETUP_METHODS = ["bot.channel.lark.connect.request"] as const;
 export const BOT_WEIXIN_SETUP_METHODS = [
   "bot.channel.weixin.scan.start.request",
   "bot.channel.weixin.scan.status.request",
@@ -653,6 +668,7 @@ const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_NOTIFICATION_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
+  ...BOT_LARK_SETUP_METHODS,
   ...BOT_TELEGRAM_SETUP_METHODS,
   ...BOT_WEIXIN_SETUP_METHODS,
   ...BOT_QQ_SETUP_METHODS,

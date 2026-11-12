@@ -85,7 +85,7 @@ pub(crate) struct ScanRequest {
     pub(crate) workspace_id: String,
     pub(crate) scan_id: Uuid,
 }
-/// Manually entered Feishu credentials; deliberately not `Debug` because it holds a secret.
+/// Feishu or Lark credentials; deliberately not `Debug` because it holds a secret.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct FeishuConnect {

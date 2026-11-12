@@ -199,6 +199,7 @@ export const ar: TranslationResources = {
     channelType: "نوع القناة",
     telegram: "Telegram",
     feishu: "Feishu",
+    lark: "Lark",
     tokenRef: "مرجع رمز Bot",
     secretRef: "مرجع سر التطبيق",
     appId: "معرّف التطبيق",
@@ -219,21 +220,22 @@ export const ar: TranslationResources = {
     feishuScanRetry: "إعادة المحاولة",
     feishuScanDenied: "تم رفض الطلب في Feishu.",
     feishuScanExpired: "انتهت صلاحية رمز QR. ابدأ من جديد للحصول على رمز آخر.",
-    feishuScanLark: "يبدو أن هذا حساب Lark. يدعم Ait تطبيق Feishu في الصين فقط.",
+    feishuScanLark:
+      "رمز QR هذا مخصص لـ Feishu. لحساب Lark، اختر Lark وأدخل بيانات اعتماد التطبيق يدويًا.",
     feishuScanUnavailable:
       "تعذّر إكمال الإعداد مع Feishu. أعد المحاولة أو أدخل بيانات الاعتماد يدويًا.",
     feishuManualEntry: "إدخال بيانات الاعتماد يدويًا",
     feishuScanInstead: "مسح رمز QR بدلاً من ذلك",
     feishuAppSecret: "App Secret",
     feishuAppSecretHint:
-      "الصق App Secret. يتحقق منه Ait مع Feishu ويحفظه بشكل خاص على هذا المضيف. يمكن أيضًا استخدام مرجع env:AIT_SERVER_CREDENTIAL_*.",
-    feishuManualStep1: "أنشئ تطبيقًا مخصصًا على open.feishu.cn/app وفعّل إمكانية البوت.",
+      "الصق App Secret. يتحقق منه Ait مع {{platform}} ويحفظه بشكل خاص على هذا المضيف. يمكن أيضًا استخدام مرجع env:AIT_SERVER_CREDENTIAL_*.",
+    feishuManualStep1: "أنشئ تطبيقًا مخصصًا على {{developerUrl}} وفعّل إمكانية البوت.",
     feishuManualStep2:
       "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
     feishuManualStep3:
-      "انسخ App ID وApp Secret هنا، وأضف معرّف Open ID الخاص بك في Feishu (ou_...) كمرسل مسموح، ثم أضف القناة.",
+      "انسخ App ID وApp Secret هنا، وأضف معرّف Open ID الخاص بك في {{platform}} (ou_...) كمرسل مسموح، ثم أضف القناة.",
     feishuManualStep4:
-      "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في Feishu، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ Feishu حفظ ذلك إلا بعد اتصال القناة.",
+      "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في {{platform}}، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ {{platform}} حفظ ذلك إلا بعد اتصال القناة.",
     feishuManualStep5: "انشر إصدارًا من التطبيق حتى يتمكن الآخرون من مراسلة البوت.",
     telegramGuideStep1: "امسح هذا الرمز أو استخدم الزر لفتح BotFather في Telegram.",
     telegramGuideStep2: "أرسل /newbot ثم اختر اسمًا واسم مستخدم ينتهي بـ bot.",

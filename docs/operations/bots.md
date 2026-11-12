@@ -1,7 +1,7 @@
 # Workspace Bot
 
 每个 Workspace 至多一个管理者 Bot，使用独占 Channel 和隐藏 Provider session，由用户显式设置；未设置时不产生任何记录、会话、轮询或模型调用。
-当前支持内置对话、Telegram、中国区飞书、微信（仅单聊）、QQ（单聊和群聊）与 iMessage（通过 Photon，仅单聊）；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)，权限与 Ait 工具见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)。
+当前支持内置对话、Telegram、中国区飞书、国际版 Lark、微信（仅单聊）、QQ（单聊和群聊）与 iMessage（通过 Photon，仅单聊）；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)，权限与 Ait 工具见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)。
 客户端 Bot 标签页见 [ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)，使用方式见下文“在 Ait 中使用”。
 
 ## 使用与生命周期
@@ -17,7 +17,7 @@
 - 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；排队中的输入随 reset 取消；旧历史保留。
 - 状态为 `active`、`paused`（原因 `user` 或 `directory_missing`）、`retired`。暂停取消排队和执行中的输入并停止外部轮询；
   恢复要求 Workspace 目录存在，否则返回 `WorkspaceNotFound`。Workspace 目录缺失会在轮次可运行时检测，Bot 暂停为 `directory_missing`，需用户显式恢复。
-- `bot.remove` 使 Bot 退役、保留记忆，并释放其 Telegram／飞书账号（外部 Channel 标记为已删除）；Workspace 归档同样退役并删除记忆。
+- `bot.remove` 使 Bot 退役、保留记忆，并释放其外部账号（外部 Channel 标记为已删除）；Workspace 归档同样退役并删除记忆。
 - 退役 Bot 的对话与历史仍留在磁盘上，但 v2 接口只读取当前未退役的 Bot，因此无法再查看；
   重新 `bot.setup` 从空的对话历史开始，记忆除非 `clearMemory:true` 否则保留。清理或只读访问退役历史留待后续工作。
 - 所有 Provider 权限请求自动拒绝，不等待用户审批，见
@@ -39,7 +39,7 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
    访客只看到未配置提示。
 3. 设置完成后进入对话，轮次显示状态与错误。由通知唤醒的轮次不显示为用户消息，见下文“通知与唤醒”。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
    目录缺失导致的暂停会说明原因。暂停期间记忆保存、Channel 新增与启停也停用，恢复后才能修改。
-4. 在设置页可修改模型（对新对话生效）、选择唤醒范围并查看最近的通知、暂停或恢复、按 revision 编辑记忆、管理 Telegram 与飞书 Channel、移除 Bot。
+4. 在设置页可修改模型（对新对话生效）、选择唤醒范围并查看最近的通知、暂停或恢复、按 revision 编辑记忆、管理外部 Channel、移除 Bot。
    飞书 Channel 默认扫码接入，也可手动填写凭据，见下文“飞书接入”；Telegram 按页面引导粘贴 Token 并点击 Start，见下文“Telegram 接入”。两者都可改用 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用并配置允许的发送者；通过环境变量引用新建的 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
 5. 访客在所有视图中只读。重新设置被移除的 Bot（包括在其他设备上）得到空的对话与 Channel，客户端不会显示旧 Bot 的缓存内容。
 
@@ -172,7 +172,7 @@ Bot 创建的定时任务记录 `botScope`（根 Workspace，而不是某个 Bot
 Bot 运行或恢复模式超出上限的任务会被拒绝；没有存储模式的用户任务需由用户先设置允许的模式。
 凭据细节见 [MCP](mcp.md#bot-与子树凭据)。
 
-## Telegram 与飞书配置
+## Telegram、飞书与 Lark 配置
 
 飞书推荐扫码接入，Telegram 推荐引导接入，都无需下面的配置。使用环境变量时，凭据由启动 daemon 的宿主环境注入，Channel 仅保存引用。
 以下为非秘密配置示例，替换允许的用户 ID 后再启用。
@@ -239,9 +239,38 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 同一用户运行的进程可以读取此文件，边界见 [ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)。
 
 飞书使用自建应用机器人，配置 IM 接收/发送权限，订阅 `im.message.receive_v1` 并选择长连接。
-默认只接收允许列表中的发送者；群聊需显式开启并提及机器人。当前不支持 Lark 国际区域、富媒体和卡片流式回复。
+默认只接收允许列表中的发送者；群聊需显式开启并提及机器人。当前不支持富媒体和卡片流式回复。
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
 实际平台凭据和应用权限需要单独验收，历史模拟服务测试不能证明真实账号已验证。
+
+### Lark 国际版接入
+
+在 Bot 设置页添加 Channel 并选择 **Lark**，手动填写国际版自建应用的 App ID、App Secret
+和允许发送消息的用户 Open ID（`ou_...`）。daemon 向 `open.larksuite.com` 验证凭据后保存并启用
+Channel；凭据存储与清理沿用飞书规则。Lark 入口要求主机支持 `bot.channel.lark.connect.request`，
+旧主机需升级后才能显示。
+
+1. 在 [Lark 开发者后台](https://open.larksuite.com/app)创建自建应用，开启机器人能力。
+2. 添加 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly` 权限。
+3. 在 Ait 中填好上述信息并添加 Channel，然后在应用的事件与回调设置中选择长连接，订阅 `im.message.receive_v1`。
+4. 发布应用版本，使用允许列表内的账号向机器人发消息。群聊需在 Ait 开启群聊并 @ 机器人。
+
+也可用环境变量引用配置，通过 `bot.channel.create.request` 创建，再启用 Channel：
+
+```json
+{
+  "kind": "lark",
+  "appId": "cli_example",
+  "secretRef": "env:AIT_SERVER_CREDENTIAL_LARK",
+  "allowedSenders": ["ou_example"],
+  "allowGroups": false
+}
+```
+
+Lark 与飞书配置分别连接各自区域，不能通过修改已有 Channel 的类型切换；请新建对应类型。
+Lark 接入目前仅以本地模拟服务验证，真实账号和区域长连接可用性仍需验收；应用必须能启用长连接，
+尚未提供 Lark 平台事件的 Webhook 接收方式。飞书二维码不用于创建 Lark 应用。
+新增类型的升级与降级限制见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。
 
 ### Webhook Channel
 
@@ -276,7 +305,8 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
 其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.{list,reset}`、
 `bot.turn.cancel`、`bot.memory.get`，以及读取通知日志的 `bot.notifications.list`（可选 `unseenBy` 只返回某对话尚未在完成轮次中看到的通知）。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
-Channel 能力以 `bot.channel.types.request` 为准；完整参数见
+`bot.channel.lark.connect` 提供 Lark 手动接入。基础 Channel 类型通过 `bot.channel.types.request` 查询，
+新增平台按各自的接入方法发现能力；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见
 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md) 与
 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。

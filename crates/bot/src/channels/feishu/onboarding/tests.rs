@@ -121,7 +121,7 @@ async fn harness(feishu: &Feishu, credentials: Memory) -> Harness {
         .unwrap();
     Harness {
         bots,
-        onboarding: Onboarding::at(&feishu.base, &feishu.base),
+        onboarding: Onboarding::at(&feishu.base, &feishu.base, "http://127.0.0.1:0"),
         credentials,
         _fixture: fixture,
     }
@@ -272,7 +272,7 @@ async fn terminal_feishu_answers_are_reported_and_create_nothing() {
 }
 
 #[tokio::test]
-async fn lark_tenants_are_refused_because_the_channel_only_reaches_feishu() {
+async fn feishu_scan_requires_lark_tenants_to_use_the_lark_setup() {
     let mut lark = created();
     lark["user_info"]["tenant_brand"] = json!("lark");
     let feishu = feishu(vec![(200, lark)]).await;
@@ -445,14 +445,22 @@ async fn manual_connect_verifies_stores_and_retries_without_rewriting() {
 
     let refused = harness
         .onboarding
-        .connect(&harness.bots, connect_request(id, "wrong-secret"))
+        .connect(
+            &harness.bots,
+            connect_request(id, "wrong-secret"),
+            super::super::Platform::Feishu,
+        )
         .await;
     assert_eq!(refused.unwrap_err(), ErrorCode::InvalidMessage);
     assert!(harness.credentials.secrets.lock().unwrap().is_empty());
 
     let connected = harness
         .onboarding
-        .connect(&harness.bots, connect_request(id, "good-secret"))
+        .connect(
+            &harness.bots,
+            connect_request(id, "good-secret"),
+            super::super::Platform::Feishu,
+        )
         .await
         .unwrap();
     assert_eq!(connected["created"], true);
@@ -461,11 +469,63 @@ async fn manual_connect_verifies_stores_and_retries_without_rewriting() {
     harness.credentials.secrets.lock().unwrap().clear();
     let retried = harness
         .onboarding
-        .connect(&harness.bots, connect_request(id, "good-secret"))
+        .connect(
+            &harness.bots,
+            connect_request(id, "good-secret"),
+            super::super::Platform::Feishu,
+        )
         .await
         .unwrap();
     assert_eq!(retried["created"], false);
     assert!(harness.credentials.secrets.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn lark_connect_verifies_only_in_lark_and_stores_a_lark_channel() {
+    let server = feishu(vec![pending()]).await;
+    let mut harness = harness(&server, Memory::default()).await;
+    harness.onboarding.lark_open.clone_from(&server.base);
+    harness.onboarding.open = "http://127.0.0.1:0".into();
+    let channel_id = ChannelId::generate();
+
+    let refused = harness
+        .onboarding
+        .connect(
+            &harness.bots,
+            connect_request(channel_id, "wrong-secret"),
+            super::super::Platform::Lark,
+        )
+        .await;
+    assert_eq!(refused.unwrap_err(), ErrorCode::InvalidMessage);
+    assert!(harness.credentials.secrets.lock().unwrap().is_empty());
+
+    let result = harness
+        .onboarding
+        .connect(
+            &harness.bots,
+            connect_request(channel_id, "good-secret"),
+            super::super::Platform::Lark,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["channel"]["config"]["kind"], "lark");
+    assert_eq!(
+        result["channel"]["config"]["allowedSenders"],
+        json!(["ou_alice"])
+    );
+    assert_eq!(result["channel"]["enabled"], true);
+    assert!(!result.to_string().contains("good-secret"));
+    assert_eq!(
+        harness
+            .credentials
+            .secrets
+            .lock()
+            .unwrap()
+            .get(&channel_id)
+            .unwrap(),
+        "good-secret"
+    );
+    harness.bots.shutdown().await.unwrap();
 }
 
 #[tokio::test]
@@ -479,6 +539,7 @@ async fn manual_connect_rejects_malformed_secrets_before_contacting_feishu() {
             .connect(
                 &harness.bots,
                 connect_request(ChannelId::generate(), secret),
+                super::super::Platform::Feishu,
             )
             .await;
         assert_eq!(refused.unwrap_err(), ErrorCode::InvalidMessage);

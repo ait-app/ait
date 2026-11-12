@@ -10,6 +10,7 @@ const {
   confirmDialog,
   randomUUID,
   feishuSetup,
+  larkSetup,
   telegramSetup,
   scanSetup,
   imessageSetup,
@@ -20,6 +21,7 @@ const {
   openSmsUrl,
 } = vi.hoisted(() => ({
   feishuSetup: { current: false },
+  larkSetup: { current: false },
   telegramSetup: { current: false },
   scanSetup: { current: false },
   imessageSetup: { current: false },
@@ -41,6 +43,7 @@ vi.mock("@/stores/session-store", () => ({
           serverInfo: {
             features: {
               workspaceBotFeishuSetup: feishuSetup.current,
+              workspaceBotLarkSetup: larkSetup.current,
               workspaceBotTelegramSetup: telegramSetup.current,
               workspaceBotWeixinSetup: scanSetup.current,
               workspaceBotQqSetup: scanSetup.current,
@@ -205,6 +208,7 @@ function submitButton() {
 
 beforeEach(() => {
   feishuSetup.current = false;
+  larkSetup.current = false;
   telegramSetup.current = false;
   imessageSetup.current = false;
   webhookSetup.current = false;
@@ -245,6 +249,96 @@ afterEach(() => {
 });
 
 describe("BotChannels", () => {
+  describe("Lark manual setup", () => {
+    async function openLark() {
+      larkSetup.current = true;
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      fireEvent.change(await screen.findByTestId("bot-channel-type"), {
+        target: { value: "lark" },
+      });
+      await screen.findByTestId("bot-lark-manual-guide");
+    }
+
+    it("offers Lark by its own capability without changing the legacy type list", async () => {
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      expect(screen.queryByRole("option", { name: "bots.lark" })).toBeNull();
+      cleanup();
+      queryClient.clear();
+      await openLark();
+      expect(screen.getByRole("option", { name: "bots.lark" })).toBeTruthy();
+      expect(screen.queryByTestId("bot-feishu-scan-start")).toBeNull();
+      expect(screen.queryByTestId("bot-feishu-scan-instead")).toBeNull();
+    });
+
+    it("masks the secret and submits to the Lark verification method", async () => {
+      const base = botRequest.getMockImplementation();
+      botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+        if (method === "bot.channel.lark.connect.request") return { created: true, channel: {} };
+        return base?.(method, params);
+      });
+      await openLark();
+      expect(screen.getByLabelText("bots.feishuAppSecret")).toHaveProperty("type", "password");
+      typeInto("bots.appId", " cli_lark ");
+      typeInto("bots.feishuAppSecret", " test-secret ");
+      expect(submitButton()).toHaveProperty("disabled", true);
+      typeInto("bots.allowedSenders", "ou_alice, ou_bob");
+      fireEvent.click(submitButton());
+
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.lark.connect.request", {
+          workspaceId: "workspace",
+          channelId: randomUUID(),
+          appId: "cli_lark",
+          appSecret: "test-secret",
+          allowedSenders: ["ou_alice", "ou_bob"],
+          allowGroups: false,
+        }),
+      );
+      await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
+      expect(
+        botRequest.mock.calls.some(([method]) => method === "bot.channel.feishu.connect.request"),
+      ).toBe(false);
+    });
+
+    it("supports environment references with the Lark kind", async () => {
+      await openLark();
+      typeInto("bots.appId", "cli_lark");
+      typeInto("bots.feishuAppSecret", "env:AIT_SERVER_CREDENTIAL_LARK");
+      typeInto("bots.allowedSenders", "ou_alice");
+      fireEvent.click(submitButton());
+
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.create.request", {
+          workspaceId: "workspace",
+          channelId: randomUUID(),
+          enabled: false,
+          config: {
+            kind: "lark",
+            appId: "cli_lark",
+            secretRef: "env:AIT_SERVER_CREDENTIAL_LARK",
+            allowedSenders: ["ou_alice"],
+            allowGroups: false,
+          },
+        }),
+      );
+    });
+
+    it("labels an existing Lark channel", async () => {
+      const base = botRequest.getMockImplementation();
+      botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+        if (method === "bot.channel.list.request")
+          return {
+            channels: [{ ...channels[2], config: { ...channels[2].config, kind: "lark" } }],
+          };
+        return base?.(method, params);
+      });
+      renderChannels();
+      expect(await screen.findByText("bots.lark")).toBeTruthy();
+    });
+  });
+
   it("channel_form_requires_env_reference_and_senders", async () => {
     renderChannels();
     fireEvent.click(await screen.findByText("bots.addChannel"));

@@ -107,7 +107,7 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     allowGroups: z.boolean().default(false),
   }),
   z.strictObject({
-    kind: z.literal("feishu"),
+    kind: z.enum(["feishu", "lark"]),
     appId: z.string(),
     secretRef: z.string(),
     allowedSenders: z.array(z.string()),

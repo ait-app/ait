@@ -12,15 +12,21 @@ use tokio::sync::Notify;
 use super::super::*;
 use crate::test_support::{Fixture, WORKSPACE, setup};
 
-async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
+async fn registered_channel(fixture: &Fixture, bots: &Bots, kind: &str) -> Channel {
     bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let value = bots.execute("bot.channel.create.request", json!({
-        "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
-        "config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
-            "allowedSenders":["ou_alice"],"allowGroups":true}
-    })).await.unwrap();
+    let value = bots
+        .execute(
+            "bot.channel.create.request",
+            json!({
+                "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
+                "config":{"kind":kind,"appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
+                    "allowedSenders":["ou_alice"],"allowGroups":true}
+            }),
+        )
+        .await
+        .unwrap();
     fixture.channel(&value["channel"])
 }
 
@@ -62,14 +68,13 @@ fn api(endpoint: Value, delivered: Arc<Notify>) -> Router {
         )
 }
 
-#[tokio::test]
-async fn feishu_lifecycle_authenticates_connects_and_delivers_a_durable_reply() {
+async fn lifecycle(kind: &str, expected_endpoint: &str) {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&fixture, &bots).await;
+    let channel = registered_channel(&fixture, &bots, kind).await;
     let delivered = Arc::new(Notify::new());
     let app = api(
-        json!({"code":0,"data":{"URL":"wss://fixture.feishu.cn/ws?service_id=7",
+        json!({"code":0,"data":{"URL":expected_endpoint,
         "ClientConfig":{"PingInterval":30}}}),
         delivered.clone(),
     );
@@ -113,7 +118,7 @@ async fn feishu_lifecycle_authenticates_connects_and_delivers_a_durable_reply() 
         (&client, &secret, &base),
         &cancel,
         move |endpoint| async move {
-            assert_eq!(endpoint, "wss://fixture.feishu.cn/ws?service_id=7");
+            assert_eq!(endpoint, expected_endpoint);
             tokio_tungstenite::connect_async(format!("ws://{ws_address}"))
                 .await
                 .map(|(socket, _)| socket)
@@ -144,40 +149,66 @@ async fn feishu_lifecycle_authenticates_connects_and_delivers_a_durable_reply() 
 }
 
 #[tokio::test]
-async fn untrusted_feishu_endpoints_never_reach_the_websocket_dialer() {
-    for endpoint in [
-        json!({"code":1}),
-        json!({"code":0}),
-        json!({"code":0,"data":{}}),
-        json!({"code":0,"data":{"URL":"invalid"}}),
-        json!({"code":0,"data":{"URL":"ws://fixture.feishu.cn?service_id=7"}}),
-        json!({"code":0,"data":{"URL":"wss://feishu.cn.evil.test?service_id=7"}}),
-        json!({"code":0,"data":{"URL":"wss://fixture.feishu.cn"}}),
+async fn feishu_lifecycle_authenticates_connects_and_delivers_a_durable_reply() {
+    lifecycle("feishu", "wss://fixture.feishu.cn/ws?service_id=7").await;
+}
+
+#[tokio::test]
+async fn lark_lifecycle_authenticates_connects_and_delivers_a_durable_reply() {
+    lifecycle("lark", "wss://fixture.larksuite.com/ws?service_id=7").await;
+}
+
+#[tokio::test]
+async fn untrusted_or_cross_region_endpoints_never_reach_the_websocket_dialer() {
+    for (kind, domain, other) in [
+        ("feishu", "feishu.cn", "larksuite.com"),
+        ("lark", "larksuite.com", "feishu.cn"),
     ] {
-        let fixture = Fixture::new();
-        let bots = fixture.bots();
-        let channel = registered_channel(&fixture, &bots).await;
-        let app = api(endpoint, Arc::new(Notify::new()));
-        let http = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = http.local_addr().unwrap();
-        let task = tokio::spawn(async move {
-            axum::serve(http, app).await.unwrap();
-        });
-        let result = run_at(
-            &bots,
-            &channel,
-            (
-                &reqwest::Client::builder().no_proxy().build().unwrap(),
-                &SecretString::from("offline-secret".to_owned()),
-                &format!("http://{address}"),
-            ),
-            &CancellationToken::new(),
-            |_| async { panic!("untrusted endpoint was dialed") },
-        )
-        .await;
-        assert_eq!(result, Err(ErrorCode::BotIo));
-        bots.shutdown().await.unwrap();
-        task.abort();
+        let mut endpoints = vec![
+            json!({"code":1}),
+            json!({"code":0}),
+            json!({"code":0,"data":{}}),
+        ];
+        for url in [
+            "invalid".to_owned(),
+            format!("ws://fixture.{domain}?service_id=7"),
+            format!("wss://{domain}.evil.test?service_id=7"),
+            format!("wss://evil{domain}?service_id=7"),
+            format!("wss://fixture.{other}?service_id=7"),
+            format!("wss://fixture.{domain}"),
+            format!("wss://fixture.{domain}?service_id=invalid"),
+            format!("wss://user:password@fixture.{domain}?service_id=7"),
+            format!("wss://fixture.{domain}?service_id=7#fragment"),
+            "wss://127.0.0.1?service_id=7".to_owned(),
+        ] {
+            endpoints.push(json!({"code":0,"data":{"URL":url}}));
+        }
+        for endpoint in endpoints {
+            let fixture = Fixture::new();
+            let bots = fixture.bots();
+            let channel = registered_channel(&fixture, &bots, kind).await;
+            let app = api(endpoint, Arc::new(Notify::new()));
+            let http = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = http.local_addr().unwrap();
+            let task = tokio::spawn(async move {
+                axum::serve(http, app).await.unwrap();
+            });
+            let result = run_at(
+                &bots,
+                &channel,
+                (
+                    &reqwest::Client::builder().no_proxy().build().unwrap(),
+                    &SecretString::from("offline-secret".to_owned()),
+                    &format!("http://{address}"),
+                ),
+                &CancellationToken::new(),
+                |_| async { panic!("untrusted endpoint was dialed") },
+            )
+            .await;
+            assert_eq!(result, Err(ErrorCode::BotIo));
+            bots.shutdown().await.unwrap();
+            task.abort();
+        }
     }
 }
 

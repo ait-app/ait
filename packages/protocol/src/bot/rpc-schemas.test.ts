@@ -17,6 +17,45 @@ import { StoredScheduleSchema } from "../schedule/types.js";
 import { validateWSOutboundMessage } from "../validation/ws-outbound.js";
 
 describe("Bot wire contract", () => {
+  it("keeps Lark setup optional and accepts its credentials and channel in session envelopes", () => {
+    expect(BOT_METHODS).not.toContain("bot.channel.lark.connect.request");
+    const channelId = crypto.randomUUID();
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "bot.channel.lark.connect.request",
+        requestId: "lark-connect",
+        workspaceId: "workspace",
+        channelId,
+        appId: "cli_lark",
+        appSecret: "test-secret",
+        allowedSenders: ["ou_alice"],
+      }).type,
+    ).toBe("bot.channel.lark.connect.request");
+    const config = {
+      kind: "lark",
+      appId: "cli_lark",
+      secretRef: "env:AIT_SERVER_CREDENTIAL_LARK",
+      allowedSenders: ["ou_alice"],
+    };
+    expect(BotChannelConfigSchema.parse(config)).toMatchObject({
+      kind: "lark",
+      allowGroups: false,
+    });
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "bot.channel.lark.connect.response",
+        payload: {
+          requestId: "lark-connect",
+          created: true,
+          channel: { id: channelId, config, enabled: true, cursor: null },
+        },
+      }).type,
+    ).toBe("bot.channel.lark.connect.response");
+    expect(BotChannelConfigSchema.safeParse({ ...config, appSecret: "raw-secret" }).success).toBe(
+      false,
+    );
+  });
+
   it("preserves distinct assistant messages and defaults legacy turns to an empty list", () => {
     const turn = {
       id: crypto.randomUUID(),
@@ -175,7 +214,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(43);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(44);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

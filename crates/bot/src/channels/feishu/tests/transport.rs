@@ -116,91 +116,93 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
 
 #[tokio::test]
 async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplicated() {
-    let fixture = Fixture::new();
-    fixture.native.hold.store(true, Ordering::SeqCst);
-    let bots = fixture.bots();
-    let id = ChannelId::generate();
-    bots.execute("bot.setup.request", setup(WORKSPACE))
-        .await
-        .unwrap();
-    let value = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).await.unwrap();
-    let channel: Channel = fixture.channel(&value["channel"]);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let cancel = CancellationToken::new();
-    let server_cancel = cancel.clone();
-    let store = fixture.store.clone();
-    let server = tokio::spawn(async move {
-        let (tcp, _) = listener.accept().await.unwrap();
-        let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
-        let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
-        let frame = Frame {
-            seq_id: 12,
-            log_id: 99,
-            service: 7,
-            method: 1,
-            headers: vec![Header {
-                key: "type".into(),
-                value: "event".into(),
-            }],
-            payload: Some(serde_json::to_vec(&event).unwrap()),
-            ..Frame::default()
-        };
-        for _ in 0..2 {
-            socket
-                .send(WsMessage::Binary(frame.encode_to_vec().into()))
-                .await
-                .unwrap();
-            loop {
-                let WsMessage::Binary(bytes) = socket.next().await.unwrap().unwrap() else {
-                    continue;
-                };
-                let reply = Frame::decode(bytes).unwrap();
-                if reply.method != 1 {
-                    continue;
-                }
-                assert_eq!(reply.seq_id, 12);
-                assert_eq!(reply.log_id, 99);
-                let result: Value =
-                    serde_json::from_slice(reply.payload.as_ref().unwrap()).unwrap();
-                assert_eq!(result["code"], 200);
-                let conversations = store.conversations().unwrap();
-                assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
-                break;
-            }
-        }
-        server_cancel.cancel();
-    });
-    let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{address}"))
-        .await
-        .unwrap();
-    let client = reqwest::Client::new();
-    let secret = SecretString::from("offline".to_owned());
-    let connection = Connection {
-        channel: &channel,
-        client: &client,
-        app_id: "app-1",
-        secret: &secret,
-        token: Mutex::new(None),
-        api: API,
-    };
-    tokio::time::timeout(
-        Duration::from_secs(5),
-        receive(
-            &bots,
-            &connection,
-            socket,
-            StreamOptions {
+    for kind in ["feishu", "lark"] {
+        let fixture = Fixture::new();
+        fixture.native.hold.store(true, Ordering::SeqCst);
+        let bots = fixture.bots();
+        let id = ChannelId::generate();
+        bots.execute("bot.setup.request", setup(WORKSPACE))
+            .await
+            .unwrap();
+        let value = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":kind,"appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).await.unwrap();
+        let channel: Channel = fixture.channel(&value["channel"]);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let cancel = CancellationToken::new();
+        let server_cancel = cancel.clone();
+        let store = fixture.store.clone();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
+            let frame = Frame {
+                seq_id: 12,
+                log_id: 99,
                 service: 7,
-                ping_interval: 30,
-                bot_id: "ou_bot",
-            },
-            &cancel,
-        ),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    server.await.unwrap();
-    bots.shutdown().await.unwrap();
+                method: 1,
+                headers: vec![Header {
+                    key: "type".into(),
+                    value: "event".into(),
+                }],
+                payload: Some(serde_json::to_vec(&event).unwrap()),
+                ..Frame::default()
+            };
+            for _ in 0..2 {
+                socket
+                    .send(WsMessage::Binary(frame.encode_to_vec().into()))
+                    .await
+                    .unwrap();
+                loop {
+                    let WsMessage::Binary(bytes) = socket.next().await.unwrap().unwrap() else {
+                        continue;
+                    };
+                    let reply = Frame::decode(bytes).unwrap();
+                    if reply.method != 1 {
+                        continue;
+                    }
+                    assert_eq!(reply.seq_id, 12);
+                    assert_eq!(reply.log_id, 99);
+                    let result: Value =
+                        serde_json::from_slice(reply.payload.as_ref().unwrap()).unwrap();
+                    assert_eq!(result["code"], 200);
+                    let conversations = store.conversations().unwrap();
+                    assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
+                    break;
+                }
+            }
+            server_cancel.cancel();
+        });
+        let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+            .await
+            .unwrap();
+        let client = reqwest::Client::new();
+        let secret = SecretString::from("offline".to_owned());
+        let connection = Connection {
+            channel: &channel,
+            client: &client,
+            app_id: "app-1",
+            secret: &secret,
+            token: Mutex::new(None),
+            api: API,
+        };
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            receive(
+                &bots,
+                &connection,
+                socket,
+                StreamOptions {
+                    service: 7,
+                    ping_interval: 30,
+                    bot_id: "ou_bot",
+                },
+                &cancel,
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        server.await.unwrap();
+        bots.shutdown().await.unwrap();
+    }
 }
