@@ -104,6 +104,20 @@ fn layers_reference_only_what_their_future_crate_may_depend_on() {
     );
 }
 
+#[test]
+fn references_read_indented_and_visibility_prefixed_groups() {
+    let source =
+        "fn f() {\n    use crate::service::x::{A, B};\n}\npub(crate) use crate::ports::y::{C};\n";
+    assert_eq!(
+        references(source),
+        [
+            (2, "service::x::A".to_owned()),
+            (2, "service::x::B".to_owned()),
+            (4, "ports::y::C".to_owned()),
+        ]
+    );
+}
+
 /// Every `.rs` file under `dir`, relative to `root` with `/` separators.
 fn collect(dir: &Path, root: &Path, files: &mut Vec<String>) {
     for entry in fs::read_dir(dir).unwrap() {
@@ -140,7 +154,11 @@ fn references(source: &str) -> Vec<(usize, String)> {
         }
         let opened = group
             .is_empty()
-            .then(|| line.strip_prefix("use crate::")?.split_once('{'))
+            .then(|| {
+                use_statement(line)?
+                    .strip_prefix("crate::")?
+                    .split_once('{')
+            })
             .flatten();
         let entries = match opened {
             Some((prefix, rest)) => {
@@ -179,6 +197,21 @@ fn references(source: &str) -> Vec<(usize, String)> {
         }
     }
     found
+}
+
+/// The rest of `line` after an indented, optionally `pub` or `pub(...)`, `use `.
+fn use_statement(line: &str) -> Option<&str> {
+    let line = line.trim_start();
+    let line = match line.strip_prefix("pub") {
+        Some(rest) => rest
+            .strip_prefix('(')
+            .map_or(rest, |scope| {
+                scope.split_once(')').map_or(scope, |(_, after)| after)
+            })
+            .trim_start(),
+        None => line,
+    };
+    line.strip_prefix("use ")
 }
 
 /// Whether `file` referencing `crate::<target>` crosses a future crate boundary.
