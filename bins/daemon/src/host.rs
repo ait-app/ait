@@ -418,6 +418,7 @@ fn compose_services(
         (&storage.workspaces, &storage.projects, &storage.agents),
         (&directory, &worktrees, scopes),
     )?;
+    let filesystem = compose_filesystem(config, &storage.workspaces, &storage.agents);
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
         push_tokens: compose_push(&config.data_dir, Arc::new(storage.agents))?,
@@ -437,7 +438,7 @@ fn compose_services(
         Services {
             bot: Some(bots),
             metadata: Some(metadata),
-            filesystem: Some(compose_filesystem(config, &storage.workspaces)),
+            filesystem: Some(filesystem),
             provider: Some(provider::Service::new(provider::Dependencies {
                 execution: agent_execution.clone(),
                 summary_generator,
@@ -514,8 +515,10 @@ fn compose_background(
 fn compose_filesystem(
     config: &Config,
     workspace_registry: &FileBackedWorkspaceRegistry,
+    agents: &FileBackedAgentRuntimeRegistry,
 ) -> filesystem::Service {
     let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
+    let git_fetch = git_fetch.with_agent_turns(Arc::new(agents.clone()));
     filesystem::Service::new(filesystem::Dependencies {
         checkout,
         git_fetch,

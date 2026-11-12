@@ -38,7 +38,7 @@ pub enum SessionEventKind {
     /// Terminal hook completion or input attention.
     #[serde(rename = "terminal_attention_required")]
     TerminalAttention,
-    /// Observed checkout state changed after a background remote refresh.
+    /// Observed checkout state changed after a background remote refresh or an Agent turn end.
     #[serde(rename = "checkout_status_update")]
     CheckoutStatus,
     /// Server lifecycle and public metadata changed.
