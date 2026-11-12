@@ -201,7 +201,10 @@ function deriveEffectiveWorkspaceStatus(input: {
     workspaceId: input.workspace.id,
     pendingCreateAttempts: input.pendingCreateAttempts,
   });
-  if (pendingStartedAt) {
+  if (
+    pendingStartedAt &&
+    (!input.workspace.statusEnteredAt || pendingStartedAt > input.workspace.statusEnteredAt)
+  ) {
     return { status: "running", enteredAt: pendingStartedAt };
   }
 
