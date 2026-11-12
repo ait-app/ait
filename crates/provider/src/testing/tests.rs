@@ -259,7 +259,7 @@ async fn manager_delegates_subagent_reads_owner_lanes_and_catalog_shutdown() {
 }
 
 #[tokio::test]
-async fn manager_delegates_unknown_restores_and_command_lists_and_unwraps() {
+async fn manager_delegates_unknown_restores_and_command_lists() {
     let root = tempfile::tempdir().unwrap();
     let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
     registry.initialize().unwrap();
@@ -296,6 +296,30 @@ async fn manager_delegates_unknown_restores_and_command_lists_and_unwraps() {
         manager.commands(&spec).await,
         Err(ErrorCode::UnsupportedCapability)
     );
+}
 
-    manager.into_inner().validate_provider("codex").unwrap();
+#[tokio::test]
+async fn worker_at_registers_the_given_directory_and_reopens_its_root() {
+    let root = tempfile::tempdir().unwrap();
+    let cwd = root.path().join("project");
+    std::fs::create_dir(&cwd).unwrap();
+    // A missing absolute program is never resolved on PATH, so no installed Codex starts.
+    let client = || Box::new(CodexClient::new(root.path().join("missing-codex")));
+
+    let (execution, registry) = worker_at(root.path(), &cwd, Creations::default(), client());
+    execution.shutdown().await.unwrap();
+    let (restarted, _) = worker_at(root.path(), &cwd, Creations::default(), client());
+    restarted.shutdown().await.unwrap();
+
+    let workspaces: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.path().join("workspaces.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        workspaces
+            .to_string()
+            .contains(&format!("\"cwd\":{}", json!(cwd)))
+    );
+    assert!(registry.list().unwrap().is_empty());
+    assert!(root.path().join("timeline.sqlite").exists());
 }

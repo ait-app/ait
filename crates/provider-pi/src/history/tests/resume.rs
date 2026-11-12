@@ -1,61 +1,21 @@
 use super::*;
-use std::os::unix::fs::{PermissionsExt, symlink};
-use std::sync::Arc;
-
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use std::os::unix::fs::{PermissionsExt, symlink};
 
-use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
-use provider::service::agent_manager::AgentManager;
-use provider::service::agent_runtime::AgentRuntimeDirectory;
-use provider::testing::Manager;
+use provider::service::agent_execution::AgentExecution;
 
 fn worker(
     root: &Path,
     cwd: &str,
     client: PiClient,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
-    let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
-    registry.initialize().unwrap();
-    let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
-    projects.initialize().unwrap();
-    let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
-    workspaces.initialize().unwrap();
-    projects.upsert(&serde_json::from_value(json!({
-        "projectId":"project-1","rootPath":cwd,"kind":"non_git","displayName":"project",
-        "createdAt":"2026-09-24T00:00:00Z","updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-    })).unwrap()).unwrap();
-    workspaces
-        .upsert(
-            &serde_json::from_value(json!({
-                "workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":cwd,
-                "kind":"local_checkout","displayName":"main","createdAt":"2026-09-24T00:00:00Z",
-                "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-            }))
-            .unwrap(),
-            domain::workspace::registry::WorkspaceMutationContext::default(),
-        )
-        .unwrap();
-    let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
-    manager.register(Box::new(client)).unwrap();
-    let execution = AgentExecution::spawn(ExecutionDependencies {
-        manager: manager.into_inner(),
-        directory: AgentRuntimeDirectory::new(
-            Box::new(registry.clone()),
-            Box::new(workspaces.clone()),
-            Box::new(projects.clone()),
-        ),
-        registry: Box::new(registry.clone()),
-        workspaces: Box::new(workspaces),
-        projects: Box::new(projects),
-        import_directory: None,
-        workspace_automation: None,
-        lifetime: Arc::new(()),
-    })
-    .unwrap();
-    (execution, registry)
+    provider::testing::worker_at(
+        root,
+        Path::new(cwd),
+        model::creation::Creations::default(),
+        Box::new(client),
+    )
 }
 
 #[tokio::test]

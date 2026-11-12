@@ -497,6 +497,7 @@ async fn manager_retains_timeline_and_native_session_across_restart() {
         .collect();
     assert_eq!(users.len(), 3);
     assert_eq!(original[0].item["type"], "user_message");
+    // The entries are in `seq` order, so comparing positions is the former `seq` comparison.
     for (index, (position, user)) in users.iter().enumerate() {
         assert_eq!(user.item["text"], format!("hello {index}"));
         assert_eq!(user.item["clientMessageId"], format!("client-{index}"));

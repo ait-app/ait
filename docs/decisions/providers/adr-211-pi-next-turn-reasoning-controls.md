@@ -22,6 +22,7 @@ paths:
   改用按设置给出的说明，而不是原生错误措辞。
 - 保留：[ADR-034](adr-034-agent-config-session-events.md) 中"请求配置"与"运行时事实"的分离，
   以及 [ADR-189](adr-189-pi-without-host-mode.md) 中"Pi 没有模式"的结论。
+- 适配器现位于 `crates/provider-pi`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

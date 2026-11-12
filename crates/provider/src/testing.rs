@@ -372,12 +372,6 @@ impl Manager {
     pub async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
         self.0.commands(spec).await
     }
-
-    /// The wrapped manager, to compose an execution worker from `ExecutionDependencies`.
-    #[must_use]
-    pub fn into_inner(self) -> AgentManager {
-        self.0
-    }
 }
 
 /// The thinking option `record` runs with: its native runtime selection, or else its configured
@@ -458,6 +452,24 @@ pub fn worker(
         client,
         |manager| manager,
     )
+}
+
+/// Start an execution worker like [`worker`], over registries and a display timeline under
+/// `root`, with the existing directory `cwd` registered as the only project and workspace.
+///
+/// Calling it again with the same `root` reopens the same registries and timeline, as a host
+/// restart does. Returns the execution handle and its durable agent registry.
+///
+/// # Panics
+/// Panics when the registries, the timeline or the worker cannot be set up.
+#[must_use]
+pub fn worker_at(
+    root: &Path,
+    cwd: &Path,
+    creations: Creations,
+    client: Box<dyn AgentClient>,
+) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
+    spawn(root, cwd, creations, client, |manager| manager)
 }
 
 /// Start an execution worker with registries and timeline under `root` and `cwd` registered
