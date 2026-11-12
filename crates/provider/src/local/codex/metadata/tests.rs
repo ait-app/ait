@@ -1,6 +1,6 @@
 use super::*;
-use crate::ports::agent_session::AgentClient;
 use crate::test_support::Fixture;
+use provider_core::ports::agent_session::AgentClient;
 
 #[tokio::test]
 async fn auxiliary_generation_survives_native_retries_and_ignores_old_turn_errors() {

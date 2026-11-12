@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use super::*;
-use provider::ports::agent_session::AgentTurnEvent;
-use provider::protocol::prompt::{AgentPrompt, PromptImage};
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
 mod capabilities;
 mod commands;
@@ -998,7 +998,7 @@ async fn cancellation_closes_tools_and_children_that_never_finished() {
             .any(|item| item["callId"] == "stuck-tool" && item["status"] == "canceled")
     );
     assert!(events.iter().any(|event| matches!(event,
-        AgentTurnEvent::Subagent(provider::ports::controls::SubagentEvent::Upsert(child))
+        AgentTurnEvent::Subagent(provider_core::ports::controls::SubagentEvent::Upsert(child))
             if child.id.ends_with("/worker") && child.descriptor["status"] == "canceled")));
     assert_eq!(session.subagents()[0].descriptor["status"], "canceled");
     session.close().await.unwrap();
@@ -1067,7 +1067,7 @@ async fn steered_slash_commands_never_reach_omp_and_late_steering_refusals_keep_
 }
 
 /// The user messages among `events`' timeline items.
-fn user_messages(events: &[AgentTurnEvent]) -> Vec<provider::protocol::timeline::NativeItem> {
+fn user_messages(events: &[AgentTurnEvent]) -> Vec<provider_core::protocol::timeline::NativeItem> {
     events
         .iter()
         .filter_map(|event| match event {

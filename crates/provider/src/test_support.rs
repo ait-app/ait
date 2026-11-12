@@ -10,11 +10,11 @@ use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorksp
 use serde_json::{Value, json};
 
 use crate::local::codex::CodexClient;
-use crate::ports::agent_session::AgentSessionSpec;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use crate::service::agent_manager::AgentManager;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
+use provider_core::ports::agent_session::AgentSessionSpec;
 
 pub(crate) mod codex_history;
 pub(crate) mod usage_ledger;
@@ -70,7 +70,7 @@ impl Fixture {
 pub(crate) fn worker_with_client(
     fixture: &Fixture,
     creations: model::creation::Creations,
-    client: Box<dyn crate::ports::agent_session::AgentClient>,
+    client: Box<dyn provider_core::ports::agent_session::AgentClient>,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     worker_with_ledger(fixture, creations, client, Arc::new(NoopUsageLedger))
 }
@@ -79,7 +79,7 @@ pub(crate) fn worker_with_client(
 pub(crate) fn worker_with_ledger(
     fixture: &Fixture,
     creations: model::creation::Creations,
-    client: Box<dyn crate::ports::agent_session::AgentClient>,
+    client: Box<dyn provider_core::ports::agent_session::AgentClient>,
     ledger: Arc<dyn UsageLedger>,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));

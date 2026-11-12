@@ -14,8 +14,8 @@ use serde_json::{Value, json};
 
 use super::{LABEL, OmpClient, PROVIDER, config, stream::Stream};
 use provider::local::session_preview;
-use provider::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use provider::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
 /// Bytes of session files read per listing; later files are not described.
 const MAX_LISTING_BYTES: u64 = 256 * 1024 * 1024;
@@ -237,7 +237,7 @@ fn unknown_entry(entry: &Value, kind: &str) -> Option<Value> {
 struct Replay {
     config: StoredAgentConfig,
     active: bool,
-    entries: Vec<provider::protocol::timeline::NativeItem>,
+    entries: Vec<provider_core::protocol::timeline::NativeItem>,
 }
 
 impl Journal {
@@ -447,7 +447,7 @@ pub(super) async fn inspect(
 pub(super) async fn subagents(
     client: &OmpClient,
     cwd: &str,
-) -> Result<Vec<provider::ports::controls::NativeSubagent>, AgentSessionError> {
+) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
     let (client, cwd) = (client.clone(), cwd.to_owned());
     tokio::task::spawn_blocking(move || children::list(&client, &cwd))
         .await

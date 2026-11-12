@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use super::*;
-use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 /// One hour in milliseconds.
 const HOUR: i64 = 3_600_000;

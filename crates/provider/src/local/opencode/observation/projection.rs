@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::{
+use provider_core::{
     ports::agent_session::AgentSessionError,
     protocol::{timeline::NativeItem, usage::AgentUsage},
 };

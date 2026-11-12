@@ -2,7 +2,7 @@
 
 use super::DeepSeekHarnessClient;
 use crate::local::acp_transport::Transport;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(super) fn spawn(
     client: &DeepSeekHarnessClient,

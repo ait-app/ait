@@ -2,11 +2,11 @@
 use super::super::{DeepSeekHarnessClient, PROVIDER};
 use super::{content, projection, runtime::Runtime};
 use crate::local::acp_streaming::Stream;
-use crate::{
+use domain::agent_runtime::AgentPersistenceHandle;
+use provider_core::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::timeline::NativeItem,
 };
-use domain::agent_runtime::AgentPersistenceHandle;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

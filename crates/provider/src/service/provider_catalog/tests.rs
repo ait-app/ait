@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::ports::agent_session::{
+use domain::agent_runtime::AgentPersistenceHandle;
+use provider_core::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use domain::agent_runtime::AgentPersistenceHandle;
 
 mod concurrency;
 mod diagnostics;

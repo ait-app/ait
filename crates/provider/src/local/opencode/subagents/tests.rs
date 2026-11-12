@@ -1,8 +1,6 @@
 use super::*;
-use crate::{
-    local::images::ImageStore,
-    ports::{agent_session::AgentTurnEvent, controls::SubagentEvent},
-};
+use crate::local::images::ImageStore;
+use provider_core::ports::{agent_session::AgentTurnEvent, controls::SubagentEvent};
 
 #[test]
 fn legacy_task_completion_flushes_the_child_without_an_extension_status() {

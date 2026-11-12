@@ -5,13 +5,11 @@ use std::collections::BTreeSet;
 use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
-use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
+use provider_core::ports::account_usage::{PreparedUsage, UsageIdentity};
 
 use super::{http::Api, runtime::Runtime};
-use crate::{
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
-    ports::agent_session::AgentSessionError,
-};
+use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
+use provider_core::ports::agent_session::AgentSessionError;
 
 mod api_key;
 pub(super) mod credentials;

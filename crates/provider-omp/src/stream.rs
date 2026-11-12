@@ -13,8 +13,8 @@ use serde_json::{Value, json};
 
 use provider::local::images::{ImageStore, UNAVAILABLE_IMAGE};
 use provider::local::usage::requests;
-use provider::ports::agent_session::AgentTurnEvent;
-use provider::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 use super::events;
 use super::tool_detail::{self, Report, Status};

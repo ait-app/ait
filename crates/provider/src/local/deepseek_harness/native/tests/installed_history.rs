@@ -1,11 +1,9 @@
-use crate::{
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
-    ports::{
-        agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
-        native_history::{ListOptions, SessionHistory},
-    },
-};
+use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
 use domain::agent_runtime::AgentPersistenceHandle;
+use provider_core::ports::{
+    agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
+    native_history::{ListOptions, SessionHistory},
+};
 
 async fn imported_existing() -> (
     DeepSeekHarnessClient,

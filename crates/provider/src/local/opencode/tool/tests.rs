@@ -23,7 +23,8 @@ fn native_tool_projections_match_the_shared_wire_contract_cases() {
             .events
             .into_iter()
             .find_map(|event| {
-                if let crate::ports::agent_session::AgentTurnEvent::Timeline(entry) = event {
+                if let provider_core::ports::agent_session::AgentTurnEvent::Timeline(entry) = event
+                {
                     Some(entry)
                 } else {
                     None

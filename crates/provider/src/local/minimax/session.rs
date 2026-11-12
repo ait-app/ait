@@ -9,11 +9,11 @@ use super::{MiniMaxClient, PROVIDER, config};
 use crate::local::acp_streaming::Stream;
 use crate::local::usage::requests::MAX_SEGMENT_ID;
 use crate::local::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
-use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
+use provider_core::protocol::prompt::AgentPrompt;
 
 /// One native ACP session with bounded control requests and a single active prompt.
 #[derive(Debug)]
@@ -125,7 +125,7 @@ impl Session {
     /// Returns confirmed model controls; rejects transport failures instead of hiding them.
     pub(super) async fn discover(
         &mut self,
-    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+    ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
         let mut details = config::details(&self.options)?;
         for model in &mut details.models {
             let selected = StoredAgentConfig {
@@ -201,7 +201,7 @@ impl Session {
             item["clientMessageId"] = json!(id);
         }
         self.stream.events.push_back(AgentTurnEvent::Timeline(
-            crate::protocol::timeline::NativeItem {
+            provider_core::protocol::timeline::NativeItem {
                 key: format!("native:{turn}:user"),
                 turn_id: Some(turn.clone()),
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -293,7 +293,7 @@ impl Session {
                     self.stream
                         .settle(message, &mut self.permissions, &self.transport.diagnostics);
                 if let Some(usage) = message["result"].get("usage") {
-                    let usage = crate::protocol::usage::AgentUsage {
+                    let usage = provider_core::protocol::usage::AgentUsage {
                         input_tokens: usage["inputTokens"].as_u64(),
                         output_tokens: usage["outputTokens"].as_u64(),
                         cached_input_tokens: usage["cachedReadTokens"].as_u64(),
@@ -374,7 +374,7 @@ impl AgentSession for Session {
         Some(config::settings(&self.options))
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.transport.diagnostics.failure()
     }
 

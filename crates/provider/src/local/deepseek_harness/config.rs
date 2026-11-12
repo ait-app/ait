@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 use super::PROVIDER;
 use crate::local::acp_config::{choices, option, state, text};
 use crate::local::acp_transport::Transport;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::protocol::provider::Details;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::protocol::provider::Details;
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config.mode_id.is_some()

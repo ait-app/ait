@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 /// Three-state patch value, distinguishing omission from explicit null.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) enum NullableSetting<T = String> {
+pub enum NullableSetting<T = String> {
     /// The request omitted the field.
     #[default]
     Unchanged,
@@ -37,34 +37,33 @@ impl<T: Clone> NullableSetting<T> {
 pub struct ConfigPatch {
     /// Explicit workflow mode; null is rejected by the service.
     #[serde(default)]
-    pub(crate) mode_id: NullableSetting,
+    pub mode_id: NullableSetting,
     /// Feature values merged into existing selections, validated by the native adapter.
-    pub(crate) feature_values: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub feature_values: Option<std::collections::BTreeMap<String, serde_json::Value>>,
     /// Selected model, or explicit null for the provider's inherited model.
     #[serde(default)]
-    pub(crate) model_id: NullableSetting,
+    pub model_id: NullableSetting,
     /// Selected thinking option, or explicit null for provider inheritance.
     #[serde(default)]
-    pub(crate) thinking_option_id: NullableSetting,
+    pub thinking_option_id: NullableSetting,
     /// Replace native provider options; null restores native defaults.
     #[serde(default)]
-    pub(crate) provider_options:
-        NullableSetting<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub provider_options: NullableSetting<std::collections::BTreeMap<String, serde_json::Value>>,
     /// Replace configured MCP servers; null removes host-provided servers.
     #[serde(default)]
-    pub(crate) mcp_servers: NullableSetting<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub mcp_servers: NullableSetting<std::collections::BTreeMap<String, serde_json::Value>>,
     /// Replace exact MCP preapprovals; null removes host-provided grants.
     #[serde(default)]
-    pub(crate) tool_policy: NullableSetting<serde_json::Value>,
+    pub tool_policy: NullableSetting<serde_json::Value>,
     /// Replace the appended system prompt; null restores the provider prompt.
     #[serde(default)]
-    pub(crate) system_prompt: NullableSetting,
+    pub system_prompt: NullableSetting,
 }
 
 impl ConfigPatch {
     /// Apply only present fields to a copy of `current`, preserving unrelated configuration.
     #[must_use]
-    pub(crate) fn apply(&self, current: &StoredAgentConfig) -> StoredAgentConfig {
+    pub fn apply(&self, current: &StoredAgentConfig) -> StoredAgentConfig {
         let mut next = current.clone();
         self.mode_id.apply(&mut next.mode_id);
         if let Some(features) = &self.feature_values {

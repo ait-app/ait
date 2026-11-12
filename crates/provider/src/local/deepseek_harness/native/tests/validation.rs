@@ -1,6 +1,6 @@
 use super::super::{config, content, http::Api, usage};
-use crate::protocol::prompt::AgentPrompt;
 use domain::agent_runtime::StoredAgentConfig;
+use provider_core::protocol::prompt::AgentPrompt;
 use serde_json::json;
 
 #[test]

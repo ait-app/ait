@@ -3,7 +3,7 @@
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Project bounded native speed tiers into a select catalog with an explicit Normal default.
 pub(super) fn options(native: &Value) -> Vec<Value> {

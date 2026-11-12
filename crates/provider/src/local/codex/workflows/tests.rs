@@ -1,8 +1,8 @@
 use super::*;
 #[cfg(unix)]
-use crate::ports::agent_session::{AgentClient, AgentTurnEvent};
-#[cfg(unix)]
 use crate::test_support::Fixture;
+#[cfg(unix)]
+use provider_core::ports::agent_session::{AgentClient, AgentTurnEvent};
 
 #[test]
 fn version_gate_does_not_guess_capabilities_from_unknown_agents() {

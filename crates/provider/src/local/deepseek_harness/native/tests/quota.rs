@@ -1,8 +1,6 @@
 use super::fixture::Fixture;
-use crate::{
-    local::deepseek_harness::PROVIDER, ports::agent_session::AgentClient,
-    service::agent_manager::AgentManager,
-};
+use crate::{local::deepseek_harness::PROVIDER, service::agent_manager::AgentManager};
+use provider_core::ports::agent_session::AgentClient;
 use serde_json::json;
 
 #[tokio::test]

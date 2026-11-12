@@ -2,10 +2,8 @@
 use serde_json::{Value, json};
 
 use super::{config::Selection, runtime::Runtime};
-use crate::{
-    local::deepseek_harness::DeepSeekHarnessClient, ports::agent_session::AgentSessionError,
-    protocol::provider::Details,
-};
+use crate::local::deepseek_harness::DeepSeekHarnessClient;
+use provider_core::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 
 /// Read the native catalog without creating a session, selecting a model or sending input.
 /// Returns discovery/transport errors; session-specific permissions are checked on creation.

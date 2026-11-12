@@ -9,10 +9,12 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::AgentManager;
-use crate::ports::agent_session::{AgentClient, AgentSessionError};
-use crate::ports::native_history::{CwdLookup, ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::native_sessions::RecentRequest;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
+use provider_core::ports::native_history::{
+    CwdLookup, ListOptions, SessionDescriptor, SessionHistory,
+};
 
 impl AgentManager {
     pub(crate) async fn recent_sessions(&self, request: RecentRequest) -> Result<Value, ErrorCode> {

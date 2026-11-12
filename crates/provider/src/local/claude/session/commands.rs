@@ -1,7 +1,7 @@
 //! Native checkpoint commands run as foreground control turns without model inference.
 
 use super::{AgentSessionError, AgentTurnEvent, ClaudeSession, Uuid, Value, json, streaming};
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::protocol::prompt::AgentPrompt;
 
 pub(super) fn is_rewind(text: &str) -> bool {
     text.split_whitespace().next() == Some("/rewind")

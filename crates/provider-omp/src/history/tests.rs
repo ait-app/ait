@@ -45,7 +45,7 @@ fn write_lines(path: &Path, lines: &[String]) {
     std::fs::write(path, lines.join("\n")).unwrap();
 }
 
-fn timeline(stream: &mut Stream) -> Vec<provider::protocol::timeline::NativeItem> {
+fn timeline(stream: &mut Stream) -> Vec<provider_core::protocol::timeline::NativeItem> {
     stream
         .events
         .drain(..)
@@ -307,7 +307,7 @@ fn image_session(root: &Path, image: &Value) -> PathBuf {
 fn isolated_client(root: &Path) -> OmpClient {
     let mut client = OmpClient::new("unused".into()).with_image_directory(root.join("images"));
     client.environment =
-        provider::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
+        provider_core::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
             ("HOME".to_owned(), root.to_string_lossy().into_owned()),
             (
                 "PI_CODING_AGENT_DIR".to_owned(),

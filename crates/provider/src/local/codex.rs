@@ -33,11 +33,11 @@ use domain::workspace::sandbox::WriteConfinement;
 use serde_json::{Value, json};
 use transport::Transport;
 
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
-use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
@@ -47,7 +47,7 @@ pub(crate) struct CodexClient {
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
     images: super::images::ImageStore,
-    environment: crate::ports::environment::AgentEnvironment,
+    environment: provider_core::ports::environment::AgentEnvironment,
     usage_connection: inspection::connection::Shared,
     speed_catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
 }
@@ -85,7 +85,7 @@ impl CodexClient {
             deadline: Duration::from_secs(20),
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
-            environment: crate::ports::environment::AgentEnvironment::default(),
+            environment: provider_core::ports::environment::AgentEnvironment::default(),
             usage_connection: inspection::connection::Shared::default(),
             speed_catalog: std::sync::Arc::default(),
         }
@@ -278,7 +278,7 @@ impl AgentClient for CodexClient {
     async fn create_session_with_environment(
         &self,
         spec: &AgentSessionSpec,
-        environment: &crate::ports::environment::AgentEnvironment,
+        environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
@@ -361,13 +361,13 @@ impl AgentClient for CodexClient {
         self.usage_connection.close().await
     }
 
-    async fn usage_cache_key(&self) -> Option<crate::ports::account_usage::UsageIdentity> {
+    async fn usage_cache_key(&self) -> Option<provider_core::ports::account_usage::UsageIdentity> {
         inspection::connection::fingerprint(self).await
     }
 
     async fn prepare_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         self.prepare_native_usage().await
     }
 
@@ -383,7 +383,7 @@ impl AgentClient for CodexClient {
     async fn subagents(
         &self,
         cwd: &str,
-    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
         self.native_subagents(cwd).await
     }
 
@@ -392,7 +392,7 @@ impl AgentClient for CodexClient {
         handle: &AgentPersistenceHandle,
         spec: &AgentSessionSpec,
         message: &str,
-    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
         if handle.provider != "codex" {
             return Err(AgentSessionError::Unavailable);
         }
@@ -461,7 +461,7 @@ impl AgentClient for CodexClient {
     async fn discover(
         &self,
         cwd: &str,
-    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+    ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
         self.discover_native(cwd).await
     }
 
@@ -469,7 +469,7 @@ impl AgentClient for CodexClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
         if handle.provider != "codex" {
             return Err(AgentSessionError::Unavailable);
         }
@@ -500,8 +500,9 @@ impl AgentClient for CodexClient {
 
     async fn list_sessions(
         &self,
-        options: &crate::ports::native_history::ListOptions,
-    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
+        options: &provider_core::ports::native_history::ListOptions,
+    ) -> Result<Vec<provider_core::ports::native_history::SessionDescriptor>, AgentSessionError>
+    {
         self.list_native(options).await
     }
 
@@ -509,7 +510,7 @@ impl AgentClient for CodexClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
         if handle.provider != "codex" {
             return Err(AgentSessionError::Unavailable);
         }
@@ -604,8 +605,8 @@ impl CodexSession {
                 if let Some(transport) = &mut self.transport {
                     transport.observe_error(
                         &json!({"message":"Codex sub-agent event could not be processed."}),
-                        crate::ports::diagnostics::Diagnostic::new(
-                            crate::ports::diagnostics::Category::Protocol,
+                        provider_core::ports::diagnostics::Diagnostic::new(
+                            provider_core::ports::diagnostics::Category::Protocol,
                             "subagent_event",
                         ),
                         "observe",
@@ -789,7 +790,7 @@ impl AgentSession for CodexSession {
             .map(Cow::Borrowed)
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.transport
             .as_ref()
             .and_then(|transport| transport.diagnostics.failure())
@@ -797,7 +798,7 @@ impl AgentSession for CodexSession {
 
     async fn prepare_account_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         self.client.prepare_native_usage_in(&self.cwd).await
     }
 
@@ -830,18 +831,18 @@ impl AgentSession for CodexSession {
 
     async fn out_of_band(
         &mut self,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         self.execute_command(prompt).await
     }
-    fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
         self.children.children()
     }
     fn prepare_permission_response(
         &self,
         id: &str,
         response: &Value,
-    ) -> Result<Option<crate::protocol::prompt::AgentPrompt>, AgentSessionError> {
+    ) -> Result<Option<provider_core::protocol::prompt::AgentPrompt>, AgentSessionError> {
         if self.questions.contains(id) {
             self.questions.prepare(id, response)
         } else if let Some(plan) = self
@@ -861,7 +862,7 @@ impl AgentSession for CodexSession {
         &self,
         id: &str,
         response: &Value,
-    ) -> Result<Option<crate::protocol::agent_config::ConfigPatch>, AgentSessionError> {
+    ) -> Result<Option<provider_core::protocol::agent_config::ConfigPatch>, AgentSessionError> {
         self.plan_patch(id, response)
     }
 
@@ -928,13 +929,16 @@ impl AgentSession for CodexSession {
         text: &str,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
-        self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
-            .await
+        self.start_input(
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+            config,
+        )
+        .await
     }
 
     async fn start_input(
         &mut self,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
         validate_config(config)?;
@@ -1003,14 +1007,17 @@ impl AgentSession for CodexSession {
     }
 
     async fn steer_turn(&mut self, turn_id: &str, text: &str) -> Result<(), AgentSessionError> {
-        self.steer_input(turn_id, &crate::protocol::prompt::AgentPrompt::text(text))
-            .await
+        self.steer_input(
+            turn_id,
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+        )
+        .await
     }
 
     async fn steer_input(
         &mut self,
         turn_id: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         prompt.validate()?;
         if self.history

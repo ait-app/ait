@@ -4,9 +4,9 @@ use super::*;
 async fn autonomous_parent_output_starts_a_new_turn_and_client_ids_survive_history() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         client_message_id: Some("arbitrary-ui-id".to_owned()),
-        ..crate::protocol::prompt::AgentPrompt::text("autonomous")
+        ..provider_core::protocol::prompt::AgentPrompt::text("autonomous")
     };
     session.start_input(&prompt, &spec.config).await.unwrap();
     let mut started = 0;

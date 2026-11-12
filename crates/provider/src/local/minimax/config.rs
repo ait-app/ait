@@ -7,8 +7,8 @@ use crate::local::acp_config::{choices, option, text};
 
 use super::PROVIDER;
 use crate::local::acp_transport::Transport;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::protocol::provider::Details;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::protocol::provider::Details;
 
 /// Validate bounded host settings before native admission; unsupported fields are rejected.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {

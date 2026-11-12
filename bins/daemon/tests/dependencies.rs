@@ -186,7 +186,13 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "provider",
             "persistence",
         ],
-        "provider-omp" => &["provider", "domain", "model", "persistence"],
+        "provider-omp" => &[
+            "provider-core",
+            "provider",
+            "domain",
+            "model",
+            "persistence",
+        ],
         "provider" => &[
             "domain",
             "model",

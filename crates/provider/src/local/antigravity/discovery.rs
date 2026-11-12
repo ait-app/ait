@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::{AntigravityClient, PROVIDER, transport};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(super) fn installed_program() -> PathBuf {
     let search = Search {

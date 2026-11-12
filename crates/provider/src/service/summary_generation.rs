@@ -13,12 +13,12 @@ use serde_json::Value;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
-use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
 use crate::ports::usage_ledger::{
     CallBegin, CallFinish, CallOutcome, CallSource, NoopUsageLedger, UsageLedger,
 };
 use crate::support::time::now_unix_ms;
 use model::summary::{SummaryConfiguration, SummaryGenerator};
+use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 
 /// Model-backed summary generator shared by all four wording use cases.
 #[derive(Debug)]

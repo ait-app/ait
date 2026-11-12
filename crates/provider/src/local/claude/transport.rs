@@ -13,13 +13,14 @@ use tokio_util::task::AbortOnDropHandle;
 use super::ClaudeClient;
 use crate::local::diagnostics::Diagnostics;
 use crate::local::process_group::{self, Signal};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 /// Largest stdout frame or native transcript line. `--replay-user-messages` and the transcript
 /// echo complete user inputs, including inline images, so the cap covers the largest accepted
 /// prompt plus Claude's record envelope.
-pub(super) const MAX_FRAME: usize = crate::protocol::prompt::MAX_PROMPT_BYTES + 2 * 1024 * 1024;
+pub(super) const MAX_FRAME: usize =
+    provider_core::protocol::prompt::MAX_PROMPT_BYTES + 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
 /// Bytes of decoded stdout frames buffered between the reader and the session, across the
 /// channel and the event backlog. One maximal frame always fits; the reader waits for budget

@@ -17,12 +17,12 @@ use std::time::Duration;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use crate::ports::environment::AgentEnvironment;
-use crate::ports::native_history::CwdLookup;
-use crate::protocol::provider::Details;
+use provider_core::ports::environment::AgentEnvironment;
+use provider_core::ports::native_history::CwdLookup;
+use provider_core::protocol::provider::Details;
 
 pub(crate) const PROVIDER: &str = "pi";
 const DISCOVERY_DEFAULTS_TIMEOUT: Duration = Duration::from_secs(1);
@@ -122,8 +122,9 @@ impl AgentClient for PiClient {
 
     async fn list_sessions(
         &self,
-        options: &crate::ports::native_history::ListOptions,
-    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
+        options: &provider_core::ports::native_history::ListOptions,
+    ) -> Result<Vec<provider_core::ports::native_history::SessionDescriptor>, AgentSessionError>
+    {
         let client = self.clone();
         let options = options.clone();
 
@@ -136,7 +137,7 @@ impl AgentClient for PiClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
         let client = self.clone();
         let handle = handle.clone();
         let cwd = cwd.to_owned();

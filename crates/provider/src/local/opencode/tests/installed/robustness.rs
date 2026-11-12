@@ -63,13 +63,13 @@ async fn installed_acp_rejected_initial_model_cleans_only_the_new_session() {
         fixture.client.create_session(&invalid).await,
         Err(AgentSessionError::Rejected)
     ));
-    let list = crate::ports::native_history::ListOptions {
+    let list = provider_core::ports::native_history::ListOptions {
         cwd: Some(fixture.spec.cwd.clone()),
         scan_limit: 100,
     };
     assert_eq!(
         fixture.client.list_sessions(&list).await.unwrap(),
-        [] as [crate::ports::native_history::SessionDescriptor; 0]
+        [] as [provider_core::ports::native_history::SessionDescriptor; 0]
     );
     assert!(fixture.requests.try_recv().is_err());
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
@@ -237,7 +237,7 @@ async fn installed_acp_catalog_snapshot_refresh_keeps_configured_models_and_clea
     assert_eq!(
         fixture
             .client
-            .list_sessions(&crate::ports::native_history::ListOptions {
+            .list_sessions(&provider_core::ports::native_history::ListOptions {
                 cwd: Some(fixture.spec.cwd.clone()),
                 scan_limit: 100
             })

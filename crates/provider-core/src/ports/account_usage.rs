@@ -12,7 +12,8 @@ pub struct UsageIdentity([u8; 32]);
 
 impl UsageIdentity {
     /// Hash provider and native identity material without retaining its plaintext.
-    pub(crate) fn from_native(provider: &str, material: &[u8]) -> Self {
+    #[must_use]
+    pub fn from_native(provider: &str, material: &[u8]) -> Self {
         let mut digest = Sha256::new();
         digest.update(b"ait-account-usage-v1");
         digest.update(provider.len().to_le_bytes());
@@ -32,9 +33,9 @@ impl fmt::Debug for UsageIdentity {
 /// Authentication is resolved before cache lookup; polling happens only when needed.
 pub struct PreparedUsage<'a> {
     /// Known native account identity; absence disables historical fallback and cache reuse.
-    pub(crate) identity: Option<UsageIdentity>,
+    pub identity: Option<UsageIdentity>,
     /// Quota operation bound to the authentication context used for `identity`.
-    pub(crate) report: BoxFuture<'a, Result<Value, super::agent_session::AgentSessionError>>,
+    pub report: BoxFuture<'a, Result<Value, super::agent_session::AgentSessionError>>,
 }
 
 impl fmt::Debug for PreparedUsage<'_> {

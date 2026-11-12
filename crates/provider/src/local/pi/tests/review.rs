@@ -1,6 +1,6 @@
 use super::diagnostics::Capture;
 use super::*;
-use crate::ports::diagnostics::Category;
+use provider_core::ports::diagnostics::Category;
 
 #[tokio::test]
 async fn idle_notifications_and_compactions_do_not_poison_later_turns() {

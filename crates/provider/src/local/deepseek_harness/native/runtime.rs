@@ -17,7 +17,7 @@ use tokio_tungstenite::{
 use super::super::DeepSeekHarnessClient;
 use super::http::{Api, MAX_FRAME};
 use crate::local::process_group::{self, Signal};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 
@@ -94,12 +94,12 @@ impl Runtime {
             })
         } else {
             let category = if result.is_err() {
-                crate::ports::diagnostics::Category::Timeout
+                provider_core::ports::diagnostics::Category::Timeout
             } else {
-                crate::ports::diagnostics::Category::Protocol
+                provider_core::ports::diagnostics::Category::Protocol
             };
             diagnostics.observe(
-                crate::ports::diagnostics::Diagnostic::new(category, "transport"),
+                provider_core::ports::diagnostics::Diagnostic::new(category, "transport"),
                 "connect",
             );
             process_group::signal(child.id(), Signal::Kill);
@@ -188,8 +188,8 @@ impl Runtime {
                 }
             }
             diagnostics.observe(
-                crate::ports::diagnostics::Diagnostic::new(
-                    crate::ports::diagnostics::Category::Closed,
+                provider_core::ports::diagnostics::Diagnostic::new(
+                    provider_core::ports::diagnostics::Category::Closed,
                     "transport",
                 ),
                 "events",

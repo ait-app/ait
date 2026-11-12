@@ -8,7 +8,7 @@ use model::ErrorCode;
 use serde_json::Value;
 
 use super::*;
-use crate::ports::agent_session::AgentSessionSpec;
+use provider_core::ports::agent_session::AgentSessionSpec;
 
 mod auto_archive;
 mod bot_permissions;
@@ -135,7 +135,7 @@ struct FakeState {
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
     failure_message: Option<&'static str>,
-    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
+    failure_diagnostic: Option<provider_core::ports::diagnostics::Diagnostic>,
     commands_error: AgentSessionError,
     permission_responses: Vec<(String, Value)>,
     permission_result: Result<(), AgentSessionError>,
@@ -261,7 +261,7 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }
 
@@ -300,7 +300,7 @@ impl AgentSession for FakeSession {
 
     async fn start_input(
         &mut self,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
         prompt.validate()?;
@@ -895,8 +895,10 @@ async fn configuration_write_failure_preserves_the_previous_bundle_and_unrelated
     registry.upsert(&stored_record()).unwrap();
     let original = registry.get("agent-1").unwrap().unwrap();
     let patch = ConfigPatch {
-        model_id: crate::protocol::agent_config::NullableSetting::Set("new".to_owned()),
-        thinking_option_id: crate::protocol::agent_config::NullableSetting::Set("high".to_owned()),
+        model_id: provider_core::protocol::agent_config::NullableSetting::Set("new".to_owned()),
+        thinking_option_id: provider_core::protocol::agent_config::NullableSetting::Set(
+            "high".to_owned(),
+        ),
         ..ConfigPatch::default()
     };
     registry.0.lock().unwrap().fail_update = true;

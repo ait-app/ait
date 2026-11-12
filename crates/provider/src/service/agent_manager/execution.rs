@@ -189,8 +189,8 @@ impl AgentManager {
 pub(super) async fn native<T>(
     provider: &str,
     operation: &'static str,
-    future: impl Future<Output = Result<T, crate::ports::agent_session::AgentSessionError>>,
-) -> Result<T, crate::ports::agent_session::AgentSessionError> {
+    future: impl Future<Output = Result<T, provider_core::ports::agent_session::AgentSessionError>>,
+) -> Result<T, provider_core::ports::agent_session::AgentSessionError> {
     let started = std::time::Instant::now();
     let result = future.await;
     if let Err(error) = &result {

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use provider::ports::environment::AgentEnvironment;
+use provider_core::ports::environment::AgentEnvironment;
 
 use super::*;
 

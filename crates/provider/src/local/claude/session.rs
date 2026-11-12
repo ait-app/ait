@@ -8,7 +8,7 @@ use uuid::Uuid;
 mod commands;
 
 use super::{ClaudeClient, config, history, permissions, streaming, transport::Transport};
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 
@@ -44,7 +44,7 @@ pub(super) async fn open(
     spec: &AgentSessionSpec,
     resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
 ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-    crate::ports::agent_session::AgentClient::validate_selection(client, spec).await?;
+    provider_core::ports::agent_session::AgentClient::validate_selection(client, spec).await?;
     config::validate_spec(spec)?;
     let (id, history_only) = match resume {
         Some((handle, purpose)) => {
@@ -502,7 +502,7 @@ impl ClaudeSession {
     async fn submit_steer(
         &mut self,
         turn: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         prompt.validate()?;
         // Consume already available native frames before checking the target turn; preserve every
@@ -553,7 +553,7 @@ impl ClaudeSession {
 
 #[async_trait::async_trait]
 impl AgentSession for ClaudeSession {
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.diagnostics.failure()
     }
 
@@ -567,7 +567,7 @@ impl AgentSession for ClaudeSession {
 
     async fn prepare_account_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         self.client.prepare_native_usage().await
     }
 
@@ -575,7 +575,7 @@ impl AgentSession for ClaudeSession {
         self.client.native_usage().await
     }
 
-    fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
         self.children.children()
     }
 
@@ -622,16 +622,19 @@ impl AgentSession for ClaudeSession {
         text: &str,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
-        self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
-            .await
+        self.start_input(
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+            config,
+        )
+        .await
     }
 
     async fn start_input(
         &mut self,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
-        crate::ports::agent_session::AgentClient::validate_config(&self.client, config)?;
+        provider_core::ports::agent_session::AgentClient::validate_config(&self.client, config)?;
         prompt.validate()?;
         if self.closed || self.history_only || self.active.is_some() {
             return Err(AgentSessionError::Rejected);
@@ -686,14 +689,17 @@ impl AgentSession for ClaudeSession {
     }
 
     async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {
-        self.submit_steer(turn, &crate::protocol::prompt::AgentPrompt::text(text))
-            .await
+        self.submit_steer(
+            turn,
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+        )
+        .await
     }
 
     async fn steer_input(
         &mut self,
         turn: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         self.submit_steer(turn, prompt).await
     }

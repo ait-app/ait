@@ -404,6 +404,7 @@ dependencies = [
  "persistence",
  "prost",
  "provider",
+ "provider-core",
  "pulldown-cmark",
  "reqwest",
  "ring",
@@ -2285,6 +2286,7 @@ dependencies = [
  "nix 0.31.3",
  "opus2",
  "persistence",
+ "provider-core",
  "pulldown-cmark",
  "regex",
  "reqwest",
@@ -2310,6 +2312,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "provider-core"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "domain",
+ "futures-util",
+ "model",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "provider-omp"
 version = "0.2.9"
 dependencies = [
@@ -2321,6 +2340,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-core",
  "serde",
  "serde_json",
  "sha2",

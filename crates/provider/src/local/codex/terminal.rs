@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::protocol::timeline::NativeItem;
 
 const MAX_COMMANDS: usize = 128;
 const PREVIEW_BYTES: usize = 16 * 1024;

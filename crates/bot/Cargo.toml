@@ -9,6 +9,8 @@ publish.workspace = true
 domain.workspace = true
 model.workspace = true
 provider.workspace = true
+# Instruction delivery mode of the Bot session port.
+provider-core.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

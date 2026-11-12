@@ -9,7 +9,7 @@ use base64::Engine;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Display text for a native image whose source is missing or can no longer be read.
 pub const UNAVAILABLE_IMAGE: &str = "[Image attachment]";

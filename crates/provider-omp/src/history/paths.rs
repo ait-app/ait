@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use super::super::OmpClient;
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Directory entries inspected per scan; later entries are ignored rather than failing.
 const MAX_ENTRIES: usize = 32_768;

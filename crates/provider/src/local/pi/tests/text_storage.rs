@@ -147,7 +147,7 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
     let images = crate::local::images::ImageStore::new(directory.clone());
     let prompt = AgentPrompt {
         client_message_id: Some("client".into()),
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: "aGVsbG8=".into(),
             mime_type: "image/png".into(),
         }],
@@ -222,7 +222,7 @@ async fn submitted_image_only_session_is_materialized_for_timeline_display() {
     let client = client.with_image_directory(image_directory.clone());
     let mut session = client.create_session(&spec).await.unwrap();
     let prompt = AgentPrompt {
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: "aGVsbG8=".into(),
             mime_type: "image/png".into(),
         }],

@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::CodexSession;
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 
 #[derive(Debug)]
 pub(super) struct Pending {

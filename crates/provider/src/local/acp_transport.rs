@@ -11,8 +11,8 @@ use tokio_util::task::AbortOnDropHandle;
 
 use crate::local::diagnostics::Diagnostics;
 use crate::local::process_group::{self, Signal};
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 8 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;

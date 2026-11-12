@@ -71,7 +71,7 @@ impl Fixture {
                 confinement: None,
             },
             Duration::from_secs(3),
-            &crate::ports::environment::AgentEnvironment::default(),
+            &provider_core::ports::environment::AgentEnvironment::default(),
         )
         .unwrap();
         Self {

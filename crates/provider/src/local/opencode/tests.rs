@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use super::client::OpenCodeClient;
 use super::*;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
@@ -194,7 +194,9 @@ pub(super) async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
     .unwrap()
 }
 
-async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timeline::NativeItem> {
+async fn completed(
+    session: &mut dyn AgentSession,
+) -> Vec<provider_core::protocol::timeline::NativeItem> {
     let mut items = Vec::new();
     loop {
         match event(session).await {
@@ -215,7 +217,7 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timel
 async fn projected_turn(
     session: &mut dyn AgentSession,
     timeline: &crate::storage::timeline::Timeline,
-) -> Vec<crate::protocol::timeline::NativeItem> {
+) -> Vec<provider_core::protocol::timeline::NativeItem> {
     let mut streamed = false;
     let mut items = Vec::new();
     loop {
@@ -251,7 +253,7 @@ async fn projected_turn(
 async fn acp_model_error_preserves_native_reason_input_history_and_resume_identity() {
     let (_root, client, spec) = fixture("model-error");
     let mut session = client.create_session(&spec).await.unwrap();
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         text: "inspect".into(),
         client_message_id: Some("failed-input".into()),
         ..Default::default()
@@ -294,7 +296,7 @@ async fn recorded_turn(
     session: &mut dyn AgentSession,
     timeline: &crate::storage::timeline::Timeline,
     turn: &str,
-) -> Vec<crate::protocol::timeline::NativeItem> {
+) -> Vec<provider_core::protocol::timeline::NativeItem> {
     let mut history = Vec::new();
     let mut observed = false;
     loop {
@@ -319,7 +321,10 @@ async fn recorded_turn(
             }
             AgentTurnEvent::Completed(text) => {
                 assert_eq!(text.as_deref(), Some("authoritative answer"));
-                assert_ne!(history, [] as [crate::protocol::timeline::NativeItem; 0]);
+                assert_ne!(
+                    history,
+                    [] as [provider_core::protocol::timeline::NativeItem; 0]
+                );
                 return history;
             }
             AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_) => {}
@@ -336,7 +341,7 @@ async fn acp_live_and_replayed_turns_keep_each_prompt_before_its_reply_without_d
         let mut session = client.create_session(&spec).await.unwrap();
         let timeline = crate::storage::timeline::Timeline::memory().unwrap();
         for index in 0..2 {
-            let prompt = crate::protocol::prompt::AgentPrompt {
+            let prompt = provider_core::protocol::prompt::AgentPrompt {
                 text: format!("inspect {index}"),
                 client_message_id: Some(format!("client-{index}")),
                 ..Default::default()
@@ -468,7 +473,7 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
     let mut session = client.create_session(&spec).await.unwrap();
     let mut all = Vec::new();
     for index in 0..2 {
-        let prompt = crate::protocol::prompt::AgentPrompt {
+        let prompt = provider_core::protocol::prompt::AgentPrompt {
             text: format!("hello {index}"),
             client_message_id: Some(format!("client-{index}")),
             ..Default::default()
@@ -491,7 +496,7 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
     assert_eq!(saved["clients"]["user2"], "client-1");
     session.close().await.unwrap();
     let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
+        .list_sessions(&provider_core::ports::native_history::ListOptions {
             cwd: Some(spec.cwd.clone()),
             scan_limit: 10,
         })
@@ -537,7 +542,7 @@ async fn acp_settlement_keeps_user_messages_before_live_replies_across_turns() {
     let mut session = client.create_session(&spec).await.unwrap();
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();
     for index in 0..2 {
-        let prompt = crate::protocol::prompt::AgentPrompt {
+        let prompt = provider_core::protocol::prompt::AgentPrompt {
             text: format!("hello {index}"),
             client_message_id: Some(format!("client-{index}")),
             ..Default::default()
@@ -616,7 +621,7 @@ async fn acp_missing_preview_replay_keeps_discovered_sessions_without_prompting(
     )
     .unwrap();
     let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
+        .list_sessions(&provider_core::ports::native_history::ListOptions {
             cwd: Some(spec.cwd),
             scan_limit: 10,
         })
@@ -861,13 +866,13 @@ async fn acp_discovery_never_prompts_and_deletes_its_native_query_session() {
     assert_eq!(details.models[0]["id"], "local/model");
     assert_eq!(
         client
-            .list_sessions(&crate::ports::native_history::ListOptions {
+            .list_sessions(&provider_core::ports::native_history::ListOptions {
                 cwd: Some(spec.cwd),
                 scan_limit: 10
             })
             .await
             .unwrap(),
-        [] as [crate::ports::native_history::SessionDescriptor; 0]
+        [] as [provider_core::ports::native_history::SessionDescriptor; 0]
     );
     assert!(!root.path().join("native-fixture.json").exists());
     assert!(
@@ -1053,8 +1058,8 @@ fn acp_configuration_rejects_unsupported_policy_before_launch() {
 mod installed;
 
 fn assert_replay(
-    items: &[crate::protocol::timeline::NativeItem],
-    replay: &[crate::protocol::timeline::NativeItem],
+    items: &[provider_core::protocol::timeline::NativeItem],
+    replay: &[provider_core::protocol::timeline::NativeItem],
 ) {
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();
     let (epoch, _) = timeline.append("agent", "opencode", items).unwrap();
@@ -1166,9 +1171,9 @@ async fn acp_image_rejection_is_visible_and_text_retry_recovers_the_session() {
     manager
         .send_input(
             "image-agent",
-            &crate::protocol::prompt::AgentPrompt {
+            &provider_core::protocol::prompt::AgentPrompt {
                 text: "inspect this".into(),
-                images: vec![crate::protocol::prompt::PromptImage {
+                images: vec![provider_core::protocol::prompt::PromptImage {
                     data: "aGVsbG8=".into(),
                     mime_type: "image/png".into(),
                 }],

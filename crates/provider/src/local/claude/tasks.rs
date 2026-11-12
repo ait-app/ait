@@ -1,6 +1,6 @@
 //! Project native legacy and ID-based task tools into immutable todo snapshots.
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 

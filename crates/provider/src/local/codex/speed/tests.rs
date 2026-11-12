@@ -93,7 +93,7 @@ fn normal_overrides_thread_tier_and_legacy_fast_migrates_without_guessing_suppor
 #[cfg(unix)]
 #[tokio::test]
 async fn catalog_tier_reaches_turn_start_and_normal_explicitly_clears_it() {
-    use crate::ports::agent_session::AgentClient;
+    use provider_core::ports::agent_session::AgentClient;
     let fixture = crate::test_support::Fixture::new();
     std::fs::write(
         fixture.cwd.join("speed-models.json"),

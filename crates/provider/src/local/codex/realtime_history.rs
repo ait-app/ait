@@ -6,9 +6,9 @@ use std::io::{self, Write};
 use serde_json::{Value, json};
 
 use super::{Transport, discovery, native_sessions, realtime_timeline};
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::native_history::{HistoryError, HistoryFailure};
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::native_history::{HistoryError, HistoryFailure};
+use provider_core::protocol::timeline::NativeItem;
 
 const METHOD: &str = "thread/timeline/list";
 const MAX_ENTRIES: usize = 32_768;

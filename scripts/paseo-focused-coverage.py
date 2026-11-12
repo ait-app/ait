@@ -20,9 +20,9 @@ SCOPES = [
         "service::agent_execution::", "service::agent_manager::", "service::agent_runtime::",
         "service::provider_catalog::", "service::workspace_attention::", "rpc::timeline::",
         "rpc::fork_context::", "rpc::agent_execution::", "rpc::agent_runtime::", "connection::",
-        "local::codex::", "local::claude::", "storage::timeline::", "ports::environment::",
-        "ports::agent_session::", "protocol::tests::",
+        "local::codex::", "local::claude::", "storage::timeline::", "protocol::tests::",
     ]),
+    ("provider-core", ["--lib"], ["ports::environment::", "ports::agent_session::"]),
     ("model", ["--lib"], [
         "pagination::", "directory_sync::", "polling::", "runtime::", "events::",
         "workspace::", "storage::", "session::", "creation::", "server::", "methods::",

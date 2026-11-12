@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use super::PROVIDER;
 use crate::local::acp_config::{choices, option, state, text};
 use crate::local::acp_transport::Transport;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 /// Reject unsupported or oversized host choices before starting native execution.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {

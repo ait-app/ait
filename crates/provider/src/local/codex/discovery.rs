@@ -4,9 +4,9 @@ use chrono::Utc;
 use serde_json::{Value, json};
 
 use super::CodexClient;
-use crate::ports::agent_session::AgentSessionError;
-use crate::protocol::provider::Details;
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::provider::Details;
+use provider_core::protocol::timeline::NativeItem;
 
 impl CodexClient {
     pub(super) async fn discover_native(&self, cwd: &str) -> Result<Details, AgentSessionError> {

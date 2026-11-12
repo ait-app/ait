@@ -1,8 +1,8 @@
 //! Opt-in real Pi test against an isolated loopback model, never user credentials.
 
 use super::*;
-use crate::protocol::prompt::PromptImage;
 use axum::{Json, Router, routing::post};
+use provider_core::protocol::prompt::PromptImage;
 use std::sync::{Arc, Mutex};
 use tokio_util::task::AbortOnDropHandle;
 
@@ -115,7 +115,7 @@ async fn import_handle(
     cwd: &str,
 ) -> AgentPersistenceHandle {
     let sessions = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
+        .list_sessions(&provider_core::ports::native_history::ListOptions {
             cwd: Some(cwd.into()),
             scan_limit: 20,
         })

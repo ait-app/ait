@@ -9,7 +9,7 @@ use futures_util::FutureExt;
 use serde_json::Value;
 use tokio_util::task::AbortOnDropHandle;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const MEMORY_EVENTS: usize = 128;
 type ReadBatch = (Option<Spool>, VecDeque<Value>);

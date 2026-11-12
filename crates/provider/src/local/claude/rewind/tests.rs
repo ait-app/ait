@@ -50,7 +50,7 @@ fn explicit_empty_branch_can_be_recovered_without_claiming_another_missing_sessi
     };
     assert_eq!(
         fresh_history(&handle, &spec.cwd).unwrap().unwrap().entries,
-        [] as [crate::protocol::timeline::NativeItem; 0]
+        [] as [provider_core::protocol::timeline::NativeItem; 0]
     );
     assert!(fresh_history(&handle, "/different/missing").is_err());
     handle.metadata = None;

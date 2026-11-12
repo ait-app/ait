@@ -6,7 +6,7 @@ use domain::workspace::sandbox::WriteConfinement;
 use serde_json::{Value, json};
 
 use super::{PiClient, probe};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
 

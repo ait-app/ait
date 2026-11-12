@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use super::{AntigravityClient, PROVIDER, discovery, transport};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Read quotas with the client's native launch environment and the supplied working directory.
 ///

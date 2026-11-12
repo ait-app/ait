@@ -1,7 +1,4 @@
-use crate::{
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
-    ports::agent_session::{AgentSession, AgentSessionSpec, AgentTurnEvent},
-};
+use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
 use axum::{
     Json, Router,
     extract::{
@@ -14,6 +11,7 @@ use axum::{
 };
 use domain::agent_runtime::StoredAgentConfig;
 use futures_util::{SinkExt, StreamExt};
+use provider_core::ports::agent_session::{AgentSession, AgentSessionSpec, AgentTurnEvent};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,

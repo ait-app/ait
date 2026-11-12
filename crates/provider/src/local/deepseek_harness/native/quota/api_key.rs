@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Read only the fixed official balance endpoint; never follow credential-bearing redirects.
 /// Returns safe HTTP authentication problems or bounded transport/schema failures.

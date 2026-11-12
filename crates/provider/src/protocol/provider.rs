@@ -1,18 +1,6 @@
 //! Provider discovery and snapshot requests.
 
 use serde::Deserialize;
-use serde_json::Value;
-
-/// Provider-owned model and mode definitions, with no credentials or private diagnostics.
-#[derive(Debug, Clone, Default)]
-pub struct Details {
-    /// Paseo model definitions fetched from the native provider.
-    pub models: Vec<Value>,
-    /// Modes actually supported by this server adapter.
-    pub modes: Vec<Value>,
-    /// Runtime toggles and selects supported by the adapter.
-    pub features: Vec<Value>,
-}
 
 /// Select one installed Provider in an optional working directory.
 #[derive(Debug, Deserialize)]

@@ -23,9 +23,9 @@ mod review;
 mod text_storage;
 mod thinking_delivery;
 mod tool_schema;
-use crate::ports::agent_session::AgentTurnEvent;
-use crate::ports::diagnostics::Category;
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::ports::diagnostics::Category;
+use provider_core::protocol::prompt::AgentPrompt;
 
 /// Build an isolated native peer, client and session specification for `scenario`.
 pub(super) fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
@@ -142,7 +142,7 @@ async fn streams_tools_usage_and_resumes_same_native_identity() {
     assert!(request.segment_id.starts_with("pi:") && request.segment_id.ends_with(":1"));
     assert_eq!(
         request.boundary,
-        crate::ports::usage_ledger::UsageBoundary::Request
+        provider_core::ports::usage_ledger::UsageBoundary::Request
     );
     assert_eq!(
         (
@@ -424,7 +424,7 @@ async fn failed_native_writer_is_not_reused_and_missing_history_is_not_recreated
 
 #[tokio::test]
 async fn rich_input_preserves_images_and_unicode_framing_without_persisting_environment() {
-    use crate::protocol::prompt::PromptImage;
+    use provider_core::protocol::prompt::PromptImage;
     let (directory, client, spec) = fixture("");
     let mut session = client.create_session(&spec).await.unwrap();
     let prompt = AgentPrompt {

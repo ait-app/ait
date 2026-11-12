@@ -221,7 +221,7 @@ fn native_items_keep_stable_source_identity_and_supported_display_shapes() {
 #[cfg(unix)]
 #[tokio::test]
 async fn native_discovery_and_read_only_history_use_real_stdio_without_model_calls() {
-    use crate::ports::agent_session::{AgentClient, AgentTurnEvent};
+    use provider_core::ports::agent_session::{AgentClient, AgentTurnEvent};
     let fixture = crate::test_support::Fixture::new();
     let client = fixture.client();
     let details = client

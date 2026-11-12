@@ -14,11 +14,11 @@ use super::{
     transport::{self, Transport},
 };
 use crate::local::prompt_blocks;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
-use crate::ports::diagnostics::{Category, Diagnostic};
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_core::protocol::prompt::AgentPrompt;
 
 const ABORT_SETTLEMENT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_STATE_READS: usize = 3;

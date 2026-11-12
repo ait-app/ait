@@ -20,7 +20,6 @@ use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
@@ -29,6 +28,7 @@ use crate::service::agent_manager::ownership::RUNTIME_OVERLAY_FIELDS;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
+use provider_core::ports::agent_session::AgentSessionSpec;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
@@ -348,7 +348,7 @@ impl ExecutionState {
         let key = format!("plugin:{plugin}:{}", request.item.id);
         let mut item = serde_json::to_value(request.item).map_err(|_| ErrorCode::InvalidMessage)?;
         item["pluginId"] = json!(plugin);
-        let entry = crate::protocol::timeline::NativeItem {
+        let entry = provider_core::protocol::timeline::NativeItem {
             key,
             turn_id: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -434,7 +434,7 @@ impl ExecutionState {
     async fn register_creation(
         &mut self,
         request: CreateRequest,
-        prompt: Option<crate::protocol::prompt::AgentPrompt>,
+        prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
         admission: &domain::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
@@ -518,7 +518,7 @@ impl ExecutionState {
         &mut self,
         id: &str,
         admission: &domain::creation::protocol::Snapshot,
-        prompt: Option<crate::protocol::prompt::AgentPrompt>,
+        prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
         let result = json!({"agent":self.snapshot(id)?});
@@ -744,7 +744,7 @@ fn parse_creation(
 ) -> Result<
     (
         CreateRequest,
-        Option<crate::protocol::prompt::AgentPrompt>,
+        Option<provider_core::protocol::prompt::AgentPrompt>,
         Value,
     ),
     ErrorCode,
@@ -803,7 +803,7 @@ fn parse_creation(
     let prompt = (request.initial_prompt.is_some()
         || !request.images.is_empty()
         || !request.attachments.is_empty())
-    .then(|| crate::protocol::prompt::AgentPrompt {
+    .then(|| provider_core::protocol::prompt::AgentPrompt {
         text: request.initial_prompt.clone().unwrap_or_default(),
         images: std::mem::take(&mut request.images),
         attachments: std::mem::take(&mut request.attachments),

@@ -392,7 +392,11 @@ async fn usage_turn(
     session: &mut dyn AgentSession,
     text: &str,
     config: &StoredAgentConfig,
-) -> (String, Vec<crate::ports::usage_ledger::RequestUsage>, usize) {
+) -> (
+    String,
+    Vec<provider_core::ports::usage_ledger::RequestUsage>,
+    usize,
+) {
     let turn = session.start_turn(text, config).await.unwrap();
     let mut requests = Vec::new();
     let mut snapshots = 0;
@@ -406,7 +410,7 @@ async fn usage_turn(
     }
 }
 
-fn segment_ids(requests: &[crate::ports::usage_ledger::RequestUsage]) -> Vec<&str> {
+fn segment_ids(requests: &[provider_core::ports::usage_ledger::RequestUsage]) -> Vec<&str> {
     requests
         .iter()
         .map(|request| request.segment_id.as_str())

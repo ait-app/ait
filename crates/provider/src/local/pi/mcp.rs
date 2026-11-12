@@ -13,7 +13,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Map, Value, json};
 use tempfile::TempDir;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Extension module name; Pi loads it with jiti, which may cache this secret-free source.
 const EXTENSION: &str = "ait-mcp.mjs";

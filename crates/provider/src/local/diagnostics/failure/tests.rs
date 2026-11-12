@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::diagnostics::Category;
+use provider_core::ports::diagnostics::Category;
 use serde_json::json;
 
 #[test]

@@ -1,5 +1,5 @@
 use super::super::interactions::Pending;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 use serde_json::{Value, json};
 
 fn question() -> Value {

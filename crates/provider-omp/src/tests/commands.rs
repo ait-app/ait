@@ -28,7 +28,9 @@ fn compactions(events: &[AgentTurnEvent]) -> Vec<&Value> {
         .collect()
 }
 
-fn usage(events: &[AgentTurnEvent]) -> Option<(usize, &provider::protocol::usage::AgentUsage)> {
+fn usage(
+    events: &[AgentTurnEvent],
+) -> Option<(usize, &provider_core::protocol::usage::AgentUsage)> {
     events
         .iter()
         .enumerate()

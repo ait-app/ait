@@ -16,8 +16,8 @@ use super::framing::{Decoder, Frame, MAX_LINE};
 use super::{LABEL, OmpClient};
 use provider::local::diagnostics::Diagnostics;
 use provider::local::process_group::{self, Signal};
-use provider::ports::agent_session::AgentSessionError;
-use provider::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 /// Frames buffered while a request waits for its response.
 const MAX_BUFFER: usize = 64 * 1024 * 1024;

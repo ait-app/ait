@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::controls::SubagentEvent;
+use provider_core::ports::controls::SubagentEvent;
 
 pub(super) fn model_response(request: &Value) -> Option<Response> {
     if is_user_message(request, "Native child sentinel")

@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 
 use super::{PROVIDER, client::OpenCodeClient, config, launcher, streaming::Stream};
 use crate::local::acp_config;
-use crate::{
-    local::acp_transport::Transport,
+use crate::local::acp_transport::Transport;
+use provider_core::{
     ports::{
         agent_session::AgentSessionError,
         native_history::{ListOptions, SessionDescriptor, SessionHistory},
@@ -142,7 +142,7 @@ async fn load(
                     completed.extend(stream.events.drain(..).filter(|event| {
                         matches!(
                             event,
-                            crate::ports::agent_session::AgentTurnEvent::Timeline(_)
+                            provider_core::ports::agent_session::AgentTurnEvent::Timeline(_)
                         )
                     }));
                 }
@@ -156,7 +156,7 @@ async fn load(
     completed.extend(stream.events.drain(..).filter(|event| {
         matches!(
             event,
-            crate::ports::agent_session::AgentTurnEvent::Timeline(_)
+            provider_core::ports::agent_session::AgentTurnEvent::Timeline(_)
         )
     }));
     stream.events = completed;
@@ -170,7 +170,7 @@ pub(super) fn identities(stream: &Stream) -> BTreeSet<String> {
         .iter()
         .cloned()
         .chain(stream.events.iter().filter_map(|event| {
-            let crate::ports::agent_session::AgentTurnEvent::Timeline(entry) = event else {
+            let provider_core::ports::agent_session::AgentTurnEvent::Timeline(entry) = event else {
                 return None;
             };
             entry.item["compactionId"].as_str().map(str::to_owned)
@@ -184,7 +184,8 @@ pub(super) fn entries(stream: &mut Stream, clients: &BTreeMap<String, String>) -
         .events
         .drain(..)
         .filter_map(|event| {
-            if let crate::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event {
+            if let provider_core::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event
+            {
                 if let Some(turn) = entry.item["compactionId"]
                     .as_str()
                     .and_then(|id| clients.get(id))
@@ -286,7 +287,7 @@ pub(super) async fn inspect(
     cwd: &str,
 ) -> Result<SessionHistory, AgentSessionError> {
     super::session::validate_handle(handle)?;
-    let spec = crate::ports::agent_session::AgentSessionSpec {
+    let spec = provider_core::ports::agent_session::AgentSessionSpec {
         provider: PROVIDER.into(),
         cwd: cwd.into(),
         config: StoredAgentConfig::default(),

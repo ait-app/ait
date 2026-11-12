@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::*;
-use provider::ports::environment::AgentEnvironment;
+use provider_core::ports::environment::AgentEnvironment;
 
 /// A client whose environment is exactly `variables`, so no daemon value leaks in.
 fn client(variables: &[(&str, &str)]) -> OmpClient {

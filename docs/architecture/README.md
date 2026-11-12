@@ -8,27 +8,30 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 
 ## Rust 能力边界
 
-| Crate          | 职责                                          | 生产代码的内部依赖                                   |
-| -------------- | --------------------------------------------- | ---------------------------------------------------- |
-| `domain`       | 业务值、记录、不变量与纯投影                  | 无                                                   |
-| `model`        | 协作端口、协议、请求资源与共享协调            | `domain`                                             |
-| `persistence`  | 原子文件、Registry、具体文件持久化适配器      | `model`、`domain`                                    |
-| `metadata`     | 基础连接、Project/Workspace、配置与生命周期   | `domain`、`model`                                    |
-| `filesystem`   | 文件、Git、Forge、worktree/clone 本地适配器   | `domain`、`model`                                    |
-| `provider`     | 原生 Agent、执行、历史、摘要、技能与 MCP 注入 | `domain`、`model`                                    |
-| `provider-omp` | Oh My Pi 原生 RPC 适配器                      | `provider`、`domain`                                 |
-| `terminal`     | PTY、快照、活动与订阅                         | `domain`、`model`                                    |
-| `voice`        | 语音、听写、离线推理与媒体连接                | `model`                                              |
-| `bot`          | Workspace Bot、Channel、隐藏会话与消息协调    | `domain`、`model`、`provider`                        |
-| `schedule`     | 定时任务服务与协议                            | `domain`、`model`                                    |
-| `browser`      | 浏览器自动化与 TCP 隧道                       | `model`                                              |
-| `relay`        | Hub serve、下载 Relay、控制与传输             | `model`                                              |
-| `host-link`    | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
-| `api`          | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
-| `daemon`       | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
+| Crate           | 职责                                           | 生产代码的内部依赖                                   |
+| --------------- | ---------------------------------------------- | ---------------------------------------------------- |
+| `domain`        | 业务值、记录、不变量与纯投影                   | 无                                                   |
+| `model`         | 协作端口、协议、请求资源与共享协调             | `domain`                                             |
+| `persistence`   | 原子文件、Registry、具体文件持久化适配器       | `model`、`domain`                                    |
+| `metadata`      | 基础连接、Project/Workspace、配置与生命周期    | `domain`、`model`                                    |
+| `filesystem`    | 文件、Git、Forge、worktree/clone 本地适配器    | `domain`、`model`                                    |
+| `provider-core` | 适配器实现、运行时驱动的 Provider 端口与协议值 | `domain`、`model`                                    |
+| `provider`      | 原生 Agent、执行、历史、摘要、技能与 MCP 注入  | `provider-core`、`domain`、`model`                   |
+| `provider-omp`  | Oh My Pi 原生 RPC 适配器                       | `provider-core`、`provider`、`domain`                |
+| `terminal`      | PTY、快照、活动与订阅                          | `domain`、`model`                                    |
+| `voice`         | 语音、听写、离线推理与媒体连接                 | `model`                                              |
+| `bot`           | Workspace Bot、Channel、隐藏会话与消息协调     | `domain`、`model`、`provider`、`provider-core`       |
+| `schedule`      | 定时任务服务与协议                             | `domain`、`model`                                    |
+| `browser`       | 浏览器自动化与 TCP 隧道                        | `model`                                              |
+| `relay`         | Hub serve、下载 Relay、控制与传输              | `model`                                              |
+| `host-link`     | 机器授权、节点租约与发布协调                   | 无，通过 ports 调用适配器                            |
+| `api`           | HTTP/WebSocket、鉴权、分发与跨能力协调         | `domain`、`model`、`host-link` 及上述功能 crate      |
+| `daemon`        | CLI/配置、进程锁、身份、服务组装与停机         | `api`、`domain`、`model`、`persistence` 及功能 crate |
 
 适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
+`provider-core` 只依赖 `domain` 与 `model`，`provider`、`provider-omp` 与 `bot` 直接从它导入端口与协议值，
+不经 `provider` 转发（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 `provider-omp → provider` 同样单向，daemon 负责注册 OMP；`provider` 的 `test-support` feature 只允许 dev 边启用。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。

@@ -5,10 +5,8 @@ use serde_json::{Value, json};
 
 use super::{client::OpenCodeClient, config, launcher};
 use crate::local::acp_config;
-use crate::{
-    local::acp_transport::Transport,
-    ports::agent_session::{AgentSessionError, AgentSessionSpec},
-};
+use crate::local::acp_transport::Transport;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 /// Owned auxiliary session; deletion remains scheduled if its caller drops a pending cleanup.
 #[derive(Debug)]

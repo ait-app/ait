@@ -12,18 +12,18 @@ use crate::protocol::timeline::NativeItem;
 )]
 pub struct HistoryError {
     /// Native read method, supplied by the adapter rather than the response.
-    pub(crate) method: &'static str,
+    pub method: &'static str,
     /// One-based page number.
-    pub(crate) page: usize,
+    pub page: usize,
     /// Serialized display bytes retained before this failure.
-    pub(crate) bytes: usize,
+    pub bytes: usize,
     /// Limit, protocol or native request failure without conversation contents.
-    pub(crate) failure: HistoryFailure,
+    pub failure: HistoryFailure,
 }
 
 /// Distinguish display budgets from malformed history and failed RPCs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub(crate) enum HistoryFailure {
+pub enum HistoryFailure {
     /// A named bounded resource exceeded its allowance.
     #[error("{resource} limit exceeded (limit={limit}, actual={actual})")]
     Limit {

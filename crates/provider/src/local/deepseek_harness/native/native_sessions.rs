@@ -6,13 +6,13 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{history, runtime::Runtime};
-use crate::{
-    local::acp_config::text,
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
-    ports::{
-        agent_session::AgentSessionError,
-        native_history::{ListOptions, SessionDescriptor, SessionHistory},
-    },
+use crate::local::{
+    acp_config::text,
+    deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
+};
+use provider_core::ports::{
+    agent_session::AgentSessionError,
+    native_history::{ListOptions, SessionDescriptor, SessionHistory},
 };
 
 /// List visible root sessions, filtering directories before the bounded result limit.

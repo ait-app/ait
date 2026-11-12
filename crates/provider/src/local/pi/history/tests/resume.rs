@@ -286,11 +286,12 @@ async fn imported_thinking_from_an_earlier_model_is_clamped_before_the_first_pro
     std::fs::write(&program, include_str!("../../tests/fixtures/pi.py")).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     client.program = program;
-    client.environment = crate::ports::environment::AgentEnvironment::try_from(BTreeMap::from([(
-        "PI_FIXTURE_SCENARIO".into(),
-        "strict-thinking-models".into(),
-    )]))
-    .unwrap();
+    client.environment =
+        provider_core::ports::environment::AgentEnvironment::try_from(BTreeMap::from([(
+            "PI_FIXTURE_SCENARIO".into(),
+            "strict-thinking-models".into(),
+        )]))
+        .unwrap();
     let (execution, registry) = worker(directory.path(), &cwd, client);
 
     let resumed = execution

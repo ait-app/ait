@@ -8,8 +8,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{CreateRequest, ErrorCode, ExecutionState, parse_creation};
-use crate::protocol::prompt::AgentPrompt;
 use crate::support::rpc::decode;
+use provider_core::protocol::prompt::AgentPrompt;
 
 /// Validate an embedded Agent before Workspace side effects and return its secret-free intent.
 /// # Errors

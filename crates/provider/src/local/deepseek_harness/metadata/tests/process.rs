@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 fn fixture() -> (tempfile::TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();

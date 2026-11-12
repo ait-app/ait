@@ -4,16 +4,16 @@ use std::sync::{Arc, Mutex};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{
+use crate::service::agent_execution::AgentExecution;
+use crate::test_support::{Fixture, request, worker_with_client};
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
-use crate::ports::controls::{NativeSubagent, SubagentEvent};
-use crate::ports::native_history::{SessionDescriptor, SessionHistory};
-use crate::protocol::prompt::AgentPrompt;
-use crate::protocol::timeline::NativeItem;
-use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
+use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
+use provider_core::protocol::prompt::AgentPrompt;
+use provider_core::protocol::timeline::NativeItem;
 
 const NOW: &str = "2026-10-31T00:00:00Z";
 

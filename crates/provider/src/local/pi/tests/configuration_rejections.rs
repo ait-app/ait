@@ -54,10 +54,10 @@ async fn thinking_rejection_survives_conflicting_readback() {
 
 #[tokio::test]
 async fn busy_admission_persists_native_changes_before_and_after_controls() {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
     use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for scenario in [
         "busy-runtime-change",

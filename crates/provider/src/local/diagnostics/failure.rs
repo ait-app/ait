@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::ports::diagnostics::Diagnostic;
+use provider_core::ports::diagnostics::Diagnostic;
 
 const MAX_NATIVE_BYTES: usize = 32 * 1024;
 const MAX_REASON_BYTES: usize = 3072;

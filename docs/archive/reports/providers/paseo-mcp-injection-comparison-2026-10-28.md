@@ -61,7 +61,7 @@ Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅�
 | 验证             | 已有 MCP 服务端进程测试，但未覆盖 daemon 自动填充配置                              | 增加原生启动参数捕获、自动调用、恢复、第二轮输入、配置切换及不落盘验证                  |
 
 证据：[host](../../../../bins/daemon/src/host.rs#L85)、
-[会话配置契约](../../../../crates/provider/src/ports/agent_session.rs#L31)、
+[会话配置契约](../../../../crates/provider-core/src/ports/agent_session.rs#L31)、
 [创建与持久化](../../../../crates/provider/src/service/agent_manager.rs#L487)、
 [resume](../../../../crates/provider/src/service/agent_manager.rs#L607)、
 [restore](../../../../crates/provider/src/service/agent_manager/resume.rs#L31)、

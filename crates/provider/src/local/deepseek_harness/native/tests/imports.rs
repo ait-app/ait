@@ -2,7 +2,7 @@ use domain::agent_runtime::AgentPersistenceHandle;
 use serde_json::{Value, json};
 
 use super::fixture::Fixture;
-use crate::ports::{
+use provider_core::ports::{
     agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
     native_history::ListOptions,
 };

@@ -14,7 +14,7 @@ use super::{
     diagnostics::{Diagnostics, Failure},
 };
 use crate::local::process_group::{self, Signal};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;

@@ -9,8 +9,8 @@ use super::acp_permissions::Pending;
 use super::acp_transport;
 use super::diagnostics::Diagnostics;
 use super::tool_detail::{MARKER, truncate};
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 const MAX_TEXT: usize = 128 * 1024;
 const MAX_ITEMS: usize = 4096;

@@ -5,10 +5,8 @@ use std::path::PathBuf;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde_json::json;
 
-use crate::{
-    local::opencode::client::OpenCodeClient,
-    ports::{agent_session::AgentSessionError, controls::NativeSubagent},
-};
+use crate::local::opencode::client::OpenCodeClient;
+use provider_core::ports::{agent_session::AgentSessionError, controls::NativeSubagent};
 
 struct OutcomeRow {
     parent: String,

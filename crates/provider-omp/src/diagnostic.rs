@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 use super::{LABEL, OmpClient, history::paths};
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Oldest supported OMP: Ait's documented compatibility floor, not Paseo's 16.3.9, because
 /// Ait relies on RPC v2 and the native settlement facts of that release (ADR-194).

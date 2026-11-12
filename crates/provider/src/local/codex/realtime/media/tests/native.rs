@@ -5,7 +5,7 @@ use crate::local::codex::transport::Transport;
 use serde_json::json;
 
 use crate::local::codex::CodexClient;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec, AgentTurnEvent,
 };
 
@@ -133,7 +133,7 @@ async fn logged_in_codex_connects_the_provider_owned_media_peer() {
             confinement: None,
         },
         Duration::from_secs(25),
-        &crate::ports::environment::AgentEnvironment::default(),
+        &provider_core::ports::environment::AgentEnvironment::default(),
     )
     .unwrap();
     native.initialize().await.unwrap();

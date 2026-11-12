@@ -7,9 +7,8 @@ use serde_json::json;
 
 use super::{OpenCodeClient, SessionDescriptor, launcher};
 use crate::local::acp_config;
-use crate::{
-    local::session_preview, ports::agent_session::AgentSessionError, protocol::timeline::NativeItem,
-};
+use crate::local::session_preview;
+use provider_core::{ports::agent_session::AgentSessionError, protocol::timeline::NativeItem};
 
 #[derive(Debug, Default)]
 struct Prompts {

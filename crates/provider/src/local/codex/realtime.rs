@@ -215,7 +215,7 @@ impl CodexSession {
             self.stream.events.extend(
                 entries
                     .into_iter()
-                    .map(crate::ports::agent_session::AgentTurnEvent::Timeline),
+                    .map(provider_core::ports::agent_session::AgentTurnEvent::Timeline),
             );
         }
         Ok(())

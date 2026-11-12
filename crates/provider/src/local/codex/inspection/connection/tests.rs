@@ -135,7 +135,7 @@ async fn cancelled_quota_request_drops_process_and_rebuilds_on_next_read() {
 
 #[tokio::test]
 async fn explicit_close_reaps_query_process_while_client_clones_remain_alive() {
-    use crate::ports::agent_session::AgentClient;
+    use provider_core::ports::agent_session::AgentClient;
     let fixture = Fixture::new();
     let client = client(&fixture);
     let retained = client.clone();
@@ -178,7 +178,7 @@ async fn worker_shutdown_reaps_host_query_process_before_retained_handle_is_drop
 
 #[tokio::test]
 async fn direct_and_resumed_sessions_keep_prepared_quota_transports_separate_from_host() {
-    use crate::ports::agent_session::{AgentClient, AgentResumePurpose};
+    use provider_core::ports::agent_session::{AgentClient, AgentResumePurpose};
     let fixture = Fixture::new();
     let client = client(&fixture);
     let spec = fixture.spec();
@@ -244,7 +244,7 @@ fn assert_reaped(pid: i64) {
 
 #[tokio::test]
 async fn cancelled_initialization_retains_child_for_explicit_reaping() {
-    use crate::ports::agent_session::AgentClient;
+    use provider_core::ports::agent_session::AgentClient;
     let fixture = Fixture::new();
     let client = client(&fixture);
     fixture.mode("timeout");

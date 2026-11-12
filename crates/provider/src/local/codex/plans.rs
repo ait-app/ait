@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::protocol::{prompt::AgentPrompt, timeline::NativeItem};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::{prompt::AgentPrompt, timeline::NativeItem};
 
 impl super::CodexSession {
     pub(super) fn plan_progress(&mut self, params: &Value) -> Result<(), AgentSessionError> {
@@ -63,7 +63,7 @@ impl super::CodexSession {
             self.notes.push(entry.clone())?;
             self.stream
                 .events
-                .push_back(crate::ports::agent_session::AgentTurnEvent::Timeline(entry));
+                .push_back(provider_core::ports::agent_session::AgentTurnEvent::Timeline(entry));
         }
         Ok(())
     }
@@ -72,7 +72,7 @@ impl super::CodexSession {
         &self,
         id: &str,
         response: &Value,
-    ) -> Result<Option<crate::protocol::agent_config::ConfigPatch>, AgentSessionError> {
+    ) -> Result<Option<provider_core::protocol::agent_config::ConfigPatch>, AgentSessionError> {
         let Some(plan) = self
             .pending_plan
             .as_ref()
@@ -83,12 +83,12 @@ impl super::CodexSession {
         if plan.prepare(response)?.is_none() {
             return Ok(None);
         }
-        Ok(Some(crate::protocol::agent_config::ConfigPatch {
+        Ok(Some(provider_core::protocol::agent_config::ConfigPatch {
             feature_values: Some(std::collections::BTreeMap::from([(
                 "plan_mode".to_owned(),
                 json!(false),
             )])),
-            ..crate::protocol::agent_config::ConfigPatch::default()
+            ..provider_core::protocol::agent_config::ConfigPatch::default()
         }))
     }
 
@@ -101,7 +101,7 @@ impl super::CodexSession {
         self.notes.push(entry.clone())?;
         self.stream
             .events
-            .push_back(crate::ports::agent_session::AgentTurnEvent::Timeline(entry));
+            .push_back(provider_core::ports::agent_session::AgentTurnEvent::Timeline(entry));
         self.pending_plan = None;
         Ok(())
     }
@@ -129,9 +129,9 @@ impl super::CodexSession {
         {
             let id = plan.request_id();
             self.resolve_plan(&json!({"behavior":"deny"}))?;
-            self.stream
-                .events
-                .push_back(crate::ports::agent_session::AgentTurnEvent::PermissionResolved(id));
+            self.stream.events.push_back(
+                provider_core::ports::agent_session::AgentTurnEvent::PermissionResolved(id),
+            );
         }
         Ok(())
     }
@@ -142,12 +142,14 @@ impl super::CodexSession {
             if let Some(previous) = &self.pending_plan {
                 let id = previous.request_id();
                 self.resolve_plan(&json!({"behavior":"deny"}))?;
-                self.stream
-                    .events
-                    .push_back(crate::ports::agent_session::AgentTurnEvent::PermissionResolved(id));
+                self.stream.events.push_back(
+                    provider_core::ports::agent_session::AgentTurnEvent::PermissionResolved(id),
+                );
             }
             self.stream.events.push_back(
-                crate::ports::agent_session::AgentTurnEvent::PermissionRequested(plan.request()),
+                provider_core::ports::agent_session::AgentTurnEvent::PermissionRequested(
+                    plan.request(),
+                ),
             );
             self.pending_plan = Some(plan);
         }

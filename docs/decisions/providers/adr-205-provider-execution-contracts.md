@@ -4,6 +4,7 @@ status: accepted
 date: 2026-10-31
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-205：Provider 执行归属与公共端口契约

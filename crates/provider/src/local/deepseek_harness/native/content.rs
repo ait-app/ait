@@ -1,5 +1,5 @@
 //! Convert native content without exposing bearer URLs or native attachment paths.
-use crate::{ports::agent_session::AgentSessionError, protocol::prompt::AgentPrompt};
+use provider_core::{ports::agent_session::AgentSessionError, protocol::prompt::AgentPrompt};
 use serde_json::{Value, json};
 
 pub(super) fn prompt(prompt: &AgentPrompt) -> Result<Vec<Value>, AgentSessionError> {

@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 
 use super::super::commands::{self, AutoCompact, Builtin};
 use super::{LABEL, Session, native_reason};
-use provider::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use provider::protocol::prompt::AgentPrompt;
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::protocol::prompt::AgentPrompt;
 
 /// Commands awaiting OMP's answer at once; more are refused before anything is written.
 const MAX_PENDING: usize = 16;

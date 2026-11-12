@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use super::CodexClient;
-use crate::ports::agent_session::{AgentClient, AgentSessionError};
+use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
 
 impl CodexClient {
     pub(super) async fn native_diagnostic(&self) -> Result<String, AgentSessionError> {
@@ -48,10 +48,10 @@ impl CodexClient {
     pub(super) async fn prepare_native_usage_in<'a>(
         &'a self,
         cwd: &str,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'a>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'a>, AgentSessionError> {
         let account = self.usage_connection.account(self, cwd).await?;
         let cwd = cwd.to_owned();
-        Ok(crate::ports::account_usage::PreparedUsage {
+        Ok(provider_core::ports::account_usage::PreparedUsage {
             identity: account.identity.clone(),
             report: Box::pin(
                 async move { self.usage_connection.report(self, &cwd, &account).await },
@@ -64,7 +64,7 @@ impl CodexClient {
     /// Returns directory, native launch or initialization failures.
     pub(super) async fn prepare_native_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         self.prepare_native_usage_in(&current_dir()?).await
     }
 }

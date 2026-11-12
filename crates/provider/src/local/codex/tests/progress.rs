@@ -61,7 +61,7 @@ async fn compaction_terminal_fallback_closes_loading_and_releases_manual_admissi
         let spec = fixture.spec();
         let mut session = client.create_session(&spec).await.unwrap();
         if mode == "legacy-compaction" {
-            let mut prompt = crate::protocol::prompt::AgentPrompt::text("/compact");
+            let mut prompt = provider_core::protocol::prompt::AgentPrompt::text("/compact");
             prompt.client_message_id = Some("manual-legacy".into());
             session.out_of_band(&prompt).await.unwrap();
         } else {
@@ -139,7 +139,7 @@ async fn native_compaction_emits_loading_before_completion_for_auto_and_manual_r
             session.start_turn("hang", &spec.config).await.unwrap();
         }
         if manual {
-            let mut prompt = crate::protocol::prompt::AgentPrompt::text("/compact");
+            let mut prompt = provider_core::protocol::prompt::AgentPrompt::text("/compact");
             prompt.client_message_id = Some(format!("compact-{busy}"));
             session.out_of_band(&prompt).await.unwrap();
         } else {
@@ -200,7 +200,10 @@ async fn native_plan_progress_is_a_durable_todo_snapshot_or_a_reviewable_plan() 
         .unwrap();
         let handle = session.persistence().unwrap();
         if planning {
-            assert_eq!(todos, [] as [crate::protocol::timeline::NativeItem; 0]);
+            assert_eq!(
+                todos,
+                [] as [provider_core::protocol::timeline::NativeItem; 0]
+            );
             assert!(
                 session.pending_permissions()[0]["input"]["plan"]
                     .as_str()

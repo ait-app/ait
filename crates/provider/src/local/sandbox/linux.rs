@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use domain::workspace::sandbox::WritePolicy;
 use tokio::process::Command;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(crate) mod process;
 

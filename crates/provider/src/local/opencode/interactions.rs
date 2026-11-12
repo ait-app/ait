@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::PROVIDER;
 use crate::local::acp_permissions::{Pending, resolve_tool};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Validate a host answer and build its exact native callback reply; invalid answers reject.
 pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, AgentSessionError> {

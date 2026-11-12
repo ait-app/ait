@@ -3,7 +3,7 @@ use std::path::Path;
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
     if spec.provider != "claude"

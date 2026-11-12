@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::protocol::{prompt::AgentPrompt, timeline::NativeItem};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::{prompt::AgentPrompt, timeline::NativeItem};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Question {

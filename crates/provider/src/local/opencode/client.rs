@@ -10,7 +10,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{PROVIDER, config, history, launcher, session};
-use crate::{
+use provider_core::{
     ports::{
         agent_session::{
             AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
@@ -107,14 +107,14 @@ impl AgentClient for OpenCodeClient {
     async fn subagents(
         &self,
         cwd: &str,
-    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
         super::subagents::history::discover(self, cwd).await
     }
 
     async fn reconcile_subagents(
         &self,
-        children: Vec<crate::ports::controls::NativeSubagent>,
-    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+        children: Vec<provider_core::ports::controls::NativeSubagent>,
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
         super::subagents::durable::reconcile(self, children).await
     }
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

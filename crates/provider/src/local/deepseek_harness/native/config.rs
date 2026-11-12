@@ -1,8 +1,8 @@
 //! Native Host model catalog and session-local permission presets.
 use super::{super::PROVIDER, http::Api, presets};
 use crate::local::acp_config::text;
-use crate::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
+use provider_core::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 use serde_json::{Value, json};
 
 /// Validate Ait controls before launching a Host; exact choices are checked against native state.

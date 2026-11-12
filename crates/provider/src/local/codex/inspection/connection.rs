@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
 
 use super::super::{CodexClient, Transport};
-use crate::ports::account_usage::UsageIdentity;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::account_usage::UsageIdentity;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Native account metadata and the independent, serialized quota transport.
 #[derive(Debug, Clone, Default)]

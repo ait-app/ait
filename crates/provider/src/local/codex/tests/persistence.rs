@@ -161,7 +161,7 @@ async fn inspect_and_rewind_preserve_only_controls_belonging_to_retained_history
     let plan = plans::Plan::receive(&json!({"id":"plan","text":"Implement tests"}), "t1")
         .unwrap()
         .unwrap();
-    let note = crate::protocol::timeline::NativeItem {
+    let note = provider_core::protocol::timeline::NativeItem {
         key: "native:control-note".into(),
         turn_id: Some("t1".into()),
         timestamp: "2026-01-01T00:00:00Z".into(),

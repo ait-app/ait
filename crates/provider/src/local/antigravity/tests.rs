@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use super::*;
-use crate::ports::agent_session::AgentTurnEvent;
-use crate::protocol::prompt::{AgentPrompt, PromptImage};
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
 mod image_input;
 mod input_history;

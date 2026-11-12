@@ -1,7 +1,7 @@
 use super::*;
-use crate::ports::agent_session::AgentTurnEvent;
-use crate::ports::usage_ledger::UsageBoundary;
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::ports::usage_ledger::UsageBoundary;
+use provider_core::protocol::prompt::AgentPrompt;
 
 mod discovery;
 mod execution;
@@ -111,7 +111,7 @@ async fn image_input_has_durable_sources_and_rejects_live_launch_changes() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
     let prompt = AgentPrompt {
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: "aW1hZ2U=".into(),
             mime_type: "image/png".into(),
         }],

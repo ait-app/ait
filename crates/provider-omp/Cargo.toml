@@ -5,7 +5,9 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Ports, prompt/timeline protocol and the shared native toolkit the adapter builds on.
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on, until it moves to `provider-native`.
 provider.workspace = true
 domain.workspace = true
 async-trait.workspace = true

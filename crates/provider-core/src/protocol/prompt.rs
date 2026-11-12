@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use crate::ports::agent_session::AgentSessionError;
 
 /// Maximum serialized rich input, leaving room in the 64 MiB request envelope.
-pub(crate) const MAX_PROMPT_BYTES: usize = 63 * 1024 * 1024;
+pub const MAX_PROMPT_BYTES: usize = 63 * 1024 * 1024;
 
 /// An inline raster image, using the existing Paseo wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,7 +148,7 @@ impl AgentPrompt {
     /// Map ordered blocks to native Codex app-server input, including inline image URLs.
     /// # Errors
     /// Returns invalid rich input before submission.
-    pub(crate) fn codex_input(&self) -> Result<Vec<Value>, AgentSessionError> {
+    pub fn codex_input(&self) -> Result<Vec<Value>, AgentSessionError> {
         self.blocks()?.into_iter().map(|block| {
             Ok(if block["type"] == "image" {
                 json!({"type":"image","url":format!("data:{};base64,{}", block["mimeType"].as_str().ok_or(AgentSessionError::Rejected)?, block["data"].as_str().ok_or(AgentSessionError::Rejected)?)})
@@ -159,7 +159,7 @@ impl AgentPrompt {
     /// Map ordered blocks to Claude Code's Anthropic content representation.
     /// # Errors
     /// Returns invalid rich input before submission.
-    pub(crate) fn claude_content(&self) -> Result<Value, AgentSessionError> {
+    pub fn claude_content(&self) -> Result<Value, AgentSessionError> {
         if self.images.is_empty() && self.attachments.is_empty() {
             self.validate()?;
             return Ok(json!(self.text));

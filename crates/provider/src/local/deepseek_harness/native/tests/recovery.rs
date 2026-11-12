@@ -1,8 +1,8 @@
 use super::fixture::{Fixture, next};
-use crate::{
+use crate::storage::timeline::Timeline;
+use provider_core::{
     ports::agent_session::{AgentClient, AgentTurnEvent},
     protocol::{prompt::AgentPrompt, timeline::NativeItem},
-    storage::timeline::Timeline,
 };
 use serde_json::{Value, json};
 

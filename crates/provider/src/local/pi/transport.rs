@@ -14,7 +14,7 @@ use super::{PROVIDER, PiClient};
 use crate::local::diagnostics::Diagnostics;
 use crate::local::metadata_process::Process;
 use crate::local::process_group::{self, Signal};
-use crate::ports::{
+use provider_core::ports::{
     agent_session::AgentSessionError,
     diagnostics::{Category, Diagnostic},
 };

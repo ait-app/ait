@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::controls::SubagentEvent;
+use provider_core::ports::controls::SubagentEvent;
 
 #[tokio::test]
 async fn timed_out_child_discovery_reaps_its_native_process_before_returning() {

@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use super::{CodexClient, Transport, controls, native_sessions};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::ports::native_history::SessionHistory;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::native_history::SessionHistory;
 
 impl CodexClient {
     pub(super) async fn native_rewind(

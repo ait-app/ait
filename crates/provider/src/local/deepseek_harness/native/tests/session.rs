@@ -1,5 +1,5 @@
 use super::fixture::{Fixture, next};
-use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentTurnEvent};
+use provider_core::ports::agent_session::{AgentClient, AgentResumePurpose, AgentTurnEvent};
 use serde_json::json;
 
 #[tokio::test]
@@ -51,7 +51,7 @@ async fn failed_native_turns_preserve_safe_classified_reasons() {
     }
     assert_eq!(
         session.failure_diagnostic().unwrap().category,
-        crate::ports::diagnostics::Category::Quota
+        provider_core::ports::diagnostics::Category::Quota
     );
     let message = session.failure_message().unwrap().into_owned();
     assert!(message.contains("insufficient_quota"));
@@ -211,7 +211,7 @@ async fn cancellation_expires_questions_and_allows_a_following_turn() {
 
 async fn answer_question(
     fixture: &Fixture,
-    session: &mut dyn crate::ports::agent_session::AgentSession,
+    session: &mut dyn provider_core::ports::agent_session::AgentSession,
 ) {
     fixture.interaction(json!({"type":"waterfall","agentId":"session","eventId":"question","event":"user-questions/request","request":{"questions":[{"id":"choice","question":"Continue?","options":[{"label":"Yes"}]}]}}));
     let AgentTurnEvent::PermissionRequested(question) = next(session).await else {
@@ -321,7 +321,7 @@ async fn history_gap_fails_without_resending_input() {
 
 async fn resume_without_replay(
     fixture: &Fixture,
-    session: &mut dyn crate::ports::agent_session::AgentSession,
+    session: &mut dyn provider_core::ports::agent_session::AgentSession,
 ) {
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();

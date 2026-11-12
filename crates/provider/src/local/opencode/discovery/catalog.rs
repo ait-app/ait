@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use super::{Details, OpenCodeClient, PROVIDER, config, launcher};
 use crate::local::acp_config;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Query native models and primary agents without creating or modifying native sessions.
 /// CLI failures and malformed or oversized catalogs are propagated.

@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::super::config;
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// A session file larger than this fails instead of being read.
 const MAX_BYTES: u64 = 64 * 1024 * 1024;

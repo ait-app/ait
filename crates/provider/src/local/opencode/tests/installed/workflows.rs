@@ -1,6 +1,6 @@
 //! Native workflow acceptance; every model request stays on an isolated loopback server.
 use super::*;
-use crate::protocol::prompt::{AgentPrompt, PromptImage};
+use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
 fn configuration(fixture: &Installed) -> Value {
     serde_json::from_slice(&std::fs::read(fixture.root.path().join("opencode.json")).unwrap())
@@ -155,7 +155,7 @@ async fn installed_acp_large_catalog_is_complete_prompt_free_and_selectable() {
     assert!(
         fixture
             .client
-            .list_sessions(&crate::ports::native_history::ListOptions {
+            .list_sessions(&provider_core::ports::native_history::ListOptions {
                 cwd: Some(fixture.spec.cwd.clone()),
                 scan_limit: 100,
             })

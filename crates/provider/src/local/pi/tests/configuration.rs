@@ -2,11 +2,11 @@ use super::*;
 
 #[tokio::test]
 async fn opening_thinking_rejections_reach_the_durable_failure_notice() {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
     use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use crate::storage::timeline::Timeline;
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for resumed in [false, true] {
         let (directory, client, mut spec) = fixture("reject-thinking");
@@ -115,10 +115,10 @@ async fn correcting_an_opening_rejection_applies_the_new_preference() {
 
 #[tokio::test]
 async fn partial_control_rejections_persist_the_actual_runtime_before_settlement() {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
     use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     let (directory, client, mut spec) = fixture("summary-model-reply-reject-thinking");
     spec.config.thinking_option_id = Some("high".into());

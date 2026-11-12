@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use super::DeepSeekHarnessClient;
 use crate::local::metadata_process;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 impl DeepSeekHarnessClient {
     pub(super) async fn metadata(

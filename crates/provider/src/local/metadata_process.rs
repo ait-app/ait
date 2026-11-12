@@ -5,7 +5,7 @@ use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
 
 use super::process_group::{self, Signal};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const MAX_OUTPUT: u64 = 1024 * 1024;
 

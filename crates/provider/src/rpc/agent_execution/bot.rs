@@ -4,13 +4,13 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, map_manager};
-use crate::ports::agent_session::AgentSessionSpec;
-use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
-use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
-use crate::protocol::prompt::AgentPrompt;
 use crate::service::agent_manager::{AgentManagerError, AgentRegistration};
 use crate::service::bot_execution::{Action, Created, TimelineCursor};
+use provider_core::ports::agent_session::AgentSessionSpec;
+use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
+use provider_core::protocol::prompt::AgentPrompt;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -229,7 +229,7 @@ impl ExecutionState {
                     ),
                     ..AgentRegistration::default()
                 },
-                &crate::ports::environment::AgentEnvironment::default(),
+                &provider_core::ports::environment::AgentEnvironment::default(),
             )
             .await
             .map_err(|error| map_manager(&error))?;

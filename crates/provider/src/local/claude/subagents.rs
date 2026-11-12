@@ -11,9 +11,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{ClaudeClient, history};
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::controls::NativeSubagent;
-use crate::ports::native_history::SessionHistory;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::native_history::SessionHistory;
 
 pub(super) const LOCATOR: &str = "claudeSubagent";
 

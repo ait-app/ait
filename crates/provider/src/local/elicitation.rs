@@ -2,7 +2,7 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(super) fn questions(schema: &Value) -> Result<Vec<Value>, AgentSessionError> {
     if schema["type"] != "object" || !schema.is_object() {

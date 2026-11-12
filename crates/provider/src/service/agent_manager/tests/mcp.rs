@@ -334,7 +334,9 @@ async fn denied_bot_session_launches_without_ait_server() {
         .configure(
             "bot-session",
             &ConfigPatch {
-                model_id: crate::protocol::agent_config::NullableSetting::Set("gpt-7".into()),
+                model_id: provider_core::protocol::agent_config::NullableSetting::Set(
+                    "gpt-7".into(),
+                ),
                 ..Default::default()
             },
         )
@@ -461,7 +463,9 @@ async fn restoring_a_live_scoped_agent_releases_before_reissuing() {
         .restore(
             "child",
             &crate::protocol::resume::Overrides {
-                title: crate::protocol::agent_config::NullableSetting::Set("Renamed".into()),
+                title: provider_core::protocol::agent_config::NullableSetting::Set(
+                    "Renamed".into(),
+                ),
                 ..Default::default()
             },
         )

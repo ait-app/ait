@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 use super::diagnostics::Failure;
 use crate::local::usage::cumulative::{CumulativeUsage, UsageCounters};
 use crate::local::usage::requests::MAX_SEGMENT_ID;
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
-use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
+use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 const MAX_TEXT: usize = 128 * 1024;
 const MAX_ITEMS: usize = 4096;

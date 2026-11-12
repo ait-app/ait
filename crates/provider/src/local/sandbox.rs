@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use domain::workspace::sandbox::{WriteConfinement, WritePolicy};
 use tokio::process::Command;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;

@@ -7,7 +7,7 @@ use super::super::{
     tests::{bundle, file},
 };
 use super::*;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 const MANIFEST: &str = r#"{"name":"@deepseek-ai/dsh","bin":{"dsh":"lib/bin.js"}}"#;
 

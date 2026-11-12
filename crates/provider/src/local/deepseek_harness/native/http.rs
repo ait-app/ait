@@ -6,8 +6,8 @@ use futures_util::StreamExt;
 use reqwest::{Client, Url, header};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 pub(super) const MAX_FRAME: usize = 2 * 1024 * 1024;
 

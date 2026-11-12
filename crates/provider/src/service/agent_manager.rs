@@ -29,17 +29,17 @@ use domain::session::protocol::SessionEventKind;
 use model::session::SessionEvents;
 use serde_json::json;
 
-use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
-    AgentTurnEvent,
-};
 use crate::ports::mcp_scope::McpSubject;
-use crate::ports::native_history::CwdLookup;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
-use crate::protocol::agent_config::ConfigPatch;
 use crate::service::bot_execution::TimelineCursor;
 use crate::storage::usage_ledger::SqliteUsageLedger;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+    AgentTurnEvent,
+};
+use provider_core::ports::native_history::CwdLookup;
+use provider_core::protocol::agent_config::ConfigPatch;
 
 enum Registration<'a> {
     Create,
@@ -118,8 +118,8 @@ struct LiveAgent {
     pending: Option<AgentTurnEvent>,
     pending_runtime: Option<StoredAgentRuntimeInfo>,
     pending_input_at: Option<String>,
-    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
-    failure_entry: Option<crate::protocol::timeline::NativeItem>,
+    failure_diagnostic: Option<provider_core::ports::diagnostics::Diagnostic>,
+    failure_entry: Option<provider_core::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
     /// Usage ledger calls of this session's turns.
@@ -448,7 +448,7 @@ impl AgentManager {
     pub(crate) fn bot_session_support(
         &self,
         provider: &str,
-    ) -> Result<crate::ports::bot_session::BotSessionSupport, AgentManagerError> {
+    ) -> Result<provider_core::ports::bot_session::BotSessionSupport, AgentManagerError> {
         self.clients
             .get(provider)
             .map(|client| client.bot_session_support())
@@ -537,7 +537,7 @@ impl AgentManager {
         }
         if matches!(
             patch.mode_id,
-            crate::protocol::agent_config::NullableSetting::Clear
+            provider_core::protocol::agent_config::NullableSetting::Clear
         ) {
             return Err(AgentManagerError::InvalidRequest);
         }
@@ -607,7 +607,7 @@ impl AgentManager {
             agent_id,
             spec,
             registration,
-            &crate::ports::environment::AgentEnvironment::default(),
+            &provider_core::ports::environment::AgentEnvironment::default(),
         )
         .await
     }
@@ -622,7 +622,7 @@ impl AgentManager {
         agent_id: &str,
         spec: &AgentSessionSpec,
         registration: AgentRegistration,
-        environment: &crate::ports::environment::AgentEnvironment,
+        environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
         validate_identity(agent_id, spec)?;
         if self.live.len() >= 32 {
@@ -857,8 +857,11 @@ impl AgentManager {
         agent_id: &str,
         text: &str,
     ) -> Result<(), AgentManagerError> {
-        self.send_input(agent_id, &crate::protocol::prompt::AgentPrompt::text(text))
-            .await
+        self.send_input(
+            agent_id,
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+        )
+        .await
     }
 
     /// Submit one complete rich prompt while retaining exclusive native-turn admission.
@@ -867,7 +870,7 @@ impl AgentManager {
     pub(crate) async fn send_input(
         &mut self,
         agent_id: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentManagerError> {
         prompt
             .validate()

@@ -4,7 +4,7 @@ use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
 use super::PROVIDER;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config

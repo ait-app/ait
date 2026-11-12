@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use serde_json::{Value, json};
 
 use crate::PROVIDER;
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const TITLE_PREFIX: &str = "Allow tool: ";
 const DENY: &str = "Deny";

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::acp_config::text;
 use super::tool_detail::{MARKER, input_preview, truncate};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Display budget for a native permission title, which may be a complete shell script.
 const TITLE_BYTES: usize = 16 * 1024;

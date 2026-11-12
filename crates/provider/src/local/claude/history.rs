@@ -7,8 +7,8 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::{ClaudeClient, streaming::Stream, transport::MAX_FRAME};
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
 // Long 1M-context sessions pass 32 MiB. Parsing costs about ten times the file size in memory.
 const MAX_HISTORY: u64 = 128 * 1024 * 1024;

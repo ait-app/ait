@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::agent_execution::AgentExecution;
-use crate::ports::bot_session::InstructionDelivery;
+use provider_core::ports::bot_session::InstructionDelivery;
 
 /// An owner-checked operation on a hidden provider session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,7 +14,7 @@ pub enum Action {
     /// Create once, or reuse an existing session with the exact same owner; returns [`Created`].
     ///
     /// The session's mode, tool preapprovals and system prompt follow the provider's
-    /// [`BotSessionSupport`](crate::ports::bot_session::BotSessionSupport); `config.mode_id`
+    /// [`BotSessionSupport`](provider_core::ports::bot_session::BotSessionSupport); `config.mode_id`
     /// is ignored.
     Create {
         /// Stable preallocated runtime identity.

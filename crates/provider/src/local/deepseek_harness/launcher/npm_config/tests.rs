@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::super::{resolve, tests::file};
 use super::*;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 fn npm(root: &Path, output: &str) -> PathBuf {
     let program = root.join("node tools/npm");

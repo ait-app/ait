@@ -5,7 +5,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
 use super::PROVIDER;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 const KNOWN_THINKING_OPTIONS: [(&str, &str, &str); 7] = [
     (

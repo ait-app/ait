@@ -66,7 +66,8 @@ impl Category {
     }
 
     /// Return the stable structured-log classification.
-    pub(crate) const fn code(self) -> &'static str {
+    #[must_use]
+    pub const fn code(self) -> &'static str {
         match self {
             Self::Authentication => "authentication",
             Self::Permission => "permission",
@@ -92,13 +93,13 @@ pub struct Diagnostic {
     /// Common classification used for logs and user-facing text.
     pub category: Category,
     /// Adapter-owned fixed source label, never native input.
-    pub(crate) source: &'static str,
+    pub source: &'static str,
     /// Numeric native RPC error code, when supplied.
-    pub(crate) native_code: Option<i64>,
+    pub native_code: Option<i64>,
     /// Numeric upstream HTTP status, when supplied.
-    pub(crate) http_status: Option<u16>,
+    pub http_status: Option<u16>,
     /// `None` means the provider did not supply an authoritative retry state.
-    pub(crate) will_retry: Option<bool>,
+    pub will_retry: Option<bool>,
 }
 
 impl Diagnostic {

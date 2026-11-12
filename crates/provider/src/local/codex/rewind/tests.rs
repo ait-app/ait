@@ -87,7 +87,7 @@ async fn first_interrupted_turn_rewinds_when_rollback_is_removed_or_fork_is_lega
 
         assert_eq!(
             empty.entries,
-            [] as [crate::protocol::timeline::NativeItem; 0]
+            [] as [provider_core::protocol::timeline::NativeItem; 0]
         );
         assert_ne!(empty.descriptor.provider_handle_id, "source");
         assert_eq!(
@@ -142,7 +142,7 @@ async fn rewind_forks_exclusive_prefix_and_never_modifies_the_source() {
         .unwrap();
     assert_eq!(
         empty.entries,
-        [] as [crate::protocol::timeline::NativeItem; 0]
+        [] as [provider_core::protocol::timeline::NativeItem; 0]
     );
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),

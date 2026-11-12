@@ -14,7 +14,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::protocol::timeline::NativeItem;
+use provider_core::protocol::timeline::NativeItem;
 
 /// Maximum serialized native display entry, shared by completed and incremental storage.
 pub(crate) const MAX_ENTRY_BYTES: usize = 768 * 1024;

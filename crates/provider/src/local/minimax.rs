@@ -9,11 +9,11 @@ use std::time::Duration;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use crate::ports::environment::AgentEnvironment;
-use crate::protocol::provider::Details;
+use provider_core::ports::environment::AgentEnvironment;
+use provider_core::protocol::provider::Details;
 
 const PROVIDER: &str = "minimax-code";
 

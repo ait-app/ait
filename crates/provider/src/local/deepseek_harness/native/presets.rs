@@ -2,7 +2,7 @@
 use serde_json::{Value, json};
 
 use crate::local::acp_config::text;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(super) const PREFIX: &str = "agent-preset:";
 pub(super) const PERMISSION: &str = "permission_preset";
@@ -44,7 +44,7 @@ pub(super) fn permission_feature(permissions: &Value) -> Result<Value, AgentSess
 /// Check draft selections against discovery without activating a plugin composition.
 /// Returns rejection for unavailable models, reasoning efforts, modes or permission choices.
 pub(in crate::local::deepseek_harness) fn validate_selection(
-    details: &crate::protocol::provider::Details,
+    details: &provider_core::protocol::provider::Details,
     config: &domain::agent_runtime::StoredAgentConfig,
 ) -> Result<(), AgentSessionError> {
     super::config::validate(config)?;

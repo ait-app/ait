@@ -1,5 +1,5 @@
 //! Native context occupancy is independent of cumulative billing counters.
-use crate::{ports::agent_session::AgentSessionError, protocol::usage::AgentUsage};
+use provider_core::{ports::agent_session::AgentSessionError, protocol::usage::AgentUsage};
 use serde_json::Value;
 
 pub(super) fn context(value: &Value) -> Result<Option<AgentUsage>, AgentSessionError> {

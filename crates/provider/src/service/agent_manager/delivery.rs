@@ -1,11 +1,12 @@
 //! Serialized message admission, native interruption and durable retry receipts.
 
 use super::{AgentManager, AgentManagerError};
-use crate::protocol::{agent_execution::ActiveTurnBehavior, prompt::AgentPrompt};
+use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
 use crate::support::time::now_timestamp;
 use model::ErrorCode;
+use provider_core::protocol::prompt::AgentPrompt;
 
 impl AgentManager {
     pub(crate) async fn deliver_answer(
@@ -176,7 +177,9 @@ impl AgentManager {
         let result = session.session.out_of_band(&prompt).await;
         let receipt = match &result {
             Ok(()) => Receipt::Accepted,
-            Err(crate::ports::agent_session::AgentSessionError::Rejected) => Receipt::Rejected,
+            Err(provider_core::ports::agent_session::AgentSessionError::Rejected) => {
+                Receipt::Rejected
+            }
             Err(_) => Receipt::Uncertain,
         };
         timeline.finish_input(agent, &message, receipt)?;
@@ -212,7 +215,7 @@ impl AgentManager {
                 return Ok(());
             }
             if agent.session.cancel_turn(turn).await.is_err() {
-                agent.pending = Some(crate::ports::agent_session::AgentTurnEvent::Failed);
+                agent.pending = Some(provider_core::ports::agent_session::AgentTurnEvent::Failed);
                 return Err(ErrorCode::AgentIo);
             }
             agent.interruption_requested = true;
@@ -350,7 +353,7 @@ impl AgentManager {
                 previous
                     .as_ref()
                     .map_or("unknown", |record| record.provider.as_str()),
-                &[crate::protocol::timeline::NativeItem {
+                &[provider_core::protocol::timeline::NativeItem {
                     key: format!("host:provider-failure:input:{}", input.message),
                     turn_id: None,
                     timestamp: now.clone(),

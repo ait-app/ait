@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::agent_session::AgentTurnEvent;
+use provider_core::ports::agent_session::AgentTurnEvent;
 
 mod environment;
 mod parity;
@@ -20,7 +20,7 @@ async fn native_authentication_failures_expose_sanitized_reasons_and_classified_
     let diagnostic = session.failure_diagnostic().unwrap();
     assert_eq!(
         diagnostic.category,
-        crate::ports::diagnostics::Category::Authentication
+        provider_core::ports::diagnostics::Category::Authentication
     );
     assert!(!format!("{diagnostic:?}").contains("secret"));
     let message = session.failure_message().unwrap().into_owned();
@@ -103,9 +103,9 @@ async fn steering_drains_prior_result_and_preserves_the_active_turn_and_input_id
         session.steer_turn(&turn, "/clear").await,
         Err(AgentSessionError::Rejected)
     );
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         client_message_id: Some(uuid::Uuid::new_v4().to_string()),
-        ..crate::protocol::prompt::AgentPrompt::text("second")
+        ..provider_core::protocol::prompt::AgentPrompt::text("second")
     };
     session.steer_input(&turn, &prompt).await.unwrap();
     let mut submitted = Vec::new();
@@ -597,7 +597,7 @@ async fn live_requests_are_queued_before_completion_and_resume_replays_none() {
     );
     assert_eq!(
         requests[0].boundary,
-        crate::ports::usage_ledger::UsageBoundary::Request
+        provider_core::ports::usage_ledger::UsageBoundary::Request
     );
     assert_eq!(
         (requests[0].input_tokens, requests[0].cache_read_tokens),
@@ -700,7 +700,7 @@ async fn rich_input_preserves_images_attachments_identity_and_output_schema_at_n
 
 #[tokio::test]
 async fn background_child_streams_after_root_completion_without_changing_root_history() {
-    use crate::ports::controls::SubagentEvent;
+    use provider_core::ports::controls::SubagentEvent;
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
     session
@@ -782,7 +782,7 @@ async fn rewind_slash_command_uses_native_file_checkpoints_without_adding_an_inf
 
 #[tokio::test]
 async fn native_error_shapes_preserve_the_reason_and_reset_on_a_new_turn() {
-    use crate::ports::diagnostics::Category;
+    use provider_core::ports::diagnostics::Category;
     for (shape, category, expected) in [
         (
             "assistant",

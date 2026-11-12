@@ -22,7 +22,7 @@ Agent protocol/session/runtime modules and Workspace automation ownership were
 consolidated by docs/decisions/providers/adr-031-daemon-provider.md.
 
 Native session and text-turn adaptations in crates/provider/src/local/codex*,
-crates/provider/src/ports/agent_session*, crates/provider/src/service/agent_manager*,
+crates/provider-core/src/ports/agent_session*, crates/provider/src/service/agent_manager*,
 crates/provider/src/protocol/agent_execution* and crates/provider/src/rpc/agent_execution*
 also reference the same pinned commit's packages/server/src/server/agent/agent-sdk-types.ts,
 agent-manager.ts, agent-loading.ts, providers/codex-app-server-agent.ts, and

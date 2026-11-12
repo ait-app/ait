@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Resolve prompt files using the same environment inherited by this native session.
 pub(super) fn directory(
-    environment: &crate::ports::environment::AgentEnvironment,
+    environment: &provider_core::ports::environment::AgentEnvironment,
 ) -> Result<PathBuf, AgentSessionError> {
     let lookup = |key| {
         environment

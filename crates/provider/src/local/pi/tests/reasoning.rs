@@ -459,10 +459,10 @@ fn catalog_uses_known_map_keys_when_seeding_defaults() {
 
 #[tokio::test]
 async fn clamped_thinking_selections_survive_updates_restart_and_import() {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
     use crate::protocol::resume::Overrides;
     use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for level in ["max", "ultra"] {
         let (directory, client, mut spec) = fixture("clamp-thinking");
@@ -1113,11 +1113,11 @@ async fn rejected_thinking_controls_fail_explicitly() {
 
 #[tokio::test]
 async fn pending_thinking_preferences_preserve_the_last_native_runtime() {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
     use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use crate::service::agent_runtime::effective_thinking_option_id;
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     let (directory, client, mut spec) = fixture("");
     spec.config.thinking_option_id = Some("high".into());

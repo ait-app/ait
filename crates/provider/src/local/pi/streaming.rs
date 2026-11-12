@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 use crate::local::usage::requests;
 use crate::local::{compaction::Compactions, diagnostics::classify};
-use crate::ports::{
+use provider_core::ports::{
     agent_session::{AgentSessionError, AgentTurnEvent},
     diagnostics::{Category, Diagnostic},
 };
-use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 // Storage caps serialized NativeItem at 768 KiB. Sixfold JSON escaping of 96 KiB
 // leaves 192 KiB for metadata, matching OpenCode's conservative text allowance.
@@ -107,7 +107,7 @@ impl Stream {
     pub(super) fn submitted(
         images: &crate::local::images::ImageStore,
         turn: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
         text: &str,
     ) -> Result<Vec<AgentTurnEvent>, AgentSessionError> {
         let sources = prompt

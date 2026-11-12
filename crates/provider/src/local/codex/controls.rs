@@ -4,8 +4,8 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
 use super::{CodexClient, Transport, native_sessions};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::ports::controls::NativeSubagent;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::controls::NativeSubagent;
 
 /// Native configuration keys paired with their turn-policy wire names.
 pub(super) const WORKSPACE_FIELDS: [(&str, &str); 4] = [

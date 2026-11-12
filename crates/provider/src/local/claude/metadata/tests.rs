@@ -1,6 +1,6 @@
 use super::super::tests::fixture;
 use super::*;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 #[tokio::test]
 async fn auxiliary_claude_request_disables_tools_mcp_hooks_and_history() {

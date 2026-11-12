@@ -6,11 +6,11 @@ use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use serde_json::{Value, json};
 
 use super::terminal;
-use crate::ports::agent_session::{AgentClient, AgentTurnEvent};
-use crate::ports::diagnostics::Category;
 use crate::service::agent_manager::{AgentManager, AgentRegistration};
 use crate::storage::timeline::Timeline;
 use crate::test_support::Fixture;
+use provider_core::ports::agent_session::{AgentClient, AgentTurnEvent};
+use provider_core::ports::diagnostics::Category;
 
 #[tokio::test]
 async fn unknown_subagent_activity_and_state_keep_parent_completion_and_next_turn() {

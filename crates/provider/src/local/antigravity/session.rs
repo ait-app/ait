@@ -10,10 +10,10 @@ use super::{
     AntigravityClient, PROVIDER, config, diagnostics::Failure, discovery, input, streaming::Stream,
     transport::Transport,
 };
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::protocol::prompt::AgentPrompt;
 
 #[derive(Debug)]
 pub(super) struct Session {
@@ -221,8 +221,8 @@ impl AgentSession for Session {
         super::quota::read(&self.client, std::path::Path::new(&self.cwd)).await
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
-        use crate::ports::diagnostics::{Category, Diagnostic};
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
+        use provider_core::ports::diagnostics::{Category, Diagnostic};
         if self.input_error.is_some() {
             return Some(Diagnostic::new(Category::Unknown, "input"));
         }

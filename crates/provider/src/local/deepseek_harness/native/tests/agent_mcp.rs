@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use super::fixture::Fixture;
 use crate::local::agent_mcp_injection::{Adapter, Opening, json_lines, verify};
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
-use crate::ports::agent_session::{AgentClient, AgentSessionError};
 use domain::agent_runtime::StoredAgentConfig;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

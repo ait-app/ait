@@ -3,7 +3,7 @@ use std::time::Duration;
 use futures_util::future::BoxFuture;
 
 use super::{PiClient, transport};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Run an ephemeral RPC probe after the independently cached version check.
 /// `budget` bounds startup, requests and cleanup; `None` keeps per-request deadlines.

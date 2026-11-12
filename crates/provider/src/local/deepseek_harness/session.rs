@@ -10,10 +10,10 @@ use crate::local::acp_config;
 use crate::local::acp_permissions;
 use crate::local::acp_streaming::Stream;
 use crate::local::acp_transport::Transport;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
-use crate::protocol::prompt::AgentPrompt;
+use provider_core::protocol::prompt::AgentPrompt;
 
 #[derive(Debug)]
 pub(super) struct Session {
@@ -213,7 +213,7 @@ impl AgentSession for Session {
         Ok(super::native::quota::acp_unavailable())
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.transport.diagnostics.failure()
     }
 

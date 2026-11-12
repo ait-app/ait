@@ -1,8 +1,8 @@
 //! Subagent transcripts, listing and history (B7) against the official peer, driven by a
 //! loopback mock model.
 use super::*;
-use provider::ports::controls::SubagentEvent;
-use provider::protocol::timeline::NativeItem;
+use provider_core::ports::controls::SubagentEvent;
+use provider_core::protocol::timeline::NativeItem;
 
 /// The prompt that starts the parent's task round.
 const TRIGGER: &str = "OMP_SUBAGENT_FIXTURE";
@@ -136,7 +136,7 @@ async fn installed_omp_subagent_transcripts_replay_and_list_as_shown_live() {
 /// the rows shown live.
 async fn assert_transcript_matches(
     fixture: &Installed,
-    child: &provider::ports::controls::NativeSubagent,
+    child: &provider_core::ports::controls::NativeSubagent,
     live_child: &[NativeItem],
 ) {
     let discovered = fixture.client.subagents(&fixture.spec.cwd).await.unwrap();

@@ -4,12 +4,10 @@ use serde_json::{Value, json};
 
 use super::{Links, MAX_CHILDREN, descriptor, valid_id};
 use crate::local::acp_config;
-use crate::{
-    local::{images::ImageStore, opencode::streaming::Stream},
-    ports::{
-        agent_session::{AgentSessionError, AgentTurnEvent},
-        controls::{NativeSubagent, SubagentEvent},
-    },
+use crate::local::{images::ImageStore, opencode::streaming::Stream};
+use provider_core::ports::{
+    agent_session::{AgentSessionError, AgentTurnEvent},
+    controls::{NativeSubagent, SubagentEvent},
 };
 
 #[derive(Debug)]

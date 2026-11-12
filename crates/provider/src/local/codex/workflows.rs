@@ -4,7 +4,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
 use super::{CodexClient, Transport, controls};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const PLAN: u8 = 1;
 const REVIEW: u8 = 2;

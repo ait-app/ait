@@ -10,7 +10,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
 use tokio::process::Command;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 const MAX_BODY: usize = 32 * 1024 * 1024;
 const MAX_FRAME: usize = 8 * 1024 * 1024;

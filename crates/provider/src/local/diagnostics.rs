@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_TEXT: usize = 32 * 1024;
 const LOG_INTERVAL: Duration = Duration::from_secs(30);

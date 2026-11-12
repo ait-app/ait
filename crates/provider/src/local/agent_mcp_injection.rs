@@ -14,10 +14,10 @@ use model::storage::daemon_config::DaemonConfigStore;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
 use crate::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 use crate::service::agent_manager::{AgentManager, AgentRegistration};
 use crate::service::agent_mcp::AgentMcp;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 
 /// MCP servers one native opening received, keyed by server name.
 pub(super) type Opening = BTreeMap<String, Value>;

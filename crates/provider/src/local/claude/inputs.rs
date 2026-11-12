@@ -1,7 +1,7 @@
 //! Host correlation IDs are independent of the UUID required by the Claude SDK.
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::timeline::NativeItem;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use uuid::Uuid;

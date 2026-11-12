@@ -3,7 +3,7 @@
 use rusqlite::{OptionalExtension, params};
 
 use super::{ErrorCode, Timeline, io};
-use crate::ports::controls::NativeSubagent;
+use provider_core::ports::controls::NativeSubagent;
 
 impl Timeline {
     /// Return the canonical host identity previously bound to a verified native child.

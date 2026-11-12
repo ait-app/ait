@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use tokio::{process::Command, sync::mpsc};
 use tokio_util::task::AbortOnDropHandle;
 
-use crate::{ports::agent_session::AgentSessionError, protocol::timeline::NativeItem};
+use provider_core::{ports::agent_session::AgentSessionError, protocol::timeline::NativeItem};
 
 /// Ephemeral address and authentication for the native server inside one ACP child.
 #[derive(Debug)]
@@ -222,9 +222,9 @@ impl Observation {
     }
 
     /// Latest factual usage for restore/import; omitted fields remain unknown.
-    pub(super) fn usage(&self) -> Option<crate::protocol::usage::AgentUsage> {
+    pub(super) fn usage(&self) -> Option<provider_core::protocol::usage::AgentUsage> {
         let usage = self.projection.usage.as_ref()?;
-        let usage = crate::protocol::usage::AgentUsage {
+        let usage = provider_core::protocol::usage::AgentUsage {
             context_window_used_tokens: usage["used"].as_u64(),
             context_window_max_tokens: usage["size"].as_u64(),
             total_cost_usd: usage["cost"]["amount"].as_f64(),

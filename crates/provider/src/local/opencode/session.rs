@@ -23,12 +23,12 @@ use super::{
     subagents::live::Live,
 };
 use crate::local::acp_config;
-use crate::ports::diagnostics::{Category, Diagnostic};
-use crate::{
-    local::{
-        acp_permissions,
-        acp_transport::{self, Transport},
-    },
+use crate::local::{
+    acp_permissions,
+    acp_transport::{self, Transport},
+};
+use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_core::{
     ports::agent_session::{
         AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
     },
@@ -301,7 +301,7 @@ async fn reload(
         Value,
         BTreeSet<String>,
         String,
-        Vec<crate::ports::controls::NativeSubagent>,
+        Vec<provider_core::ports::controls::NativeSubagent>,
     ),
     AgentSessionError,
 > {
@@ -678,7 +678,7 @@ struct Execution {
     id: String,
     rpc_id: String,
     turn: String,
-    submitted: Vec<crate::protocol::timeline::NativeItem>,
+    submitted: Vec<provider_core::protocol::timeline::NativeItem>,
     pending: Pending,
     children: Arc<Mutex<Live>>,
     events: mpsc::Sender<AgentTurnEvent>,
@@ -1130,12 +1130,12 @@ impl Execution {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
-    fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
         self.children
             .lock()
             .map_or_else(|_| Vec::new(), |children| children.list())
     }
-    fn settle_subagents(&self, children: &[crate::ports::controls::NativeSubagent]) {
+    fn settle_subagents(&self, children: &[provider_core::ports::controls::NativeSubagent]) {
         if let Ok(mut live) = self.children.lock() {
             live.settle(children);
         }

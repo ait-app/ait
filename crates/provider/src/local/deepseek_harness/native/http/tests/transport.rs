@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use super::*;
-use crate::ports::diagnostics::Category;
+use provider_core::ports::diagnostics::Category;
 
 fn api_at(address: SocketAddr) -> Api {
     Api {

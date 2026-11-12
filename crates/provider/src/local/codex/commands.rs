@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 
 use super::{CodexSession, discovery};
 use crate::local::usage::requests::CodexRequests;
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::protocol::{prompt::AgentPrompt, timeline::NativeItem};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::protocol::{prompt::AgentPrompt, timeline::NativeItem};
 
 pub(super) fn split(text: &str) -> Option<(&str, &str)> {
     let command = text.trim().strip_prefix('/')?;
@@ -227,7 +227,7 @@ pub(super) async fn input(
     transport: &mut super::Transport,
     cwd: &str,
     prompt: &AgentPrompt,
-    environment: &crate::ports::environment::AgentEnvironment,
+    environment: &provider_core::ports::environment::AgentEnvironment,
 ) -> Result<Vec<Value>, AgentSessionError> {
     let mut input = prompt.codex_input()?;
     let Some((name, args)) = split(&prompt.text) else {

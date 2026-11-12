@@ -13,8 +13,8 @@ use tokio::task::JoinHandle;
 
 use crate::local::diagnostics::{self, Diagnostics};
 use crate::local::process_group::{self, Signal};
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
 use tokio_util::task::AbortOnDropHandle;
 
 const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
@@ -45,7 +45,7 @@ impl Transport {
         program: &Path,
         launch: Launch<'_>,
         deadline: Duration,
-        environment: &crate::ports::environment::AgentEnvironment,
+        environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
         let mut command = process(program, &launch, environment)?;
         let diagnostics = Diagnostics::new("codex");
@@ -452,7 +452,7 @@ pub(super) struct Launch<'a> {
 fn process(
     program: &Path,
     launch: &Launch<'_>,
-    environment: &crate::ports::environment::AgentEnvironment,
+    environment: &provider_core::ports::environment::AgentEnvironment,
 ) -> Result<Command, AgentSessionError> {
     let mut command = crate::local::sandbox::command(
         program,

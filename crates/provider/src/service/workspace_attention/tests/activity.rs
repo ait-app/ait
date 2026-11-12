@@ -167,7 +167,7 @@ fn running_native_children_contribute_to_the_active_workspace_root() {
     archived.archived_at = Some("archived".to_owned());
     *agents.0.lock().unwrap() = vec![root, delegated, archived];
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();
-    let mut native = crate::ports::controls::NativeSubagent {
+    let mut native = provider_core::ports::controls::NativeSubagent {
         persistence: None,
         id: "native-child".to_owned(),
         parent_id: "native-parent".to_owned(),

@@ -2,7 +2,7 @@ use std::future::pending;
 use std::task::Poll;
 
 use super::*;
-use crate::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionSpec};
 
 #[derive(Debug)]
 struct PendingClient {

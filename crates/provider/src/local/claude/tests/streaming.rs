@@ -1,6 +1,6 @@
 use super::*;
 use crate::local::claude::streaming;
-use crate::ports::agent_session::AgentTurnEvent;
+use provider_core::ports::agent_session::AgentTurnEvent;
 
 #[test]
 fn compaction_status_emits_one_loading_marker_for_each_boundary() {

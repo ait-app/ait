@@ -4,7 +4,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 
 use super::{Transport, controls};
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Inherited and effective permissions owned by one native thread connection.
 #[derive(Debug, Default)]

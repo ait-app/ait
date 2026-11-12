@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::protocol::agent_config::NullableSetting;
+use provider_core::protocol::agent_config::NullableSetting;
 
 use super::{AgentAttentionClearRequest, AgentHistoryRequest, AgentIdSelection, AgentListRequest};
 

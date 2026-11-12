@@ -20,6 +20,7 @@ metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }
 persistence = { path = "crates/persistence" }
 provider = { path = "crates/provider" }
+provider-core = { path = "crates/provider-core" }
 provider-omp = { path = "crates/provider-omp" }
 relay = { path = "crates/relay" }
 schedule = { path = "crates/schedule" }

@@ -322,7 +322,7 @@ fn version_one_migration_keeps_existing_rows_and_epoch() {
 #[test]
 fn forget_removes_every_row_of_one_agent_and_keeps_other_agents() {
     let timeline = Timeline::memory().unwrap();
-    let prompt = crate::protocol::prompt::AgentPrompt::text("hello");
+    let prompt = provider_core::protocol::prompt::AgentPrompt::text("hello");
     for agent in ["agent", "other"] {
         timeline
             .append(agent, "codex", &[item("one", "first")])

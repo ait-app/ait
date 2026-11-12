@@ -15,10 +15,10 @@
   provider 维护；构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
-- Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider` 与 `domain`（`model`、
+- Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider-core`、`provider` 与 `domain`（`model`、
   `persistence` 仅测试使用），只公开 `OmpClient` 与 `installed_program`；`provider` 不依赖它，
   它也不依赖 daemon。daemon 在 `compose_providers` 中用 `Providers::with` 追加 `OmpClient`，共享同一
-  图片目录。`provider` 只公开 OMP 生产代码用到的 ports、protocol 与 `local` 工具模块。OMP 测试归
+  图片目录。OMP 从 `provider-core` 导入 ports 与 protocol 值，`provider` 只公开 OMP 生产代码用到的 `local` 工具模块。OMP 测试归
   `provider-omp`；需要 `AgentManager` 或 Timeline 的场景使用 `provider::testing`，它只在 dev-only 的
   `test-support` feature 下编译，非 dev 依赖边启用或转发该 feature 会被依赖守卫拒绝
   （[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)，已由

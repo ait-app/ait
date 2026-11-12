@@ -13,11 +13,11 @@ use std::time::Duration;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use crate::ports::environment::AgentEnvironment;
-use crate::protocol::provider::Details;
+use provider_core::ports::environment::AgentEnvironment;
+use provider_core::protocol::provider::Details;
 
 /// Stable provider identity used by creation, discovery and durable resume handles.
 const PROVIDER: &str = "deepseek-harness";
@@ -110,9 +110,9 @@ impl AgentClient for DeepSeekHarnessClient {
 
     async fn prepare_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         if !self.interactive {
-            return Ok(crate::ports::account_usage::PreparedUsage {
+            return Ok(provider_core::ports::account_usage::PreparedUsage {
                 identity: None,
                 report: Box::pin(async { Ok(native::quota::acp_unavailable()) }),
             });
@@ -158,8 +158,9 @@ impl AgentClient for DeepSeekHarnessClient {
 
     async fn list_sessions(
         &self,
-        options: &crate::ports::native_history::ListOptions,
-    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
+        options: &provider_core::ports::native_history::ListOptions,
+    ) -> Result<Vec<provider_core::ports::native_history::SessionDescriptor>, AgentSessionError>
+    {
         native::native_sessions::list(self, options).await
     }
 
@@ -167,7 +168,7 @@ impl AgentClient for DeepSeekHarnessClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
         native::native_sessions::inspect(self, handle, cwd).await
     }
 
@@ -183,7 +184,7 @@ impl AgentClient for DeepSeekHarnessClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
         if !self.interactive {
             return Err(AgentSessionError::Unavailable);
         }

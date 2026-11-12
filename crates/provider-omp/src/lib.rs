@@ -25,12 +25,12 @@ use std::path::PathBuf;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use provider::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use provider::ports::environment::AgentEnvironment;
-use provider::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
-use provider::protocol::provider::Details;
+use provider_core::ports::environment::AgentEnvironment;
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::protocol::provider::Details;
 
 /// Stable provider identity recorded on handles, descriptors and host requests.
 const PROVIDER: &str = "omp";
@@ -159,7 +159,7 @@ impl AgentClient for OmpClient {
         &self,
         handle: &AgentPersistenceHandle,
         cwd: &str,
-    ) -> Result<Vec<provider::protocol::timeline::NativeItem>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
         Ok(history::inspect(self, handle, cwd).await?.entries)
     }
 
@@ -181,7 +181,7 @@ impl AgentClient for OmpClient {
     async fn subagents(
         &self,
         cwd: &str,
-    ) -> Result<Vec<provider::ports::controls::NativeSubagent>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
         history::subagents(self, cwd).await
     }
 

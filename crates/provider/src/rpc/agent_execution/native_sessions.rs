@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{ErrorCode, ExecutionState, decode, only};
-use crate::ports::native_history::{CwdLookup, SessionHistory};
 use crate::protocol::native_sessions::{ForkRequest, ImportRequest};
 use crate::service::agent_manager::native_sessions::canonical;
+use provider_core::ports::native_history::{CwdLookup, SessionHistory};
 
 impl ExecutionState {
     pub(super) async fn recent_sessions(&self, params: Value) -> Result<Value, ErrorCode> {

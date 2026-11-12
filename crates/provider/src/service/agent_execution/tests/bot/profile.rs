@@ -4,7 +4,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::*;
 use crate::local::codex::CodexClient;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 

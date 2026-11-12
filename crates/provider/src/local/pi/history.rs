@@ -14,9 +14,9 @@ use url::Url;
 use uuid::Uuid;
 
 use super::{PROVIDER, PiClient, config, streaming::Stream};
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::protocol::timeline::NativeItem;
 
 const MAX_HISTORY: u64 = 32 * 1024 * 1024;
 const MAX_HISTORY_RECORDS: usize = 100_000;

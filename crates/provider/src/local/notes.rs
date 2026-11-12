@@ -2,8 +2,8 @@
 
 use serde_json::Value;
 
-use crate::ports::agent_session::AgentSessionError;
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::timeline::NativeItem;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct Notes(Vec<NativeItem>);

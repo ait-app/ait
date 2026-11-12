@@ -14,8 +14,9 @@ use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, watch};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-use crate::ports::agent_session::AgentClient;
-use crate::protocol::provider::{Details, ListRequest, RefreshRequest, SnapshotRequest};
+use crate::protocol::provider::{ListRequest, RefreshRequest, SnapshotRequest};
+use provider_core::ports::agent_session::AgentClient;
+use provider_core::protocol::provider::Details;
 
 mod draft;
 mod loading;

@@ -1,5 +1,5 @@
 use super::fixture::Fixture;
-use crate::ports::agent_session::{AgentClient, AgentResumePurpose};
+use provider_core::ports::agent_session::{AgentClient, AgentResumePurpose};
 use serde_json::json;
 
 #[tokio::test]

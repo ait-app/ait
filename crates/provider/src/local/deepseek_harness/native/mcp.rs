@@ -12,7 +12,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Plugin package implementing stdio and Streamable HTTP MCP clients.
 const PLUGIN: &str = "@deepseek-ai/dsh-mcp-client";

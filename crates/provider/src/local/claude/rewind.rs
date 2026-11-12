@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{ClaudeClient, config, history, transport::Transport};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use crate::ports::native_history::{SessionDescriptor, SessionHistory};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
 
 pub(super) const FRESH: &str = "aitFreshSession";
 

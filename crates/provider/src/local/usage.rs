@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::protocol::usage::AgentUsage;
+use provider_core::protocol::usage::AgentUsage;
 
 /// Shared cumulative-counter differencing for adapters that only report running totals.
 pub(super) mod cumulative;
@@ -47,14 +47,14 @@ pub(super) struct ClaudeUsage {
 impl ClaudeUsage {
     pub(super) fn restore(
         value: Option<&Value>,
-    ) -> Result<Self, crate::ports::agent_session::AgentSessionError> {
+    ) -> Result<Self, provider_core::ports::agent_session::AgentSessionError> {
         let Some(value) = value else {
             return Ok(Self::default());
         };
         let snapshot: AgentUsage = serde_json::from_value(value.clone())
-            .map_err(|_| crate::ports::agent_session::AgentSessionError::Failed)?;
+            .map_err(|_| provider_core::ports::agent_session::AgentSessionError::Failed)?;
         if !snapshot.is_valid() {
-            return Err(crate::ports::agent_session::AgentSessionError::Failed);
+            return Err(provider_core::ports::agent_session::AgentSessionError::Failed);
         }
         Ok(Self {
             snapshot,

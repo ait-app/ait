@@ -1,11 +1,9 @@
-use crate::{
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
-    ports::{
-        agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
-        environment::AgentEnvironment,
-    },
-};
+use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
 use domain::agent_runtime::StoredAgentConfig;
+use provider_core::ports::{
+    agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
+    environment::AgentEnvironment,
+};
 use std::collections::BTreeMap;
 
 mod agent_mcp;
@@ -68,10 +66,10 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
     session.close().await.unwrap();
     assert_eq!(
         client.history(&handle, &spec.cwd).await.unwrap(),
-        [] as [crate::protocol::timeline::NativeItem; 0]
+        [] as [provider_core::protocol::timeline::NativeItem; 0]
     );
     let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
+        .list_sessions(&provider_core::ports::native_history::ListOptions {
             cwd: Some(spec.cwd.clone()),
             scan_limit: 20,
         })
@@ -87,7 +85,7 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         .unwrap();
     assert_eq!(
         imported.entries,
-        [] as [crate::protocol::timeline::NativeItem; 0]
+        [] as [provider_core::protocol::timeline::NativeItem; 0]
     );
     assert!(!imported.active);
     assert_eq!(imported.config.mode_id, native_mode);

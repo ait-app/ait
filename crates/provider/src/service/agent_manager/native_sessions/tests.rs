@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 
 use super::*;
-use crate::ports::native_history::SessionDescriptor;
+use provider_core::ports::native_history::SessionDescriptor;
 
 mod budget;
 
@@ -173,17 +173,17 @@ impl AgentClient for ImportClient {
 
     async fn create_session(
         &self,
-        _spec: &crate::ports::agent_session::AgentSessionSpec,
-    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
+        _spec: &provider_core::ports::agent_session::AgentSessionSpec,
+    ) -> Result<Box<dyn provider_core::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not create a session")
     }
 
     async fn resume_session(
         &self,
         _handle: &AgentPersistenceHandle,
-        _spec: &crate::ports::agent_session::AgentSessionSpec,
-        _purpose: crate::ports::agent_session::AgentResumePurpose,
-    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
+        _spec: &provider_core::ports::agent_session::AgentSessionSpec,
+        _purpose: provider_core::ports::agent_session::AgentResumePurpose,
+    ) -> Result<Box<dyn provider_core::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not resume a session")
     }
 }

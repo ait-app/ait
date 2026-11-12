@@ -1,5 +1,5 @@
 use super::*;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 mod paseo;
 

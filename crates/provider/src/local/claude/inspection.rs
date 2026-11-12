@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ClaudeClient;
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 #[derive(Debug)]
 struct Credentials {
@@ -80,12 +80,14 @@ impl ClaudeClient {
     /// Fingerprint the same native credential source used by quota preparation.
     pub(super) async fn usage_credential_key(
         &self,
-    ) -> Option<crate::ports::account_usage::UsageIdentity> {
+    ) -> Option<provider_core::ports::account_usage::UsageIdentity> {
         let credentials = self.credentials().await.ok()??;
-        Some(crate::ports::account_usage::UsageIdentity::from_native(
-            "claude",
-            credentials.token.expose_secret().as_bytes(),
-        ))
+        Some(
+            provider_core::ports::account_usage::UsageIdentity::from_native(
+                "claude",
+                credentials.token.expose_secret().as_bytes(),
+            ),
+        )
     }
 
     /// Capture the native OAuth credential once for cache identity and the later HTTPS poll.
@@ -93,8 +95,8 @@ impl ClaudeClient {
     /// Returns safe credential-resolution failures.
     pub(super) async fn prepare_native_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
-        use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        use provider_core::ports::account_usage::{PreparedUsage, UsageIdentity};
         let credentials = self.credentials().await?;
         let identity = credentials.as_ref().map(|credentials| {
             UsageIdentity::from_native("claude", credentials.token.expose_secret().as_bytes())

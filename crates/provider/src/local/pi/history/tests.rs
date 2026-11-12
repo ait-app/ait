@@ -2,7 +2,7 @@ use super::*;
 
 #[cfg(unix)]
 mod resume;
-use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec};
 
 const SESSION: &str = "019a0000-0000-7000-8000-000000000001";
 
@@ -310,14 +310,15 @@ fn per_agent_environment_does_not_move_the_host_session_store() {
     let agent = directory.path().join("agent");
     let mut client = PiClient::new(directory.path().join("missing-pi"));
     client.session_environment = SessionEnvironment::isolated(directory.path(), &agent);
-    client.environment = crate::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
-        ("HOME".into(), "/ephemeral/home".into()),
-        (
-            "PI_CODING_AGENT_SESSION_DIR".into(),
-            "/ephemeral/sessions".into(),
-        ),
-    ]))
-    .unwrap();
+    client.environment =
+        provider_core::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
+            ("HOME".into(), "/ephemeral/home".into()),
+            (
+                "PI_CODING_AGENT_SESSION_DIR".into(),
+                "/ephemeral/sessions".into(),
+            ),
+        ]))
+        .unwrap();
 
     assert_eq!(
         session_directory(&client, &project).unwrap(),

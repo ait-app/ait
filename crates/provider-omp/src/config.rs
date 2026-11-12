@@ -9,8 +9,8 @@ use super::{
     PROVIDER,
     transport::{Timeouts, Transport},
 };
-use provider::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use provider::protocol::provider::Details;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::protocol::provider::Details;
 
 /// OMP's thinking levels in Paseo's display order: id, label and description.
 /// `--thinking` accepts exactly these ids.

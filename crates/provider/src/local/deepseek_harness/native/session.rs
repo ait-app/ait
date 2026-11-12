@@ -15,7 +15,7 @@ use super::{
 };
 use crate::local::acp_config::text;
 use crate::local::acp_streaming::Stream;
-use crate::{
+use provider_core::{
     ports::agent_session::{AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent},
     protocol::{prompt::AgentPrompt, provider::Details},
 };
@@ -434,14 +434,14 @@ impl AgentSession for Session {
 
     async fn prepare_account_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         if self.closed {
             return Err(AgentSessionError::Unavailable);
         }
         super::quota::prepare(&self.runtime.api, &self.account).await
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.runtime.diagnostics.failure()
     }
 

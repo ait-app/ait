@@ -56,7 +56,7 @@ fn assistant_end(usage: &Value) -> Value {
         "content":[{"type":"text","text":"hi"}],"stopReason":"stop","usage":usage}})
 }
 
-fn requests(stream: &Stream) -> Vec<&crate::ports::usage_ledger::RequestUsage> {
+fn requests(stream: &Stream) -> Vec<&provider_core::ports::usage_ledger::RequestUsage> {
     stream
         .events
         .iter()

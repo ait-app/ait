@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{discovery, native_sessions};
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::protocol::timeline::NativeItem;
 
 const MAX_ITEMS: usize = 8192;
 const MAX_TEXT: usize = 64 * 1024;

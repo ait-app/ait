@@ -321,7 +321,7 @@ async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and
     let session = sessions.last_mut().unwrap();
     session
         .start_input(
-            &crate::protocol::prompt::AgentPrompt {
+            &provider_core::protocol::prompt::AgentPrompt {
                 text: "Reject model request".into(),
                 client_message_id: Some("model-error-input".into()),
                 ..Default::default()
@@ -353,7 +353,7 @@ async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and
     {
         "OpenCode's free tier can only be used from within OpenCode"
     } else {
-        crate::ports::diagnostics::Category::Authentication.message()
+        provider_core::ports::diagnostics::Category::Authentication.message()
     };
     assert!(
         session.failure_message().unwrap().contains(expected),
@@ -382,7 +382,7 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
     for index in 0..2 {
         session
             .start_input(
-                &crate::protocol::prompt::AgentPrompt {
+                &provider_core::protocol::prompt::AgentPrompt {
                     text: format!("hello {index}"),
                     client_message_id: Some(format!("client-{index}")),
                     ..Default::default()
@@ -404,7 +404,7 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
     session.close().await.unwrap();
     assert_replay(&items, &client.history(&handle, &spec.cwd).await.unwrap());
     let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
+        .list_sessions(&provider_core::ports::native_history::ListOptions {
             cwd: Some(spec.cwd.clone()),
             scan_limit: 10,
         })
@@ -508,7 +508,7 @@ async fn installed_acp_shell_output_is_text_in_live_and_replayed_history() {
     let mut session = client.create_session(&spec).await.unwrap();
     let turn = session
         .start_input(
-            &crate::protocol::prompt::AgentPrompt {
+            &provider_core::protocol::prompt::AgentPrompt {
                 text: "Run shell tool, then continue.".into(),
                 client_message_id: Some("shell-input".into()),
                 ..Default::default()
@@ -628,7 +628,7 @@ async fn installed_acp_without_native_forms_disables_unanswerable_questions() {
         .unwrap();
     completed(session.as_mut()).await;
     session.close().await.unwrap();
-    let options = crate::ports::native_history::ListOptions {
+    let options = provider_core::ports::native_history::ListOptions {
         cwd: Some(spec.cwd.clone()),
         scan_limit: 10,
     };
@@ -656,13 +656,13 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
         _server,
         ..
     } = installed(false).await;
-    let options = crate::ports::native_history::ListOptions {
+    let options = provider_core::ports::native_history::ListOptions {
         cwd: Some(spec.cwd.clone()),
         scan_limit: 10,
     };
     assert_eq!(
         client.list_sessions(&options).await.unwrap(),
-        [] as [crate::ports::native_history::SessionDescriptor; 0]
+        [] as [provider_core::ports::native_history::SessionDescriptor; 0]
     );
     assert_eq!(
         client
@@ -673,7 +673,7 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
     );
     assert_eq!(
         client.list_sessions(&options).await.unwrap(),
-        [] as [crate::ports::native_history::SessionDescriptor; 0]
+        [] as [provider_core::ports::native_history::SessionDescriptor; 0]
     );
 }
 

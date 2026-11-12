@@ -74,7 +74,7 @@ fn native_history_validates_complete_identity_and_preserves_configuration() {
     assert!(parsed.active);
     assert_eq!(
         parsed.entries,
-        [] as [crate::protocol::timeline::NativeItem; 0]
+        [] as [provider_core::protocol::timeline::NativeItem; 0]
     );
     let mut duplicate = thread();
     duplicate["turns"]

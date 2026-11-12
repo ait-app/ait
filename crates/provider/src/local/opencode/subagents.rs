@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::PROVIDER;
 use crate::local::acp_config;
-use crate::ports::{agent_session::AgentSessionError, controls::NativeSubagent};
+use provider_core::ports::{agent_session::AgentSessionError, controls::NativeSubagent};
 
 const MAX_CHILDREN: usize = 256;
 const LOCATOR: &str = "opencodeChild";

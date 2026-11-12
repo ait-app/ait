@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 
 use super::{discovery, streaming};
 use crate::local::images::ImageStore;
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::ports::controls::{NativeSubagent, SubagentEvent};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
 
 #[derive(Debug)]
 struct Child {

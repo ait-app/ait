@@ -1,7 +1,7 @@
 //! Native account quotas stay in provider; no credentials or quota cache are persisted.
 
-use crate::ports::account_usage::UsageIdentity;
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::account_usage::UsageIdentity;
+use provider_core::ports::agent_session::AgentClient;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -14,8 +14,8 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::AgentManager;
-use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Bounded ephemeral facts, always scoped to one Host or one live session generation.
 #[derive(Debug, Clone)]
@@ -131,7 +131,7 @@ impl UsageCache {
     async fn read(
         &self,
         provider: &str,
-        prepared: Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError>,
+        prepared: Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError>,
         force: bool,
     ) -> Value {
         let prepared = match prepared {

@@ -3,10 +3,10 @@ use std::io::Read;
 use std::path::Path;
 
 use crate::local::claude::{ClaudeClient, history, streaming};
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
-use crate::ports::controls::NativeSubagent;
-use crate::ports::native_history::{SessionDescriptor, SessionHistory};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
 use serde_json::{Value, json};
 
 pub(in crate::local::claude::subagents) fn histories(
@@ -250,7 +250,7 @@ fn entries(
     binding: (&Path, &str),
     summary: &Value,
     timestamps: (&str, &str),
-) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
     let (directory, run) = binding;
     let (start, finish) = timestamps;
     let description = summary["summary"]

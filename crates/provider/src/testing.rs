@@ -9,11 +9,11 @@ use model::ErrorCode;
 use model::events::EventHub;
 use serde_json::Value;
 
-use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
-use crate::ports::controls::NativeSubagent;
-use crate::protocol::timeline::NativeItem;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::storage::timeline::Timeline;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
+use provider_core::ports::controls::NativeSubagent;
+use provider_core::protocol::timeline::NativeItem;
 
 #[cfg(test)]
 mod tests;

@@ -92,9 +92,9 @@ fn disables_every_unknown_plugin_and_uses_in_memory_sessions() {
 #[tokio::test]
 #[ignore = "requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only"]
 async fn installed_dsh_metadata_has_no_tools_or_persisted_session() {
-    use crate::ports::agent_session::AgentClient;
-    use crate::ports::environment::AgentEnvironment;
     use axum::{Json, Router, routing::post};
+    use provider_core::ports::agent_session::AgentClient;
+    use provider_core::ports::environment::AgentEnvironment;
     use std::{collections::BTreeMap, time::Duration};
     async fn answer(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
         assert!(body["tools"].as_array().is_none_or(Vec::is_empty));

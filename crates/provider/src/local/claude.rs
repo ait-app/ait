@@ -20,12 +20,12 @@ use std::time::Duration;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
-use crate::protocol::{provider::Details, timeline::NativeItem};
+use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::protocol::{provider::Details, timeline::NativeItem};
 
 /// Local Claude Code executable; credentials and native tools remain owned by Claude Code.
 #[derive(Debug, Clone)]
@@ -36,7 +36,7 @@ pub(crate) struct ClaudeClient {
     config_dir_from_home: bool,
     deadline: Duration,
     images: super::images::ImageStore,
-    environment: crate::ports::environment::AgentEnvironment,
+    environment: provider_core::ports::environment::AgentEnvironment,
     resolved_models: std::sync::Arc<std::sync::RwLock<std::collections::BTreeMap<String, String>>>,
 }
 
@@ -52,7 +52,7 @@ impl ClaudeClient {
             config_dir_from_home: false,
             deadline: Duration::from_secs(30),
             images: super::images::ImageStore::default(),
-            environment: crate::ports::environment::AgentEnvironment::default(),
+            environment: provider_core::ports::environment::AgentEnvironment::default(),
             resolved_models: std::sync::Arc::default(),
         }
     }
@@ -138,7 +138,7 @@ impl AgentClient for ClaudeClient {
     async fn create_session_with_environment(
         &self,
         spec: &AgentSessionSpec,
-        environment: &crate::ports::environment::AgentEnvironment,
+        environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
@@ -212,13 +212,13 @@ impl AgentClient for ClaudeClient {
         self.native_diagnostic().await
     }
 
-    async fn usage_cache_key(&self) -> Option<crate::ports::account_usage::UsageIdentity> {
+    async fn usage_cache_key(&self) -> Option<provider_core::ports::account_usage::UsageIdentity> {
         self.usage_credential_key().await
     }
 
     async fn prepare_usage(
         &self,
-    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
         self.prepare_native_usage().await
     }
 
@@ -295,7 +295,7 @@ impl AgentClient for ClaudeClient {
     async fn subagents(
         &self,
         cwd: &str,
-    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
         let (client, cwd) = (self.clone(), cwd.to_owned());
         blocking(move || subagents::list(&client, &cwd)).await
     }

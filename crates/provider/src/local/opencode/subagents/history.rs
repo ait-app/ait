@@ -5,14 +5,12 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::{LOCATOR, MAX_CHILDREN};
 use crate::local::acp_config;
-use crate::{
-    local::{
-        acp_transport::Transport,
-        opencode::{client::OpenCodeClient, config, history, launcher},
-    },
-    ports::{
-        agent_session::AgentSessionError, controls::NativeSubagent, native_history::ListOptions,
-    },
+use crate::local::{
+    acp_transport::Transport,
+    opencode::{client::OpenCodeClient, config, history, launcher},
+};
+use provider_core::ports::{
+    agent_session::AgentSessionError, controls::NativeSubagent, native_history::ListOptions,
 };
 
 /// Discover durable native task relationships in this directory under a single bounded deadline.

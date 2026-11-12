@@ -13,11 +13,11 @@ use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::minimax::MiniMaxClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
-use crate::ports::agent_session::AgentClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::service::summary_generation::Generation;
 use crate::storage::usage_ledger::SqliteUsageLedger;
+use provider_core::ports::agent_session::AgentClient;
 
 /// Configured built-in providers, with adapter identities and launch details kept in this crate.
 #[derive(Debug)]

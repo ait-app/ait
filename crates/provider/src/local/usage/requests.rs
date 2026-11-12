@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::Value;
 
 use super::cumulative::UsageCounters;
-use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 /// Longest segment identity emitted, matching the Codex turn identity bound.
 pub(crate) const MAX_SEGMENT_ID: usize = 512;

@@ -1,11 +1,11 @@
 use super::*;
 
 use crate::ports::usage_ledger::{
-    CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, RequestUsage, UsageBoundary,
-    UsageLedger,
+    CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, UsageLedger,
 };
 use crate::storage::usage_ledger::SqliteUsageLedger;
 use crate::test_support::{request, worker_with_ledger};
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 #[tokio::test]
 async fn usage_response_slots_stay_bounded_until_delivery_and_reject_mutations() {

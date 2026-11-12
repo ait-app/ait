@@ -31,7 +31,7 @@ async fn host_publisher_observes_committed_timeline_without_a_client_subscriptio
     let (execution, _) = worker(&fixture);
     let publisher = Arc::new(HostPublisher::default());
     execution.set_timeline_publisher(publisher.clone());
-    let item = crate::protocol::timeline::NativeItem {
+    let item = provider_core::protocol::timeline::NativeItem {
         key: "host-publication".to_owned(),
         turn_id: Some("turn".to_owned()),
         timestamp: "2026-10-22T00:00:00Z".to_owned(),

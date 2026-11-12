@@ -1,5 +1,5 @@
 use super::*;
-use crate::protocol::usage::AgentUsage;
+use provider_core::protocol::usage::AgentUsage;
 
 #[tokio::test]
 async fn native_control_and_usage_streams_have_timestamps_and_turn_identity() {

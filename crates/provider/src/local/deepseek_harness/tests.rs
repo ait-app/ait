@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use super::*;
-use crate::ports::agent_session::AgentTurnEvent;
+use provider_core::ports::agent_session::AgentTurnEvent;
 
 const PRO: &str = "[\"deepseek-official\",\"deepseek-v4-pro\"]";
 const FLASH: &str = "[\"deepseek-official\",\"deepseek-v4-flash\"]";
@@ -166,10 +166,10 @@ async fn streams_tools_approvals_text_and_usage_then_resumes_and_cancels() {
     assert_eq!(info.model.as_deref(), Some(FLASH));
     assert_eq!(info.thinking_option_id.as_deref(), Some("off"));
     let handle = session.persistence().unwrap();
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         text: "hello".to_owned(),
         client_message_id: Some("client-message".to_owned()),
-        ..crate::protocol::prompt::AgentPrompt::default()
+        ..provider_core::protocol::prompt::AgentPrompt::default()
     };
     session.start_input(&prompt, &spec.config).await.unwrap();
     assert_eq!(
@@ -265,13 +265,13 @@ async fn validates_dynamic_efforts_and_rejects_invalid_resume_and_images() {
             .await
             .is_err()
     );
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         text: "image".to_owned(),
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: "aGVsbG8=".to_owned(),
             mime_type: "image/png".to_owned(),
         }],
-        ..crate::protocol::prompt::AgentPrompt::default()
+        ..provider_core::protocol::prompt::AgentPrompt::default()
     };
     assert!(session.start_input(&prompt, &spec.config).await.is_err());
     session.close().await.unwrap();
@@ -364,13 +364,13 @@ async fn image_input_is_capability_gated_and_foreign_session_updates_fail() {
     ]))
     .unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
-    let prompt = crate::protocol::prompt::AgentPrompt {
+    let prompt = provider_core::protocol::prompt::AgentPrompt {
         text: "wait".to_owned(),
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: "aGVsbG8=".to_owned(),
             mime_type: "image/png".to_owned(),
         }],
-        ..crate::protocol::prompt::AgentPrompt::default()
+        ..provider_core::protocol::prompt::AgentPrompt::default()
     };
     let turn = session.start_input(&prompt, &spec.config).await.unwrap();
     session.cancel_turn(&turn).await.unwrap();

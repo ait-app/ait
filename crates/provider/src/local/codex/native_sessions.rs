@@ -6,8 +6,8 @@ use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
 use super::{CodexClient, Transport, discovery, validate_config};
-use crate::ports::agent_session::AgentSessionError;
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
 /// Recognize only the native archived-thread rejection for the requested identity.
 pub(super) fn archived(message: &str, thread: &str) -> bool {

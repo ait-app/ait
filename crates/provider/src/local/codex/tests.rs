@@ -133,7 +133,7 @@ async fn cancelling_a_pending_goal_pauses_native_work_once_and_releases_admissio
     fixture.mode("workflows");
     let client = fixture.client();
     let mut session = client.create_session(&fixture.spec()).await.unwrap();
-    let mut prompt = crate::protocol::prompt::AgentPrompt::text("/goal waiting fixture");
+    let mut prompt = provider_core::protocol::prompt::AgentPrompt::text("/goal waiting fixture");
     prompt.client_message_id = Some("goal-request".to_owned());
     session.out_of_band(&prompt).await.unwrap();
     assert!(session.pending_foreground());
@@ -405,14 +405,14 @@ async fn capacity_failure_is_classified_for_one_manager_owned_terminal_notice() 
     }
     assert_eq!(
         session.failure_diagnostic().unwrap().category,
-        crate::ports::diagnostics::Category::Capacity
+        provider_core::ports::diagnostics::Category::Capacity
     );
     session.close().await.unwrap();
 }
 
 #[tokio::test]
 async fn classified_native_errors_are_safe_and_recovered_retries_are_not_failures() {
-    use crate::ports::diagnostics::Category;
+    use provider_core::ports::diagnostics::Category;
     for (text, expected) in [
         ("auth-error", Some(Category::Authentication)),
         ("quota-error", Some(Category::Quota)),

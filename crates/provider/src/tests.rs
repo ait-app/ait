@@ -21,23 +21,6 @@ const RUNTIME: &[&str] = &[
     "testing",
 ];
 
-/// Modules of the `provider-core` column of the contract table, whole or split by item.
-const CORE: &[&str] = &[
-    "ports/agent_session",
-    "ports/account_usage",
-    "ports/bot_session",
-    "ports/controls",
-    "ports/diagnostics",
-    "ports/environment",
-    "ports/native_history",
-    "ports/usage_ledger",
-    "protocol/agent_config",
-    "protocol/prompt",
-    "protocol/provider",
-    "protocol/timeline",
-    "protocol/usage",
-];
-
 /// `local` modules that move to `provider-native`.
 const TOOLKIT: &[&str] = &[
     "acp_config",
@@ -228,19 +211,9 @@ fn crosses(file: &str, target: &str) -> bool {
     if let Some(local) = file.strip_prefix("local/") {
         let own = local.split(['/', '.']).next().unwrap_or_default();
         (!test && RUNTIME.contains(&top)) || (TOOLKIT.contains(&own) && adapter)
-    } else if CORE.contains(&owning_module(file).as_str()) {
-        !CORE.contains(&format!("{top}/{module}").as_str())
     } else if test {
         adapter && module != "codex" && !PENDING.contains(&file)
     } else {
         top == "local" && file != "composition.rs"
     }
-}
-
-/// `ports/agent_session` for `ports/agent_session.rs` and every file below it.
-fn owning_module(file: &str) -> String {
-    let mut parts = file.split('/');
-    let top = parts.next().unwrap_or_default();
-    let module = parts.next().unwrap_or_default();
-    format!("{top}/{}", module.trim_end_matches(".rs"))
 }

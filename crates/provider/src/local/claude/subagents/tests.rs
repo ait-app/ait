@@ -153,5 +153,5 @@ fn assert_resumed_alias(client: &ClaudeClient, root: &str, cwd: &str) {
     let mut reply = reply;
     reply["parent_tool_use_id"] = json!("new-call");
     let updates = resumed.observe(&reply, root, cwd).unwrap();
-    assert!(updates.iter().any(|event|matches!(event,crate::ports::agent_session::AgentTurnEvent::Subagent(crate::ports::controls::SubagentEvent::Timeline {id,entry}) if id=="call-parent" && entry.item["text"]=="Resumed answer")));
+    assert!(updates.iter().any(|event|matches!(event,provider_core::ports::agent_session::AgentTurnEvent::Subagent(provider_core::ports::controls::SubagentEvent::Timeline {id,entry}) if id=="call-parent" && entry.item["text"]=="Resumed answer")));
 }

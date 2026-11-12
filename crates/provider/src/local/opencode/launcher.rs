@@ -7,7 +7,7 @@ use tokio::{process::Command, time::Instant};
 
 use super::{client::OpenCodeClient, config, observation::Source};
 use crate::local::{acp_transport::Transport, metadata_process::Process};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
 

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Map, Value, json};
 
-use crate::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Validate advanced settings without exposing their contents in errors.
 pub(super) fn validate(
