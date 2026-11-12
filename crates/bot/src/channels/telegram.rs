@@ -48,18 +48,8 @@ async fn run_at(
         cancel.cancelled().await;
         return Ok(());
     }
-    let mut status = json!({"state":"connected","accountId":identity.to_string()});
-    if matches!(
-        channel.config,
-        ChannelConfig::Telegram {
-            allow_groups: true,
-            ..
-        }
-    ) && me["can_read_all_group_messages"] != true
-    {
-        status["error"] = json!(GROUP_PRIVACY_WARNING);
-    }
-    bots.channel_status(channel.id, status).await;
+    bots.channel_status(channel.id, connected_status(channel, &me, identity))
+        .await;
     let receiver = Receiver {
         bots,
         channel,
@@ -78,6 +68,22 @@ async fn run_at(
         result = receiving => result,
         result = sending => result,
     }
+}
+
+/// The status of a connected account, warning when group privacy hides mentions the channel accepts.
+fn connected_status(channel: &Channel, me: &Value, identity: i64) -> Value {
+    let mut status = json!({"state":"connected","accountId":identity.to_string()});
+    if matches!(
+        channel.config,
+        ChannelConfig::Telegram {
+            allow_groups: true,
+            ..
+        }
+    ) && me["can_read_all_group_messages"] != true
+    {
+        status["error"] = json!(GROUP_PRIVACY_WARNING);
+    }
+    status
 }
 
 async fn send_reply(
