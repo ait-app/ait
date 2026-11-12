@@ -24,7 +24,7 @@ const PROVIDER: &str = "deepseek-harness";
 
 /// Local Harness launcher; native profiles own credentials, tools and durable sessions.
 #[derive(Debug, Clone)]
-pub(crate) struct DeepSeekHarnessClient {
+pub struct DeepSeekHarnessClient {
     program: PathBuf,
     desktop: Option<launcher::Desktop>,
     interactive: bool,
@@ -38,7 +38,7 @@ impl DeepSeekHarnessClient {
     /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
     /// Control operations have a thirty-second deadline; prompts have no duration limit.
     #[must_use]
-    pub(crate) fn new(program: PathBuf) -> Self {
+    pub fn new(program: PathBuf) -> Self {
         Self {
             program,
             desktop: None,
@@ -54,7 +54,7 @@ impl DeepSeekHarnessClient {
     /// `profile` is passed as one CLI argument; DSH validates the profile and its Host support.
     /// Returns this configured client without initializing or changing the native profile.
     #[must_use]
-    pub(crate) fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
+    pub fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
         self.native_profile = profile;
         self
     }
@@ -62,14 +62,14 @@ impl DeepSeekHarnessClient {
     /// Retain the automation-only ACP profile for older Harness installations.
     /// ACP does not expose permission presets or interactive user questions.
     #[must_use]
-    pub(crate) fn with_acp_profile(mut self) -> Self {
+    pub fn with_acp_profile(mut self) -> Self {
         self.interactive = false;
         self
     }
 
     /// Materialize native image output in `directory` for live display and saved timelines.
     #[must_use]
-    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = provider_native::images::ImageStore::new(directory);
         self
     }

@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use domain::agent_runtime::{AgentPersistenceHandle, PersistedAgentRuntimeRecord};
 use domain::workspace::registry::WorkspaceMutationContext;
 use model::ErrorCode;
 use model::creation::Creations;
@@ -33,10 +33,12 @@ use crate::storage::timeline::Timeline;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 use provider_core::ports::controls::NativeSubagent;
 use provider_core::ports::environment::AgentEnvironment;
+use provider_core::ports::native_history::SessionHistory;
 use provider_core::protocol::agent_config::ConfigPatch;
 use provider_core::protocol::prompt::AgentPrompt;
 use provider_core::protocol::timeline::NativeItem;
 
+pub mod agent_mcp;
 #[cfg(test)]
 mod tests;
 
@@ -260,6 +262,51 @@ impl Manager {
     #[must_use]
     pub fn events(&self) -> SessionEvents {
         self.0.events()
+    }
+
+    /// List importable native sessions for the `provider.sessions.recent.list.request`
+    /// parameters `params`, without registering or opening any of them.
+    ///
+    /// # Errors
+    /// Returns `InvalidMessage` for undecodable or out-of-range parameters and unknown
+    /// providers, and listing or registry failures.
+    pub async fn recent_sessions(&self, params: Value) -> Result<Value, ErrorCode> {
+        let request = serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
+        self.0.recent_sessions(request).await
+    }
+
+    /// Read the complete native history behind `handle` in `cwd` for an import.
+    ///
+    /// # Errors
+    /// Returns `UnsupportedCapability` for already imported or child sessions, `CatalogBusy`
+    /// for an unfinished native turn, and adapter or validation failures.
+    pub async fn inspect_native(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<SessionHistory, ErrorCode> {
+        self.0.inspect_native(handle, cwd).await
+    }
+
+    /// Persist `record` with the inspected `history`, updating an `existing` registration
+    /// instead of adding one.
+    ///
+    /// # Errors
+    /// Returns `UnsupportedCapability` without a display timeline, `CatalogBusy` for a live
+    /// Agent, and timeline, ownership or registry failures.
+    pub fn import_native(
+        &mut self,
+        record: PersistedAgentRuntimeRecord,
+        history: &SessionHistory,
+        existing: bool,
+    ) -> Result<PersistedAgentRuntimeRecord, ErrorCode> {
+        self.0.import_native(record, history, existing)
+    }
+
+    /// The display timeline the manager was built with, if any.
+    #[must_use]
+    pub fn timeline(&self) -> Option<Timeline> {
+        self.0.timeline()
     }
 }
 

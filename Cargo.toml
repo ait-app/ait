@@ -24,6 +24,7 @@ provider-antigravity = { path = "crates/provider-antigravity" }
 provider-core = { path = "crates/provider-core" }
 provider-builtin = { path = "crates/provider-builtin" }
 provider-claude = { path = "crates/provider-claude" }
+provider-deepseek-harness = { path = "crates/provider-deepseek-harness" }
 provider-minimax = { path = "crates/provider-minimax" }
 provider-native = { path = "crates/provider-native" }
 provider-omp = { path = "crates/provider-omp" }

@@ -5,15 +5,14 @@ use std::time::Duration;
 use serde_json::json;
 
 use super::super::DeepSeekHarnessClient;
-use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, worker_with_client};
-use crate::testing::request;
+use provider::service::agent_execution::AgentExecution;
+use provider::testing::{Workbench, request};
 
-fn worker(fixture: &Fixture) -> AgentExecution {
-    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/local/deepseek_harness/tests/fixtures/acp.cjs");
+fn worker(fixture: &Workbench) -> AgentExecution {
+    let program =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.cjs");
     let client = DeepSeekHarnessClient::new(program).with_acp_profile();
-    worker_with_client(
+    provider::testing::worker(
         fixture,
         model::creation::Creations::default(),
         Box::new(client),
@@ -23,7 +22,7 @@ fn worker(fixture: &Fixture) -> AgentExecution {
 
 #[tokio::test]
 async fn acp_executes_and_keeps_history_after_worker_restart() {
-    let fixture = Fixture::new();
+    let fixture = Workbench::new();
     let cwd = &fixture.cwd;
     let execution = worker(&fixture);
     request(

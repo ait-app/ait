@@ -12,7 +12,7 @@ use serde_json::json;
 use tokio::io::AsyncReadExt;
 
 use super::super::http::Api;
-use crate::local::deepseek_harness::DeepSeekHarnessClient;
+use crate::DeepSeekHarnessClient;
 use provider_core::ports::agent_session::AgentSessionError;
 use provider_native::metadata_process;
 
@@ -20,7 +20,7 @@ const MAX_FILE: u64 = 1024 * 1024;
 
 /// Ephemeral launch layers for one Host; secret values are redacted and never persisted by Ait.
 #[derive(Debug)]
-pub(in crate::local::deepseek_harness::native) struct Context {
+pub(in crate::native) struct Context {
     client: DeepSeekHarnessClient,
     cwd: PathBuf,
     home: PathBuf,
@@ -32,7 +32,7 @@ pub(in crate::local::deepseek_harness::native) struct Context {
 impl Context {
     /// Freeze the same process/project/home environment as the native Host; stored keys stay live.
     /// Returns bounded file errors without including paths or source text in diagnostics.
-    pub(in crate::local::deepseek_harness::native) async fn capture(
+    pub(in crate::native) async fn capture(
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
@@ -83,7 +83,7 @@ impl Context {
 
     /// Read the composed plugin identities, then ask the running Host which credential source wins.
     /// No key is returned if the official `DeepSeek` route is absent or unconfigured.
-    pub(in crate::local::deepseek_harness::native) async fn resolve(
+    pub(in crate::native) async fn resolve(
         &self,
         api: &Api,
     ) -> Result<Option<SecretString>, AgentSessionError> {

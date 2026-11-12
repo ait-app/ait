@@ -1,5 +1,6 @@
 use super::fixture::{Fixture, next};
-use crate::storage::timeline::Timeline;
+use provider::storage::timeline::Timeline;
+use provider::testing::{append_timeline, reconcile_timeline, timeline_entries};
 use provider_core::{
     ports::agent_session::{AgentClient, AgentTurnEvent},
     protocol::{prompt::AgentPrompt, timeline::NativeItem},
@@ -113,33 +114,29 @@ fn recover_legacy_and_reopen(fixture: &Fixture, replay: &[NativeItem]) {
     for (index, entry) in old.iter_mut().enumerate() {
         entry.key = format!("native:legacy:{index}");
     }
-    timeline.append("agent", "deepseek-harness", &old).unwrap();
-    let old_epoch = timeline.read("agent").unwrap().0;
-    let repaired = timeline
-        .reconcile("agent", "deepseek-harness", replay)
-        .unwrap();
+    append_timeline(&timeline, "agent", "deepseek-harness", &old).unwrap();
+    let old_epoch = timeline_entries(&timeline, "agent").unwrap().0;
+    let repaired = reconcile_timeline(&timeline, "agent", "deepseek-harness", replay).unwrap();
     assert_ne!(old_epoch, repaired);
     assert_eq!(
-        timeline
-            .reconcile("agent", "deepseek-harness", replay)
-            .unwrap(),
+        reconcile_timeline(&timeline, "agent", "deepseek-harness", replay).unwrap(),
         repaired
     );
     drop(timeline);
     let timeline = Timeline::open(&path).unwrap();
-    let (epoch, rows) = timeline.read("agent").unwrap();
+    let (epoch, rows) = timeline_entries(&timeline, "agent").unwrap();
     assert_eq!(epoch, repaired);
     assert_eq!(rows.len(), 18);
     assert_eq!(
         rows.iter()
-            .filter(|row| row.entry.item["type"] == "user_message")
+            .filter(|row| row.item["type"] == "user_message")
             .count(),
         6
     );
     for chunk in rows.as_chunks::<3>().0 {
-        assert_eq!(chunk[0].entry.item["type"], "user_message");
-        assert_eq!(chunk[1].entry.item["type"], "tool_call");
-        assert_eq!(chunk[2].entry.item["type"], "assistant_message");
+        assert_eq!(chunk[0].item["type"], "user_message");
+        assert_eq!(chunk[1].item["type"], "tool_call");
+        assert_eq!(chunk[2].item["type"], "assistant_message");
     }
 }
 

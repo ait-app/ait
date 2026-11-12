@@ -1,5 +1,7 @@
 use super::fixture::Fixture;
-use crate::{local::deepseek_harness::PROVIDER, service::agent_manager::AgentManager};
+use crate::PROVIDER;
+use provider::service::agent_manager::AgentManager;
+use provider::testing::Manager;
 use provider_core::ports::agent_session::AgentClient;
 use serde_json::json;
 
@@ -31,14 +33,12 @@ async fn deepseek_balance_is_read_without_creating_or_prompting_a_session() {
 async fn unknown_account_identity_bypasses_the_host_cache_and_handles_sign_out() {
     let fixture = Fixture::new().await;
     let directory = tempfile::tempdir().unwrap();
-    let mut manager = AgentManager::new(Box::new(
+    let mut manager = Manager::new(AgentManager::new(Box::new(
         persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
             directory.path().join("agents.json"),
         ),
-    ));
-    manager
-        .register_client(Box::new(fixture.client.clone()))
-        .unwrap();
+    )));
+    manager.register(Box::new(fixture.client.clone())).unwrap();
     let first = manager.usage(None, Some(PROVIDER), true).await.unwrap();
     assert_eq!(first["providers"][0]["status"], "available");
     fixture.set_balance(json!(null));
@@ -52,28 +52,20 @@ async fn unknown_account_identity_bypasses_the_host_cache_and_handles_sign_out()
 
 #[tokio::test]
 async fn live_account_queries_keep_the_session_environment_and_do_not_fall_back_to_host() {
-    use crate::service::agent_manager::AgentRegistration;
     let host = Fixture::new().await;
     let session = Fixture::new().await;
     session.set_balance(
         json!({"status":"ready","value":[{"currency":"CNY","balance":"9.25"}],"bonusWallets":[]}),
     );
     let directory = tempfile::tempdir().unwrap();
-    let mut manager = AgentManager::new(Box::new(
+    let mut manager = Manager::new(AgentManager::new(Box::new(
         persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
             directory.path().join("agents.json"),
         ),
-    ));
+    )));
+    manager.register(Box::new(host.client.clone())).unwrap();
     manager
-        .register_client(Box::new(host.client.clone()))
-        .unwrap();
-    manager
-        .create_with_environment(
-            "quota-agent",
-            &session.spec,
-            AgentRegistration::default(),
-            &session.client.environment,
-        )
+        .create_with_environment("quota-agent", &session.spec, &session.client.environment)
         .await
         .unwrap();
     let report = manager
@@ -250,7 +242,7 @@ async fn deepseek_key_resolution_follows_native_sources_custom_references_and_li
 #[ignore = "requires AIT_TEST_DSH_BIN and a configured DeepSeek API key; only reads official balance"]
 async fn installed_deepseek_api_key_balance_without_model_execution() {
     let binary = std::env::var_os("AIT_TEST_DSH_BIN").expect("set AIT_TEST_DSH_BIN");
-    let client = crate::local::deepseek_harness::DeepSeekHarnessClient::new(binary.into());
+    let client = crate::DeepSeekHarnessClient::new(binary.into());
     let report = client
         .usage()
         .await

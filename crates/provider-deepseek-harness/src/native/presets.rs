@@ -43,7 +43,7 @@ pub(super) fn permission_feature(permissions: &Value) -> Result<Value, AgentSess
 
 /// Check draft selections against discovery without activating a plugin composition.
 /// Returns rejection for unavailable models, reasoning efforts, modes or permission choices.
-pub(in crate::local::deepseek_harness) fn validate_selection(
+pub(crate) fn validate_selection(
     details: &provider_core::protocol::provider::Details,
     config: &domain::agent_runtime::StoredAgentConfig,
 ) -> Result<(), AgentSessionError> {

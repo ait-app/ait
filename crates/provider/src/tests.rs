@@ -22,10 +22,10 @@ const RUNTIME: &[&str] = &[
 ];
 
 /// `local` modules that become one crate each.
-const ADAPTERS: &[&str] = &["codex", "deepseek_harness", "opencode", "pi"];
+const ADAPTERS: &[&str] = &["codex", "opencode", "pi"];
 
 /// Runtime tests that build a non-Codex adapter until they move to `provider-builtin`.
-const PENDING: &[&str] = &["service/agent_execution/tests/subscriptions/creation.rs"];
+const PENDING: &[&str] = &[];
 
 #[test]
 fn layers_reference_only_what_their_future_crate_may_depend_on() {
@@ -168,10 +168,9 @@ fn crosses(file: &str, target: &str) -> bool {
     let top = segments.next().unwrap_or_default();
     let module = segments.next().unwrap_or_default();
     let adapter = top == "local" && ADAPTERS.contains(&module);
-    let test = file == "local/agent_mcp_injection.rs"
-        || file.split('/').any(|part| {
-            matches!(part, "tests" | "fixtures" | "tests.rs") || part.starts_with("test_support")
-        });
+    let test = file.split('/').any(|part| {
+        matches!(part, "tests" | "fixtures" | "tests.rs") || part.starts_with("test_support")
+    });
 
     if file.starts_with("local/") {
         !test && RUNTIME.contains(&top)

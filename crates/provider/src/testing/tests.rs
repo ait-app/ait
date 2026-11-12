@@ -135,3 +135,71 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
     manager.poll().await.unwrap();
     manager.close_all().await.unwrap();
 }
+
+#[tokio::test]
+async fn manager_delegates_native_session_listing_inspection_and_import() {
+    let root = tempfile::tempdir().unwrap();
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry.initialize().unwrap();
+    let cwd = root.path().to_str().unwrap().to_owned();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+
+    assert!(manager.timeline().is_none());
+    assert_eq!(
+        manager.recent_sessions(json!({"limit":"many"})).await,
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(
+        manager
+            .recent_sessions(json!({"providers":["missing"]}))
+            .await,
+        Err(ErrorCode::InvalidMessage)
+    );
+    let handle = AgentPersistenceHandle {
+        provider: "missing".to_owned(),
+        session_id: "session".to_owned(),
+        native_handle: None,
+        metadata: None,
+    };
+    assert_eq!(
+        manager.inspect_native(&handle, &cwd).await.unwrap_err(),
+        ErrorCode::UnsupportedCapability
+    );
+    let history = SessionHistory {
+        resume_metadata: std::collections::BTreeMap::new(),
+        parent_id: None,
+        descriptor: provider_core::ports::native_history::SessionDescriptor {
+            provider_id: "missing".to_owned(),
+            provider_label: "Missing".to_owned(),
+            provider_handle_id: "session".to_owned(),
+            cwd: cwd.clone(),
+            title: None,
+            first_prompt_preview: None,
+            last_prompt_preview: None,
+            last_activity_at: "2026-11-12T00:00:00Z".to_owned(),
+        },
+        created_at: "2026-11-12T00:00:00Z".to_owned(),
+        config: domain::agent_runtime::StoredAgentConfig::default(),
+        active: false,
+        entries: Vec::new(),
+    };
+    let record: PersistedAgentRuntimeRecord = serde_json::from_value(json!({
+        "id":"imported", "provider":"missing", "cwd":cwd,
+        "createdAt":"2026-11-12T00:00:00Z", "updatedAt":"2026-11-12T00:00:00Z",
+        "persistence":handle
+    }))
+    .unwrap();
+    // Without a display timeline the manager has nowhere to put the imported history.
+    assert_eq!(
+        manager.import_native(record, &history, false).unwrap_err(),
+        ErrorCode::UnsupportedCapability
+    );
+
+    let with_timeline = Manager::new(
+        AgentManager::new(Box::new(FileBackedAgentRuntimeRegistry::new(
+            root.path().join("other.json"),
+        )))
+        .with_timeline(Timeline::memory().unwrap()),
+    );
+    assert!(with_timeline.timeline().is_some());
+}

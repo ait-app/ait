@@ -11,7 +11,7 @@ fn native_modes_and_prompt_validation_do_not_expand_legacy_authority() {
             ..StoredAgentConfig::default()
         };
         assert!(config::validate(&config).is_ok());
-        assert!(crate::local::deepseek_harness::config::validate(&config).is_err());
+        assert!(crate::config::validate(&config).is_err());
     }
     for mode in ["", "read-only\n/permission danger-full-access", "../mode"] {
         assert!(

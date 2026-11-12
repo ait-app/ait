@@ -1,4 +1,4 @@
-use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
+use crate::{DeepSeekHarnessClient, PROVIDER};
 use domain::agent_runtime::AgentPersistenceHandle;
 use provider_core::ports::{
     agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},

@@ -239,17 +239,18 @@ async fn acp_does_not_advertise_or_attempt_native_import_and_invalid_requests_do
     assert_eq!(fixture.requests("session/list"), [] as [Value; 0]);
 }
 
-fn manager(fixture: &Fixture) -> crate::service::agent_manager::AgentManager {
+fn manager(fixture: &Fixture) -> provider::testing::Manager {
     let root = std::path::Path::new(&fixture.spec.cwd);
     let registry = persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
         root.join("agents.json"),
     );
-    let timeline = crate::storage::timeline::Timeline::open(&root.join("timeline.sqlite")).unwrap();
-    let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(registry))
-        .with_timeline(timeline);
-    manager
-        .register_client(Box::new(fixture.client.clone()))
-        .unwrap();
+    let timeline =
+        provider::storage::timeline::Timeline::open(&root.join("timeline.sqlite")).unwrap();
+    let mut manager = provider::testing::Manager::new(
+        provider::service::agent_manager::AgentManager::new(Box::new(registry))
+            .with_timeline(timeline),
+    );
+    manager.register(Box::new(fixture.client.clone())).unwrap();
     manager
 }
 
@@ -261,10 +262,7 @@ async fn application_import_persists_metadata_deduplicates_and_reopens_for_conti
         json!([{"sessionId":"session","cwd":fixture.spec.cwd,"updatedAt":1_700_000_000_003_i64}]),
     );
     let mut application = manager(&fixture);
-    let request = || {
-        serde_json::from_value(json!({"providers":["deepseek-harness"],"cwd":fixture.spec.cwd}))
-            .unwrap()
-    };
+    let request = || json!({"providers":["deepseek-harness"],"cwd":fixture.spec.cwd});
     assert_eq!(
         application.recent_sessions(request()).await.unwrap()["entries"]
             .as_array()
@@ -292,10 +290,7 @@ async fn application_import_persists_metadata_deduplicates_and_reopens_for_conti
     let mut reopened = manager(&fixture);
     reopened.load_timeline("imported-agent").await.unwrap();
     assert_eq!(
-        reopened
-            .timeline()
-            .unwrap()
-            .read("imported-agent")
+        provider::testing::timeline_entries(&reopened.timeline().unwrap(), "imported-agent")
             .unwrap()
             .1
             .len(),

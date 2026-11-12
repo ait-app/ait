@@ -19,8 +19,6 @@ async-trait.workspace = true
 
 # Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true
-# Authenticated DSH Host logical streams on an owned loopback WebSocket.
-tokio-tungstenite.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64.workspace = true
 # Read-only native account balance/quota inspection; credentials never enter public snapshots.
@@ -34,8 +32,6 @@ serde.workspace = true
 serde_json.workspace = true
 # Respect Codex credential storage mode before reusing a native account.
 toml.workspace = true
-# Read DSH's native credential/configuration YAML without modifying its owned files.
-serde_yaml_ng.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

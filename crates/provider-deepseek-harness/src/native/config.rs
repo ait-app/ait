@@ -6,9 +6,7 @@ use provider_native::acp_config::text;
 use serde_json::{Value, json};
 
 /// Validate Ait controls before launching a Host; exact choices are checked against native state.
-pub(in crate::local::deepseek_harness) fn validate(
-    config: &StoredAgentConfig,
-) -> Result<(), AgentSessionError> {
+pub(crate) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     let mut acp = config.clone();
     acp.mode_id = None;
     acp.feature_values = None;

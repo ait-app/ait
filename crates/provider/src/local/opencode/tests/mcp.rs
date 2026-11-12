@@ -1,7 +1,7 @@
 //! Agent MCP injection through ACP session opening of the offline `OpenCode` fake.
 
 use super::*;
-use crate::local::agent_mcp_injection::{Adapter, Opening, acp_opening, json_lines, verify};
+use crate::testing::agent_mcp::{Adapter, Opening, acp_opening, json_lines, verify};
 
 const OPENINGS: [&str; 3] = ["session/new", "session/load", "session/resume"];
 

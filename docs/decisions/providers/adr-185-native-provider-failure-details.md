@@ -12,6 +12,7 @@ paths:
   - crates/provider-minimax
   - crates/provider-antigravity
   - crates/provider-claude
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use provider_core::ports::account_usage::{PreparedUsage, UsageIdentity};
 
 use super::{http::Api, runtime::Runtime};
-use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
+use crate::{DeepSeekHarnessClient, PROVIDER};
 use provider_core::ports::agent_session::AgentSessionError;
 
 mod api_key;
@@ -16,7 +16,7 @@ pub(super) mod credentials;
 
 /// Query the launch account without creating a native session or sending model input.
 /// Returns bounded native transport/schema errors and always closes the temporary Host.
-pub(in crate::local::deepseek_harness) async fn read(
+pub(crate) async fn read(
     client: &DeepSeekHarnessClient,
     cwd: &str,
 ) -> Result<Value, AgentSessionError> {
@@ -27,7 +27,7 @@ pub(in crate::local::deepseek_harness) async fn read(
 /// The temporary process always closes before the lazy quota request is returned.
 /// # Errors
 /// Returns bounded native transport or credential-resolution errors.
-pub(in crate::local::deepseek_harness) async fn prepare_host(
+pub(crate) async fn prepare_host(
     client: &DeepSeekHarnessClient,
     cwd: &str,
 ) -> Result<PreparedUsage<'static>, AgentSessionError> {
@@ -100,7 +100,7 @@ async fn query_web(api: &Api) -> Result<Value, AgentSessionError> {
 }
 
 /// Explain the explicit legacy transport's missing account API without implying a login failure.
-pub(in crate::local::deepseek_harness) fn acp_unavailable() -> Value {
+pub(crate) fn acp_unavailable() -> Value {
     unavailable("DSH ACP does not expose DeepSeek account balances. Use the native Host transport.")
 }
 

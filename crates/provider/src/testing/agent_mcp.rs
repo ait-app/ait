@@ -20,18 +20,18 @@ use crate::service::agent_mcp::AgentMcp;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 
 /// MCP servers one native opening received, keyed by server name.
-pub(super) type Opening = BTreeMap<String, Value>;
+pub type Opening = BTreeMap<String, Value>;
 
 /// Adapter under test and the observations its offline fake records.
-pub(super) struct Adapter<'a> {
+pub struct Adapter<'a> {
     /// Build a fresh client, as a daemon restart would.
-    pub(super) client: &'a dyn Fn() -> Box<dyn AgentClient>,
+    pub client: &'a dyn Fn() -> Box<dyn AgentClient>,
     /// Interactive specification whose cwd hosts the fake's records.
-    pub(super) spec: AgentSessionSpec,
+    pub spec: AgentSessionSpec,
     /// Read every native opening recorded so far, in order.
-    pub(super) openings: &'a dyn Fn() -> Vec<Opening>,
+    pub openings: &'a dyn Fn() -> Vec<Opening>,
     /// Whether the fake completes ordinary prompts; otherwise sessions are only opened.
-    pub(super) prompts: bool,
+    pub prompts: bool,
 }
 
 #[derive(Debug)]
@@ -151,7 +151,10 @@ fn since(adapter: &Adapter<'_>, seen: usize) -> Vec<Opening> {
 ///
 /// Uses the shared token for ordinary sessions, rebinds it after a simulated restart and an
 /// import, and asserts that no credential reaches the durable registry or native handle.
-pub(super) async fn verify(adapter: &Adapter<'_>) {
+///
+/// # Panics
+/// Panics when an expectation fails or the temporary registry cannot be set up.
+pub async fn verify(adapter: &Adapter<'_>) {
     let root = tempfile::tempdir().unwrap();
     let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
     registry.initialize().unwrap();
@@ -300,7 +303,11 @@ async fn verify_history(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntime
 }
 
 /// Normalize ACP `mcpServers` descriptions into [`Opening`] entries.
-pub(super) fn acp_opening(servers: &Value) -> Opening {
+///
+/// # Panics
+/// Panics when a server or header lacks a string `name`.
+#[must_use]
+pub fn acp_opening(servers: &Value) -> Opening {
     servers
         .as_array()
         .into_iter()
@@ -326,7 +333,11 @@ pub(super) fn acp_opening(servers: &Value) -> Opening {
 }
 
 /// Read JSON lines from `path`, or none when the fake has not written it yet.
-pub(super) fn json_lines(path: &Path) -> Vec<Value> {
+///
+/// # Panics
+/// Panics when a line is not JSON.
+#[must_use]
+pub fn json_lines(path: &Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .unwrap_or_default()
         .lines()

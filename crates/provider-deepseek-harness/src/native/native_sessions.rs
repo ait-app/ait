@@ -6,7 +6,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{history, runtime::Runtime};
-use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
+use crate::{DeepSeekHarnessClient, PROVIDER};
 use provider_core::ports::{
     agent_session::AgentSessionError,
     native_history::{ListOptions, SessionDescriptor, SessionHistory},
@@ -15,7 +15,7 @@ use provider_native::acp_config::text;
 
 /// List visible root sessions, filtering directories before the bounded result limit.
 /// Returns unsupported for ACP, or native transport/schema errors without creating an Agent.
-pub(in crate::local::deepseek_harness) async fn list(
+pub(crate) async fn list(
     client: &DeepSeekHarnessClient,
     options: &ListOptions,
 ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
@@ -108,7 +108,7 @@ fn descriptors(
 
 /// Inspect an external identity without creating/resuming a writer or altering configuration.
 /// Returns validated history and non-secret resume metadata, or identity/history errors.
-pub(in crate::local::deepseek_harness) async fn inspect(
+pub(crate) async fn inspect(
     client: &DeepSeekHarnessClient,
     handle: &AgentPersistenceHandle,
     cwd: &str,

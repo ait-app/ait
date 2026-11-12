@@ -9,6 +9,7 @@ paths:
   - crates/api
   - crates/provider-minimax
   - crates/provider-claude
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-202：Agent MCP 运行时自动注入

@@ -7,7 +7,6 @@ use std::sync::Arc;
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 use crate::local::codex::CodexClient;
-use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
@@ -80,19 +79,8 @@ impl Providers {
         let codex = CodexClient::new(program("AIT_SERVER_CODEX_BIN", "codex"))
             .with_image_directory(images.clone());
         let opencode = OpenCodeClient::new(program("AIT_SERVER_OPENCODE_BIN", "opencode"));
-        let mut dsh = environment("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
-            .map_or_else(DeepSeekHarnessClient::installed, |program| {
-                DeepSeekHarnessClient::new(program.into())
-            })
-            .with_image_directory(images.clone());
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
-        if let Some(profile) = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE") {
-            dsh = dsh.with_native_profile(profile);
-        }
-        if environment("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Some("acp".as_ref()) {
-            dsh = dsh.with_acp_profile();
-        }
         let mut providers = Self {
             clients: Vec::new(),
             summary_clients: Vec::new(),
@@ -101,7 +89,6 @@ impl Providers {
         };
         providers.add(codex);
         providers.add(opencode);
-        providers.add(dsh);
         providers.add(pi);
         providers
     }

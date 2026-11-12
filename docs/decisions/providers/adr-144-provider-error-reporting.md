@@ -9,6 +9,7 @@ paths:
   - crates/provider-minimax
   - crates/provider-antigravity
   - crates/provider-claude
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示

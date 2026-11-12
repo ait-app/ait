@@ -1,5 +1,6 @@
 use super::fixture::{Fixture, next};
-use crate::storage::timeline::Timeline;
+use provider::storage::timeline::Timeline;
+use provider::testing::{append_timeline, reconcile_timeline, timeline_entries};
 use provider_core::ports::agent_session::{AgentClient, AgentTurnEvent};
 use serde_json::json;
 
@@ -68,29 +69,25 @@ async fn live_and_recovered_history_only_project_human_input() {
         .as_object_mut()
         .unwrap()
         .remove("clientMessageId");
-    timeline
-        .append(
-            "agent",
-            "deepseek-harness",
-            &[context, recovered[0].clone()],
-        )
-        .unwrap();
-    let old_epoch = timeline.read("agent").unwrap().0;
-    let repaired = timeline
-        .reconcile("agent", "deepseek-harness", &recovered)
-        .unwrap();
+    append_timeline(
+        &timeline,
+        "agent",
+        "deepseek-harness",
+        &[context, recovered[0].clone()],
+    )
+    .unwrap();
+    let old_epoch = timeline_entries(&timeline, "agent").unwrap().0;
+    let repaired = reconcile_timeline(&timeline, "agent", "deepseek-harness", &recovered).unwrap();
     assert_ne!(old_epoch, repaired);
     drop(timeline);
     let timeline = Timeline::open(&path).unwrap();
     for _ in 0..2 {
         assert_eq!(
-            timeline
-                .reconcile("agent", "deepseek-harness", &recovered)
-                .unwrap(),
+            reconcile_timeline(&timeline, "agent", "deepseek-harness", &recovered).unwrap(),
             repaired
         );
-        let (_, rows) = timeline.read("agent").unwrap();
+        let (_, rows) = timeline_entries(&timeline, "agent").unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].entry.item["messageId"], "human");
+        assert_eq!(rows[0].item["messageId"], "human");
     }
 }

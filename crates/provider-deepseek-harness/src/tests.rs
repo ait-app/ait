@@ -19,8 +19,8 @@ fn fixture() -> (TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
     // Keep the executable immutable while concurrent tests spawn processes. Executing a
     // freshly written script can fail with ETXTBSY on Linux if another fork inherited
     // its writable descriptor before it was closed. Logs and cwd remain per-test.
-    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/local/deepseek_harness/tests/fixtures/acp.cjs");
+    let program =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.cjs");
     let mut client = DeepSeekHarnessClient::new(program)
         .with_acp_profile()
         .with_image_directory(directory.path().join("images"));
@@ -309,12 +309,14 @@ async fn environment_is_ephemeral_and_catalog_has_a_user_facing_label() {
             .iter()
             .all(|request| request["hasEnvironment"] == true)
     );
-    let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(
-        persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
-            directory.path().join("agents.json"),
-        ),
-    ));
-    manager.register_client(Box::new(client)).unwrap();
+    let mut manager = provider::testing::Manager::new(
+        provider::service::agent_manager::AgentManager::new(Box::new(
+            persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+                directory.path().join("agents.json"),
+            ),
+        )),
+    );
+    manager.register(Box::new(client)).unwrap();
     let snapshot = manager
         .providers("provider.snapshot.get.request", json!({"cwd":spec.cwd}))
         .await

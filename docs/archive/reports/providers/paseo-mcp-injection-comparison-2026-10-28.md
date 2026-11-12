@@ -75,7 +75,7 @@ Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅�
 如果只在创建时增加 MCP，Codex 的配置对比可能将其视为一次 MCP 配置变更并重新打开原生进程；
 DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这里是根据调用代码得出的实现风险，
 不是本次复现的故障。来源：[Codex](../../../../crates/provider/src/local/codex.rs#L598)、
-[DSH ACP](../../../../crates/provider/src/local/deepseek_harness/session.rs#L105)。
+[DSH ACP](../../../../crates/provider-deepseek-harness/src/session.rs#L105)。
 
 ### Ait Provider 现状
 
@@ -88,9 +88,9 @@ DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这�
 | DSH native、Pi、Antigravity | 当前拒绝非空 MCP 配置                                    | 补各自原生工具或 MCP 适配；仅分发 Skill 不会提供工具   |
 
 证据：[Codex/Claude 转换](../../../../crates/provider-native/src/configuration.rs#L138)、
-[DSH ACP 转换](../../../../crates/provider/src/local/deepseek_harness/config.rs#L61)、
+[DSH ACP 转换](../../../../crates/provider-deepseek-harness/src/config.rs#L61)、
 [OpenCode](../../../../crates/provider/src/local/opencode/config.rs#L38)、
-[DSH native](../../../../crates/provider/src/local/deepseek_harness/native/config.rs#L19)、
+[DSH native](../../../../crates/provider-deepseek-harness/src/native/config.rs#L19)、
 [Pi](../../../../crates/provider/src/local/pi/config.rs#L27)、
 [Antigravity](../../../../crates/provider-antigravity/src/config.rs#L26)。
 

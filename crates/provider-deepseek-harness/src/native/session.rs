@@ -21,7 +21,7 @@ use provider_native::acp_config::text;
 use provider_native::acp_streaming::Stream;
 
 #[derive(Debug)]
-pub(in crate::local::deepseek_harness) struct Session {
+pub(crate) struct Session {
     runtime: Runtime,
     /// MCP servers the Host was started with; they cannot change for a live session.
     mcp_servers: Option<BTreeMap<String, Value>>,
@@ -43,7 +43,7 @@ pub(in crate::local::deepseek_harness) struct Session {
 }
 
 /// Open or adopt one durable native session and verify its cwd before admitting work.
-pub(in crate::local::deepseek_harness) async fn open(
+pub(crate) async fn open(
     client: &DeepSeekHarnessClient,
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
@@ -176,7 +176,7 @@ fn validate_identity(
 }
 
 impl Session {
-    pub(in crate::local::deepseek_harness) fn details(&self) -> Result<Details, AgentSessionError> {
+    pub(crate) fn details(&self) -> Result<Details, AgentSessionError> {
         self.selection.details()
     }
 

@@ -142,7 +142,7 @@
         }
       ],
       "tests": [
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
@@ -357,7 +357,7 @@
         "crates/provider/src/capabilities/tests.rs",
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
@@ -3457,7 +3457,7 @@
         }
       ],
       "tests": [
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
@@ -5264,7 +5264,7 @@
         "crates/provider/src/capabilities/tests.rs",
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
@@ -6749,7 +6749,7 @@
       ],
       "tests": [
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/protocol/agent_lifecycle/tests.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
@@ -6819,7 +6819,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
         "crates/provider/src/service/agent_execution/tests/delivery.rs",
@@ -8049,7 +8049,7 @@
       ],
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo.rs",
@@ -9228,7 +9228,7 @@
       ],
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
@@ -11709,7 +11709,7 @@
       ],
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
@@ -12811,7 +12811,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
@@ -14668,7 +14668,7 @@
         "crates/provider/src/capabilities/tests.rs",
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider-deepseek-harness/src/tests/execution.rs",
         "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",

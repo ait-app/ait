@@ -8,7 +8,7 @@ async fn installed_host_accepts_void_event_result_acknowledgement_without_model_
     let binary = std::env::var_os("AIT_TEST_DSH_BIN").expect("set AIT_TEST_DSH_BIN");
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().to_str().unwrap();
-    let mut client = crate::local::deepseek_harness::DeepSeekHarnessClient::new(binary.into());
+    let mut client = crate::DeepSeekHarnessClient::new(binary.into());
     client.environment = std::collections::BTreeMap::from([("DSH_HOME".into(), cwd.into())])
         .try_into()
         .unwrap();

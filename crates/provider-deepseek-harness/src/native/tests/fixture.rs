@@ -1,4 +1,4 @@
-use crate::local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER};
+use crate::{DeepSeekHarnessClient, PROVIDER};
 use axum::{
     Json, Router,
     extract::{

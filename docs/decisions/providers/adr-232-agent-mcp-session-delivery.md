@@ -7,7 +7,7 @@ amends:
 paths:
   - crates/provider/src/local/opencode
   - crates/provider/src/local/pi
-  - crates/provider/src/local/deepseek_harness
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付

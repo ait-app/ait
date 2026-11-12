@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use provider::Providers;
 use provider_antigravity::AntigravityClient;
 use provider_claude::ClaudeClient;
+use provider_deepseek_harness::DeepSeekHarnessClient;
 use provider_minimax::MiniMaxClient;
 use provider_omp::OmpClient;
 
@@ -32,6 +33,10 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
     let antigravity = environment("AIT_SERVER_ANTIGRAVITY_BIN");
     let claude =
         environment("AIT_SERVER_CLAUDE_BIN").map_or_else(|| PathBuf::from("claude"), PathBuf::from);
+    let dsh = environment("AIT_SERVER_DEEPSEEK_HARNESS_BIN");
+    let dsh_profile = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE");
+    let dsh_acp =
+        environment("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Some("acp".as_ref());
     let minimax = environment("AIT_SERVER_MINIMAX_CODE_BIN")
         .map_or_else(|| PathBuf::from("mcode"), PathBuf::from);
     Providers::configured(data_dir, &environment)
@@ -43,6 +48,20 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
                 .with_image_directory(images.to_owned())
         })
         .with(|images| ClaudeClient::new(claude).with_image_directory(images.to_owned()))
+        .with(|images| {
+            let mut client = dsh
+                .map_or_else(DeepSeekHarnessClient::installed, |program| {
+                    DeepSeekHarnessClient::new(program.into())
+                })
+                .with_image_directory(images.to_owned());
+            if let Some(profile) = dsh_profile {
+                client = client.with_native_profile(profile);
+            }
+            if dsh_acp {
+                client = client.with_acp_profile();
+            }
+            client
+        })
         .with(|images| MiniMaxClient::new(minimax).with_image_directory(images.to_owned()))
         .with(|images| OmpClient::new(omp).with_image_directory(images.to_owned()))
 }

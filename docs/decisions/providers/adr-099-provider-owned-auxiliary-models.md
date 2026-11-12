@@ -11,6 +11,7 @@ paths:
   - crates/provider-core
   - crates/provider-antigravity
   - crates/provider-claude
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-099：Provider 自选辅助小模型

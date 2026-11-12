@@ -4,9 +4,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use super::fixture::Fixture;
-use crate::local::agent_mcp_injection::{Adapter, Opening, json_lines, verify};
-use crate::local::deepseek_harness::DeepSeekHarnessClient;
+use crate::DeepSeekHarnessClient;
 use domain::agent_runtime::StoredAgentConfig;
+use provider::testing::agent_mcp::{Adapter, Opening, json_lines, verify};
 use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;

@@ -21,7 +21,7 @@ pub(super) struct Journal {
 /// Recover display entries for a registered native handle and its exact working directory.
 /// Returns an ordered projection, or an error for invalid handles, transport failures,
 /// incomplete journals, or content that cannot be projected. Never submits input.
-pub(in crate::local::deepseek_harness) async fn read(
+pub(crate) async fn read(
     client: &DeepSeekHarnessClient,
     handle: &AgentPersistenceHandle,
     cwd: &str,

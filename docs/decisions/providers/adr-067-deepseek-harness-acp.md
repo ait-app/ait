@@ -6,11 +6,14 @@ paths:
   - crates/provider
   - crates/provider-native
   - crates/provider-core
+  - crates/provider-deepseek-harness
 ---
 
 # ADR-067：DeepSeek Harness ACP Provider
 
 Status note: Superseded in part by [ADR-082](adr-082-deepseek-harness-native-host.md)
+
+- 适配器现位于 `crates/provider-deepseek-harness`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 默认接入已改为原生交互 Host；本文保留显式 ACP 兼容模式的契约。
 
