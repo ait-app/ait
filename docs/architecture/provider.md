@@ -6,10 +6,11 @@
 
 ## 边界与装配
 
-- `provider` 的生产依赖只有 `domain` 与 `model`；`persistence` 仅作为测试依赖，不依赖 `metadata`，
+- `provider` 的生产依赖只有 `provider-core`、`domain` 与 `model`；`persistence` 仅作为测试依赖，不依赖 `metadata`，
   也不反向依赖 `bot`。依赖守卫是 `bins/daemon/tests/dependencies.rs`
   （[ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
-  [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)）。
+  [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
+  [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - `provider::Providers` 装配 `provider` 内的 adapter：Codex、Claude Code、Antigravity、OpenCode、
   DeepSeek Harness、Pi、MiniMax Code。可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖由
   provider 维护；构造与注册不启动原生进程，也不创建存储
