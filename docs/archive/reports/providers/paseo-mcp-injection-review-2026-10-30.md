@@ -79,7 +79,7 @@ Ait 当前保留所有显式用户 `ait` 项，应保留这个取舍。来源：
 
 当前没有发现 Ait 自动注入项回流到持久 record 的来源：
 [Codex 导入](../../../../crates/provider/src/local/codex/native_sessions.rs) 仅还原模型、推理和模式，
-[Claude 导入](../../../../crates/provider/src/local/claude/history.rs) 仅还原模型；
+[Claude 导入](../../../../crates/provider-claude/src/history.rs) 仅还原模型；
 [refresh 的 apply_history](../../../../crates/provider/src/service/agent_manager/native_sessions.rs)
 不替换 `record.config`；configure 和 restore 只提交用户输入的配置。
 因此“旧内部项清理”目前是防御性扩展，不能报告为已复现的回流故障。未来若增加迁移或完整原生

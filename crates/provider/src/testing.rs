@@ -81,6 +81,34 @@ impl Manager {
             .await
     }
 
+    /// Create `agent_id` from `spec` as an internal session owned by `owner`, the registration a
+    /// bot session receives.
+    ///
+    /// # Errors
+    /// Returns invalid or duplicate IDs, unavailable providers, and session or storage failures.
+    pub async fn create_internal(
+        &mut self,
+        agent_id: &str,
+        spec: &AgentSessionSpec,
+        owner: Value,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        let registration = AgentRegistration {
+            internal: true,
+            owner: Some(owner),
+            ..AgentRegistration::default()
+        };
+        self.0.create(agent_id, spec, registration).await
+    }
+
+    /// Load the native history of `agent_id` into the display timeline without claiming a
+    /// writer, once per agent in this manager.
+    ///
+    /// # Errors
+    /// Returns unknown agents, unavailable history, or durable projection failures.
+    pub async fn load_timeline(&mut self, agent_id: &str) -> Result<(), ErrorCode> {
+        self.0.load_timeline(agent_id).await
+    }
+
     /// Reopen the persisted native session of `agent_id`.
     ///
     /// # Errors
@@ -435,6 +463,21 @@ pub fn append_timeline(
     entries: &[NativeItem],
 ) -> Result<(String, Vec<u64>), ErrorCode> {
     timeline.append(agent, provider, entries)
+}
+
+/// Persist and publish one incremental `entry` of the native `observation` produced by
+/// `provider` for `agent`; text entries are additive deltas, tool entries running snapshots.
+///
+/// # Errors
+/// Returns changed replays, already completed items, oversized data or storage failures.
+pub fn progress_timeline(
+    timeline: &Timeline,
+    agent: &str,
+    provider: &str,
+    observation: &str,
+    entry: &NativeItem,
+) -> Result<(), ErrorCode> {
+    timeline.progress(agent, provider, observation, entry)
 }
 
 /// Replace the display history of `agent` with `entries`, returning the new generation.

@@ -7,6 +7,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-claude
 ---
 
 # ADR-223：Linux 沙箱化 Worktree

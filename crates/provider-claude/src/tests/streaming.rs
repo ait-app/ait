@@ -1,5 +1,6 @@
 use super::*;
-use crate::local::claude::streaming;
+use crate::streaming;
+use provider::testing::{append_timeline, memory_timeline, progress_timeline, timeline_entries};
 use provider_core::ports::agent_session::AgentTurnEvent;
 
 #[test]
@@ -16,7 +17,7 @@ fn compaction_status_emits_one_loading_marker_for_each_boundary() {
         .unwrap();
     assert!(stream.events.is_empty());
 
-    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let timeline = memory_timeline().unwrap();
     for (index, with_uuid) in [(0, true), (1, false)] {
         let mut status = json!({"type":"system","subtype":"status","status":"compacting"});
         if with_uuid {
@@ -44,10 +45,10 @@ fn compaction_status_emits_one_loading_marker_for_each_boundary() {
             };
             assert_eq!(entry.item["type"], "compaction");
             assert_eq!(entry.item["status"], expected);
-            timeline.append("agent", "claude", &[entry]).unwrap();
+            append_timeline(&timeline, "agent", "claude", &[entry]).unwrap();
         }
     }
-    assert_eq!(timeline.read("agent").unwrap().1.len(), 4);
+    assert_eq!(timeline_entries(&timeline, "agent").unwrap().1.len(), 4);
 }
 
 #[test]
@@ -150,25 +151,25 @@ fn text_and_reasoning_deltas_match_native_history_keys() {
         {"type":"thinking","thinking":"Reason"},{"type":"text","text":"Hello"}]}});
     stream.record(&record).unwrap();
     stream.record(&record).unwrap();
-    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let timeline = memory_timeline().unwrap();
     for event in stream.events {
         match event {
-            AgentTurnEvent::Progress { observation, entry } => timeline
-                .progress("agent", "claude", &observation, &entry)
-                .unwrap(),
+            AgentTurnEvent::Progress { observation, entry } => {
+                progress_timeline(&timeline, "agent", "claude", &observation, &entry).unwrap();
+            }
             AgentTurnEvent::Timeline(entry) => {
-                timeline.append("agent", "claude", &[entry]).unwrap();
+                append_timeline(&timeline, "agent", "claude", &[entry]).unwrap();
             }
             _ => panic!("unexpected stream event"),
         }
     }
-    let (_, rows) = timeline.read("agent").unwrap();
-    let content: String = rows
+    let (_, entries) = timeline_entries(&timeline, "agent").unwrap();
+    let content: String = entries
         .iter()
-        .filter_map(|row| row.entry.item["text"].as_str())
+        .filter_map(|entry| entry.item["text"].as_str())
         .collect();
     assert_eq!(content, "ReasonHello");
-    assert_eq!(rows.len(), 4);
+    assert_eq!(entries.len(), 4);
 }
 
 #[test]

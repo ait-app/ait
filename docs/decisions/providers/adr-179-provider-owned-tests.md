@@ -10,6 +10,7 @@ paths:
   - crates/provider-core
   - crates/provider-minimax
   - crates/provider-antigravity
+  - crates/provider-claude
 ---
 
 # ADR-179：Provider 自身行为的测试归 provider crate

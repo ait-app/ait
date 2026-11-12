@@ -50,6 +50,18 @@ fn timeline_access_reads_appended_and_reconciled_entries() {
         ),
         Err(ErrorCode::InvalidMessage)
     );
+
+    progress_timeline(
+        &timeline,
+        "agent",
+        "omp",
+        "observation",
+        &entry("native:c", "third"),
+    )
+    .unwrap();
+    let (_, entries) = timeline_entries(&timeline, "agent").unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[1].item["text"], "third");
 }
 
 #[tokio::test]
@@ -99,6 +111,15 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
             .create_with_environment("agent", &spec, &AgentEnvironment::default())
             .await
             .is_err()
+    );
+    assert!(matches!(
+        manager.create_internal("agent", &spec, json!({"botId":"bot"})).await,
+        Err(AgentManagerError::ProviderUnavailable(provider)) if provider == "missing"
+    ));
+    // This manager has no display timeline, so there is nowhere to load history into.
+    assert_eq!(
+        manager.load_timeline("missing").await,
+        Err(ErrorCode::UnsupportedCapability)
     );
     assert_eq!(
         manager.usage(None, Some("missing"), false).await,

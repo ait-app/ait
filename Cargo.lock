@@ -2307,7 +2307,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "unicode-normalization",
  "url",
  "uuid",
  "webrtc",
@@ -2341,11 +2340,37 @@ dependencies = [
  "persistence",
  "provider",
  "provider-antigravity",
+ "provider-claude",
  "provider-minimax",
  "provider-omp",
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "provider-claude"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]

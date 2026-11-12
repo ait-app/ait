@@ -22,7 +22,7 @@ const RUNTIME: &[&str] = &[
 ];
 
 /// `local` modules that become one crate each.
-const ADAPTERS: &[&str] = &["claude", "codex", "deepseek_harness", "opencode", "pi"];
+const ADAPTERS: &[&str] = &["codex", "deepseek_harness", "opencode", "pi"];
 
 /// Runtime tests that build a non-Codex adapter until they move to `provider-builtin`.
 const PENDING: &[&str] = &["service/agent_execution/tests/subscriptions/creation.rs"];

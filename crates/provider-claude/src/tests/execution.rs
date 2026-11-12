@@ -3,19 +3,18 @@
 use serde_json::{Value, json};
 
 use super::super::ClaudeClient;
-use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, worker_with_client};
-use crate::testing::request;
+use provider::service::agent_execution::AgentExecution;
+use provider::testing::{Workbench, request};
 
 mod diagnostics;
 mod rewind;
 
-fn worker(fixture: &Fixture) -> AgentExecution {
+fn worker(fixture: &Workbench) -> AgentExecution {
     let program =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claude_code.py");
     let mut client = ClaudeClient::new(program);
     client.config_dir = Some(fixture.root.path().join("claude-config"));
-    worker_with_client(
+    provider::testing::worker(
         fixture,
         model::creation::Creations::default(),
         Box::new(client),
@@ -25,7 +24,7 @@ fn worker(fixture: &Fixture) -> AgentExecution {
 
 #[tokio::test]
 async fn discovery_execution_and_restore_preserve_native_history() {
-    let fixture = Fixture::new();
+    let fixture = Workbench::new();
     let execution = worker(&fixture);
     let models = request(
         &execution,

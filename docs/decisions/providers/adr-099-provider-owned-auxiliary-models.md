@@ -10,6 +10,7 @@ paths:
   - crates/provider-native
   - crates/provider-core
   - crates/provider-antigravity
+  - crates/provider-claude
 ---
 
 # ADR-099：Provider 自选辅助小模型

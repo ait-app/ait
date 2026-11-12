@@ -177,7 +177,7 @@ async fn native_rotation_updates_the_handle_and_missing_accepted_history_is_not_
         Some(current.session_id.as_str())
     );
     session.close().await.unwrap();
-    let path = crate::local::claude::history::project_dir(&client, &spec.cwd)
+    let path = crate::history::project_dir(&client, &spec.cwd)
         .unwrap()
         .join(format!("{}.jsonl", current.session_id));
     std::fs::remove_file(&path).unwrap();

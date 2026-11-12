@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use crate::local::claude::streaming;
+use crate::streaming;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
 use provider_native::images::ImageStore;
@@ -19,7 +19,7 @@ struct Child {
 }
 
 #[derive(Debug)]
-pub(in crate::local::claude) struct Live {
+pub(crate) struct Live {
     images: ImageStore,
     children: BTreeMap<String, Child>,
     tasks: BTreeMap<String, String>,
@@ -29,7 +29,7 @@ pub(in crate::local::claude) struct Live {
 }
 
 impl Live {
-    pub(in crate::local::claude) fn restore(
+    pub(crate) fn restore(
         &mut self,
         client: &super::ClaudeClient,
         root: &str,
@@ -112,7 +112,7 @@ impl Live {
         Ok(())
     }
 
-    pub(in crate::local::claude) fn new(images: ImageStore) -> Self {
+    pub(crate) fn new(images: ImageStore) -> Self {
         Self {
             images,
             children: BTreeMap::new(),
@@ -123,14 +123,14 @@ impl Live {
         }
     }
 
-    pub(in crate::local::claude) fn children(&self) -> Vec<NativeSubagent> {
+    pub(crate) fn children(&self) -> Vec<NativeSubagent> {
         self.children
             .values()
             .map(|child| child.descriptor.clone())
             .collect()
     }
 
-    pub(in crate::local::claude) fn observe(
+    pub(crate) fn observe(
         &mut self,
         record: &Value,
         root: &str,
@@ -388,11 +388,7 @@ impl Live {
         Ok(())
     }
 
-    pub(in crate::local::claude) fn stopped(
-        &mut self,
-        failed: bool,
-        all: bool,
-    ) -> Vec<AgentTurnEvent> {
+    pub(crate) fn stopped(&mut self, failed: bool, all: bool) -> Vec<AgentTurnEvent> {
         let mut events = Vec::new();
         for child in self.children.values_mut() {
             if child.descriptor.descriptor["status"] == "running" && (all || !child.background) {

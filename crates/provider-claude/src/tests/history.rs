@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use super::*;
-use crate::local::claude::history;
+use crate::history;
 
 #[test]
 fn native_paths_and_handles_are_scoped_to_canonical_working_directory() {

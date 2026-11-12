@@ -5,6 +5,7 @@ date: 2026-10-31
 paths:
   - crates/provider
   - apps/mobile
+  - crates/provider-claude
 ---
 
 # ADR-209：通过只读登记统一子 Agent 展示

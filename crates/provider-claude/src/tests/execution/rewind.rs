@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn native_file_and_combined_rewind_preserve_the_source_conversation() {
-    let fixture = Fixture::new();
+    let fixture = Workbench::new();
     let execution = worker(&fixture);
     let created = request(
         &execution,
@@ -48,7 +48,7 @@ async fn native_file_and_combined_rewind_preserve_the_source_conversation() {
 
 async fn assert_rewind(
     execution: &AgentExecution,
-    fixture: &Fixture,
+    fixture: &Workbench,
     id: &str,
     target: &Value,
     original: &Value,

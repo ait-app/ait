@@ -18,10 +18,9 @@ impl ClaudeSession {
         {
             return Err(AgentSessionError::Rejected);
         }
-        let history =
-            crate::local::claude::read_history(&self.client, &self.handle(), &self.spec.cwd)
-                .await?
-                .ok_or(AgentSessionError::Rejected)?;
+        let history = crate::read_history(&self.client, &self.handle(), &self.spec.cwd)
+            .await?
+            .ok_or(AgentSessionError::Rejected)?;
         let requested = prompt
             .text
             .trim()

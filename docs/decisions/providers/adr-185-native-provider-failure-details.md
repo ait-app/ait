@@ -11,6 +11,7 @@ paths:
   - crates/provider-core
   - crates/provider-minimax
   - crates/provider-antigravity
+  - crates/provider-claude
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

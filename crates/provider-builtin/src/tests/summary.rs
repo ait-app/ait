@@ -22,10 +22,12 @@ impl SummaryConfiguration for Configuration {
     }
 }
 
-/// A fake native program owned by the runtime crate's fixtures.
-fn fake(name: &str) -> PathBuf {
+/// The fake native program `name` among the fixtures of the sibling crate `owner`.
+fn fake(owner: &str, name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../provider/tests/fixtures")
+        .join("..")
+        .join(owner)
+        .join("tests/fixtures")
         .join(name)
 }
 
@@ -35,14 +37,14 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
     // Keep the executable immutable while concurrent tests spawn native processes; the link
     // also scopes the fake's optional diagnostic cwd overrides to this test.
     let codex = root.path().join("codex");
-    symlink(fake("codex_app_server.py"), &codex).unwrap();
+    symlink(fake("provider", "codex_app_server.py"), &codex).unwrap();
     let cwd = root.path().join("work");
     std::fs::create_dir(&cwd).unwrap();
     let config = Arc::new(Configuration::default());
     let providers = configured(root.path(), |name| {
         Some(match name {
             "AIT_SERVER_CODEX_BIN" => codex.clone().into_os_string(),
-            "AIT_SERVER_CLAUDE_BIN" => fake("claude_code.py").into_os_string(),
+            "AIT_SERVER_CLAUDE_BIN" => fake("provider-claude", "claude_code.py").into_os_string(),
             _ => root.path().join(name).into_os_string(),
         })
     });

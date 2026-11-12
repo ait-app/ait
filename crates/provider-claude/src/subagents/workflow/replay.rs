@@ -2,14 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
 
-use crate::local::claude::{ClaudeClient, history, streaming};
+use crate::{ClaudeClient, history, streaming};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::controls::NativeSubagent;
 use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
 use serde_json::{Value, json};
 
-pub(in crate::local::claude::subagents) fn histories(
+pub(in crate::subagents) fn histories(
     client: &ClaudeClient,
     context: (&str, &str),
     parent: &SessionHistory,

@@ -6,6 +6,7 @@ paths:
   - crates/provider
   - crates/metadata
   - crates/provider-native
+  - crates/provider-claude
 ---
 
 # ADR-058：Server 的有界 metadata generation

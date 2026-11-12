@@ -1,5 +1,5 @@
 use super::*;
-use crate::local::claude::config;
+use crate::config;
 
 #[test]
 fn rejects_unsupported_configuration_and_preserves_native_modes() {

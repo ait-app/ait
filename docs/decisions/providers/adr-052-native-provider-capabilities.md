@@ -10,6 +10,7 @@ paths:
   - crates/provider-core
   - crates/provider-minimax
   - crates/provider-antigravity
+  - crates/provider-claude
 ---
 
 # ADR-052: Native provider capability completion

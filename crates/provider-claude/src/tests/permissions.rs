@@ -1,32 +1,29 @@
 use super::*;
-use crate::local::claude::permissions;
+use crate::permissions;
 
 #[cfg(unix)]
 #[tokio::test]
 async fn bot_denies_native_tools_and_questions() {
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
 
     for prompt in ["permission", "question"] {
         let (root, client, spec) = fixture();
         let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
         registry.initialize().unwrap();
-        let mut manager = AgentManager::new(Box::new(registry.clone()));
-        manager.register_client(Box::new(client)).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+        manager.register(Box::new(client)).unwrap();
         manager
-            .create(
+            .create_internal(
                 "bot-agent",
                 &spec,
-                AgentRegistration {
-                    internal: true,
-                    owner: Some(json!(domain::bot::SessionOwner {
-                        bot_id: domain::BotId::generate(),
-                        conversation_id: domain::ConversationId::generate(),
-                        workspace_id: "workspace-1".into(),
-                    })),
-                    ..AgentRegistration::default()
-                },
+                json!(domain::bot::SessionOwner {
+                    bot_id: domain::BotId::generate(),
+                    conversation_id: domain::ConversationId::generate(),
+                    workspace_id: "workspace-1".into(),
+                }),
             )
             .await
             .unwrap();

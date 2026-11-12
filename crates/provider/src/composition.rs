@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
-use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::opencode::OpenCodeClient;
@@ -80,8 +79,6 @@ impl Providers {
         let images = data_dir.join("agents/provider-images");
         let codex = CodexClient::new(program("AIT_SERVER_CODEX_BIN", "codex"))
             .with_image_directory(images.clone());
-        let claude = ClaudeClient::new(program("AIT_SERVER_CLAUDE_BIN", "claude"))
-            .with_image_directory(images.clone());
         let opencode = OpenCodeClient::new(program("AIT_SERVER_OPENCODE_BIN", "opencode"));
         let mut dsh = environment("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
             .map_or_else(DeepSeekHarnessClient::installed, |program| {
@@ -103,7 +100,6 @@ impl Providers {
             images,
         };
         providers.add(codex);
-        providers.add(claude);
         providers.add(opencode);
         providers.add(dsh);
         providers.add(pi);

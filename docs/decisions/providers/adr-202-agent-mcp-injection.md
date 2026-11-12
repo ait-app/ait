@@ -8,6 +8,7 @@ paths:
   - crates/provider
   - crates/api
   - crates/provider-minimax
+  - crates/provider-claude
 ---
 
 # ADR-202：Agent MCP 运行时自动注入

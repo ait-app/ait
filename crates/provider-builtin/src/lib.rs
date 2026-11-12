@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use provider::Providers;
 use provider_antigravity::AntigravityClient;
+use provider_claude::ClaudeClient;
 use provider_minimax::MiniMaxClient;
 use provider_omp::OmpClient;
 
@@ -29,6 +30,8 @@ pub fn providers(data_dir: &Path) -> Providers {
 pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString>) -> Providers {
     let omp = provider_omp::installed_program(&environment);
     let antigravity = environment("AIT_SERVER_ANTIGRAVITY_BIN");
+    let claude =
+        environment("AIT_SERVER_CLAUDE_BIN").map_or_else(|| PathBuf::from("claude"), PathBuf::from);
     let minimax = environment("AIT_SERVER_MINIMAX_CODE_BIN")
         .map_or_else(|| PathBuf::from("mcode"), PathBuf::from);
     Providers::configured(data_dir, &environment)
@@ -39,6 +42,7 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
                 })
                 .with_image_directory(images.to_owned())
         })
+        .with(|images| ClaudeClient::new(claude).with_image_directory(images.to_owned()))
         .with(|images| MiniMaxClient::new(minimax).with_image_directory(images.to_owned()))
         .with(|images| OmpClient::new(omp).with_image_directory(images.to_owned()))
 }
