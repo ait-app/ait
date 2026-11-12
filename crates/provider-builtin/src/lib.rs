@@ -1,7 +1,9 @@
-//! The built-in provider adapters: the one place that names every adapter the daemon ships.
+//! The built-in provider adapters: the one place that registers every adapter the daemon ships.
 //!
 //! The runtime's [`Providers`] container stays adapter-agnostic; this crate decides which
 //! adapters it holds, their default programs, and the environment variables that override them.
+//! The runtime still names some adapters by provider id in its diagnostics sources (variables and
+//! default programs) and catalog labels; keep those in step by hand.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

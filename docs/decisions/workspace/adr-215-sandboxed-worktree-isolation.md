@@ -24,6 +24,7 @@ paths:
   原生 addon 与 Python 环境；下文 Oh My Pi 一行和受保护路径清单以该条为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
+- 沙箱适配器现位于 `crates/provider-native`（[ADR-270](../providers/adr-270-provider-crate-family.md)）。
 
 ## 背景
 

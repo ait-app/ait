@@ -17,7 +17,10 @@
   用 `Providers::with` 依次追加 `provider-codex` 的 `CodexClient`、`provider-antigravity` 的 `AntigravityClient`、
   `provider-claude` 的 `ClaudeClient`、`provider-deepseek-harness` 的 `DeepSeekHarnessClient`、`provider-minimax` 的 `MiniMaxClient`、`provider-omp` 的 `OmpClient`、`provider-opencode` 的 `OpenCodeClient` 与 `provider-pi` 的 `PiClient`，共享同一图片目录（`OpenCodeClient` 与迁出前一样不接收该目录）；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
   负责注册与摘要生成器装配。`provider-builtin` 的生产依赖只有 `provider`、`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode` 与 `provider-pi`。
-  可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖随 adapter 列表维护（OMP 的经 `provider_omp::installed_program`）；
+  可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖随 adapter 列表维护（OMP 的经 `provider_omp::installed_program`）。
+  运行时仍有两份按 provider id 键控的部分副本，需与该列表手工保持一致：`crates/provider/src/diagnostics.rs`
+  的诊断来源表列出六个 adapter 的 `AIT_SERVER_<KEY>_BIN` 与各自的默认程序，
+  `crates/provider/src/service/provider_catalog.rs` 按四个 provider id 补充 Catalog 标签、说明与默认模式。
   构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)、
@@ -87,7 +90,9 @@
 - Pi 的 adapter 在 `crates/provider-pi`，生产依赖为 `provider-core`、`provider-native` 与 `domain`
   （`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `PiClient`；`provider` 与
   daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它，可执行文件默认 `pi`，由
-  `AIT_SERVER_PI_BIN` 覆盖，共享同一图片目录。Pi 测试与 RPC 假程序和工具卡片样本归 `provider-pi`，需要执行
+  `AIT_SERVER_PI_BIN` 覆盖，共享同一图片目录。原生会话导入、列表与恢复使用的目录写法由 `AgentClient::cwd_lookup`
+  决定：Pi 返回 `CwdLookup::Requested`（客户端请求的写法），其余 adapter 用默认的 `Canonical`，运行时不按
+  provider id 判断。Pi 测试与 RPC 假程序和工具卡片样本归 `provider-pi`，需要执行
   worker、`AgentManager`、Timeline、Provider 目录或 Agent MCP 注入辅助的场景使用 `provider::testing`
   （[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。

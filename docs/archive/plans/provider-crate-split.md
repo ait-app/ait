@@ -10,7 +10,7 @@
 
 **Spec:** None exists. The Design section below is the specification; Task 1 records it as an ADR.
 
-**Status (2026-11-12):** Implemented on branch `eloquent-monkey` (commits from `69816c57` on; decision recorded as [ADR-270](../../decisions/providers/adr-270-provider-crate-family.md)) and archived; the body below is the plan as executed and is not updated. Originally rewritten against `main` at `f3a2c3d3`. The 2026-11-10 version predated `provider-omp` and is replaced. What changed: `provider-omp` is the pilot instead of a task; `Providers` stays in the runtime as a container; three contract files are split by item instead of dragging RPC request types into the contract crate; adapter tests use the `provider::testing` facade that ADR-249 introduced; ADR `paths` metadata and the full list of fixture consumers are covered.
+**Status (2026-11-12):** Implemented (decision recorded as [ADR-270](../../decisions/providers/adr-270-provider-crate-family.md)) and archived; the body below is the plan as executed and is not updated. Originally rewritten against `main` at `f3a2c3d3`. The 2026-11-10 version predated `provider-omp` and is replaced. What changed: `provider-omp` is the pilot instead of a task; `Providers` stays in the runtime as a container; three contract files are split by item instead of dragging RPC request types into the contract crate; adapter tests use the `provider::testing` facade that ADR-249 introduced; ADR `paths` metadata and the full list of fixture consumers are covered.
 
 ## Why
 

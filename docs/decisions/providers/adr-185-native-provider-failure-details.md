@@ -22,6 +22,7 @@ paths:
 
 - 更新：2026-11-03，Pi 推理配置拒绝的专用说明见 [ADR-211](adr-211-pi-next-turn-reasoning-controls.md)。
 - 修订：ADR-144 的固定分类展示策略；将 ADR-162、ADR-175 的原生错误说明扩展到其他适配器。
+- 共享诊断工具现位于 `crates/provider-native`，各适配器位于各自的 `crates/provider-<adapter>`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

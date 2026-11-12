@@ -106,7 +106,10 @@ dev-only:  provider-<adapter> ..> provider        (adapter 测试驱动真实运
 2. **adapter 与运行时之间没有任何方向的生产依赖。** adapter 的生产依赖只有 `provider-core`、
    `provider-native` 与 `domain`；只有 `provider-codex` 因 `model::realtime` 额外依赖 `model`。
    这也是第 5 条的前提：链接运行时的 adapter 不能用于运行时自身的测试，因为 `provider` 的
-   测试构建与该 adapter 链接的副本会定义两个不同的 `AgentClient` trait。
+   测试构建与该 adapter 链接的副本会定义两个不同的 `AgentClient` trait。运行时对
+   `local::pi::PROVIDER` 的两处比较改为 port 能力 `AgentClient::cwd_lookup`：它返回 `CwdLookup`
+   （`provider-core` 的 `ports/agent_session.rs` 与 `ports/native_history.rs`），默认 `Canonical`，
+   Pi 返回 `Requested`。
 3. **`Providers` 作为容器留在运行时，`provider-builtin` 拥有内置列表。**
    [ADR-249](adr-249-omp-adapter-crate.md) 加入的 `Providers::with` 已能接收其他 crate 的 adapter。
    `provider-builtin` 从空容器 `Providers::empty` 开始，用 `Providers::with` 追加全部内置 adapter。
@@ -121,8 +124,9 @@ dev-only:  provider-<adapter> ..> provider        (adapter 测试驱动真实运
 5. **`provider` 只 dev 依赖一个 adapter：`provider-codex`。** 131 个
    `service/agent_execution/tests` 用例和 manager 测试驱动 Codex 的 Python 夹具。`verify.mjs`
    沿 dev 边选择测试，运行时的 dev 依赖每多一个 adapter，修改该 adapter 时就会选中整个家族。
-6. **夹具归拥有该假程序或产出该数据的 crate。** 原生假程序和 adapter 专用 JSON 移到
-   `crates/provider-<adapter>/tests/fixtures/`；`legacy_tool_details.json` 与三个 `paseo-*.json`
+6. **夹具归拥有该假程序或产出该数据的 crate。** 原在 `crates/provider/tests/fixtures/` 的原生假程序和
+   adapter 专用 JSON 移到 `crates/provider-<adapter>/tests/fixtures/`；原在 adapter 源码测试目录下的
+   假程序随源码移动，仍在 `src/tests/fixtures/`；`legacy_tool_details.json` 与三个 `paseo-*.json`
    留在 `crates/provider/tests/fixtures/`。这取代 ADR-249 第 4 条中两个 OMP JSON 留在
    `provider` 的例外。
 7. **构造非 Codex adapter 的运行时测试一分为二。** 运行时一半使用桩 `AgentClient`（如这些测试
@@ -158,7 +162,10 @@ feature 启用时，`dep:persistence` 和强形式 `persistence/<feature>` 都�
 修改单个 adapter 只选中该 adapter、`provider-builtin` 及其宿主 `api` 与 `daemon`；修改 `provider-codex`
 还会选中运行时一侧（`provider`、依赖它的 `bot` 和以 dev 边依赖它的其他 adapter），这是第 5 条的代价。
 修改运行时同样选中这些 crate；修改契约或共享工具会选中整个家族，与拆分前相同。
-新 adapter 加入 `provider-builtin` 即可，宿主不了解任何客户端类型。行为、wire 格式、持久化格式、
+新 adapter 在 `provider-builtin` 注册即可，宿主不了解任何客户端类型；但运行时的诊断来源表
+（`crates/provider/src/diagnostics.rs`，覆盖变量与默认程序）和 Catalog 特例
+（`crates/provider/src/service/provider_catalog.rs`）仍按 provider id 列出部分 adapter，属于下文不在范围内的
+字符串特例，需手工保持一致。行为、wire 格式、持久化格式、
 环境变量和 provider id 都不变。
 
 不在本决策范围内：继续拆分运行时（`skills`、`storage`、`timeline_projection` 保留在 `provider`）；
