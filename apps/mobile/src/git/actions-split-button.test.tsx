@@ -61,4 +61,36 @@ describe("workspace action dropdown", () => {
     fireEvent.click(screen.getByTestId("workspace-archive-action"));
     expect(handler).toHaveBeenCalledOnce();
   });
+
+  it("surfaces the first allowed PR merge method beside the PR action", () => {
+    const mergeHandler = vi.fn();
+    const viewPr: GitAction = {
+      id: "pr",
+      label: "View PR",
+      pendingLabel: "View PR",
+      successLabel: "View PR",
+      disabled: false,
+      status: "idle",
+      startsGroup: false,
+      handler: vi.fn(),
+    };
+    const mergePr: GitAction = {
+      id: "merge-pr-squash",
+      label: "Merge PR (squash)",
+      pendingLabel: "Merging PR...",
+      successLabel: "PR merged",
+      disabled: false,
+      status: "idle",
+      startsGroup: true,
+      handler: mergeHandler,
+    };
+
+    render(
+      <GitActionsSplitButton gitActions={{ primary: viewPr, secondary: [mergePr], menu: [] }} />,
+    );
+
+    expect(screen.getByTestId("changes-merge-pr-cta")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("changes-merge-pr-cta"));
+    expect(mergeHandler).toHaveBeenCalledOnce();
+  });
 });
