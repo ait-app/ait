@@ -1,5 +1,6 @@
 //! Bot-only tools: long-term memory and a bounded overview of the Bot's Workspace.
 
+use bot::mcp::CallerKind;
 use domain::bot::BOT_SCOPE_LABEL;
 use domain::bot::permissions::BotPermissions;
 use model::ErrorCode;
@@ -19,8 +20,27 @@ const MAX_LABEL: usize = 256;
 const MAX_BOT_AGENTS: usize = 20;
 const MAX_ATTENTION: usize = 10;
 const MAX_SCHEDULES: usize = 20;
+const MAX_NOTIFICATIONS: usize = 20;
+/// Largest `summary` kept per notification, in bytes.
+const MAX_SUMMARY: usize = 512;
+/// Notification fields copied into the overview when present.
+const NOTIFICATION_FIELDS: [&str; 8] = [
+    "kind",
+    "title",
+    "workspaceId",
+    "agentId",
+    "scheduleId",
+    "runId",
+    "terminalId",
+    "at",
+];
 /// Overview lists that may shrink to fit, as JSON pointers.
-const LISTS: [&str; 3] = ["/botAgents", "/otherAgents/attention", "/schedules/bot"];
+const LISTS: [&str; 4] = [
+    "/botAgents",
+    "/otherAgents/attention",
+    "/schedules/bot",
+    "/notifications",
+];
 /// Agents fetched to count and sample the Agents the Bot did not start.
 const AGENT_PAGE: u64 = 200;
 /// Refusal for an update made against a stale revision.
@@ -96,6 +116,7 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
     let all = agents(json!({}), AGENT_PAGE).await?;
     let schedules = rpc::execute(state, "schedule.list.request", json!({})).await?;
     let memory = memory(state, root).await?;
+    let notifications = unseen(state, scope).await?;
     Ok(project(&Sources {
         root,
         checkout: &checkout,
@@ -107,8 +128,31 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
             .ok_or(ErrorCode::InvalidMessage)?,
         workspaces,
         memory: &memory,
+        notifications: &notifications,
         permissions: &scope.grant.permissions,
     }))
+}
+
+/// Read the notifications the calling Bot conversation has not had in front of it in a
+/// completed turn, one more than the overview keeps so it can report truncation.
+///
+/// Returns `null` for callers without a conversation and for a conversation the Bot no longer
+/// has, such as one closed while its session still answered.
+/// # Errors
+/// Propagates other Bot read failures.
+async fn unseen(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
+    let CallerKind::Bot {
+        conversation_id, ..
+    } = &scope.caller.kind
+    else {
+        return Ok(Value::Null);
+    };
+    let params = json!({"workspaceId":scope.caller.root,"unseenBy":conversation_id,
+        "limit":MAX_NOTIFICATIONS + 1});
+    match rpc::execute(state, "bot.notifications.list.request", params).await {
+        Err(ErrorCode::BotNotFound) => Ok(Value::Null),
+        other => other,
+    }
 }
 
 fn entries(page: &Value) -> Result<Vec<Value>, ErrorCode> {
@@ -138,14 +182,16 @@ pub(super) struct Sources<'a> {
     pub(super) workspaces: &'a std::collections::BTreeSet<String>,
     /// `bot.memory.get.request` result.
     pub(super) memory: &'a Value,
+    /// `bot.notifications.list.request` result for the calling conversation, or `null`.
+    pub(super) notifications: &'a Value,
     /// The Bot's current permissions.
     pub(super) permissions: &'a BotPermissions,
 }
 
 /// Project `sources` into the overview document of at most [`MAX_BYTES`] bytes.
 ///
-/// Lists are capped first. If the document is still too large, the Agents' `lastMessage` fields
-/// go, then list entries, which sets `truncated`.
+/// Lists are capped first. If the document is still too large, the Agents' `lastMessage` and the
+/// notifications' `summary` fields go, then list entries, which sets `truncated`.
 pub(super) fn project(sources: &Sources<'_>) -> Value {
     let root = sources.root;
     let mut truncated = !sources.all_complete;
@@ -182,6 +228,13 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
         }
     }
     truncated |= cap(&mut own_schedules, MAX_SCHEDULES);
+    let notifications = sources.notifications["notifications"]
+        .as_array()
+        .map(|entries| {
+            let mut kept: Vec<Value> = entries.iter().map(notification).collect();
+            truncated |= cap(&mut kept, MAX_NOTIFICATIONS);
+            kept
+        });
     let text = sources.memory["text"].as_str().unwrap_or_default();
     let mut overview = json!({
         "workspace":{"id":root,"branch":sources.checkout["currentBranch"],
@@ -189,15 +242,17 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
         "botAgents":bot_agents,
         "otherAgents":{"count":others.len(),"attention":attention},
         "schedules":{"bot":own_schedules,"otherCount":other_count},
-        "notifications":null,
+        "notifications":notifications,
         "memory":{"revision":sources.memory["revision"],"bytes":text.len()},
         "permissions":sources.permissions,
         "truncated":truncated,
     });
     if overview.to_string().len() > MAX_BYTES {
-        for agent in overview["botAgents"].as_array_mut().into_iter().flatten() {
-            if let Some(agent) = agent.as_object_mut() {
-                agent.remove("lastMessage");
+        for (list, field) in [("botAgents", "lastMessage"), ("notifications", "summary")] {
+            for entry in overview[list].as_array_mut().into_iter().flatten() {
+                if let Some(entry) = entry.as_object_mut() {
+                    entry.remove(field);
+                }
             }
         }
     }
@@ -232,6 +287,21 @@ fn agent(agent: &Value) -> Value {
         "requiresAttention":agent["requiresAttention"],"updatedAt":agent["updatedAt"]});
     if agent["lastMessage"].is_string() {
         summary["lastMessage"] = clip(&agent["lastMessage"], MAX_MESSAGE);
+    }
+    summary
+}
+
+/// Project logged notification `entry` to its present fields, sequence and wake state.
+fn notification(entry: &Value) -> Value {
+    let source = &entry["notification"];
+    let mut summary = json!({"sequence":entry["sequence"],"wake":entry["wake"]["state"]});
+    for field in NOTIFICATION_FIELDS {
+        if !source[field].is_null() {
+            summary[field] = source[field].clone();
+        }
+    }
+    if source["summary"].is_string() {
+        summary["summary"] = clip(&source["summary"], MAX_SUMMARY);
     }
     summary
 }

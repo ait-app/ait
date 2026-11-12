@@ -109,6 +109,9 @@ Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 中心托管的 Webhook Channel 使用现有 serve 链路和受限服务会话，daemon 只保存端点；见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
+Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。
+daemon 把 Agent／终端 attention（未经焦点过滤的提交后广播）与定时任务运行结果转成通知，来源对话由 `ait.bot.conversation` 标签与 `botConversation` 字段记录，
+见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)。
 
 ## 主机、连接与客户端
 

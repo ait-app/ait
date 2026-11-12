@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use domain::ConversationId;
 use domain::schedule::{Cadence, Run, RunStatus, Schedule, Status, Target};
 use domain::storage::schedule::Error;
 use model::storage::schedule::Store;
@@ -78,7 +79,22 @@ impl Engine {
         }
         result
     }
-    fn find(&self, id: &str) -> Result<&Schedule, Error> {
+    /// Occurrences that ended at or after `since`, as (schedule id, run id), including those
+    /// `open` settled because the server restarted while they ran.
+    pub(crate) fn ended_since(&self, since: DateTime<Utc>) -> Vec<(String, String)> {
+        self.records
+            .iter()
+            .flat_map(|schedule| {
+                schedule
+                    .runs
+                    .iter()
+                    .filter(|run| run.status != RunStatus::Running)
+                    .filter(|run| run.ended_at.is_some_and(|ended| ended >= since))
+                    .map(|run| (schedule.id.clone(), run.id.clone()))
+            })
+            .collect()
+    }
+    pub(crate) fn find(&self, id: &str) -> Result<&Schedule, Error> {
         self.records
             .iter()
             .find(|s| s.id == id)
@@ -200,6 +216,7 @@ impl Engine {
             id: Uuid::new_v4().to_string(),
             workspace_id: Some(request.workspace_id),
             bot_scope: request.bot_scope,
+            bot_conversation: request.bot_conversation,
             name: normalize_name(request.name),
             prompt: request.prompt.trim().to_owned(),
             cadence: request.cadence,
@@ -498,6 +515,8 @@ struct Summary<'a> {
     workspace_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     bot_scope: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bot_conversation: Option<ConversationId>,
     name: Option<&'a str>,
     prompt: &'a str,
     cadence: &'a Cadence,
@@ -517,6 +536,7 @@ fn summary(schedule: &Schedule) -> Summary<'_> {
         id: &schedule.id,
         workspace_id: schedule.workspace_id.as_deref(),
         bot_scope: schedule.bot_scope.as_deref(),
+        bot_conversation: schedule.bot_conversation,
         name: schedule.name.as_deref(),
         prompt: &schedule.prompt,
         cadence: &schedule.cadence,

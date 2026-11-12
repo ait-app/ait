@@ -69,6 +69,7 @@ async fn guest_bot_access_is_read_only_v2() {
         "bot.history.get.request",
         "bot.turn.get.request",
         "bot.memory.get.request",
+        "bot.notifications.list.request",
     ] {
         guest.forwarded(method, json!({})).await;
     }

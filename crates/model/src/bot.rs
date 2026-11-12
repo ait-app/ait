@@ -1,7 +1,8 @@
 //! Blocking storage and runtime-secret ports for the Bot application.
 
+use domain::bot::notification::NotificationLog;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotTurnId, ConversationId};
+use domain::{BotId, BotTurnId, ConversationId};
 
 /// A safe Bot persistence failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -63,4 +64,16 @@ pub trait Store: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns inaccessible storage errors.
     fn delete_memory(&self, workspace: &str) -> Result<(), StorageError>;
+    /// Load every Bot's notification log.
+    /// # Errors
+    /// Returns malformed or inaccessible storage errors.
+    fn notification_logs(&self) -> Result<Vec<NotificationLog>, StorageError>;
+    /// Atomically replace one Bot's notification log.
+    /// # Errors
+    /// Returns oversized records or write failures; callers must stop on an uncertain write.
+    fn save_notification_log(&self, log: &NotificationLog) -> Result<(), StorageError>;
+    /// Remove one Bot's notification log; an absent log is not an error.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_notification_log(&self, bot: BotId) -> Result<(), StorageError>;
 }

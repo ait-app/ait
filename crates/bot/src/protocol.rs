@@ -1,5 +1,5 @@
 use domain::bot::permissions::BotPermissions;
-use domain::bot::{ChannelConfig, ExecutionConfig};
+use domain::bot::{ChannelConfig, ExecutionConfig, WakeScope};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use serde::Deserialize;
 use serde_json::Value;
@@ -18,6 +18,8 @@ pub(crate) struct Setup {
     pub(crate) clear_memory: bool,
     #[serde(default)]
     pub(crate) permissions: Option<BotPermissions>,
+    #[serde(default)]
+    pub(crate) wake_scope: Option<WakeScope>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -28,7 +30,12 @@ pub(crate) struct WorkspaceRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Update {
     pub(crate) workspace_id: String,
-    pub(crate) execution: ExecutionConfig,
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub(crate) execution: Option<ExecutionConfig>,
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub(crate) wake_scope: Option<WakeScope>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -185,6 +192,16 @@ pub(crate) struct WebhookAck {
     pub(crate) workspace_id: String,
     pub(crate) turn_id: BotTurnId,
     pub(crate) status: WebhookDelivery,
+}
+/// A page of the Workspace Bot's notification log.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct NotificationsList {
+    pub(crate) workspace_id: String,
+    /// Only entries this conversation has not had in front of it in a completed turn.
+    #[serde(default)]
+    pub(crate) unseen_by: Option<ConversationId>,
+    pub(crate) limit: Option<usize>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

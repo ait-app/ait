@@ -129,7 +129,8 @@ pub(super) async fn profiles(state: &Shared) -> Result<Value, ErrorCode> {
     Ok(json!({"profiles":profiles}))
 }
 
-/// Read the Agent's bounded recent timeline selected by `arguments` in `state`.
+/// Read the Agent's bounded recent timeline selected by `arguments` in `state`, with the
+/// Agent's status and last change read just before it.
 /// # Errors
 /// Returns missing Agent, invalid page or native history failures.
 pub(super) async fn activity(state: &Shared, arguments: Value) -> Result<Value, ErrorCode> {
@@ -146,8 +147,11 @@ pub(super) async fn activity(state: &Shared, arguments: Value) -> Result<Value, 
         .map(Value::to_string)
         .collect::<Vec<_>>()
         .join("\n");
-    Ok(json!({"agentId":agent["id"],"updateCount":items.len(),
-        "currentModeId":agent["currentModeId"],"content":content,"items":items}))
+    Ok(
+        json!({"agentId":agent["id"],"status":agent["status"],"updatedAt":agent["updatedAt"],
+        "updateCount":items.len(),"currentModeId":agent["currentModeId"],"content":content,
+        "items":items}),
+    )
 }
 
 /// Inspect modes and draft features from `arguments`, with optional `caller` cwd in `state`.

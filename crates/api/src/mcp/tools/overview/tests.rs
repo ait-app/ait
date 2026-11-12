@@ -6,6 +6,7 @@ use super::*;
 
 static CHECKOUT: LazyLock<Value> = LazyLock::new(|| json!({"currentBranch":"main","isDirty":true}));
 static MEMORY: LazyLock<Value> = LazyLock::new(|| json!({"text":"hello","revision":"r0"}));
+static NONE: Value = Value::Null;
 
 fn agent(index: usize, workspace: &str, scoped: bool) -> Value {
     let labels = if scoped {
@@ -34,8 +35,26 @@ fn sources<'a>(
         schedules,
         workspaces,
         memory: &MEMORY,
+        notifications: &NONE,
         permissions,
     }
+}
+
+/// A `bot.notifications.list.request` result with `count` entries, newest first.
+fn listed(count: u64) -> Value {
+    let entries: Vec<Value> = (1..=count)
+        .rev()
+        .map(|sequence| {
+            json!({"sequence":sequence,"admittedAt":"2026-11-12T00:00:00Z",
+                "wake":{"state":"woke","conversationId":"c","turnId":"t"},
+                "notification":{"id":format!("agent:a{sequence}:t"),"workspaceId":"wks_root",
+                    "scope":"wks_root","kind":"agent_failed","agentId":format!("a{sequence}"),
+                    "scheduleId":null,"runId":null,"terminalId":null,"title":"Agent failed",
+                    "summary":"s".repeat(2048),"at":"2026-11-12T00:00:00Z",
+                    "conversationId":"c"}})
+        })
+        .collect();
+    json!({"headSequence":count,"seenSequence":null,"wakeScope":"own","notifications":entries})
 }
 
 #[test]
@@ -95,6 +114,47 @@ fn oversized_documents_lose_last_messages_before_entries() {
     assert_eq!(overview["botAgents"].as_array().unwrap().len(), 20);
     assert!(overview["botAgents"][0].get("lastMessage").is_none());
     assert_eq!(overview["truncated"], false);
+}
+
+#[test]
+fn unseen_notifications_are_projected_newest_first_within_the_bound() {
+    let workspaces = BTreeSet::from(["wks_root".to_owned()]);
+    let permissions = BotPermissions::default();
+    let few = listed(2);
+    let mut small = sources(&[], &[], &[], &workspaces, &permissions);
+    small.notifications = &few;
+    let overview = project(&small);
+    assert_eq!(overview["truncated"], false);
+    assert_eq!(
+        overview["notifications"][0],
+        json!({"sequence":2,"wake":"woke","kind":"agent_failed","title":"Agent failed",
+            "workspaceId":"wks_root","agentId":"a2","at":"2026-11-12T00:00:00Z",
+            "summary":"s".repeat(MAX_SUMMARY)})
+    );
+    assert_eq!(overview["notifications"][1]["sequence"], 1);
+
+    let many = listed(MAX_NOTIFICATIONS as u64 + 1);
+    let own: Vec<_> = (0..20)
+        .map(|index| agent(index, "wks_root", true))
+        .collect();
+    let mut large = sources(&own, &own, &[], &workspaces, &permissions);
+    large.notifications = &many;
+    let overview = project(&large);
+    assert!(overview.to_string().len() <= MAX_BYTES);
+    assert_eq!(overview["truncated"], true, "the extra entry was dropped");
+    let notifications = overview["notifications"].as_array().unwrap();
+    assert_eq!(notifications.len(), MAX_NOTIFICATIONS);
+    assert_eq!(notifications[0]["sequence"], MAX_NOTIFICATIONS + 1);
+    assert!(
+        notifications
+            .iter()
+            .all(|entry| entry.get("summary").is_none())
+    );
+    assert!(overview["botAgents"][0].get("lastMessage").is_none());
+
+    let empty = json!({"headSequence":0,"seenSequence":null,"notifications":[]});
+    small.notifications = &empty;
+    assert_eq!(project(&small)["notifications"], json!([]));
 }
 
 #[test]

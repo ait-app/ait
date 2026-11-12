@@ -156,5 +156,6 @@ async fn panic_is_recorded_as_failed_instead_of_losing_running_state() {
 mod concurrency;
 mod controlled;
 mod durability;
+mod settlement;
 
 mod validation;

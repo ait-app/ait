@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   BOT_METHODS,
+  BOT_NOTIFICATION_METHODS,
   BOT_REQUEST_SCHEMAS,
   BotRequestSchema,
   BotResponseSchema,
 } from "./rpc-schemas.js";
-import { BotChannelConfigSchema, BotPermissionsSchema, BotTurnSchema } from "./types.js";
+import {
+  BotChannelConfigSchema,
+  BotPermissionsSchema,
+  BotTurnSchema,
+  BotWakeStatusSchema,
+} from "./types.js";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "../messages.js";
+import { StoredScheduleSchema } from "../schedule/types.js";
+import { validateWSOutboundMessage } from "../validation/ws-outbound.js";
 
 describe("Bot wire contract", () => {
   it("preserves distinct assistant messages and defaults legacy turns to an empty list", () => {
@@ -167,7 +175,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(42);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(43);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",
@@ -278,5 +286,223 @@ describe("Bot wire contract", () => {
     ]) {
       expect(BotRequestSchema.safeParse({ ...valid, ...patch }).success).toBe(false);
     }
+  });
+
+  it("parses wake turns and keeps turns from older hosts unchanged", () => {
+    const base = {
+      id: crypto.randomUUID(),
+      conversationId: crypto.randomUUID(),
+      messageId: "input",
+      sequence: 1,
+      generation: 0,
+      text: "question",
+      replyTo: null,
+      reply: null,
+      messages: [],
+      pendingPermissions: [],
+      status: "completed",
+      delivery: "delivered",
+      error: null,
+      createdAt: "2026-11-12T00:00:00Z",
+    } as const;
+    const legacy = BotTurnSchema.parse(base);
+    expect(legacy).toEqual(base);
+    expect("wake" in legacy || "silent" in legacy || "notificationCursor" in legacy).toBe(false);
+    const notification = {
+      id: "agent:a1:2026-11-12T00:00:00Z",
+      workspaceId: "wks_1",
+      scope: "wks_1",
+      kind: "agent_finished",
+      agentId: "a1",
+      scheduleId: null,
+      runId: null,
+      terminalId: null,
+      title: 'Agent "fix" finished',
+      summary: null,
+      at: "2026-11-12T00:00:00Z",
+      conversationId: base.conversationId,
+    };
+    const wake = BotTurnSchema.parse({
+      ...base,
+      messageId: `notification:${base.id}`,
+      text: "<ait-notifications>…</ait-notifications>",
+      wake: { notifications: [notification, { ...notification, id: "x", kind: "later_kind" }] },
+      silent: true,
+      notificationCursor: 7,
+    });
+    expect(wake.wake?.notifications.map((item) => item.kind)).toEqual([
+      "agent_finished",
+      "later_kind",
+    ]);
+    expect(wake).toMatchObject({ silent: true, notificationCursor: 7 });
+  });
+
+  it("keeps the notification log optional and parses wake scope and log entries", () => {
+    expect(BOT_METHODS).not.toContain("bot.notifications.list.request");
+    expect(BOT_NOTIFICATION_METHODS).toEqual(["bot.notifications.list.request"]);
+    const execution = { provider: "codex", model: null, modeId: null, thinking: null };
+    for (const type of ["bot.setup.request", "bot.update.request"] as const) {
+      expect(
+        BotRequestSchema.parse({
+          type,
+          requestId: "r",
+          workspaceId: "w",
+          execution,
+          wakeScope: "all",
+        }),
+      ).toMatchObject({ wakeScope: "all" });
+      expect(
+        BotRequestSchema.safeParse({
+          type,
+          requestId: "r",
+          workspaceId: "w",
+          execution,
+          wakeScope: "everything",
+        }).success,
+      ).toBe(false);
+    }
+    const list = {
+      type: "bot.notifications.list.request",
+      requestId: "r",
+      workspaceId: "w",
+    };
+    expect(BotRequestSchema.safeParse(list).success).toBe(true);
+    for (const patch of [{ limit: 0 }, { limit: 129 }, { unseenBy: "owner" }]) {
+      expect(BotRequestSchema.safeParse({ ...list, ...patch }).success).toBe(false);
+    }
+    const bot = {
+      workspaceId: "w",
+      execution,
+      builtinChannelId: crypto.randomUUID(),
+      state: { kind: "active" },
+      createdAt: "2026-11-12T00:00:00Z",
+    };
+    const view = (payload: unknown) =>
+      BotResponseSchema.parse({
+        type: "bot.get.response",
+        payload: { requestId: "r", bot: payload },
+      }).payload;
+    expect(view(bot)).toEqual({ requestId: "r", bot });
+    expect(view({ ...bot, wakeScope: "all" })).toMatchObject({ bot: { wakeScope: "all" } });
+    const notification = {
+      id: "schedule:s1:r1",
+      workspaceId: "w",
+      scope: null,
+      kind: "schedule_failed",
+      agentId: null,
+      scheduleId: "s1",
+      runId: "r1",
+      terminalId: null,
+      title: 'Schedule "nightly" run failed',
+      summary: "REVOKED",
+      at: "2026-11-12T00:00:00Z",
+      conversationId: null,
+    };
+    const parsed = BotResponseSchema.parse({
+      type: "bot.notifications.list.response",
+      payload: {
+        requestId: "r",
+        headSequence: 3,
+        seenSequence: null,
+        wakeScope: "own",
+        notifications: [
+          {
+            sequence: 3,
+            admittedAt: "2026-11-12T00:00:01Z",
+            notification,
+            wake: { state: "skipped", reason: "over_budget" },
+          },
+          {
+            sequence: 2,
+            admittedAt: "2026-11-12T00:00:01Z",
+            notification,
+            wake: {
+              state: "woke",
+              conversationId: crypto.randomUUID(),
+              turnId: crypto.randomUUID(),
+            },
+          },
+          {
+            sequence: 1,
+            admittedAt: "2026-11-12T00:00:01Z",
+            notification,
+            wake: { state: "logged" },
+          },
+        ],
+      },
+    });
+    expect(parsed.type).toBe("bot.notifications.list.response");
+  });
+
+  it("changes the wake scope alone and reads wake states from newer hosts", () => {
+    expect(
+      BotRequestSchema.parse({
+        type: "bot.update.request",
+        requestId: "r",
+        workspaceId: "w",
+        wakeScope: "all",
+      }),
+    ).not.toHaveProperty("execution");
+    for (const wake of [
+      { state: "skipped", reason: "observed" },
+      { state: "skipped", reason: "blocked" },
+      { state: "skipped", reason: "reason_from_a_newer_host" },
+      { state: "state_from_a_newer_host", detail: 1 },
+    ]) {
+      expect(BotWakeStatusSchema.parse(wake)).toEqual(wake);
+    }
+    expect(BotWakeStatusSchema.safeParse({ state: "woke" }).success).toBe(false);
+    expect(BotWakeStatusSchema.safeParse({ state: "skipped" }).success).toBe(false);
+    const entry = (sequence: number, wake: unknown) => ({
+      sequence,
+      admittedAt: "2026-11-12T00:00:01Z",
+      notification: {
+        id: `agent:a:${sequence}`,
+        workspaceId: "w",
+        kind: "agent_finished",
+        title: "Agent finished",
+        at: "2026-11-12T00:00:00Z",
+      },
+      wake,
+    });
+    const envelope = {
+      type: "session",
+      message: {
+        type: "bot.notifications.list.response",
+        payload: {
+          requestId: "r",
+          headSequence: 2,
+          seenSequence: null,
+          wakeScope: "own",
+          notifications: [
+            entry(2, { state: "state_from_a_newer_host" }),
+            entry(1, { state: "skipped", reason: "reason_from_a_newer_host" }),
+          ],
+        },
+      },
+    };
+    expect(validateWSOutboundMessage(envelope).success).toBe(true);
+  });
+
+  it("parses schedules that record the Bot conversation that created them", () => {
+    const schedule = StoredScheduleSchema.parse({
+      id: "s1",
+      name: "nightly",
+      prompt: "check",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: { type: "agent", agentId: crypto.randomUUID() },
+      status: "active",
+      createdAt: "2026-11-12T00:00:00Z",
+      updatedAt: "2026-11-12T00:00:00Z",
+      nextRunAt: null,
+      lastRunAt: null,
+      pausedAt: null,
+      expiresAt: null,
+      maxRuns: null,
+      runs: [],
+      botScope: "w",
+      botConversation: crypto.randomUUID(),
+    });
+    expect(schedule.id).toBe("s1");
   });
 });

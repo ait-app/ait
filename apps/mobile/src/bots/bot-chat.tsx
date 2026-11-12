@@ -27,8 +27,9 @@ import { SubagentsTrack } from "@/subagents/track";
 import type { Theme } from "@/styles/theme";
 import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
+import { BotSilentNote, BotWakeHeader, visibleBotMessages } from "./bot-wake";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
 import { closeBotSessionTab } from "./session-tab";
@@ -48,34 +49,69 @@ const RUNNING_TURN: TurnLiveness = {
   cancellationRequestId: null,
 };
 
-/** One exchange: the prompt in a user bubble, then the Bot's reply as an assistant message. */
-function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string; cwd: string }) {
+/**
+ * Opens a Workspace target from the Bot chat beside it, as a session page opens its children.
+ * `pin` keeps a tab whose Agent the Agent directory does not list, such as the Bot's own session.
+ */
+function useOpenFromBot(serverId: string, workspaceId: string) {
+  const { tabId } = usePaneContext();
+  const openInSidePane = useSettings((settings) => settings.openInSidePane);
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  return useCallback(
+    (target: WorkspaceTabTarget, pin = false) => {
+      if (!workspaceKey) return;
+      openPreferredWorkspaceTarget({
+        workspaceKey,
+        target,
+        source: "subagents",
+        preferences: openInSidePane,
+        parentTabId: tabId,
+        ...(pin ? { pin } : {}),
+      });
+    },
+    [openInSidePane, tabId, workspaceKey],
+  );
+}
+
+/**
+ * One exchange: the prompt in a user bubble, or for a wake turn the notifications that started
+ * it, then the Bot's reply as an assistant message.
+ */
+function BotExchange({
+  turn,
+  serverId,
+  workspaceId,
+  cwd,
+  onOpen,
+}: {
+  turn: BotTurn;
+  serverId: string;
+  workspaceId: string;
+  cwd: string;
+  onOpen: (target: WorkspaceTabTarget) => void;
+}) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const createdAt = useMemo(() => new Date(turn.createdAt), [turn.createdAt]);
-  const messages = useMemo(
-    () =>
-      turn.messages.length > 0
-        ? turn.messages
-        : turn.reply
-          ? [{ id: "legacy", text: turn.reply, status: "completed" as const }]
-          : [],
-    [turn.messages, turn.reply],
-  );
+  const pending = isBotTurnPending(turn);
+  const messages = useMemo(() => visibleBotMessages(turn, pending), [turn, pending]);
   const getReply = useCallback(
     () => messages.map((message) => message.text).join("\n\n"),
     [messages],
   );
-  const pending = isBotTurnPending(turn);
   return (
     <View testID={`bot-turn-${turn.id}`}>
-      <UserMessage
-        serverId={serverId}
-        messageId={turn.messageId}
-        message={turn.text}
-        timestamp={createdAt.getTime()}
-        client={client}
-      />
+      {turn.wake ? (
+        <BotWakeHeader turn={turn} workspaceId={workspaceId} onOpen={onOpen} />
+      ) : (
+        <UserMessage
+          serverId={serverId}
+          messageId={turn.messageId}
+          message={turn.text}
+          timestamp={createdAt.getTime()}
+          client={client}
+        />
+      )}
       {messages.map((message) => (
         <AssistantMessage
           key={message.id}
@@ -88,6 +124,7 @@ function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string;
           occurrenceKey={`${turn.id}:${message.id}`}
         />
       ))}
+      {turn.wake && turn.silent ? <BotSilentNote turnId={turn.id} /> : null}
       {pending ? (
         <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
           <ThemedSyncedLoader size={14} uniProps={foregroundColorMapping} />
@@ -125,10 +162,9 @@ function BotSessionTrack({
   busy: boolean;
 }) {
   const { t } = useTranslation();
-  const { tabId } = usePaneContext();
-  const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
   const opensInSheet = useSubagentOpensInSheet(workspaceKey);
+  const open = useOpenFromBot(serverId, workspaceId);
   const title = t("bots.session");
   const rows = useMemo<PaseoSubagentRow[]>(
     () => [
@@ -150,19 +186,9 @@ function BotSessionTrack({
     [busy, provider, sessionAgentId, title],
   );
   const openSession = useCallback(
-    (agentId: string) => {
-      if (!workspaceKey) return;
-      openPreferredWorkspaceTarget({
-        workspaceKey,
-        target: { kind: "agent", agentId },
-        source: "subagents",
-        preferences: openInSidePane,
-        parentTabId: tabId,
-        // The session never joins the Agent directory, which would otherwise prune its tab.
-        pin: true,
-      });
-    },
-    [openInSidePane, tabId, workspaceKey],
+    // The session never joins the Agent directory, which would otherwise prune its tab.
+    (agentId: string) => open({ kind: "agent", agentId }, true),
+    [open],
   );
   return (
     <ComposerTrackBar>
@@ -226,6 +252,7 @@ export function BotChat({
     },
   });
   const history = useBotHistory(serverId, workspaceId, conversation.data?.id, interactive);
+  const openTarget = useOpenFromBot(serverId, workspaceId);
   const refresh = () => {
     void history.refetch();
   };
@@ -358,7 +385,15 @@ export function BotChat({
         data={turns}
         keyExtractor={(turn) => turn.id}
         contentContainerStyle={[chatStyles.listContent, paddingBottom ? { paddingBottom } : null]}
-        renderItem={({ item }) => <BotExchange turn={item} serverId={serverId} cwd={cwd} />}
+        renderItem={({ item }) => (
+          <BotExchange
+            turn={item}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            cwd={cwd}
+            onOpen={openTarget}
+          />
+        )}
         ListEmptyComponent={
           <View style={chatStyles.emptyChat}>
             <Text style={styles.hint}>{t("bots.emptyChat")}</Text>

@@ -57,6 +57,9 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         delivery: DeliveryStatus::Delivered,
         error: None,
         created_at: "2026-10-12T00:00:00Z".into(),
+        wake: None,
+        silent: false,
+        notification_cursor: None,
     };
     store.save_turn(&turn).unwrap();
     fs::write(
@@ -153,4 +156,29 @@ fn oversized_channel_secrets_are_refused() {
 
     assert!(secrets.save(channel, &"x".repeat(4097)).is_err());
     assert!(secrets.load(channel).is_err());
+}
+
+#[test]
+fn notification_logs_are_stored_per_bot_and_removable() {
+    use domain::bot::notification::NotificationLog;
+
+    let root = tempfile::tempdir().unwrap();
+    let store = FileStore::new(root.path().join("workspace-bots"));
+    assert!(store.notification_logs().unwrap().is_empty());
+    let first = NotificationLog::new(BotId::generate());
+    let mut second = NotificationLog::new(BotId::generate());
+    second.next_sequence = 5;
+
+    store.save_notification_log(&first).unwrap();
+    store.save_notification_log(&second).unwrap();
+    store.delete_notification_log(first.bot_id).unwrap();
+    store.delete_notification_log(first.bot_id).unwrap();
+
+    assert_eq!(store.notification_logs().unwrap(), vec![second.clone()]);
+    assert!(
+        root.path()
+            .join("workspace-bots/notifications")
+            .join(format!("{}.json", second.bot_id))
+            .is_file()
+    );
 }

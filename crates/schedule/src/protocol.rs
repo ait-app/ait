@@ -1,6 +1,7 @@
 //! Schedule input and shared durable records.
 
 use chrono::{DateTime, Utc};
+use domain::ConversationId;
 use domain::schedule::{Cadence, Target};
 use serde::Deserialize;
 
@@ -13,6 +14,8 @@ pub(crate) struct Create {
     pub(crate) workspace_id: String,
     /// Root Workspace of the creating Bot's scope; immutable afterwards.
     pub(crate) bot_scope: Option<String>,
+    /// Bot conversation of the creating scoped caller; immutable afterwards.
+    pub(crate) bot_conversation: Option<ConversationId>,
     /// Optional display name.
     pub(crate) name: Option<String>,
     /// Nonempty prompt.

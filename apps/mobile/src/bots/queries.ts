@@ -22,6 +22,12 @@ export const botKeys = {
     conversationId,
   ],
   memory: (serverId: string, workspaceId: string) => ["bot-memory", serverId, workspaceId],
+  notifications: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-notifications",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
   channels: (serverId: string, workspaceId: string, builtinChannelId: string) => [
     "bot-channels",
     serverId,

@@ -3,8 +3,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use domain::bot::notification::NotificationLog;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotTurnId, ChannelId, ConversationId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId};
 use model::bot::{StorageError, Store};
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
@@ -173,19 +174,36 @@ impl Store for FileStore {
             .map_err(|_| StorageError)
     }
     fn delete_memory(&self, workspace: &str) -> Result<(), StorageError> {
-        match fs::remove_file(self.memory_path(workspace)) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(_) => Err(StorageError),
-        }
+        remove(&self.memory_path(workspace))
+    }
+    fn notification_logs(&self) -> Result<Vec<NotificationLog>, StorageError> {
+        records(&self.root.join("notifications"))
+    }
+    fn save_notification_log(&self, log: &NotificationLog) -> Result<(), StorageError> {
+        write(&self.notification_path(log.bot_id), log)
+    }
+    fn delete_notification_log(&self, bot: BotId) -> Result<(), StorageError> {
+        remove(&self.notification_path(bot))
     }
 }
 
 impl FileStore {
+    fn notification_path(&self, bot: BotId) -> PathBuf {
+        self.root.join("notifications").join(format!("{bot}.json"))
+    }
     fn memory_path(&self, workspace: &str) -> PathBuf {
         self.root
             .join("memory")
             .join(format!("{:x}.md", Sha256::digest(workspace.as_bytes())))
+    }
+}
+
+/// Remove `path`; an absent file is not an error.
+fn remove(path: &Path) -> Result<(), StorageError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(StorageError),
     }
 }
 

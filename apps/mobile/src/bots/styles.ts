@@ -69,6 +69,20 @@ export const botChatStyles = StyleSheet.create((theme) => ({
   },
   turnStatusText: { fontSize: theme.fontSize.sm, color: theme.colors.foregroundMuted },
   turnFooter: { paddingBottom: theme.spacing[4] },
+  // A wake turn's source sits where a user message would, styled as a notice, not a bubble.
+  wake: {
+    gap: theme.spacing[2],
+    padding: theme.spacing[3],
+    marginBottom: theme.spacing[2],
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface1,
+  },
+  wakeTitle: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  wakeEntry: { gap: theme.spacing[1] },
+  wakeEntryLine: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  wakeSummary: { paddingLeft: theme.spacing[6] },
   composerRail: {
     width: "100%",
     maxWidth: theme.contentMaxWidth,

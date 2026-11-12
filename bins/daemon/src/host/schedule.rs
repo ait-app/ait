@@ -7,8 +7,8 @@ use std::{
 
 use anyhow::Context;
 use bot::mcp::Scopes;
-use domain::bot::BOT_SCOPE_LABEL;
-use domain::schedule::{RunStatus, Schedule, Target};
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
+use domain::schedule::{Run, RunStatus, Schedule, Target};
 use domain::workspace::lifecycle::WorkspaceCreation;
 use domain::workspace::records::PersistedWorkspaceRecord;
 use metadata::directory::service::directory::Directory;
@@ -20,6 +20,8 @@ use schedule::ports::{Outcome, Progress, Runner};
 use schedule::service::Schedules;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
+
+use super::notifications::{Notifier, schedule_notification};
 
 /// Upper bound for one completion wait; pending permissions are re-checked after each wait.
 const FINISH_WAIT_MS: u64 = 1_000;
@@ -52,6 +54,8 @@ struct AgentRunner {
     worktrees: Arc<Mutex<Worktrees>>,
     /// Current Bot grants, re-read before every occurrence of a Bot-scoped task.
     scopes: Arc<Scopes>,
+    /// Receives one notification per settled occurrence; absent without a runtime.
+    notifier: Option<Notifier>,
 }
 struct Occurrence<'a> {
     run_id: &'a str,
@@ -60,7 +64,8 @@ struct Occurrence<'a> {
 }
 
 /// Start the schedule worker, running occurrences through `execution` in `directory`'s
-/// Workspaces; Bot-scoped tasks are re-checked against `scopes` before every occurrence.
+/// Workspaces; Bot-scoped tasks are re-checked against `scopes` before every occurrence, and
+/// every settled occurrence is offered to `notifier`.
 /// # Errors
 /// Returns data-directory, interrupted-run recovery or worker start failures.
 pub(super) fn compose(
@@ -68,7 +73,7 @@ pub(super) fn compose(
     execution: AgentExecution,
     directory: Directory,
     worktrees: Arc<Mutex<Worktrees>>,
-    scopes: Arc<Scopes>,
+    (scopes, notifier): (Arc<Scopes>, Option<Notifier>),
 ) -> anyhow::Result<Schedules> {
     let data = data
         .canonicalize()
@@ -83,6 +88,7 @@ pub(super) fn compose(
             directory,
             worktrees,
             scopes,
+            notifier,
         }),
     )
     .context("start schedule worker")
@@ -231,6 +237,13 @@ impl Runner for AgentRunner {
         }
         outcome
     }
+    fn settled(&self, schedule: &Schedule, run: &Run) {
+        if let Some(notifier) = &self.notifier
+            && let Some(notification) = schedule_notification(schedule, run)
+        {
+            notifier.offer(notification);
+        }
+    }
 }
 impl AgentRunner {
     async fn workspace(&self, id: &str) -> Result<PersistedWorkspaceRecord, &'static str> {
@@ -367,6 +380,10 @@ impl AgentRunner {
         // Bot-scoped Agents receive derived credentials instead of the host token.
         if let Some(root) = &schedule.bot_scope {
             labels[BOT_SCOPE_LABEL] = json!(root);
+        }
+        // Notifications about the Agent's own permission requests reach the creating conversation.
+        if let Some(conversation) = schedule.bot_conversation {
+            labels[BOT_CONVERSATION_LABEL] = json!(conversation);
         }
         let created=self.execution.execute("agent.create.request",json!({"config":config,"workspaceId":workspace.workspace_id,"idempotencyKey":occurrence.run_id,"labels":labels})).await.map_err(|_|"Scheduled agent creation failed")?;
         outcome.agent_id = created["agentId"].as_str().map(str::to_owned);

@@ -1114,9 +1114,10 @@
       "agent.list.request",
       "schedule.list.request",
       "checkout.status.get.request",
-      "bot.memory.get.request"
+      "bot.memory.get.request",
+      "bot.notifications.list.request"
     ],
-    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, memory revision and your permissions. Call it at the start of every turn.",
+    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, notifications this conversation has not seen yet, memory revision and your permissions. Call it at the start of every turn.",
     "inputSchema": {
       "type": "object",
       "properties": {},

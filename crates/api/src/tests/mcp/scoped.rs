@@ -7,6 +7,7 @@ use domain::bot::permissions::{BotPermissions, ToolGroup};
 use super::*;
 
 mod confinement;
+mod notifications;
 mod schedules;
 mod support;
 
@@ -312,7 +313,7 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
     assert_eq!(overview["memory"]["revision"], second.as_str());
     assert_eq!(overview["memory"]["bytes"], 20);
     assert_eq!(overview["botAgents"], json!([]));
-    assert!(overview["notifications"].is_null());
+    assert!(overview["notifications"].is_null(), "no such conversation");
     let child = scoped.subtree_agent().await;
     let other = scoped
         .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)

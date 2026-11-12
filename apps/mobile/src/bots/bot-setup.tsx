@@ -5,11 +5,12 @@ import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
-import type { BotExecution, BotPermissions, BotView } from "@ait/protocol/bot/types";
+import type { BotExecution, BotPermissions, BotView, BotWakeScope } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
+import { BotWakeScopeField, useBotNotificationsSupported } from "./bot-notifications";
 import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
 import { BotSelect } from "./bot-select";
 import { botSessionNotes, defaultBotPermissions, type BotSessionNote } from "./permissions";
@@ -163,7 +164,9 @@ export function BotSetup({
   const [draft, setDraft] = useState(() => executionDraft());
   const [clearMemory, setClearMemory] = useState(false);
   const [permissionsDraft, setPermissionsDraft] = useState<BotPermissions | null>(null);
+  const [wakeScope, setWakeScope] = useState<BotWakeScope>("own");
   const supportsPermissions = useBotPermissionsSupported(serverId);
+  const supportsNotifications = useBotNotificationsSupported(serverId);
   const { providers, error } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   // Providers load after mount, so the default profile is derived until the user edits it.
@@ -175,6 +178,7 @@ export function BotSetup({
         workspaceId,
         execution,
         ...(supportsPermissions ? { permissions } : {}),
+        ...(supportsNotifications ? { wakeScope } : {}),
         ...(clearingMemory ? { clearMemory: true } : {}),
       });
       return bot;
@@ -212,6 +216,9 @@ export function BotSetup({
           onChange={setPermissionsDraft}
           disabled={disabled}
         />
+      ) : null}
+      {supportsNotifications ? (
+        <BotWakeScopeField value={wakeScope} onChange={setWakeScope} disabled={disabled} />
       ) : null}
       <Pressable
         style={[styles.row, disabled ? styles.disabled : null]}
