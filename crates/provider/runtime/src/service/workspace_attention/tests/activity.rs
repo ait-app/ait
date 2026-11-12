@@ -161,8 +161,10 @@ fn captures_source_failures_and_prefers_attention_timestamp_over_activity() {
 #[test]
 fn running_native_children_contribute_to_the_active_workspace_root() {
     let agents = Agents::default();
-    let root = agent("root", "wks-one", "2026-09-29T00:00:00.000Z");
-    let delegated = child("delegated", "wks-two", "root");
+    let mut root = agent("root", "wks-one", "2026-09-29T00:00:00.000Z");
+    root.last_status = AgentRuntimeStatus::Idle;
+    let mut delegated = child("delegated", "wks-two", "root");
+    delegated.last_status = AgentRuntimeStatus::Idle;
     let mut archived = agent("archived", "wks-three", "2026-09-29T00:00:00.000Z");
     archived.archived_at = Some("archived".to_owned());
     *agents.0.lock().unwrap() = vec![root, delegated, archived];
@@ -202,5 +204,61 @@ fn running_native_children_contribute_to_the_active_workspace_root() {
             .unwrap()
             .iter()
             .all(|entry| entry.bucket != WorkspaceStateBucket::Running)
+    );
+}
+
+#[test]
+fn cached_native_children_of_closed_sessions_do_not_keep_workspaces_running() {
+    let agents = Agents::default();
+    let mut closed = agent("closed", "wks-one", "2026-09-29T00:05:00.000Z");
+    closed.requires_attention = false;
+    closed.attention_reason = None;
+    let mut current = agent("current", "wks-one", "2026-09-29T00:06:00.000Z");
+    current.last_status = AgentRuntimeStatus::Idle;
+    current.requires_attention = false;
+    current.attention_reason = None;
+    *agents.0.lock().unwrap() = vec![closed, current];
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let native = provider_core::ports::controls::NativeSubagent {
+        persistence: None,
+        id: "stale-child".to_owned(),
+        parent_id: "native-parent".to_owned(),
+        cwd: "/cwd".to_owned(),
+        descriptor: serde_json::json!({"id":"stale-child","status":"running","updatedAt":"2026-09-29T00:03:00.000Z"}),
+    };
+    timeline.store_subagent("closed", &native).unwrap();
+    let source = AgentWorkspaceAttention::new(Box::new(agents.clone())).with_timeline(timeline);
+
+    assert!(
+        source
+            .snapshot()
+            .unwrap()
+            .iter()
+            .all(|entry| entry.bucket == WorkspaceStateBucket::Done)
+    );
+
+    agents
+        .update("current", &|record| {
+            let mut next = record.clone();
+            next.last_status = AgentRuntimeStatus::Running;
+            next
+        })
+        .unwrap();
+    let snapshot = source.snapshot().unwrap();
+    assert_eq!(
+        snapshot
+            .iter()
+            .filter(|entry| entry.bucket == WorkspaceStateBucket::Running)
+            .count(),
+        1
+    );
+    assert_eq!(
+        snapshot
+            .iter()
+            .find(|entry| entry.bucket == WorkspaceStateBucket::Running)
+            .unwrap()
+            .changed_at
+            .as_deref(),
+        Some("2026-09-29T00:06:00.000Z")
     );
 }

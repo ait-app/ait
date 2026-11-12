@@ -91,6 +91,11 @@ impl WorkspaceActivitySource for AgentWorkspaceAttention {
                 let Some(agent) = by_id.get(parent.as_str()) else {
                     continue;
                 };
+                // Closing the native session stops its children. A cached running descriptor
+                // cannot keep the Workspace busy after its owning session has closed.
+                if agent.last_status == AgentRuntimeStatus::Closed {
+                    continue;
+                }
                 let Some(root_id) = workspace_root_id(agent, &by_id) else {
                     continue;
                 };
