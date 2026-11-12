@@ -3,6 +3,7 @@ import {
   BOT_IMESSAGE_SETUP_METHODS,
   BOT_WEBHOOK_SETUP_METHODS,
   BOT_METHODS,
+  BOT_NOTIFICATION_METHODS,
   BOT_PERMISSION_METHODS,
   BOT_QQ_SETUP_METHODS,
   BOT_TELEGRAM_SETUP_METHODS,
@@ -93,6 +94,10 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_PERMISSION_METHODS.every(has),
+      workspaceBotNotifications:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_NOTIFICATION_METHODS.every(has),
       workspaceBotFeishuSetup:
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&

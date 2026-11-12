@@ -167,6 +167,7 @@ fn caller_context_follows_the_credential_and_rejects_other_headers() {
     assert_eq!(claimed(None, Some("agent")), Ok(Some("agent")));
     let bot = scoped(CallerKind::Bot {
         bot_id: domain::BotId::generate(),
+        conversation_id: domain::ConversationId::generate(),
         session_id: "session".to_owned(),
     });
     assert_eq!(claimed(Some(&bot), None), Ok(None));

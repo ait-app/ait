@@ -8,6 +8,7 @@ import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { BotChannels } from "./bot-channels";
 import { BotLoadingSpinner } from "./loading";
+import { BotNotificationSettings } from "./bot-notifications";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
@@ -338,6 +339,13 @@ export function BotSettings({
           onSaved={setPermissionsSaved}
         />
       ) : null}
+      <BotNotificationSettings
+        serverId={serverId}
+        workspaceId={workspaceId}
+        bot={bot}
+        interactive={interactive}
+        readOnly={readOnly}
+      />
       {!readOnly && bot.state.kind !== "retired" ? (
         <View style={styles.card}>
           {toggle.error ? <Text style={styles.error}>{toggle.error.message}</Text> : null}

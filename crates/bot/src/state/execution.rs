@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::time::Instant;
 
 use domain::bot::{
     Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnMessage, TurnMessageStatus,
@@ -177,10 +178,13 @@ impl State {
         }
         for run in &mut ready {
             run.turn.status = TurnStatus::Sending;
+            run.turn.notification_cursor = self.notification_head(run.conversation.bot_id);
             self.commit_turn(&run.turn)?;
         }
+        let started = Instant::now();
         for run in &ready {
             self.running.insert(run.conversation.id, run.cancel.clone());
+            self.start_observing(run.conversation.id, started);
         }
         Ok(ready)
     }
@@ -210,15 +214,10 @@ impl State {
         error: Option<String>,
     ) -> Result<(), ErrorCode> {
         let mut turn = self.turn(id)?;
-        if matches!(
-            turn.status,
-            TurnStatus::Completed
-                | TurnStatus::Failed
-                | TurnStatus::Uncertain
-                | TurnStatus::Cancelled
-        ) {
+        if is_final(turn.status) {
             return Ok(());
         }
+        let executing = turn.status != TurnStatus::Queued;
         let messages_changed = messages
             .as_ref()
             .is_some_and(|messages| turn.messages.as_slice() != messages.as_slice());
@@ -261,10 +260,36 @@ impl State {
         {
             turn.delivery = DeliveryStatus::Delivered;
         }
-        self.commit_turn(&turn)
+        // A wake-up the Bot judged not worth a message completes without being sent anywhere.
+        if status == TurnStatus::Completed
+            && turn.wake.is_some()
+            && turn.reply.as_deref().map(str::trim) == Some(crate::instructions::SILENT_REPLY)
+        {
+            turn.silent = true;
+            turn.delivery = DeliveryStatus::Delivered;
+        }
+        // A wake turn shutdown cut short never reached the user; a user cancel stays final. Its
+        // notifications go back to the inbox before the turn settles, so a crash in between
+        // leaves it executing on disk and the next start retries it once.
+        if self.stopping
+            && turn.wake.is_some()
+            && matches!(status, TurnStatus::Cancelled | TurnStatus::Uncertain)
+        {
+            self.retry_wake(&turn)?;
+        }
+        self.commit_turn(&turn)?;
+        if status == TurnStatus::Completed {
+            self.saw_notifications(&turn);
+        }
+        if executing && is_final(status) {
+            self.settle_observations(turn.conversation_id, status == TurnStatus::Completed);
+        }
+        Ok(())
     }
     pub(crate) fn finished(&mut self, conversation: ConversationId) {
         self.running.remove(&conversation);
+        // A run that ended without settling its turn never completed it.
+        self.settle_observations(conversation, false);
     }
     pub(crate) fn cancel(&mut self, request: &TurnRequest) -> Result<Value, ErrorCode> {
         let turn = self.owned_turn(self.current(&request.workspace_id)?.id, request.turn_id)?;
@@ -317,6 +342,14 @@ impl State {
         turn.delivery = status;
         self.commit_turn(&turn)
     }
+}
+
+/// Whether a turn in `status` has settled for good.
+const fn is_final(status: TurnStatus) -> bool {
+    matches!(
+        status,
+        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Uncertain | TurnStatus::Cancelled
+    )
 }
 
 use domain::bot::Turn;

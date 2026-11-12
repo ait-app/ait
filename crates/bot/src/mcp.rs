@@ -8,9 +8,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use domain::BotId;
 use domain::bot::permissions::BotPermissions;
 use domain::bot::{BOT_SCOPE_LABEL, BotState, Catalog, SessionOwner};
+use domain::{BotId, ConversationId};
 use provider::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -30,6 +30,8 @@ pub enum CallerKind {
     Bot {
         /// Bot generation the credential was issued to.
         bot_id: BotId,
+        /// Conversation the hidden session belongs to; work it starts reports back here.
+        conversation_id: ConversationId,
         /// Hidden native session identity.
         session_id: String,
     },
@@ -192,6 +194,15 @@ impl Scopes {
         }
     }
 
+    /// Whether `workspace` had a current, active Bot in the last published catalog; a cheap
+    /// filter before the Bot worker decides authoritatively.
+    pub(crate) fn has_active_bot(&self, workspace: &str) -> bool {
+        self.read()
+            .roots
+            .get(workspace)
+            .is_some_and(|root| root.active)
+    }
+
     /// Replace the authorization snapshot and revoke Bot credentials that lost their Bot.
     pub(crate) fn publish(&self, catalog: &Catalog) {
         let roots = catalog
@@ -214,11 +225,9 @@ impl Scopes {
             .credentials
             .values()
             .filter_map(|issued| match &issued.caller.kind {
-                CallerKind::Bot { bot_id, session_id }
-                    if !inner.admits(&issued.caller.root, *bot_id) =>
-                {
-                    Some(session_id.clone())
-                }
+                CallerKind::Bot {
+                    bot_id, session_id, ..
+                } if !inner.admits(&issued.caller.root, *bot_id) => Some(session_id.clone()),
                 CallerKind::Bot { .. } | CallerKind::Subtree { .. } => None,
             })
             .collect();
@@ -255,6 +264,7 @@ impl McpScopes for Scopes {
                 root: owner.workspace_id,
                 kind: CallerKind::Bot {
                     bot_id: owner.bot_id,
+                    conversation_id: owner.conversation_id,
                     session_id: subject.agent_id.to_owned(),
                 },
             };

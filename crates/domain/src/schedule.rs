@@ -3,6 +3,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::ConversationId;
+
 /// One-time trigger, fixed interval or five-field cron cadence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
@@ -111,6 +113,12 @@ pub struct Schedule {
     /// Every occurrence re-checks that Bot's current grant and runs new Agents in its scope.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bot_scope: Option<String>,
+    /// Bot conversation whose scoped caller created the task; set only at creation.
+    ///
+    /// Run results notify the Bot in this conversation, and new Agents of a run carry it as
+    /// their origin label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot_conversation: Option<ConversationId>,
     /// Optional display name.
     pub name: Option<String>,
     /// Prompt submitted for every occurrence.

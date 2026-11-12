@@ -60,6 +60,58 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
   [ADR-227](../decisions/bot/adr-227-bot-multi-message-output.md)）。
 
+## 通知与唤醒
+
+- daemon 以 `bot::service::Bots::notify` 提交 Workspace 通知（`domain::bot::notification::Notification`），持久化后返回
+  `Admitted`、`Duplicate` 或 `Ignored`，从不等待模型。`workspaceId` 与 `scope` 都没有 `active` 的当前 Bot 时直接 `Ignored`：
+  不进入 Bot worker、不写盘、不建会话
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。
+- 两个根 Workspace 的当前 `active` Bot 各自接纳，按通知 `id` 去重：日志中已有，或 1 小时内的唤醒轮次携带过（启动时从轮次记录重建），
+  因此 15 分钟重放不会因日志淘汰而再次唤醒。全部进入有界日志
+  （128 条已结算 + 至多 64 条待唤醒）；`scope` 为本 Bot 根 Workspace，或 `wakeScope` 为 `all` 且 `workspaceId` 为根 Workspace 时进入收件箱。
+  `wakeScope` 默认 `own`，由 `bot.setup`／`bot.update` 设置、`bot.get` 返回
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。
+- 目标对话为仍属于当前 Bot、Channel 启用未删除、非 Webhook、当前 generation 无 `uncertain` 的来源对话，否则为内置 `owner` 对话（按需创建）。
+  同一目标的待唤醒通知静默 3 秒或最早一条等满 30 秒后合并为一个唤醒轮次（至多 16 条），目标有执行中或排队轮次时等待；
+  全局积压满时留在收件箱重试。每个对话每小时至多 12 个唤醒轮次，超出记为 `skipped/over_budget`。
+  解析出的目标（含 `owner`）当前 generation 有 `uncertain` 轮次时，到期条目记为 `skipped/blocked`，不再占用收件箱
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 5 节）。
+- Bot 会话经作用域 MCP 用 `wait_for_agent`、`get_agent_status` 或 `get_agent_activity` 读到 Agent 已不在执行时，`crates/api` 以
+  `Bots::observe` 记录该对话看到的 Agent 最后变更时间（快照中更晚的 `attentionTimestamp` 优先，以覆盖审批请求）。观察挂在发起读取的轮次上
+  （工具调用开始早于该对话当前轮次开始执行的读取不记录，例如已取消轮次迟返的 `wait_for_agent`），
+  该轮次 `completed` 后才生效，以其他方式结束则丢弃；生效后关于该 Agent、目标为该对话且不晚于该时间的 `agent_*` 待唤醒条目记为
+  `skipped/observed`。观察只在内存中保留，有界
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 14 节）。
+- 唤醒轮次带 `wake.notifications`，`messageId` 为 `notification:<turnId>`，无 `replyTo`，输入是 `<ait-notifications>` 围栏。
+  先提交轮次再标记日志，启动时按仍排队的唤醒轮次携带的通知 id 补标记，因此重启不丢失也不重复唤醒。用户取消或 reset 的唤醒轮次不再重新唤醒；
+  服务停止时被取消（或因此 `uncertain`）以及启动时发现仍在执行的唤醒轮次，其通知回到收件箱重试一次，被打断的轮次计入预算；
+  两种情况都先保存改回 `pending` 的日志，再写入轮次的新状态，因此其间崩溃也只重试一次
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 11 节）。
+- 来源对话由保留标签 `ait.bot.conversation`（`domain::bot::BOT_CONVERSATION_LABEL`）与定时任务字段 `botConversation` 记录。
+  Bot 会话的作用域凭据携带其对话 id；作用域 `create_agent` 为 Bot 调用者写入该对话，子树调用者复制自身 Agent 的标签；
+  作用域 `create_schedule`／`create_heartbeat` 以同样来源写入 `botConversation`，运行创建的 Agent 也带该标签。
+  调用者不能自行提供或修改二者（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+- 事件源：daemon 订阅 `SessionEvents::subscribe_committed_attention()`（焦点与中心投递之前的全部 attention），
+  按 Agent 当前记录生成 `agent:<agentId>:<timestamp>` 通知，跳过内部会话、已归档、被更新 attention 取代、无 Workspace，
+  以及定时任务运行创建的 Agent 的全部 attention（含等待审批）；终端 attention 生成 `terminal:<terminalId>:<毫秒>`，只在 `wakeScope: all` 时唤醒。
+  每次定时任务运行结算（含创建 Agent 前的失败与重启中断）经 `schedule::ports::Runner::settled` 生成一条 `schedule:<scheduleId>:<runId>` 通知，
+  心跳（已有 Agent 目标）的成功运行除外；通知经 `Bots::offer` 提交
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+- 重放：启动与广播滞后时只重放当前仍需 attention、时间戳在 15 分钟内的 Agent，由 Bot 侧按 id 去重；更早的 attention 不再唤醒。
+  定时任务 worker 启动时把 15 分钟内结束的运行再报告一次，`settled` 因此是“至少一次”
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+- 关闭：`Bots::stop` 只停止 Channel 与执行中的轮次，worker 继续把通知写入日志（不唤醒）直到 `Bots::shutdown`；`shutdown` 先等待已提交的
+  `Bots::offer`。`Api::wait_closed` 先关闭定时任务再关闭 Bot，关闭时结算的运行结果因此在重启后唤醒
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+- `workspace_overview` 的 `notifications` 是调用会话尚未在完成轮次中看到的通知（`bot.notifications.list` 的 `unseenBy`），
+  至多 20 条、`summary` 至多 512 字节，计入 24 KiB 预算；对话已不属于 Bot 时为 `null`
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
+- 唤醒轮次的最后一条回复恰为 `NO_REPLY` 时记为 `silent` 并直接 `delivered`，不向任何 Channel 发送；外部 Channel 对唤醒轮次发普通消息
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。
+- 轮次进入 `sending` 时记录 `notificationCursor`；`bot.notifications.list` 带 `unseenBy` 时只返回该对话最近完成轮次之后的通知，
+  失败的轮次不推进。暂停把待唤醒通知记为 `skipped/paused`；移除与归档删除该 Bot 的通知状态
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。
+
 ## 原生权限与会话配置
 
 - Provider 的 AgentManager 按持久化的 `internal` 与 `owner` 识别 Bot 会话，在发布前向原生 Provider 回复
@@ -151,6 +203,10 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   客户端与 Bot 工具更新时都需携带
   （[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
+- 通知日志位于 `notifications/<botId>.json`，每个 Bot 一个原子文件；旧 daemon 忽略该目录。`Bot.wakeScope` 与轮次的 `wake`、
+  `silent`、`notificationCursor` 在默认值时不写入，非默认值会使旧 daemon 拒绝加载 Bot 存储。日志非空后几乎每个轮次都会写入
+  `notificationCursor`，因此有活动的 Workspace 降级实际上需要删除 `<data>/workspace-bots/`
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 12 节）。
 
 ## 内部会话可见性
 
@@ -165,7 +221,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 访客与客户端契约
 
 - node 范围的访客只能调用 `bot.get`、`bot.channel.{list,types,status}`、`bot.conversation.list`、`bot.history.get`、
-  `bot.turn.get` 与 `bot.memory.get`，其余 `bot.*` 返回 `Forbidden`；workspace／project 范围访客不能调用 `bot.*`
+  `bot.turn.get`、`bot.memory.get` 与 `bot.notifications.list`，其余 `bot.*` 返回 `Forbidden`；workspace／project 范围访客不能调用 `bot.*`
   （[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、
   [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)）。
 - 客户端只在 Host 声明 `workspace-bots-v2` 且完整 Bot 方法可用时启用 Bot，权限设置另要求
@@ -174,3 +230,11 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)，修订
   [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md)；权限门控见
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
+- 唤醒范围设置与最近通知列表另要求 `bot.notifications.list.request`（SDK 特性 `workspaceBotNotifications`），
+  且 `bot.get` 返回 `wakeScope`；不满足时隐藏，`bot.setup` 不发送 `wakeScope`。`bot.update` 修改唤醒范围时不发送 `execution`
+  （支持通知的 Host 省略时保持不变），不会覆盖其他设备对模型的修改。列表对未知的唤醒状态与跳过原因显示通用文本
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 3、4 节）。
+- 带 `wake` 的轮次以通知列表代替用户消息展示，不显示围栏输入；同一 Workspace 的 Agent 与定时任务可打开。
+  `silent` 轮次显示为一行说明；唤醒轮次在任何状态下都不显示恰为 `NO_REPLY` 的消息，执行中也不显示可能成为该标记的前缀。
+  协议中通知 `kind` 接受未知值，旧 Host 的轮次与 Bot 视图解析不变
+  （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。

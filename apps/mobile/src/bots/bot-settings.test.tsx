@@ -7,8 +7,9 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { BotSettings } from "./bot-settings";
 import { botKeys } from "./queries";
 
-const { botRequest, canManage, confirmDialog, supported } = vi.hoisted(() => ({
+const { botRequest, canManage, confirmDialog, supported, notifications } = vi.hoisted(() => ({
   supported: { current: true },
+  notifications: { current: true },
   botRequest: vi.fn(),
   canManage: vi.fn(() => true),
   confirmDialog: vi.fn(async (_options: unknown) => true),
@@ -23,7 +24,14 @@ vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
     select({
       sessions: {
-        host: { serverInfo: { features: { workspaceBotPermissions: supported.current } } },
+        host: {
+          serverInfo: {
+            features: {
+              workspaceBotPermissions: supported.current,
+              workspaceBotNotifications: notifications.current,
+            },
+          },
+        },
       },
     }),
 }));
@@ -156,6 +164,7 @@ beforeEach(() => {
   });
   canManage.mockReturnValue(true);
   supported.current = true;
+  notifications.current = true;
   confirmDialog.mockClear();
   onRemoved.mockClear();
 });
@@ -402,5 +411,109 @@ describe("BotSettings", () => {
     fireEvent.click(screen.getByTestId("bot-memory-save"));
     expect(await screen.findByText("bots.memoryConflict")).toBeTruthy();
     expect(screen.queryByText("bots.resumeToEdit")).toBeNull();
+  });
+});
+
+describe("BotSettings notifications", () => {
+  const withWakeScope: BotView = { ...bot, wakeScope: "own" };
+  const entry = (sequence: number, wake: unknown, title: string) => ({
+    sequence,
+    admittedAt: "2026-11-12T00:00:00Z",
+    notification: {
+      id: `agent:a${sequence}:t`,
+      workspaceId: "workspace",
+      scope: "workspace",
+      kind: "agent_failed",
+      agentId: `a${sequence}`,
+      scheduleId: null,
+      runId: null,
+      terminalId: null,
+      title,
+      summary: null,
+      at: "2026-11-12T00:00:00Z",
+      conversationId: null,
+    },
+    wake,
+  });
+
+  it.each([
+    ["the host lacks the capability", false, withWakeScope],
+    ["the Bot view has no wake scope", true, bot],
+  ])("hides the section when %s", async (_case, capability, view) => {
+    notifications.current = capability;
+    renderSettings(view);
+    await screen.findByTestId("bot-memory");
+    expect(screen.queryByTestId("bot-notifications-section")).toBeNull();
+    expect(screen.queryByTestId("bot-wake-scope")).toBeNull();
+    expect(botRequest).not.toHaveBeenCalledWith(
+      "bot.notifications.list.request",
+      expect.anything(),
+    );
+  });
+
+  it("saves only the wake scope and lists skipped notifications", async () => {
+    const saved: BotView = { ...withWakeScope, wakeScope: "all" };
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.memory.get.request") return { text: "memo", revision: "r1" };
+      if (method === "bot.notifications.list.request")
+        return {
+          headSequence: 2,
+          seenSequence: null,
+          wakeScope: "own",
+          notifications: [
+            entry(6, { state: "a_newer_state" }, 'Agent "f" failed'),
+            entry(5, { state: "skipped", reason: "a_newer_reason" }, 'Agent "e" failed'),
+            entry(4, { state: "skipped", reason: "blocked" }, 'Agent "d" failed'),
+            entry(3, { state: "skipped", reason: "observed" }, 'Agent "c" failed'),
+            entry(2, { state: "skipped", reason: "over_budget" }, 'Agent "b" failed'),
+            entry(1, { state: "woke", conversationId: "c", turnId: "t" }, 'Agent "a" failed'),
+          ],
+        };
+      if (method === "bot.update.request")
+        return { bot: saved, configurationAppliesToNewSessions: true };
+      throw new Error(`unexpected ${method}`);
+    });
+    const { rerender } = renderSettings(withWakeScope);
+    expect(await screen.findByText('Agent "b" failed')).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.skipped\.over_budget/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.skipped\.observed/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.skipped\.blocked/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.skipped\.other/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.state\.other/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.state\.woke/)).toBeTruthy();
+    expect(screen.queryByText(/a_newer/)).toBeNull();
+    expect(botRequest).toHaveBeenCalledWith("bot.notifications.list.request", {
+      workspaceId: "workspace",
+      limit: 10,
+    });
+    expect(screen.getByText("bots.notifications.wakeScopeHint")).toBeTruthy();
+    const select = screen.getByTestId("bot-wake-scope") as HTMLSelectElement;
+    expect(select.value).toBe("own");
+    fireEvent.change(select, { target: { value: "all" } });
+    await waitFor(() =>
+      // Without `execution`, a model changed on another device is not reverted.
+      expect(botRequest).toHaveBeenCalledWith("bot.update.request", {
+        workspaceId: "workspace",
+        wakeScope: "all",
+      }),
+    );
+    await waitFor(() =>
+      expect(queryClient.getQueryData(botKeys.bot("host", "workspace"))).toEqual(saved),
+    );
+    rerender(settings(saved));
+    expect((screen.getByTestId("bot-wake-scope") as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("shows the wake scope read-only to guests", async () => {
+    canManage.mockReturnValue(false);
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.memory.get.request") return { text: "memo", revision: "r1" };
+      if (method === "bot.notifications.list.request")
+        return { headSequence: 0, seenSequence: null, wakeScope: "all", notifications: [] };
+      throw new Error(`unexpected ${method}`);
+    });
+    renderSettings({ ...withWakeScope, wakeScope: "all" });
+    expect(await screen.findByText("bots.notifications.empty")).toBeTruthy();
+    expect(screen.getByTestId("bot-wake-scope")).toHaveProperty("disabled", true);
   });
 });

@@ -7,9 +7,10 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { BotSetup } from "./bot-setup";
 import { botKeys } from "./queries";
 
-const { botRequest, supported, snapshotEntries } = vi.hoisted(() => ({
+const { botRequest, supported, notifications, snapshotEntries } = vi.hoisted(() => ({
   botRequest: vi.fn(),
   supported: { current: false },
+  notifications: { current: false },
   snapshotEntries: { current: [] as unknown[] },
 }));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
@@ -19,7 +20,14 @@ vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
     select({
       sessions: {
-        server: { serverInfo: { features: { workspaceBotPermissions: supported.current } } },
+        server: {
+          serverInfo: {
+            features: {
+              workspaceBotPermissions: supported.current,
+              workspaceBotNotifications: notifications.current,
+            },
+          },
+        },
       },
     }),
 }));
@@ -110,6 +118,7 @@ const providerEntries = () => [
 
 beforeEach(() => {
   supported.current = false;
+  notifications.current = false;
   snapshotEntries.current = providerEntries();
 });
 
@@ -292,4 +301,26 @@ it("degraded_bot_provider_shows_capability_notes", () => {
   expect(notes()).toEqual([]);
   fireEvent.change(screen.getByTestId("bot-provider"), { target: { value: "minimax" } });
   expect(notes()).toEqual([]);
+});
+
+it("setup_omits_wake_scope_on_old_hosts", async () => {
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  expect(screen.queryByTestId("bot-wake-scope")).toBeNull();
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1]).not.toHaveProperty("wakeScope");
+});
+
+it("setup_sends_the_chosen_wake_scope", async () => {
+  notifications.current = true;
+  botRequest.mockResolvedValue({ bot: { ...bot, wakeScope: "all" }, created: true });
+  renderSetup();
+  const select = screen.getByTestId("bot-wake-scope") as HTMLSelectElement;
+  expect(select.value).toBe("own");
+  expect(screen.getByText("bots.notifications.wakeScopeHint")).toBeTruthy();
+  fireEvent.change(select, { target: { value: "all" } });
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1]).toMatchObject({ wakeScope: "all" });
 });

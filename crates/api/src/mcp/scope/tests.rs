@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use domain::BotId;
 use domain::bot::BOT_LABEL_PREFIX;
 use domain::bot::permissions::ToolGroup;
+use domain::{BotId, ConversationId};
 
 use super::*;
 
 const ROOT: &str = "wks_root";
+/// Conversation of the Bot session built by [`bot`].
+const CONVERSATION: &str = "33333333-3333-4333-8333-333333333333";
 
 fn scope(kind: CallerKind, permissions: BotPermissions) -> Scope {
     Scope {
@@ -24,6 +26,7 @@ fn scope(kind: CallerKind, permissions: BotPermissions) -> Scope {
 fn bot() -> CallerKind {
     CallerKind::Bot {
         bot_id: BotId::generate(),
+        conversation_id: CONVERSATION.parse().unwrap(),
         session_id: "session".to_owned(),
     }
 }
@@ -123,17 +126,28 @@ fn codex_agent(id: &str, workspace: &str) -> Value {
     json!({"id":id,"provider":"codex","workspaceId":workspace})
 }
 
+fn origin() -> Option<ConversationId> {
+    CONVERSATION.parse().ok()
+}
+
 #[test]
 fn bot_created_agents_are_root_level_and_labeled() {
     let mut arguments = json!({"provider":"codex/gpt","title":"Fix","initialPrompt":"go"});
-    rewrite_create_agent(&capped_scope(bot()), None, &mut arguments).unwrap();
+    rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut arguments).unwrap();
     assert_eq!(arguments["workspaceId"], ROOT);
     assert_eq!(arguments["labels"][BOT_SCOPE_LABEL], ROOT);
+    assert_eq!(arguments["labels"][BOT_CONVERSATION_LABEL], CONVERSATION);
     assert_eq!(arguments["settings"]["modeId"], "auto");
     assert!(arguments.get("callerAgentId").is_none());
 
     let mut inherited = json!({"provider":"codex/gpt","labels":{"topic":"x"}});
-    rewrite_create_agent(&capped_scope(subtree()), Some(WORKTREE), &mut inherited).unwrap();
+    rewrite_create_agent(
+        &capped_scope(subtree()),
+        Some(WORKTREE),
+        None,
+        &mut inherited,
+    )
+    .unwrap();
     assert_eq!(inherited["workspaceId"], WORKTREE);
     assert_eq!(
         inherited["labels"],
@@ -141,13 +155,39 @@ fn bot_created_agents_are_root_level_and_labeled() {
     );
 
     let mut explicit = json!({"provider":"codex/gpt","workspaceId":WORKTREE});
-    rewrite_create_agent(&capped_scope(bot()), None, &mut explicit).unwrap();
+    rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut explicit).unwrap();
     assert_eq!(explicit["workspaceId"], WORKTREE);
     let mut outside = json!({"provider":"codex/gpt","workspaceId":"wks_other"});
     assert_eq!(
-        rewrite_create_agent(&capped_scope(bot()), None, &mut outside),
+        rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut outside),
         Err(ErrorCode::Forbidden)
     );
+}
+
+#[test]
+fn the_origin_conversation_is_the_bot_session_or_the_subtree_callers_label() {
+    let bot = capped_scope(bot());
+    assert_eq!(bot.origin(None), origin());
+    let labelled = json!({"id":"child","labels":{BOT_CONVERSATION_LABEL:CONVERSATION}});
+    assert_eq!(bot.origin(Some(&json!({"labels":{}}))), origin());
+
+    let subtree = capped_scope(subtree());
+    assert_eq!(subtree.origin(Some(&labelled)), origin());
+    for context in [
+        json!({"id":"child","labels":{BOT_SCOPE_LABEL:ROOT}}),
+        json!({"id":"child","labels":{BOT_CONVERSATION_LABEL:"not-a-conversation"}}),
+        json!({"id":"child"}),
+    ] {
+        assert_eq!(subtree.origin(Some(&context)), None, "{context}");
+    }
+    assert_eq!(subtree.origin(None), None);
+
+    let mut schedule = json!({"provider":"codex/model"});
+    record_origin(subtree.origin(Some(&labelled)), &mut schedule);
+    assert_eq!(schedule["botConversation"], CONVERSATION);
+    let mut unlabelled = json!({"provider":"codex/model"});
+    record_origin(None, &mut unlabelled);
+    assert!(unlabelled.get("botConversation").is_none());
 }
 
 #[test]
@@ -161,13 +201,13 @@ fn mode_cap_covers_every_execution_entry() {
     ] {
         let mut rewritten = arguments.clone();
         assert_eq!(
-            rewrite_create_agent(&bot, None, &mut rewritten),
+            rewrite_create_agent(&bot, None, None, &mut rewritten),
             Err(ErrorCode::Forbidden),
             "{arguments}"
         );
     }
     let mut fast = json!({"provider":"codex/gpt","settings":{"features":{"fast_mode":true}}});
-    rewrite_create_agent(&bot, None, &mut fast).unwrap();
+    rewrite_create_agent(&bot, None, None, &mut fast).unwrap();
 
     let target = codex_agent("agent", ROOT);
     let claude = json!({"id":"agent","provider":"claude","workspaceId":ROOT});
@@ -246,11 +286,16 @@ fn unlisted_tools_reserved_labels_and_cwd_are_rejected() {
         reserved_labels(&json!({"labels":reserved}), BOT_LABEL_PREFIX),
         Err(ErrorCode::Forbidden)
     );
+    let origin = json!({BOT_CONVERSATION_LABEL:CONVERSATION});
+    assert_eq!(
+        reserved_labels(&json!({"labels":origin}), BOT_LABEL_PREFIX),
+        Err(ErrorCode::Forbidden)
+    );
     reserved_labels(&json!({"labels":{"ait.botany":"y"}}), BOT_LABEL_PREFIX).unwrap();
     reserved_labels(&json!({}), BOT_LABEL_PREFIX).unwrap();
     let mut create = json!({"provider":"codex/gpt","labels":reserved});
     assert_eq!(
-        rewrite_create_agent(&capped_scope(bot()), None, &mut create),
+        rewrite_create_agent(&capped_scope(bot()), None, None, &mut create),
         Err(ErrorCode::Forbidden)
     );
     let update = json!({"agentId":"agent","labels":{BOT_SCOPE_LABEL:"wks_other"}});
@@ -397,11 +442,16 @@ fn scoped_schedules_record_the_bot_scope_and_heartbeats_need_an_agent_caller() {
 
 #[test]
 fn scoped_callers_cannot_write_any_ait_label() {
-    for label in ["ait.guest.owner", "ait.botany", "ait.x"] {
+    for label in [
+        "ait.guest.owner",
+        "ait.botany",
+        "ait.x",
+        BOT_CONVERSATION_LABEL,
+    ] {
         let labels = json!({ label: "y" });
         let mut create = json!({"provider":"codex/gpt","labels":labels});
         assert_eq!(
-            rewrite_create_agent(&capped_scope(bot()), None, &mut create),
+            rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut create),
             Err(ErrorCode::Forbidden),
             "{label}"
         );
@@ -417,5 +467,5 @@ fn scoped_callers_cannot_write_any_ait_label() {
         );
     }
     let mut create = json!({"provider":"codex/gpt","labels":{"team":"ait"}});
-    rewrite_create_agent(&capped_scope(bot()), None, &mut create).unwrap();
+    rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut create).unwrap();
 }

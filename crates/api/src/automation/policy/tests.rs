@@ -28,6 +28,7 @@ async fn only_webhook_and_turn_methods_pass() {
         "bot.message.send.request",
         "bot.conversation.open.request",
         "bot.history.get.request",
+        "bot.notifications.list.request",
         "bot.channel.update.request",
         "terminal.create.request",
         "automation.settings.set.request",

@@ -28,6 +28,7 @@
 重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
 当前通过持久查询读取结果，尚无 Bot 流式事件订阅。
+Bot 启动的工作结束时，Bot 会被唤醒并在发起它的对话中回报，见下文“通知与唤醒”。
 
 ## 在 Ait 中使用
 
@@ -36,11 +37,84 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
 1. 开启测试功能后，在 Workspace 新建菜单选择 Bot；每个 Workspace 只有一个 Bot 标签页，重复打开会聚焦已有标签页。
 2. 未设置时显示设置向导：选择 Provider、模型、权限模式与推理强度后提交；可勾选“清空已保存的记忆”，否则保留之前移除的 Bot 留下的记忆。
    访客只看到未配置提示。
-3. 设置完成后进入对话，轮次显示状态与错误。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
+3. 设置完成后进入对话，轮次显示状态与错误。由通知唤醒的轮次不显示为用户消息，见下文“通知与唤醒”。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
    目录缺失导致的暂停会说明原因。暂停期间记忆保存、Channel 新增与启停也停用，恢复后才能修改。
-4. 在设置页可修改模型（对新对话生效）、暂停或恢复、按 revision 编辑记忆、管理 Telegram 与飞书 Channel、移除 Bot。
+4. 在设置页可修改模型（对新对话生效）、选择唤醒范围并查看最近的通知、暂停或恢复、按 revision 编辑记忆、管理 Telegram 与飞书 Channel、移除 Bot。
    飞书 Channel 默认扫码接入，也可手动填写凭据，见下文“飞书接入”；Telegram 按页面引导粘贴 Token 并点击 Start，见下文“Telegram 接入”。两者都可改用 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用并配置允许的发送者；通过环境变量引用新建的 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
 5. 访客在所有视图中只读。重新设置被移除的 Bot（包括在其他设备上）得到空的对话与 Channel，客户端不会显示旧 Bot 的缓存内容。
+
+## 通知与唤醒
+
+处于 `active` 的 Bot 接收所在 Workspace 的事件通知，并据此执行“唤醒轮次”，在发起该工作的对话中回报
+（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)）。未设置或暂停的 Bot 不接收通知，不产生任何调用。
+
+**产生通知的事件**
+
+- Agent 完成、失败或等待审批。Bot 自身的会话与已归档的 Agent 不产生通知。
+- 定时任务每次运行的结果，成功或失败都有，包括创建 Agent 之前就失败的运行（如 `REVOKED`）。
+  定时任务运行创建的 Agent 的完成、失败与等待审批都不单独通知，以运行结果为准：运行器遇到审批请求会取消该 Agent 并使运行失败，
+  运行结果说明它在等待审批。
+- 心跳（目标为已有 Agent 的定时任务）运行成功时不另发运行结果，由该 Agent 自己的完成通知报告；运行失败仍通知。
+- 终端 attention。
+
+**唤醒范围**
+
+- “仅自己的工作”（`wakeScope: own`，默认）：Bot 启动的 Agent（含这些 Agent 再启动的 Agent）与 Bot 创建的定时任务的通知会唤醒 Bot。
+- “此 Workspace 中的全部通知”（`all`）：Workspace 中其他 Agent、定时任务与终端的通知也会唤醒，模型调用会相应增多。终端通知只在此范围下唤醒。
+- 范围外的通知只记入日志，Bot 在下一轮通过 `workspace_overview` 看到，不调用模型。
+- 在设置页“通知”中修改，设置向导中也可选择；修改立即作用于之后的通知，访客只读。Host 未实现 `bot.notifications.list.request` 时客户端不显示该设置。
+
+**回复去向**
+
+- 唤醒轮次在发起该工作的对话中执行：在 Telegram 交办的任务，结果回到该 Telegram 会话。来源记录在 Agent 的保留标签
+  `ait.bot.conversation` 与定时任务的 `botConversation` 字段，由 daemon 写入；Bot、它启动的 Agent 与 Ait MCP 调用都不能写入或修改。
+- 没有来源（例如用户自己启动的 Agent）、来源对话已不可用（Channel 停用或删除、对话有 `uncertain` 轮次），
+  或来源是 Webhook Channel 时，回到 Ait 主对话，即 Bot 标签页显示的对话。Webhook 只能返回调用方发起的轮次的结果，无法主动推送。
+- 外部平台的投递方式：Telegram 发到原聊天与话题；飞书发到原聊天，不在话题内回复；QQ 以主动消息发送，
+  受平台主动消息配额限制，被拒时投递记为 `uncertain`；微信不带上下文 token 发送。
+
+**合并与限额**
+
+- 同一目标对话的通知在最后一条到达后静默 3 秒，或最早一条已等待 30 秒时合并为一个唤醒轮次；
+  目标对话有执行中或排队的输入时继续累积，结束后再唤醒。每轮至多 16 条，其余进入下一轮。
+- 每个对话每小时至多 12 个唤醒轮次。超出后通知不再唤醒，记为未送达，在设置页“最近的通知”中可见，并出现在该对话下一轮的概览里。
+- 每个 Bot 至多 64 条待唤醒通知，满时新通知记为未送达。
+- 目标对话因中断（有 `uncertain` 轮次）需要重置时，通知不再等待，记为未送达（“对话已中断”），其他对话照常唤醒；
+  重置该对话后，这些通知出现在它下一轮的概览里。
+- Bot 在一轮中用 `wait_for_agent`、`get_agent_status` 或 `get_agent_activity` 读到某个 Agent 已结束时，该轮正常完成后，同一对话中关于该 Agent、
+  不晚于所读状态的通知不再唤醒（设置页显示为“未重复唤醒”），避免把刚回报过的结果再报一次。
+  该轮失败、被取消、中断或遇到 daemon 重启时，用户没有收到回报，这些通知照常唤醒；
+  被取消的轮次里还在等待的 `wait_for_agent` 若到下一轮执行时才返回，不算作下一轮看过该结果，通知仍会唤醒。
+  更晚的通知、其他 Agent、其他对话照常唤醒；daemon 重启后可能再唤醒一次。
+  审批请求只有用 `wait_for_agent` 读到时才不再唤醒，用另外两个工具读到时仍会再唤醒一次。
+
+**无需告知**：Bot 判断没有需要告诉用户的内容时以 `NO_REPLY` 作答，该轮记为 `silent`，不向任何外部 Channel 发送；
+Ait 中显示为一行“无需告知”，流式输出期间也不显示该标记。只有唤醒轮次适用，用户消息的回复照常投递。
+
+**在 Ait 中查看**：唤醒轮次在对话中显示为“Workspace 动态”标题和通知列表（每条的标题与摘要），而不是用户消息；
+同一 Workspace 的 Agent 与定时任务可点击打开。设置页“最近的通知”列出最近 10 条通知及其去向（已唤醒、等待唤醒、不在唤醒范围内、未送达及原因）。
+Bot 标签页尚不能查看外部对话，因此回到 Telegram 等平台的唤醒轮次只在该平台可见。
+
+**暂停与重启**
+
+- 暂停时等待中的通知记为未送达，恢复后不补发；暂停期间不接收新通知。
+- 重启不会丢失已接纳的通知，也不会重复唤醒：已唤醒过的通知在 1 小时内再次到达都按重复处理。
+  启动时只重放 15 分钟内仍需关注的 Agent attention，以及 15 分钟内结束的定时任务运行，更早的不再唤醒。
+- 唤醒轮次执行中 daemon 关闭或崩溃时，这些通知在重启后重新唤醒一次；崩溃会使原对话需要重置，因此重新唤醒发生在 Ait 主对话中。
+  用户自己取消或重置对话取消的唤醒轮次不会重来。
+- daemon 关闭时被取消的定时任务运行，其结果在关闭前写入通知日志，重启后唤醒 Bot。只有在结算后、写入通知前崩溃，
+  且 15 分钟后才重启时，该结果不会产生通知。
+
+**已知限制**：`archiveOnFinish: false` 的定时任务 Agent 之后被复用时，其通知不再产生，因为它仍带定时任务运行标签。
+心跳运行失败而目标 Agent 本身也报告失败时，Bot 会收到两条通知，通常合并在同一轮中。
+
+**降级**：回退到不支持通知的旧版 daemon 时，只要 Bot 数据中有唤醒范围“全部”、唤醒轮次或带通知游标的轮次，daemon 就会因 Bot 数据无法加载而启动失败
+（`start Bot service`）。Workspace 中任何 Agent 结束都会记入通知日志，此后 Bot 的每一轮几乎都会带上通知游标，
+所以在有活动的 Workspace 中，降级实际上需要删除 `<data>/workspace-bots/`（Bot 的配置、对话与记忆随之删除）。
+详见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 12 节。
+
+**验证范围**：以上规则由 daemon 与客户端的单元和组件测试覆盖；唤醒回复尚未在 Telegram、飞书、QQ、微信等真实平台上验收，
+移动端与桌面界面也未在真机上检查。
 
 ## 权限
 
@@ -89,7 +163,7 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 
 ### Bot 启动的 Agent
 
-Bot 创建的 Agent 带保留标签 `ait.bot.scope`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具；
+Bot 创建的 Agent 带保留标签 `ait.bot.scope` 与记录发起对话的 `ait.bot.conversation`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具；
 作用域调用者不能写入任何 `ait.` 前缀的标签。Bot 暂停期间这些 Agent 保留完整授权（只有 Bot 自身的凭据失效）；Bot 移除后降为只读观察；
 同一 Workspace 设置新 Bot 后，新 Bot 的授权适用于该 Workspace 已有的这些 Agent 与定时任务。
 
@@ -201,7 +275,7 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
 其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.{list,reset}`、
-`bot.turn.cancel`、`bot.memory.get`。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
+`bot.turn.cancel`、`bot.memory.get`，以及读取通知日志的 `bot.notifications.list`（可选 `unseenBy` 只返回某对话尚未在完成轮次中看到的通知）。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 Channel 能力以 `bot.channel.types.request` 为准；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见
 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md) 与

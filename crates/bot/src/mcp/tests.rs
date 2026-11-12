@@ -28,6 +28,7 @@ fn active_bot(workspace: &str) -> Bot {
         created_at: "2026-11-06T00:00:00Z".to_owned(),
         permissions: BotPermissions::default(),
         workspaces: BTreeSet::new(),
+        wake_scope: domain::bot::WakeScope::Own,
     }
 }
 
@@ -117,9 +118,13 @@ fn bot_credential_is_rejected_after_pause_remove_or_new_generation() {
     let token = bot_token(scopes.access(&session));
     let caller = scopes.resolve(token.expose_secret()).unwrap();
     assert_eq!(caller.root, WORKSPACE);
+    let conversation = owner["conversationId"].as_str().unwrap();
     assert!(matches!(
         caller.kind,
-        CallerKind::Bot { bot_id, ref session_id } if bot_id == bot.id && session_id == "session"
+        CallerKind::Bot { bot_id, conversation_id, ref session_id }
+            if bot_id == bot.id
+                && conversation_id.to_string() == conversation
+                && session_id == "session"
     ));
 
     bot.state = BotState::Paused {

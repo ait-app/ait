@@ -8,6 +8,7 @@ mod catalog;
 mod hub;
 #[cfg(unix)]
 mod mcp_socket;
+mod notifications;
 mod push;
 mod schedule;
 mod voice;
@@ -414,7 +415,7 @@ fn compose_services(
     let (schedules, bots) = compose_background(
         config,
         &agent_execution,
-        (&storage.workspaces, &storage.projects),
+        (&storage.workspaces, &storage.projects, &storage.agents),
         (&directory, &worktrees, scopes),
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
@@ -475,25 +476,37 @@ fn compose_workspace_labels(
     ))?)
 }
 
+/// Compose the Bot and schedule services and feed Agent attention, terminal attention and
+/// schedule run results into the Bots' notification inbox.
 fn compose_background(
     config: &Config,
     execution: &AgentExecution,
-    registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
+    (workspaces, projects, agents): (
+        &FileBackedWorkspaceRegistry,
+        &FileBackedProjectRegistry,
+        &FileBackedAgentRuntimeRegistry,
+    ),
     (directory, worktrees, scopes): (&Directory, &Arc<Mutex<Worktrees>>, Arc<::bot::mcp::Scopes>),
 ) -> anyhow::Result<(::schedule::service::Schedules, ::bot::service::Bots)> {
     let bots = bot::compose(
         &config.data_dir,
-        registries.0,
-        registries.1,
+        workspaces,
+        projects,
         execution.clone(),
         scopes.clone(),
     )?;
+    let notifier = notifications::Notifier::current(bots.clone());
+    if let Some(notifier) = &notifier {
+        notifier.forward_attention(&execution.events(), Arc::new(agents.clone()));
+    } else {
+        tracing::warn!("no async runtime; Workspace Bot notifications are disabled");
+    }
     let schedules = schedule::compose(
         &config.data_dir,
         execution.clone(),
         directory.clone(),
         worktrees.clone(),
-        scopes,
+        (scopes, notifier),
     )?;
     Ok((schedules, bots))
 }

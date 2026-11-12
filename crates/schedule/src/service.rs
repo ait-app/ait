@@ -36,6 +36,13 @@ use crate::ports::{Checkpoint, Outcome, Progress, Runner};
 use crate::protocol::Create;
 
 type Reply = oneshot::Sender<Result<Value, Error>>;
+
+/// How long after an occurrence ended a restarted worker reports it again.
+///
+/// A settlement saved while the daemon stopped, or just before a crash, may never have reached
+/// the runner's observer; reporting it again on start delivers it. The daemon's Bot
+/// notifications replay Agent attention over the same 15 minutes and dedupe by run id.
+const REOFFER_WINDOW: chrono::TimeDelta = chrono::TimeDelta::minutes(15);
 enum Command {
     Request(String, Value, Reply),
 }
@@ -58,11 +65,16 @@ impl fmt::Debug for Schedules {
     }
 }
 impl Schedules {
-    /// Open state, recover interrupted runs, and start the one-second scheduler.
+    /// Open state, recover interrupted runs, report the occurrences that ended within
+    /// [`REOFFER_WINDOW`] to the runner again, and start the one-second scheduler.
     /// # Errors
     /// Returns storage or worker initialization failures.
     pub fn spawn(store: Box<dyn Store>, runner: Arc<dyn Runner>) -> Result<Self, Error> {
-        let engine = Engine::open(store, Utc::now())?;
+        let now = Utc::now();
+        let engine = Engine::open(store, now)?;
+        for (id, run_id) in engine.ended_since(now - REOFFER_WINDOW) {
+            report(&engine, runner.as_ref(), &id, &run_id);
+        }
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -175,7 +187,19 @@ fn launch(
         }
     }
 }
-fn settle(engine: &mut Engine, mut finished: Finished) -> Result<(), Box<Finished>> {
+/// Hand saved occurrence `run_id` of schedule `id` to the runner's settlement observer.
+fn report(engine: &Engine, runner: &dyn Runner, id: &str, run_id: &str) {
+    if let Ok(schedule) = engine.find(id)
+        && let Some(run) = schedule.runs.iter().find(|run| run.id == run_id)
+    {
+        runner.settled(schedule, run);
+    }
+}
+fn settle(
+    engine: &mut Engine,
+    runner: &dyn Runner,
+    mut finished: Finished,
+) -> Result<(), Box<Finished>> {
     if engine
         .finish(
             &finished.id,
@@ -188,6 +212,7 @@ fn settle(engine: &mut Engine, mut finished: Finished) -> Result<(), Box<Finishe
     {
         return Err(Box::new(finished));
     }
+    report(engine, runner, &finished.id, &finished.run_id);
     if let Some(reply) = finished.reply.take() {
         let _ = reply.send(
             engine
@@ -328,9 +353,9 @@ async fn serve(
                 None=>break,
             },
             Some(result) = validations.join_next(), if !validations.is_empty() => { if let Ok(prepared) = result { apply_prepared(&mut engine, prepared); } },
-            Some(result)=jobs.join_next(),if !jobs.is_empty()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,finished){pending.push(*finished);}},
+            Some(result)=jobs.join_next(),if !jobs.is_empty()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,runner.as_ref(),finished){pending.push(*finished);}},
             _=tick.tick()=>{
-                pending=pending.into_iter().filter_map(|finished|settle(&mut engine,finished).err().map(|entry|*entry)).collect();
+                pending=pending.into_iter().filter_map(|finished|settle(&mut engine,runner.as_ref(),finished).err().map(|entry|*entry)).collect();
                 if pending.is_empty()&& let Ok(due)=engine.due(Utc::now()){for id in due {launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,false,None));}}
             }
         }
@@ -341,14 +366,14 @@ async fn serve(
         while !jobs.is_empty() {
             tokio::select! {
                 Some(update)=updates.recv()=>{let result=engine.checkpoint(&update);let _=update.reply.send(result);},
-                Some(result)=jobs.join_next()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,finished){pending.push(*finished);}}
+                Some(result)=jobs.join_next()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,runner.as_ref(),finished){pending.push(*finished);}}
             }
         }
     };
     let _ = tokio::time::timeout(Duration::from_secs(5), drained).await;
     jobs.abort_all();
     for finished in pending {
-        let _ = settle(&mut engine, finished);
+        let _ = settle(&mut engine, runner.as_ref(), finished);
     }
 }
 #[cfg(test)]

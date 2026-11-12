@@ -533,3 +533,135 @@ describe("Bot conversation presentation", () => {
     );
   });
 });
+
+describe("Bot wake turns", () => {
+  const notification = {
+    id: "agent:a1:2026-11-12T00:00:00Z",
+    workspaceId: "workspace",
+    scope: "workspace",
+    kind: "agent_finished",
+    agentId: "a1",
+    scheduleId: null,
+    runId: null,
+    terminalId: null,
+    title: 'Agent "fix tests" finished',
+    summary: "All green",
+    at: "2026-11-12T00:00:00Z",
+    conversationId: conversation.id,
+  };
+  const wakeTurn: BotTurn = {
+    ...receipt,
+    id: "55555555-5555-4555-8555-555555555555",
+    messageId: "notification:55555555-5555-4555-8555-555555555555",
+    sequence: 2,
+    text: "<ait-notifications>machine text</ait-notifications>",
+    reply: "Tests pass now.",
+    messages: [{ id: "m1", text: "Tests pass now.", status: "completed" }],
+    wake: {
+      notifications: [
+        notification,
+        {
+          ...notification,
+          id: "schedule:s1:r1",
+          kind: "schedule_failed",
+          agentId: "a2",
+          scheduleId: "s1",
+          runId: "r1",
+          title: 'Schedule "nightly" run failed',
+          summary: null,
+        },
+        {
+          ...notification,
+          id: "agent:elsewhere:1",
+          workspaceId: "other-workspace",
+          agentId: "elsewhere",
+          title: 'Agent "elsewhere" finished',
+          summary: null,
+        },
+      ],
+    },
+  };
+  function serve(turns: BotTurn[]) {
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.conversation.open.request") return { conversation };
+      if (method === "bot.history.get.request") return { turns, nextSequence: null };
+      if (method === "bot.turn.get.request") return { turn: turns.find(isPendingTurn) };
+      throw new Error(`Unexpected ${method}`);
+    });
+  }
+  function isPendingTurn(turn: BotTurn) {
+    return turn.status === "running";
+  }
+
+  it("shows what woke the Bot instead of a user message and links subjects in this workspace", async () => {
+    serve([receipt, wakeTurn]);
+    renderChat({});
+    await screen.findByTestId(`bot-wake-${wakeTurn.id}`);
+    expect(screen.queryByText(wakeTurn.text)).toBeNull();
+    // Only the legacy user turn renders a user bubble.
+    expect(screen.getAllByTestId("user-message").map((node) => node.textContent)).toEqual([
+      "hello",
+    ]);
+    expect(screen.getByText("All green")).toBeTruthy();
+    expect(screen.getByText("Tests pass now.")).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`bot-wake-open-${notification.id}`));
+    fireEvent.click(screen.getByTestId("bot-wake-open-schedule:s1:r1"));
+    expect(openPreferredWorkspaceTarget.mock.calls.map(([input]) => input.target)).toEqual([
+      { kind: "agent", agentId: "a1" },
+      { kind: "schedule", scheduleId: "s1" },
+    ]);
+    expect(openPreferredWorkspaceTarget.mock.calls[0][0]).not.toHaveProperty("pin");
+    // A subject in another workspace of the Bot's scope stays plain text.
+    expect(screen.getByText('Agent "elsewhere" finished')).toBeTruthy();
+    expect(screen.queryByTestId("bot-wake-open-agent:elsewhere:1")).toBeNull();
+  });
+
+  it("collapses a silent wake turn to one note without the sentinel", async () => {
+    serve([
+      {
+        ...wakeTurn,
+        reply: "NO_REPLY",
+        messages: [{ id: "m1", text: " NO_REPLY\n", status: "completed" }],
+        silent: true,
+      },
+    ]);
+    renderChat({});
+    await screen.findByTestId(`bot-silent-${wakeTurn.id}`);
+    expect(screen.getByText("bots.notifications.silent")).toBeTruthy();
+    expect(screen.queryByText(/NO_REPLY/)).toBeNull();
+    expect(screen.queryAllByTestId("assistant-message")).toHaveLength(0);
+  });
+
+  it("never flashes the sentinel while a wake turn streams", async () => {
+    const running = (text: string): BotTurn => ({
+      ...wakeTurn,
+      status: "running",
+      delivery: "pending",
+      reply: null,
+      messages: [{ id: "m1", text, status: "streaming" }],
+    });
+    serve([running("NO_REP")]);
+    renderChat({});
+    await screen.findByTestId(`bot-turn-status-${wakeTurn.id}`);
+    expect(screen.queryAllByTestId("assistant-message")).toHaveLength(0);
+    cleanup();
+    queryClient.clear();
+    serve([running("Now")]);
+    renderChat({});
+    expect(await screen.findByText("Now")).toBeTruthy();
+  });
+
+  it("keeps a user turn that replies with the sentinel text unchanged", async () => {
+    serve([
+      {
+        ...receipt,
+        reply: "NO_REPLY",
+        messages: [{ id: "m1", text: "NO_REPLY", status: "completed" }],
+      },
+    ]);
+    renderChat({});
+    expect(await screen.findByText("NO_REPLY")).toBeTruthy();
+    expect(screen.getByTestId("user-message").textContent).toBe("hello");
+    expect(screen.queryByTestId(`bot-silent-${receipt.id}`)).toBeNull();
+  });
+});

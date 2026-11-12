@@ -130,3 +130,6 @@
   `archiveOnFinish` 只归档该次新建的 Agent，所属 Workspace 不被归档；只有旧版未绑定任务保留
   创建并归档独立 Workspace 的分支（[ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)、
   [任务手册](../operations/schedules.md)）。
+- 每次运行结算写盘后（含打开存储时记为失败的中断运行）调用 `schedule::ports::Runner::settled`；worker 启动时对 15 分钟内结束的运行再调用一次，
+  弥补关闭或崩溃前未送达的报告，观察者按运行 id 去重。daemon 据此向 Workspace Bot
+  提交运行结果通知（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。

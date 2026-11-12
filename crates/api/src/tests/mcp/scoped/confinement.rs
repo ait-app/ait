@@ -2,7 +2,8 @@
 
 use std::time::Duration;
 
-use domain::bot::BOT_SCOPE_LABEL;
+use domain::ConversationId;
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
 
 use super::support::{forbidden, structured};
 use super::*;
@@ -175,13 +176,15 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
 async fn subtree_child_inherits_scope_and_cannot_escalate() {
     let scoped = Scoped::start().await;
     scoped.setup(codex_modes(&["auto"])).await;
-    let bot = scoped.bot_credential();
+    let conversation = ConversationId::generate().to_string();
+    let bot = scoped.bot_credential_in(conversation.parse().unwrap());
     let created = scoped
         .call(&bot, None, "create_agent", create("Child"))
         .await;
     let child = id(&created, "/agent/id");
     let labels = scoped.labels(&child).await;
     assert_eq!(labels[BOT_SCOPE_LABEL], scoped.workspace);
+    assert_eq!(labels[BOT_CONVERSATION_LABEL], conversation, "{labels}");
     assert!(labels.get(PARENT_LABEL).is_none(), "{labels}");
 
     let credential = scoped.subtree_credential(&child);
@@ -211,7 +214,29 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     );
     let labels = scoped.labels(&grandchild).await;
     assert_eq!(labels[BOT_SCOPE_LABEL], scoped.workspace);
+    assert_eq!(labels[BOT_CONVERSATION_LABEL], conversation, "{labels}");
     assert_eq!(labels[PARENT_LABEL], child);
+    // Neither the subtree nor the host may name another origin conversation.
+    let mut forged = create("Forged");
+    forged["labels"] = json!({BOT_CONVERSATION_LABEL:ConversationId::generate()});
+    forbidden(&scoped.call(&credential, None, "create_agent", forged).await);
+    for token in [credential.as_str(), TOKEN] {
+        forbidden(
+            &scoped
+                .call(
+                    token,
+                    None,
+                    "update_agent",
+                    json!({"agentId":grandchild,
+                        "labels":{BOT_CONVERSATION_LABEL:ConversationId::generate()}}),
+                )
+                .await,
+        );
+    }
+    let mut host = create("Host");
+    host["workspaceId"] = json!(scoped.workspace);
+    host["labels"] = json!({BOT_CONVERSATION_LABEL:ConversationId::generate()});
+    forbidden(&scoped.call(TOKEN, None, "create_agent", host).await);
     forbidden(
         &scoped
             .call(
@@ -233,10 +258,9 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
             )
             .await,
     );
-    assert_eq!(
-        scoped.labels(&grandchild).await[BOT_SCOPE_LABEL],
-        scoped.workspace
-    );
+    let labels = scoped.labels(&grandchild).await;
+    assert_eq!(labels[BOT_SCOPE_LABEL], scoped.workspace);
+    assert_eq!(labels[BOT_CONVERSATION_LABEL], conversation, "{labels}");
     scoped.stop().await;
 }
 

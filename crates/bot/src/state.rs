@@ -1,12 +1,15 @@
 mod catalog;
 mod conversations;
 mod execution;
+mod notifications;
 mod webhook;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use domain::bot::ChannelConfig;
+use domain::bot::notification::NotificationLog;
 use domain::bot::{
     Bot, BotState, Catalog, Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus,
 };
@@ -55,6 +58,23 @@ pub(crate) struct State {
     pub(crate) released_credentials: Vec<ChannelId>,
     /// Deleted webhook channels whose center endpoints the runtime has yet to remove.
     pub(crate) released_webhooks: Vec<ChannelId>,
+    /// Notification log and inbox of each Bot that has received a notification.
+    notifications: BTreeMap<BotId, NotificationLog>,
+    /// Start times of recent wake turns per conversation, for the wake budget.
+    wakes: BTreeMap<ConversationId, Vec<DateTime<Utc>>>,
+    /// Newest notification sequence each conversation had in front of it in a completed turn.
+    seen: BTreeMap<ConversationId, u64>,
+    /// When a completed turn of each conversation last read each Agent settled, by the Agent's
+    /// own clock.
+    observations: BTreeMap<(ConversationId, String), DateTime<Utc>>,
+    /// Reads of settled Agents by each conversation's running turn, applied to
+    /// `observations` only if that turn completes.
+    observing: BTreeMap<ConversationId, notifications::Observing>,
+    /// Notification ids each Bot's recent wake turns carried, with the turn's start, so a
+    /// replay stays a duplicate after the log evicted the entry.
+    woken: BTreeMap<(BotId, String), DateTime<Utc>>,
+    /// The service is stopping: running turns are being cancelled by shutdown, not by a user.
+    pub(crate) stopping: bool,
 }
 
 impl State {
@@ -83,6 +103,7 @@ impl State {
             .filter(|channel| channel.deleted)
             .map(|channel| channel.id)
             .collect();
+        let notifications = notifications::load(store.as_ref(), &catalog)?;
         let mut state = Self {
             store,
             workspaces,
@@ -102,55 +123,81 @@ impl State {
             session_actions: Vec::new(),
             released_credentials,
             released_webhooks: Vec::new(),
+            notifications,
+            wakes: BTreeMap::new(),
+            seen: BTreeMap::new(),
+            observations: BTreeMap::new(),
+            observing: BTreeMap::new(),
+            woken: BTreeMap::new(),
+            stopping: false,
         };
-        for conversation in state.store.conversations().map_err(|_| ErrorCode::BotIo)? {
-            state.channel(conversation.bot_id, conversation.channel_id)?;
-            if state
+        state.load_turns(Utc::now())?;
+        Ok(state)
+    }
+
+    /// Index every stored turn, mark those a stopped daemon left executing `uncertain`, and
+    /// put the notifications of interrupted wake turns back in their inbox, as of `now`.
+    fn load_turns(&mut self, now: DateTime<Utc>) -> Result<(), ErrorCode> {
+        let mut stored_wakes = Vec::new();
+        let mut rewritten = Vec::new();
+        for conversation in self.store.conversations().map_err(|_| ErrorCode::BotIo)? {
+            self.channel(conversation.bot_id, conversation.channel_id)?;
+            if self
                 .conversations
                 .insert(conversation.id, conversation.clone())
                 .is_some()
             {
                 return Err(ErrorCode::BotIo);
             }
-            let store = state.store.clone();
+            let store = self.store.clone();
             store.scan_turns(conversation.id, &mut |mut turn| {
-                let original_status = turn.status;
+                let interrupted = matches!(
+                    turn.status,
+                    TurnStatus::Sending | TurnStatus::Running | TurnStatus::NeedsApproval
+                );
                 let original_delivery = turn.delivery;
                 if turn.conversation_id != conversation.id
                     || turn.sequence >= conversation.next_sequence
                 {
                     return Err(model::bot::StorageError);
                 }
-                if matches!(
-                    turn.status,
-                    TurnStatus::Sending | TurnStatus::Running | TurnStatus::NeedsApproval
-                ) {
+                if interrupted {
                     turn.status = TurnStatus::Uncertain;
                     turn.error = Some("Daemon restarted during native execution; reset the conversation to continue".into());
                 }
                 if turn.delivery == DeliveryStatus::Sending {
                     turn.delivery = DeliveryStatus::Uncertain;
                 }
-                if state.receipts.contains_key(&turn.id)
-                    || state.order.contains_key(&(conversation.id, turn.sequence))
-                    || state
+                if self.receipts.contains_key(&turn.id)
+                    || self.order.contains_key(&(conversation.id, turn.sequence))
+                    || self
                         .inputs
                         .contains_key(&(conversation.channel_id, turn.message_id.clone()))
                 {
                     return Err(model::bot::StorageError);
                 }
-                if matches!(original_status, TurnStatus::Sending | TurnStatus::Running | TurnStatus::NeedsApproval)
-                    || original_delivery == DeliveryStatus::Sending {
-                    state.store.save_turn(&turn)?;
-                }
-                state.index_turn(&turn).map_err(|_| model::bot::StorageError)?;
-                state
+                self.index_turn(&turn).map_err(|_| model::bot::StorageError)?;
+                self
                     .inputs
                     .insert((conversation.channel_id, turn.message_id.clone()), turn.id);
+                self.load_wake(&conversation, &turn, interrupted, now, &mut stored_wakes);
+                if turn.status == TurnStatus::Completed {
+                    self.saw_notifications(&turn);
+                }
+                if interrupted || original_delivery == DeliveryStatus::Sending {
+                    rewritten.push(turn);
+                }
                 Ok(())
             }).map_err(|_| ErrorCode::BotIo)?;
         }
-        Ok(state)
+        // The inbox goes first: a crash before the rewrites leaves an interrupted wake turn
+        // executing on disk with its notifications already pending, and the next start finds
+        // nothing left to requeue, so the retry is neither lost nor repeated.
+        self.reconcile_wakes(stored_wakes)?;
+        for turn in &rewritten {
+            self.store.save_turn(turn).map_err(|_| ErrorCode::BotIo)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn execute(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
@@ -216,6 +263,7 @@ impl State {
                 Ok(json!({"turn":self.owned_turn(bot, request.turn_id)?}))
             }
             "bot.memory.get.request" => self.memory(&decode(params)?),
+            "bot.notifications.list.request" => self.list_notifications(&decode(params)?),
             "bot.memory.update.request" => self.update_memory(&decode(params)?),
             "bot.webhook.message.send.request" => self.webhook_send(decode(params)?),
             "bot.webhook.delivery.ack.request" => self.webhook_ack(&decode(params)?),
@@ -391,6 +439,34 @@ impl State {
     }
 }
 
+/// A new queued receipt for the next input of `conversation`.
+fn queued_turn(
+    conversation: &Conversation,
+    message_id: String,
+    text: String,
+    now: DateTime<Utc>,
+) -> Turn {
+    Turn {
+        id: BotTurnId::generate(),
+        conversation_id: conversation.id,
+        message_id,
+        sequence: conversation.next_sequence,
+        generation: conversation.generation,
+        text,
+        reply_to: None,
+        reply: None,
+        messages: Vec::new(),
+        pending_permissions: Vec::new(),
+        status: TurnStatus::Queued,
+        delivery: DeliveryStatus::Pending,
+        error: None,
+        created_at: now.to_rfc3339(),
+        wake: None,
+        silent: false,
+        notification_cursor: None,
+    }
+}
+
 /// Lowercase hex SHA-256 digest of `text`, used for memory revisions and instruction digests.
 pub(crate) fn sha256_hex(text: &str) -> String {
     format!(
@@ -403,7 +479,7 @@ pub(crate) fn sha256_hex(text: &str) -> String {
 fn view(bot: &Bot) -> Value {
     json!({"workspaceId":bot.workspace_id,"execution":bot.execution,
         "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at,
-        "permissions":bot.permissions})
+        "permissions":bot.permissions,"wakeScope":bot.wake_scope})
 }
 
 /// Client projection of a channel; the owning Bot's storage identity is never exposed.

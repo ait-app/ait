@@ -233,6 +233,7 @@ describe("Rust v1 connection", () => {
       .filter(
         (method) =>
           method !== "bot.permissions.update.request" &&
+          method !== "bot.notifications.list.request" &&
           !method.includes(".feishu.") &&
           !method.includes(".telegram.") &&
           !method.includes(".weixin.") &&
@@ -246,6 +247,7 @@ describe("Rust v1 connection", () => {
     expect(object(object(oldInfo).payload).features).toMatchObject({
       workspaceBots: true,
       workspaceBotPermissions: false,
+      workspaceBotNotifications: false,
       workspaceBotFeishuSetup: false,
       workspaceBotTelegramSetup: false,
       workspaceBotWeixinSetup: false,
@@ -259,6 +261,7 @@ describe("Rust v1 connection", () => {
     expect(object(object(info).payload).features).toMatchObject({
       workspaceBots: true,
       workspaceBotPermissions: true,
+      workspaceBotNotifications: true,
       workspaceBotFeishuSetup: true,
       workspaceBotTelegramSetup: true,
       workspaceBotWeixinSetup: true,
@@ -929,9 +932,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(228);
+    expect(Object.keys(METHODS)).toHaveLength(229);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(228);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(229);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

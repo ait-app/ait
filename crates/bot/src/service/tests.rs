@@ -5,7 +5,7 @@ use model::ErrorCode;
 use model::bot::Store;
 use serde_json::{Value, json};
 
-use crate::service::Bots;
+use crate::service::{Bots, Notified};
 use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 #[tokio::test]
@@ -518,4 +518,172 @@ async fn reset_required_rotates_the_conversation_and_retries_once() {
     );
     assert_eq!(sent_texts(&fixture).len(), 1);
     bots.shutdown().await.unwrap();
+}
+
+fn notification(id: &str, workspace: &str) -> domain::bot::notification::Notification {
+    serde_json::from_value(json!({
+        "id": id,
+        "workspaceId": workspace,
+        "scope": workspace,
+        "kind": "agent_finished",
+        "agentId": "agent-1",
+        "title": "Fix login",
+        "at": "2026-11-12T08:00:00Z"
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_notification_wakes_the_bot_once_and_an_unconfigured_workspace_stays_untouched() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    assert_eq!(
+        bots.notify(notification("ignored", WORKSPACE))
+            .await
+            .unwrap(),
+        Notified::Ignored
+    );
+    let conversation = open(&bots, WORKSPACE).await;
+
+    assert_eq!(
+        bots.notify(notification("a", WORKSPACE)).await.unwrap(),
+        Notified::Admitted
+    );
+    assert_eq!(
+        bots.notify(notification("a", WORKSPACE)).await.unwrap(),
+        Notified::Duplicate
+    );
+    assert_eq!(
+        bots.notify(notification("other", OTHER_WORKSPACE))
+            .await
+            .unwrap(),
+        Notified::Ignored
+    );
+    let turn = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let history = bots
+                .execute(
+                    "bot.history.get.request",
+                    json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+                )
+                .await
+                .unwrap();
+            if let Some(turn) = history["turns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|turn| turn["status"] == "completed")
+            {
+                return turn.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(turn["wake"]["notifications"][0]["id"], "a");
+    assert!(
+        turn["reply"]
+            .as_str()
+            .unwrap()
+            .starts_with("reply:<ait-notifications>")
+    );
+    let listed = bots
+        .execute(
+            "bot.notifications.list.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["notifications"][0]["wake"]["turnId"], turn["id"]);
+    assert_eq!(fixture.store.notification_logs().unwrap().len(), 1);
+    bots.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_notification_offered_after_stop_is_kept_until_shutdown() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    open(&bots, WORKSPACE).await;
+
+    // Draining stops the Bots before schedules settle the runs it cancelled.
+    bots.stop();
+    bots.offer(
+        &tokio::runtime::Handle::current(),
+        notification("settled-at-shutdown", WORKSPACE),
+    );
+    bots.shutdown().await.unwrap();
+
+    let logs = fixture.store.notification_logs().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0].entries[0].notification.id, "settled-at-shutdown");
+    assert_eq!(
+        logs[0].entries[0].wake,
+        domain::bot::notification::WakeStatus::Pending
+    );
+    assert_eq!(
+        bots.notify(notification("after-shutdown", WORKSPACE)).await,
+        Err(ErrorCode::ServerDraining)
+    );
+}
+
+/// The Bot's notification log entries, newest first.
+async fn logged(bots: &Bots) -> Vec<Value> {
+    bots.execute(
+        "bot.notifications.list.request",
+        json!({"workspaceId":WORKSPACE}),
+    )
+    .await
+    .unwrap()["notifications"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn a_wake_turn_cut_short_by_shutdown_wakes_again_after_restart() {
+    let fixture = Fixture::new();
+    fixture.native.hold.store(true, Ordering::SeqCst);
+    let bots = fixture.bots();
+    open(&bots, WORKSPACE).await;
+    bots.notify(notification("a", WORKSPACE)).await.unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&bots).await.remove(0);
+            if entry["wake"]["state"] == "woke" {
+                return entry["wake"]["turnId"].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    wait(&bots, WORKSPACE, &first, "running").await;
+
+    bots.shutdown().await.unwrap();
+    fixture.native.hold.store(false, Ordering::SeqCst);
+    let restarted = fixture.bots();
+
+    let retried = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&restarted).await.remove(0);
+            if entry["wake"]["state"] == "woke" && entry["wake"]["turnId"] != first {
+                return entry["wake"]["turnId"].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    wait(&restarted, WORKSPACE, &retried, "completed").await;
+    let cancelled = restarted
+        .execute(
+            "bot.turn.get.request",
+            json!({"workspaceId":WORKSPACE,"turnId":first}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancelled["turn"]["status"], "cancelled");
+    restarted.shutdown().await.unwrap();
 }

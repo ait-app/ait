@@ -1,6 +1,6 @@
 # Workspace Bot 重设计：每个 Workspace 一个管理者
 
-- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）、阶段 3 已实现（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）；阶段 4 未实施（实施计划：[阶段 1](../archive/plans/workspace-bot-manager-phase-1.md)、[阶段 2](../archive/plans/workspace-bot-manager-phase-2.md)、[阶段 3](../archive/plans/workspace-bot-manager-phase-3.md)）
+- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）、阶段 3 已实现（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）；阶段 4 的通知与唤醒已实现（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)），剩余事项见下文“阶段 4 剩余工作”（实施计划：[阶段 1](../archive/plans/workspace-bot-manager-phase-1.md)、[阶段 2](../archive/plans/workspace-bot-manager-phase-2.md)、[阶段 3](../archive/plans/workspace-bot-manager-phase-3.md)）
 - 日期：2026-11-05
 - 关系：已由 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)、[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 实施：取代 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 的多 Bot／人格模型、
   修订 [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md) 的标签页与
@@ -185,6 +185,22 @@ Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron�
   每个 Agent／定时任务记录发起它的对话。来源不在任何对话中的通知（用户自启的 Agent、全部通知模式）进入 Ait 主对话。
   收件队列按对话分组，沿用同一对话串行执行。Bot 可判断无需告知（普通完成且无后续动作），只记录不推送。
 - 同一 Workspace 的所有对话共享记忆与概览，Ait 标签页可只读查看外部对话，因此在 Ait 中也能看到外部回报。
+
+#### 阶段 4 剩余工作
+
+截至 2026-11-12，收件队列、合并唤醒、按发起对话路由、无需告知、唤醒范围设置、Workspace 事件源与 Bot 标签页的展示已实现，
+用户可见行为见 [Workspace Bot](../operations/bots.md#通知与唤醒)。合入前的修复轮已处理：Bot 已等待并回报的 Agent 不再重复唤醒、
+卡住的对话不再占满收件箱、被重启打断的唤醒轮次重试、关闭与重启时的定时任务结果不再丢失、去重覆盖重放窗口，
+以及定时任务 Agent 的审批请求与心跳成功结果不再重复通知（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 5、11、13、14 节）。尚未完成：
+
+- **真实平台验收**：唤醒回复在 Telegram、飞书、QQ、微信上的投递只有模拟测试，尚无人用真实账号验证；
+  QQ 主动消息配额与飞书不在话题内回复的实际体验也未确认。移动端与桌面界面未在真机上检查。
+- **Ait 中只读查看外部对话**：Bot 标签页只显示主对话，回到 Telegram 等平台的唤醒轮次在 Ait 中看不到。
+- **复用的定时任务 Agent**：`archiveOnFinish: false` 的定时任务 Agent 之后被复用时仍带运行标签，其通知不再产生。
+- **重启后的观察**：“已观察”只保存在内存中，daemon 重启后同一结果可能再唤醒一次；尚未决定是否值得持久化。
+- **降级**：有活动的 Workspace 升级后实际上无法降级到不支持通知的 daemon（ADR-271 第 12 节），需决定是否提供导出或清理工具。
+- **对话中的可点击条目**：唤醒轮次的通知头可打开 Agent 与定时任务，Bot 回复中提到的 Agent 与定时任务仍是纯文本。
+- **浏览器端到端用例**：`workspace-bots.spec.ts` 尚未覆盖唤醒轮次。
 
 ### Channel 与对话
 

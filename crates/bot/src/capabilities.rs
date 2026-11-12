@@ -45,6 +45,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.turn.cancel.request"),
     MethodSpec::request("bot.memory.get.request"),
     MethodSpec::request("bot.memory.update.request"),
+    MethodSpec::request("bot.notifications.list.request"),
     MethodSpec::request("bot.webhook.message.send.request"),
     MethodSpec::request("bot.webhook.delivery.ack.request"),
     MethodSpec::request("bot.webhook.conversation.close.request"),

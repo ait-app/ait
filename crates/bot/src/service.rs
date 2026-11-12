@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use domain::bot::notification::Notification;
 use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnMessage, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
@@ -43,6 +44,18 @@ pub struct WebhookBot {
     pub kind: &'static str,
 }
 
+/// Outcome of offering one Workspace notification to the Bots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Notified {
+    /// Durably logged by at least one active Bot.
+    Admitted,
+    /// Every active Bot concerned had already logged this notification id.
+    Duplicate,
+    /// No active Bot is concerned; nothing was stored and no session or model was touched.
+    Ignored,
+}
+
 /// Complete host dependencies; no concrete persistence adapter is required by this crate.
 pub struct Dependencies {
     /// Local atomic records and workspace-local memory.
@@ -74,6 +87,11 @@ pub enum Error {
 struct Worker {
     sender: mpsc::Sender<Command>,
     cancellation: CancellationToken,
+    /// Cancelled by [`Bots::shutdown`] once offered notifications are in; until then a stopped
+    /// worker still logs notifications, such as the results of runs settled while draining.
+    closing: CancellationToken,
+    /// Notifications [`Bots::offer`] has yet to hand to the worker.
+    offers: TaskTracker,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
     scopes: Arc<Scopes>,
@@ -120,6 +138,13 @@ enum Operation {
     WebhookTurn(String, BotTurnId),
     CreateWebhook(ChannelCreate),
     WebhookChannel(String, ChannelId),
+    Notify(Box<Notification>),
+    Observe(
+        ConversationId,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        std::time::Instant,
+    ),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,6 +185,8 @@ impl Bots {
         let bots = Self(Arc::new(Worker {
             sender,
             cancellation,
+            closing: CancellationToken::new(),
+            offers: TaskTracker::new(),
             closed: observed,
             executor: dependencies.executor,
             scopes: dependencies.scopes,
@@ -282,10 +309,71 @@ impl Bots {
             .map(|_| ())
     }
 
+    /// Offer one Workspace notification to the active Bots of its Workspace and scope root.
+    ///
+    /// Returns once the notification is durably logged; it never waits for model execution.
+    /// Without an active Bot for either Workspace it returns [`Notified::Ignored`] without
+    /// reaching the Bot worker. Wake turns start later, after the coalescing window. After
+    /// [`Bots::stop`] notifications are still logged, without waking, until
+    /// [`Bots::shutdown`].
+    /// # Errors
+    /// Returns `InvalidMessage` for malformed identities, `ServerDraining` once shutting down,
+    /// and persistence or worker lifecycle failures.
+    pub async fn notify(&self, notification: Notification) -> Result<Notified, ErrorCode> {
+        let concerned = std::iter::once(notification.workspace_id.as_str())
+            .chain(notification.scope.as_deref())
+            .any(|root| self.0.scopes.has_active_bot(root));
+        if !concerned {
+            return Ok(Notified::Ignored);
+        }
+        if self.0.closing.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        decode(self.send(Operation::Notify(Box::new(notification))).await?)
+    }
+
+    /// Offer `notification` on `runtime` without waiting, for callers that cannot await, such
+    /// as the schedule worker settling a run. [`Bots::shutdown`] waits for every offer, so a
+    /// result settled while the daemon drains is still logged.
+    pub fn offer(&self, runtime: &tokio::runtime::Handle, notification: Notification) {
+        let bots = self.clone();
+        runtime.spawn(self.0.offers.track_future(async move {
+            match bots.notify(notification).await {
+                Ok(_) | Err(ErrorCode::ServerDraining) => {}
+                Err(error) => tracing::warn!(?error, "Bot notification was not admitted"),
+            }
+        }));
+    }
+
+    /// Record that a turn of `conversation` read Agent `agent` no longer running, in the state
+    /// the Agent last changed at `at`, so the conversation is not woken again for what it saw.
+    /// `read_started` is when the reading call began; it binds the read to the turn running
+    /// then, so a late result of an earlier, cancelled turn's call is ignored.
+    ///
+    /// Best effort: the observation only suppresses a repeated report and is kept in memory.
+    /// # Errors
+    /// Returns `ServerDraining` while stopping and worker lifecycle failures.
+    pub async fn observe(
+        &self,
+        conversation: ConversationId,
+        agent: String,
+        at: chrono::DateTime<chrono::Utc>,
+        read_started: std::time::Instant,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::Observe(conversation, agent, at, read_started))
+            .await
+            .map(|_| ())
+    }
+
     /// The scoped MCP credential registry this service publishes authorization into.
     #[must_use]
     pub fn scopes(&self) -> &Arc<Scopes> {
         &self.0.scopes
+    }
+
+    /// Resolve once the service stops admitting work, so host feeders can end with it.
+    pub async fn stopped(&self) {
+        self.0.cancellation.cancelled().await;
     }
 
     /// Stop admission and signal channel receivers and active turns to shut down.
@@ -302,11 +390,15 @@ impl Bots {
             .map(|_| ())
     }
 
-    /// Wait for all channel tasks and native turn cancellations after stopping admission.
+    /// Wait for all channel tasks and native turn cancellations after stopping admission, and
+    /// for the notifications offered until now.
     /// # Errors
     /// Returns worker failure when the completion signal disappears.
     pub async fn shutdown(&self) -> Result<(), Error> {
         self.stop();
+        self.0.offers.close();
+        self.0.offers.wait().await;
+        self.0.closing.cancel();
         let mut closed = self.0.closed.clone();
         while !*closed.borrow_and_update() {
             closed.changed().await.map_err(|_| Error::Worker)?;
@@ -527,6 +619,7 @@ async fn serve(
     let mut accounts: BTreeMap<String, ChannelId> = BTreeMap::new();
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     let mut stopping = false;
+    let mut closing = false;
     loop {
         let command = tokio::select! {
             () = bots.0.cancellation.cancelled(), if !stopping => {
@@ -535,15 +628,20 @@ async fn serve(
                 for cancel in state.running.values() { cancel.cancel(); }
                 None
             },
+            () = bots.0.closing.cancelled(), if stopping && !closing => {
+                closing = true;
+                None
+            },
             command = receiver.recv() => command,
             _ = interval.tick() => None,
         };
-        if stopping && state.running.is_empty() {
+        if closing && state.running.is_empty() {
             break;
         }
         let host_credentials = credentials.clone();
         let hub = bots.clone();
         let processed = tokio::task::spawn_blocking(move || {
+            state.stopping = stopping;
             if let Some(command) = command {
                 let result = apply(
                     &mut state,
@@ -560,6 +658,9 @@ async fn serve(
                 if let Err(error) = host_credentials.delete(channel) {
                     tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
                 }
+            }
+            if !stopping {
+                state.wake(chrono::Utc::now());
             }
             let ready = if stopping {
                 Vec::new()
@@ -685,6 +786,14 @@ fn apply(
         Operation::WebhookChannel(workspace, channel) => state
             .check_webhook_channel(&workspace, channel)
             .map(|()| Value::Null),
+        Operation::Observe(conversation, agent, at, read_started) => {
+            state.observe(conversation, &agent, at, read_started);
+            Ok(Value::Null)
+        }
+        Operation::Notify(notification) => {
+            let notified = state.notify(*notification, chrono::Utc::now())?;
+            serde_json::to_value(notified).map_err(|_| ErrorCode::BotIo)
+        }
     }
 }
 

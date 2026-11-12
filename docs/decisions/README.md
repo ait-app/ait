@@ -13,15 +13,16 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Bot
 
+- [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)
 - [ADR-233：中心托管的 Workspace Bot Webhook Channel](bot/adr-233-webhook-channel-center-endpoints.md)
-- [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)
+- [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)
 - [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)
 - [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)
 - [ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace](bot/adr-222-single-agent-mode-no-bot-workspaces.md)
 - [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)
-- [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)（经 [ADR-222](bot/adr-222-single-agent-mode-no-bot-workspaces.md) 修订）
-- [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md)、[ADR-227](bot/adr-227-bot-multi-message-output.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md) 修订）
+- [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)（经 [ADR-222](bot/adr-222-single-agent-mode-no-bot-workspaces.md)、[ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
+- [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md)、[ADR-227](bot/adr-227-bot-multi-message-output.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md)、[ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)（经 [ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md) 修订）
 - [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)（经 [ADR-145](bot/adr-145-bot-permission-denial.md)、[ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-224](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)、[ADR-226](bot/adr-226-photon-imessage-channel.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md) 修订）
 
@@ -75,7 +76,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
-- [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)
+- [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)
 - [ADR-131：metadata 按能力组组织模块](workspace/adr-131-metadata-capability-groups.md)（经 [ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）
@@ -199,7 +200,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-184：Windows Desktop 不附带内置 daemon](clients/adr-184-windows-desktop-without-daemon.md)
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](clients/adr-183-ios-xcode-cloud-release.md)（经 [ADR-187](clients/adr-187-ios-app-store-cloud-trigger.md)、[ADR-235](clients/adr-235-ios-testflight-in-release-workflow.md) 修订）
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
-- [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
+- [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](clients/adr-175-android-play-gradle-release.md)（经 [ADR-234](clients/adr-234-play-internal-in-release-workflow.md)、[ADR-236](clients/adr-236-google-signed-apk-release-asset.md) 修订）
 - [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
 - [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](clients/adr-172-android-gradle-ci-build.md)（已由 [ADR-175](clients/adr-175-android-play-gradle-release.md) 取代）

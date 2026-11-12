@@ -1,6 +1,7 @@
 //! Schedules and heartbeats created or controlled by scoped callers stay within the Bot's grant.
 
-use domain::bot::BOT_SCOPE_LABEL;
+use domain::ConversationId;
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
 
 use super::support::{forbidden, structured};
 use super::*;
@@ -62,7 +63,8 @@ fn schedule_id(response: &Value) -> String {
 async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
     let scoped = Scoped::start().await;
     scoped.setup(codex_modes(&["auto", "read-only"])).await;
-    let bot = scoped.bot_credential();
+    let conversation = ConversationId::generate();
+    let bot = scoped.bot_credential_in(conversation);
 
     let created = scoped
         .call(
@@ -74,6 +76,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .await;
     let stored = scoped.stored(&schedule_id(&created)).await;
     assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
+    assert_eq!(stored["botConversation"], json!(conversation), "{stored}");
     assert_eq!(stored["workspaceId"], scoped.workspace.as_str());
     assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");
     assert_eq!(stored["target"]["config"]["model"], "offline-model");
@@ -115,8 +118,36 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .await;
     let stored = scoped.stored(&schedule_id(&created)).await;
     assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
+    assert!(stored.get("botConversation").is_none(), "{stored}");
     assert_eq!(stored["target"]["config"]["provider"], "codex");
     assert_eq!(stored["target"]["config"]["modeId"], "auto");
+
+    // A subtree caller started from a conversation passes that origin on.
+    let labelled = scoped
+        .agent(json!({BOT_SCOPE_LABEL:scoped.workspace,BOT_CONVERSATION_LABEL:conversation}))
+        .await;
+    let created = scoped
+        .call(
+            &scoped.subtree_credential(&labelled),
+            None,
+            "create_schedule",
+            json!({"prompt":"report","cron":CRON}),
+        )
+        .await;
+    let stored = scoped.stored(&schedule_id(&created)).await;
+    assert_eq!(stored["botConversation"], json!(conversation), "{stored}");
+
+    // The tool schema accepts no origin from any caller.
+    let forged = scoped
+        .call(
+            TOKEN,
+            None,
+            "create_schedule",
+            json!({"workspaceId":scoped.workspace,"provider":"codex","prompt":"report",
+                "cron":CRON,"botConversation":ConversationId::generate()}),
+        )
+        .await;
+    rejected(&forged, "Arguments do not match the tool input schema");
 
     // Host-created schedules carry no Bot scope.
     let host = scoped
@@ -315,7 +346,10 @@ async fn bot_cannot_create_heartbeat_targeting_itself() {
             .await,
     );
 
-    let child = scoped.subtree_agent().await;
+    let conversation = ConversationId::generate();
+    let child = scoped
+        .agent(json!({BOT_SCOPE_LABEL:scoped.workspace,BOT_CONVERSATION_LABEL:conversation}))
+        .await;
     let created = scoped
         .call(
             &scoped.subtree_credential(&child),
@@ -326,6 +360,7 @@ async fn bot_cannot_create_heartbeat_targeting_itself() {
         .await;
     let stored = scoped.stored(&schedule_id(&created)).await;
     assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
+    assert_eq!(stored["botConversation"], json!(conversation), "{stored}");
     assert_eq!(stored["workspaceId"], scoped.workspace.as_str());
     assert_eq!(
         stored["target"],

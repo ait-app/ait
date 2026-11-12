@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 use bot::mcp::Scopes;
 use bot::ports::{Credentials, Executor};
 use bot::service::{Bots, Dependencies};
-use domain::bot::{BOT_SCOPE_LABEL, SessionOwner};
+use domain::ConversationId;
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL, SessionOwner};
 use filesystem::forge::local::forge::LocalForge;
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use filesystem::git::local::worktrees::LocalManagedWorktrees;
@@ -18,6 +19,7 @@ use secrecy::SecretString;
 use serde_json::{Value, json};
 
 use super::{AgentRpc, AgentRunner, REVOKED, available_agent};
+use crate::host::notifications::Notifier;
 
 const AGENT: &str = "11111111-1111-4111-8111-111111111111";
 
@@ -137,6 +139,7 @@ impl Fixture {
             directory,
             worktrees: Arc::new(Mutex::new(worktrees)),
             scopes,
+            notifier: Notifier::current(bots.clone()),
         };
         let schedules = Schedules::spawn(
             Box::new(persistence::storage::schedule::FileStore::new(
@@ -164,10 +167,24 @@ impl Fixture {
 
     /// Create a schedule with `target`, in the Bot scope when `scoped`.
     async fn schedule(&self, target: Value, scoped: bool) -> String {
+        self.schedule_from(target, scoped, None).await
+    }
+
+    /// Create a schedule with `target`, in the Bot scope when `scoped`, started from
+    /// `conversation`.
+    async fn schedule_from(
+        &self,
+        target: Value,
+        scoped: bool,
+        conversation: Option<ConversationId>,
+    ) -> String {
         let mut params = json!({"workspaceId":self.workspace,"prompt":"report",
             "cadence":{"type":"cron","expression":"0 9 * * *"},"target":target});
         if scoped {
             params["botScope"] = json!(self.workspace);
+        }
+        if let Some(conversation) = conversation {
+            params["botConversation"] = json!(conversation);
         }
         let created = self
             .schedules
@@ -313,5 +330,80 @@ async fn bot_schedule_run_rechecks_current_grant() {
     }
     assert_eq!(fixture.agents.calls("agent.create.request").len(), 1);
     assert_eq!(fixture.agents.calls("agent.message.send.request").len(), 2);
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn each_bot_schedule_run_notifies_its_conversation_once() {
+    let fixture = Fixture::start();
+    fixture
+        .bot("bot.setup.request", permissions(GROUPS, &["auto"]))
+        .await;
+    let conversation = ConversationId::generate();
+    let task = fixture
+        .schedule_from(codex(Some("auto")), true, Some(conversation))
+        .await;
+    let (succeeded, _) = fixture.run(&task).await;
+    fixture
+        .bot(
+            "bot.permissions.update.request",
+            permissions(&["observe"], &["auto"]),
+        )
+        .await;
+    let (failed, _) = fixture.run(&task).await;
+    assert_eq!(failed["error"], REVOKED, "{failed}");
+
+    let labels = &fixture.agents.calls("agent.create.request")[0]["labels"];
+    assert_eq!(
+        labels[BOT_CONVERSATION_LABEL],
+        json!(conversation),
+        "{labels}"
+    );
+    let logged = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let listed = fixture
+                .bots
+                .execute(
+                    "bot.notifications.list.request",
+                    json!({"workspaceId":fixture.workspace}),
+                )
+                .await
+                .unwrap();
+            let entries = listed["notifications"].as_array().unwrap().clone();
+            if entries.len() >= 2 {
+                return entries;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let summary: Vec<_> = logged
+        .iter()
+        .map(|entry| {
+            let notification = &entry["notification"];
+            (
+                notification["id"].as_str().unwrap().to_owned(),
+                notification["kind"].clone(),
+                notification["conversationId"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (
+                format!("schedule:{task}:{}", failed["id"].as_str().unwrap()),
+                json!("schedule_failed"),
+                json!(conversation)
+            ),
+            (
+                format!("schedule:{task}:{}", succeeded["id"].as_str().unwrap()),
+                json!("schedule_succeeded"),
+                json!(conversation)
+            ),
+        ]
+    );
+    assert_eq!(logged[1]["notification"]["agentId"], AGENT);
     fixture.stop().await;
 }

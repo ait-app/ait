@@ -3486,6 +3486,7 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
+        workspaceBotNotifications: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
         workspaceBotTelegramSetup: z.boolean().optional(),
         workspaceBotWeixinSetup: z.boolean().optional(),
