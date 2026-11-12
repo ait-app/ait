@@ -344,6 +344,47 @@ impl Manager {
     pub async fn close_providers(&self) {
         self.0.catalog().close().await;
     }
+
+    /// Register and open `record`, an unknown native session, once its interactive restore
+    /// succeeds.
+    ///
+    /// # Errors
+    /// Returns duplicate identities, exhausted capacity, invalid handles, and native or registry
+    /// failures.
+    pub async fn restore_new(
+        &mut self,
+        record: PersistedAgentRuntimeRecord,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.0.restore_new(record).await
+    }
+
+    /// Whether the manager retains live native sessions that must be polled or reaped.
+    #[must_use]
+    pub fn has_sessions(&self) -> bool {
+        self.0.has_sessions()
+    }
+
+    /// The native slash commands the adapter registered for `spec.provider` offers for `spec`.
+    ///
+    /// # Errors
+    /// Returns `UnsupportedCapability` for an unregistered or unavailable adapter, `CatalogBusy`
+    /// for a busy one, `InvalidMessage` for a rejected request and `AgentIo` for native failures.
+    pub async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
+        self.0.commands(spec).await
+    }
+
+    /// The wrapped manager, to compose an execution worker from `ExecutionDependencies`.
+    #[must_use]
+    pub fn into_inner(self) -> AgentManager {
+        self.0
+    }
+}
+
+/// The thinking option `record` runs with: its native runtime selection, or else its configured
+/// one; blank values count as unset.
+#[must_use]
+pub fn effective_thinking_option_id(record: &PersistedAgentRuntimeRecord) -> Option<&str> {
+    crate::service::agent_runtime::effective_thinking_option_id(record)
 }
 
 /// Owner lanes shared by forked managers, routing agents and native sessions to one lane each.

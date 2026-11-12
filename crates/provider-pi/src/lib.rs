@@ -29,7 +29,7 @@ const DISCOVERY_DEFAULTS_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Native Pi executable and ephemeral environment; constructing it performs no I/O.
 #[derive(Debug, Clone)]
-pub(crate) struct PiClient {
+pub struct PiClient {
     program: PathBuf,
     deadline: Duration,
     admission_deadline: Duration,
@@ -44,7 +44,7 @@ impl PiClient {
     /// Control operations have a ten-second deadline; prompt admission has a 120-second
     /// deadline. Inference after admission has no host duration limit.
     #[must_use]
-    pub(crate) fn new(program: PathBuf) -> Self {
+    pub fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(10),
@@ -58,7 +58,7 @@ impl PiClient {
 
     /// Store submitted images in `directory` for durable timeline display.
     #[must_use]
-    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = provider_native::images::ImageStore::new(directory);
         self
     }

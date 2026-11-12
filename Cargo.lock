@@ -2304,7 +2304,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "url",
  "uuid",
  "webrtc",
 ]
@@ -2342,6 +2341,7 @@ dependencies = [
  "provider-minimax",
  "provider-omp",
  "provider-opencode",
+ "provider-pi",
  "serde_json",
  "tempfile",
  "tokio",
@@ -2506,6 +2506,33 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-pi"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

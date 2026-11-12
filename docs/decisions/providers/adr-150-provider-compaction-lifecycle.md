@@ -9,6 +9,7 @@ paths:
   - crates/provider-claude
   - crates/provider-deepseek-harness
   - crates/provider-opencode
+  - crates/provider-pi
 ---
 
 # ADR-150：所有 Provider 的上下文压缩生命周期提示

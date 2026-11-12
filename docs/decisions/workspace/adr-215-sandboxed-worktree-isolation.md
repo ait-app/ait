@@ -12,6 +12,7 @@ paths:
   - crates/provider-claude
   - crates/provider-deepseek-harness
   - crates/provider-opencode
+  - crates/provider-pi
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别

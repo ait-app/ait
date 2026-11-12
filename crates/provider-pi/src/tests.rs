@@ -454,20 +454,19 @@ async fn rich_input_preserves_images_and_unicode_framing_without_persisting_envi
 
 #[tokio::test]
 async fn manager_retains_timeline_and_native_session_across_restart() {
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
-    use crate::storage::timeline::Timeline;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::storage::timeline::Timeline;
+    use provider::testing::{Manager, timeline_entries};
 
     let (directory, client, spec) = fixture("");
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
     let timeline_path = directory.path().join("timeline.sqlite");
     let timeline = Timeline::open(&timeline_path).unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
-    manager.register_client(Box::new(client.clone())).unwrap();
-    manager
-        .create("pi-agent", &spec, AgentRegistration::default())
-        .await
-        .unwrap();
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()));
+    manager.register(Box::new(client.clone())).unwrap();
+    manager.create("pi-agent", &spec).await.unwrap();
     for index in 0..3 {
         let prompt = AgentPrompt {
             text: format!("hello {index}"),
@@ -485,51 +484,39 @@ async fn manager_retains_timeline_and_native_session_across_restart() {
         .unwrap();
     }
     assert_eq!(manager.last_message("pi-agent"), Some("Hello"));
-    let (_, original) = timeline.read("pi-agent").unwrap();
+    let (_, original) = timeline_entries(&timeline, "pi-agent").unwrap();
     assert!(
         original
             .iter()
-            .any(|row| row.entry.item["type"] == "tool_call")
+            .any(|entry| entry.item["type"] == "tool_call")
     );
     let users: Vec<_> = original
         .iter()
-        .filter(|row| row.entry.item["type"] == "user_message")
+        .enumerate()
+        .filter(|(_, entry)| entry.item["type"] == "user_message")
         .collect();
     assert_eq!(users.len(), 3);
-    assert_eq!(original[0].entry.item["type"], "user_message");
-    for (index, user) in users.iter().enumerate() {
-        assert_eq!(user.entry.item["text"], format!("hello {index}"));
-        assert_eq!(
-            user.entry.item["clientMessageId"],
-            format!("client-{index}")
-        );
+    assert_eq!(original[0].item["type"], "user_message");
+    for (index, (position, user)) in users.iter().enumerate() {
+        assert_eq!(user.item["text"], format!("hello {index}"));
+        assert_eq!(user.item["clientMessageId"], format!("client-{index}"));
         let reply = original
             .iter()
-            .find(|row| {
-                row.entry.turn_id == user.entry.turn_id
-                    && row.entry.item["type"] == "assistant_message"
+            .position(|entry| {
+                entry.turn_id == user.turn_id && entry.item["type"] == "assistant_message"
             })
             .unwrap();
-        assert!(user.seq < reply.seq);
+        assert!(*position < reply);
     }
     manager.close_all().await.unwrap();
     drop(manager);
     drop(timeline);
     let timeline = Timeline::open(&timeline_path).unwrap();
-    let mut restored = AgentManager::new(Box::new(registry)).with_timeline(timeline.clone());
-    restored.register_client(Box::new(client)).unwrap();
-    restored
-        .restore("pi-agent", &crate::protocol::resume::Overrides::default())
-        .await
-        .unwrap();
-    let original: Vec<_> = original.into_iter().map(|row| row.entry).collect();
-    let retained: Vec<_> = timeline
-        .read("pi-agent")
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|row| row.entry)
-        .collect();
+    let mut restored =
+        Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
+    restored.register(Box::new(client)).unwrap();
+    restored.restore("pi-agent").await.unwrap();
+    let (_, retained) = timeline_entries(&timeline, "pi-agent").unwrap();
     assert_eq!(original, retained);
     restored.close_all().await.unwrap();
 }

@@ -34,8 +34,6 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
-# Decode Pi-supported file URLs in host session configuration.
-url.workspace = true
 # Estimate chat search hits from rendered Markdown blocks without an HTML renderer.
 pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.

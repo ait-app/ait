@@ -59,12 +59,12 @@ fn command_catalog_rejects_malformed_or_excessive_entries() {
         json!({"commands":vec![json!({"name":"review"});4097]}),
     ] {
         assert_eq!(
-            crate::local::pi::commands::catalog(&response),
+            crate::commands::catalog(&response),
             Err(AgentSessionError::Failed)
         );
     }
     assert_eq!(
-        crate::local::pi::commands::catalog(&json!({"commands":[]})).unwrap(),
+        crate::commands::catalog(&json!({"commands":[]})).unwrap(),
         Vec::<Value>::new()
     );
 }
@@ -153,21 +153,20 @@ async fn command_failures_can_recover_immediately() {
 
 #[test]
 fn command_descriptions_and_escaped_catalog_payload_are_bounded() {
-    let commands = crate::local::pi::commands::catalog(&json!({"commands":[{
+    let commands = crate::commands::catalog(&json!({"commands":[{
         "name":"review", "description": "é".repeat(513)
     }]}))
     .unwrap();
     assert_eq!(commands[0]["description"].as_str().unwrap().len(), 1024);
-    let commands =
-        crate::local::pi::commands::catalog(&json!({"commands": (0..4096).map(|index| json!({
+    let commands = crate::commands::catalog(&json!({"commands": (0..4096).map(|index| json!({
         "name":format!("command-{index}"), "description":"\"".repeat(1024)
     })).collect::<Vec<_>>()}))
-        .unwrap();
+    .unwrap();
     assert_eq!(commands.len(), 4096);
     assert!(commands.iter().all(|command| command["description"] == ""));
     assert!(serde_json::to_vec(&commands).unwrap().len() <= 768 * 1024);
     assert_eq!(
-        crate::local::pi::commands::catalog(&json!({"commands":(0..4096).map(|index| json!({
+        crate::commands::catalog(&json!({"commands":(0..4096).map(|index| json!({
             "name":format!("{index:04}{}", "x".repeat(1020))
         })).collect::<Vec<_>>()})),
         Err(AgentSessionError::Failed)
@@ -176,13 +175,14 @@ fn command_descriptions_and_escaped_catalog_payload_are_bounded() {
 
 #[tokio::test]
 async fn manager_returns_the_native_catalog() {
-    use crate::service::agent_manager::AgentManager;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
 
     let (directory, client, spec) = fixture("");
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let mut manager = AgentManager::new(Box::new(registry));
-    manager.register_client(Box::new(client.clone())).unwrap();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+    manager.register(Box::new(client.clone())).unwrap();
     let catalog = client.commands(&spec).await.unwrap();
 
     let mut response: Vec<Value> = manager.commands(&spec).await.unwrap();
@@ -241,8 +241,8 @@ async fn directory_aliases_discover_the_same_catalog() {
     ];
     for alias in alias_paths {
         let (canonical, aliased) = tokio::join!(
-            crate::local::pi::commands::discover(&client, &spec.cwd, None),
-            crate::local::pi::commands::discover(&client, &alias, None)
+            crate::commands::discover(&client, &spec.cwd, None),
+            crate::commands::discover(&client, &alias, None)
         );
         assert_eq!(canonical.unwrap(), aliased.unwrap());
     }
@@ -254,7 +254,7 @@ async fn directory_aliases_discover_the_same_catalog() {
         6
     );
     assert_eq!(
-        crate::local::pi::commands::discover(
+        crate::commands::discover(
             &client,
             directory.path().join("missing").to_str().unwrap(),
             None
@@ -284,7 +284,7 @@ fn command_catalog_omits_unrepresentable_names_without_renaming() {
     ]);
     entries.push(json!({"name":"skill:rust", "source":"skill"}));
 
-    let commands = crate::local::pi::commands::catalog(&json!({"commands":entries})).unwrap();
+    let commands = crate::commands::catalog(&json!({"commands":entries})).unwrap();
 
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0]["name"], "skill:rust");
@@ -293,7 +293,7 @@ fn command_catalog_omits_unrepresentable_names_without_renaming() {
 
 #[test]
 fn command_catalog_keeps_first_duplicate_in_native_order() {
-    let commands = crate::local::pi::commands::catalog(&json!({"commands":[
+    let commands = crate::commands::catalog(&json!({"commands":[
         {"name":"review", "description":"Extension", "source":"extension"},
         {"name":"skill:rust", "source":"skill"},
         {"name":"review", "description":"Template", "source":"prompt"},
@@ -310,7 +310,7 @@ fn command_catalog_keeps_first_duplicate_in_native_order() {
 
 #[test]
 fn command_descriptions_replace_control_characters_with_spaces() {
-    let commands = crate::local::pi::commands::catalog(&json!({"commands":[
+    let commands = crate::commands::catalog(&json!({"commands":[
         {"name":"review", "description":"Line\nnext\r\tword\u{1b}\0\u{85}end"},
         {"name":"plain", "description":"Plain é text"}
     ]}))

@@ -2,7 +2,7 @@ use super::*;
 
 /// Simulate a cached shutdown failure after the fixture process has been reaped.
 #[cfg(unix)]
-pub(in crate::local::pi) fn fail_completed_shutdown(transport: &mut Transport) {
+pub(crate) fn fail_completed_shutdown(transport: &mut Transport) {
     assert!(transport.closed && transport.shutdown.is_none());
     transport.shutdown_result = Some(Err(AgentSessionError::Failed));
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::local::pi::transport::{self, Transport};
+use crate::transport::{self, Transport};
 
 #[tokio::test]
 #[ignore = "requires Pi >= 1.2 on PATH; uses only isolated models and control RPCs"]

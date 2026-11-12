@@ -459,9 +459,9 @@ fn catalog_uses_known_map_keys_when_seeding_defaults() {
 
 #[tokio::test]
 async fn clamped_thinking_selections_survive_updates_restart_and_import() {
-    use crate::protocol::resume::Overrides;
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
     use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for level in ["max", "ultra"] {
@@ -477,20 +477,15 @@ async fn clamped_thinking_selections_survive_updates_restart_and_import() {
                 .all(|option| option["id"] != level)
         );
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let mut manager = AgentManager::new(Box::new(registry.clone()));
-        manager.register_client(Box::new(client.clone())).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+        manager.register(Box::new(client.clone())).unwrap();
         let created = manager
-            .create_with_environment(
-                "clamped",
-                &spec,
-                AgentRegistration::default(),
-                &client.environment,
-            )
+            .create_with_environment("clamped", &spec, &client.environment)
             .await
             .unwrap();
         assert_eq!(created.config.as_ref(), Some(&spec.config));
         assert_eq!(
-            crate::service::agent_runtime::effective_thinking_option_id(&created),
+            provider::testing::effective_thinking_option_id(&created),
             Some("high")
         );
         assert_eq!(
@@ -505,12 +500,9 @@ async fn clamped_thinking_selections_survive_updates_restart_and_import() {
         manager.close_all().await.unwrap();
         drop(manager);
 
-        let mut restored = AgentManager::new(Box::new(registry));
-        restored.register_client(Box::new(client.clone())).unwrap();
-        let record = restored
-            .restore("clamped", &Overrides::default())
-            .await
-            .unwrap();
+        let mut restored = Manager::new(AgentManager::new(Box::new(registry)));
+        restored.register(Box::new(client.clone())).unwrap();
+        let record = restored.restore("clamped").await.unwrap();
         assert_eq!(
             record.config.unwrap().thinking_option_id.as_deref(),
             Some(level)
@@ -520,10 +512,10 @@ async fn clamped_thinking_selections_survive_updates_restart_and_import() {
         let mut imported = restored.live_snapshot("clamped").unwrap().clone();
         imported.id = "imported".into();
         restored.close_all().await.unwrap();
-        let mut manager = AgentManager::new(Box::new(FileBackedAgentRuntimeRegistry::new(
-            directory.path().join("imported-agents.json"),
+        let mut manager = Manager::new(AgentManager::new(Box::new(
+            FileBackedAgentRuntimeRegistry::new(directory.path().join("imported-agents.json")),
         )));
-        manager.register_client(Box::new(client)).unwrap();
+        manager.register(Box::new(client)).unwrap();
         let record = manager.restore_new(imported).await.unwrap();
         assert_eq!(native_thinking(&record.runtime_info.unwrap()), Some("high"));
         manager.close_all().await.unwrap();
@@ -875,8 +867,9 @@ async fn native_thinking_state_is_optional_and_forward_compatible() {
 
 #[tokio::test]
 async fn non_object_state_replies_fail_cleanly_during_opening_and_admission() {
-    use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::{AgentManager, AgentManagerError};
+    use provider::testing::Manager;
 
     for reply in [
         json!("bad state"),
@@ -889,15 +882,10 @@ async fn non_object_state_replies_fail_cleanly_during_opening_and_admission() {
         let (directory, client, spec) = fixture("");
         let reply_path = directory.path().join("state-reply.json");
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let mut manager = AgentManager::new(Box::new(registry));
-        manager.register_client(Box::new(client.clone())).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+        manager.register(Box::new(client.clone())).unwrap();
         manager
-            .create_with_environment(
-                "agent",
-                &spec,
-                AgentRegistration::default(),
-                &client.environment,
-            )
+            .create_with_environment("agent", &spec, &client.environment)
             .await
             .unwrap();
         std::fs::write(&reply_path, reply.to_string()).unwrap();
@@ -1113,24 +1101,20 @@ async fn rejected_thinking_controls_fail_explicitly() {
 
 #[tokio::test]
 async fn pending_thinking_preferences_preserve_the_last_native_runtime() {
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
-    use crate::service::agent_runtime::effective_thinking_option_id;
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
+    use provider::testing::effective_thinking_option_id;
     use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     let (directory, client, mut spec) = fixture("");
     spec.config.thinking_option_id = Some("high".into());
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let mut manager = AgentManager::new(Box::new(registry.clone()));
-    manager.register_client(Box::new(client.clone())).unwrap();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+    manager.register(Box::new(client.clone())).unwrap();
     manager
-        .create_with_environment(
-            "agent",
-            &spec,
-            AgentRegistration::default(),
-            &client.environment,
-        )
+        .create_with_environment("agent", &spec, &client.environment)
         .await
         .unwrap();
 
@@ -1174,24 +1158,20 @@ async fn pending_thinking_preferences_preserve_the_last_native_runtime() {
 
 #[tokio::test]
 async fn runtime_readback_uses_native_identity_without_rewriting_preferences() {
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
-    use crate::service::agent_runtime::effective_thinking_option_id;
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
+    use provider::testing::effective_thinking_option_id;
 
     for selection in [None, Some("max")] {
         let (directory, client, mut spec) = fixture("clamp-thinking");
         spec.config.thinking_option_id = selection.map(str::to_owned);
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let mut manager = AgentManager::new(Box::new(registry.clone()));
-        manager.register_client(Box::new(client.clone())).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+        manager.register(Box::new(client.clone())).unwrap();
         let record = manager
-            .create_with_environment(
-                "agent",
-                &spec,
-                AgentRegistration::default(),
-                &client.environment,
-            )
+            .create_with_environment("agent", &spec, &client.environment)
             .await
             .unwrap();
         assert_eq!(

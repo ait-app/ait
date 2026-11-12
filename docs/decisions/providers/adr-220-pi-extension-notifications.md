@@ -6,6 +6,7 @@ amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-pi
 ---
 
 # ADR-220：Pi 扩展通知与会话时间线

@@ -11,6 +11,7 @@ paths:
   - crates/provider-claude
   - crates/provider-deepseek-harness
   - crates/provider-opencode
+  - crates/provider-pi
 ---
 
 # ADR-202：Agent MCP 运行时自动注入

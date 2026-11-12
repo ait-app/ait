@@ -7,9 +7,10 @@ use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
-use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
-use crate::service::agent_manager::AgentManager;
-use crate::service::agent_runtime::AgentRuntimeDirectory;
+use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
+use provider::service::agent_manager::AgentManager;
+use provider::service::agent_runtime::AgentRuntimeDirectory;
+use provider::testing::Manager;
 
 fn worker(
     root: &Path,
@@ -37,10 +38,10 @@ fn worker(
             domain::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone()));
-    manager.register_client(Box::new(client)).unwrap();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+    manager.register(Box::new(client)).unwrap();
     let execution = AgentExecution::spawn(ExecutionDependencies {
-        manager,
+        manager: manager.into_inner(),
         directory: AgentRuntimeDirectory::new(
             Box::new(registry.clone()),
             Box::new(workspaces.clone()),

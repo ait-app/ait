@@ -7,7 +7,6 @@ use std::sync::Arc;
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 use crate::local::codex::CodexClient;
-use crate::local::pi::PiClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::service::summary_generation::Generation;
@@ -77,8 +76,6 @@ impl Providers {
         let images = data_dir.join("agents/provider-images");
         let codex = CodexClient::new(program("AIT_SERVER_CODEX_BIN", "codex"))
             .with_image_directory(images.clone());
-        let pi =
-            PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
         let mut providers = Self {
             clients: Vec::new(),
             summary_clients: Vec::new(),
@@ -86,7 +83,6 @@ impl Providers {
             images,
         };
         providers.add(codex);
-        providers.add(pi);
         providers
     }
 

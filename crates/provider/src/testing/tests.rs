@@ -257,3 +257,45 @@ async fn manager_delegates_subagent_reads_owner_lanes_and_catalog_shutdown() {
         Err(ErrorCode::ServerDraining)
     );
 }
+
+#[tokio::test]
+async fn manager_delegates_unknown_restores_and_command_lists_and_unwraps() {
+    let root = tempfile::tempdir().unwrap();
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry.initialize().unwrap();
+    let cwd = root.path().to_str().unwrap().to_owned();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+    // A missing absolute program is never resolved on PATH, so no installed Codex starts.
+    manager
+        .register(Box::new(CodexClient::new(
+            root.path().join("missing-codex"),
+        )))
+        .unwrap();
+    assert!(!manager.has_sessions());
+
+    let record: PersistedAgentRuntimeRecord = serde_json::from_value(json!({
+        "id":"imported", "provider":"missing", "cwd":cwd,
+        "createdAt":"2026-11-12T00:00:00Z", "updatedAt":"2026-11-12T00:00:00Z",
+        "config":{"thinkingOptionId":" high "},
+        "persistence":{"provider":"missing","sessionId":"session"}
+    }))
+    .unwrap();
+    assert_eq!(effective_thinking_option_id(&record), Some("high"));
+    assert!(matches!(
+        manager.restore_new(record).await,
+        Err(AgentManagerError::ProviderUnavailable(provider)) if provider == "missing"
+    ));
+    assert!(!manager.has_sessions());
+    let spec = AgentSessionSpec {
+        provider: "missing".to_owned(),
+        cwd,
+        config: domain::agent_runtime::StoredAgentConfig::default(),
+        confinement: None,
+    };
+    assert_eq!(
+        manager.commands(&spec).await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
+
+    manager.into_inner().validate_provider("codex").unwrap();
+}

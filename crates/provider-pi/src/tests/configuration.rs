@@ -2,29 +2,25 @@ use super::*;
 
 #[tokio::test]
 async fn opening_thinking_rejections_reach_the_durable_failure_notice() {
-    use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
-    use crate::storage::timeline::Timeline;
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::{AgentManager, AgentManagerError};
+    use provider::testing::Manager;
     use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for resumed in [false, true] {
         let (directory, client, mut spec) = fixture("reject-thinking");
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let timeline = Timeline::memory().unwrap();
-        let mut manager =
-            AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
-        manager.register_client(Box::new(client.clone())).unwrap();
+        let timeline = provider::testing::memory_timeline().unwrap();
+        let mut manager = Manager::new(
+            AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()),
+        );
+        manager.register(Box::new(client.clone())).unwrap();
         if !resumed {
             spec.config.thinking_option_id = Some("high".into());
         }
         manager
-            .create_with_environment(
-                "agent",
-                &spec,
-                AgentRegistration::default(),
-                &client.environment,
-            )
+            .create_with_environment("agent", &spec, &client.environment)
             .await
             .unwrap();
         if resumed {
@@ -66,9 +62,11 @@ async fn opening_thinking_rejections_reach_the_durable_failure_notice() {
             record.config.unwrap().thinking_option_id.as_deref(),
             Some("high")
         );
-        let rows = timeline.read("agent").unwrap().1;
-        assert!(rows.iter().any(|row| row.entry.item["type"] == "error"
-            && row.entry.item["message"].as_str() == record.last_error.as_deref()));
+        let rows = provider::testing::timeline_entries(&timeline, "agent")
+            .unwrap()
+            .1;
+        assert!(rows.iter().any(|row| row.item["type"] == "error"
+            && row.item["message"].as_str() == record.last_error.as_deref()));
         let requests = std::fs::read_to_string(directory.path().join("requests.jsonl")).unwrap();
         let commands: Vec<Value> = requests
             .lines()
@@ -115,23 +113,19 @@ async fn correcting_an_opening_rejection_applies_the_new_preference() {
 
 #[tokio::test]
 async fn partial_control_rejections_persist_the_actual_runtime_before_settlement() {
-    use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::{AgentManager, AgentManagerError};
+    use provider::testing::Manager;
     use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     let (directory, client, mut spec) = fixture("summary-model-reply-reject-thinking");
     spec.config.thinking_option_id = Some("high".into());
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let mut manager = AgentManager::new(Box::new(registry.clone()));
-    manager.register_client(Box::new(client.clone())).unwrap();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+    manager.register(Box::new(client.clone())).unwrap();
     manager
-        .create_with_environment(
-            "agent",
-            &spec,
-            AgentRegistration::default(),
-            &client.environment,
-        )
+        .create_with_environment("agent", &spec, &client.environment)
         .await
         .unwrap();
     manager

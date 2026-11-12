@@ -17,10 +17,8 @@ enum HostAction {
 
 #[test]
 fn tool_events_match_the_shared_client_schema_fixtures() {
-    let cases: Vec<ToolCase> = serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/pi_tool_cards.json"
-    ))
-    .unwrap();
+    let cases: Vec<ToolCase> =
+        serde_json::from_str(include_str!("../../tests/fixtures/pi_tool_cards.json")).unwrap();
     for case in cases {
         let mut stream = streaming::Stream::default();
         stream.begin("turn".into());

@@ -214,7 +214,7 @@ async fn probe_keeps_success_when_cleanup_exceeds_budget() {
     std::fs::write(&program, include_str!("shutdown.py")).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let client = PiClient::new(program);
-    let result = crate::local::pi::probe::run(
+    let result = crate::probe::run(
         &client,
         directory.path().to_str().unwrap(),
         None,

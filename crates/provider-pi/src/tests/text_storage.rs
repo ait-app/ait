@@ -1,5 +1,6 @@
 use super::*;
-use crate::storage::timeline::{MAX_ENTRY_BYTES, Timeline};
+use provider::storage::timeline::Timeline;
+use provider::testing::MAX_TIMELINE_ENTRY_BYTES;
 
 #[test]
 fn extension_notifications_survive_timeline_reopen_with_bounded_payloads() {
@@ -16,25 +17,25 @@ fn extension_notifications_survive_timeline_reopen_with_bounded_payloads() {
     let Some(AgentTurnEvent::Timeline(entry)) = stream.pop() else {
         panic!("expected notification timeline entry");
     };
-    assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_ENTRY_BYTES);
+    assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
     let expected = entry.clone();
-    timeline.append("agent", "pi", &[entry]).unwrap();
+    provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
     drop(timeline);
 
     let reopened = Timeline::open(&database).unwrap();
-    let (_, rows) = reopened.read("agent").unwrap();
+    let (_, rows) = provider::testing::timeline_entries(&reopened, "agent").unwrap();
 
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].entry, expected);
-    assert_eq!(rows[0].entry.item["type"], "notification");
-    assert_eq!(rows[0].entry.item["message"], message);
-    assert_eq!(rows[0].entry.item["metadata"]["transient"], true);
+    assert_eq!(rows[0], expected);
+    assert_eq!(rows[0].item["type"], "notification");
+    assert_eq!(rows[0].item["message"], message);
+    assert_eq!(rows[0].item["metadata"]["transient"], true);
 }
 
 #[test]
 fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
     for kind in ["text", "thinking"] {
-        let timeline = Timeline::memory().unwrap();
+        let timeline = provider::testing::memory_timeline().unwrap();
         let mut stream = streaming::Stream::default();
         stream.begin(uuid::Uuid::new_v4().to_string());
         stream.admission = true;
@@ -51,9 +52,8 @@ fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
         let AgentTurnEvent::Progress { observation, entry } = stream.pop().unwrap() else {
             panic!("expected coalesced progress");
         };
-        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_ENTRY_BYTES);
-        timeline
-            .progress("agent", "pi", &observation, &entry)
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+        provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
             .unwrap();
         stream.end_admission();
         stream
@@ -64,19 +64,19 @@ fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
         let AgentTurnEvent::Timeline(entry) = stream.pop().unwrap() else {
             panic!("expected completed text");
         };
-        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_ENTRY_BYTES);
-        timeline.append("agent", "pi", &[entry]).unwrap();
-        let (_, rows) = timeline.read("agent").unwrap();
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+        provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
+        let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].entry.item["text"], text);
-        assert_eq!(rows[1].entry.item["text"], "");
+        assert_eq!(rows[0].item["text"], text);
+        assert_eq!(rows[1].item["text"], "");
     }
 }
 
 #[test]
 fn published_deltas_require_an_ordered_prefix_at_completion() {
     for complete in ["first second tail", "second first tail"] {
-        let timeline = Timeline::memory().unwrap();
+        let timeline = provider::testing::memory_timeline().unwrap();
         let mut stream = streaming::Stream::default();
         stream.begin("turn".into());
         stream.admission = true;
@@ -89,8 +89,7 @@ fn published_deltas_require_an_ordered_prefix_at_completion() {
             let AgentTurnEvent::Progress { observation, entry } = stream.pop().unwrap() else {
                 panic!("expected progress");
             };
-            timeline
-                .progress("agent", "pi", &observation, &entry)
+            provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
                 .unwrap();
             stream.end_admission();
         }
@@ -102,11 +101,11 @@ fn published_deltas_require_an_ordered_prefix_at_completion() {
         let AgentTurnEvent::Timeline(entry) = stream.pop().unwrap() else {
             panic!("expected completion");
         };
-        let result = timeline.append("agent", "pi", &[entry]);
+        let result = provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]);
         if complete.starts_with("first ") {
             result.unwrap();
-            let (_, rows) = timeline.read("agent").unwrap();
-            assert_eq!(rows[2].entry.item["text"], "tail");
+            let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
+            assert_eq!(rows[2].item["text"], "tail");
         } else {
             assert_eq!(result, Err(model::ErrorCode::IdempotencyConflict));
         }
@@ -127,17 +126,16 @@ fn admission_chunk_rollover_preserves_order_and_observation_identity() {
             .unwrap();
     }
     assert_eq!(stream.events().len(), 2);
-    let timeline = Timeline::memory().unwrap();
+    let timeline = provider::testing::memory_timeline().unwrap();
     while let Some(AgentTurnEvent::Progress { observation, entry }) = stream.pop() {
-        timeline
-            .progress("agent", "pi", &observation, &entry)
+        provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
             .unwrap();
     }
-    let (_, rows) = timeline.read("agent").unwrap();
+    let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].entry.key, rows[1].entry.key);
-    assert_eq!(rows[0].entry.item["text"], first);
-    assert_eq!(rows[1].entry.item["text"], "second third");
+    assert_eq!(rows[0].key, rows[1].key);
+    assert_eq!(rows[0].item["text"], first);
+    assert_eq!(rows[1].item["text"], "second third");
 }
 
 #[test]
@@ -155,7 +153,7 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
     };
     let text = "\u{0001}".repeat(192 * 1024);
     let events = streaming::Stream::submitted(&images, "turn", &prompt, &text).unwrap();
-    let timeline = Timeline::memory().unwrap();
+    let timeline = provider::testing::memory_timeline().unwrap();
     let mut restored = String::new();
     let mut message_ids = std::collections::BTreeSet::new();
     for event in events {
@@ -177,12 +175,18 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
         }
         assert!(message_ids.insert(entry.item["messageId"].as_str().unwrap().to_owned()));
         assert_eq!(entry.turn_id.as_deref(), Some("turn"));
-        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_ENTRY_BYTES);
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
         restored.push_str(entry.item["text"].as_str().unwrap());
-        timeline.append("agent", "pi", &[entry]).unwrap();
+        provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
     }
     assert_eq!(restored, text);
-    assert_eq!(timeline.read("agent").unwrap().1.len(), 2);
+    assert_eq!(
+        provider::testing::timeline_entries(&timeline, "agent")
+            .unwrap()
+            .1
+            .len(),
+        2
+    );
     let files: Vec<_> = std::fs::read_dir(directory).unwrap().collect();
     assert_eq!(files.len(), 1);
     assert_eq!(

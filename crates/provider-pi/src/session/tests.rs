@@ -1,5 +1,5 @@
 use super::*;
-use crate::local::pi::tests::fixture;
+use crate::tests::fixture;
 
 #[tokio::test]
 async fn persisted_work_requires_native_activity_and_a_matching_header() {

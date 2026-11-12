@@ -91,7 +91,7 @@ DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这�
 [DSH ACP 转换](../../../../crates/provider-deepseek-harness/src/config.rs#L61)、
 [OpenCode](../../../../crates/provider-opencode/src/config.rs#L38)、
 [DSH native](../../../../crates/provider-deepseek-harness/src/native/config.rs#L17)、
-[Pi](../../../../crates/provider/src/local/pi/config.rs#L27)、
+[Pi](../../../../crates/provider-pi/src/config.rs#L27)、
 [Antigravity](../../../../crates/provider-antigravity/src/config.rs#L26)。
 
 ## 建议实施顺序

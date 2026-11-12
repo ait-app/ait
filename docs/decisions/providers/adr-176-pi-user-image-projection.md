@@ -8,6 +8,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-pi
 ---
 
 # ADR-176: Pi user images in the shared timeline projection

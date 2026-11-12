@@ -17,6 +17,7 @@ paths:
   - crates/provider-claude
   - crates/provider-deepseek-harness
   - crates/provider-opencode
+  - crates/provider-pi
 ---
 
 # ADR-246：按 Host 记录的 Harness 用量账本

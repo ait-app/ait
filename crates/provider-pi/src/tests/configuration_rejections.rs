@@ -54,9 +54,10 @@ async fn thinking_rejection_survives_conflicting_readback() {
 
 #[tokio::test]
 async fn busy_admission_persists_native_changes_before_and_after_controls() {
-    use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::{AgentManager, AgentManagerError};
+    use provider::testing::Manager;
     use provider_core::protocol::agent_config::{ConfigPatch, NullableSetting};
 
     for scenario in [
@@ -66,15 +67,10 @@ async fn busy_admission_persists_native_changes_before_and_after_controls() {
     ] {
         let (directory, client, spec) = fixture(scenario);
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let mut manager = AgentManager::new(Box::new(registry.clone()));
-        manager.register_client(Box::new(client.clone())).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+        manager.register(Box::new(client.clone())).unwrap();
         manager
-            .create_with_environment(
-                "agent",
-                &spec,
-                AgentRegistration::default(),
-                &client.environment,
-            )
+            .create_with_environment("agent", &spec, &client.environment)
             .await
             .unwrap();
         if scenario == "control-starts-work" {

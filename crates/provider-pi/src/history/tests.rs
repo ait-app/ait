@@ -1422,22 +1422,23 @@ fn tool_result_images_reconcile_without_conflicts_or_loss() {
         );
 
         let history = inspect(&client, &handle(), &cwd).unwrap();
-        let timeline = crate::storage::timeline::Timeline::memory().unwrap();
-        let epoch = timeline
-            .reconcile("agent", PROVIDER, &history.entries)
-            .unwrap();
+        let timeline = provider::testing::memory_timeline().unwrap();
+        let epoch =
+            provider::testing::reconcile_timeline(&timeline, "agent", PROVIDER, &history.entries)
+                .unwrap();
         let refreshed = inspect(&client, &handle(), &cwd).unwrap();
 
         assert_eq!(
-            timeline
-                .reconcile("agent", PROVIDER, &refreshed.entries)
+            provider::testing::reconcile_timeline(&timeline, "agent", PROVIDER, &refreshed.entries)
                 .unwrap(),
             epoch
         );
-        let rows = timeline.read("agent").unwrap().1;
+        let rows = provider::testing::timeline_entries(&timeline, "agent")
+            .unwrap()
+            .1;
         let images: Vec<_> = rows
             .iter()
-            .filter_map(|row| row.entry.item["text"].as_str())
+            .filter_map(|row| row.item["text"].as_str())
             .flat_map(str::lines)
             .filter(|line| line.starts_with("![Image]("))
             .collect();

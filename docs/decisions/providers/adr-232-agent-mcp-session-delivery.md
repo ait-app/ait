@@ -6,7 +6,7 @@ amends:
   - providers/adr-202-agent-mcp-injection.md
 paths:
   - crates/provider-opencode
-  - crates/provider/src/local/pi
+  - crates/provider-pi
   - crates/provider-deepseek-harness
 ---
 

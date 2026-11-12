@@ -147,10 +147,7 @@ async fn failed_version_probes_are_shared_throttled_and_recover_after_repair() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn version_spawn_failures_preserve_os_facts_and_respect_probe_cooldown() {
-    use crate::service::provider_catalog::Catalog;
-    use model::session::SessionEvents;
-
-    let (_directory, client, _spec) = fixture("");
+    let (directory, client, _spec) = fixture("");
     std::fs::write(&client.program, "#!/missing/ait-pi-interpreter\n").unwrap();
     let clone = client.clone();
     let capture = Capture::default();
@@ -165,15 +162,16 @@ async fn version_spawn_failures_preserve_os_facts_and_respect_probe_cooldown() {
             Err(AgentSessionError::Unavailable)
         );
     }
-    let clients: BTreeMap<String, Arc<dyn AgentClient>> =
-        BTreeMap::from([(PROVIDER.into(), Arc::new(clone) as Arc<dyn AgentClient>)]);
-    let available = Catalog::default()
-        .execute(
-            &clients,
-            &SessionEvents::default(),
-            "provider.available.list.request",
-            json!({}),
-        )
+    let mut manager = provider::testing::Manager::new(
+        provider::service::agent_manager::AgentManager::new(Box::new(
+            persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+                directory.path().join("agents.json"),
+            ),
+        )),
+    );
+    manager.register(Box::new(clone)).unwrap();
+    let available = manager
+        .providers("provider.available.list.request", json!({}))
         .await
         .unwrap();
     assert_eq!(available["providers"][0]["available"], false);
@@ -225,36 +223,30 @@ async fn invalid_executable_format_has_launch_guidance_without_native_text() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn hanging_version_probe_is_bounded_and_reused_by_catalog_refreshes() {
-    use crate::service::provider_catalog::Catalog;
-    use model::session::SessionEvents;
-
     let (directory, client, spec) = fixture("version-timeout");
-    let clients: BTreeMap<String, Arc<dyn AgentClient>> =
-        BTreeMap::from([(PROVIDER.into(), Arc::new(client) as Arc<dyn AgentClient>)]);
-    let catalog = Catalog::default();
-    let events = SessionEvents::default();
+    let mut manager = provider::testing::Manager::new(
+        provider::service::agent_manager::AgentManager::new(Box::new(
+            persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+                directory.path().join("agents.json"),
+            ),
+        )),
+    );
+    manager.register(Box::new(client)).unwrap();
     let capture = Capture::default();
     let _subscriber = tracing::subscriber::set_default(capture.subscriber());
 
     tokio::time::timeout(Duration::from_secs(8), async {
         for _ in 0..2 {
-            let refreshed = catalog
-                .execute(
-                    &clients,
-                    &events,
+            let refreshed = manager
+                .providers(
                     "provider.snapshot.refresh.request",
                     json!({"cwd": spec.cwd}),
                 )
                 .await
                 .unwrap();
             assert_eq!(refreshed["acknowledged"], true);
-            let snapshot = catalog
-                .execute(
-                    &clients,
-                    &events,
-                    "provider.snapshot.get.request",
-                    json!({"cwd": spec.cwd}),
-                )
+            let snapshot = manager
+                .providers("provider.snapshot.get.request", json!({"cwd": spec.cwd}))
                 .await
                 .unwrap();
             assert_eq!(snapshot["entries"][0]["status"], "unavailable");

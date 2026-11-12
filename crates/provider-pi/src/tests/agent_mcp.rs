@@ -1,7 +1,7 @@
 //! Agent MCP injection through the private extension loaded by the offline Pi peer.
 
 use super::*;
-use crate::testing::agent_mcp::{Adapter, Opening, json_lines, verify};
+use provider::testing::agent_mcp::{Adapter, Opening, json_lines, verify};
 
 fn openings(root: &std::path::Path) -> Vec<Opening> {
     json_lines(&root.join("mcp-openings.jsonl"))

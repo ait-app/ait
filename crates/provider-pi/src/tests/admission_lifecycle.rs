@@ -155,29 +155,25 @@ async fn display_limit_without_a_native_file_preserves_the_previous_resume_requi
 
 #[tokio::test]
 async fn manager_rejection_drops_the_writer_without_projecting_rejected_input() {
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
-    use crate::storage::timeline::Timeline;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use provider::service::agent_manager::AgentManager;
+    use provider::storage::timeline::Timeline;
+    use provider::testing::Manager;
 
     let (directory, client, spec) = fixture("");
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
     let timeline = Timeline::open(&directory.path().join("timeline.sqlite")).unwrap();
-    let mut manager = AgentManager::new(Box::new(registry)).with_timeline(timeline.clone());
-    manager.register_client(Box::new(client)).unwrap();
-    manager
-        .create("agent", &spec, AgentRegistration::default())
-        .await
-        .unwrap();
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
+    manager.register(Box::new(client)).unwrap();
+    manager.create("agent", &spec).await.unwrap();
 
     assert!(manager.send("agent", "reject-settled").await.is_err());
 
     assert!(!manager.has_sessions());
-    let (_, rows) = timeline.read("agent").unwrap();
-    assert!(
-        rows.iter()
-            .all(|row| row.entry.item["type"] != "user_message")
-    );
-    assert_eq!(rows.last().unwrap().entry.item["type"], "error");
+    let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
+    assert!(rows.iter().all(|row| row.item["type"] != "user_message"));
+    assert_eq!(rows.last().unwrap().item["type"], "error");
     manager.send("agent", "hello").await.unwrap();
     manager.close_all().await.unwrap();
 }
@@ -187,7 +183,8 @@ async fn resume_recovers_history_written_after_the_manager_checkpoint() {
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
 
     for (scenario, rejected) in [
         ("history-on-shutdown", false),
@@ -198,10 +195,10 @@ async fn resume_recovers_history_written_after_the_manager_checkpoint() {
         let (directory, client, spec) = fixture(scenario);
         let environment = client.environment.clone();
         let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-        let mut manager = AgentManager::new(Box::new(registry.clone()));
-        manager.register_client(Box::new(client)).unwrap();
+        let mut manager = Manager::new(AgentManager::new(Box::new(registry.clone())));
+        manager.register(Box::new(client)).unwrap();
         manager
-            .create_with_environment("agent", &spec, AgentRegistration::default(), &environment)
+            .create_with_environment("agent", &spec, &environment)
             .await
             .unwrap();
         manager.send("agent", "handled-before").await.unwrap();
