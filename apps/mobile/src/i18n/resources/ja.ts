@@ -605,6 +605,7 @@ export const ja: TranslationResources = {
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
+    emptyForHost: "このホストにはセッションがありません",
     noMatches: "一致するセッションはありません",
     tooManyMatches: "一致が多すぎます — 検索条件を絞ってください",
     hostLoadFailed: "{{host}}: 履歴を読み込めませんでした",

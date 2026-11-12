@@ -970,7 +970,7 @@ const styles = StyleSheet.create((theme) => ({
   errorText: {
     flexShrink: 1,
     minWidth: 0,
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
   emptyState: {

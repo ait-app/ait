@@ -254,7 +254,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   submitError: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.base,
   },
 }));

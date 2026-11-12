@@ -551,7 +551,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   errorText: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
     marginTop: theme.spacing[1],
   },

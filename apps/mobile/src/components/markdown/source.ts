@@ -1,5 +1,6 @@
 import { classifyAssistantFileLink } from "@/assistant-file-links";
 import { ASSISTANT_FILE_EXTENSIONS } from "@/assistant-file-links/extensions";
+import { normalizeCjkEmphasis } from "./cjk-emphasis";
 import { normalizeMarkdownHtml } from "./html";
 import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
@@ -109,6 +110,8 @@ export function prepareMarkdownSource(
   options: { supportsSvg?: boolean } = {},
 ) {
   source = normalizeMarkdownHtml(source);
+  // Reorders characters without changing length; offsets below index this source.
+  source = normalizeCjkEmphasis(source);
   const images: MarkdownImage[] = [];
   let tree: Root | undefined;
   const getTree = () =>

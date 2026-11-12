@@ -603,7 +603,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   exitBadgeTextError: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
   },
   iconActionButton: {
     padding: 2,

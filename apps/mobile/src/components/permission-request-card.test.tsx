@@ -2,8 +2,9 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import { i18n } from "@/i18n/i18next";
 import type { PendingPermission } from "@/types/shared";
 import { PermissionRequestCard } from "./permission-request-card";
 
@@ -66,6 +67,10 @@ const permission: PendingPermission = {
   },
 };
 
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -74,7 +79,7 @@ afterEach(() => {
 function mount(
   client: unknown,
   request = permission,
-  options: { compact?: boolean; onOpenDetails?: () => void } = {},
+  options: { panel?: boolean; compact?: boolean; onOpenDetails?: () => void } = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -225,6 +230,59 @@ describe("shared permission card", () => {
       request: { ...permission.request, name: "commandExecution", input },
     });
     expect(JSON.parse(screen.getByTestId("tool-detail").textContent!).input).toEqual(input);
+  });
+
+  it("names a chat command request and shows its command and directory without transport IDs", () => {
+    mount(
+      null,
+      {
+        ...permission,
+        request: {
+          ...permission.request,
+          name: "commandExecution",
+          title: undefined,
+          input: {
+            command: "npm test",
+            cwd: "/repo",
+            threadId: "thread-1",
+            turnId: "turn-1",
+            itemId: "approval-item",
+          },
+        },
+      },
+      { panel: false },
+    );
+    expect(screen.getByText("Run command")).toBeTruthy();
+    expect(screen.queryByText("commandExecution")).toBeNull();
+    expect(JSON.parse(screen.getByTestId("tool-detail").textContent!)).toEqual({
+      type: "shell",
+      command: "npm test",
+      cwd: "/repo",
+    });
+    expect(screen.getByTestId("permission-request-cwd").textContent).toBe("/repo");
+  });
+
+  it("fills only the primary chat action and keeps the provider's action order", () => {
+    mount(null, permission, { panel: false });
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["Allow once", "Deny"]);
+    expect(buttons[0].style.backgroundColor).toBe("rgb(37, 99, 235)");
+    expect(buttons[1].style.backgroundColor).not.toBe("rgb(37, 99, 235)");
+  });
+
+  it("keeps additional command arguments visible in the chat request", () => {
+    const input = { command: "npm test", cwd: "/repo", env: { TARGET: "production" } };
+    mount(
+      null,
+      { ...permission, request: { ...permission.request, name: "commandExecution", input } },
+      { panel: false },
+    );
+    expect(JSON.parse(screen.getByTestId("tool-detail").textContent!)).toEqual({
+      type: "unknown",
+      input,
+      output: null,
+    });
+    expect(screen.queryByTestId("permission-request-cwd")).toBeNull();
   });
 
   it("retains question answers and uses the bounded question response deadline", async () => {

@@ -249,7 +249,7 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   errorText: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
     lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
