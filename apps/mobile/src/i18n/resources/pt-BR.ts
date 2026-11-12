@@ -2489,8 +2489,6 @@ export const ptBR: TranslationResources = {
       cacheWrite: "Gravação de cache {{value}}",
       cacheHitRate: "Acertos de cache {{value}}",
       reportedCost: "Custo informado pelo provedor {{value}}",
-      lowerBound:
-        "≥ indica um mínimo: algumas chamadas informaram só parte do uso de tokens, ou nada.",
       recordedSince: "O histórico de uso começa em {{date}}. Nada anterior foi registrado.",
       empty: "Nenhuma chamada neste período",
       unreachable: "Não contabilizados, sem conexão: {{hosts}}",

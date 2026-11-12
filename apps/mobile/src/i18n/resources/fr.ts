@@ -2515,8 +2515,6 @@ export const fr: TranslationResources = {
       cacheWrite: "Écriture du cache {{value}}",
       cacheHitRate: "Succès du cache {{value}}",
       reportedCost: "Coût indiqué par le fournisseur {{value}}",
-      lowerBound:
-        "≥ indique une borne inférieure : certains appels n'ont indiqué qu'une partie de leur usage de jetons, ou rien.",
       recordedSince:
         "L'historique d'utilisation commence le {{date}}. Rien n'a été enregistré avant.",
       empty: "Aucun appel sur cette période",

@@ -61,18 +61,27 @@ export function formatAmount(value: number, unit: UsageBalanceUnit, locale: stri
   }
 }
 
-/** A ledger count in the app's language, compacted past a thousand: "980", "12.3K", "1.2M". */
-export function formatLedgerCount(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    notation: value >= 1_000 ? "compact" : "standard",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
+const LEDGER_UNITS = [
+  { size: 1_000_000_000, suffix: "B" },
+  { size: 1_000_000, suffix: "M" },
+  { size: 1_000, suffix: "K" },
+] as const;
 
-/** A ledger token figure, marked "≥" when some calls behind it reported partial usage or none. */
-export function formatLedgerTokens(value: number, lowerBound: boolean, locale: string): string {
-  const formatted = formatLedgerCount(value, locale);
-  return lowerBound ? `≥${formatted}` : formatted;
+/**
+ * A ledger count compacted past a thousand with K, M and B in every language, never 万 or 亿:
+ * "980", "12.3K", "1.3M", "4.6B". Only the decimal separator follows the app's language.
+ */
+export function formatLedgerCount(value: number, locale: string): string {
+  const digits = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+  const scaled = (size: number) => Math.round((Math.abs(value) / size) * 10) / 10;
+  const index = LEDGER_UNITS.findIndex(({ size }) => Math.abs(value) >= size);
+  if (index === -1) return digits.format(value);
+  // A figure that rounds up to a thousand of its unit moves up one, so 999,960 reads "1M".
+  const unit =
+    index > 0 && scaled(LEDGER_UNITS[index].size) >= 1_000
+      ? LEDGER_UNITS[index - 1]
+      : LEDGER_UNITS[index];
+  return `${digits.format(Math.sign(value) * scaled(unit.size))}${unit.suffix}`;
 }
 
 /** A cache hit rate (0 to 1) as a whole percent: "77%". */
@@ -81,24 +90,22 @@ export function formatCacheHitRate(rate: number): string {
 }
 
 /**
- * The cost providers reported, or null when none did. Marked "≥" when only some requests reported
- * one; a cost under a cent keeps two significant digits instead of rounding to nothing.
+ * The cost providers reported, or null when none did; a cost under a cent keeps two significant
+ * digits instead of rounding to nothing.
  */
 export function formatReportedCost(
-  row: { reportedCostUsd: number; costReportedRequests: number; requests: number },
+  row: { reportedCostUsd: number; costReportedRequests: number },
   locale: string,
 ): string | null {
   if (row.costReportedRequests === 0) return null;
   const value = row.reportedCostUsd;
-  const amount =
-    value > 0 && value < 0.01
-      ? new Intl.NumberFormat(locale, {
-          style: "currency",
-          currency: "USD",
-          maximumSignificantDigits: 2,
-        }).format(value)
-      : formatAmount(value, "usd", locale);
-  return row.costReportedRequests < row.requests ? `≥${amount}` : amount;
+  return value > 0 && value < 0.01
+    ? new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "USD",
+        maximumSignificantDigits: 2,
+      }).format(value)
+    : formatAmount(value, "usd", locale);
 }
 
 /** A ledger day ("2026-11-10", UTC) as the app's language writes it: "Nov 10". */

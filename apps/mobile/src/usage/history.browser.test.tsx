@@ -74,7 +74,7 @@ afterEach(async () => {
 });
 
 describe("usage history in Chromium", () => {
-  it("marks lower bounds, lists unreachable hosts, and does not treat a missing ledger as an error", () => {
+  it("shows reported figures without a lower-bound marker, lists unreachable hosts, and does not treat a missing ledger as an error", () => {
     const node = render(
       combineUsageHistory([
         {
@@ -115,7 +115,8 @@ describe("usage history in Chromium", () => {
     );
     const byModel = node.querySelector('[data-testid="usage-history-by-model"]')!;
     expect(byModel.textContent).toContain("Claude · opus");
-    expect(byModel.textContent).toContain("Tokens ≥4.5K");
+    expect(byModel.textContent).toContain("Tokens 4.5K");
+    expect(node.textContent).not.toContain("≥");
     expect(byModel.textContent).toContain("Cache hit 75%");
     expect(byModel.textContent).toContain("Provider-reported cost $0.25");
     expect(node.querySelector('[data-testid="usage-history-by-provider"]')?.textContent).toContain(
@@ -124,7 +125,6 @@ describe("usage history in Chromium", () => {
     expect(node.querySelector('[data-testid="usage-history-by-day"]')?.textContent).toContain(
       "Nov 10",
     );
-    expect(node.textContent).toContain("≥ marks a lower bound");
     expect(node.textContent).toContain("Not counted, unable to reach: Offline");
     expect(node.textContent).toContain("Usage history is not recorded on NoLedger");
     expect(node.textContent).not.toContain("Unable to load");

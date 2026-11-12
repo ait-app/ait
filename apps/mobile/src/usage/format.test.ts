@@ -7,7 +7,6 @@ import {
   formatLedgerCount,
   formatLedgerDate,
   formatLedgerDay,
-  formatLedgerTokens,
   formatReportedCost,
   formatResetLabel,
   formatRunOutLabel,
@@ -57,16 +56,30 @@ it("retained reset times that have passed do not claim the quota is resetting", 
 });
 
 describe("ledger figures", () => {
-  it("compacts counts past a thousand in the app's language", () => {
+  it("compacts counts past a thousand with K, M and B", () => {
+    expect(formatLedgerCount(0, "en")).toBe("0");
     expect(formatLedgerCount(980, "en")).toBe("980");
+    expect(formatLedgerCount(999, "en")).toBe("999");
+    expect(formatLedgerCount(1_000, "en")).toBe("1K");
     expect(formatLedgerCount(12_345, "en")).toBe("12.3K");
     expect(formatLedgerCount(1_250_000, "en")).toBe("1.3M");
+    expect(formatLedgerCount(4_567_000_000, "en")).toBe("4.6B");
+    expect(formatLedgerCount(1_234_000_000_000, "en")).toBe("1,234B");
   });
 
-  it("marks lower-bound token figures with ≥", () => {
-    expect(formatLedgerTokens(12_345, false, "en")).toBe("12.3K");
-    expect(formatLedgerTokens(12_345, true, "en")).toBe("≥12.3K");
-    expect(formatLedgerTokens(0, true, "en")).toBe("≥0");
+  it("moves up a unit when rounding reaches a thousand of the smaller one", () => {
+    expect(formatLedgerCount(999_960, "en")).toBe("1M");
+    expect(formatLedgerCount(999_960_000, "en")).toBe("1B");
+  });
+
+  it("uses K, M and B instead of 万 and 亿 in Chinese", () => {
+    expect(formatLedgerCount(12_345, "zh-CN")).toBe("12.3K");
+    expect(formatLedgerCount(123_456_789, "zh-CN")).toBe("123.5M");
+    expect(formatLedgerCount(2_500_000_000, "zh-CN")).toBe("2.5B");
+  });
+
+  it("keeps the language's decimal separator", () => {
+    expect(formatLedgerCount(12_345, "fr")).toBe("12,3K");
   });
 
   it("writes cache hit rates as whole percents", () => {
@@ -74,10 +87,10 @@ describe("ledger figures", () => {
     expect(formatCacheHitRate(0)).toBe("0%");
   });
 
-  it("shows reported cost only when a provider reported one, and marks partial reports", () => {
+  it("shows the reported cost only when a provider reported one, without a ≥ marker", () => {
     const row = { reportedCostUsd: 1.5, costReportedRequests: 2, requests: 2 };
     expect(formatReportedCost(row, "en")).toBe("$1.50");
-    expect(formatReportedCost({ ...row, costReportedRequests: 1 }, "en")).toBe("≥$1.50");
+    expect(formatReportedCost({ ...row, costReportedRequests: 1 }, "en")).toBe("$1.50");
     expect(formatReportedCost({ ...row, costReportedRequests: 0 }, "en")).toBeNull();
     expect(formatReportedCost({ ...row, reportedCostUsd: 0.0042 }, "en")).toBe("$0.0042");
   });

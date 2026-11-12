@@ -2505,8 +2505,6 @@ export const es: TranslationResources = {
       cacheWrite: "Escritura de caché {{value}}",
       cacheHitRate: "Aciertos de caché {{value}}",
       reportedCost: "Coste informado por el proveedor {{value}}",
-      lowerBound:
-        "≥ indica un mínimo: algunas llamadas informaron solo parte de su uso de tokens, o nada.",
       recordedSince: "El historial de uso empieza el {{date}}. No hay registros anteriores.",
       empty: "No hay llamadas en este periodo",
       unreachable: "Sin contar, no se pudo conectar: {{hosts}}",

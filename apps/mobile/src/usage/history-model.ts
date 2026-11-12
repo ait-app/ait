@@ -22,11 +22,6 @@ export function historyWindow(range: HistoryRange, now: number): { from: number;
   return { from: now - RANGE_MS[range], to: now };
 }
 
-/** Whether any call behind a row reported partial token usage or none, so its totals are minimums. */
-export function isLowerBound(row: LedgerRow): boolean {
-  return row.lowerBoundCalls > 0 || row.missingCalls > 0;
-}
-
 /** Every token the row counts. The buckets are disjoint, so their sum counts nothing twice. */
 export function totalTokens(row: LedgerRow): number {
   return row.inputTokens + row.outputTokens + row.cacheReadTokens + row.cacheWriteTokens;
@@ -227,11 +222,6 @@ export function combineUsageHistory(hosts: readonly LedgerHostInput[]): UsageHis
   history.byProvider = sumRows(modelRows, (key) => ({ provider: key.provider })).sort(byUsage);
   history.byDay = sumRows(dayRows).sort(byDayDescending);
   return history;
-}
-
-/** Whether any row of the view is only a lower bound, so the view explains the "≥" marker. */
-export function hasLowerBound(history: Pick<UsageHistory, "byModel" | "byDay">): boolean {
-  return history.byModel.some(isLowerBound) || history.byDay.some(isLowerBound);
 }
 
 /** What a host's settings page shows of its ledger. */

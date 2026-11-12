@@ -2648,7 +2648,6 @@ export const zhCN: TranslationResources = {
       cacheWrite: "缓存写入 {{value}}",
       cacheHitRate: "缓存命中 {{value}}",
       reportedCost: "提供方报告的费用 {{value}}",
-      lowerBound: "≥ 表示下限：部分调用只报告了部分 token 用量或未报告。",
       recordedSince: "用量历史从 {{date}} 开始，更早的记录不存在。",
       empty: "此期间没有调用",
       unreachable: "未计入，无法连接：{{hosts}}",

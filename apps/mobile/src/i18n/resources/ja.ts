@@ -2519,8 +2519,6 @@ export const ja: TranslationResources = {
       cacheWrite: "キャッシュ書き込み {{value}}",
       cacheHitRate: "キャッシュヒット {{value}}",
       reportedCost: "プロバイダー報告の費用 {{value}}",
-      lowerBound:
-        "≥ は下限を示します：一部の呼び出しはトークン使用量の一部のみを報告したか、報告しませんでした。",
       recordedSince: "使用履歴は {{date}} から始まります。それ以前の記録はありません。",
       empty: "この期間の呼び出しはありません",
       unreachable: "集計対象外、接続できません：{{hosts}}",

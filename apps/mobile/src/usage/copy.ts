@@ -161,9 +161,6 @@ function createHistoryCopy(t: TFunction) {
     cacheWrite: figure("cacheWrite"),
     cacheHitRate: figure("cacheHitRate"),
     reportedCost: figure("reportedCost"),
-    get lowerBound() {
-      return t("providerUsage.history.lowerBound");
-    },
     recordedSince: (date: string) => t("providerUsage.history.recordedSince", { date }),
     get empty() {
       return t("providerUsage.history.empty");
