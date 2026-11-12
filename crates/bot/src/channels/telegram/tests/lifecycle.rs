@@ -10,6 +10,20 @@ use tokio::sync::Notify;
 use super::*;
 use crate::test_support::{Fixture, WORKSPACE, setup};
 
+const QUOTED_REPLY: &str =
+    "reply:@ait_bot hello\n\n[Quoted Telegram message]\nhttps://x.com/paseo_sh/status/123";
+
+fn quoted_update() -> Value {
+    let mut message = update();
+    message["message"]["message_id"] = json!(42);
+    message["message"]["reply_to_message"] = json!({
+        "message_id": 41,
+        "from": {"id": 7},
+        "text": "https://x.com/paseo_sh/status/123"
+    });
+    message
+}
+
 async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
     bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
@@ -148,8 +162,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
             "/botfake/getUpdates",
             post(|Json(body): Json<Value>| async move {
                 if body["offset"] == 0 {
-                    let mut message = update();
-                    message["message"]["message_id"] = json!(42);
+                    let message = quoted_update();
                     let mut follow_up = update();
                     follow_up["update_id"] = json!(11);
                     follow_up["message"]["message_id"] = json!(44);
@@ -174,7 +187,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
                             || body["reply_parameters"]["message_id"] == 44
                     );
                     assert!(
-                        body["text"] == "reply:@ait_bot hello"
+                        body["text"] == format::render(QUOTED_REPLY)
                             || body["text"] == "reply:@ait_bot follow up"
                     );
                     observed.notify_one();
@@ -204,7 +217,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
             {
                 assert!(turns.iter().any(|turn| {
                     turn.reply_to.as_deref() == Some("42")
-                        && turn.reply.as_deref() == Some("reply:@ait_bot hello")
+                        && turn.reply.as_deref() == Some(QUOTED_REPLY)
                 }));
                 assert!(turns.iter().any(|turn| {
                     turn.reply_to.as_deref() == Some("44")
