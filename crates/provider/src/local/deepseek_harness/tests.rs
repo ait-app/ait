@@ -102,6 +102,20 @@ async fn missing_acp_program_is_unavailable() {
     ));
 }
 
+#[test]
+fn summary_model_takes_flash_and_never_mistakes_gemini_for_mini() {
+    let client = DeepSeekHarnessClient::new("dsh".into());
+    let models = vec![
+        json!({"id":"[\"google\",\"gemini-2.5-pro\"]","label":"Gemini 2.5 Pro"}),
+        json!({"id":"[\"google\",\"gemini-2.5-flash\"]","label":"Gemini 2.5 Flash"}),
+    ];
+    assert_eq!(
+        client.summary_model(&models).unwrap().model.as_deref(),
+        Some("[\"google\",\"gemini-2.5-flash\"]")
+    );
+    assert!(client.summary_model(&models[..1]).is_none());
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn discovers_opaque_grouped_models_and_actual_reasoning_choices() {

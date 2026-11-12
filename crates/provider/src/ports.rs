@@ -3,6 +3,7 @@
 pub mod account_usage;
 pub mod agent;
 pub mod agent_session;
+pub mod bot_session;
 pub mod controls;
 pub mod diagnostics;
 pub mod environment;

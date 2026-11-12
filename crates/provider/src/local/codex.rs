@@ -37,7 +37,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
-use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
+use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]

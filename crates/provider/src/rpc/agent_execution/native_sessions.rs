@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{ErrorCode, ExecutionState, decode, only};
-use crate::ports::native_history::SessionHistory;
+use crate::ports::native_history::{CwdLookup, SessionHistory};
 use crate::protocol::native_sessions::{ForkRequest, ImportRequest};
 use crate::service::agent_manager::native_sessions::canonical;
 
@@ -65,7 +65,8 @@ impl ExecutionState {
         let request: ImportRequest = decode(params)?;
         let handle = import_handle(&request)?;
         let cwd = canonical(&request.cwd)?;
-        let lookup_cwd = inspection_cwd(&handle.provider, &request.cwd, &cwd);
+        let lookup = self.manager.cwd_lookup(&handle.provider);
+        let lookup_cwd = inspection_cwd(lookup, &request.cwd, &cwd);
         let matching: Vec<_> = self
             .registry
             .list()
@@ -128,11 +129,11 @@ impl ExecutionState {
 
 /// Select the validated lookup spelling without changing canonical Agent placement.
 pub(super) fn inspection_cwd<'a>(
-    provider: &str,
+    lookup: CwdLookup,
     requested_cwd: &'a str,
     canonical_cwd: &'a str,
 ) -> &'a str {
-    if provider == crate::local::pi::PROVIDER {
+    if lookup == CwdLookup::Requested {
         requested_cwd
     } else {
         canonical_cwd

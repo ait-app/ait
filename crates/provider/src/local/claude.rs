@@ -23,9 +23,9 @@ use serde_json::{Value, json};
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
+use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::{provider::Details, timeline::NativeItem};
-use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 /// Local Claude Code executable; credentials and native tools remain owned by Claude Code.
 #[derive(Debug, Clone)]

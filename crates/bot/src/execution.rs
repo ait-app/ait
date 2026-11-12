@@ -4,7 +4,8 @@ use std::time::Duration;
 use domain::bot::{
     Conversation, ExecutionConfig, SessionOwner, Turn, TurnMessage, TurnMessageStatus, TurnStatus,
 };
-use provider::service::bot_execution::{Action, Created, InstructionDelivery, TimelineCursor};
+use provider::ports::bot_session::InstructionDelivery;
+use provider::service::bot_execution::{Action, Created, TimelineCursor};
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::Executor;

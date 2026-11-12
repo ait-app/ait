@@ -59,6 +59,7 @@ async fn unsupported_providers_skip_the_saturated_history_budget_without_probing
     manager
         .register_client(Box::new(ImportClient {
             provider: "unsupported",
+            lookup: CwdLookup::Canonical,
             supported: false,
             available: Ok(true),
             sessions: Err(AgentSessionError::Unavailable),
@@ -89,6 +90,7 @@ async fn cancelling_listing_releases_capacity_for_another_providers_inspection()
         manager
             .register_client(Box::new(ImportClient {
                 provider: "inspecting",
+                lookup: CwdLookup::Canonical,
                 supported: true,
                 available: Ok(true),
                 sessions: Ok(Vec::new()),
@@ -143,6 +145,7 @@ async fn listing_releases_history_capacity_after_absence_errors_and_success() {
         manager
             .register_client(Box::new(ImportClient {
                 provider,
+                lookup: CwdLookup::Canonical,
                 supported: true,
                 available,
                 sessions,

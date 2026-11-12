@@ -34,6 +34,7 @@ use crate::ports::agent_session::{
     AgentTurnEvent,
 };
 use crate::ports::mcp_scope::McpSubject;
+use crate::ports::native_history::CwdLookup;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::protocol::agent_config::ConfigPatch;
 use crate::service::bot_execution::TimelineCursor;
@@ -447,11 +448,20 @@ impl AgentManager {
     pub(crate) fn bot_session_support(
         &self,
         provider: &str,
-    ) -> Result<crate::service::bot_execution::BotSessionSupport, AgentManagerError> {
+    ) -> Result<crate::ports::bot_session::BotSessionSupport, AgentManagerError> {
         self.clients
             .get(provider)
             .map(|client| client.bot_session_support())
             .ok_or_else(|| AgentManagerError::ProviderUnavailable(provider.to_owned()))
+    }
+
+    /// Working-directory spelling the `provider` adapter's native session lookup expects;
+    /// `Canonical` when no adapter is registered for `provider`.
+    pub(crate) fn cwd_lookup(&self, provider: &str) -> CwdLookup {
+        self.clients
+            .get(provider)
+            .map(|client| client.cwd_lookup())
+            .unwrap_or_default()
     }
 
     /// Return the live session's latest registered snapshot, if this process owns it.

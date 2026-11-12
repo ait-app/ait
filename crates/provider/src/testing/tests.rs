@@ -2,7 +2,7 @@ use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use serde_json::json;
 
 use super::*;
-use crate::local::pi::PiClient;
+use crate::local::codex::CodexClient;
 
 fn entry(key: &str, text: &str) -> NativeItem {
     NativeItem {
@@ -39,11 +39,11 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
     let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
 
     manager
-        .register(Box::new(PiClient::new("pi".into())))
+        .register(Box::new(CodexClient::new("codex".into())))
         .unwrap();
     assert!(matches!(
-        manager.register(Box::new(PiClient::new("pi".into()))),
-        Err(AgentManagerError::AlreadyExists(provider)) if provider == "pi"
+        manager.register(Box::new(CodexClient::new("codex".into()))),
+        Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"
     ));
     assert_eq!(manager.active_turn("missing"), None);
     assert!(manager.live_snapshot("missing").is_none());

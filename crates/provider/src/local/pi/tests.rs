@@ -236,6 +236,14 @@ async fn resume_rejects_foreign_provider_and_mismatched_cwd() {
     ));
 }
 
+#[test]
+fn cwd_lookup_keeps_the_requested_directory_spelling() {
+    assert_eq!(
+        PiClient::new("pi".into()).cwd_lookup(),
+        CwdLookup::Requested
+    );
+}
+
 #[tokio::test]
 async fn model_less_create_and_resume_each_fetch_state_once() {
     let (directory, client, spec) = fixture("");

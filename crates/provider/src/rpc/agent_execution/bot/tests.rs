@@ -2,8 +2,8 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::json;
 
 use super::Profile;
+use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
-use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 const CAPABLE: BotSessionSupport = BotSessionSupport {
     instructions: InstructionDelivery::SystemPrompt,

@@ -21,6 +21,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
+use crate::ports::native_history::CwdLookup;
 use crate::protocol::provider::Details;
 
 pub(crate) const PROVIDER: &str = "pi";
@@ -147,6 +148,10 @@ impl AgentClient for PiClient {
 
     fn provider(&self) -> &'static str {
         PROVIDER
+    }
+
+    fn cwd_lookup(&self) -> CwdLookup {
+        CwdLookup::Requested
     }
 
     fn supports_history_replay(&self) -> bool {

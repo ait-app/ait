@@ -73,6 +73,16 @@ pub struct ListOptions {
     pub scan_limit: usize,
 }
 
+/// Working-directory spelling a provider's native session lookup expects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CwdLookup {
+    /// The canonical directory Ait stores for the Agent.
+    #[default]
+    Canonical,
+    /// The spelling the client sent, before canonicalization.
+    Requested,
+}
+
 /// Complete native facts used to validate an import or refresh before publishing host state.
 #[derive(Debug, Clone)]
 pub struct SessionHistory {

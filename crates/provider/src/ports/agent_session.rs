@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
-use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
+use crate::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+use crate::ports::native_history::CwdLookup;
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -343,6 +344,11 @@ pub trait AgentClient: Debug + Send + Sync {
             tool_preapproval: false,
             ait_tools: self.supports_agent_mcp(),
         }
+    }
+
+    /// Working-directory spelling this adapter's native session lookup expects.
+    fn cwd_lookup(&self) -> CwdLookup {
+        CwdLookup::Canonical
     }
 
     /// Return the total catalog budget, including queueing and availability checks.
