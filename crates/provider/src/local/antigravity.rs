@@ -30,7 +30,7 @@ pub(crate) struct AntigravityClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
 }
 
 impl AntigravityClient {
@@ -43,14 +43,14 @@ impl AntigravityClient {
             program,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
         }
     }
 
     /// Keep submitted images in the host's private artifact directory for native reads and history.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 
@@ -86,7 +86,7 @@ impl AgentClient for AntigravityClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(super::configuration::executable(&self.program))
+        Ok(provider_native::configuration::executable(&self.program))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

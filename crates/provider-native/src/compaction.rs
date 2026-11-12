@@ -10,13 +10,13 @@ const MAX_ITEMS: usize = 4096;
 
 /// Session-local native identities and the last published compaction state.
 #[derive(Debug, Default)]
-pub(super) struct Compactions {
+pub struct Compactions {
     states: BTreeMap<String, &'static str>,
 }
 
 impl Compactions {
     /// Terminalize still-open operations when their native execution ends without a close event.
-    pub(super) fn fail_pending(&mut self) -> Vec<Value> {
+    pub fn fail_pending(&mut self) -> Vec<Value> {
         self.states
             .iter_mut()
             .filter_map(|(id, status)| {
@@ -31,7 +31,12 @@ impl Compactions {
 
     /// Return a marker for a new lifecycle state, ignoring duplicates and late starts.
     /// Invalid identities, states, triggers, or excessive distinct items return a protocol error.
-    pub(super) fn marker(
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] for an invalid identity, state or trigger, or too many
+    /// distinct items.
+    pub fn marker(
         &mut self,
         id: &str,
         status: &'static str,

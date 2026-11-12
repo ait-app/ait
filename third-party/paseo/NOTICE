@@ -31,7 +31,7 @@ sessions, explicit unsupported options, terminal-result polling and process-grou
 Scope and differences: docs/decisions/providers/adr-032-daemon-native-provider-execution.md.
 
 Codex protocol compatibility updates in crates/provider/src/local/codex*,
-crates/provider/src/local/tool_detail/subagent*, and their provider-owned tests also
+crates/provider-native/src/tool_detail/subagent*, and their provider-owned tests also
 reference getpaseo/paseo commit 4f9d9d6de2236486ecc2ad886a2c37f4b92271e0:
 packages/server/src/server/agent/providers/codex-app-server-agent.ts
 packages/server/src/server/agent/providers/codex/app-server-transport.ts

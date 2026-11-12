@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use tokio::time::{Instant, timeout_at};
 
 use super::{AgentSessionError, Runtime, SessionDescriptor};
-use crate::local::session_preview;
+use provider_native::session_preview;
 
 type Previews = (Option<String>, Option<String>);
 

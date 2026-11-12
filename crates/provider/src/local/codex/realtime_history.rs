@@ -52,7 +52,7 @@ impl Projection {
         entry: &Value,
         page: usize,
         created: &str,
-        images: &crate::local::images::ImageStore,
+        images: &provider_native::images::ImageStore,
     ) -> Result<(), AgentSessionError> {
         self.count += 1;
         if self.count > MAX_ENTRIES {
@@ -103,7 +103,7 @@ impl Projection {
         &mut self,
         entry: &Value,
         created: &str,
-        images: &crate::local::images::ImageStore,
+        images: &provider_native::images::ImageStore,
     ) -> Result<(), AgentSessionError> {
         let projected = match entry["type"].as_str() {
             Some("turnStarted") => {
@@ -225,7 +225,7 @@ fn display_bytes(item: &NativeItem) -> Result<usize, AgentSessionError> {
 pub(super) async fn read(
     transport: &mut Transport,
     thread: &Value,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<Option<Vec<NativeItem>>, AgentSessionError> {
     let id = native_sessions::text(thread, "id")?;
     let created = native_sessions::timestamp(&thread["createdAt"])?;

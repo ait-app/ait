@@ -13,9 +13,9 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{LABEL, OmpClient, PROVIDER, config, stream::Stream};
-use provider::local::session_preview;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+use provider_native::session_preview;
 
 /// Bytes of session files read per listing; later files are not described.
 const MAX_LISTING_BYTES: u64 = 256 * 1024 * 1024;

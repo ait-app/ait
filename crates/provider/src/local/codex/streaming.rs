@@ -259,7 +259,7 @@ impl Stream {
             return Err(AgentSessionError::Failed);
         }
         let turn = text(params, "turnId")?;
-        let items = crate::local::tool_detail::codex_tools(native, "running");
+        let items = provider_native::tool_detail::codex_tools(native, "running");
         if items.len() > MAX_ITEMS - self.tool_rows {
             tracing::warn!(
                 running_items = self.tool_rows,

@@ -4,7 +4,13 @@ use serde_json::{Map, Value, json};
 
 use provider_core::ports::agent_session::AgentSessionError;
 
-pub(super) fn questions(schema: &Value) -> Result<Vec<Value>, AgentSessionError> {
+/// Project an MCP elicitation `schema` into host question entries.
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when the schema is not a bounded object of supported
+/// primitive properties.
+pub fn questions(schema: &Value) -> Result<Vec<Value>, AgentSessionError> {
     if schema["type"] != "object" || !schema.is_object() {
         return Err(AgentSessionError::Rejected);
     }
@@ -110,7 +116,13 @@ fn supported(property: &Value) -> bool {
         }
 }
 
-pub(super) fn content(schema: &Value, updated: &Value) -> Result<Value, AgentSessionError> {
+/// Convert the host's `updated` answers into MCP elicitation content for `schema`.
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when the schema is unsupported or an answer does not
+/// match its property.
+pub fn content(schema: &Value, updated: &Value) -> Result<Value, AgentSessionError> {
     questions(schema)?;
     let empty = Map::new();
     let properties = schema

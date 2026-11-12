@@ -6,9 +6,9 @@ use futures_util::{StreamExt, stream};
 use serde_json::json;
 
 use super::{OpenCodeClient, SessionDescriptor, launcher};
-use crate::local::acp_config;
-use crate::local::session_preview;
 use provider_core::{ports::agent_session::AgentSessionError, protocol::timeline::NativeItem};
+use provider_native::acp_config;
+use provider_native::session_preview;
 
 #[derive(Debug, Default)]
 struct Prompts {

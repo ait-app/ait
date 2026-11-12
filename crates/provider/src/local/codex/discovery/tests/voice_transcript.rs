@@ -4,7 +4,7 @@ use super::*;
 fn realtime_delegation_projects_conversation_without_xml_or_duplicate_input() {
     let text = "<realtime_delegation>\n  <input>能进入这个 thread 吗？</input>\n  <transcript_delta>user: 试试看\nassistant: 我能听到你。\nuser: 能进入这个 thread 吗？</transcript_delta>\n</realtime_delegation>";
     let native = json!({"type":"userMessage","id":"voice","content":[{"type":"text","text":text}]});
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
 
     let entries = timeline_items(&native, "turn", "time", &images).unwrap();
 

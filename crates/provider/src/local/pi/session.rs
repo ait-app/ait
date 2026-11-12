@@ -13,12 +13,12 @@ use super::{
     streaming::Stream,
     transport::{self, Transport},
 };
-use crate::local::prompt_blocks;
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use provider_core::ports::diagnostics::{Category, Diagnostic};
 use provider_core::protocol::prompt::AgentPrompt;
+use provider_native::prompt_blocks;
 
 const ABORT_SETTLEMENT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_STATE_READS: usize = 3;
@@ -60,7 +60,7 @@ pub(super) struct Session {
     config: StoredAgentConfig,
     configuration_state: ConfigurationState,
     rejected_thinking: Option<String>,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     active: Option<String>,
     stream: Stream,
     persistence_state: PersistenceState,
@@ -136,7 +136,7 @@ pub(super) async fn open(
     transport::version(client).await?;
     let mut session = Session {
         transport: launch(client, spec, args)?,
-        mcp_servers: crate::local::acp_config::launched_servers(&spec.config).cloned(),
+        mcp_servers: provider_native::acp_config::launched_servers(&spec.config).cloned(),
         id,
         cwd: spec.cwd.clone(),
         native_cwd: native_cwd.to_owned(),
@@ -336,7 +336,7 @@ impl Session {
         if self.closed
             || self.active.is_some()
             || prompt.output_schema.is_some()
-            || crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
+            || provider_native::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -712,7 +712,7 @@ impl AgentSession for Session {
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         // MCP servers are registered when the native process starts.
-        if crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
+        if provider_native::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
             return Err(AgentSessionError::Rejected);
         }
         Ok(())

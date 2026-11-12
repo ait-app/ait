@@ -11,13 +11,13 @@ use tokio::sync::{Mutex, OnceCell, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use super::{PROVIDER, PiClient};
-use crate::local::diagnostics::Diagnostics;
-use crate::local::metadata_process::Process;
-use crate::local::process_group::{self, Signal};
 use provider_core::ports::{
     agent_session::AgentSessionError,
     diagnostics::{Category, Diagnostic},
 };
+use provider_native::diagnostics::Diagnostics;
+use provider_native::metadata_process::Process;
+use provider_native::process_group::{self, Signal};
 
 const MAX_VERSION_BYTES: usize = 64;
 const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -233,10 +233,10 @@ impl Transport {
         confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(PROVIDER);
-        let mut command = crate::local::sandbox::command(
+        let mut command = provider_native::sandbox::command(
             &client.program,
             confinement,
-            crate::local::sandbox::PI_STATE,
+            provider_native::sandbox::PI_STATE,
             &|name| client.environment.variable(name),
         )?;
         command
@@ -644,7 +644,7 @@ fn terminate(group: Option<u32>, sandboxed: bool) {
     #[cfg(target_os = "linux")]
     if sandboxed {
         if let Some(monitor) = group
-            && let Err(error) = crate::local::sandbox::linux::process::terminate_native(monitor)
+            && let Err(error) = provider_native::sandbox::linux::process::terminate_native(monitor)
         {
             tracing::debug!(error_kind = ?error.kind(), "Native sandbox termination unavailable");
         }

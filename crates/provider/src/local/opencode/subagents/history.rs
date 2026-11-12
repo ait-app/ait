@@ -4,14 +4,12 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::{LOCATOR, MAX_CHILDREN};
-use crate::local::acp_config;
-use crate::local::{
-    acp_transport::Transport,
-    opencode::{client::OpenCodeClient, config, history, launcher},
-};
+use crate::local::opencode::{client::OpenCodeClient, config, history, launcher};
 use provider_core::ports::{
     agent_session::AgentSessionError, controls::NativeSubagent, native_history::ListOptions,
 };
+use provider_native::acp_config;
+use provider_native::acp_transport::Transport;
 
 /// Discover durable native task relationships in this directory under a single bounded deadline.
 pub(in crate::local::opencode) async fn discover(

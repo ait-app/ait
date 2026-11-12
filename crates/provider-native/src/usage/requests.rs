@@ -11,7 +11,7 @@ use super::cumulative::UsageCounters;
 use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 /// Longest segment identity emitted, matching the Codex turn identity bound.
-pub(crate) const MAX_SEGMENT_ID: usize = 512;
+pub const MAX_SEGMENT_ID: usize = 512;
 
 /// Longest native response id embedded in a segment identity.
 const MAX_RESPONSE_ID: usize = 256;
@@ -68,7 +68,7 @@ impl Request {
 /// one open message. A message is emitted when the next message of its stream starts or the
 /// turn ends, so its merged value is final.
 #[derive(Debug, Default)]
-pub(crate) struct ClaudeRequests {
+pub struct ClaudeRequests {
     /// Open message of the foreground stream.
     foreground: Option<Request>,
     /// Open message of each sub-agent stream, keyed by its `parent_tool_use_id`.
@@ -89,14 +89,14 @@ pub(crate) struct ClaudeRequests {
 
 impl ClaudeRequests {
     /// Forget all state when a new turn starts.
-    pub(crate) fn begin(&mut self) {
+    pub fn begin(&mut self) {
         *self = Self::default();
     }
 
     /// Stop observing the turn once its terminal event is queued, until the next `begin`.
     ///
     /// Frames consumed before the terminal event is delivered must not add segments after it.
-    pub(crate) fn settle(&mut self) {
+    pub fn settle(&mut self) {
         self.settled = true;
     }
 
@@ -104,7 +104,7 @@ impl ClaudeRequests {
     ///
     /// Returns the previous message of the frame's stream once a different message starts, and
     /// `None` after the turn settled.
-    pub(crate) fn observe(&mut self, record: &Value, turn: &str) -> Option<RequestUsage> {
+    pub fn observe(&mut self, record: &Value, turn: &str) -> Option<RequestUsage> {
         if self.settled {
             return None;
         }
@@ -137,7 +137,7 @@ impl ClaudeRequests {
     /// With a `result` and no foreground per-message usage since the previous result, also
     /// emits one turn segment of `result.usage` minus what was already attributed. Returns no
     /// segments after the turn settled.
-    pub(crate) fn finish(&mut self, turn: &str, result: Option<&Value>) -> Vec<RequestUsage> {
+    pub fn finish(&mut self, turn: &str, result: Option<&Value>) -> Vec<RequestUsage> {
         if self.settled {
             return Vec::new();
         }
@@ -258,7 +258,7 @@ impl ClaudeRequests {
 
 /// Live Codex request usage of one thread, deduplicated by its running `total.totalTokens`.
 #[derive(Debug, Default)]
-pub(crate) struct CodexRequests {
+pub struct CodexRequests {
     /// Largest running total accepted for this thread.
     accepted_total: Option<u64>,
 }
@@ -278,7 +278,7 @@ impl CodexRequests {
     /// A request segment from `last` only when `total.totalTokens` is strictly greater than the
     /// last accepted total and `turn` is known. Duplicate and out-of-order payloads return
     /// `None`; a newer payload without `turn` returns `None` but still advances the cursor.
-    pub(crate) fn observe(
+    pub fn observe(
         &mut self,
         usage: &Value,
         turn: Option<&str>,

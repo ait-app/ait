@@ -7,8 +7,6 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{PROVIDER, client::OpenCodeClient, config, launcher, streaming::Stream};
-use crate::local::acp_config;
-use crate::local::acp_transport::Transport;
 use provider_core::{
     ports::{
         agent_session::AgentSessionError,
@@ -16,6 +14,8 @@ use provider_core::{
     },
     protocol::timeline::NativeItem,
 };
+use provider_native::acp_config;
+use provider_native::acp_transport::Transport;
 
 /// Load this native transcript within `timeout` and return the directory it was loaded from.
 ///
@@ -25,7 +25,7 @@ pub(super) async fn replay(
     transport: &mut Transport,
     id: &str,
     cwd: &str,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     timeout: std::time::Duration,
 ) -> Result<(Value, Stream, String), AgentSessionError> {
     let attachment = Attachment {
@@ -52,7 +52,7 @@ pub(super) struct Attachment<'a> {
 pub(super) async fn attach(
     transport: &mut Transport,
     attachment: &Attachment<'_>,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     timeout: std::time::Duration,
 ) -> Result<(Value, Stream, String), AgentSessionError> {
     let previous = transport.diagnostics.failure();
@@ -98,7 +98,7 @@ async fn locate(transport: &mut Transport, id: &str) -> Result<Option<String>, A
 async fn load(
     transport: &mut Transport,
     attachment: &Attachment<'_>,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     timeout: std::time::Duration,
 ) -> Result<(Value, Stream), AgentSessionError> {
     let Attachment { id, cwd, servers } = *attachment;

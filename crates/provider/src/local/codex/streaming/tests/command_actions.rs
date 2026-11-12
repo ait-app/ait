@@ -51,7 +51,7 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(completed.len(), running.len());

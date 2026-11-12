@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::local::claude::streaming;
-use crate::local::images::ImageStore;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
+use provider_native::images::ImageStore;
 
 #[derive(Debug)]
 struct Child {

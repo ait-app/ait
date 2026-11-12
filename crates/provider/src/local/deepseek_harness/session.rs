@@ -6,14 +6,14 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{DeepSeekHarnessClient, PROVIDER, config, transport};
-use crate::local::acp_config;
-use crate::local::acp_permissions;
-use crate::local::acp_streaming::Stream;
-use crate::local::acp_transport::Transport;
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use provider_core::protocol::prompt::AgentPrompt;
+use provider_native::acp_config;
+use provider_native::acp_permissions;
+use provider_native::acp_streaming::Stream;
+use provider_native::acp_transport::Transport;
 
 #[derive(Debug)]
 pub(super) struct Session {

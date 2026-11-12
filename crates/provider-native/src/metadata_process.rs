@@ -10,7 +10,7 @@ use provider_core::ports::agent_session::AgentSessionError;
 const MAX_OUTPUT: u64 = 1024 * 1024;
 
 /// One-shot native command whose process group is killed when it is dropped.
-pub(super) struct Process {
+pub struct Process {
     child: Child,
     group: Option<u32>,
 }
@@ -28,7 +28,7 @@ impl Process {
     /// # Errors
     ///
     /// Returns the OS launch error so callers can classify an unusable executable.
-    pub(super) fn spawn(command: &mut Command) -> std::io::Result<Self> {
+    pub fn spawn(command: &mut Command) -> std::io::Result<Self> {
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -49,7 +49,7 @@ impl Process {
     ///
     /// Returns `AgentSessionError::Failed` for oversized, non-UTF-8 or unreadable output
     /// and for a non-zero exit status.
-    pub(super) async fn output(mut self, limit: u64) -> Result<String, AgentSessionError> {
+    pub async fn output(mut self, limit: u64) -> Result<String, AgentSessionError> {
         let (status, bytes) = self.collect(limit).await?;
         if !status.success() {
             return Err(AgentSessionError::Failed);
@@ -84,7 +84,7 @@ impl Process {
 ///
 /// Returns `AgentSessionError::Unavailable` when the command cannot start, otherwise the
 /// output failures of [`Process::output`].
-pub(super) async fn output(command: &mut Command) -> Result<String, AgentSessionError> {
+pub async fn output(command: &mut Command) -> Result<String, AgentSessionError> {
     Process::spawn(command)
         .map_err(|_| AgentSessionError::Unavailable)?
         .output(MAX_OUTPUT)
@@ -109,7 +109,7 @@ pub(super) async fn output(command: &mut Command) -> Result<String, AgentSession
 ///
 /// Returns `AgentSessionError::Unavailable` when the command cannot start, and
 /// `AgentSessionError::Failed` for read or wait failures or stdout exceeding `limit`.
-pub(super) async fn bounded_output(
+pub async fn bounded_output(
     command: &mut Command,
     limit: u64,
 ) -> Result<(ExitStatus, Vec<u8>), AgentSessionError> {

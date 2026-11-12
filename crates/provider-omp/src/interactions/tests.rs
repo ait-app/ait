@@ -49,10 +49,8 @@ fn ask_started(dialogs: &mut Dialogs) {
 
 #[test]
 fn every_interactive_method_matches_the_shared_client_contract_and_native_reply() {
-    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../provider/tests/fixtures/omp_dialogs.json"
-    ))
-    .unwrap();
+    let fixtures: Vec<Value> =
+        serde_json::from_str(include_str!("../../tests/fixtures/omp_dialogs.json")).unwrap();
     for fixture in fixtures {
         let mut dialogs = Dialogs::default();
         assert_eq!(
@@ -87,10 +85,8 @@ fn every_interactive_method_matches_the_shared_client_contract_and_native_reply(
 
 #[test]
 fn structured_question_matches_the_client_wire_contract() {
-    let fixture: Value = serde_json::from_str(include_str!(
-        "../../../provider/tests/fixtures/omp_question.json"
-    ))
-    .unwrap();
+    let fixture: Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/omp_question.json")).unwrap();
     let mut dialogs = Dialogs::default();
 
     let request = requested(dialogs.capture(&fixture["native"]).unwrap());

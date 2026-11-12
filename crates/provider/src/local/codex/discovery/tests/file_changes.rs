@@ -13,7 +13,7 @@ fn entries(native: &Value) -> Vec<NativeItem> {
         native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap()
 }

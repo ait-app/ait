@@ -6,6 +6,7 @@ amends:
   - workspace/adr-215-sandboxed-worktree-isolation.md
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-223：Linux 沙箱化 Worktree

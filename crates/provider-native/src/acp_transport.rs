@@ -9,8 +9,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
-use crate::local::diagnostics::Diagnostics;
-use crate::local::process_group::{self, Signal};
+use crate::diagnostics::Diagnostics;
+use crate::process_group::{self, Signal};
 use provider_core::ports::agent_session::AgentSessionError;
 use provider_core::ports::diagnostics::{Category, Diagnostic};
 
@@ -19,9 +19,10 @@ const MAX_EVENTS: usize = 128;
 
 /// Owned, bounded JSON-RPC stdio connection.
 #[derive(Debug)]
-pub(crate) struct Transport {
+pub struct Transport {
     child: Child,
-    pub(crate) diagnostics: Diagnostics,
+    /// Bounded stderr explanations of the native process, shared with the owning adapter.
+    pub diagnostics: Diagnostics,
     _stderr: AbortOnDropHandle<()>,
     input: ChildStdin,
     messages: mpsc::Receiver<Value>,
@@ -34,7 +35,12 @@ pub(crate) struct Transport {
 
 impl Transport {
     /// Launch a configured command in an owned process group; returns child or pipe failures.
-    pub(crate) fn spawn(
+    ///
+    /// # Errors
+    ///
+    /// Returns the diagnosed spawn failure, or [`AgentSessionError::Failed`] when a standard pipe
+    /// is missing.
+    pub fn spawn(
         mut command: tokio::process::Command,
         cwd: &str,
         deadline: Duration,
@@ -104,17 +110,22 @@ impl Transport {
 
     /// Return the configured deadline for one control operation, including its confirmation.
     /// Prompt execution uses unbounded reads and does not use this duration.
-    pub(crate) const fn control_deadline(&self) -> Duration {
+    #[must_use]
+    pub const fn control_deadline(&self) -> Duration {
         self.deadline
     }
 
     /// Set the deadline for subsequent control requests on this owned connection.
-    pub(crate) fn set_control_deadline(&mut self, deadline: Duration) {
+    pub fn set_control_deadline(&mut self, deadline: Duration) {
         self.deadline = deadline;
     }
 
     /// Allow one potentially slow native initialization request, then restore normal controls.
-    pub(crate) async fn startup_request(
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::request`].
+    pub async fn startup_request(
         &mut self,
         method: &str,
         params: Value,
@@ -128,7 +139,12 @@ impl Transport {
     }
 
     /// Write and flush one bounded frame; closes uncertain transports on write failure.
-    pub(crate) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Rejected`] for a frame of 64 MiB or more and
+    /// [`AgentSessionError::Failed`] when the transport is closed or the write fails.
+    pub async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.closed {
             return Err(AgentSessionError::Failed);
         }
@@ -150,7 +166,11 @@ impl Transport {
     }
 
     /// Submit exactly one request and return its correlation ID without awaiting its response.
-    pub(crate) async fn begin(
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::send`].
+    pub async fn begin(
         &mut self,
         method: &str,
         params: Value,
@@ -163,7 +183,12 @@ impl Transport {
     }
 
     /// Await a control response, retaining notifications and rejecting unsupported callbacks.
-    pub(crate) async fn request(
+    ///
+    /// # Errors
+    ///
+    /// Returns the native rejection, or [`AgentSessionError::Failed`] on a protocol, timeout or
+    /// child-process failure, which also closes the transport.
+    pub async fn request(
         &mut self,
         method: &str,
         params: Value,
@@ -185,7 +210,11 @@ impl Transport {
     /// Consume replay notifications as they arrive rather than buffering a complete transcript.
     /// Frames other than the response and native callbacks, which are rejected, go to `update`.
     /// Returns protocol, callback, timeout or child-process failures without retrying the request.
-    pub(crate) async fn request_with_updates(
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::request`], and any error from `update`.
+    pub async fn request_with_updates(
         &mut self,
         method: &str,
         params: Value,
@@ -243,7 +272,11 @@ impl Transport {
     }
 
     /// Read one queued frame without blocking; returns failure after child disconnection.
-    pub(crate) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] once the child has disconnected.
+    pub fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
         if let Some(message) = self.events.pop_front() {
             return Ok(Some(message));
         }
@@ -256,7 +289,11 @@ impl Transport {
 
     /// Wait for one notification or response, preserving configuration notification order.
     /// Returns a failure when the child closes its protocol stream.
-    pub(crate) async fn receive(&mut self) -> Result<Value, AgentSessionError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] once the child has closed its protocol stream.
+    pub async fn receive(&mut self) -> Result<Value, AgentSessionError> {
         if let Some(event) = self.events.pop_front() {
             return Ok(event);
         }
@@ -264,7 +301,11 @@ impl Transport {
     }
 
     /// Stop the reader and reap the owned process group within a bounded deadline.
-    pub(crate) async fn close(&mut self) -> Result<(), AgentSessionError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] when the child is not reaped within two seconds.
+    pub async fn close(&mut self) -> Result<(), AgentSessionError> {
         if self.closed {
             return Ok(());
         }
@@ -289,7 +330,12 @@ impl Drop for Transport {
 }
 
 /// Decode a JSON-RPC result or return a safe rejection/failure without exposing native payloads.
-pub(crate) fn response(message: &Value) -> Result<Value, AgentSessionError> {
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] for a native rejection and
+/// [`AgentSessionError::Failed`] for any other error or a missing result.
+pub fn response(message: &Value) -> Result<Value, AgentSessionError> {
     if message.get("result").is_some() && message.get("error").is_none() {
         return Ok(message["result"].clone());
     }

@@ -16,7 +16,7 @@ pub(super) struct Api {
     pub(super) base: Url,
     pub(super) cookie: header::HeaderValue,
     client: Client,
-    pub(super) diagnostics: crate::local::diagnostics::Diagnostics,
+    pub(super) diagnostics: provider_native::diagnostics::Diagnostics,
 }
 
 impl std::fmt::Debug for Api {
@@ -33,7 +33,7 @@ impl Api {
     pub(super) async fn connect(
         launch: &str,
         deadline: Duration,
-        diagnostics: crate::local::diagnostics::Diagnostics,
+        diagnostics: provider_native::diagnostics::Diagnostics,
     ) -> Result<Self, AgentSessionError> {
         let mut base = Url::parse(launch).map_err(|_| AgentSessionError::Failed)?;
         if base.scheme() != "http"

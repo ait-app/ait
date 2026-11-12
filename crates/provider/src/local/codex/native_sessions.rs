@@ -181,12 +181,12 @@ pub(super) fn descriptor(thread: &Value) -> Result<SessionDescriptor, AgentSessi
 
 #[cfg(test)]
 pub(super) fn history(thread: &Value) -> Result<SessionHistory, AgentSessionError> {
-    history_with_images(thread, &crate::local::images::ImageStore::default())
+    history_with_images(thread, &provider_native::images::ImageStore::default())
 }
 
 pub(super) fn history_with_images(
     thread: &Value,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<SessionHistory, AgentSessionError> {
     let descriptor = descriptor(thread)?;
     let created_at = timestamp(&thread["createdAt"])?;

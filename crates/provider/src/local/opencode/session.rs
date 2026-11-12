@@ -22,17 +22,17 @@ use super::{
     streaming::Stream,
     subagents::live::Live,
 };
-use crate::local::acp_config;
-use crate::local::{
-    acp_permissions,
-    acp_transport::{self, Transport},
-};
 use provider_core::ports::diagnostics::{Category, Diagnostic};
 use provider_core::{
     ports::agent_session::{
         AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
     },
     protocol::prompt::AgentPrompt,
+};
+use provider_native::acp_config;
+use provider_native::{
+    acp_permissions,
+    acp_transport::{self, Transport},
 };
 
 type Pending = Arc<Mutex<BTreeMap<String, acp_permissions::Pending>>>;
@@ -92,7 +92,7 @@ pub(super) struct Session {
     closed: bool,
     failed: bool,
     failure: Option<String>,
-    diagnostics: crate::local::diagnostics::Diagnostics,
+    diagnostics: provider_native::diagnostics::Diagnostics,
 }
 
 /// Reject handles with a different provider or malformed native session identity.
@@ -843,7 +843,7 @@ impl Execution {
     }
 
     fn failure(connection: &Connection, error: &Value) -> String {
-        let diagnostic = crate::local::diagnostics::native(error, "rpc");
+        let diagnostic = provider_native::diagnostics::native(error, "rpc");
         connection
             .transport
             .diagnostics

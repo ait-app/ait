@@ -5,11 +5,18 @@ use serde_json::Value;
 use provider_core::ports::agent_session::AgentSessionError;
 use provider_core::protocol::timeline::NativeItem;
 
+/// Bounded native timeline notes persisted with the session's saved state.
 #[derive(Debug, Clone, Default)]
-pub(super) struct Notes(Vec<NativeItem>);
+pub struct Notes(Vec<NativeItem>);
 
 impl Notes {
-    pub(super) fn restore(value: Option<&Value>) -> Result<Self, AgentSessionError> {
+    /// Resume from the value previously returned by [`Self::saved`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] for a malformed value and
+    /// [`AgentSessionError::Rejected`] when it exceeds the bounds.
+    pub fn restore(value: Option<&Value>) -> Result<Self, AgentSessionError> {
         let Some(value) = value else {
             return Ok(Self::default());
         };
@@ -22,7 +29,13 @@ impl Notes {
         Ok(notes)
     }
 
-    pub(super) fn push(&mut self, entry: NativeItem) -> Result<(), AgentSessionError> {
+    /// Record `entry`, ignoring an identical repeat of its key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] when the key already holds a different item and
+    /// [`AgentSessionError::Rejected`] when the notes would exceed 128 entries or 64 KiB.
+    pub fn push(&mut self, entry: NativeItem) -> Result<(), AgentSessionError> {
         if let Some(previous) = self.0.iter().find(|previous| previous.key == entry.key) {
             return if previous.item == entry.item {
                 Ok(())
@@ -45,11 +58,14 @@ impl Notes {
         Ok(())
     }
 
-    pub(super) fn saved(&self) -> Option<Value> {
+    /// The persisted form of the notes, or `None` when there are none.
+    #[must_use]
+    pub fn saved(&self) -> Option<Value> {
         (!self.0.is_empty()).then(|| serde_json::json!(self.0))
     }
 
-    pub(super) fn history(&self, entries: &mut Vec<NativeItem>) {
+    /// Insert notes missing from `entries` in timestamp order.
+    pub fn history(&self, entries: &mut Vec<NativeItem>) {
         for entry in &self.0 {
             if !entries.iter().any(|existing| existing.key == entry.key) {
                 let timestamp = chrono::DateTime::parse_from_rfc3339(&entry.timestamp).ok();
@@ -66,7 +82,8 @@ impl Notes {
         }
     }
 
-    pub(super) fn retain(&mut self, entries: &[NativeItem]) {
+    /// Keep only notes whose turn still appears in `entries`.
+    pub fn retain(&mut self, entries: &[NativeItem]) {
         self.0.retain(|note| {
             note.turn_id.as_ref().is_some_and(|turn| {
                 entries

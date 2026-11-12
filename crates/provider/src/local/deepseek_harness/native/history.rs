@@ -1,12 +1,12 @@
 //! Read a fixed native journal cut without creating a session or sending a prompt.
 use super::super::{DeepSeekHarnessClient, PROVIDER};
 use super::{content, projection, runtime::Runtime};
-use crate::local::acp_streaming::Stream;
 use domain::agent_runtime::AgentPersistenceHandle;
 use provider_core::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::timeline::NativeItem,
 };
+use provider_native::acp_streaming::Stream;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

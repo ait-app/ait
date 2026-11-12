@@ -44,7 +44,7 @@ async fn authentication_rejects_foreign_hosts_credentials_and_unexpected_launch_
             Api::connect(
                 url,
                 std::time::Duration::from_millis(1),
-                crate::local::diagnostics::Diagnostics::new("deepseek-harness")
+                provider_native::diagnostics::Diagnostics::new("deepseek-harness")
             )
             .await
             .is_err()

@@ -11,10 +11,10 @@ use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
 use super::ClaudeClient;
-use crate::local::diagnostics::Diagnostics;
-use crate::local::process_group::{self, Signal};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_native::diagnostics::Diagnostics;
+use provider_native::process_group::{self, Signal};
 
 /// Largest stdout frame or native transcript line. `--replay-user-messages` and the transcript
 /// echo complete user inputs, including inline images, so the cap covers the largest accepted
@@ -342,7 +342,7 @@ fn launch_command(
     #[cfg(target_os = "linux")]
     let config_dir = if spec.confinement.is_some() {
         Some(
-            crate::local::sandbox::linux::claude_config_dir(&|name| match (name, &config_dir) {
+            provider_native::sandbox::linux::claude_config_dir(&|name| match (name, &config_dir) {
                 ("CLAUDE_CONFIG_DIR", _) if client.config_dir_from_home => None,
                 ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
                 _ => client.environment.variable(name),
@@ -352,10 +352,10 @@ fn launch_command(
     } else {
         config_dir
     };
-    let mut command = crate::local::sandbox::command(
+    let mut command = provider_native::sandbox::command(
         &client.program,
         spec.confinement.as_ref(),
-        crate::local::sandbox::CLAUDE_STATE,
+        provider_native::sandbox::CLAUDE_STATE,
         &|name| match (name, &config_dir) {
             ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
             _ => client.environment.variable(name),
@@ -384,11 +384,11 @@ fn launch_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    command.args(crate::local::configuration::claude(
+    command.args(provider_native::configuration::claude(
         &spec.config,
         spec.confinement.is_some(),
     )?);
-    let mcp_config = crate::local::configuration::claude_mcp(&spec.config)
+    let mcp_config = provider_native::configuration::claude_mcp(&spec.config)
         .map(|document| mcp_config_file(&document))
         .transpose()?;
     if let Some(file) = &mcp_config {

@@ -11,10 +11,10 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
-use crate::local::diagnostics::{self, Diagnostics};
-use crate::local::process_group::{self, Signal};
 use provider_core::ports::agent_session::AgentSessionError;
 use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_native::diagnostics::{self, Diagnostics};
+use provider_native::process_group::{self, Signal};
 use tokio_util::task::AbortOnDropHandle;
 
 const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
@@ -86,7 +86,7 @@ impl Transport {
                     && (!matches!(
                         value["params"]["mode"].as_str(),
                         Some("form" | "openai/form" | "openaiForm")
-                    ) || crate::local::elicitation::questions(
+                    ) || provider_native::elicitation::questions(
                         &value["params"]["requestedSchema"],
                     )
                     .is_err())
@@ -454,10 +454,10 @@ fn process(
     launch: &Launch<'_>,
     environment: &provider_core::ports::environment::AgentEnvironment,
 ) -> Result<Command, AgentSessionError> {
-    let mut command = crate::local::sandbox::command(
+    let mut command = provider_native::sandbox::command(
         program,
         launch.confinement,
-        crate::local::sandbox::CODEX_STATE,
+        provider_native::sandbox::CODEX_STATE,
         &|name| environment.variable(name),
     )?;
     command.envs(environment.entries());

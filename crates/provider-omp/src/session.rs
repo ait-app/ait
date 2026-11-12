@@ -574,7 +574,7 @@ impl Session {
             .map(str::trim)
             .filter(|reason| !reason.is_empty())
             .unwrap_or("OMP turn failed");
-        let diagnostic = provider::local::diagnostics::native(
+        let diagnostic = provider_native::diagnostics::native(
             &json!({"message":reason,"status":message["errorStatus"]}),
             "message_end",
         );
@@ -1419,7 +1419,7 @@ fn is_outcome(event: &AgentTurnEvent) -> bool {
 /// OMP's refusal reason, bounded and redacted by separate diagnostics so that it never
 /// fails the session.
 fn native_reason(error: &Value, operation: &str) -> Option<String> {
-    let reason = provider::local::diagnostics::Diagnostics::new(LABEL);
+    let reason = provider_native::diagnostics::Diagnostics::new(LABEL);
     reason.observe_native(error, "rpc", operation);
     reason.message()
 }

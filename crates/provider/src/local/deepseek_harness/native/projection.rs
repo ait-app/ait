@@ -1,10 +1,10 @@
 //! One durable DSH event projection shared by live delivery and complete history recovery.
-use crate::local::acp_config::text;
-use crate::local::acp_streaming::Stream;
 use provider_core::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::timeline::NativeItem,
 };
+use provider_native::acp_config::text;
+use provider_native::acp_streaming::Stream;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

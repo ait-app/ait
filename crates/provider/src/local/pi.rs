@@ -36,7 +36,7 @@ pub(crate) struct PiClient {
     version: Arc<transport::VersionProbe>,
     environment: AgentEnvironment,
     session_environment: history::SessionEnvironment,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
 }
 
 impl PiClient {
@@ -52,14 +52,14 @@ impl PiClient {
             version: Arc::default(),
             environment: AgentEnvironment::default(),
             session_environment: history::SessionEnvironment::default(),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
         }
     }
 
     /// Store submitted images in `directory` for durable timeline display.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 
@@ -172,14 +172,14 @@ impl AgentClient for PiClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        if !super::configuration::executable(&self.program) {
+        if !provider_native::configuration::executable(&self.program) {
             return Ok(false);
         }
         Ok(transport::version(self).await.is_ok())
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
-        if !super::configuration::executable(&self.program) {
+        if !provider_native::configuration::executable(&self.program) {
             return Ok("Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN.".to_owned());
         }
         match transport::version_info(self).await {

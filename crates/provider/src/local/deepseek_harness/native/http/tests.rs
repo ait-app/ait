@@ -49,7 +49,7 @@ async fn native_http_distinguishes_absent_capabilities_rejections_and_invalid_en
     let api = Api::connect(
         &format!("http://{address}/?token=fixture"),
         Duration::from_secs(5),
-        crate::local::diagnostics::Diagnostics::new("deepseek-harness"),
+        provider_native::diagnostics::Diagnostics::new("deepseek-harness"),
     )
     .await
     .unwrap();
@@ -117,7 +117,7 @@ async fn launch_without_a_redirect_cookie_never_creates_an_authenticated_client(
         Api::connect(
             &format!("http://{address}/?token=fixture"),
             Duration::from_secs(5),
-            crate::local::diagnostics::Diagnostics::new("deepseek-harness")
+            provider_native::diagnostics::Diagnostics::new("deepseek-harness")
         )
         .await,
         Err(AgentSessionError::Failed)

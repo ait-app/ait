@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn single_user_image_projects_a_source_without_a_placeholder() {
     let root = tempfile::tempdir().unwrap();
-    let images = crate::local::images::ImageStore::new(root.path().join("images"));
+    let images = provider_native::images::ImageStore::new(root.path().join("images"));
     let native = json!({"type":"userMessage","id":"user","content":[
         {"type":"text","text":"Inspect"},
         {"type":"image","url":"data:image/png;base64,aGVsbG8="}]});
@@ -19,7 +19,7 @@ fn single_user_image_projects_a_source_without_a_placeholder() {
 #[test]
 fn tiled_user_image_projects_one_preview_and_only_user_authored_text() {
     let root = tempfile::tempdir().unwrap();
-    let images = crate::local::images::ImageStore::new(root.path().join("images"));
+    let images = provider_native::images::ImageStore::new(root.path().join("images"));
     let mut content = vec![json!({"type":"text","text":"这是什么植物？"})];
     content.extend((0..10).map(|_| json!({"type":"image","url":"data:image/png;base64,aGVsbG8="})));
     let mut layout = "Image layout: overviews show the full image; detail crops preserve readable pixels and overlap. Crop coordinates refer to the top-left of the original image.\nImage 1: original image 1: overview of the full 4284x5712 image".to_owned();

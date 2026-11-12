@@ -4,10 +4,10 @@ use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
 use super::PROVIDER;
-use crate::local::acp_config::{choices, option, state, text};
-use crate::local::acp_transport::Transport;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use provider_core::protocol::provider::Details;
+use provider_native::acp_config::{choices, option, state, text};
+use provider_native::acp_transport::Transport;
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config.mode_id.is_some()
@@ -32,7 +32,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
     {
         return Err(AgentSessionError::Rejected);
     }
-    crate::local::configuration::validate(config, PROVIDER)?;
+    provider_native::configuration::validate(config, PROVIDER)?;
     for (_, server) in config.mcp_servers.iter().flatten() {
         if server["type"] == "sse"
             || (server["type"] == "stdio"

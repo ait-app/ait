@@ -12,6 +12,7 @@ paths:
   - crates/provider-omp
   - bins/daemon
   - crates/provider-core
+  - crates/provider-native
 ---
 
 # ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate

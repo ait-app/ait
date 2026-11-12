@@ -5,11 +5,11 @@ use chrono::Utc;
 use serde_json::{Value, json};
 
 use super::diagnostics::Failure;
-use crate::local::usage::cumulative::{CumulativeUsage, UsageCounters};
-use crate::local::usage::requests::MAX_SEGMENT_ID;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_native::usage::cumulative::{CumulativeUsage, UsageCounters};
+use provider_native::usage::requests::MAX_SEGMENT_ID;
 
 const MAX_TEXT: usize = 128 * 1024;
 const MAX_ITEMS: usize = 4096;
@@ -37,9 +37,9 @@ pub(super) struct Stream {
     /// Ledger segments queued in the current turn; makes each segment identity unique.
     segments: u64,
     reported_denials: BTreeMap<(String, String), usize>,
-    compactions: crate::local::compaction::Compactions,
+    compactions: provider_native::compaction::Compactions,
     pub(super) failure: Option<Failure>,
-    pub(super) explanation: crate::local::diagnostics::failure::Failure,
+    pub(super) explanation: provider_native::diagnostics::failure::Failure,
 }
 
 impl Stream {
@@ -56,7 +56,7 @@ impl Stream {
         self.bytes = 0;
         self.assistant_seen = false;
         self.segments = 0;
-        self.compactions = crate::local::compaction::Compactions::default();
+        self.compactions = provider_native::compaction::Compactions::default();
         self.failure = None;
         self.explanation.clear();
     }
@@ -267,7 +267,7 @@ impl Stream {
                 self.explanation.observe(
                     "Antigravity",
                     &result["error"],
-                    crate::local::diagnostics::native(&result["error"], "result"),
+                    provider_native::diagnostics::native(&result["error"], "result"),
                 );
             }
             self.failure = Some(if denied {
@@ -515,7 +515,7 @@ fn preview(value: &Value) -> (Value, usize) {
     let encoded = value
         .as_str()
         .map_or_else(|| Cow::Owned(value.to_string()), Cow::Borrowed);
-    match crate::local::tool_detail::truncate(
+    match provider_native::tool_detail::truncate(
         &encoded,
         MAX_PREVIEW,
         "\n[Output truncated; full output remains in AGY.]",

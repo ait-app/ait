@@ -1352,7 +1352,7 @@ fn inspection_caps_cumulative_projected_entries() {
 fn tool_result_images_are_materialized_without_embedding_base64() {
     let (directory, mut client, file, cwd) = fixture();
     let image_directory = directory.path().join("images");
-    client.images = crate::local::images::ImageStore::new(image_directory.clone());
+    client.images = provider_native::images::ImageStore::new(image_directory.clone());
     let image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
     write(
         &file,
@@ -1455,7 +1455,7 @@ fn tool_result_images_reconcile_without_conflicts_or_loss() {
 fn empty_user_text_blocks_with_images_allow_inspection_and_refresh() {
     for edited in [false, true] {
         let (directory, mut client, file, cwd) = fixture();
-        client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+        client.images = provider_native::images::ImageStore::new(directory.path().join("images"));
         let content = json!([
             {"type":"text","text":""},
             {"type":"image","mimeType":"image/png","data":"aGVsbG8="}
@@ -1500,7 +1500,7 @@ fn empty_user_text_blocks_with_images_allow_inspection_and_refresh() {
 #[test]
 fn image_only_user_context_edit_projects_a_preview_without_markdown_text() {
     let (directory, mut client, file, cwd) = fixture();
-    client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+    client.images = provider_native::images::ImageStore::new(directory.path().join("images"));
     write(
         &file,
         &cwd,
@@ -1535,7 +1535,7 @@ fn image_only_user_context_edit_projects_a_preview_without_markdown_text() {
 #[test]
 fn projects_images_compaction_extension_messages_and_manual_shell_commands() {
     let (directory, mut client, file, cwd) = fixture();
-    client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+    client.images = provider_native::images::ImageStore::new(directory.path().join("images"));
     let mut input = user("u", Value::Null, "");
     input["message"]["content"] = json!([
         {"type":"text","text":"image"},

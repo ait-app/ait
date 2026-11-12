@@ -6,9 +6,13 @@ use std::{fs, io};
 ///
 /// The monitor and PID 1 reaper stay alive so `--die-with-parent` cannot interrupt
 /// native cleanup. Called on Pi's dedicated shutdown thread; failure leaves forced
-/// termination to its existing deadline. Returns an error if the child has exited,
-/// the expected namespace hierarchy is unavailable, or signal delivery fails.
-pub(crate) fn terminate_native(monitor: u32) -> io::Result<()> {
+/// termination to its existing deadline.
+///
+/// # Errors
+///
+/// Returns an error if the child has exited, the expected namespace hierarchy is
+/// unavailable, or signal delivery fails.
+pub fn terminate_native(monitor: u32) -> io::Result<()> {
     let reaper = namespace_child(monitor, 1)?;
     let native = namespace_child(reaper, 2)?;
     let native = i32::try_from(native)

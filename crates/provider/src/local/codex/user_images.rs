@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 
-use crate::local::images::{ImageStore, UNAVAILABLE_IMAGE};
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::images::{ImageStore, UNAVAILABLE_IMAGE};
 
 const LAYOUT_HEADER: &str = "Image layout: overviews show the full image; detail crops preserve readable pixels and overlap. Crop coordinates refer to the top-left of the original image.";
 

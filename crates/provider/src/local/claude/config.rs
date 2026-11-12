@@ -51,7 +51,7 @@ pub(super) fn validate_shape(config: &StoredAgentConfig) -> Result<(), AgentSess
     {
         return Err(AgentSessionError::Rejected);
     }
-    crate::local::configuration::validate(config, "claude")
+    provider_native::configuration::validate(config, "claude")
 }
 
 pub(super) fn modes() -> Vec<Value> {

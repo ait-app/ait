@@ -4,9 +4,9 @@ use std::{collections::BTreeMap, time::Duration};
 use serde_json::{Value, json};
 
 use super::{client::OpenCodeClient, config, launcher};
-use crate::local::acp_config;
-use crate::local::acp_transport::Transport;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_native::acp_config;
+use provider_native::acp_transport::Transport;
 
 /// Owned auxiliary session; deletion remains scheduled if its caller drops a pending cleanup.
 #[derive(Debug)]

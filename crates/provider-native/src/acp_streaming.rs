@@ -24,9 +24,9 @@ struct Text {
 
 /// Project native ACP notifications into bounded AIT timeline and progress events.
 #[derive(Debug, Default)]
-pub(super) struct Stream {
+pub struct Stream {
     /// Events waiting for the owning session to deliver to its host.
-    pub(super) events: VecDeque<AgentTurnEvent>,
+    pub events: VecDeque<AgentTurnEvent>,
     current: Option<Text>,
     tools: BTreeMap<String, Value>,
     completed_tools: BTreeSet<String>,
@@ -34,16 +34,17 @@ pub(super) struct Stream {
     sequence: usize,
     observation: usize,
     /// Most recently completed assistant text in the current turn.
-    pub(super) last_message: Option<String>,
-    images: crate::local::images::ImageStore,
-    compactions: crate::local::compaction::Compactions,
+    pub last_message: Option<String>,
+    images: crate::images::ImageStore,
+    compactions: crate::compaction::Compactions,
     /// Opening identity for older journals whose compaction end omits a native ID.
-    pub(super) native_compaction: Option<String>,
+    pub native_compaction: Option<String>,
 }
 
 impl Stream {
     /// Create an empty projection using `images` for durable native image references.
-    pub(super) fn new(images: crate::local::images::ImageStore) -> Self {
+    #[must_use]
+    pub fn new(images: crate::images::ImageStore) -> Self {
         Self {
             images,
             ..Self::default()
@@ -59,7 +60,7 @@ impl Stream {
     ///
     /// The terminal turn event for the caller to queue: `Cancelled`, `Completed` for an
     /// ordinary end, refusal or token/turn limit, and `Failed` otherwise.
-    pub(super) fn settle(
+    pub fn settle(
         &mut self,
         response: &Value,
         pending: &mut BTreeMap<String, Pending>,
@@ -89,7 +90,7 @@ impl Stream {
     }
 
     /// Reset per-turn state to `turn`, preserving events already queued for the host.
-    pub(super) fn begin(&mut self, turn: String) {
+    pub fn begin(&mut self, turn: String) {
         self.turn = turn;
         self.sequence = 0;
         self.observation = 0;
@@ -97,12 +98,16 @@ impl Stream {
         self.current = None;
         self.tools.clear();
         self.completed_tools.clear();
-        self.compactions = crate::local::compaction::Compactions::default();
+        self.compactions = crate::compaction::Compactions::default();
         self.native_compaction = None;
     }
 
     /// Queue events from one native `update`; malformed or oversized content fails.
-    pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] for malformed or oversized content.
+    pub fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         match update["sessionUpdate"].as_str() {
             Some("agent_message_chunk") => self.chunk("assistant_message", update),
             Some("agent_thought_chunk") => self.chunk("reasoning", update),
@@ -141,7 +146,11 @@ impl Stream {
     /// Publish one bounded, deduplicated native compaction lifecycle marker.
     /// `id` identifies the marker; `status` and optional `trigger` describe its transition.
     /// Invalid marker identities or metadata return a protocol error.
-    pub(super) fn compaction(
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] for an invalid marker identity or metadata.
+    pub fn compaction(
         &mut self,
         id: &str,
         status: &'static str,
@@ -159,7 +168,12 @@ impl Stream {
     }
 
     /// Stop pending loading markers when native execution ends without closing them.
-    pub(super) fn finish_compactions(&mut self) {
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pending marker lacks its `compactionId`, which [`Self::compaction`] always
+    /// records.
+    pub fn finish_compactions(&mut self) {
         for item in self.compactions.fail_pending() {
             let id = item["compactionId"]
                 .as_str()
@@ -290,7 +304,7 @@ impl Stream {
     }
 
     /// Finish buffered text as a durable timeline event and retain the last assistant message.
-    pub(super) fn flush(&mut self) {
+    pub fn flush(&mut self) {
         if let Some(mut current) = self.current.take() {
             current.entry.item["text"] = json!(current.buffer);
             if current.entry.item["type"] == "assistant_message" {
@@ -324,7 +338,7 @@ fn preview(value: &Value) -> Value {
 }
 
 fn tool_content(
-    images: &crate::local::images::ImageStore,
+    images: &crate::images::ImageStore,
     value: &Value,
 ) -> Result<Value, AgentSessionError> {
     let blocks = value.as_array().ok_or(AgentSessionError::Failed)?;

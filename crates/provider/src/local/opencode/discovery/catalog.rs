@@ -3,8 +3,8 @@ use futures_util::{StreamExt, TryStreamExt, stream};
 use serde_json::{Value, json};
 
 use super::{Details, OpenCodeClient, PROVIDER, config, launcher};
-use crate::local::acp_config;
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::acp_config;
 
 /// Query native models and primary agents without creating or modifying native sessions.
 /// CLI failures and malformed or oversized catalogs are propagated.

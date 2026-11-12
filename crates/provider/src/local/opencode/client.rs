@@ -27,7 +27,7 @@ pub(crate) struct OpenCodeClient {
     pub(super) deadline: Duration,
     pub(super) startup_timeout: Duration,
     pub(super) environment: BTreeMap<String, String>,
-    pub(super) images: crate::local::images::ImageStore,
+    pub(super) images: provider_native::images::ImageStore,
     pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
     pub(super) startup: Arc<tokio::sync::Mutex<()>>,
     /// Validated CLI versions by launch directory, shared by clones; launches reuse them.
@@ -54,7 +54,7 @@ impl OpenCodeClient {
             deadline: Duration::from_secs(30),
             startup_timeout: Duration::from_secs(120),
             environment: BTreeMap::new(),
-            images: crate::local::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
             capabilities: Arc::new(RwLock::new(None)),
             startup: Arc::default(),
             versions: Arc::default(),
@@ -153,7 +153,7 @@ impl AgentClient for OpenCodeClient {
         if !self.capabilities.read().ok()?.as_ref()?.deletion {
             return None;
         }
-        crate::local::summary_model::select(
+        provider_native::summary_model::select(
             PROVIDER,
             models,
             &["haiku", "mini", "flash", "minimax-m3", "nemotron-3-super"],

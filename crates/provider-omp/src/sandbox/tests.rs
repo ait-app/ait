@@ -58,7 +58,7 @@ fn launch(worktree: &Path, variables: &[(&str, &str)]) -> (Vec<PathBuf>, Vec<Pat
             .iter()
             .find_map(|(key, value)| (*key == name).then(|| (*value).to_owned()))
     };
-    let command = provider::local::sandbox::command(
+    let command = provider_native::sandbox::command(
         Path::new("omp"),
         crate::tests::confinement(worktree).as_ref(),
         state(&client),

@@ -7,13 +7,13 @@ use regex::Regex;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::local::usage::requests;
-use crate::local::{compaction::Compactions, diagnostics::classify};
 use provider_core::ports::{
     agent_session::{AgentSessionError, AgentTurnEvent},
     diagnostics::{Category, Diagnostic},
 };
 use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_native::usage::requests;
+use provider_native::{compaction::Compactions, diagnostics::classify};
 
 // Storage caps serialized NativeItem at 768 KiB. Sixfold JSON escaping of 96 KiB
 // leaves 192 KiB for metadata, matching OpenCode's conservative text allowance.
@@ -99,13 +99,13 @@ pub(super) struct Stream {
     pub(super) settled: bool,
     /// Safe final native error facts, cleared when a retry succeeds.
     pub(super) failure: Option<Diagnostic>,
-    pub(super) explanation: crate::local::diagnostics::failure::Failure,
+    pub(super) explanation: provider_native::diagnostics::failure::Failure,
 }
 
 impl Stream {
     /// Build submitted input rows, materializing images before native admission.
     pub(super) fn submitted(
-        images: &crate::local::images::ImageStore,
+        images: &provider_native::images::ImageStore,
         turn: &str,
         prompt: &provider_core::protocol::prompt::AgentPrompt,
         text: &str,

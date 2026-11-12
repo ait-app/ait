@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
-use crate::local::{configuration::executable, metadata_process};
+use provider_native::{configuration::executable, metadata_process};
 
 /// Effective Unix npm installation and cache locations.
 #[derive(Debug, PartialEq, Eq)]

@@ -20,20 +20,20 @@ struct ClaudeSession {
     history_only: bool,
     closed: bool,
     transport: Option<Transport>,
-    diagnostics: crate::local::diagnostics::Diagnostics,
+    diagnostics: provider_native::diagnostics::Diagnostics,
     active: Option<String>,
     info: StoredAgentRuntimeInfo,
     permissions: BTreeMap<String, permissions::Pending>,
     stream: streaming::Stream,
-    usage: crate::local::usage::ClaudeUsage,
+    usage: provider_native::usage::ClaudeUsage,
     /// Live per-request usage of the active turn; replayed history never feeds it.
-    requests: crate::local::usage::requests::ClaudeRequests,
+    requests: provider_native::usage::requests::ClaudeRequests,
     output_schema: Option<Value>,
     unread_steers: std::collections::BTreeSet<String>,
     compacting: bool,
     metadata: Option<BTreeMap<String, Value>>,
     children: super::subagents::live::Live,
-    notes: crate::local::notes::Notes,
+    notes: provider_native::notes::Notes,
     inputs: super::inputs::Inputs,
     /// Native session whose existing transcript passed identity and cwd validation.
     validated: Option<String>,
@@ -71,17 +71,17 @@ pub(super) async fn open(
         history_only,
         closed: false,
         transport: None,
-        diagnostics: crate::local::diagnostics::Diagnostics::new("claude"),
+        diagnostics: provider_native::diagnostics::Diagnostics::new("claude"),
         active: None,
         permissions: BTreeMap::new(),
         stream: streaming::Stream::new(client.images.clone()),
-        usage: crate::local::usage::ClaudeUsage::default(),
-        requests: crate::local::usage::requests::ClaudeRequests::default(),
+        usage: provider_native::usage::ClaudeUsage::default(),
+        requests: provider_native::usage::requests::ClaudeRequests::default(),
         output_schema: None,
         unread_steers: std::collections::BTreeSet::default(),
         compacting: false,
         children: super::subagents::live::Live::new(client.images.clone()),
-        notes: crate::local::notes::Notes::restore(
+        notes: provider_native::notes::Notes::restore(
             resume
                 .and_then(|(handle, _)| handle.metadata.as_ref())
                 .and_then(|metadata| metadata.get("controlNotes")),
@@ -145,7 +145,7 @@ impl ClaudeSession {
             .as_ref()
             .and_then(|metadata| metadata.get("lastUsage"))
         {
-            self.usage = crate::local::usage::ClaudeUsage::restore(Some(saved))?;
+            self.usage = provider_native::usage::ClaudeUsage::restore(Some(saved))?;
         }
         if let Some(saved) = self.usage.saved() {
             self.info

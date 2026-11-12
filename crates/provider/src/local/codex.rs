@@ -46,7 +46,7 @@ pub(crate) struct CodexClient {
     realtime_media: realtime::media::Factory,
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
     environment: provider_core::ports::environment::AgentEnvironment,
     usage_connection: inspection::connection::Shared,
     speed_catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
@@ -84,7 +84,7 @@ impl CodexClient {
             realtime_media: realtime::media::open,
             deadline: Duration::from_secs(20),
             capabilities: std::sync::Arc::default(),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
             environment: provider_core::ports::environment::AgentEnvironment::default(),
             usage_connection: inspection::connection::Shared::default(),
             speed_catalog: std::sync::Arc::default(),
@@ -101,7 +101,7 @@ impl CodexClient {
     /// Store decoded native image output in a private, persistent directory.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 
@@ -230,11 +230,11 @@ impl CodexClient {
                     children: self
                         .restore_children(resume.is_some() && !history, &spec.cwd, &id)
                         .await?,
-                    notes: crate::local::notes::Notes::restore(saved(resume, "controlNotes"))?,
+                    notes: provider_native::notes::Notes::restore(saved(resume, "controlNotes"))?,
                     last_anchor: None,
                     manual_compactions: 0,
                     pending_goal_start: false,
-                    requests: crate::local::usage::requests::CodexRequests::default(),
+                    requests: provider_native::usage::requests::CodexRequests::default(),
                     child_requests: std::collections::BTreeMap::new(),
                     config: spec.config.clone(),
                     client: self.session_client(),
@@ -286,7 +286,7 @@ impl AgentClient for CodexClient {
     }
 
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
-        super::summary_model::select(
+        provider_native::summary_model::select(
             self.provider(),
             models,
             &["gpt-6-luna", "gpt-5.6-luna", "gpt-5.4-mini", "mini"],
@@ -405,7 +405,7 @@ impl AgentClient for CodexClient {
                 .as_ref()
                 .and_then(|metadata| metadata.get("asyncQuestions")),
         )?;
-        let mut notes = crate::local::notes::Notes::restore(
+        let mut notes = provider_native::notes::Notes::restore(
             handle
                 .metadata
                 .as_ref()
@@ -474,7 +474,7 @@ impl AgentClient for CodexClient {
             return Err(AgentSessionError::Unavailable);
         }
         let mut entries = self.read_history(&handle.session_id, cwd).await?;
-        crate::local::notes::Notes::restore(
+        provider_native::notes::Notes::restore(
             handle
                 .metadata
                 .as_ref()
@@ -525,7 +525,7 @@ impl AgentClient for CodexClient {
                 .resume_metadata
                 .insert("pendingPlan".to_owned(), json!(plan));
         }
-        let notes = crate::local::notes::Notes::restore(
+        let notes = provider_native::notes::Notes::restore(
             handle
                 .metadata
                 .as_ref()
@@ -581,15 +581,15 @@ struct CodexSession {
     pending_plan: Option<plans::Plan>,
     latest_plan: Option<plans::Plan>,
     children: subagents::Live,
-    notes: crate::local::notes::Notes,
+    notes: provider_native::notes::Notes,
     last_anchor: Option<String>,
     manual_compactions: u8,
     pending_goal_start: bool,
     /// Live per-request usage deduplicated by the thread's running token total.
-    requests: crate::local::usage::requests::CodexRequests,
+    requests: provider_native::usage::requests::CodexRequests,
     /// Live per-request usage of each sub-agent thread, keyed by its thread id.
     child_requests:
-        std::collections::BTreeMap<String, crate::local::usage::requests::CodexRequests>,
+        std::collections::BTreeMap<String, provider_native::usage::requests::CodexRequests>,
     stream: streaming::Stream,
     terminal: terminal::Terminal,
     config: StoredAgentConfig,
@@ -624,7 +624,7 @@ impl CodexSession {
         {
             transport.observe_error(
                 &params["turn"]["error"],
-                crate::local::diagnostics::native(&params["turn"]["error"], "result"),
+                provider_native::diagnostics::native(&params["turn"]["error"], "result"),
                 "turn",
             );
         }
@@ -712,8 +712,8 @@ impl CodexSession {
             && self.config.mcp_servers == config.mcp_servers
             && self.config.tool_policy == config.tool_policy
             && self.config.system_prompt == config.system_prompt
-            && crate::local::configuration::codex_computer_use_auto_approval(&self.config)
-                == crate::local::configuration::codex_computer_use_auto_approval(config)
+            && provider_native::configuration::codex_computer_use_auto_approval(&self.config)
+                == provider_native::configuration::codex_computer_use_auto_approval(config)
         {
             return Ok(());
         }
@@ -740,7 +740,7 @@ impl CodexSession {
                 &mut transport,
                 json!({"threadId":self.id,
                 "cwd":self.cwd,"model":config.model,"approvalPolicy":approval,"sandbox":sandbox,
-                "config":crate::local::configuration::codex(config)?,
+                "config":provider_native::configuration::codex(config)?,
                 "approvalsReviewer":workflows::reviewer(config),
                 "developerInstructions":config.system_prompt}),
             )
@@ -759,7 +759,7 @@ impl CodexSession {
         }
         self.transport = Some(transport);
         // The new process may restart the thread's running total; ledger ids stay idempotent.
-        self.requests = crate::local::usage::requests::CodexRequests::default();
+        self.requests = provider_native::usage::requests::CodexRequests::default();
         self.child_requests.clear();
         Ok(())
     }
@@ -1133,7 +1133,7 @@ impl AgentSession for CodexSession {
             }
             if method == "error" {
                 let mut diagnostic =
-                    crate::local::diagnostics::native(&params["error"], "notification");
+                    provider_native::diagnostics::native(&params["error"], "notification");
                 diagnostic.will_retry = params["willRetry"].as_bool();
                 if let Some(transport) = &mut self.transport {
                     transport.observe_error(&params["error"], diagnostic, "turn");
@@ -1238,7 +1238,7 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
     {
         return Err(AgentSessionError::Unavailable);
     }
-    crate::local::configuration::validate(config, "codex")
+    provider_native::configuration::validate(config, "codex")
 }
 
 #[cfg(all(test, unix))]
@@ -1271,7 +1271,7 @@ fn launch_params(
     if let Some(prompt) = &spec.config.system_prompt {
         params["developerInstructions"] = json!(prompt);
     }
-    params["config"] = crate::local::configuration::codex(&spec.config)?;
+    params["config"] = provider_native::configuration::codex(&spec.config)?;
     Ok(())
 }
 

@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use super::{discovery, streaming};
-use crate::local::images::ImageStore;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
+use provider_native::images::ImageStore;
 
 #[derive(Debug)]
 struct Child {
@@ -62,7 +62,7 @@ impl Live {
         if receiver == context.0 {
             return Err(AgentSessionError::Failed);
         }
-        let detail = crate::local::tool_detail::codex(item);
+        let detail = provider_native::tool_detail::codex(item);
         if detail["type"] != "sub_agent" {
             return Err(AgentSessionError::Failed);
         }

@@ -35,7 +35,7 @@ pub(crate) struct ClaudeClient {
     #[cfg(target_os = "linux")]
     config_dir_from_home: bool,
     deadline: Duration,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
     environment: provider_core::ports::environment::AgentEnvironment,
     resolved_models: std::sync::Arc<std::sync::RwLock<std::collections::BTreeMap<String, String>>>,
 }
@@ -51,7 +51,7 @@ impl ClaudeClient {
             #[cfg(target_os = "linux")]
             config_dir_from_home: false,
             deadline: Duration::from_secs(30),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
             environment: provider_core::ports::environment::AgentEnvironment::default(),
             resolved_models: std::sync::Arc::default(),
         }
@@ -60,7 +60,7 @@ impl ClaudeClient {
     /// Store decoded native image output in a private, persistent directory.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 
@@ -165,7 +165,7 @@ impl AgentClient for ClaudeClient {
     }
 
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
-        super::summary_model::select(self.provider(), models, &["haiku"])
+        provider_native::summary_model::select(self.provider(), models, &["haiku"])
     }
 
     async fn generate_summary(
@@ -205,7 +205,7 @@ impl AgentClient for ClaudeClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(crate::local::configuration::executable(&self.program))
+        Ok(provider_native::configuration::executable(&self.program))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

@@ -15,7 +15,7 @@ fn api_at(address: SocketAddr) -> Api {
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap(),
-        diagnostics: crate::local::diagnostics::Diagnostics::new("deepseek-harness"),
+        diagnostics: provider_native::diagnostics::Diagnostics::new("deepseek-harness"),
     }
 }
 

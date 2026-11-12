@@ -29,7 +29,7 @@ fn file_changes_keep_live_completed_and_replayed_cards_in_sync() {
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(completed.len(), running.len());
@@ -74,7 +74,7 @@ fn file_changes_reuse_the_initial_placeholder_when_paths_arrive_on_completion() 
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
 

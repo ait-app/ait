@@ -144,7 +144,7 @@ fn admission_chunk_rollover_preserves_order_and_observation_identity() {
 fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
     let root = tempfile::tempdir().unwrap();
     let directory = root.path().join("images");
-    let images = crate::local::images::ImageStore::new(directory.clone());
+    let images = provider_native::images::ImageStore::new(directory.clone());
     let prompt = AgentPrompt {
         client_message_id: Some("client".into()),
         images: vec![provider_core::protocol::prompt::PromptImage {
@@ -195,7 +195,7 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
 fn submitted_chunks_without_client_identity_preserve_multibyte_text() {
     let text = format!("{}é尾", "a".repeat(96 * 1024 - 1));
     let events = streaming::Stream::submitted(
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
         "turn",
         &AgentPrompt::default(),
         &text,

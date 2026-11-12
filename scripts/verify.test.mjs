@@ -164,7 +164,7 @@ test("a script change runs its sibling test", () => {
 });
 
 test("provider fixtures shared with the TypeScript clients select both sides", () => {
-  const result = plan(["crates/provider/tests/fixtures/omp_question.json"]);
+  const result = plan(["crates/provider-omp/tests/fixtures/omp_question.json"]);
   assert.equal(result.outputs.rust, true);
   assert.ok(find(result, "--workspace=@ait/client"));
 });

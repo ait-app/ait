@@ -3,7 +3,7 @@ use super::*;
 fn project(
     entries: &[Value],
     thread: &Value,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<Vec<NativeItem>, AgentSessionError> {
     let created = native_sessions::timestamp(&thread["createdAt"])?;
     let mut projection = Projection::default();
@@ -34,7 +34,7 @@ async fn large_native_payload_is_projected_before_the_history_budget() {
         .launch_transport(fixture.cwd.to_str().unwrap(), false)
         .unwrap();
     transport.initialize().await.unwrap();
-    let images = crate::local::images::ImageStore::new(fixture.root.path().join("images"));
+    let images = provider_native::images::ImageStore::new(fixture.root.path().join("images"));
     let entries = read(
         &mut transport,
         &json!({"id":"thread","createdAt":0}),
@@ -76,7 +76,7 @@ fn history_interleaves_speech_and_structured_output_without_duplicate_handoffs()
     let output = project(
         entries.as_array().unwrap(),
         &json!({"createdAt":0}),
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(output.len(), 5);
@@ -96,7 +96,7 @@ async fn reads_all_pages_and_only_falls_back_on_method_not_found() {
         .unwrap();
     transport.initialize().await.unwrap();
     let thread = json!({"id":"thread","createdAt":0});
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
     assert!(
         read(&mut transport, &thread, &images)
             .await
@@ -220,7 +220,7 @@ async fn image_heavy_history_exceeds_raw_budget_and_keeps_chronology_and_small_p
 
 #[test]
 fn projected_budget_accepts_the_exact_boundary_and_reports_one_extra_byte() {
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
     let created = "1970-01-01T00:00:00+00:00";
     let native = json!({"id":"a","type":"agentMessage","text":""});
     let overhead =
@@ -261,7 +261,7 @@ fn projected_budget_accepts_the_exact_boundary_and_reports_one_extra_byte() {
 
 #[test]
 fn malformed_history_and_entry_limits_are_distinct_from_display_limits() {
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
     let created = "1970-01-01T00:00:00+00:00";
     let duplicate = json!([
         {"type":"item","turnId":"t","item":{"id":"same","type":"agentMessage","text":"first"}},
@@ -308,7 +308,7 @@ fn promotions_and_voice_handoffs_resolve_across_reverse_pages() {
     let output = project(
         entries.as_array().unwrap(),
         &json!({"createdAt":0}),
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(output.len(), 2);
@@ -331,7 +331,7 @@ async fn malformed_pages_late_rpc_failures_and_page_limits_do_not_fall_back() {
         .unwrap();
     transport.initialize().await.unwrap();
     let thread = json!({"id":"thread","createdAt":0});
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
     let path = fixture.cwd.join("timeline-pages.json");
     for first in [
         json!(42),

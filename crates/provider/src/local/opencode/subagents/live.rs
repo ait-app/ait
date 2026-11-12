@@ -3,12 +3,13 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use serde_json::{Value, json};
 
 use super::{Links, MAX_CHILDREN, descriptor, valid_id};
-use crate::local::acp_config;
-use crate::local::{images::ImageStore, opencode::streaming::Stream};
+use crate::local::opencode::streaming::Stream;
 use provider_core::ports::{
     agent_session::{AgentSessionError, AgentTurnEvent},
     controls::{NativeSubagent, SubagentEvent},
 };
+use provider_native::acp_config;
+use provider_native::images::ImageStore;
 
 #[derive(Debug)]
 struct Child {

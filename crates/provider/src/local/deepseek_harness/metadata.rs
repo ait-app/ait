@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use tokio::process::Command;
 
 use super::DeepSeekHarnessClient;
-use crate::local::metadata_process;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_native::metadata_process;
 
 impl DeepSeekHarnessClient {
     pub(super) async fn metadata(

@@ -100,7 +100,7 @@ pub(super) fn read(
     {
         return Err(AgentSessionError::Rejected);
     }
-    let notes = crate::local::notes::Notes::restore(
+    let notes = provider_native::notes::Notes::restore(
         handle
             .metadata
             .as_ref()
@@ -179,10 +179,10 @@ fn read_records_mode(path: &Path, allow_partial_tail: bool) -> std::io::Result<V
 pub(super) fn parse(
     records: &[Value],
     id: &str,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<SessionHistory, AgentSessionError> {
     let mut stream = Stream::new(images.clone());
-    let mut usage = crate::local::usage::ClaudeUsage::default();
+    let mut usage = provider_native::usage::ClaudeUsage::default();
     let mut entries = Vec::new();
     let mut cwd = None;
     let mut created = None;

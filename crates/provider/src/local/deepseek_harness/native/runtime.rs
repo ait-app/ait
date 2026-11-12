@@ -16,15 +16,15 @@ use tokio_tungstenite::{
 
 use super::super::DeepSeekHarnessClient;
 use super::http::{Api, MAX_FRAME};
-use crate::local::process_group::{self, Signal};
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::process_group::{self, Signal};
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 
 #[derive(Debug)]
 pub(super) struct Runtime {
     pub(super) api: Api,
-    pub(super) diagnostics: crate::local::diagnostics::Diagnostics,
+    pub(super) diagnostics: provider_native::diagnostics::Diagnostics,
     _stderr: tokio_util::task::AbortOnDropHandle<()>,
     pub(super) client_id: String,
     child: Child,
@@ -52,7 +52,7 @@ impl Runtime {
         cwd: &str,
         overlay: Option<super::mcp::Overlay>,
     ) -> Result<Self, AgentSessionError> {
-        let diagnostics = crate::local::diagnostics::Diagnostics::new("deepseek-harness");
+        let diagnostics = provider_native::diagnostics::Diagnostics::new("deepseek-harness");
         let mut command = client.command();
         command.arg("--profile").arg(&client.native_profile);
         if let Some(overlay) = &overlay {
@@ -111,7 +111,7 @@ impl Runtime {
     async fn connect(
         child: &mut Child,
         deadline: Duration,
-        diagnostics: crate::local::diagnostics::Diagnostics,
+        diagnostics: provider_native::diagnostics::Diagnostics,
     ) -> Result<(Api, Writer, mpsc::Receiver<Value>, JoinHandle<()>, String), AgentSessionError>
     {
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
@@ -167,7 +167,7 @@ impl Runtime {
         {
             return Err(AgentSessionError::Failed);
         }
-        let client_id = crate::local::acp_config::text(&ready["value"], "clientId")?.to_owned();
+        let client_id = provider_native::acp_config::text(&ready["value"], "clientId")?.to_owned();
         let (writer, mut socket) = socket.split();
         let (sender, events) = mpsc::channel(128);
         let reader = tokio::spawn(async move {

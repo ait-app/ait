@@ -14,17 +14,17 @@ const TITLE_BYTES: usize = 16 * 1024;
 
 /// Correlated native callback retained until exactly one validated response is flushed.
 #[derive(Debug)]
-pub(crate) struct Pending {
+pub struct Pending {
     /// Native JSON-RPC identity answered by the host response.
-    pub(crate) rpc_id: Value,
+    pub rpc_id: Value,
     /// Host-facing permission or question request.
-    pub(crate) request: Value,
+    pub request: Value,
     /// Native choices accepted for a tool permission; empty for a question.
-    pub(crate) options: Vec<Value>,
+    pub options: Vec<Value>,
     /// Retained elicitation schema, or none for a tool permission.
-    pub(crate) schema: Option<Value>,
+    pub schema: Option<Value>,
     /// Schema properties whose answers must stay unique.
-    pub(crate) unique_fields: Vec<String>,
+    pub unique_fields: Vec<String>,
 }
 
 /// Project native permission choices; malformed identities and option lists fail closed.
@@ -42,7 +42,7 @@ pub(crate) struct Pending {
 ///
 /// Returns `AgentSessionError::Failed` for a missing identity, an empty or oversized
 /// option list, duplicate option identities or unknown option kinds.
-pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentSessionError> {
+pub fn capture(message: &Value, provider: &str) -> Result<Pending, AgentSessionError> {
     let params = &message["params"];
     let rpc_id = message
         .get("id")
@@ -104,7 +104,8 @@ pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentS
 ///
 /// # Returns
 /// The native JSON-RPC reply: a `cancel` action for a form, otherwise a `cancelled` outcome.
-pub(crate) fn cancelled(pending: &Pending) -> Value {
+#[must_use]
+pub fn cancelled(pending: &Pending) -> Value {
     let result = if pending.schema.is_some() {
         json!({"action":"cancel"})
     } else {
@@ -131,7 +132,7 @@ pub(crate) fn cancelled(pending: &Pending) -> Value {
 /// Returns `AgentSessionError::Failed` outside an active prompt, for another session,
 /// beyond 128 pending callbacks, for a repeated native identity, or for a callback that
 /// [`capture`] rejects.
-pub(super) fn admit(
+pub fn admit(
     message: &Value,
     session: &str,
     active: bool,
@@ -167,10 +168,7 @@ pub(super) fn admit(
 ///
 /// Returns `AgentSessionError::Rejected` for unknown fields, a selected action that the
 /// host did not advertise, or a behavior the callback does not accept.
-pub(crate) fn resolve_tool(
-    pending: &Pending,
-    response: &Value,
-) -> Result<Value, AgentSessionError> {
+pub fn resolve_tool(pending: &Pending, response: &Value) -> Result<Value, AgentSessionError> {
     let fields = response.as_object().ok_or(AgentSessionError::Rejected)?;
     if fields.keys().any(|key| {
         !matches!(

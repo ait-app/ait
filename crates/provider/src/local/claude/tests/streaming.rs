@@ -90,7 +90,7 @@ fn structured_outputs_and_result_only_commands_are_visible_without_duplicating_s
 #[test]
 fn tool_images_render_once_and_replay_with_the_same_identity() {
     let root = tempfile::tempdir().unwrap();
-    let images = crate::local::images::ImageStore::new(root.path().join("images"));
+    let images = provider_native::images::ImageStore::new(root.path().join("images"));
     let records = [
         json!({"type":"assistant","uuid":"tool-msg","message":{"id":"api","content":[
             {"type":"tool_use","id":"call","name":"mcp__images__render","input":{}}]}}),

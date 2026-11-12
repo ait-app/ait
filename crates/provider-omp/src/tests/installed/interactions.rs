@@ -182,10 +182,8 @@ async fn installed_omp_structured_ask_dialog_answers_every_question_at_once() {
         .await
         .unwrap();
     let request = question(session.as_mut()).await;
-    let shared: Value = serde_json::from_str(include_str!(
-        "../../../../provider/tests/fixtures/omp_question.json"
-    ))
-    .unwrap();
+    let shared: Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/omp_question.json")).unwrap();
     let questions = request["input"]["questions"].as_array().unwrap();
     assert_eq!(questions.len(), 2);
     assert_eq!(questions[1]["multiSelect"], true);

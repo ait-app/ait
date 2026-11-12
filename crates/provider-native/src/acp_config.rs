@@ -13,7 +13,8 @@ use provider_core::ports::agent_session::AgentSessionError;
 ///
 /// # Returns
 /// The select option whose category matches, or none when the adapter omits it.
-pub(crate) fn option<'a>(options: &'a Value, category: &str) -> Option<&'a Value> {
+#[must_use]
+pub fn option<'a>(options: &'a Value, category: &str) -> Option<&'a Value> {
     options
         .as_array()?
         .iter()
@@ -32,7 +33,7 @@ pub(crate) fn option<'a>(options: &'a Value, category: &str) -> Option<&'a Value
 /// # Errors
 ///
 /// Returns `AgentSessionError::Failed` for a missing, oversized or malformed choice list.
-pub(crate) fn choices(option: &Value) -> Result<Vec<&Value>, AgentSessionError> {
+pub fn choices(option: &Value) -> Result<Vec<&Value>, AgentSessionError> {
     let options = option["options"]
         .as_array()
         .ok_or(AgentSessionError::Failed)?;
@@ -69,7 +70,7 @@ pub(crate) fn choices(option: &Value) -> Result<Vec<&Value>, AgentSessionError> 
 /// # Errors
 ///
 /// Returns `AgentSessionError::Failed` for a missing, oversized or malformed option list.
-pub(crate) fn state(response: &Value) -> Result<Value, AgentSessionError> {
+pub fn state(response: &Value) -> Result<Value, AgentSessionError> {
     let options = response["configOptions"]
         .as_array()
         .filter(|options| options.len() <= 128)
@@ -99,7 +100,7 @@ pub(crate) fn state(response: &Value) -> Result<Value, AgentSessionError> {
 /// # Errors
 ///
 /// Returns `AgentSessionError::Failed` when the field is absent or out of bounds.
-pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {
+pub fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {
     value[key]
         .as_str()
         .filter(|text| {
@@ -110,7 +111,8 @@ pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
 
 /// Convert validated host MCP definitions to ACP launch descriptions.
 /// Reads `config.mcp_servers`; returns an empty list when none are configured.
-pub(crate) fn mcp_servers(config: &domain::agent_runtime::StoredAgentConfig) -> Vec<Value> {
+#[must_use]
+pub fn mcp_servers(config: &domain::agent_runtime::StoredAgentConfig) -> Vec<Value> {
     config
         .mcp_servers
         .iter()
@@ -148,7 +150,8 @@ pub(crate) fn mcp_servers(config: &domain::agent_runtime::StoredAgentConfig) -> 
 ///
 /// # Returns
 /// The configured servers, or `None` when there are none.
-pub(crate) fn launched_servers(
+#[must_use]
+pub fn launched_servers(
     config: &domain::agent_runtime::StoredAgentConfig,
 ) -> Option<&std::collections::BTreeMap<String, Value>> {
     config
@@ -166,7 +169,8 @@ pub(crate) fn launched_servers(
 /// # Returns
 /// True for Streamable HTTP servers and for stdio servers with an absolute command; false for
 /// SSE, which the supported native clients reject, and for commands that need `PATH` lookup.
-pub(crate) fn launchable(server: &Value) -> bool {
+#[must_use]
+pub fn launchable(server: &Value) -> bool {
     server["type"] == "http"
         || (server["type"] == "stdio"
             && server["command"]

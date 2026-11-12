@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::local::images::ImageStore;
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::images::ImageStore;
 
 /// Native text blocks and a separate display projection of the same validated input.
 pub(super) struct Prepared {

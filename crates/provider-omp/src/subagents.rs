@@ -9,9 +9,9 @@ use serde_json::{Value, json};
 
 use super::history::children;
 use super::{PROVIDER, config, stream::Stream};
-use provider::local::images::ImageStore;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::ports::controls::{NativeSubagent, SubagentEvent};
+use provider_native::images::ImageStore;
 
 /// Children tracked per parent session; finished ones are forgotten first, oldest first.
 const MAX_CHILDREN: usize = 256;

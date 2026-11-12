@@ -31,7 +31,7 @@ pub(crate) struct DeepSeekHarnessClient {
     native_profile: std::ffi::OsString,
     deadline: Duration,
     environment: AgentEnvironment,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
 }
 
 impl DeepSeekHarnessClient {
@@ -46,7 +46,7 @@ impl DeepSeekHarnessClient {
             native_profile: "web".into(),
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
         }
     }
 
@@ -70,7 +70,7 @@ impl DeepSeekHarnessClient {
     /// Materialize native image output in `directory` for live display and saved timelines.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 
@@ -126,7 +126,7 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
-        let mut selection = super::summary_model::select(
+        let mut selection = provider_native::summary_model::select(
             self.provider(),
             models,
             &["deepseek-flash", "haiku", "mini", "flash"],
@@ -233,7 +233,7 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(super::configuration::executable(&self.program)
+        Ok(provider_native::configuration::executable(&self.program)
             && self
                 .desktop
                 .as_ref()

@@ -87,7 +87,7 @@ DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这�
 | OpenCode ACP                | 当前拒绝 `mcp_servers`，新建会话传空 MCP 列表            | 补 ACP MCP 能力或原生工具适配；不能统一强塞配置        |
 | DSH native、Pi、Antigravity | 当前拒绝非空 MCP 配置                                    | 补各自原生工具或 MCP 适配；仅分发 Skill 不会提供工具   |
 
-证据：[Codex/Claude 转换](../../../../crates/provider/src/local/configuration.rs#L138)、
+证据：[Codex/Claude 转换](../../../../crates/provider-native/src/configuration.rs#L138)、
 [DSH ACP 转换](../../../../crates/provider/src/local/deepseek_harness/config.rs#L61)、
 [OpenCode](../../../../crates/provider/src/local/opencode/config.rs#L38)、
 [DSH native](../../../../crates/provider/src/local/deepseek_harness/native/config.rs#L19)、

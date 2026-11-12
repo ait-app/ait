@@ -21,7 +21,7 @@ fn oversized_mcp_structured_result_has_a_durable_replayable_preview() {
         "tool":"github.fetch","status":"completed","arguments":{"url":"https://example.test/compare"},
         "result":{"content":[{"type":"text","text":"Success"}],
             "structuredContent":{"diff":"界\n\"\\".repeat(160 * 1024)},"isError":false}});
-    let images = crate::local::images::ImageStore::default();
+    let images = provider_native::images::ImageStore::default();
     let entries = timeline_items(&native, "turn", "time", &images).unwrap();
     let output = &entries[0].item["detail"]["output"];
     assert!(output.as_str().unwrap().contains("Output truncated"));
@@ -50,7 +50,7 @@ fn oversized_mcp_arguments_and_errors_fit_running_and_failed_cards() {
         "tool":"test","status":"inProgress","arguments":{"text":"界\n".repeat(128 * 1024)},
         "result":null});
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();
-    let running = crate::local::tool_detail::codex_tools(&native, "running")
+    let running = provider_native::tool_detail::codex_tools(&native, "running")
         .remove(0)
         .1;
     let mut entry = NativeItem {
@@ -76,7 +76,7 @@ fn oversized_mcp_arguments_and_errors_fit_running_and_failed_cards() {
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap()
     .remove(0);
@@ -95,7 +95,7 @@ fn oversized_mcp_arguments_and_errors_fit_running_and_failed_cards() {
 #[test]
 fn generated_images_and_mcp_images_have_stable_sanitized_history() {
     let root = tempfile::tempdir().unwrap();
-    let images = crate::local::images::ImageStore::new(root.path().join("images"));
+    let images = provider_native::images::ImageStore::new(root.path().join("images"));
     let generation =
         json!({"id":"image","type":"imageGeneration","status":"completed","result":"aGVsbG8="});
     let first = timeline_items(&generation, "turn", "time", &images).unwrap();
@@ -123,7 +123,7 @@ fn mcp_screenshot_metadata_does_not_exhaust_the_timeline() {
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(items.len(), 1);
@@ -146,7 +146,7 @@ fn completed_mcp_tool_uses_the_same_name_and_input_as_its_running_card() {
         &native,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(items.len(), 1);
@@ -165,7 +165,7 @@ fn completed_mcp_tool_uses_the_same_name_and_input_as_its_running_card() {
         &failed,
         "turn",
         "time",
-        &crate::local::images::ImageStore::default(),
+        &provider_native::images::ImageStore::default(),
     )
     .unwrap();
     assert_eq!(failure[0].item["status"], "failed");

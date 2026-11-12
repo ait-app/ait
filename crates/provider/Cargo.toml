@@ -7,6 +7,8 @@ publish.workspace = true
 [dependencies]
 # Ports and protocol values shared with the native adapters.
 provider-core.workspace = true
+# Process, sandbox, ACP and media helpers the adapters still in this crate build on.
+provider-native.workspace = true
 model.workspace = true
 domain.workspace = true
 # Codex owns the upstream peer and converts its Opus media to connection-local PCM.
@@ -67,7 +69,6 @@ tracing-subscriber.workspace = true
 # Match Claude Agent SDK's NFC normalization of native session directory names.
 unicode-normalization.workspace = true
 
-[target.'cfg(unix)'.dependencies]
-# Signal owned native process groups directly instead of spawning `/bin/kill`.
-nix.workspace = true
-nix.features = ["signal"]
+[target.'cfg(unix)'.dev-dependencies]
+# Probe that a closed native query process was killed and reaped.
+nix = { workspace = true, features = ["signal"] }

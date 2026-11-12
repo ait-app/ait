@@ -15,8 +15,7 @@ const PERMISSION_INPUT_BYTES: usize = 64 * 1024;
 /// Per-field budget once permission prompt arguments exceed their budget.
 const PERMISSION_FIELD_BYTES: usize = 16 * 1024;
 /// Notice ending a shortened display preview whose complete value stays in the native transcript.
-pub(super) const MARKER: &str =
-    "\n[Output truncated; full output remains in the native transcript.]";
+pub const MARKER: &str = "\n[Output truncated; full output remains in the native transcript.]";
 
 mod command_actions;
 mod mcp;
@@ -29,7 +28,8 @@ mod subagent;
 /// items. Compound actions share one command result identified by an `:output` suffix.
 /// File edits retain the native ID for the first file and use `:file:N` for subsequent files,
 /// so an initial placeholder is replaced when paths arrive. Invalid metadata falls back to one row.
-pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> {
+#[must_use]
+pub fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> {
     let details = file_changes(native)
         .or_else(|| command_actions::details(native))
         .unwrap_or_else(|| vec![codex(native)]);
@@ -64,7 +64,7 @@ pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> 
 /// Return the display name for `native`, including its MCP server when present.
 ///
 /// Borrows the native type or tool name where possible; allocates only for `server.tool`.
-pub(super) fn codex_name(native: &Value) -> Cow<'_, str> {
+pub fn codex_name(native: &Value) -> Cow<'_, str> {
     if native["type"] == "subAgentActivity" {
         return Cow::Borrowed("Sub-agent");
     }
@@ -87,7 +87,8 @@ pub(super) fn codex_name(native: &Value) -> Cow<'_, str> {
 /// Return the error for `native` when `failed`, or null for a successful tool.
 ///
 /// MCP failures retain their native error; other failures use a generic message.
-pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
+#[must_use]
+pub fn codex_error(native: &Value, failed: bool) -> Value {
     if !failed {
         return Value::Null;
     }
@@ -102,7 +103,7 @@ pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
 ///
 /// Copied text arguments such as commands, file contents, edits and plans are bounded display
 /// previews; complete arguments remain in the native transcript.
-pub(super) fn claude(name: &str, input: &Value) -> Value {
+pub fn claude(name: &str, input: &Value) -> Value {
     if matches!(name, "Read" | "Edit" | "Write")
         && input["file_path"]
             .as_str()
@@ -156,7 +157,7 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
 }
 
 /// Add a bounded display preview of a Claude tool `result` to its typed `detail`.
-pub(super) fn claude_result(detail: &mut Value, result: &Value) {
+pub fn claude_result(detail: &mut Value, result: &Value) {
     let field = match detail["type"].as_str() {
         Some("shell") => "output",
         Some("read" | "search") => "content",
@@ -185,7 +186,8 @@ pub(super) fn claude_result(detail: &mut Value, result: &Value) {
 /// `input` unchanged when it fits. Larger objects keep every top-level field, with marked text
 /// prefixes and marked JSON previews, so the prompt still names the path or command it approves.
 /// Any other oversized shape becomes one marked JSON preview.
-pub(super) fn input_preview(input: &Value) -> Value {
+#[must_use]
+pub fn input_preview(input: &Value) -> Value {
     let bounded = mcp::bounded(input, PERMISSION_INPUT_BYTES);
     let (true, Some(fields)) = (bounded.is_string(), input.as_object()) else {
         return bounded;
@@ -208,7 +210,8 @@ fn claude_unknown(input: &Value) -> Value {
     json!({"type":"unknown","input":mcp::bounded(input, CLAUDE_UNKNOWN_BYTES),"output":null})
 }
 
-pub(super) fn codex(native: &Value) -> Value {
+/// Project a native Codex thread item into a bounded tool-call detail.
+pub fn codex(native: &Value) -> Value {
     match native["type"].as_str() {
         Some("commandExecution") => {
             command_actions::shell(native, native["command"].as_str().unwrap_or(""), true)
@@ -306,7 +309,8 @@ fn preview(text: &str) -> Cow<'_, str> {
 /// # Returns
 ///
 /// `text` unchanged when it fits, otherwise its longest char-aligned prefix plus `marker`.
-pub(super) fn truncate<'a>(text: &'a str, limit: usize, marker: &str) -> Cow<'a, str> {
+#[must_use]
+pub fn truncate<'a>(text: &'a str, limit: usize, marker: &str) -> Cow<'a, str> {
     if text.len() <= limit {
         return Cow::Borrowed(text);
     }

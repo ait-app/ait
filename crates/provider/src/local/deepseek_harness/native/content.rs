@@ -37,7 +37,7 @@ pub(super) async fn hydrate(
     mut frame: Value,
     api: &super::http::Api,
     session: &str,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<Value, AgentSessionError> {
     let event = &mut frame["value"]["event"];
     let message = if event["type"] == "user/message" {
@@ -65,7 +65,7 @@ async fn hydrate_image(
     block: &mut Value,
     api: &super::http::Api,
     session: &str,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<(), AgentSessionError> {
     if block["type"] != "image" {
         return Ok(());

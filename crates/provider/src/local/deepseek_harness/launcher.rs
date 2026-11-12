@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 use super::DeepSeekHarnessClient;
-use crate::local::configuration::executable;
+use provider_native::configuration::executable;
 
 #[derive(Debug, Clone)]
 pub(super) struct Desktop {

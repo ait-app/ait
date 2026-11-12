@@ -6,12 +6,12 @@ use std::{
 
 use serde_json::{Value, json};
 
-use crate::local::images::ImageStore;
-use crate::local::{acp_config, tool_detail};
 use provider_core::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::{timeline::NativeItem, usage::AgentUsage},
 };
+use provider_native::images::ImageStore;
+use provider_native::{acp_config, tool_detail};
 
 // JSON can expand each control byte to six bytes; leave room for entry metadata.
 const TEXT_BYTES: usize = 96 * 1024;
@@ -42,7 +42,7 @@ pub(super) struct Stream {
     foreground_turn: Option<String>,
     observation: u64,
     images: ImageStore,
-    compactions: crate::local::compaction::Compactions,
+    compactions: provider_native::compaction::Compactions,
 }
 
 impl Stream {

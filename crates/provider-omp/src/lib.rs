@@ -43,7 +43,7 @@ pub struct OmpClient {
     program: PathBuf,
     timeouts: transport::Timeouts,
     environment: AgentEnvironment,
-    images: provider::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
 }
 
 impl OmpClient {
@@ -54,14 +54,14 @@ impl OmpClient {
             program,
             timeouts: transport::Timeouts::default(),
             environment: AgentEnvironment::default(),
-            images: provider::local::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
         }
     }
 
     /// Store rendered native image output in the daemon's private `directory`.
     #[must_use]
     pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = provider::local::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 }
@@ -110,7 +110,7 @@ impl AgentClient for OmpClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(provider::local::configuration::executable(&self.program))
+        Ok(provider_native::configuration::executable(&self.program))
     }
 
     async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {

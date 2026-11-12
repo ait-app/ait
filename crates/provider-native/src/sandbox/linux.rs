@@ -14,7 +14,7 @@ use tokio::process::Command;
 
 use provider_core::ports::agent_session::AgentSessionError;
 
-pub(crate) mod process;
+pub mod process;
 
 const BWRAP: &str = "/usr/bin/bwrap";
 const PROTECTED_DIRECTORIES: [&str; 9] = [
@@ -181,8 +181,12 @@ fn seed(path: &Path, contents: &[u8]) -> io::Result<()> {
 ///
 /// `variable` supplies the effective launch environment. An explicit config directory is
 /// preserved. Otherwise seed the native global settings in `~/.claude/.claude.json` once;
-/// credentials and history remain in the same `~/.claude` directory. Returns I/O failures.
-pub(crate) fn claude_config_dir(variable: &dyn Fn(&str) -> Option<String>) -> io::Result<PathBuf> {
+/// credentials and history remain in the same `~/.claude` directory.
+///
+/// # Errors
+///
+/// Returns the I/O failure when `HOME` is not absolute or the settings cannot be seeded.
+pub fn claude_config_dir(variable: &dyn Fn(&str) -> Option<String>) -> io::Result<PathBuf> {
     if let Some(directory) = variable("CLAUDE_CONFIG_DIR").filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(directory));
     }

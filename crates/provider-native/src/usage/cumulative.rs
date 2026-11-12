@@ -5,20 +5,20 @@
 
 /// Disjoint token buckets of one usage observation, matching `RequestUsage`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct UsageCounters {
+pub struct UsageCounters {
     /// Input tokens, excluding cache read and cache write tokens.
-    pub(crate) input: u64,
+    pub input: u64,
     /// Output tokens, including reasoning tokens.
-    pub(crate) output: u64,
+    pub output: u64,
     /// Cache read tokens.
-    pub(crate) cache_read: u64,
+    pub cache_read: u64,
     /// Cache write tokens.
-    pub(crate) cache_write: u64,
+    pub cache_write: u64,
 }
 
 /// Baseline of one cumulative usage stream, such as one native conversation.
 #[derive(Debug, Default)]
-pub(crate) struct CumulativeUsage {
+pub struct CumulativeUsage {
     baseline: Option<UsageCounters>,
 }
 
@@ -27,7 +27,7 @@ impl CumulativeUsage {
     ///
     /// Returns `None` for the first total, an unchanged total, or a drop in any counter; each of
     /// these leaves `current` as the new baseline.
-    pub(crate) fn observe(&mut self, current: UsageCounters) -> Option<UsageCounters> {
+    pub fn observe(&mut self, current: UsageCounters) -> Option<UsageCounters> {
         let previous = self.baseline.replace(current)?;
         let delta = UsageCounters {
             input: current.input.checked_sub(previous.input)?,

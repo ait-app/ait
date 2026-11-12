@@ -47,7 +47,7 @@ struct OAuth {
 
 impl ClaudeClient {
     pub(super) async fn native_diagnostic(&self) -> Result<String, AgentSessionError> {
-        if !crate::local::configuration::executable(&self.program) {
+        if !provider_native::configuration::executable(&self.program) {
             return Ok("Claude Code executable: unavailable".to_owned());
         }
         let mut command = tokio::process::Command::new(&self.program);
@@ -309,7 +309,7 @@ async fn output(
 ) -> Result<SecretString, AgentSessionError> {
     let Ok(result) = tokio::time::timeout(
         deadline,
-        crate::local::metadata_process::bounded_output(&mut command, 65536),
+        provider_native::metadata_process::bounded_output(&mut command, 65536),
     )
     .await
     else {

@@ -38,7 +38,7 @@ impl CodexSession {
     pub(super) fn approve_computer_use(&mut self, id: &str) -> Result<bool, AgentSessionError> {
         let pending = self.permissions.get(id).ok_or(AgentSessionError::Failed)?;
         let input = &pending.request["input"];
-        if !crate::local::configuration::codex_computer_use_auto_approval(&self.config)
+        if !provider_native::configuration::codex_computer_use_auto_approval(&self.config)
             || pending.kind != Kind::Mcp
             || input["serverName"] != "cua_repl"
             || input["_meta"]["codex_approval_kind"] != "mcp_tool_call"
@@ -124,7 +124,7 @@ impl CodexSession {
             if !params["serverName"].is_string() || !params["message"].is_string() {
                 return Err(AgentSessionError::Failed);
             }
-            let questions = crate::local::elicitation::questions(&params["requestedSchema"])?;
+            let questions = provider_native::elicitation::questions(&params["requestedSchema"])?;
             request["title"] = json!(params["message"]);
             if !questions.is_empty() {
                 request["kind"] = json!("question");
@@ -245,7 +245,7 @@ fn resolution(pending: &Pending, response: &Value) -> Result<Value, AgentSession
     if pending.kind == Kind::Mcp {
         return Ok(
             json!({"action":if allow {"accept"} else if response["interrupt"] == true {"cancel"} else {"decline"},
-            "content":if allow {crate::local::elicitation::content(&pending.request["input"]["requestedSchema"], &response["updatedInput"])?} else {Value::Null},"_meta":null}),
+            "content":if allow {provider_native::elicitation::content(&pending.request["input"]["requestedSchema"], &response["updatedInput"])?} else {Value::Null},"_meta":null}),
         );
     }
     if response.get("updatedInput").is_some() {

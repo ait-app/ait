@@ -21,28 +21,6 @@ const RUNTIME: &[&str] = &[
     "testing",
 ];
 
-/// `local` modules that move to `provider-native`.
-const TOOLKIT: &[&str] = &[
-    "acp_config",
-    "acp_permissions",
-    "acp_streaming",
-    "acp_transport",
-    "compaction",
-    "configuration",
-    "diagnostics",
-    "elicitation",
-    "images",
-    "metadata_process",
-    "notes",
-    "process_group",
-    "prompt_blocks",
-    "sandbox",
-    "session_preview",
-    "summary_model",
-    "tool_detail",
-    "usage",
-];
-
 /// `local` modules that become one crate each.
 const ADAPTERS: &[&str] = &[
     "antigravity",
@@ -208,9 +186,8 @@ fn crosses(file: &str, target: &str) -> bool {
             matches!(part, "tests" | "fixtures" | "tests.rs") || part.starts_with("test_support")
         });
 
-    if let Some(local) = file.strip_prefix("local/") {
-        let own = local.split(['/', '.']).next().unwrap_or_default();
-        (!test && RUNTIME.contains(&top)) || (TOOLKIT.contains(&own) && adapter)
+    if file.starts_with("local/") {
+        !test && RUNTIME.contains(&top)
     } else if test {
         adapter && module != "codex" && !PENDING.contains(&file)
     } else {

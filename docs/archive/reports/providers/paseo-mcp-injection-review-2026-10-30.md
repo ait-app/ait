@@ -38,7 +38,7 @@ Ait 当前已采用这个主链路：[host](../../../../bins/daemon/src/host.rs)
    [MiniMax 配置校验](../../../../crates/provider/src/local/minimax/config.rs) 已接受 HTTP MCP，
    [原生会话](../../../../crates/provider/src/local/minimax/session.rs) 在 `session/new` 与
    `session/resume` 中调用共享
-   [ACP MCP 转换](../../../../crates/provider/src/local/acp_config.rs)，包含 HTTP headers。
+   [ACP MCP 转换](../../../../crates/provider-native/src/acp_config.rs)，包含 HTTP headers。
    本轮已在 [MiniMaxClient](../../../../crates/provider/src/local/minimax.rs) 声明
    `supports_agent_mcp = true`，复用现有 HTTP 通路，并在 provider 内验证启动、恢复和多轮
    配置一致。
@@ -104,7 +104,7 @@ HTTP 与原生目录使用同一过滤规则。Ait 的 `toolPolicy.preapproved` 
 [策略解析](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/agent/paseo-tool-policy.ts#L1)、
 [工具注册过滤](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/agent/tools/paseo-tools.ts#L737)、
 [HTTP 调用者策略](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/bootstrap.ts#L1610)、
-[Ait 审批转换](../../../../crates/provider/src/local/configuration.rs)。
+[Ait 审批转换](../../../../crates/provider-native/src/configuration.rs)。
 
 ## Test coverage
 

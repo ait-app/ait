@@ -5,6 +5,7 @@ date: 2026-11-06
 paths:
   - crates/provider
   - crates/domain
+  - crates/provider-native
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别

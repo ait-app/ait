@@ -28,7 +28,7 @@ pub(super) fn capture(message: &Value) -> Result<Pending, AgentSessionError> {
     let mut input = if question || name == "ExitPlanMode" {
         params["input"].clone()
     } else {
-        crate::local::tool_detail::input_preview(&params["input"])
+        provider_native::tool_detail::input_preview(&params["input"])
     };
     if question {
         let questions = input["questions"]

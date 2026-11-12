@@ -3,9 +3,9 @@
 use serde_json::{Value, json};
 
 use super::{CodexSession, discovery};
-use crate::local::usage::requests::CodexRequests;
 use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use provider_core::protocol::{prompt::AgentPrompt, timeline::NativeItem};
+use provider_native::usage::requests::CodexRequests;
 
 pub(super) fn split(text: &str) -> Option<(&str, &str)> {
     let command = text.trim().strip_prefix('/')?;
@@ -119,7 +119,9 @@ impl CodexSession {
                     .events
                     .push_back(AgentTurnEvent::RequestUsage(request));
             }
-            return Ok(crate::local::usage::codex(&params["tokenUsage"]).map(AgentTurnEvent::Usage));
+            return Ok(
+                provider_native::usage::codex(&params["tokenUsage"]).map(AgentTurnEvent::Usage)
+            );
         }
         if method == "turn/started" {
             self.pending_goal_start = false;

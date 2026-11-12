@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use super::{PROVIDER, client::OpenCodeClient, config, launcher, summary::Temporary};
-use crate::local::acp_config;
 use provider_core::{ports::agent_session::AgentSessionError, protocol::provider::Details};
+use provider_native::acp_config;
 
 /// Query native options without a prompt, deleting the temporary session before returning.
 /// Unavailable capabilities, malformed choices and cleanup failures are propagated.

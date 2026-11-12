@@ -4,9 +4,9 @@ use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
 use super::PROVIDER;
-use crate::local::acp_config::{choices, option, state, text};
-use crate::local::acp_transport::Transport;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_native::acp_config::{choices, option, state, text};
+use provider_native::acp_transport::Transport;
 
 /// Reject unsupported or oversized host choices before starting native execution.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -41,7 +41,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .mcp_servers
             .iter()
             .flatten()
-            .any(|(_, server)| !crate::local::acp_config::launchable(server))
+            .any(|(_, server)| !provider_native::acp_config::launchable(server))
         || config
             .system_prompt
             .as_ref()
@@ -54,7 +54,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
         return Err(AgentSessionError::Rejected);
     }
     // Bounded MCP definitions reach native ACP session opening; other fields are checked above.
-    crate::local::configuration::validate(config, PROVIDER)
+    provider_native::configuration::validate(config, PROVIDER)
 }
 
 /// Validate provider, configuration and an existing canonical absolute working directory.

@@ -41,7 +41,7 @@ impl Overlay {
     ///
     /// Returns `Failed` when the private file cannot be written.
     pub(super) fn write(config: &StoredAgentConfig) -> Result<Option<Self>, AgentSessionError> {
-        let Some(servers) = crate::local::acp_config::launched_servers(config) else {
+        let Some(servers) = provider_native::acp_config::launched_servers(config) else {
             return Ok(None);
         };
         let rows: Vec<Value> = servers

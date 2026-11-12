@@ -13,12 +13,12 @@ use super::{
     presets,
     runtime::Runtime,
 };
-use crate::local::acp_config::text;
-use crate::local::acp_streaming::Stream;
 use provider_core::{
     ports::agent_session::{AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent},
     protocol::{prompt::AgentPrompt, provider::Details},
 };
+use provider_native::acp_config::text;
+use provider_native::acp_streaming::Stream;
 
 #[derive(Debug)]
 pub(in crate::local::deepseek_harness) struct Session {
@@ -37,7 +37,7 @@ pub(in crate::local::deepseek_harness) struct Session {
     waiting_approvals: BTreeMap<String, Value>,
     delegations: JoinSet<Result<Value, AgentSessionError>>,
     closed: bool,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     hydration: JoinSet<Result<Value, AgentSessionError>>,
     account: Result<super::quota::credentials::Context, AgentSessionError>,
 }
@@ -127,7 +127,7 @@ pub(in crate::local::deepseek_harness) async fn open(
         .await?;
     Ok(Session {
         runtime,
-        mcp_servers: crate::local::acp_config::launched_servers(&spec.config).cloned(),
+        mcp_servers: provider_native::acp_config::launched_servers(&spec.config).cloned(),
         id,
         cwd: spec.cwd.clone(),
         selection,
@@ -189,7 +189,7 @@ impl Session {
             || self.active.is_some()
             || !self.permissions.is_empty()
             || prompt.output_schema.is_some()
-            || crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
+            || provider_native::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -401,7 +401,7 @@ impl AgentSession for Session {
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         // MCP servers are plugins of the Host process started for this session.
-        if crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
+        if provider_native::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
             return Err(AgentSessionError::Rejected);
         }
         self.selection.validate_controls(config).map(|_| ())

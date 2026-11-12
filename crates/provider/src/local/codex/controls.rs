@@ -241,7 +241,7 @@ pub(super) fn policy(config: &StoredAgentConfig, confined: bool) -> (Value, &str
         .and_then(|options| options.get("approval_policy"))
         .cloned()
         .unwrap_or_else(|| json!(approval));
-    crate::local::configuration::complete_codex_approval(&mut approval);
+    provider_native::configuration::complete_codex_approval(&mut approval);
     let sandbox = if confined {
         "danger-full-access"
     } else {

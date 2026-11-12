@@ -84,7 +84,7 @@ impl Diagnostics {
     }
 
     pub(super) async fn drain(&self, output: impl AsyncRead + Unpin) {
-        crate::local::diagnostics::drain_lines(output, |line| self.observe_line(line)).await;
+        provider_native::diagnostics::drain_lines(output, |line| self.observe_line(line)).await;
     }
 
     fn observe_line(&self, line: &[u8]) {

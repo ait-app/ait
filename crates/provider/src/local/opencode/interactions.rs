@@ -2,8 +2,8 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::PROVIDER;
-use crate::local::acp_permissions::{Pending, resolve_tool};
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::acp_permissions::{Pending, resolve_tool};
 
 /// Validate a host answer and build its exact native callback reply; invalid answers reject.
 pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, AgentSessionError> {
@@ -54,7 +54,7 @@ pub(super) fn form(message: &Value) -> Result<Pending, AgentSessionError> {
         .filter(|(_, property)| property["uniqueItems"] == true)
         .map(|(key, _)| key.clone())
         .collect();
-    let mut questions = crate::local::elicitation::questions(&schema)?;
+    let mut questions = provider_native::elicitation::questions(&schema)?;
     for question in &mut questions {
         let key = question["header"]
             .as_str()
@@ -102,7 +102,7 @@ fn schema(value: &Value) -> Result<Value, AgentSessionError> {
     for property in fields.values_mut() {
         normalize_choice(property)?;
     }
-    crate::local::elicitation::questions(&value)?;
+    provider_native::elicitation::questions(&value)?;
     Ok(value)
 }
 
@@ -146,7 +146,7 @@ fn normalize_choice(property: &mut Value) -> Result<(), AgentSessionError> {
 
 fn answer(schema: &Value, updated: &Value) -> Result<Value, AgentSessionError> {
     if updated.get("content").is_some() {
-        return crate::local::elicitation::content(schema, updated);
+        return provider_native::elicitation::content(schema, updated);
     }
     let mut updated = updated.clone();
     let answers = updated["answers"]
@@ -173,5 +173,5 @@ fn answer(schema: &Value, updated: &Value) -> Result<Value, AgentSessionError> {
             convert(value)
         };
     }
-    crate::local::elicitation::content(schema, &updated)
+    provider_native::elicitation::content(schema, &updated)
 }

@@ -53,7 +53,7 @@ impl Extension {
     ///
     /// Returns `Failed` when the private directory or its files cannot be written.
     pub(super) fn write(config: &StoredAgentConfig) -> Result<Option<Self>, AgentSessionError> {
-        let Some(servers) = crate::local::acp_config::launched_servers(config) else {
+        let Some(servers) = provider_native::acp_config::launched_servers(config) else {
             return Ok(None);
         };
         let servers: Map<String, Value> = servers

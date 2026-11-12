@@ -152,7 +152,7 @@ pub(super) fn timeline_items(
     native: &Value,
     turn: &str,
     timestamp: &str,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<Vec<NativeItem>, AgentSessionError> {
     if matches!(
         native["type"].as_str(),
@@ -170,7 +170,7 @@ pub(super) fn timeline_items(
         } else {
             "completed"
         };
-        return Ok(crate::local::tool_detail::codex_tools(native, status)
+        return Ok(provider_native::tool_detail::codex_tools(native, status)
             .into_iter()
             .map(|(id, item)| NativeItem {
                 key: format!("native:{turn}:{id}"),
@@ -314,7 +314,7 @@ pub(super) fn timeline_item(
                 return Ok(None);
             }
             let failed = native["status"] == "failed" || native["status"] == "declined";
-            let error = crate::local::tool_detail::codex_error(native, failed);
+            let error = provider_native::tool_detail::codex_error(native, failed);
             let status = if failed {
                 "failed"
             } else if kind == "subAgentActivity" && native["kind"] == "interrupted" {
@@ -322,8 +322,8 @@ pub(super) fn timeline_item(
             } else {
                 "completed"
             };
-            json!({"type":"tool_call","callId":id,"name":crate::local::tool_detail::codex_name(native),"status":status,
-                "error":error,"detail":crate::local::tool_detail::codex(native)})
+            json!({"type":"tool_call","callId":id,"name":provider_native::tool_detail::codex_name(native),"status":status,
+                "error":error,"detail":provider_native::tool_detail::codex(native)})
         }
     };
     Ok(Some(NativeItem {

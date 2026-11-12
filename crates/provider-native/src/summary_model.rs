@@ -2,11 +2,8 @@
 use domain::summary::SummarySelection;
 use serde_json::Value;
 
-pub(super) fn select(
-    provider: &str,
-    models: &[Value],
-    preferences: &[&str],
-) -> Option<SummarySelection> {
+/// The first catalog model matching an adapter's `preferences`, with its lowest thinking effort.
+pub fn select(provider: &str, models: &[Value], preferences: &[&str]) -> Option<SummarySelection> {
     let model = preferences.iter().find_map(|preference| {
         models.iter().find(|model| {
             model["isSelectable"] != false

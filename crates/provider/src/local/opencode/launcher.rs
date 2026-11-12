@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 use tokio::{process::Command, time::Instant};
 
 use super::{client::OpenCodeClient, config, observation::Source};
-use crate::local::{acp_transport::Transport, metadata_process::Process};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_native::{acp_transport::Transport, metadata_process::Process};
 
 const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -184,10 +184,10 @@ async fn launch(
         "opencode.startup.version"
     );
     let legacy = version.starts_with("1.");
-    let mut command = crate::local::sandbox::command(
+    let mut command = provider_native::sandbox::command(
         &client.program,
         role.confinement,
-        crate::local::sandbox::OPENCODE_STATE,
+        provider_native::sandbox::OPENCODE_STATE,
         &|name| {
             client
                 .environment

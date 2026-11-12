@@ -12,8 +12,9 @@ use serde_json::json;
 use tokio::io::AsyncReadExt;
 
 use super::super::http::Api;
-use crate::local::{deepseek_harness::DeepSeekHarnessClient, metadata_process};
+use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::metadata_process;
 
 const MAX_FILE: u64 = 1024 * 1024;
 

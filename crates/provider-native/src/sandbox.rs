@@ -14,7 +14,7 @@ use tokio::process::Command;
 use provider_core::ports::agent_session::AgentSessionError;
 
 #[cfg(target_os = "linux")]
-pub(crate) mod linux;
+pub mod linux;
 #[cfg(target_os = "macos")]
 mod seatbelt;
 
@@ -64,7 +64,7 @@ impl StateLocation {
 }
 
 /// Claude Code configuration, credentials index, session history and MCP logs.
-pub(crate) const CLAUDE_STATE: &[StateLocation] = &[
+pub const CLAUDE_STATE: &[StateLocation] = &[
     StateLocation::tree(
         Some("CLAUDE_CONFIG_DIR"),
         "",
@@ -84,7 +84,7 @@ pub(crate) const CLAUDE_STATE: &[StateLocation] = &[
 ];
 
 /// Codex sessions, logs, authentication and state databases.
-pub(crate) const CODEX_STATE: &[StateLocation] = &[StateLocation::tree(
+pub const CODEX_STATE: &[StateLocation] = &[StateLocation::tree(
     Some("CODEX_HOME"),
     "",
     ".codex",
@@ -92,7 +92,7 @@ pub(crate) const CODEX_STATE: &[StateLocation] = &[StateLocation::tree(
 )];
 
 /// Pi agent configuration and session history.
-pub(crate) const PI_STATE: &[StateLocation] = &[
+pub const PI_STATE: &[StateLocation] = &[
     StateLocation::tree(
         Some("PI_CODING_AGENT_DIR"),
         "",
@@ -108,7 +108,7 @@ pub(crate) const PI_STATE: &[StateLocation] = &[
 ];
 
 /// `OpenCode` XDG data, state, cache and configuration directories.
-pub(crate) const OPENCODE_STATE: &[StateLocation] = &[
+pub const OPENCODE_STATE: &[StateLocation] = &[
     StateLocation::tree(
         Some("XDG_DATA_HOME"),
         "opencode",
@@ -131,7 +131,7 @@ pub(crate) const OPENCODE_STATE: &[StateLocation] = &[
 ];
 
 /// `MiniMax` Code configuration, sessions and runtime state.
-pub(crate) const MINIMAX_STATE: &[StateLocation] = &[StateLocation::tree(
+pub const MINIMAX_STATE: &[StateLocation] = &[StateLocation::tree(
     None,
     "",
     ".minimax",

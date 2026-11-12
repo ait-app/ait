@@ -44,7 +44,7 @@ impl ImageStore {
     /// Resolve a native image to a URL or private artifact path without embedding its bytes.
     /// # Errors
     /// Returns unsupported content, invalid data or private artifact storage failures.
-    pub(super) fn source<'a>(&self, image: &'a Value) -> Result<Cow<'a, str>, AgentSessionError> {
+    pub fn source<'a>(&self, image: &'a Value) -> Result<Cow<'a, str>, AgentSessionError> {
         let source = image.as_str().or_else(|| {
             ["path", "savedPath", "saved_path", "url"]
                 .into_iter()
@@ -170,7 +170,12 @@ impl ImageStore {
         Ok(())
     }
 
-    pub(super) fn split(&self, content: &Value) -> Result<(Value, Vec<String>), AgentSessionError> {
+    /// Split MCP result `content` into bounded display output and stored image references.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AgentSessionError`] when an image cannot be stored.
+    pub fn split(&self, content: &Value) -> Result<(Value, Vec<String>), AgentSessionError> {
         // MCP result metadata can contain opaque screenshot data. It is not display output,
         // so do not copy it into the bounded timeline projection.
         let mut output = match content {

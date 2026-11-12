@@ -1,0 +1,36 @@
+[package]
+name = "provider-native"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol values the shared helpers produce for adapters.
+provider-core.workspace = true
+domain.workspace = true
+# Decode inline prompt images before storing them as provider image artifacts.
+base64.workspace = true
+chrono.workspace = true
+# Classify native failure messages and keep only URL origins in diagnostics.
+regex.workspace = true
+url.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+# Stage image artifacts and sandbox profiles before an atomic rename.
+tempfile.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# Signal owned native process groups directly instead of spawning `/bin/kill`.
+nix.workspace = true
+nix.features = ["signal"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Typed Seatbelt profile errors.
+thiserror.workspace = true

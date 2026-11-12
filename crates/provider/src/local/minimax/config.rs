@@ -3,12 +3,12 @@ use std::path::Path;
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use crate::local::acp_config::{choices, option, text};
+use provider_native::acp_config::{choices, option, text};
 
 use super::PROVIDER;
-use crate::local::acp_transport::Transport;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use provider_core::protocol::provider::Details;
+use provider_native::acp_transport::Transport;
 
 /// Validate bounded host settings before native admission; unsupported fields are rejected.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -40,7 +40,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
     {
         return Err(AgentSessionError::Rejected);
     }
-    crate::local::configuration::validate(config, PROVIDER)?;
+    provider_native::configuration::validate(config, PROVIDER)?;
     if config.mcp_servers.iter().flatten().any(|(_, server)| {
         server["type"] == "stdio"
             && server["command"]
@@ -220,7 +220,7 @@ pub(super) fn state(
     response: &Value,
     previous: Option<&Value>,
 ) -> Result<Value, AgentSessionError> {
-    let mut options = crate::local::acp_config::state(response)?;
+    let mut options = provider_native::acp_config::state(response)?;
     let modes = if response["modes"].is_object() {
         let modes = &response["modes"];
         let choices = modes["availableModes"]

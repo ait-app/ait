@@ -23,7 +23,7 @@ pub(crate) struct MiniMaxClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
-    images: super::images::ImageStore,
+    images: provider_native::images::ImageStore,
 }
 
 impl MiniMaxClient {
@@ -34,13 +34,13 @@ impl MiniMaxClient {
             program,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
-            images: super::images::ImageStore::default(),
+            images: provider_native::images::ImageStore::default(),
         }
     }
 
     /// Keep submitted and returned images in the host's durable artifact directory.
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
-        self.images = super::images::ImageStore::new(directory);
+        self.images = provider_native::images::ImageStore::new(directory);
         self
     }
 }
@@ -72,7 +72,7 @@ impl AgentClient for MiniMaxClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(super::configuration::executable(&self.program))
+        Ok(provider_native::configuration::executable(&self.program))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

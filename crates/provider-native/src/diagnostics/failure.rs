@@ -52,7 +52,7 @@ static SECRETS: LazyLock<[(Regex, &str); 4]> = LazyLock::new(|| {
 
 /// User-facing failure state, separate from text-free diagnostic logs.
 #[derive(Default)]
-pub(crate) struct Failure {
+pub struct Failure {
     message: Option<String>,
     retried: bool,
     stopped_retrying: bool,
@@ -71,17 +71,18 @@ impl std::fmt::Debug for Failure {
 
 impl Failure {
     /// Read the sanitized final explanation, without treating retrying errors as failures.
-    pub(crate) fn message(&self) -> Option<&str> {
+    #[must_use]
+    pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
     /// Transfer the explanation to its session before the native transport is discarded.
-    pub(crate) fn take_message(&mut self) -> Option<String> {
+    pub fn take_message(&mut self) -> Option<String> {
         self.message.take()
     }
 
     /// Forget the previous turn's explanation and native retry observations.
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.message = None;
         self.retried = false;
         self.stopped_retrying = false;
@@ -89,7 +90,7 @@ impl Failure {
 
     /// Retain only a bounded, sanitized native message and numeric failure facts.
     /// Retrying notifications record retry state without creating a final explanation.
-    pub(crate) fn observe(&mut self, provider: &str, error: &Value, diagnostic: Diagnostic) {
+    pub fn observe(&mut self, provider: &str, error: &Value, diagnostic: Diagnostic) {
         if diagnostic.will_retry == Some(true) {
             self.retried = true;
             return;
@@ -144,7 +145,7 @@ pub(super) fn native_message(error: &Value) -> Option<Cow<'_, str>> {
 fn sanitize(message: &str) -> Option<String> {
     let end = message.floor_char_boundary(message.len().min(MAX_NATIVE_BYTES));
     let origins = URLS.replace_all(&message[..end], |captures: &regex::Captures<'_>| {
-        reqwest::Url::parse(&captures[0]).map_or_else(
+        url::Url::parse(&captures[0]).map_or_else(
             |_| "[redacted URL]".to_owned(),
             |url| url.origin().ascii_serialization(),
         )

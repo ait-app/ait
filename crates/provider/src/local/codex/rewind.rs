@@ -28,7 +28,7 @@ async fn rewind(
     id: &str,
     spec: &AgentSessionSpec,
     message: &str,
-    images: &crate::local::images::ImageStore,
+    images: &provider_native::images::ImageStore,
 ) -> Result<SessionHistory, AgentSessionError> {
     let source = transport
         .request("thread/read", json!({"threadId":id,"includeTurns":true}))
@@ -63,7 +63,7 @@ async fn rewind(
         "approvalPolicy":approval,"sandbox":sandbox,"excludeTurns":false,
         "beforeTurnId":turns[index]["id"],
         "approvalsReviewer":super::workflows::reviewer(&spec.config),
-        "config":crate::local::configuration::codex(&spec.config)?});
+        "config":provider_native::configuration::codex(&spec.config)?});
     if let Some(prompt) = &spec.config.system_prompt {
         params["developerInstructions"] = json!(prompt);
     }

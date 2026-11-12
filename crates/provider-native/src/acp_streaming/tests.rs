@@ -31,7 +31,7 @@ fn acp_compaction_updates_emit_start_and_failure_and_ignore_duplicate_states() {
 #[test]
 fn image_output_is_materialized_and_large_tool_output_is_bounded() {
     let directory = tempfile::tempdir().unwrap();
-    let mut stream = Stream::new(crate::local::images::ImageStore::new(
+    let mut stream = Stream::new(crate::images::ImageStore::new(
         directory.path().join("images"),
     ));
     stream.begin("turn".to_owned());

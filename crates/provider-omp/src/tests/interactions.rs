@@ -2,10 +2,8 @@ use super::*;
 
 #[tokio::test]
 async fn runtime_inspection_never_blocks_dialogs_before_prompt_admission() {
-    let fixtures: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../provider/tests/fixtures/omp_dialogs.json"
-    ))
-    .unwrap();
+    let fixtures: Vec<Value> =
+        serde_json::from_str(include_str!("../../tests/fixtures/omp_dialogs.json")).unwrap();
     for case in fixtures {
         let native = &case["native"];
         let (root, client, spec) = fixture();

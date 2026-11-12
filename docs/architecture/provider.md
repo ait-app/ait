@@ -6,7 +6,7 @@
 
 ## 边界与装配
 
-- `provider` 的生产依赖只有 `provider-core`、`domain` 与 `model`；`persistence` 仅作为测试依赖，不依赖 `metadata`，
+- `provider` 的生产依赖只有 `provider-core`、`provider-native`、`domain` 与 `model`；`persistence` 仅作为测试依赖，不依赖 `metadata`，
   也不反向依赖 `bot`。依赖守卫是 `bins/daemon/tests/dependencies.rs`
   （[ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
   [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
@@ -16,10 +16,14 @@
   provider 维护；构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
-- Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider-core`、`provider` 与 `domain`（`model`、
-  `persistence` 仅测试使用），只公开 `OmpClient` 与 `installed_program`；`provider` 不依赖它，
-  它也不依赖 daemon。daemon 在 `compose_providers` 中用 `Providers::with` 追加 `OmpClient`，共享同一
-  图片目录。OMP 从 `provider-core` 导入 ports 与 protocol 值，`provider` 只公开 OMP 生产代码用到的 `local` 工具模块。OMP 测试归
+- 原生 adapter 共享的进程、沙箱、ACP、图片、诊断与用量工具在 `crates/provider-native`，生产依赖只有
+  `provider-core` 与 `domain`，只公开 adapter 用到的项；运行时代码不使用它，`provider` 依赖它只因部分 adapter
+  仍在 crate 内（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+- Oh My Pi 的 adapter 在 `crates/provider-omp`，生产依赖为 `provider-core`、`provider-native` 与 `domain`
+  （`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `OmpClient` 与
+  `installed_program`；`provider` 不依赖它，它也不依赖 daemon。daemon 在 `compose_providers` 中用
+  `Providers::with` 追加 `OmpClient`，共享同一图片目录。OMP 从 `provider-core` 导入 ports 与 protocol 值，
+  从 `provider-native` 导入共享工具。OMP 测试归
   `provider-omp`；需要 `AgentManager` 或 Timeline 的场景使用 `provider::testing`，它只在 dev-only 的
   `test-support` feature 下编译，非 dev 依赖边启用或转发该 feature 会被依赖守卫拒绝
   （[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)，已由
@@ -156,7 +160,7 @@
 ## 测试归属
 
 - Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归所属 adapter 的 crate
-  （`crates/provider`，Oh My Pi 为 `crates/provider-omp`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
+  （`crates/provider`，Oh My Pi 为 `crates/provider-omp`；共享工具的测试归 `crates/provider-native`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
   [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。
 

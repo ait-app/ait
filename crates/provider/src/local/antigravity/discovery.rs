@@ -22,7 +22,7 @@ pub(super) fn installed_program() -> PathBuf {
 fn resolve(search: &Search) -> PathBuf {
     candidates(search)
         .into_iter()
-        .find(|program| crate::local::configuration::executable(program))
+        .find(|program| provider_native::configuration::executable(program))
         .unwrap_or_else(|| "agy".into())
 }
 

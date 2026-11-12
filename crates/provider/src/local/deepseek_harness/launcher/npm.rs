@@ -3,7 +3,7 @@
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::local::configuration::executable;
+use provider_native::configuration::executable;
 
 /// Scan at most 256 installations under the npm `cache` without invoking a package manager.
 /// Returns the newest executable DSH entrypoint, or `None` when no valid package can be read.

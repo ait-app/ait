@@ -10,10 +10,12 @@ use serde_json::{Map, Value, json};
 use provider_core::ports::agent_session::AgentSessionError;
 
 /// Validate advanced settings without exposing their contents in errors.
-pub(super) fn validate(
-    config: &StoredAgentConfig,
-    provider: &str,
-) -> Result<(), AgentSessionError> {
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when the settings are oversized or not supported by
+/// `provider`.
+pub fn validate(config: &StoredAgentConfig, provider: &str) -> Result<(), AgentSessionError> {
     let encoded = serde_json::to_vec(config).map_err(|_| AgentSessionError::Rejected)?;
     if encoded.len() > 256 * 1024
         || config
@@ -141,7 +143,11 @@ pub(super) fn grants(
 }
 
 /// Map options and transports to Codex's thread configuration overrides.
-pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionError> {
+///
+/// # Errors
+///
+/// Returns the same errors as [`validate`].
+pub fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionError> {
     validate(config, "codex")?;
     let mut result: Map<String, Value> = config
         .provider_options
@@ -193,7 +199,7 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
 
 /// Whether a permission preset permits automatic computer use approval.
 /// Explicit per-tool settings override Auto-review and Full Access defaults.
-pub(super) fn codex_computer_use_auto_approval(config: &StoredAgentConfig) -> bool {
+pub fn codex_computer_use_auto_approval(config: &StoredAgentConfig) -> bool {
     matches!(
         config.mode_id.as_deref(),
         Some("auto-review" | "full-access")
@@ -238,7 +244,7 @@ fn codex_computer_use(config: &StoredAgentConfig, result: &mut Map<String, Value
 }
 
 /// Native JSON-RPC requires all three granular switches, unlike the optional config schema.
-pub(super) fn complete_codex_approval(approval: &mut Value) {
+pub fn complete_codex_approval(approval: &mut Value) {
     if let Some(granular) = approval.get_mut("granular").and_then(Value::as_object_mut) {
         for field in ["rules", "sandbox_approval", "mcp_elicitations"] {
             granular
@@ -252,7 +258,11 @@ pub(super) fn complete_codex_approval(approval: &mut Value) {
 ///
 /// A `confined` process already runs under the Workspace's OS write sandbox, which refuses
 /// nested Seatbelt profiles or user namespaces, so Claude's own Bash sandbox is turned off.
-pub(super) fn claude(
+///
+/// # Errors
+///
+/// Returns the same errors as [`validate`].
+pub fn claude(
     config: &StoredAgentConfig,
     confined: bool,
 ) -> Result<Vec<String>, AgentSessionError> {
@@ -332,7 +342,8 @@ pub(super) fn claude(
 
 /// Native Claude MCP document; callers pass it through a private file because server headers
 /// and environment may carry credentials that must not appear in process arguments.
-pub(super) fn claude_mcp(config: &StoredAgentConfig) -> Option<Value> {
+#[must_use]
+pub fn claude_mcp(config: &StoredAgentConfig) -> Option<Value> {
     config
         .mcp_servers
         .as_ref()

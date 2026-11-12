@@ -16,7 +16,7 @@ const SUBAGENT_HANDBACK: &str = "SubagentHandback";
 
 #[derive(Debug, Default)]
 pub(super) struct Stream {
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     pub(super) events: VecDeque<AgentTurnEvent>,
     pub(super) last_message: Option<String>,
     pub(super) tools: BTreeMap<String, Value>,
@@ -40,7 +40,7 @@ impl Stream {
             .is_some_and(|id| self.completed.contains(&format!("record:{id}")))
     }
 
-    pub(super) fn new(images: crate::local::images::ImageStore) -> Self {
+    pub(super) fn new(images: provider_native::images::ImageStore) -> Self {
         Self {
             images,
             ..Self::default()
@@ -230,7 +230,7 @@ impl Stream {
                 Some("tool_use") => {
                     let call = text(block, "id")?;
                     let item = json!({"type":"tool_call","callId":call,"name":text(block,"name")?,
-                        "status":"running","error":null,"detail":crate::local::tool_detail::claude(text(block,"name")?, &block["input"])});
+                        "status":"running","error":null,"detail":provider_native::tool_detail::claude(text(block,"name")?, &block["input"])});
                     if matches!(text(block, "name")?, "Agent" | "Task") {
                         self.agent_calls.insert(call.to_owned());
                     }
@@ -295,7 +295,7 @@ impl Stream {
                     item["status"] = json!(if failed { "failed" } else { "completed" });
                     item["error"] = json!(failed.then_some("Native tool failed"));
                     let (content, images) = self.images.split(&block["content"])?;
-                    crate::local::tool_detail::claude_result(&mut item["detail"], &content);
+                    provider_native::tool_detail::claude_result(&mut item["detail"], &content);
                     self.complete(&key, item, record)?;
                     for (index, image) in images.iter().enumerate() {
                         self.complete_image(&format!("{key}:image:{index}"), image, record)?;

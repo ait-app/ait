@@ -1,6 +1,6 @@
 //! Bounded native error explanations and classification; logs contain only structured facts.
 
-pub(crate) mod failure;
+pub mod failure;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -15,7 +15,8 @@ const MAX_TEXT: usize = 32 * 1024;
 const LOG_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Classify recognized native messages without retaining arbitrary text.
-pub(crate) fn classify(text: &str) -> Category {
+#[must_use]
+pub fn classify(text: &str) -> Category {
     let end = text.floor_char_boundary(text.len().min(MAX_TEXT));
     let text = text[..end].to_ascii_lowercase();
     if text.contains("insufficient_quota")
@@ -96,10 +97,7 @@ pub(crate) fn classify(text: &str) -> Category {
 /// * `output` - Native diagnostic stream such as stderr.
 /// * `observe` - Receives each newline-terminated line, then the unterminated tail, without
 ///   its newline and truncated to the first 32 KiB.
-pub(crate) async fn drain_lines(
-    mut output: impl AsyncRead + Unpin,
-    mut observe: impl FnMut(&[u8]),
-) {
+pub async fn drain_lines(mut output: impl AsyncRead + Unpin, mut observe: impl FnMut(&[u8])) {
     let mut chunk = [0; 4096];
     let mut line = Vec::with_capacity(4096);
     while let Ok(count @ 1..) = output.read(&mut chunk).await {
@@ -279,7 +277,7 @@ impl Diagnostics {
     }
 
     /// Restore the failure fact captured before a request whose rejection was recovered.
-    pub(crate) fn restore(&self, failure: Option<Diagnostic>) {
+    pub fn restore(&self, failure: Option<Diagnostic>) {
         if let Ok(mut state) = self.state.lock() {
             state.failure = failure;
             state.explanation.clear();
@@ -303,7 +301,7 @@ impl Diagnostics {
     /// Returns a retained error unchanged. Any other error or an elapsed deadline records a
     /// network or timeout failure, unless one is already known, and returns
     /// `AgentSessionError::Failed`; the caller must then close its connection.
-    pub(crate) fn settle<T>(
+    pub fn settle<T>(
         &self,
         result: Result<Result<T, AgentSessionError>, tokio::time::error::Elapsed>,
         operation: &str,

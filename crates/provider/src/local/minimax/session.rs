@@ -6,14 +6,14 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{MiniMaxClient, PROVIDER, config};
-use crate::local::acp_streaming::Stream;
-use crate::local::usage::requests::MAX_SEGMENT_ID;
-use crate::local::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use provider_core::protocol::prompt::AgentPrompt;
+use provider_native::acp_streaming::Stream;
+use provider_native::usage::requests::MAX_SEGMENT_ID;
+use provider_native::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
 
 /// One native ACP session with bounded control requests and a single active prompt.
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub(super) struct Session {
     capabilities: Value,
     active: Option<(String, String)>,
     stream: Stream,
-    images: crate::local::images::ImageStore,
+    images: provider_native::images::ImageStore,
     permissions: BTreeMap<String, acp_permissions::Pending>,
     closed: bool,
 }
@@ -55,10 +55,10 @@ pub(super) async fn open(
     {
         return Err(AgentSessionError::Rejected);
     }
-    let mut command = crate::local::sandbox::command(
+    let mut command = provider_native::sandbox::command(
         &client.program,
         spec.confinement.as_ref(),
-        crate::local::sandbox::MINIMAX_STATE,
+        provider_native::sandbox::MINIMAX_STATE,
         &|name| client.environment.variable(name),
     )?;
     command.arg("acp").envs(client.environment.entries());
@@ -78,7 +78,7 @@ pub(super) async fn open(
     }
     let capabilities = initialized["agentCapabilities"].clone();
     let mut params =
-        json!({"cwd":spec.cwd,"mcpServers":crate::local::acp_config::mcp_servers(&spec.config)});
+        json!({"cwd":spec.cwd,"mcpServers":provider_native::acp_config::mcp_servers(&spec.config)});
     let method = if let Some(handle) = handle {
         if !capabilities["sessionCapabilities"]["resume"].is_object() {
             return Err(AgentSessionError::Rejected);

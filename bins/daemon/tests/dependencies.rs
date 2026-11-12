@@ -78,9 +78,6 @@ fn test_only_violations(name: &str, package: &Value) -> Vec<String> {
         {
             violations.push(format!("{name} -> {target} test-support outside tests"));
         }
-        if name == "provider-omp" && target == "model" {
-            violations.push(format!("{name} -> model outside tests"));
-        }
     }
     violations
 }
@@ -98,7 +95,8 @@ fn dev_only_dependencies(name: &str) -> &'static [&'static str] {
         | "provider-deepseek-harness"
         | "provider-claude"
         | "provider-antigravity"
-        | "provider-minimax" => &["model", "persistence", "provider"],
+        | "provider-minimax"
+        | "provider-omp" => &["model", "persistence", "provider"],
         _ => &["persistence"],
     }
 }
@@ -178,19 +176,13 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
         | "provider-deepseek-harness"
         | "provider-claude"
         | "provider-antigravity"
-        | "provider-minimax" => &[
+        | "provider-minimax"
+        | "provider-omp" => &[
             "domain",
             "model",
             "provider-core",
             "provider-native",
             "provider",
-            "persistence",
-        ],
-        "provider-omp" => &[
-            "provider-core",
-            "provider",
-            "domain",
-            "model",
             "persistence",
         ],
         "provider" => &[
@@ -331,11 +323,17 @@ fn runtime_test_entry_points_stay_out_of_production_builds() {
     for (kind, expected) in [
         (
             Value::Null,
-            vec!["provider-omp -> provider test-support outside tests"],
+            vec![
+                "provider-omp -> provider test-support outside tests",
+                "provider-omp -> provider outside tests",
+            ],
         ),
         (
             json!("build"),
-            vec!["provider-omp -> provider test-support outside tests"],
+            vec![
+                "provider-omp -> provider test-support outside tests",
+                "provider-omp -> provider outside tests",
+            ],
         ),
         (json!("dev"), vec![]),
     ] {

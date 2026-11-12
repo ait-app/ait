@@ -3,12 +3,13 @@ use serde_json::Value;
 use provider_core::protocol::usage::AgentUsage;
 
 /// Shared cumulative-counter differencing for adapters that only report running totals.
-pub(super) mod cumulative;
+pub mod cumulative;
 
 /// Live per-request segments for the usage ledger; history replay never feeds them.
 pub mod requests;
 
-pub(super) fn codex(value: &Value) -> Option<AgentUsage> {
+/// Codex token usage from a `tokenUsage` update, or `None` when it carries no valid counts.
+pub fn codex(value: &Value) -> Option<AgentUsage> {
     let last = value.get("last")?.as_object()?;
     let usage = AgentUsage {
         input_tokens: last
@@ -36,8 +37,9 @@ pub(super) fn codex(value: &Value) -> Option<AgentUsage> {
     usage.is_valid().then_some(usage)
 }
 
+/// Claude Code usage accumulated across one session's transcript records.
 #[derive(Debug, Default)]
-pub(super) struct ClaudeUsage {
+pub struct ClaudeUsage {
     snapshot: AgentUsage,
     request_input: Option<u64>,
     request_output: Option<u64>,
@@ -45,7 +47,13 @@ pub(super) struct ClaudeUsage {
 }
 
 impl ClaudeUsage {
-    pub(super) fn restore(
+    /// Resume from the snapshot previously returned by [`Self::saved`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`](provider_core::ports::agent_session::AgentSessionError::Failed)
+    /// when the snapshot is malformed.
+    pub fn restore(
         value: Option<&Value>,
     ) -> Result<Self, provider_core::ports::agent_session::AgentSessionError> {
         let Some(value) = value else {
@@ -63,16 +71,20 @@ impl ClaudeUsage {
         })
     }
 
-    pub(super) fn saved(&self) -> Option<Value> {
+    /// The persisted snapshot, or `None` before any usage was observed.
+    #[must_use]
+    pub fn saved(&self) -> Option<Value> {
         (self.snapshot != AgentUsage::default()).then(|| serde_json::json!(self.snapshot))
     }
 
-    pub(super) fn begin(&mut self) {
+    /// Forget the current request's counts before a new turn.
+    pub fn begin(&mut self) {
         self.request_input = None;
         self.request_output = None;
     }
 
-    pub(super) fn observe(&mut self, record: &Value) -> Option<AgentUsage> {
+    /// Apply one main-thread transcript `record`, returning the snapshot when it changed.
+    pub fn observe(&mut self, record: &Value) -> Option<AgentUsage> {
         if record
             .get("parent_tool_use_id")
             .is_some_and(|id| !id.is_null())
