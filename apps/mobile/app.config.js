@@ -6,6 +6,7 @@ const easProjectIdentity = require("./eas.json").build.ait.env;
 const { colors: brandColors } = require("../../assets/brand/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidHermesO0 = require("./plugins/with-android-hermes-o0");
+const withAndroidFoldableConfig = require("./plugins/with-android-foldable-config");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withAndroidReleaseOptimization = require("./plugins/with-android-release-optimization");
 const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
@@ -139,6 +140,7 @@ export default {
     plugins: [
       "expo-router",
       withAndroidReleaseOptimization,
+      withAndroidFoldableConfig,
       withPasteInput,
       withIosSceneLifecycle,
       withIosPodDeploymentTarget,

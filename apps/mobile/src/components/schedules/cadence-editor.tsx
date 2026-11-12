@@ -283,6 +283,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   error: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
   },
 }));

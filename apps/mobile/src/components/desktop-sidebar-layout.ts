@@ -1,3 +1,4 @@
+import { MIN_EXPLORER_SIDEBAR_WIDTH } from "@/components/explorer-sidebar-layout";
 import { SETTINGS_DESKTOP_SPLIT_MIN_WIDTH } from "@/constants/layout";
 import { MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from "@/stores/panel-store";
 
@@ -62,8 +63,12 @@ export function resolveDesktopSidebarWidth(input: {
   });
 }
 
-export function resolveDesktopAppContentMinimum(input: { isSettingsRoute: boolean }): number {
-  return input.isSettingsRoute ? SETTINGS_DESKTOP_SPLIT_MIN_WIDTH : 0;
+export function resolveDesktopAppContentMinimum(input: {
+  isSettingsRoute: boolean;
+  nativeExplorerOpen?: boolean;
+}): number {
+  if (input.isSettingsRoute) return SETTINGS_DESKTOP_SPLIT_MIN_WIDTH;
+  return input.nativeExplorerOpen ? MIN_DESKTOP_CENTER_WIDTH + MIN_EXPLORER_SIDEBAR_WIDTH : 0;
 }
 
 export function canDesktopAppSidebarShare(input: {
@@ -78,5 +83,27 @@ export function canDesktopAppSidebarShare(input: {
         viewportWidth: input.viewportWidth,
       }) >=
     input.contentMinimumWidth
+  );
+}
+
+export function shouldYieldExplorerToNavigation(input: {
+  isCompact: boolean;
+  nativeWorkspaceActive: boolean;
+  explorerOpen: boolean;
+  requestedSidebarWidth: number;
+  viewportWidth: number;
+}): boolean {
+  return (
+    !input.isCompact &&
+    input.nativeWorkspaceActive &&
+    input.explorerOpen &&
+    !canDesktopAppSidebarShare({
+      contentMinimumWidth: resolveDesktopAppContentMinimum({
+        isSettingsRoute: false,
+        nativeExplorerOpen: true,
+      }),
+      requestedSidebarWidth: input.requestedSidebarWidth,
+      viewportWidth: input.viewportWidth,
+    })
   );
 }

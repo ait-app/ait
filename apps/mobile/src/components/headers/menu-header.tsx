@@ -1,4 +1,5 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -59,15 +60,11 @@ function SidebarMenuToggleButton({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact: isMobile }));
-  const toggleAgentListForLayout = usePanelStore((state) => state.toggleAgentListForLayout);
+  const handlePress = useToggleAgentList(isMobile);
   const toggleShortcutKeys = useMemo(
     () => (getShortcutOs() === "mac" ? ["mod", "B"] : ["mod", "."]),
     [],
   );
-
-  const handlePress = useCallback(() => {
-    toggleAgentListForLayout({ isCompact: isMobile });
-  }, [toggleAgentListForLayout, isMobile]);
 
   const accessibilityState = useMemo(() => ({ expanded: isOpen }), [isOpen]);
 

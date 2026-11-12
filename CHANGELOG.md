@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+- Native apps display host CPU and memory statistics correctly with React Native’s cancellation signals.
+
+- Native apps keep the current page and task details when folding or unfolding a device, keep conversations readable beside side panels, prevent messages from showing through the chat header, and keep dropdown options readable and clear of the keyboard.
+
 - Build: the enabled React Compiler now skips `packages/protocol` sources (schemas and generated validators contain no React components), so desktop startup and protocol hot reload no longer pay for compiling their large control-flow graphs. Windows and POSIX paths are both normalized; application components are still compiled.
 
 - Add `npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]` as an alias for the existing `node scripts/release-assets.mjs daemon` standalone-daemon archive command; no new packaging path.
 
 - Desktop passes provider launch overrides (`AIT_SERVER_CODEX_BIN`, `AIT_SERVER_CLAUDE_BIN`, `AIT_SERVER_ANTIGRAVITY_BIN`, `AIT_SERVER_OPENCODE_BIN`, `AIT_SERVER_DEEPSEEK_HARNESS_BIN`, `AIT_SERVER_PI_BIN`, `AIT_SERVER_OMP_BIN`, `AIT_SERVER_MINIMAX_CODE_BIN`, plus `AIT_SERVER_DEEPSEEK_HARNESS_PROFILE` and `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT`) through to its built-in daemon instead of stripping them. All other `AIT_SERVER_*` settings stay isolated to the desktop runtime.
+- Bold text in Chinese, Japanese and Korean now renders as bold when the `**` sits next to punctuation, such as `**…。**后文` or `种**“…”**只`, instead of showing the asterisks.
+- A command approval in a conversation shows the command and its working directory instead of the raw request, and the primary choice is highlighted. Requests that carry arguments Ait does not recognize still show the full input.
+- Error text is readable in light themes; it used a pale red meant for dark surfaces. History rows keep their title in a narrow pane, such as a foldable's inner screen or a small window, and the History empty state and the turn duration label follow the app language.
 
 ## 0.2.9 - 2026-11-12
 

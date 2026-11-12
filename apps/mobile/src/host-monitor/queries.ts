@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { skipToken } from "@tanstack/react-query";
+import { CancelledError, skipToken } from "@tanstack/react-query";
 import { useFetchQuery } from "@/data/query";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { getSharedHostScope } from "@/hosts/host-groups";
@@ -36,7 +36,7 @@ export function useHostStats(serverId: string, includeHistory: boolean, active: 
           const client = getHostRuntimeStore().getClient(serverId);
           if (!client) throw new Error("Host connection unavailable");
           const result = await client.getHostStats(includeHistory);
-          signal.throwIfAborted();
+          if (signal.aborted) throw new CancelledError();
           return result;
         }
       : skipToken,

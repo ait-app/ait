@@ -578,7 +578,7 @@ function ConnectionRow({
     if (latencyMs != null) return formatLatency(latencyMs);
     return "—";
   })();
-  const latencyColor = latencyError ? theme.colors.palette.red[300] : theme.colors.foregroundMuted;
+  const latencyColor = latencyError ? theme.colors.statusDanger : theme.colors.foregroundMuted;
 
   const handlePressRemove = useCallback(() => {
     onRemove?.(connection);
@@ -1826,7 +1826,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
   },
   errorText: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
     marginBottom: theme.spacing[2],
   },

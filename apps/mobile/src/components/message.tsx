@@ -87,6 +87,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { getTurnDurationLabel } from "./assistant-turn-footer-label";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { PlanCard } from "./plan-card";
@@ -593,16 +594,23 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
   },
   labelWrapper: {
     position: "relative",
+    // Slack so sub-pixel differences between the sizer and overlay text
+    // measurements can never truncate or wrap the visible label.
+    paddingRight: 2,
   },
   labelSizer: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
     opacity: 0,
   },
+  labelSizerWidthOnly: {
+    height: 0,
+  },
   labelOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
+    right: 0,
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
@@ -621,6 +629,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   durationMs,
   onFork,
 }: AssistantTurnFooterProps) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [pressedReveal, setPressedReveal] = useState(false);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -636,10 +645,8 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
 
   const durationLabel = useMemo(
     () =>
-      durationMs !== undefined && durationMs !== null
-        ? `Worked for ${formatDuration(durationMs)}`
-        : "",
-    [durationMs],
+      durationMs !== undefined && durationMs !== null ? getTurnDurationLabel(durationMs, t) : "",
+    [durationMs, t],
   );
   const timestampLabel = useMemo(
     () => (completedAt ? formatMessageTimestamp(completedAt) : ""),
@@ -687,12 +694,25 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           accessibilityLabel={canSwap ? `${durationLabel}, ended ${timestampLabel}` : primaryLabel}
         >
           <View style={assistantTurnFooterStylesheet.labelWrapper}>
-            {/* Sizer reserves space for whichever label is longer so the
-                container width is stable across hover transitions. */}
-            <Text style={assistantTurnFooterStylesheet.labelSizer} aria-hidden>
-              {primaryLabel.length >= timestampLabel.length ? primaryLabel : timestampLabel}
+            {/* Invisible sizers reserve the width of both labels so the
+                container width is stable across hover transitions. The
+                second one has no height, so it adds width but no line. */}
+            <Text style={assistantTurnFooterStylesheet.labelSizer} numberOfLines={1} aria-hidden>
+              {primaryLabel}
             </Text>
-            <Text style={assistantTurnFooterStylesheet.labelOverlay}>
+            {canSwap ? (
+              <Text
+                style={[
+                  assistantTurnFooterStylesheet.labelSizer,
+                  assistantTurnFooterStylesheet.labelSizerWidthOnly,
+                ]}
+                numberOfLines={1}
+                aria-hidden
+              >
+                {timestampLabel}
+              </Text>
+            ) : null}
+            <Text style={assistantTurnFooterStylesheet.labelOverlay} numberOfLines={1}>
               {showTimestamp ? timestampLabel : primaryLabel}
             </Text>
           </View>

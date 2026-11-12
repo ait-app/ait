@@ -1,3 +1,4 @@
+import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
 import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
@@ -70,7 +71,7 @@ import {
   useKeyboardActionDispatcher,
 } from "@/keyboard/keyboard-action-dispatcher-context";
 import { KeyboardShiftProvider } from "@/keyboard/shift";
-import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
+import { AppNavigationGestureSurface } from "@/components/app-navigation-gesture-surface";
 import { MobilePanelsProvider, useIsMobilePanelActive } from "@/mobile-panels/provider";
 import {
   bindHostRuntimeAppState,
@@ -93,7 +94,8 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { flushDraftPersistStorage, observeSharedDraftState } from "@/stores/draft-store";
-import { usePanelStore } from "@/stores/panel-store";
+import { selectIsCompactFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { WorkspaceLayoutModePublisher } from "@/workspace-tabs/layout-mode-publisher";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
@@ -133,7 +135,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { AppState, useWindowDimensions, View } from "react-native";
-import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 polyfillCrypto();
@@ -472,7 +474,6 @@ export function useHostRuntimeBootstrapState(): HostRuntimeBootstrapState {
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
-const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 
 interface AppContainerProps {
   children: ReactNode;
@@ -485,12 +486,11 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
-  const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
-  const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
   const exitFocusMode = usePanelStore((state) => state.exitFocusMode);
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const isDesktopAgentListOpen = usePanelStore((state) => state.desktop.agentListOpen);
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  const isNativeExplorerOpen = usePanelStore(selectIsCompactFileExplorerOpen);
   const { width: viewportWidth } = useWindowDimensions();
 
   const cycleTheme = useCallback(() => {
@@ -504,11 +504,15 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const usesCompactExplorerHost = explorerSidebarPresentation !== "pane";
   useCompactWebViewportZoomLock(isCompactLayout);
   const pathname = usePathname();
+  // Match the explorer model's route observation, including cold-mount params
+  // at "/" while excluding stale workspace params on app-wide pages.
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const isNativeWorkspaceActive = isNative && activeWorkspaceSelection !== null;
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
   const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
   const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
-  const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
+  const toggleAgentList = useToggleAgentList(isCompactLayout);
   const toggleDesktopSidebars = useCallback(() => {
     // The focused workspace owns its layout key, its checkout, and therefore the
     // only correct answer to "is the explorer open". Let it decide when there is
@@ -541,6 +545,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),
+    nativeExplorerOpen: isNativeWorkspaceActive && isNativeExplorerOpen,
   });
   const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
   const desktopSidebarVisible = resolveDesktopSidebarVisibility({
@@ -581,7 +586,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       ) : null}
       {usesCompactExplorerHost ? (
         <CompactExplorerSidebarHost
-          enabled={chromeEnabled}
+          enabled={chromeEnabled && (!isNative || isNativeWorkspaceActive)}
           presentation={explorerSidebarPresentation === "dock" ? "dock" : "overlay"}
         >
           <WindowChromeRegion corners={chromeEnabled ? "both" : appChromeLayout.contentCorners}>
@@ -641,10 +646,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     </View>
   );
 
-  const content = isCompactLayout ? (
-    <MobileGestureWrapper chromeEnabled={chromeEnabled}>{surface}</MobileGestureWrapper>
-  ) : (
-    surface
+  const content = (
+    <AppNavigationGestureSurface isCompact={isCompactLayout} chromeEnabled={chromeEnabled}>
+      {surface}
+    </AppNavigationGestureSurface>
   );
 
   return (
@@ -672,24 +677,6 @@ function SidebarChrome({
       {mounted ? <LeftSidebar active={active} /> : null}
       <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
     </SidebarModelProvider>
-  );
-}
-
-function MobileGestureWrapper({
-  children,
-  chromeEnabled,
-}: {
-  children: ReactNode;
-  chromeEnabled: boolean;
-}) {
-  const openGesture = useOpenAgentListGesture(chromeEnabled);
-
-  return (
-    <GestureDetector gesture={openGesture} touchAction={MOBILE_WEB_GESTURE_TOUCH_ACTION}>
-      <View collapsable={false} style={layoutStyles.surfaceFill} testID="compact-shell">
-        {children}
-      </View>
-    </GestureDetector>
   );
 }
 

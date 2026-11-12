@@ -1218,7 +1218,7 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[2],
   },
   fieldError: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
   serviceToggleRow: {

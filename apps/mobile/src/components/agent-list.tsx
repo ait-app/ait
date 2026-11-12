@@ -5,6 +5,7 @@ import {
   Modal,
   RefreshControl,
   FlatList,
+  type LayoutChangeEvent,
   type ListRenderItem,
   type PressableStateCallbackType,
 } from "react-native";
@@ -24,6 +25,7 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
+import { SPACING } from "@/styles/theme";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -49,6 +51,25 @@ const DATE_SECTION_ORDER = [
 ] as const satisfies readonly DateSectionKey[];
 
 const HISTORY_MATCH_OPTIONS = { typoTolerant: true } as const;
+
+const META_COLUMN_WIDTH = 132;
+const TIME_COLUMN_WIDTH = 72;
+const HOST_COLUMN_WIDTH = 120;
+// Workspace name (~120), chevron and provider icon with their gaps (~50), and ~120 of title.
+const WIDE_ROW_TITLE_MIN_WIDTH = 290;
+
+/**
+ * The narrowest list that still leaves the wide row a readable title. Its trailing columns never
+ * shrink: project, branch and time with two gaps take 360, the host column adds 148 (width,
+ * margin and gap). The list and row padding add 72, so the list needs 722 without hosts and 870
+ * with them. Narrower lists, such as a split pane on a tablet, use the stacked row instead.
+ */
+function minWideRowListWidth(showHostColumn: boolean): number {
+  const columns = 2 * META_COLUMN_WIDTH + TIME_COLUMN_WIDTH + 2 * SPACING[3];
+  const hostColumn = showHostColumn ? HOST_COLUMN_WIDTH + SPACING[4] + SPACING[3] : 0;
+  const padding = 2 * SPACING[6] + 2 * SPACING[3];
+  return padding + columns + hostColumn + WIDE_ROW_TITLE_MIN_WIDTH;
+}
 
 type FlatListItem =
   | { type: "header"; key: string; section: DateSectionKey }
@@ -221,6 +242,11 @@ function SessionRow({
   );
   const showDesktopAttention =
     !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
+  // A narrow list on a wide window stacks its rows while the breakpoint styles stay wide.
+  const workspaceTitleStyle = useMemo(
+    () => [styles.workspaceTitleText, isMobile && styles.workspaceTitleTextStacked],
+    [isMobile],
+  );
 
   const agentTitle = (
     <View style={styles.agentTitleRow}>
@@ -250,7 +276,7 @@ function SessionRow({
           <HighlightedText
             text={workspaceName || projectName}
             ranges={workspaceName ? ranges.workspace : ranges.project}
-            style={styles.workspaceTitleText}
+            style={workspaceTitleStyle}
             numberOfLines={1}
             testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
           />
@@ -348,7 +374,12 @@ export function AgentList({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
-  const isMobile = useIsCompactFormFactor();
+  const [listWidth, setListWidth] = useState<number | null>(null);
+  const isCompactFormFactor = useIsCompactFormFactor();
+  // The list can be much narrower than the window, so the row layout follows the list's own
+  // width. The form factor only covers the first frame, before the list has been measured.
+  const isMobile =
+    listWidth === null ? isCompactFormFactor : listWidth < minWideRowListWidth(showHostColumn);
   const { archiveAgent } = useArchiveAgent();
 
   const actionClient = useSessionStore((state) =>
@@ -467,6 +498,9 @@ export function AgentList({
   );
 
   const keyExtractor = useCallback((item: FlatListItem) => item.key, []);
+  const handleListLayout = useCallback((event: LayoutChangeEvent) => {
+    setListWidth(event.nativeEvent.layout.width);
+  }, []);
 
   const refreshColors = useMemo(
     () => [theme.colors.foregroundMuted],
@@ -499,6 +533,7 @@ export function AgentList({
       <FlatList
         data={flatItems}
         style={styles.list}
+        onLayout={handleListLayout}
         contentContainerStyle={styles.listContent}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
@@ -616,6 +651,10 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
+  workspaceTitleTextStacked: {
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
   rowMetaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -662,20 +701,20 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 132,
+    width: META_COLUMN_WIDTH,
   },
   columnMetaFixed: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 72,
+    width: TIME_COLUMN_WIDTH,
     textAlign: "right" as const,
   },
   columnMetaHost: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 120,
+    width: HOST_COLUMN_WIDTH,
     marginLeft: theme.spacing[4],
     textAlign: "right" as const,
   },

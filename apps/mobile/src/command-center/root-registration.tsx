@@ -24,7 +24,7 @@ import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatch
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { usePanelStore } from "@/stores/panel-store";
+import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import {
@@ -133,9 +133,7 @@ export function CommandCenterRootActions() {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const isCompact = useIsCompactFormFactor();
-  const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
-  const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
-  const toggleAgentList = isCompact ? toggleMobileAgentList : toggleDesktopAgentList;
+  const toggleAgentList = useToggleAgentList(isCompact);
   const shortcutPlatform = useMemo(
     () => ({ isMac: getShortcutOs() === "mac", isDesktop: getIsElectronRuntime() }),
     [],

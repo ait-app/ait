@@ -28,7 +28,7 @@ const ThemedCheckIcon = withUnistyles(Check);
 const ThemedXIcon = withUnistyles(X);
 
 const primaryColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
+  color: theme.colors.accentForeground,
 });
 const mutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -40,6 +40,12 @@ const pressableStyle = ({
 }: PressableStateCallbackType & { hovered?: boolean }) => [
   permissionStyles.optionButton,
   hovered ? permissionStyles.optionButtonHovered : null,
+  pressed ? permissionStyles.optionButtonPressed : null,
+];
+// The primary action gets the same filled treatment as the panel's default Button.
+const primaryPressableStyle = ({ pressed }: PressableStateCallbackType) => [
+  permissionStyles.optionButton,
+  permissionStyles.optionButtonPrimary,
   pressed ? permissionStyles.optionButtonPressed : null,
 ];
 
@@ -71,7 +77,7 @@ function PermissionActionButton({
     <Pressable
       accessibilityRole="button"
       testID={testID}
-      style={pressableStyle}
+      style={isPrimary ? primaryPressableStyle : pressableStyle}
       onPress={handlePress}
       disabled={isResponding}
     >
@@ -105,7 +111,7 @@ export function PermissionRequestCard({
 
   const { request } = permission;
   const isPlanRequest = request.kind === "plan";
-  const isCommand = (panel || compact) && request.name === "commandExecution";
+  const isCommand = request.name === "commandExecution";
   const title = isPlanRequest
     ? t("agentStream.permission.plan")
     : isCommand && (!request.title || request.title === request.name)
@@ -113,8 +119,8 @@ export function PermissionRequestCard({
       : (request.title ?? request.name ?? t("agentStream.permission.required"));
   const description = request.description ?? "";
   const resolvedToolCallDetail = useMemo<ToolCallDetail>(() => {
+    // Unrecognized command arguments fall through to the raw input so none are hidden.
     if (
-      (panel || compact) &&
       request.name === "commandExecution" &&
       typeof request.input?.command === "string" &&
       Object.keys(request.input).every((key) =>
@@ -134,7 +140,7 @@ export function PermissionRequestCard({
         output: null,
       }
     );
-  }, [panel, compact, request.name, request.detail, request.input]);
+  }, [request.name, request.detail, request.input]);
   const resolvedActions = useMemo((): AgentPermissionAction[] => {
     if (request.kind === "question") {
       return [];
@@ -413,6 +419,13 @@ export function PermissionRequestCard({
         />
       ) : null}
 
+      {/* The shell detail renders only the command, so the chat card names the directory itself. */}
+      {!panel && resolvedToolCallDetail.type === "shell" && resolvedToolCallDetail.cwd ? (
+        <Text selectable testID="permission-request-cwd" style={permissionStyles.cwd}>
+          {resolvedToolCallDetail.cwd}
+        </Text>
+      ) : null}
+
       {!isPlanRequest ? (
         <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
       ) : null}
@@ -465,6 +478,11 @@ const permissionStyles = StyleSheet.create((theme) => ({
     lineHeight: 20,
     color: theme.colors.foregroundMuted,
   },
+  cwd: {
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
   section: {
     gap: theme.spacing[2],
   },
@@ -499,6 +517,10 @@ const permissionStyles = StyleSheet.create((theme) => ({
   optionButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
+  optionButtonPrimary: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
   optionButtonPressed: {
     opacity: 0.9,
   },
@@ -513,6 +535,6 @@ const permissionStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   optionTextPrimary: {
-    color: theme.colors.foreground,
+    color: theme.colors.accentForeground,
   },
 }));

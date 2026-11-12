@@ -33,7 +33,7 @@ function resolveEmptyText(input: {
 }): string {
   if (input.isSearching) return input.t("sessions.noMatches");
   if (input.isAllHosts) return input.t("sessions.empty");
-  return "No sessions for this host";
+  return input.t("sessions.emptyForHost");
 }
 
 export function SessionsScreen() {
@@ -163,7 +163,7 @@ function SessionsScreenContent() {
             </Button>
           ) : (
             <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
-              Back
+              {t("common.actions.back")}
             </Button>
           )}
           <Button variant="ghost" leftIcon={Import} onPress={importSession.open}>
