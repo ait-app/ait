@@ -76,6 +76,140 @@ fn test_only_violations(name: &str, package: &Value) -> Vec<String> {
     violations
 }
 
+/// Workspace dependencies `name` may declare only as dev-dependencies, so they stay out of its
+/// production build.
+fn dev_only_dependencies(name: &str) -> &'static [&'static str] {
+    match name {
+        "daemon" => &[],
+        "provider" => &["persistence", "provider-codex"],
+        "api" => &["persistence", "provider-builtin"],
+        "provider-codex" => &["persistence", "provider"],
+        "provider-pi"
+        | "provider-opencode"
+        | "provider-deepseek-harness"
+        | "provider-claude"
+        | "provider-antigravity"
+        | "provider-minimax" => &["model", "persistence", "provider"],
+        _ => &["persistence"],
+    }
+}
+
+/// Whether `dependency` is optional and enabled only by `package`'s `test-support` feature.
+fn enabled_only_by_test_support(package: &Value, dependency: &Value) -> bool {
+    let key = dependency["rename"]
+        .as_str()
+        .or_else(|| dependency["name"].as_str())
+        .unwrap();
+    let enabling = format!("dep:{key}");
+    dependency["optional"] == true
+        && package["features"].as_object().is_some_and(|features| {
+            features
+                .iter()
+                .filter(|(_, members)| {
+                    members
+                        .as_array()
+                        .is_some_and(|members| members.iter().any(|member| member == &enabling))
+                })
+                .map(|(feature, _)| feature.as_str())
+                .eq(["test-support"])
+        })
+}
+
+/// Workspace packages `name` may depend on, or `None` when `name` is not a registered package.
+fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
+    let allowed: &[&str] = match name {
+        "daemon" => &[
+            "bot",
+            "persistence",
+            "host-link",
+            "voice",
+            "schedule",
+            "browser",
+            "model",
+            "metadata",
+            "filesystem",
+            "provider",
+            "provider-core",
+            "provider-builtin",
+            "provider-omp",
+            "api",
+            "terminal",
+            "domain",
+        ],
+        "api" => &[
+            "bot",
+            "persistence",
+            "host-link",
+            "relay",
+            "voice",
+            "schedule",
+            "browser",
+            "model",
+            "terminal",
+            "provider",
+            "provider-core",
+            "provider-builtin",
+            "domain",
+            "metadata",
+            "filesystem",
+        ],
+        "provider-native" => &["domain", "provider-core"],
+        "provider-codex"
+        | "provider-pi"
+        | "provider-opencode"
+        | "provider-deepseek-harness"
+        | "provider-claude"
+        | "provider-antigravity"
+        | "provider-minimax" => &[
+            "domain",
+            "model",
+            "provider-core",
+            "provider-native",
+            "provider",
+            "persistence",
+        ],
+        "provider-omp" => &["provider", "domain", "model", "persistence"],
+        "provider" => &[
+            "domain",
+            "model",
+            "persistence",
+            "provider-core",
+            "provider-native",
+            "provider-codex",
+        ],
+        "provider-builtin" => &[
+            "domain",
+            "model",
+            "persistence",
+            "provider",
+            "provider-core",
+            "provider-codex",
+            "provider-pi",
+            "provider-opencode",
+            "provider-deepseek-harness",
+            "provider-claude",
+            "provider-antigravity",
+            "provider-minimax",
+            "provider-omp",
+        ],
+        "persistence" => &["model", "domain"],
+        "bot" => &[
+            "domain",
+            "model",
+            "provider",
+            "provider-core",
+            "persistence",
+        ],
+        "metadata" | "schedule" | "filesystem" => &["domain", "model", "persistence"],
+        "provider-core" | "terminal" => &["domain", "model"],
+        "voice" | "browser" | "relay" => &["model"],
+        "model" => &["domain"],
+        "domain" | "host-link" => &[],
+        _ => return None,
+    };
+    Some(allowed)
+}
+
 fn violations(packages: &[Value]) -> Vec<String> {
     let workspace_names: BTreeSet<_> = packages
         .iter()
@@ -85,53 +219,11 @@ fn violations(packages: &[Value]) -> Vec<String> {
     for package in packages {
         let name = package["name"].as_str().unwrap();
         violations.extend(test_only_violations(name, package));
-        let allowed: &[&str] = match name {
-            "daemon" => &[
-                "bot",
-                "persistence",
-                "host-link",
-                "voice",
-                "schedule",
-                "browser",
-                "model",
-                "metadata",
-                "filesystem",
-                "provider",
-                "provider-omp",
-                "api",
-                "terminal",
-                "domain",
-            ],
-            "api" => &[
-                "bot",
-                "persistence",
-                "host-link",
-                "relay",
-                "voice",
-                "schedule",
-                "browser",
-                "model",
-                "terminal",
-                "provider",
-                "domain",
-                "metadata",
-                "filesystem",
-            ],
-            "provider-omp" => &["provider", "domain", "model", "persistence"],
-            "persistence" => &["model", "domain"],
-            "bot" => &["domain", "model", "provider", "persistence"],
-            "provider" | "metadata" | "schedule" | "filesystem" => {
-                &["domain", "model", "persistence"]
-            }
-            "terminal" => &["domain", "model"],
-            "voice" | "browser" | "relay" => &["model"],
-            "model" => &["domain"],
-            "domain" | "host-link" => &[],
-            _ => {
-                violations.push(format!("unregistered workspace package: {name}"));
-                continue;
-            }
+        let Some(allowed) = allowed_dependencies(name) else {
+            violations.push(format!("unregistered workspace package: {name}"));
+            continue;
         };
+        let dev_only = dev_only_dependencies(name);
         for dependency in package["dependencies"].as_array().unwrap() {
             let target = dependency["name"].as_str().unwrap();
             if (workspace_names.contains(target) || dependency["path"].is_string())
@@ -139,12 +231,14 @@ fn violations(packages: &[Value]) -> Vec<String> {
             {
                 violations.push(format!("{name} -> {target}"));
             }
-            if target == "persistence"
-                && name != "daemon"
-                && allowed.contains(&target)
+            if allowed.contains(&target)
+                && dev_only.contains(&target)
                 && dependency["kind"].as_str() != Some("dev")
+                && !(name == "provider"
+                    && target == "persistence"
+                    && enabled_only_by_test_support(package, dependency))
             {
-                violations.push(format!("{name} -> persistence outside tests"));
+                violations.push(format!("{name} -> {target} outside tests"));
             }
             if matches!(
                 name,
@@ -262,6 +356,68 @@ fn provider_runtime_cannot_depend_on_its_omp_adapter_or_the_daemon() {
             json!({"id":name, "name":name, "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];
         assert_eq!(violations(&packages), [format!("{name} -> {dependency}")]);
+    }
+}
+
+#[test]
+fn provider_family_keeps_adapters_and_runtime_apart() {
+    let package = |name: &str, dependencies: Value| json!({"id": name, "name": name, "dependencies": dependencies});
+    let edge = |name: &str, kind: Value| json!({"name": name, "path": "x", "kind": kind});
+    let packages = [
+        package("provider-core", json!([edge("provider", Value::Null)])),
+        package(
+            "provider-native",
+            json!([edge("provider-core", Value::Null)]),
+        ),
+        package(
+            "provider",
+            json!([
+                edge("provider-core", Value::Null),
+                edge("provider-codex", json!("dev")),
+                edge("provider-pi", json!("dev")),
+            ]),
+        ),
+        package("provider-codex", json!([edge("provider", json!("dev"))])),
+        package("provider-pi", json!([edge("provider", Value::Null)])),
+        package(
+            "provider-builtin",
+            json!([
+                edge("provider", Value::Null),
+                edge("provider-pi", Value::Null)
+            ]),
+        ),
+    ];
+    assert_eq!(
+        violations(&packages),
+        [
+            "provider-core -> provider",
+            "provider -> provider-pi",
+            "provider-pi -> provider outside tests",
+        ]
+    );
+    let runtime = [
+        package("provider", json!([edge("provider-codex", Value::Null)])),
+        package("provider-codex", json!([])),
+    ];
+    assert_eq!(
+        violations(&runtime),
+        ["provider -> provider-codex outside tests"]
+    );
+}
+
+#[test]
+fn runtime_reaches_persistence_only_through_test_support() {
+    let optional = json!({"name": "persistence", "path": "x", "kind": null, "optional": true});
+    for (feature, expected) in [
+        ("test-support", vec![]),
+        ("default", vec!["provider -> persistence outside tests"]),
+    ] {
+        let packages = [
+            json!({"id": "provider", "name": "provider", "dependencies": [optional.clone()],
+                "features": {feature: ["dep:persistence"]}}),
+            json!({"id": "persistence", "name": "persistence", "dependencies": []}),
+        ];
+        assert_eq!(violations(&packages), expected);
     }
 }
 
