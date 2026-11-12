@@ -25,8 +25,9 @@ paths:
 
 # ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate
 
-- 状态说明：决策已接受，按 [provider crate 拆分计划](../../plans/provider-crate-split.md)分步实施；
-  依赖守卫已先登记目标 crate 及其依赖规则，各 crate 建立后其路径追加到本文和相关 ADR 的 `paths`。
+- 状态说明：决策已接受并已实施，下文目标依赖图即当前结构；`crates/provider/src/local` 已不存在，
+  拆分期间的源码分层扫描测试已删除，边界由 Cargo 依赖和依赖守卫强制。实施过程见已归档的
+  [provider crate 拆分计划](../../archive/plans/provider-crate-split.md)。
 - 修订：[ADR-089](adr-089-provider-owned-composition.md) 的装配归属（内置 adapter 列表移到
   `provider-builtin`，OMP 不再是宿主了解客户端类型的例外）；
   [ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 第 4 条（`provider` 可经只由
@@ -75,9 +76,9 @@ dev-only:  provider-<adapter> ..> provider        (adapter 测试驱动真实运
            api                ..> provider-builtin
 ```
 
-各 crate 的内容（路径相对于拆分前的 `crates/provider/src`，行数与测试数为 `f3a2c3d3` 的测量）：
+各 crate 的内容（路径相对于拆分前的 `crates/provider/src`，行数与测试属性数为 `f3a2c3d3` 的测量；测试属性数统计 `#[test]` 与 `#[tokio::test]` 等属性，不是 nextest 列出的测试数）：
 
-| Crate                                                                                                                                            | 内容                                                                                                                                                                                                                                | 非测试行数                               | 测试数                         |
+| Crate                                                                                                                                            | 内容                                                                                                                                                                                                                                | 非测试行数                               | 测试属性数                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------ |
 | `provider-core`                                                                                                                                  | 下方契约表中移出的部分                                                                                                                                                                                                              | 约 1.6k                                  | 约 20                          |
 | `provider-native`                                                                                                                                | `local/{acp_config,acp_permissions,acp_streaming,acp_transport,compaction,configuration,diagnostics,elicitation,images,metadata_process,notes,process_group,prompt_blocks,sandbox,session_preview,summary_model,tool_detail,usage}` | 4.9k                                     | 131                            |
@@ -136,19 +137,20 @@ dev 依赖声明，其余 crate 的 `persistence` 依赖规则不变。包内 `t
 feature 启用时，`dep:persistence` 和强形式 `persistence/<feature>` 都计入，弱形式
 `persistence?/<feature>` 不启用依赖，不计入：
 
-| Package                     | 允许的 workspace 依赖                                                                  | 仅 dev                                                                                                         |
-| --------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `provider-core`             | `domain`、`model`                                                                      | —                                                                                                              |
-| `provider-native`           | `domain`、`provider-core`                                                              | —                                                                                                              |
-| 七个新 `provider-<adapter>` | `domain`、`model`、`provider-core`、`provider-native`、`provider`、`persistence`       | `provider`、`persistence`；除 `provider-codex` 外还有 `model`                                                  |
-| `provider`                  | `domain`、`model`、`persistence`、`provider-core`、`provider-native`、`provider-codex` | `provider-codex`；`persistence`，除非该依赖可选、`test-support` 列出 `dep:persistence` 且没有其他 feature 列出 |
-| `provider-builtin`          | `domain`、`model`、`persistence`、`provider`、`provider-core`、八个 adapter            | `persistence`                                                                                                  |
-| `bot`                       | 原有列表加 `provider-core`                                                             | —                                                                                                              |
-| `api`                       | 原有列表加 `provider-core`、`provider-builtin`                                         | `provider-builtin`                                                                                             |
-| `daemon`                    | 原有列表加 `provider-core`、`provider-builtin`                                         | —                                                                                                              |
+| Package                   | 允许的 workspace 依赖                                                            | 仅 dev                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `provider-core`           | `domain`、`model`                                                                | —                                                                                                              |
+| `provider-native`         | `domain`、`provider-core`                                                        | —                                                                                                              |
+| 八个 `provider-<adapter>` | `domain`、`model`、`provider-core`、`provider-native`、`provider`、`persistence` | `provider`、`persistence`；除 `provider-codex` 外还有 `model`                                                  |
+| `provider`                | `domain`、`model`、`persistence`、`provider-core`、`provider-codex`              | `provider-codex`；`persistence`，除非该依赖可选、`test-support` 列出 `dep:persistence` 且没有其他 feature 列出 |
+| `provider-builtin`        | `domain`、`model`、`persistence`、`provider`、`provider-core`、八个 adapter      | `persistence`                                                                                                  |
+| `bot`                     | 原有列表加 `provider-core`                                                       | —                                                                                                              |
+| `api`                     | 原有列表加 `provider-core`、`provider-builtin`                                   | `provider-builtin`                                                                                             |
+| `daemon`                  | 原有列表加 `provider-core`、`provider-builtin`                                   | —                                                                                                              |
 
-`provider-omp` 在拆分过程中先增加 `provider-core`，再改用上表 adapter 一行的规则；daemon 不再
-注册 OMP 后，`daemon → provider-omp` 从守卫中移除。
+`provider-omp` 与其他七个 adapter 适用同一行规则。`provider` 不依赖 `provider-native`，adapter 中只有
+`provider-codex` 可作为它的 dev 依赖；`daemon` 与 `api` 的允许列表不含任何 adapter，只经
+`provider-builtin` 到达它们，`bot` 不依赖任何 adapter。
 
 ## 后果与限制
 

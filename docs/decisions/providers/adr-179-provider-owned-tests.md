@@ -15,6 +15,7 @@ paths:
   - crates/provider-opencode
   - crates/provider-pi
   - crates/provider-codex
+  - crates/provider-builtin
 ---
 
 # ADR-179：Provider 自身行为的测试归 provider crate

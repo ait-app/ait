@@ -96,7 +96,7 @@ impl CodexClient {
     /// Replace only upstream media with the offline native protocol fixture.
     #[cfg(all(unix, any(test, feature = "test-support")))]
     #[must_use]
-    pub fn with_fixture_media(mut self) -> Self {
+    pub(crate) fn with_fixture_media(mut self) -> Self {
         self.realtime_media = realtime::media::offline::fixture;
         self
     }

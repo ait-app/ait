@@ -11,10 +11,9 @@
 | [用 Ait 开发 Ait](ait-on-ait.md)                                | 脚本输出、运行记录、参数、teardown 与[操作手册](../operations/workspace-automation.md)已完成（ADR-229、ADR-230）；剩余验证结果与 PR/合并的关联、构建缓存原语、配置来源的语义、移动端停止脚本按钮                                                                                                               |
 | [仓库审查遗留事项](repository-review-2026-11-02.md)             | 剩余两项待确认：OpenCode 恢复后的子会话通知（本机已是 2.2.5，版本不再阻碍，需用真实会话复现）；中心是否仍为被拒访客路由会话                                                                                                                                                                                    |
 | [daemon 审查遗留事项](daemon-review-2026-11-03.md)              | 实例锁顺序与状态写入已补齐；剩余语音和定时任务整体超时的产品语义                                                                                                                                                                                                                                               |
-| [Provider crate 拆分](provider-crate-split.md)                  | 2026-11-12 按 `provider-omp` 已拆出的现状重写，尚未实施；先做任务 1（ADR、依赖守卫与基线），任务 6（按流程拆出的首个适配器）完成后按测量结果决定是否继续拆分其余适配器                                                                                                                                         |
 | [文档后续事项](docs-followups-2026-11-10.md)                    | 文档架构整理已完成并归档；剩余四份现行规格与 ADR 推断元数据的复核，以及整理中发现的七处文档与源码不一致                                                                                                                                                                                                        |
 | OMP 与 Antigravity 的 `ait` MCP 自动注入                        | OpenCode、Pi 与 DSH native 已接入（ADR-232）；OMP 未安装且官方文档只有文件来源，Antigravity 只有用户级 `mcp_config.json`，两者都缺少单会话交付方式，见 [MCP 手册](../operations/mcp.md#provider-自动注入)                                                                                                      |
-| Provider 与真实 CLI 的一致性                                    | 适配器测试使用手写的假 CLI（`crates/provider/tests/fixtures`），只反映编写时对原生 CLI 的理解；录制回放与定期 canary 的方案尚未确定，无计划文档                                                                                                                                                                |
+| Provider 与真实 CLI 的一致性                                    | 适配器测试使用手写的假 CLI（各 `crates/provider-<adapter>/tests/fixtures`），只反映编写时对原生 CLI 的理解；录制回放与定期 canary 的方案尚未确定，无计划文档                                                                                                                                                   |
 | [远程 Workspace 打开性能](remote-workspace-open-performance.md) | 已有并发隔离、目标读取与页级投影；仍需实网基线和剩余优化                                                                                                                                                                                                                                                       |
 | [客户端登录续期](relay-client-session-persistence.md)           | 凭据可持久化；用户会话自动续期尚未实现                                                                                                                                                                                                                                                                         |
 | [Workspace Bot 管理者重设计](workspace-bot-manager.md)          | 阶段 1–3 已实现，实施计划已[归档](../archive/README.md)；剩余阶段 4（通知与唤醒）：`bot` crate 尚无通知订阅、收件队列或按发起对话路由，实施计划待写                                                                                                                                                            |
@@ -23,6 +22,9 @@
 
 Harness 用量账本已完成并[归档](../archive/plans/harness-call-usage.md)（[ADR-246](../decisions/providers/adr-246-harness-usage-ledger.md)）；
 延后的价格表费用估算尚无计划。
+
+Provider crate 拆分已完成并[归档](../archive/plans/provider-crate-split.md)（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）；
+用脚本化客户端替换运行时测试中的 Codex 假程序（去掉 `provider` 对 `provider-codex` 的最后一条 dev 边）尚无计划。
 
 Bot 的 Email 线程、去重和防循环约束保留在[原方案](../archive/plans/bot-backend.md#email-可行性)。
 后续实施前重新确认范围、协议与平台限制，不能把可行性方案当作可用 Channel。

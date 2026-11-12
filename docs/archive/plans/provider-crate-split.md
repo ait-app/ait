@@ -4,13 +4,13 @@
 
 **Goal:** Finish splitting `provider` (129.7k lines, 1,696 tests in one test binary) into a contract crate, a native toolkit crate, one crate per adapter, the runtime and a built-in assembly crate, so that Cargo enforces the adapter/runtime boundary and an adapter edit rebuilds and tests only that adapter.
 
-**Architecture:** Adapters and the runtime both depend on `provider-core` and never on each other in production. The runtime keeps the name `provider` and its generic `Providers` container; a new `provider-builtin` crate is the only place that names concrete adapters. `provider-omp`, extracted early by [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md), is re-pointed first and proves the contract surface before any other adapter moves.
+**Architecture:** Adapters and the runtime both depend on `provider-core` and never on each other in production. The runtime keeps the name `provider` and its generic `Providers` container; a new `provider-builtin` crate is the only place that names concrete adapters. `provider-omp`, extracted early by [ADR-249](../../decisions/providers/adr-249-omp-adapter-crate.md), is re-pointed first and proves the contract surface before any other adapter moves.
 
-**Tech Stack:** Rust 2024 Cargo workspace, `cargo nextest`, [`scripts/verify.mjs`](../../scripts/verify.mjs), the dependency guard in [`bins/daemon/tests/dependencies.rs`](../../bins/daemon/tests/dependencies.rs).
+**Tech Stack:** Rust 2024 Cargo workspace, `cargo nextest`, [`scripts/verify.mjs`](../../../scripts/verify.mjs), the dependency guard in [`bins/daemon/tests/dependencies.rs`](../../../bins/daemon/tests/dependencies.rs).
 
 **Spec:** None exists. The Design section below is the specification; Task 1 records it as an ADR.
 
-**Status (2026-11-12):** Rewritten against `main` at `f3a2c3d3`; nothing below is implemented. The 2026-11-10 version predated `provider-omp` and is replaced. What changed: `provider-omp` is the pilot instead of a task; `Providers` stays in the runtime as a container; three contract files are split by item instead of dragging RPC request types into the contract crate; adapter tests use the `provider::testing` facade that ADR-249 introduced; ADR `paths` metadata and the full list of fixture consumers are covered.
+**Status (2026-11-12):** Implemented on branch `eloquent-monkey` (commits from `69816c57` on; decision recorded as [ADR-270](../../decisions/providers/adr-270-provider-crate-family.md)) and archived; the body below is the plan as executed and is not updated. Originally rewritten against `main` at `f3a2c3d3`. The 2026-11-10 version predated `provider-omp` and is replaced. What changed: `provider-omp` is the pilot instead of a task; `Providers` stays in the runtime as a container; three contract files are split by item instead of dragging RPC request types into the contract crate; adapter tests use the `provider::testing` facade that ADR-249 introduced; ADR `paths` metadata and the full list of fixture consumers are covered.
 
 ## Why
 
@@ -91,8 +91,8 @@ Not in scope: splitting the runtime further (`skills`, `storage`, `timeline_proj
 
 ## Global Constraints
 
-- Read [`docs/policy/rust.md`](../policy/rust.md) before any Rust change; `unsafe_code = "forbid"`, `missing_docs`, `unreachable_pub` and `unused_crate_dependencies` are all denied by `cargo clippy ... -D warnings`.
-- A library crate exposes only items another workspace crate uses ([ADR-116](../decisions/daemon/adr-116-crate-visibility.md)). Widen visibility one compiler error at a time and add the doc comment `missing_docs` then asks for; never make a module tree `pub` wholesale. No forwarding `pub use` ([ADR-107](../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)).
+- Read [`docs/policy/rust.md`](../../policy/rust.md) before any Rust change; `unsafe_code = "forbid"`, `missing_docs`, `unreachable_pub` and `unused_crate_dependencies` are all denied by `cargo clippy ... -D warnings`.
+- A library crate exposes only items another workspace crate uses ([ADR-116](../../decisions/daemon/adr-116-crate-visibility.md)). Widen visibility one compiler error at a time and add the doc comment `missing_docs` then asks for; never make a module tree `pub` wholesale. No forwarding `pub use` ([ADR-107](../../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)).
 - No behavior, wire format, persisted format, environment variable or provider id changes. If a test needs editing beyond import paths, visibility and the facade calls of decision 4, stop and report it.
 - Move whole files with `git mv` and limit edits in a moved file to paths, visibility and doc comments. PRs are squash-merged, so the check is on the PR diff: `git diff -M --summary origin/main... | grep -c '^ rename'` equals the number of files moved.
 - Path rewrites are scripted (`perl -pi` over `git ls-files '*.rs'`) and the exact commands go in the PR description, so branches in flight can replay them after rebasing. The file counts in the tasks come from single-line matches. Grouped imports need a manual pass: 29 files use `use crate::{...}`, 12 more use `crate::ports::{...}` or `crate::protocol::{...}`, and `service/agent_manager/delivery.rs:4` mixes a staying and a moving module in one group. `cargo check --workspace --all-targets` finds what the script missed.
@@ -469,7 +469,7 @@ Adapter-specific steps:
 - [ ] **Step 1: Confirm the guard is the only enforcement left.** `git grep -n 'crate::local' crates/provider/src` prints nothing; `cargo nextest run -p daemon --test dependencies` passes.
 - [ ] **Step 2: Update the documents.** The AGENTS.md bullet becomes: "Keep provider behavior tests in the crate that owns the behavior: an adapter's tests in its `crates/provider-<adapter>`, runtime tests in `crates/provider`, tests that need several real adapters in `crates/provider-builtin`." Run `npm run check:docs`.
 - [ ] **Step 3: Final measurement** in the PR description: the family test count against the Task 1 baseline; the Why table re-measured; the `--plan --scope closure --base HEAD` output for an uncommitted one-line edit in `provider-pi`, `provider-codex`, `provider` and `provider-core`. Expected: Pi selects itself, `provider-builtin`, `api` and `daemon`; the other three select the whole family.
-- [ ] **Step 4: Move this plan** to `docs/archive/plans/` per [the documentation policy](../policy/documentation.md).
+- [ ] **Step 4: Move this plan** to `docs/archive/plans/` per [the documentation policy](../../policy/documentation.md).
 - [ ] **Step 5: Commit** as `docs(provider): 更新 provider crate 拆分后的架构说明`.
 
 ## Known limits

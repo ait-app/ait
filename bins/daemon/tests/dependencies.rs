@@ -189,7 +189,6 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "model",
             "persistence",
             "provider-core",
-            "provider-native",
             "provider-codex",
         ],
         "provider-builtin" => &[
@@ -403,6 +402,7 @@ fn provider_family_keeps_adapters_and_runtime_apart() {
             "provider",
             json!([
                 edge("provider-core", Value::Null),
+                edge("provider-native", Value::Null),
                 edge("provider-codex", json!("dev")),
                 edge("provider-pi", json!("dev")),
             ]),
@@ -421,6 +421,7 @@ fn provider_family_keeps_adapters_and_runtime_apart() {
         violations(&packages),
         [
             "provider-core -> provider",
+            "provider -> provider-native",
             "provider -> provider-pi",
             "provider-pi -> provider outside tests",
         ]

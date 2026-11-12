@@ -45,8 +45,8 @@
   `CodexClient`；daemon 不依赖它。`provider-builtin` 用 `Providers::with` 追加它，可执行文件默认 `codex`，由
   `AIT_SERVER_CODEX_BIN` 覆盖，共享同一图片目录。Codex 测试与 app-server 假程序归 `provider-codex`，需要执行
   worker、`AgentManager` 或 Timeline 的场景使用 `provider::testing`。`provider-codex` 的 `test-support` feature
-  在 Unix 上公开 `provider_codex::testing`（`Fixture` 与大历史样本 `codex_history`）和
-  `CodexClient::with_fixture_media`；`provider` 只以 dev 边启用它，用 Codex 假程序驱动运行时的执行与管理器测试，
+  在 Unix 上公开 `provider_codex::testing`（`Fixture`，其客户端使用离线实时媒体；大历史样本
+  `codex_history`）；`provider` 只以 dev 边启用它，用 Codex 假程序驱动运行时的执行与管理器测试，
   这是运行时唯一的 adapter dev 依赖
   （[ADR-032](../decisions/providers/adr-032-daemon-native-provider-execution.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
@@ -225,7 +225,8 @@
 - Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归所属 adapter 的 crate
   （运行时为 `crates/provider`，Antigravity 为 `crates/provider-antigravity`，Claude Code 为 `crates/provider-claude`，Codex 为 `crates/provider-codex`，DeepSeek Harness 为 `crates/provider-deepseek-harness`，MiniMax Code 为 `crates/provider-minimax`，Oh My Pi 为 `crates/provider-omp`，OpenCode 为 `crates/provider-opencode`，Pi 为 `crates/provider-pi`；共享工具的测试归 `crates/provider-native`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
-  [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。
+  [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
+  [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - 需要多个真实 adapter 与真实运行时协作的装配测试归 `crates/provider-builtin`，经 `provider::testing`
   读取装配结果；运行时测试用桩 adapter 验证目录与容器行为，adapter 自身的端口值在该 adapter 的测试中断言
   （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。

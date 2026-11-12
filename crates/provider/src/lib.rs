@@ -25,9 +25,6 @@ mod timeline_projection;
 
 pub use composition::Providers;
 
-#[cfg(test)]
-mod tests;
-
 #[cfg(all(test, unix))]
 mod test_support;
 

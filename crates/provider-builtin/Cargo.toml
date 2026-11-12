@@ -5,9 +5,9 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-# The runtime's adapter container, still building the adapters that live inside it.
+# The runtime's adapter container; it builds no adapter itself.
 provider.workspace = true
-# Adapters extracted into their own crates, appended to the runtime's set.
+# Every built-in adapter, appended to the empty container in `configured`.
 provider-antigravity.workspace = true
 provider-claude.workspace = true
 provider-codex.workspace = true

@@ -93,7 +93,8 @@ API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储�
 Provider 运行时行为测试归 `crates/provider`（执行与管理器测试驱动 `provider-codex` 的 Codex 假程序），共享工具的归 `crates/provider-native`，Antigravity 的归 `crates/provider-antigravity`，Claude Code 的归 `crates/provider-claude`，Codex 的归 `crates/provider-codex`，DeepSeek Harness 的归 `crates/provider-deepseek-harness`，MiniMax Code 的归 `crates/provider-minimax`，OMP 的归 `crates/provider-omp`，OpenCode 的归 `crates/provider-opencode`，Pi 的归 `crates/provider-pi`，
 需要多个真实 adapter 的装配测试归 `crates/provider-builtin`；daemon 测试覆盖宿主、
 传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
-[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)。
+[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
+[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)。
 
 Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
