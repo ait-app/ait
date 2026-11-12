@@ -28,14 +28,13 @@ impl AgentManager {
         {
             Some(Binding::Strip)
         } else {
+            let client = self.clients.get(&spec.provider);
             let deliverable = purpose == AgentResumePurpose::Interactive
-                && self
-                    .clients
-                    .get(&spec.provider)
-                    .is_some_and(|client| client.supports_agent_mcp());
+                && client.is_some_and(|client| client.supports_agent_mcp());
+            let additive = client.is_some_and(|client| client.additive_tool_preapproval());
             self.mcp
                 .as_ref()
-                .map(|mcp| mcp.bind(subject, &spec.config, deliverable))
+                .map(|mcp| mcp.bind(subject, &spec.config, deliverable, additive))
                 .transpose()
                 .map_err(|_| AgentManagerError::Registry)?
                 .flatten()

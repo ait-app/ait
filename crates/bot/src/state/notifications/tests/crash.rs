@@ -5,8 +5,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ConversationId};
+use domain::{BotId, BotTurnId, ConversationId, TicketId};
 use model::bot::{StorageError, Store};
 use persistence::storage::bot::FileStore;
 
@@ -101,6 +102,27 @@ impl Store for Crash {
         self.write()?;
         self.inner.delete_notification_log(bot)
     }
+    fn scan_tickets(
+        &self,
+        visitor: &mut dyn FnMut(Ticket) -> Result<(), StorageError>,
+    ) -> Result<(), StorageError> {
+        self.inner.scan_tickets(visitor)
+    }
+    fn ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, StorageError> {
+        self.inner.ticket(bot, id)
+    }
+    fn save_ticket(&self, ticket: &Ticket) -> Result<(), StorageError> {
+        self.write()?;
+        self.inner.save_ticket(ticket)
+    }
+    fn delete_ticket(&self, bot: BotId, id: TicketId) -> Result<(), StorageError> {
+        self.write()?;
+        self.inner.delete_ticket(bot, id)
+    }
+    fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError> {
+        self.write()?;
+        self.inner.delete_tickets(bot)
+    }
 }
 
 /// A fixture whose wake turn for notification `a`, raised in a Telegram conversation, runs.
@@ -168,4 +190,108 @@ fn a_crash_while_start_up_requeues_an_interrupted_wake_turn_still_retries_it_onc
             break;
         }
     }
+}
+
+/// A ticket of the active Bot with `agent-1` assigned, asked in the owner conversation.
+fn ticketed(state: &mut State) -> TicketId {
+    let conversation = owner(state);
+    let ticket = state
+        .open_ticket(
+            crate::tickets::OpenTicket {
+                root: WORKSPACE.into(),
+                draft: domain::bot::ticket::TicketDraft {
+                    conversation_id: Some(conversation),
+                    key: "k".into(),
+                    title: "Fix login".into(),
+                    request: "Fix the login crash".into(),
+                },
+            },
+            Utc::now(),
+        )
+        .unwrap()
+        .ticket_id;
+    state
+        .assign_ticket(
+            &crate::tickets::AssignTicket {
+                root: WORKSPACE.into(),
+                ticket_id: ticket,
+                agent_id: "agent-1".into(),
+                workspace_id: WORKSPACE.into(),
+            },
+            Utc::now(),
+        )
+        .unwrap();
+    ticket
+}
+
+fn done(ticket: TicketId) -> crate::tickets::WorkerReport {
+    crate::tickets::WorkerReport {
+        root: WORKSPACE.into(),
+        ticket_id: ticket,
+        agent_id: "agent-1".into(),
+        workspace_id: WORKSPACE.into(),
+        kind: domain::bot::ticket::WorkerReportKind::Done,
+        text: "merged".into(),
+    }
+}
+
+#[test]
+fn a_crash_after_a_worker_report_still_wakes_the_bot_exactly_once() {
+    for writes in 0.. {
+        let fixture = Fixture::new();
+        let mut state = active(&fixture);
+        let ticket = ticketed(&mut state);
+        let crash = Crash::after(&fixture, writes);
+        state.store = crash.clone();
+
+        // An error here is the crash itself; the state is frozen and dropped. The first write
+        // saves the ticket, so any write at all records the report.
+        let _ = state.report_progress(&done(ticket), Utc::now());
+        let recorded = writes > 0;
+        drop(state);
+        let mut restarted = fixture.state();
+        restarted.wake(later(60));
+        drop(restarted);
+        let mut again = fixture.state();
+        again.wake(later(120));
+
+        let woke: Vec<String> = wake_turns(&fixture)
+            .iter()
+            .flat_map(|turn| &turn.wake.as_ref().unwrap().notifications)
+            .map(|notification| notification.id.clone())
+            .collect();
+        let expected = if recorded {
+            vec![format!("report:{ticket}:1")]
+        } else {
+            Vec::new()
+        };
+        assert_eq!(woke, expected, "crash after {writes} writes");
+        if !crash.crashed() {
+            break;
+        }
+    }
+}
+
+#[test]
+fn reports_older_than_the_wake_window_are_not_offered_again() {
+    let fixture = Fixture::new();
+    let mut state = active(&fixture);
+    let ticket = ticketed(&mut state);
+    let crash = Crash::after(&fixture, 1);
+    state.store = crash;
+    let _ = state.report_progress(&done(ticket), later(-2 * 3600));
+    drop(state);
+
+    let mut restarted = fixture.state();
+    restarted.wake(later(60));
+
+    assert!(wake_turns(&fixture).is_empty());
+    assert!(
+        fixture
+            .store
+            .notification_logs()
+            .unwrap()
+            .iter()
+            .all(|log| log.entries.is_empty())
+    );
 }

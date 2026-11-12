@@ -525,6 +525,17 @@ impl Scoped {
         self.issue(agent_id, false, None, &labels)
     }
 
+    /// Simulate opening the native session of Agent `agent_id` with the labels it was created
+    /// with, as the provider does when it starts the session.
+    pub(super) async fn session_credential(&self, agent_id: &str) -> String {
+        let agent = self
+            .rpc("agent.get.request", json!({"agentId":agent_id}))
+            .await;
+        let labels: BTreeMap<String, String> =
+            serde_json::from_value(agent["agent"]["labels"].clone()).unwrap();
+        self.issue(agent_id, false, None, &labels)
+    }
+
     fn issue(
         &self,
         agent_id: &str,

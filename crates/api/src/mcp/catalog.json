@@ -56,6 +56,11 @@
         },
         "autoArchive": {
           "type": "boolean"
+        },
+        "ticketId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workspace Bot sessions only: an open ticket from bot_tickets that the new agent joins. Omit it to open a new ticket for this task."
         }
       },
       "required": ["provider", "title", "initialPrompt"],
@@ -1115,9 +1120,10 @@
       "schedule.list.request",
       "checkout.status.get.request",
       "bot.memory.get.request",
-      "bot.notifications.list.request"
+      "bot.notifications.list.request",
+      "bot.ticket.list.request"
     ],
-    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, notifications this conversation has not seen yet, memory revision and your permissions. Call it at the start of every turn.",
+    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, your open tickets with their agents' live status and latest report, notifications this conversation has not seen yet, memory revision and your permissions. Call it at the start of every turn.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -1125,5 +1131,79 @@
       "additionalProperties": false
     },
     "readOnly": true
+  },
+  {
+    "name": "bot_tickets",
+    "methods": ["bot.ticket.list.request"],
+    "description": "List your tickets: every task you delegated, with its status (open, waiting, done, failed, cancelled), what it waits for, its agents and its latest report. Open tickets come first; includeClosed adds recently closed ones.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "includeClosed": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "bot_ticket_update",
+    "methods": ["bot.ticket.update.request"],
+    "description": "Update one of your tickets. Close it with status done, failed or cancelled (optionally with an outcome) once you have told the user the result; set status open to reopen it or to end a wait after passing the user's answer on; rename it with title; record a note. Returns the ticket and whether it changed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticketId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "done", "failed", "cancelled"]
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": ["ticketId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "report_progress",
+    "methods": ["bot.ticket.update.request"],
+    "description": "Report to the Workspace Bot that assigned you this task. Call it with kind blocked when you cannot continue without a decision or information from the user (say exactly what you need), done when your part is finished (summarize the result), failed when you gave up (say why), or progress for a milestone worth recording. blocked, done and failed notify the Bot, which tells the user; progress is only recorded. Reporting does not end your turn: keep working after progress, and after blocked, done or failed finish your reply as usual.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["progress", "blocked", "done", "failed"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": ["kind", "text"],
+      "additionalProperties": false
+    },
+    "readOnly": false
   }
 ]

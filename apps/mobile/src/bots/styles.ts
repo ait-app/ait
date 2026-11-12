@@ -93,3 +93,29 @@ export const botChatStyles = StyleSheet.create((theme) => ({
   },
   notice: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
 }));
+
+/** Ticket rows in the chat's track panel and the ticket sheet, on the same rails as the chat. */
+export const botTicketStyles = StyleSheet.create((theme) => ({
+  // Title over facts, as subagent rows lay out, so a long title keeps the row's full width.
+  rowText: { flexGrow: 1, flexShrink: 1, flexBasis: "auto", minWidth: 0 },
+  rowTitle: { fontSize: theme.fontSize.base, color: theme.colors.foreground },
+  rowFacts: { fontSize: theme.fontSize.sm, color: theme.colors.foregroundMuted },
+  rowWaiting: { fontSize: theme.fontSize.sm, color: theme.colors.statusWarning },
+  heading: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
+    color: theme.colors.foregroundMuted,
+  },
+  body: { gap: theme.spacing[4] },
+  section: { gap: theme.spacing[2] },
+  statusLine: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  report: { gap: theme.spacing[1] },
+  footer: { gap: theme.spacing[2] },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
+  },
+  wakeTicket: { paddingLeft: theme.spacing[6] },
+}));

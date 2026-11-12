@@ -5,8 +5,9 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use domain::bot::notification::Notification;
+use domain::bot::ticket::{TicketStatus, TicketUpdate};
 use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnMessage, TurnStatus};
-use domain::{BotTurnId, ChannelId, ConversationId};
+use domain::{BotTurnId, ChannelId, ConversationId, TicketId};
 use model::ErrorCode;
 use model::bot::Store;
 use model::hub::Center;
@@ -27,6 +28,7 @@ use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::protocol::{ChannelCreate, decode};
 use crate::state::{State, StoredChannel};
+use crate::tickets::{AssignTicket, OpenTicket, OpenedTicket, WorkerReport};
 
 /// One enabled Webhook channel whose endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -145,6 +147,18 @@ enum Operation {
         chrono::DateTime<chrono::Utc>,
         std::time::Instant,
     ),
+    Ticket(Box<TicketOperation>),
+}
+
+/// A ticket entry point of the scoped MCP (ADR-274).
+enum TicketOperation {
+    Open(OpenTicket),
+    Assign(AssignTicket),
+    Abandon(String, TicketId),
+    Report(WorkerReport),
+    Update(String, TicketId, TicketUpdate),
+    CloseFinished(String, TicketId),
+    Reopen(String, TicketId, String),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -380,6 +394,115 @@ impl Bots {
         self.call(Operation::Observe(conversation, agent, at, read_started))
             .await
             .map(|_| ())
+    }
+
+    /// Open a ticket for the first Agent a Bot session starts for a task, before the Agent is
+    /// created; an earlier attempt with the same key returns its ticket with `created: false`.
+    /// # Errors
+    /// Returns `ResourceExhausted` at the open ticket limit (report
+    /// [`crate::tickets::OPEN_LIMIT_MESSAGE`]), `IdempotencyConflict` when the key opened a
+    /// different ticket, `InvalidMessage` for a blank title, a malformed key or a conversation
+    /// of another Bot, `BotNotFound` without a Bot, `BotConflict` when it is not active, and
+    /// persistence or lifecycle failures.
+    pub async fn open_ticket(&self, request: OpenTicket) -> Result<OpenedTicket, ErrorCode> {
+        decode(self.ticket(TicketOperation::Open(request)).await?)
+    }
+
+    /// Record that an Agent works on a ticket, after the Agent was created; assigning the same
+    /// Agent again changes nothing. Any ticket status is accepted.
+    /// # Errors
+    /// Returns `ResourceExhausted` beyond the assignment limit, `InvalidMessage` for malformed
+    /// identities, `BotNotFound` for a ticket of another Bot, `BotConflict` when the Bot is not
+    /// active, and persistence or lifecycle failures.
+    pub async fn assign_ticket(&self, request: AssignTicket) -> Result<(), ErrorCode> {
+        self.ticket(TicketOperation::Assign(request))
+            .await
+            .map(|_| ())
+    }
+
+    /// Delete a ticket [`Bots::open_ticket`] opened whose first Agent could not be created; a
+    /// ticket that already has an assignment is kept.
+    /// # Errors
+    /// Returns `BotNotFound` for a ticket of another Bot, `BotConflict` when the Bot is not
+    /// active, and persistence or lifecycle failures.
+    pub async fn abandon_ticket(&self, root: String, ticket: TicketId) -> Result<(), ErrorCode> {
+        self.ticket(TicketOperation::Abandon(root, ticket))
+            .await
+            .map(|_| ())
+    }
+
+    /// Record what an Agent whose `ait.bot.ticket` label names the ticket reports about it,
+    /// assigning the Agent first when it is not assigned and the ticket has room. `blocked`,
+    /// `done` and `failed` also wake the Bot in the ticket's conversation through the
+    /// notification inbox; `progress` never wakes it. Returns the ticket's status afterwards.
+    /// # Errors
+    /// Returns `BotConflict` for a closed ticket or a Bot that is not active, `InvalidMessage`
+    /// for malformed identities, `BotNotFound` for a ticket of another Bot, and persistence or
+    /// lifecycle failures.
+    pub async fn report_progress(&self, report: WorkerReport) -> Result<TicketStatus, ErrorCode> {
+        decode(self.ticket(TicketOperation::Report(report)).await?)
+    }
+
+    /// Apply the Bot's own `update` to its ticket: close, reopen, end a wait, retitle or add a
+    /// note. Returns `{"ticket":…,"changed":bool}` like `bot.ticket.update.request`.
+    /// # Errors
+    /// Returns `InvalidMessage` for an empty or malformed update, `BotConflict` for closing a
+    /// closed ticket with another status or a Bot that is not active, `ResourceExhausted` for
+    /// reopening at the open ticket limit, `BotNotFound` for a ticket of another Bot, and
+    /// persistence or lifecycle failures.
+    pub async fn update_ticket(
+        &self,
+        root: String,
+        ticket: TicketId,
+        update: TicketUpdate,
+    ) -> Result<Value, ErrorCode> {
+        self.ticket(TicketOperation::Update(root, ticket, update))
+            .await
+    }
+
+    /// Close a ticket of the Bot of `root` on Ait's behalf because every Agent working on it
+    /// is archived, which the caller judged from a complete read of the Agent directory: as
+    /// `done` when its newest worker report says the work finished, otherwise `cancelled`.
+    /// Returns the new status, or `None` when the ticket is waiting, closed or has no Agent.
+    /// # Errors
+    /// Returns `BotNotFound` for a ticket of another Bot, `BotConflict` when the Bot is not
+    /// active, and persistence or lifecycle failures.
+    pub async fn close_finished_ticket(
+        &self,
+        root: String,
+        ticket: TicketId,
+    ) -> Result<Option<TicketStatus>, ErrorCode> {
+        decode(
+            self.ticket(TicketOperation::CloseFinished(root, ticket))
+                .await?,
+        )
+    }
+
+    /// Reopen a closed ticket of the Bot of `root` on Ait's behalf because the Bot gave
+    /// `agent`, one of its Agents, more work; `false` when it was not closed.
+    /// # Errors
+    /// Returns `ResourceExhausted` at the open ticket limit, `BotNotFound` for a ticket of
+    /// another Bot, `BotConflict` when the Bot is not active, and persistence or lifecycle
+    /// failures.
+    pub async fn reopen_ticket(
+        &self,
+        root: String,
+        ticket: TicketId,
+        agent: String,
+    ) -> Result<bool, ErrorCode> {
+        decode(
+            self.ticket(TicketOperation::Reopen(root, ticket, agent))
+                .await?,
+        )
+    }
+
+    /// Run a ticket entry point, waiting for command capacity so a busy worker never refuses
+    /// it with the `ResourceExhausted` reserved for the limits.
+    async fn ticket(&self, operation: TicketOperation) -> Result<Value, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        self.send(Operation::Ticket(Box::new(operation))).await
     }
 
     /// The scoped MCP credential registry this service publishes authorization into.
@@ -811,6 +934,35 @@ fn apply(
             let notified = state.notify(*notification, chrono::Utc::now())?;
             serde_json::to_value(notified).map_err(|_| ErrorCode::BotIo)
         }
+        Operation::Ticket(operation) => apply_ticket(state, *operation),
+    }
+}
+
+fn apply_ticket(state: &mut State, operation: TicketOperation) -> Result<Value, ErrorCode> {
+    let now = chrono::Utc::now();
+    match operation {
+        TicketOperation::Open(request) => {
+            serde_json::to_value(state.open_ticket(request, now)?).map_err(|_| ErrorCode::BotIo)
+        }
+        TicketOperation::Assign(request) => {
+            state.assign_ticket(&request, now).map(|()| Value::Null)
+        }
+        TicketOperation::Abandon(root, ticket) => {
+            state.abandon_ticket(&root, ticket).map(|()| Value::Null)
+        }
+        TicketOperation::Report(report) => {
+            serde_json::to_value(state.report_progress(&report, now)?).map_err(|_| ErrorCode::BotIo)
+        }
+        TicketOperation::Update(root, ticket, update) => {
+            state.update_ticket(&root, ticket, &update, now)
+        }
+        TicketOperation::CloseFinished(root, ticket) => {
+            serde_json::to_value(state.close_finished_ticket(&root, ticket, now)?)
+                .map_err(|_| ErrorCode::BotIo)
+        }
+        TicketOperation::Reopen(root, ticket, agent) => state
+            .reopen_ticket(&root, ticket, &agent, now)
+            .map(Value::Bool),
     }
 }
 

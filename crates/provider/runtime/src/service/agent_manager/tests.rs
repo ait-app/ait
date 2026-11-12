@@ -184,7 +184,17 @@ struct FakeSession(Arc<Mutex<FakeState>>);
 #[async_trait::async_trait]
 impl AgentClient for FakeClient {
     fn supports_agent_mcp(&self) -> bool {
-        matches!(self.0.lock().unwrap().mcp_support, mcp::Support::Http)
+        matches!(
+            self.0.lock().unwrap().mcp_support,
+            mcp::Support::Http | mcp::Support::AdditiveHttp
+        )
+    }
+
+    fn additive_tool_preapproval(&self) -> bool {
+        matches!(
+            self.0.lock().unwrap().mcp_support,
+            mcp::Support::AdditiveHttp
+        )
     }
 
     async fn commands(&self, _spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {

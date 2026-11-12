@@ -467,6 +467,7 @@ async fn agent_creation_is_forced_into_the_workspace() {
         json!({"config": {"provider": "codex", "providerOptions": {}}}),
         json!({"config": {"provider": "codex"}, "labels": {GUEST_SHARE: "forged"}}),
         json!({"config": {"provider": "codex"}, "labels": {"ait.bot.scope": "forged"}}),
+        json!({"config": {"provider": "codex"}, "labels": {"ait.bot.ticket": "forged"}}),
         json!({"config": {"provider": "codex"}, "callerAgentId": "owner-agent"}),
     ] {
         assert_eq!(

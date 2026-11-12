@@ -3,6 +3,7 @@ use provider_core::ports::agent_session::AgentTurnEvent;
 
 mod environment;
 mod parity;
+mod worker;
 
 #[tokio::test]
 async fn native_authentication_failures_expose_sanitized_reasons_and_classified_diagnostics() {

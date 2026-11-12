@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::Context;
 use bot::mcp::Scopes;
+use domain::bot::permissions::Holder;
 use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
 use domain::schedule::{Run, RunStatus, Schedule, Target};
 use domain::workspace::lifecycle::WorkspaceCreation;
@@ -275,7 +276,7 @@ impl AgentRunner {
             return Ok(None);
         };
         let permissions = self.scopes.grant(root).permissions;
-        if !permissions.allows("create_schedule", false) {
+        if !permissions.allows("create_schedule", Holder::Subtree) {
             return Err(REVOKED);
         }
         match &schedule.target {

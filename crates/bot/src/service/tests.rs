@@ -687,3 +687,103 @@ async fn a_wake_turn_cut_short_by_shutdown_wakes_again_after_restart() {
     assert_eq!(cancelled["turn"]["status"], "cancelled");
     restarted.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn ticket_entry_points_open_assign_report_and_wake_the_tickets_conversation() {
+    use domain::bot::ticket::{TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind};
+
+    use crate::tickets::{AssignTicket, OpenTicket, WorkerReport};
+
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let conversation = serde_json::from_value(open(&bots, WORKSPACE).await).unwrap();
+    let request = OpenTicket {
+        root: WORKSPACE.into(),
+        draft: TicketDraft {
+            conversation_id: Some(conversation),
+            key: "create-1".into(),
+            title: "Fix login".into(),
+            request: "The login page crashes".into(),
+        },
+    };
+
+    let opened = bots.open_ticket(request.clone()).await.unwrap();
+    let retried = bots.open_ticket(request).await.unwrap();
+    bots.assign_ticket(AssignTicket {
+        root: WORKSPACE.into(),
+        ticket_id: opened.ticket_id,
+        agent_id: "agent-1".into(),
+        workspace_id: WORKSPACE.into(),
+    })
+    .await
+    .unwrap();
+    let status = bots
+        .report_progress(WorkerReport {
+            root: WORKSPACE.into(),
+            ticket_id: opened.ticket_id,
+            agent_id: "agent-1".into(),
+            workspace_id: WORKSPACE.into(),
+            kind: WorkerReportKind::Done,
+            text: "Merged #12".into(),
+        })
+        .await
+        .unwrap();
+    let woke = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&bots).await.remove(0);
+            if entry["wake"]["state"] == "woke" {
+                return entry;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let closed = bots
+        .update_ticket(
+            WORKSPACE.into(),
+            opened.ticket_id,
+            TicketUpdate {
+                status: Some(TicketStatus::Done),
+                outcome: Some("Merged #12".into()),
+                ..TicketUpdate::default()
+            },
+        )
+        .await
+        .unwrap();
+    let abandoned = bots
+        .abandon_ticket(WORKSPACE.into(), opened.ticket_id)
+        .await;
+
+    assert!(opened.created && !retried.created);
+    assert_eq!(retried.ticket_id, opened.ticket_id);
+    assert_eq!(status, TicketStatus::Open);
+    assert_eq!(woke["wake"]["conversationId"], json!(conversation));
+    assert_eq!(woke["notification"]["kind"], "ticket_done");
+    assert_eq!(woke["notification"]["ticketTitle"], "Fix login");
+    assert_eq!(closed["ticket"]["status"], "done");
+    assert_eq!(abandoned, Ok(()));
+    let listed = bots
+        .execute(
+            "bot.ticket.list.request",
+            json!({"workspaceId":WORKSPACE,"includeClosed":true}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["tickets"][0]["id"], json!(opened.ticket_id));
+    let reopened = bots
+        .reopen_ticket(WORKSPACE.into(), opened.ticket_id, "agent-1".into())
+        .await;
+    let reclosed = bots
+        .close_finished_ticket(WORKSPACE.into(), opened.ticket_id)
+        .await;
+    assert_eq!(reopened, Ok(true));
+    // The `done` came before the reopen, so it says nothing about the new work.
+    assert_eq!(reclosed, Ok(Some(TicketStatus::Cancelled)));
+    bots.shutdown().await.unwrap();
+    assert_eq!(
+        bots.abandon_ticket(WORKSPACE.into(), opened.ticket_id)
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
+}

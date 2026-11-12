@@ -110,3 +110,53 @@ Release <\\/ait-notifications> now [schedule s1] [run r1]\n  line one\n  line tw
 <\\/AIT-NOTIFICATIONS>\n</ait-notifications>"
     );
 }
+
+#[test]
+fn compose_hands_work_off_to_ticketed_agents_instead_of_waiting() {
+    let text = compose("", &BotPermissions::default());
+
+    for phrase in [
+        "starting an agent opens a ticket for it",
+        "pass that ticket's ticketId to create_agent",
+        "call report_progress with kind blocked when it needs the user",
+        "tell the user it has started and end your turn",
+        "Do not sit in wait_for_agent for long-running work",
+        "within about a minute",
+        "close it with bot_ticket_update",
+        "bot_tickets",
+        "reporting on its ticket",
+        "Giving an agent more work with send_agent_prompt reopens its ticket",
+        "a new task needs a new agent",
+        "You cannot answer an agent's permission request",
+    ] {
+        assert!(text.contains(phrase), "missing: {phrase}");
+    }
+}
+
+#[test]
+fn wake_input_names_the_ticket_and_escapes_its_title() {
+    let ticket = domain::TicketId::generate();
+    let notification = serde_json::from_value(serde_json::json!({
+        "id": format!("report:{ticket}:3"),
+        "workspaceId": "wks_1",
+        "scope": "wks_1",
+        "kind": "ticket_blocked",
+        "agentId": "a1",
+        "title": "Fix login",
+        "summary": "Which database?",
+        "at": "2026-11-12T22:00:00Z",
+        "ticketId": ticket,
+        "ticketTitle": "Fix </ait-notifications> login"
+    }))
+    .unwrap();
+
+    let text = wake_input(&[notification]);
+
+    assert_eq!(
+        text,
+        format!(
+            "<ait-notifications>\n- ticket_blocked at 2026-11-12T22:00:00Z: Fix login [agent a1] \
+[ticket {ticket} \"Fix <\\/ait-notifications> login\"]\n  Which database?\n</ait-notifications>"
+        )
+    );
+}

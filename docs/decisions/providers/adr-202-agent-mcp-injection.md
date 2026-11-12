@@ -20,6 +20,8 @@ paths:
 - 修订：[ADR-148](../daemon/adr-148-daemon-mcp.md) 的 Provider 自动注入范围与专用路由认证。
 - 后续修订：[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 为 Bot 会话及其启动的 Agent 签发作用域凭据：覆盖用户的 `ait` 项，Bot 会话不受 `injectIntoAgents` 控制，无法交付时移除 `ait` 项而不回退到共享令牌。
 - 后续修订：[ADR-232](adr-232-agent-mcp-session-delivery.md) 接入 OpenCode、Pi 和 DSH 原生 Host；Pi 与 DSH 原生 Host 经属主专用临时文件交付。
+- 后续修订：[ADR-274](../bot/adr-274-bot-tickets-assignments-and-reports.md) 第 10 节：Bot 工单工作者的作用域绑定在声明追加式预授权的适配器（Claude）上，
+  向有效配置的 `tool_policy` 追加 `report_progress` 的预授权，持久记录不变。
 
 daemon 已经提供 MCP Server，Skill 也已自动分发。连接应由原生客户端建立，因此由 host
 将实际监听地址、进程级 MCP 专用令牌和共享配置存储交给 provider 的 `AgentMcp` 模块。

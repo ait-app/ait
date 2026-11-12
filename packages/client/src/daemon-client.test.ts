@@ -7434,6 +7434,76 @@ test("Bot requests validate params, correlate results and release errors", async
   await rejection;
 });
 
+test("Bot ticket requests validate the user's status and resolve the full ticket", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "bot-ticket-test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const ticketId = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    client.botRequest("bot.ticket.update.request", {
+      workspaceId: "workspace-a",
+      ticketId,
+      status: "waiting" as never,
+    }),
+  ).rejects.toThrow();
+  expect(mock.sent).toHaveLength(0);
+  const pending = client.botRequest("bot.ticket.update.request", {
+    workspaceId: "workspace-a",
+    ticketId,
+    status: "done",
+    outcome: "Shipped",
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "bot.ticket.update.request",
+    workspaceId: "workspace-a",
+    ticketId,
+    status: "done",
+    outcome: "Shipped",
+  });
+  const at = "2026-11-13T08:00:00Z";
+  const ticket = {
+    id: ticketId,
+    title: "Fix login",
+    status: "done",
+    waiting: null,
+    conversationId: null,
+    createdAt: at,
+    updatedAt: at,
+    closedAt: at,
+    outcome: "Shipped",
+    assignments: [],
+    request: "Fix the login form",
+    reports: [
+      {
+        sequence: 1,
+        at,
+        source: "user",
+        kind: "status",
+        agentId: null,
+        text: "Shipped",
+        status: "done",
+      },
+    ],
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.ticket.update.response",
+      payload: { requestId: request.requestId, ticket, changed: true },
+    }),
+  );
+  await expect(pending).resolves.toEqual({ requestId: request.requestId, ticket, changed: true });
+});
+
 test.each(["retry", "close", "reject"])(
   "bounds liveness recovery and ignores stale completion (%s)",
   async (action) => {

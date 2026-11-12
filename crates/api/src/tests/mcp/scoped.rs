@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use domain::bot::permissions::{BotPermissions, ToolGroup};
+use domain::bot::permissions::{BotPermissions, Holder, ToolGroup};
 
 use super::*;
 
@@ -10,6 +10,7 @@ mod confinement;
 mod notifications;
 mod schedules;
 mod support;
+mod tickets;
 
 use support::{BOT_SESSION, Scoped, codex_modes, rejected, structured, succeeded};
 
@@ -27,6 +28,8 @@ async fn scoped_credential_lists_only_granted_tools() {
         "workspace_overview",
         "bot_memory_read",
         "bot_memory_update",
+        "bot_tickets",
+        "bot_ticket_update",
     ] {
         assert!(bot.contains(granted), "{granted}: {bot:?}");
     }
@@ -37,15 +40,22 @@ async fn scoped_credential_lists_only_granted_tools() {
         "rename_workspace",
         "list_workspaces",
         "create_terminal",
+        "report_progress",
     ] {
         assert!(!bot.contains(withheld), "{withheld}");
     }
     let defaults = BotPermissions::default();
-    let bot_only = ["bot_memory_read", "bot_memory_update", "workspace_overview"];
+    let bot_only = [
+        "bot_memory_read",
+        "bot_memory_update",
+        "workspace_overview",
+        "bot_tickets",
+        "bot_ticket_update",
+    ];
     assert!(bot_only.iter().all(|tool| !host.contains(*tool)));
     let expected: BTreeSet<_> = host
         .iter()
-        .filter(|tool| defaults.allows(tool, true))
+        .filter(|tool| defaults.allows(tool, Holder::Bot))
         .cloned()
         .chain(bot_only.map(str::to_owned))
         .collect();
@@ -232,7 +242,11 @@ async fn scoped_credential_is_limited_to_the_mcp_route() {
     let host = scoped.tools(TOKEN).await;
     let remaining = scoped.tools(&subtree).await;
     assert!(!remaining.is_empty());
-    assert!(remaining.iter().all(|tool| observe.allows(tool, false)));
+    assert!(
+        remaining
+            .iter()
+            .all(|tool| observe.allows(tool, Holder::Subtree))
+    );
     assert_eq!(
         remaining,
         host.iter()
@@ -345,7 +359,13 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
 }
 
 fn bot_only_names() -> BTreeSet<String> {
-    ["bot_memory_read", "bot_memory_update", "workspace_overview"]
-        .map(str::to_owned)
-        .into()
+    [
+        "bot_memory_read",
+        "bot_memory_update",
+        "workspace_overview",
+        "bot_tickets",
+        "bot_ticket_update",
+    ]
+    .map(str::to_owned)
+    .into()
 }

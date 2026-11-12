@@ -182,3 +182,69 @@ fn notification_logs_are_stored_per_bot_and_removable() {
             .is_file()
     );
 }
+
+fn ticket(bot: BotId) -> Ticket {
+    use domain::bot::ticket::TicketDraft;
+    let draft = TicketDraft {
+        conversation_id: None,
+        key: "create-1".into(),
+        title: "Fix login".into(),
+        request: "The login page crashes".into(),
+    };
+    Ticket::open(TicketId::generate(), bot, draft, chrono::Utc::now()).unwrap()
+}
+
+#[test]
+fn tickets_are_stored_one_file_per_ticket_under_their_bot_and_removable() {
+    let root = tempfile::tempdir().unwrap();
+    let store = FileStore::new(root.path().join("workspace-bots"));
+    let mut scanned = Vec::new();
+    store
+        .scan_tickets(&mut |ticket| {
+            scanned.push(ticket);
+            Ok(())
+        })
+        .unwrap();
+    assert!(scanned.is_empty());
+    let (first_bot, second_bot) = (BotId::generate(), BotId::generate());
+    let (first, mut second, third) = (ticket(first_bot), ticket(first_bot), ticket(second_bot));
+    for ticket in [&first, &second, &third] {
+        store.save_ticket(ticket).unwrap();
+    }
+    second.title = "Renamed".into();
+    store.save_ticket(&second).unwrap();
+    let tickets = root.path().join("workspace-bots/tickets");
+    fs::write(tickets.join("stray.json"), b"{").unwrap();
+    fs::write(
+        tickets
+            .join(first_bot.to_string())
+            .join(".atomic-write-in-progress"),
+        b"{",
+    )
+    .unwrap();
+
+    store.delete_ticket(first_bot, first.id).unwrap();
+    store.delete_ticket(first_bot, first.id).unwrap();
+    let mut scanned = Vec::new();
+    store
+        .scan_tickets(&mut |ticket| {
+            scanned.push(ticket);
+            Ok(())
+        })
+        .unwrap();
+    scanned.sort_by_key(|ticket| ticket.bot_id == second_bot);
+
+    assert_eq!(scanned, vec![second.clone(), third.clone()]);
+    assert_eq!(store.ticket(first_bot, second.id).unwrap(), second);
+    assert!(store.ticket(first_bot, first.id).is_err());
+    assert!(
+        tickets
+            .join(second_bot.to_string())
+            .join(format!("{}.json", third.id))
+            .is_file()
+    );
+    store.delete_tickets(second_bot).unwrap();
+    store.delete_tickets(second_bot).unwrap();
+    assert!(!tickets.join(second_bot.to_string()).exists());
+    assert!(store.ticket(second_bot, third.id).is_err());
+}

@@ -1,6 +1,9 @@
 //! Bot-only tools: long-term memory and a bounded overview of the Bot's Workspace.
 
+use std::collections::HashMap;
+
 use bot::mcp::CallerKind;
+use domain::ConversationId;
 use domain::bot::BOT_SCOPE_LABEL;
 use domain::bot::permissions::BotPermissions;
 use model::ErrorCode;
@@ -21,7 +24,9 @@ const MAX_BOT_AGENTS: usize = 20;
 const MAX_ATTENTION: usize = 10;
 const MAX_SCHEDULES: usize = 20;
 const MAX_NOTIFICATIONS: usize = 20;
-/// Largest `summary` kept per notification, in bytes.
+/// Open tickets listed, as ADR-274 bounds them.
+const MAX_TICKETS: usize = 20;
+/// Largest `summary` kept per notification and `text` per latest ticket report, in bytes.
 const MAX_SUMMARY: usize = 512;
 /// Notification fields copied into the overview when present.
 const NOTIFICATION_FIELDS: [&str; 8] = [
@@ -35,11 +40,19 @@ const NOTIFICATION_FIELDS: [&str; 8] = [
     "at",
 ];
 /// Overview lists that may shrink to fit, as JSON pointers.
-const LISTS: [&str; 4] = [
+const LISTS: [&str; 5] = [
     "/botAgents",
     "/otherAgents/attention",
     "/schedules/bot",
     "/notifications",
+    "/tickets",
+];
+/// Texts dropped from every entry of a list before entries go: the list, the pointer of the
+/// object within an entry, and its field.
+const TEXTS: [(&str, &str, &str); 3] = [
+    ("botAgents", "", "lastMessage"),
+    ("notifications", "", "summary"),
+    ("tickets", "/latestReport", "text"),
 ];
 /// Agents fetched to count and sample the Agents the Bot did not start.
 const AGENT_PAGE: u64 = 200;
@@ -117,6 +130,7 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
     let schedules = rpc::execute(state, "schedule.list.request", json!({})).await?;
     let memory = memory(state, root).await?;
     let notifications = unseen(state, scope).await?;
+    let tickets = open_tickets(state, root).await?;
     Ok(project(&Sources {
         root,
         checkout: &checkout,
@@ -129,8 +143,22 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
         workspaces,
         memory: &memory,
         notifications: &notifications,
+        tickets: &tickets,
+        conversation: scope.origin(None),
         permissions: &scope.grant.permissions,
     }))
+}
+
+/// Read the Bot's open tickets, one more than the overview keeps so it can report truncation;
+/// `null` once the Bot is gone.
+/// # Errors
+/// Propagates other Bot read failures.
+async fn open_tickets(state: &Shared, root: &str) -> Result<Value, ErrorCode> {
+    let params = json!({"workspaceId":root,"limit":MAX_TICKETS + 1});
+    match rpc::execute(state, "bot.ticket.list.request", params).await {
+        Err(ErrorCode::BotNotFound) => Ok(Value::Null),
+        other => other,
+    }
 }
 
 /// Read the notifications the calling Bot conversation has not had in front of it in a
@@ -184,14 +212,19 @@ pub(super) struct Sources<'a> {
     pub(super) memory: &'a Value,
     /// `bot.notifications.list.request` result for the calling conversation, or `null`.
     pub(super) notifications: &'a Value,
+    /// `bot.ticket.list.request` result of the Bot's open tickets, or `null`.
+    pub(super) tickets: &'a Value,
+    /// The calling Bot conversation, which marks the tickets it asked for.
+    pub(super) conversation: Option<ConversationId>,
     /// The Bot's current permissions.
     pub(super) permissions: &'a BotPermissions,
 }
 
 /// Project `sources` into the overview document of at most [`MAX_BYTES`] bytes.
 ///
-/// Lists are capped first. If the document is still too large, the Agents' `lastMessage` and the
-/// notifications' `summary` fields go, then list entries, which sets `truncated`.
+/// Lists are capped first. If the document is still too large, the Agents' `lastMessage`, the
+/// notifications' `summary` and the tickets' latest report `text` go, then list entries, which
+/// sets `truncated`.
 pub(super) fn project(sources: &Sources<'_>) -> Value {
     let root = sources.root;
     let mut truncated = !sources.all_complete;
@@ -235,6 +268,11 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
             truncated |= cap(&mut kept, MAX_NOTIFICATIONS);
             kept
         });
+    let tickets = sources.tickets["tickets"].as_array().map(|listed| {
+        let mut kept = ticket_entries(sources, listed);
+        truncated |= cap(&mut kept, MAX_TICKETS);
+        kept
+    });
     let text = sources.memory["text"].as_str().unwrap_or_default();
     let mut overview = json!({
         "workspace":{"id":root,"branch":sources.checkout["currentBranch"],
@@ -243,15 +281,16 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
         "otherAgents":{"count":others.len(),"attention":attention},
         "schedules":{"bot":own_schedules,"otherCount":other_count},
         "notifications":notifications,
+        "tickets":tickets,
         "memory":{"revision":sources.memory["revision"],"bytes":text.len()},
         "permissions":sources.permissions,
         "truncated":truncated,
     });
     if overview.to_string().len() > MAX_BYTES {
-        for (list, field) in [("botAgents", "lastMessage"), ("notifications", "summary")] {
+        for (list, object, field) in TEXTS {
             for entry in overview[list].as_array_mut().into_iter().flatten() {
-                if let Some(entry) = entry.as_object_mut() {
-                    entry.remove(field);
+                if let Some(object) = entry.pointer_mut(object).and_then(Value::as_object_mut) {
+                    object.remove(field);
                 }
             }
         }
@@ -289,6 +328,58 @@ fn agent(agent: &Value) -> Value {
         summary["lastMessage"] = clip(&agent["lastMessage"], MAX_MESSAGE);
     }
     summary
+}
+
+/// Project the listed open `tickets`, joining each assigned Agent's live status from the Agent
+/// directory the overview read.
+///
+/// An Agent missing from a complete directory read is archived (`"status":"archived"`); from an
+/// incomplete one its status is unknown (`null`).
+fn ticket_entries(sources: &Sources<'_>, tickets: &[Value]) -> Vec<Value> {
+    let directory: HashMap<&str, &Value> = sources
+        .all
+        .iter()
+        .chain(sources.own)
+        .filter_map(|agent| Some((agent["id"].as_str()?, agent)))
+        .collect();
+    let missing = if sources.all_complete {
+        json!("archived")
+    } else {
+        Value::Null
+    };
+    let conversation = sources.conversation.map(|id| id.to_string());
+    tickets
+        .iter()
+        .map(|ticket| {
+            let agents: Vec<Value> = ticket["assignments"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|assignment| {
+                    let id = &assignment["agentId"];
+                    match id.as_str().and_then(|id| directory.get(id)) {
+                        Some(agent) => json!({"id":id,"status":agent["status"],
+                            "requiresAttention":agent["requiresAttention"]}),
+                        None => json!({"id":id,"status":missing}),
+                    }
+                })
+                .collect();
+            let report = &ticket["latestReport"];
+            let latest = if report.is_object() {
+                json!({"kind":report["kind"],"source":report["source"],
+                    "agentId":report["agentId"],"at":report["at"],
+                    "text":clip(&report["text"], MAX_SUMMARY)})
+            } else {
+                Value::Null
+            };
+            let mine = conversation
+                .as_deref()
+                .is_some_and(|conversation| ticket["conversationId"] == conversation);
+            json!({"id":ticket["id"],"title":ticket["title"],"status":ticket["status"],
+                "waiting":ticket["waiting"],"thisConversation":mine,"agents":agents,
+                "latestReport":latest,"updatedAt":ticket["updatedAt"]})
+        })
+        .collect()
 }
 
 /// Project logged notification `entry` to its present fields, sequence and wake state.

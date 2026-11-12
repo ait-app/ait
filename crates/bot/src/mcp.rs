@@ -8,9 +8,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use domain::bot::permissions::BotPermissions;
-use domain::bot::{BOT_SCOPE_LABEL, BotState, Catalog, SessionOwner};
-use domain::{BotId, ConversationId};
+use domain::bot::permissions::{BotPermissions, Holder};
+use domain::bot::{BOT_SCOPE_LABEL, BOT_TICKET_LABEL, BotState, Catalog, SessionOwner};
+use domain::{BotId, ConversationId, TicketId};
 use provider::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -39,6 +39,9 @@ pub enum CallerKind {
     Subtree {
         /// Host Agent identity.
         agent_id: String,
+        /// The Bot ticket the Agent works on, from its daemon-written `ait.bot.ticket` label
+        /// when its session started; `None` without a valid label.
+        ticket: Option<TicketId>,
     },
 }
 
@@ -46,7 +49,20 @@ impl CallerKind {
     fn agent_id(&self) -> &str {
         match self {
             Self::Bot { session_id, .. } => session_id,
-            Self::Subtree { agent_id } => agent_id,
+            Self::Subtree { agent_id, .. } => agent_id,
+        }
+    }
+
+    /// The tool access this credential has: a Bot session, a subtree Agent, or a subtree Agent
+    /// working on a ticket.
+    #[must_use]
+    pub const fn holder(&self) -> Holder {
+        match self {
+            Self::Bot { .. } => Holder::Bot,
+            Self::Subtree { ticket: None, .. } => Holder::Subtree,
+            Self::Subtree {
+                ticket: Some(_), ..
+            } => Holder::Worker,
         }
     }
 }
@@ -247,8 +263,9 @@ impl Scopes {
 
 impl McpScopes for Scopes {
     /// Issue a Bot credential for an active Bot's hidden session, a subtree credential for
-    /// an Agent carrying the Bot scope label, and leave every other session on the shared
-    /// token. Any previous credential of the same Agent is revoked first.
+    /// an Agent carrying the Bot scope label (recording its ticket label, if any, and marking
+    /// the credential as a worker's), and leave
+    /// every other session on the shared token. Any previous credential of the same Agent is revoked first.
     fn access(&self, subject: &McpSubject<'_>) -> McpAccess {
         let owner = subject
             .owner
@@ -271,20 +288,27 @@ impl McpScopes for Scopes {
             return McpAccess::Scoped {
                 token: inner.issue(caller),
                 bot_session: true,
+                worker: false,
             };
         }
         let Some(root) = subject.labels.get(BOT_SCOPE_LABEL) else {
             return McpAccess::Shared;
         };
+        let ticket = subject
+            .labels
+            .get(BOT_TICKET_LABEL)
+            .and_then(|ticket| ticket.parse().ok());
         let caller = Caller {
             root: root.clone(),
             kind: CallerKind::Subtree {
                 agent_id: subject.agent_id.to_owned(),
+                ticket,
             },
         };
         McpAccess::Scoped {
             token: inner.issue(caller),
             bot_session: false,
+            worker: ticket.is_some(),
         }
     }
 

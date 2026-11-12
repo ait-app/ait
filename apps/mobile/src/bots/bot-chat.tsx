@@ -29,6 +29,8 @@ import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness"
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
+import { BotTicketSheet } from "./bot-ticket-sheet";
+import { BotTicketsTrack, useBotTicketsSupported } from "./bot-tickets";
 import { BotSilentNote, BotWakeHeader, visibleBotMessages } from "./bot-wake";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
@@ -83,12 +85,14 @@ function BotExchange({
   workspaceId,
   cwd,
   onOpen,
+  onOpenTicket,
 }: {
   turn: BotTurn;
   serverId: string;
   workspaceId: string;
   cwd: string;
   onOpen: (target: WorkspaceTabTarget) => void;
+  onOpenTicket?: (ticketId: string) => void;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -102,7 +106,12 @@ function BotExchange({
   return (
     <View testID={`bot-turn-${turn.id}`}>
       {turn.wake ? (
-        <BotWakeHeader turn={turn} workspaceId={workspaceId} onOpen={onOpen} />
+        <BotWakeHeader
+          turn={turn}
+          workspaceId={workspaceId}
+          onOpen={onOpen}
+          onOpenTicket={onOpenTicket}
+        />
       ) : (
         <UserMessage
           serverId={serverId}
@@ -191,16 +200,14 @@ function BotSessionTrack({
     [open],
   );
   return (
-    <ComposerTrackBar>
-      <SubagentsTrack
-        serverId={serverId}
-        rows={rows}
-        onOpenSubagent={openSession}
-        onOpenProviderSubagent={NOOP}
-        opensInSheet={opensInSheet}
-        onArchiveSubagent={NOOP}
-      />
-    </ComposerTrackBar>
+    <SubagentsTrack
+      serverId={serverId}
+      rows={rows}
+      onOpenSubagent={openSession}
+      onOpenProviderSubagent={NOOP}
+      opensInSheet={opensInSheet}
+      onArchiveSubagent={NOOP}
+    />
   );
 }
 
@@ -253,6 +260,16 @@ export function BotChat({
   });
   const history = useBotHistory(serverId, workspaceId, conversation.data?.id, interactive);
   const openTarget = useOpenFromBot(serverId, workspaceId);
+  // A retired Bot has no tickets to read; older hosts serve none.
+  const ticketsShown = useBotTicketsSupported(serverId) && bot.state.kind !== "retired";
+  // The sheet stays mounted while it animates closed, then unmounts on dismiss.
+  const [ticketSheet, setTicketSheet] = useState<{ id: string; open: boolean } | null>(null);
+  const showTicket = useCallback((id: string) => setTicketSheet({ id, open: true }), []);
+  const hideTicket = useCallback(
+    () => setTicketSheet((sheet) => (sheet ? { ...sheet, open: false } : null)),
+    [],
+  );
+  const openTicket = ticketsShown ? showTicket : undefined;
   const refresh = () => {
     void history.refetch();
   };
@@ -374,7 +391,8 @@ export function BotChat({
     resume.error,
     cancel.error,
   ].filter(Boolean);
-  const paddingBottom = sessionAgentId ? resolveComposerTrackTailClearance(compact) : undefined;
+  const trackShown = Boolean(sessionAgentId) || ticketsShown;
+  const paddingBottom = trackShown ? resolveComposerTrackTailClearance(compact) : undefined;
   const content = (
     <View style={chatStyles.transcript}>
       {conversation.isPending && !conversation.data && bot.state.kind !== "retired" ? (
@@ -392,6 +410,7 @@ export function BotChat({
             workspaceId={workspaceId}
             cwd={cwd}
             onOpen={openTarget}
+            onOpenTicket={openTicket}
           />
         )}
         ListEmptyComponent={
@@ -411,13 +430,43 @@ export function BotChat({
           if (atBottom.current) list.current?.scrollToEnd({ animated: false });
         }}
       />
-      {sessionAgentId ? (
-        <BotSessionTrack
+      {trackShown ? (
+        <ComposerTrackBar>
+          {sessionAgentId ? (
+            <BotSessionTrack
+              serverId={serverId}
+              workspaceId={workspaceId}
+              sessionAgentId={sessionAgentId}
+              provider={bot.execution.provider}
+              busy={busy}
+            />
+          ) : null}
+          {ticketsShown ? (
+            <BotTicketsTrack
+              serverId={serverId}
+              workspaceId={workspaceId}
+              bot={bot}
+              interactive={interactive}
+              onOpenTicket={showTicket}
+            />
+          ) : null}
+        </ComposerTrackBar>
+      ) : null}
+      {ticketsShown && ticketSheet ? (
+        <BotTicketSheet
+          // Another task opened while this one animates closed starts with its own state.
+          key={ticketSheet.id}
           serverId={serverId}
           workspaceId={workspaceId}
-          sessionAgentId={sessionAgentId}
-          provider={bot.execution.provider}
-          busy={busy}
+          ticketId={ticketSheet.id}
+          visible={ticketSheet.open}
+          readOnly={readOnly}
+          onClose={hideTicket}
+          onDismiss={() => setTicketSheet(null)}
+          onOpenAgent={(agentId) => {
+            hideTicket();
+            openTarget({ kind: "agent", agentId });
+          }}
         />
       ) : null}
     </View>

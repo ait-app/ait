@@ -3,12 +3,16 @@ import {
   BOT_METHODS,
   BOT_NOTIFICATION_METHODS,
   BOT_REQUEST_SCHEMAS,
+  BOT_TICKET_METHODS,
   BotRequestSchema,
   BotResponseSchema,
 } from "./rpc-schemas.js";
 import {
   BotChannelConfigSchema,
+  BotNotificationSchema,
   BotPermissionsSchema,
+  BotSkipReasonSchema,
+  BotTicketSummarySchema,
   BotTurnSchema,
   BotWakeStatusSchema,
 } from "./types.js";
@@ -214,7 +218,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(44);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(47);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",
@@ -482,9 +486,11 @@ describe("Bot wire contract", () => {
         wakeScope: "all",
       }),
     ).not.toHaveProperty("execution");
+    expect(BotSkipReasonSchema.parse("reported")).toBe("reported");
     for (const wake of [
       { state: "skipped", reason: "observed" },
       { state: "skipped", reason: "blocked" },
+      { state: "skipped", reason: "reported" },
       { state: "skipped", reason: "reason_from_a_newer_host" },
       { state: "state_from_a_newer_host", detail: 1 },
     ]) {
@@ -521,6 +527,135 @@ describe("Bot wire contract", () => {
       },
     };
     expect(validateWSOutboundMessage(envelope).success).toBe(true);
+  });
+
+  it("keeps tickets optional and reads notifications from hosts without them unchanged", () => {
+    expect(BOT_TICKET_METHODS).toEqual([
+      "bot.ticket.list.request",
+      "bot.ticket.get.request",
+      "bot.ticket.update.request",
+    ]);
+    for (const method of BOT_TICKET_METHODS) expect(BOT_METHODS).not.toContain(method);
+    const legacy = {
+      id: "agent:a:1",
+      workspaceId: "w",
+      scope: "w",
+      kind: "agent_finished",
+      agentId: "a",
+      scheduleId: null,
+      runId: null,
+      terminalId: null,
+      title: "Agent finished",
+      summary: null,
+      at: "2026-11-13T00:00:00Z",
+      conversationId: null,
+    };
+    expect(BotNotificationSchema.parse(legacy)).toEqual(legacy);
+    const ticketId = crypto.randomUUID();
+    for (const kind of ["ticket_blocked", "ticket_done", "ticket_failed"]) {
+      expect(
+        BotNotificationSchema.parse({ ...legacy, kind, ticketId, ticketTitle: "Fix login" }),
+      ).toMatchObject({ kind, ticketId, ticketTitle: "Fix login" });
+    }
+  });
+
+  it("validates ticket requests and round-trips tickets, including values from newer hosts", () => {
+    const ticketId = crypto.randomUUID();
+    const base = { requestId: "r", workspaceId: "w" };
+    expect(BotRequestSchema.parse({ type: "bot.ticket.list.request", ...base })).toEqual({
+      type: "bot.ticket.list.request",
+      ...base,
+    });
+    for (const patch of [{ limit: 0 }, { limit: 129 }, { includeClosed: "yes" }, { extra: 1 }]) {
+      expect(
+        BotRequestSchema.safeParse({ type: "bot.ticket.list.request", ...base, ...patch }).success,
+      ).toBe(false);
+    }
+    expect(
+      BotRequestSchema.safeParse({ type: "bot.ticket.get.request", ...base, ticketId: "t" })
+        .success,
+    ).toBe(false);
+    const update = { type: "bot.ticket.update.request", ...base, ticketId };
+    for (const status of ["open", "done", "failed", "cancelled"]) {
+      expect(BotRequestSchema.safeParse({ ...update, status }).success).toBe(true);
+    }
+    // Only the host moves a ticket into waiting; renaming and notes belong to the Bot.
+    expect(BotRequestSchema.safeParse({ ...update, status: "waiting" }).success).toBe(false);
+    expect(BotRequestSchema.safeParse({ ...update, status: "done", title: "x" }).success).toBe(
+      false,
+    );
+    const at = "2026-11-13T08:00:00Z";
+    const report = {
+      sequence: 2,
+      at,
+      source: "system",
+      kind: "agent_permission",
+      agentId: "agt_1",
+      text: "",
+      status: "waiting",
+    };
+    const summary = {
+      id: ticketId,
+      title: "Fix login",
+      status: "waiting",
+      waiting: { reason: "permission", agentId: "agt_1", since: at },
+      conversationId: crypto.randomUUID(),
+      createdAt: at,
+      updatedAt: at,
+      closedAt: null,
+      outcome: null,
+      assignments: [{ agentId: "agt_1", workspaceId: "w", assignedAt: at }],
+      latestReport: report,
+    };
+    const { latestReport: _latest, ...fields } = summary;
+    const full = { ...fields, request: "Fix the login form", reports: [report] };
+    const newer = {
+      ...summary,
+      id: crypto.randomUUID(),
+      status: "status_from_a_newer_host",
+      waiting: { reason: "reason_from_a_newer_host", agentId: "agt_2", since: at, extra: 1 },
+      latestReport: {
+        ...report,
+        source: "source_from_a_newer_host",
+        kind: "kind_from_a_newer_host",
+        status: "status_from_a_newer_host",
+      },
+    };
+    const responses = [
+      {
+        type: "bot.ticket.list.response",
+        payload: { requestId: "r", tickets: [summary, { ...summary, latestReport: null }, newer] },
+      },
+      { type: "bot.ticket.get.response", payload: { requestId: "r", ticket: full } },
+      {
+        type: "bot.ticket.update.response",
+        payload: { requestId: "r", ticket: { ...full, status: "done" }, changed: true },
+      },
+    ];
+    for (const response of responses) {
+      expect(validateWSOutboundMessage({ type: "session", message: response }).success).toBe(true);
+    }
+    expect(BotResponseSchema.parse(responses[1])).toEqual(responses[1]);
+    expect(BotResponseSchema.parse(responses[2])).toEqual(responses[2]);
+    const parsed = BotResponseSchema.parse(responses[0]);
+    expect(parsed.type === "bot.ticket.list.response" && parsed.payload.tickets[0]).toEqual(
+      summary,
+    );
+    expect(parsed.type === "bot.ticket.list.response" && parsed.payload.tickets[2]).toMatchObject({
+      status: "status_from_a_newer_host",
+      waiting: { reason: "reason_from_a_newer_host" },
+      latestReport: { kind: "kind_from_a_newer_host", source: "source_from_a_newer_host" },
+    });
+    // A summary from a host that omits optional fields still parses with an empty history.
+    expect(
+      BotTicketSummarySchema.parse({
+        id: ticketId,
+        title: "t",
+        status: "open",
+        createdAt: at,
+        updatedAt: at,
+      }),
+    ).toMatchObject({ assignments: [] });
   });
 
   it("parses schedules that record the Bot conversation that created them", () => {

@@ -8,6 +8,8 @@ use crate::service::agent_mcp::{
 pub(super) enum Support {
     Unsupported,
     Http,
+    /// HTTP MCP, with tool pre-approvals that only add to the session's own.
+    AdditiveHttp,
 }
 
 fn connection(policy: Arc<Policy>, port: u16) -> AgentMcp {
@@ -348,6 +350,46 @@ async fn denied_bot_session_launches_without_ait_server() {
     assert!(state.start_configs.iter().all(without_ait));
     assert_eq!(state.validate_configs.len(), 1);
     assert!(state.validate_configs.iter().all(without_ait));
+}
+
+#[tokio::test]
+async fn a_worker_on_an_additive_adapter_runs_its_report_tool_without_asking() {
+    let report = json!({"preapproved":[{"kind":"mcp","server":"ait","tool":"report_progress"}]});
+    for (support, expected) in [(Support::AdditiveHttp, Some(report)), (Support::Http, None)] {
+        let (mut manager, registry, client, _) = scoped(Grant::Worker("w".repeat(64)), json!({}));
+        let additive = matches!(support, Support::AdditiveHttp);
+        client.0.lock().unwrap().mcp_support = support;
+        manager
+            .create("worker", &spec(), subtree_registration())
+            .await
+            .unwrap();
+        complete_turn(&mut manager, &client, "worker").await;
+        manager
+            .configure(
+                "worker",
+                &ConfigPatch {
+                    model_id: provider_core::protocol::agent_config::NullableSetting::Set(
+                        "gpt-7".into(),
+                    ),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        let state = client.0.lock().unwrap();
+        let launched = [
+            &state.create_specs[0].config,
+            &state.start_configs[0],
+            &state.validate_configs[0],
+        ];
+        for config in launched {
+            assert_eq!(config.tool_policy, expected, "additive={additive}");
+        }
+        let stored = registry.get("worker").unwrap().unwrap().config.unwrap();
+        assert_eq!(stored.tool_policy, None);
+        assert_eq!(stored.model.as_deref(), Some("gpt-7"));
+    }
 }
 
 #[tokio::test]

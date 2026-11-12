@@ -113,6 +113,14 @@ Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent
   `update_schedule` 只能编辑带 `botScope` 的定时任务。
 - 任何调用者都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签。作用域调用者不能使用 `create_workspace`。
 - 没有非退役 Bot 时子树凭据降为只读观察。
+- 工单（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)）：Bot 会话的每次 `create_agent` 打开一个工单，或以可选参数 `ticketId`
+  （只在 Bot 会话看到的输入 schema 中，其他调用者传入时 `-32602`）加入已有工单；Agent 带 daemon 写入的标签 `ait.bot.ticket`，结果带 `ticketId`，
+  其子 Agent 继承同一工单。达到 32 个未关闭工单时先自动关闭 Agent 全部已归档的工单（包括等待中的）。`bot_tickets` 列出工单，`bot_ticket_update` 关闭、重新打开、改名或备注；
+  Bot 会话的 `send_agent_prompt` 会重新打开目标 Agent 已关闭的工单，达到上限而不能重新打开时结果带 `ticketNote`。
+  属于工单的 Agent 用 `report_progress`（`kind` 为 `progress`、`blocked`、`done`、`failed`，`text` 必填）汇报，工单与 Agent 取自凭据；`blocked`、`done`、`failed` 唤醒 Bot。
+  Claude 工作者的会话预授权 `report_progress`（只此一个工具，持久配置不变），不再为它请求审批；Codex 与其他 Provider 的工作者没有预授权，
+  在会请求审批的模式中调用 `report_progress` 可能先请求审批，见 [Workspace Bot](bots.md#任务)。
+- 作用域 `create_agent` 在单独的任务中执行：60 秒调用超时只停止等待，Agent 创建与工单收尾照常完成；该任务占用调用额度直到结束，至多 5 分钟。
 
 分组与工具对应关系见 [Workspace Bot](bots.md#权限)。
 
@@ -135,6 +143,7 @@ Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自�
 | 心跳               | `create_heartbeat`, `delete_heartbeat`                                                                                                                                                          |
 | Profile / Provider | `list_profiles`, `list_providers`, `list_models`, `inspect_provider`                                                                                                                            |
 | 权限               | `list_pending_permissions`, `respond_to_permission`                                                                                                                                             |
+| Workspace Bot      | `workspace_overview`, `bot_memory_read`, `bot_memory_update`, `bot_tickets`, `bot_ticket_update`（只对 Bot 会话）；`report_progress`（只对属于工单的 Agent）                                    |
 
 准确参数由 `tools/list` 的 `inputSchema` 定义。部分能力未安装时，对应工具不出现在目录中。
 Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot 与子树凭据”。

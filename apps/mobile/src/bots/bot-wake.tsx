@@ -1,12 +1,24 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Bell, CircleAlert, CircleCheck, CircleX, SquareTerminal } from "lucide-react-native";
+import {
+  Bell,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  Hand,
+  ListTodo,
+  SquareTerminal,
+} from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import type { BotNotification, BotTurn, BotTurnMessage } from "@ait/protocol/bot/types";
 import type { Theme } from "@/styles/theme";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
-import { botChatStyles as chatStyles, botStyles as styles } from "./styles";
+import {
+  botChatStyles as chatStyles,
+  botStyles as styles,
+  botTicketStyles as ticketStyles,
+} from "./styles";
 
 /** The exact reply a Bot gives when a wake-up needs no message (ADR-271 §8). */
 export const SILENT_REPLY = "NO_REPLY";
@@ -16,6 +28,8 @@ const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleX = withUnistyles(CircleX);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
+const ThemedHand = withUnistyles(Hand);
+const ThemedListTodo = withUnistyles(ListTodo);
 const mutedColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successColor = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 const dangerColor = (theme: Theme) => ({ color: theme.colors.statusDanger });
@@ -28,6 +42,9 @@ const KIND_LABEL_KEYS: Record<string, string> = {
   schedule_succeeded: "bots.notifications.kind.schedule_succeeded",
   schedule_failed: "bots.notifications.kind.schedule_failed",
   terminal_attention: "bots.notifications.kind.terminal_attention",
+  ticket_blocked: "bots.notifications.kind.ticket_blocked",
+  ticket_done: "bots.notifications.kind.ticket_done",
+  ticket_failed: "bots.notifications.kind.ticket_failed",
 };
 
 /** Localized name of a notification kind; kinds from later hosts read as a generic update. */
@@ -39,12 +56,16 @@ export function NotificationKindIcon({ kind }: { kind: string }) {
   switch (kind) {
     case "agent_finished":
     case "schedule_succeeded":
+    case "ticket_done":
       return <ThemedCircleCheck size={14} uniProps={successColor} />;
     case "agent_failed":
     case "schedule_failed":
+    case "ticket_failed":
       return <ThemedCircleX size={14} uniProps={dangerColor} />;
     case "agent_permission":
       return <ThemedCircleAlert size={14} uniProps={warningColor} />;
+    case "ticket_blocked":
+      return <ThemedHand size={14} uniProps={warningColor} />;
     case "terminal_attention":
       return <ThemedSquareTerminal size={14} uniProps={mutedColor} />;
     default:
@@ -88,15 +109,62 @@ export function visibleBotMessages(turn: BotTurn, pending: boolean): BotTurnMess
   });
 }
 
+/**
+ * The task a wake notification's subject works on. It opens the task when the host serves tickets;
+ * otherwise the title is plain text.
+ */
+function WakeTicket({
+  notification,
+  onOpenTicket,
+}: {
+  notification: BotNotification;
+  onOpenTicket?: (ticketId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const ticketId = notification.ticketId;
+  if (!ticketId) return null;
+  const label = t("bots.tickets.linked", {
+    title: notification.ticketTitle?.trim() || t("bots.tickets.untitled"),
+  });
+  return (
+    <View style={[chatStyles.wakeEntryLine, ticketStyles.wakeTicket]}>
+      <ThemedListTodo size={14} uniProps={mutedColor} />
+      {onOpenTicket ? (
+        <Pressable
+          style={styles.grow}
+          onPress={() => onOpenTicket(ticketId)}
+          accessibilityRole="link"
+          testID={`bot-wake-ticket-${notification.id}`}
+        >
+          <Text style={[styles.hint, styles.link]} numberOfLines={1}>
+            {label}
+          </Text>
+        </Pressable>
+      ) : (
+        <Text
+          style={[styles.hint, styles.grow]}
+          numberOfLines={1}
+          testID={`bot-wake-ticket-${notification.id}`}
+        >
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 /** Header of a wake turn: what happened, in place of a user message. */
 export function BotWakeHeader({
   turn,
   workspaceId,
   onOpen,
+  onOpenTicket,
 }: {
   turn: BotTurn;
   workspaceId: string;
   onOpen: (target: WorkspaceTabTarget) => void;
+  /** Absent when the host serves no tickets, so a named task stays plain text. */
+  onOpenTicket?: (ticketId: string) => void;
 }) {
   const { t } = useTranslation();
   const notifications = turn.wake?.notifications ?? [];
@@ -138,6 +206,7 @@ export function BotWakeHeader({
                 {notification.summary}
               </Text>
             ) : null}
+            <WakeTicket notification={notification} onOpenTicket={onOpenTicket} />
           </View>
         );
       })}

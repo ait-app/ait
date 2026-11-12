@@ -1,6 +1,7 @@
 # Workspace Bot 重设计：每个 Workspace 一个管理者
 
-- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）、阶段 3 已实现（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）；阶段 4 的通知与唤醒已实现（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)），剩余事项见下文“阶段 4 剩余工作”（实施计划：[阶段 1](../archive/plans/workspace-bot-manager-phase-1.md)、[阶段 2](../archive/plans/workspace-bot-manager-phase-2.md)、[阶段 3](../archive/plans/workspace-bot-manager-phase-3.md)）
+- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）、阶段 3 已实现（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）；阶段 4 的通知与唤醒已实现（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)），剩余事项见下文“阶段 4 剩余工作”；
+  计划外新增的任务、指派与汇报已实现（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)），剩余事项见下文“任务、指派与汇报”（实施计划：[阶段 1](../archive/plans/workspace-bot-manager-phase-1.md)、[阶段 2](../archive/plans/workspace-bot-manager-phase-2.md)、[阶段 3](../archive/plans/workspace-bot-manager-phase-3.md)）
 - 日期：2026-11-05
 - 关系：已由 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)、[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 实施：取代 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 的多 Bot／人格模型、
   修订 [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md) 的标签页与
@@ -201,6 +202,27 @@ Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron�
 - **降级**：有活动的 Workspace 升级后实际上无法降级到不支持通知的 daemon（ADR-271 第 12 节），需决定是否提供导出或清理工具。
 - **对话中的可点击条目**：唤醒轮次的通知头可打开 Agent 与定时任务，Bot 回复中提到的 Agent 与定时任务仍是纯文本。
 - **浏览器端到端用例**：`workspace-bots.spec.ts` 尚未覆盖唤醒轮次。
+
+### 任务、指派与汇报
+
+原计划没有这一阶段，在阶段 4 之后加入。通知唤醒之后，Bot 仍倾向于在一轮中 `wait_for_agent` 等 Agent 结束，阻塞对话，
+完成的工作也无人收尾。现在 Bot 交办的每项工作是一个持久的任务（工单）：Bot 启动的 Agent 自动加入任务，
+工作者用 `report_progress` 汇报，Bot 交出工作后即结束本轮，在 Agent 结束、等待审批或汇报时被唤醒，告诉用户结果后关闭任务；
+用户在 Bot 标签页查看任务，并可关闭、取消或重新打开。契约见 [ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)，
+用户可见行为见 [Workspace Bot](../operations/bots.md#任务)。
+
+截至 2026-11-13，daemon（记录、存储、状态机、通知挂接、作用域 MCP 工具与 `create_agent` 的任务流程、概览、访客规则）与客户端（协议、SDK 特性
+`workspaceBotTickets`、对话中的任务入口与详情、唤醒卡片的任务链接、九种语言）已实现，由单元、集成与组件测试覆盖。尚未完成：
+
+- **真实会话验收**：端到端测试用伪执行器代替模型；真实 Provider 会话中 Bot 是否交出工作后结束本轮、是否要求 Agent 汇报并关闭任务，
+  以及 Agent 是否调用 `report_progress`，尚未在运行中的 daemon 上验证。任务界面未在真机、桌面应用或浏览器端到端用例中检查。
+- **遗留任务**：创建 Agent 前崩溃留下的无 Agent 任务不自动清理；Bot 忘记关闭的任务只占用 32 个名额，由用户手动关闭。
+- **关闭与停止**：关闭或取消任务不停止它的 Agent，需决定是否提供一并停止的操作。
+- **定时任务**：定时任务运行创建的 Agent 不属于任何任务。
+- **跨 Workspace 的 Agent**：作用域内其他 Workspace（旧 worktree）中的 Agent 在任务详情中不能打开；Agent 名称只在客户端已加载 Agent 目录时显示。
+- **访客**：只有整个 Host 的访客能读取任务；Workspace 与项目访客看不到。
+- **降级**：任何 Agent 汇报过 `blocked`、`done` 或 `failed` 后，降级到 0.2.10 需要删除 `<data>/workspace-bots/`（ADR-274 第 13 节）；
+  daemon 也不能容忍以后新增的任务枚举值。
 
 ### Channel 与对话
 

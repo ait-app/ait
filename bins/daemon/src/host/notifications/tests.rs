@@ -18,11 +18,13 @@ use super::*;
 const WORKSPACE: &str = "wks_0123456789abcdef";
 const AGENT: &str = "11111111-1111-4111-8111-111111111111";
 const CONVERSATION: &str = "33333333-3333-4333-8333-333333333333";
+const TICKET: &str = "44444444-4444-4444-8444-444444444444";
 
 fn record(fields: &Value) -> PersistedAgentRuntimeRecord {
     let mut record = json!({"id":AGENT,"provider":"codex","cwd":"/tmp","workspaceId":WORKSPACE,
         "createdAt":"2026-11-12T00:00:00Z","updatedAt":"2026-11-12T00:00:00Z","title":"Fix",
-        "labels":{BOT_SCOPE_LABEL:WORKSPACE,BOT_CONVERSATION_LABEL:CONVERSATION}});
+        "labels":{BOT_SCOPE_LABEL:WORKSPACE,BOT_CONVERSATION_LABEL:CONVERSATION,
+            BOT_TICKET_LABEL:TICKET}});
     for (key, value) in fields.as_object().unwrap() {
         record[key] = value.clone();
     }
@@ -47,15 +49,45 @@ fn agent_attention_maps_to_a_deterministic_notification_with_its_origin() {
         notification.conversation_id.map(|id| id.to_string()),
         Some(CONVERSATION.to_owned())
     );
+    assert_eq!(
+        notification.ticket_id.map(|id| id.to_string()),
+        Some(TICKET.to_owned())
+    );
+    assert!(
+        notification.ticket_title.is_none(),
+        "the Bot fills the title"
+    );
 
     let untitled = record(&json!({"title":null,"labels":{}}));
     let finished = agent_notification(&untitled, AgentAttentionReason::Finished, AT).unwrap();
     assert_eq!(finished.kind, NotificationKind::AgentFinished);
     assert_eq!(finished.title, "Agent finished");
     assert_eq!((finished.scope, finished.conversation_id), (None, None));
+    assert!(finished.ticket_id.is_none());
+    let malformed = record(&json!({"labels":{BOT_TICKET_LABEL:"not-a-ticket"}}));
+    let malformed = agent_notification(&malformed, AgentAttentionReason::Finished, AT).unwrap();
+    assert!(malformed.ticket_id.is_none());
     assert!(finished.summary.is_none());
     let permission = agent_notification(&untitled, AgentAttentionReason::Permission, AT).unwrap();
     assert_eq!(permission.kind, NotificationKind::AgentPermission);
+}
+
+#[test]
+fn a_turn_end_carries_when_its_turn_started_and_a_permission_request_does_not() {
+    const STARTED: &str = "2026-11-12T07:59:00Z";
+    let prompted = record(&json!({"lastUserMessageAt":STARTED}));
+    let started = DateTime::parse_from_rfc3339(STARTED)
+        .unwrap()
+        .with_timezone(&Utc);
+    for reason in [AgentAttentionReason::Finished, AgentAttentionReason::Error] {
+        let ended = agent_notification(&prompted, reason, AT).unwrap();
+        assert_eq!(ended.turn_started_at, Some(started), "{reason:?}");
+    }
+    let permission = agent_notification(&prompted, AgentAttentionReason::Permission, AT).unwrap();
+    assert_eq!(permission.turn_started_at, None);
+    let unprompted = record(&json!({}));
+    let finished = agent_notification(&unprompted, AgentAttentionReason::Finished, AT).unwrap();
+    assert_eq!(finished.turn_started_at, None);
 }
 
 #[test]

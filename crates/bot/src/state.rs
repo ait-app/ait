@@ -2,6 +2,7 @@ mod catalog;
 mod conversations;
 mod execution;
 mod notifications;
+mod tickets;
 mod webhook;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,10 +11,11 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use domain::bot::ChannelConfig;
 use domain::bot::notification::NotificationLog;
+use domain::bot::ticket::Ticket;
 use domain::bot::{
     Bot, BotState, Catalog, Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus,
 };
-use domain::{BotId, BotTurnId, ChannelId, ConversationId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
 use model::ErrorCode;
 use model::bot::Store;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
@@ -73,6 +75,8 @@ pub(crate) struct State {
     /// Notification ids each Bot's recent wake turns carried, with the turn's start, so a
     /// replay stays a duplicate after the log evicted the entry.
     woken: BTreeMap<(BotId, String), DateTime<Utc>>,
+    /// Every live Bot's tickets, each with its newest report only; the files hold the rest.
+    tickets: BTreeMap<TicketId, Ticket>,
     /// The service is stopping: running turns are being cancelled by shutdown, not by a user.
     pub(crate) stopping: bool,
 }
@@ -103,7 +107,9 @@ impl State {
             .filter(|channel| channel.deleted)
             .map(|channel| channel.id)
             .collect();
+        let now = Utc::now();
         let notifications = notifications::load(store.as_ref(), &catalog)?;
+        let loaded = tickets::load(store.as_ref(), &catalog, now)?;
         let mut state = Self {
             store,
             workspaces,
@@ -129,9 +135,11 @@ impl State {
             observations: BTreeMap::new(),
             observing: BTreeMap::new(),
             woken: BTreeMap::new(),
+            tickets: loaded.tickets,
             stopping: false,
         };
-        state.load_turns(Utc::now())?;
+        state.load_turns(now)?;
+        state.offer_reports(loaded.reports, now)?;
         Ok(state)
     }
 
@@ -264,6 +272,9 @@ impl State {
             }
             "bot.memory.get.request" => self.memory(&decode(params)?),
             "bot.notifications.list.request" => self.list_notifications(&decode(params)?),
+            "bot.ticket.list.request" => self.list_tickets(&decode(params)?),
+            "bot.ticket.get.request" => self.get_ticket(&decode(params)?),
+            "bot.ticket.update.request" => self.user_update_ticket(decode(params)?, Utc::now()),
             "bot.memory.update.request" => self.update_memory(&decode(params)?),
             "bot.webhook.message.send.request" => self.webhook_send(decode(params)?),
             "bot.webhook.delivery.ack.request" => self.webhook_ack(&decode(params)?),

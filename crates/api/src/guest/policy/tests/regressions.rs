@@ -42,6 +42,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.resume.request",
         "bot.remove.request",
         "bot.memory.update.request",
+        "bot.ticket.update.request",
     ] {
         assert_eq!(
             guest.refused(method, json!({})).await,
@@ -71,6 +72,8 @@ async fn guest_bot_access_is_read_only_v2() {
         "bot.turn.get.request",
         "bot.memory.get.request",
         "bot.notifications.list.request",
+        "bot.ticket.list.request",
+        "bot.ticket.get.request",
     ] {
         guest.forwarded(method, json!({})).await;
     }

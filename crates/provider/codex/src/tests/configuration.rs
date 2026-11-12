@@ -543,3 +543,31 @@ async fn sub_agent_usage_counts_toward_the_active_turn_until_its_terminal_event(
     );
     session.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn a_ticket_worker_keeps_every_ait_tool_and_its_approval_settings() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let build = || Box::new(client.clone()) as Box<dyn AgentClient>;
+    let adapter = provider::testing::agent_mcp::Adapter {
+        client: &build,
+        spec: fixture.spec(),
+        openings: &Vec::new,
+        prompts: true,
+    };
+
+    let stored = provider::testing::agent_mcp::open_worker(&adapter, &"w".repeat(64)).await;
+
+    let started: Vec<Value> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "thread/start")
+        .collect();
+    let ait = &started[0]["params"]["config"]["mcp_servers"]["ait"];
+    assert_eq!(ait["http_headers"]["X-Ait-Agent-Id"], "agent-worker");
+    for key in ["enabled_tools", "default_tools_approval_mode", "tools"] {
+        assert!(ait.get(key).is_none(), "{key}: {ait}");
+    }
+    assert_eq!(stored.tool_policy, None);
+    assert!(!client.additive_tool_preapproval());
+}

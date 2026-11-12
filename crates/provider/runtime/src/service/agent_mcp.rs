@@ -6,7 +6,7 @@ use std::sync::Arc;
 use domain::agent_runtime::StoredAgentConfig;
 use model::storage::daemon_config::DaemonConfigStore;
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 
@@ -40,11 +40,13 @@ pub(crate) enum Binding {
         token: SecretString,
         agent_id: String,
     },
-    /// Scoped credential; always replaces any `ait` entry.
+    /// Scoped credential; always replaces any `ait` entry. `worker_tools` pre-approves the
+    /// Bot ticket worker tools in the effective tool policy.
     Scoped {
         url: String,
         token: SecretString,
         agent_id: String,
+        worker_tools: bool,
     },
     /// No daemon MCP; always removes any `ait` entry.
     Strip,
@@ -83,8 +85,10 @@ impl AgentMcp {
 
     /// Decide the session's binding from the subject's credential and the current policy.
     ///
-    /// `deliverable` is whether this session can receive the daemon MCP at all. `None` keeps
-    /// the configuration unchanged: a shared session that is not deliverable, whose policy
+    /// `deliverable` is whether this session can receive the daemon MCP at all, and
+    /// `additive_preapproval` whether its adapter's tool pre-approval is additive, so that a
+    /// worker credential pre-approves the worker tools (ADR-274). `None` keeps the
+    /// configuration unchanged: a shared session that is not deliverable, whose policy
     /// disables injection, or whose user configured an `ait` entry. Scoped and denied
     /// sessions that do not receive a scoped credential are stripped, and an issued
     /// credential that is not injected is revoked at once.
@@ -93,6 +97,7 @@ impl AgentMcp {
         subject: &McpSubject<'_>,
         config: &StoredAgentConfig,
         deliverable: bool,
+        additive_preapproval: bool,
     ) -> Result<Option<Binding>, model::ErrorCode> {
         let shared = deliverable && !has_ait(config);
         let Some(scopes) = &self.scopes else {
@@ -101,7 +106,11 @@ impl AgentMcp {
         match scopes.access(subject) {
             McpAccess::Shared => self.shared(subject.agent_id, shared),
             McpAccess::Denied => Ok(Some(Binding::Strip)),
-            McpAccess::Scoped { token, bot_session } => {
+            McpAccess::Scoped {
+                token,
+                bot_session,
+                worker,
+            } => {
                 let policy = if deliverable {
                     self.policy()
                 } else {
@@ -113,6 +122,7 @@ impl AgentMcp {
                             url: self.url.clone(),
                             token,
                             agent_id: subject.agent_id.to_owned(),
+                            worker_tools: worker && additive_preapproval,
                         }))
                     }
                     policy => {
@@ -160,6 +170,7 @@ impl Binding {
         matches!(self, Self::Scoped { .. })
     }
 
+    /// Apply this binding to a session's `effective` configuration, never the stored one.
     pub(crate) fn apply(&self, effective: &mut StoredAgentConfig) {
         let (url, token, agent_id) = match self {
             Self::Shared { .. } if has_ait(effective) => return,
@@ -167,12 +178,18 @@ impl Binding {
                 url,
                 token,
                 agent_id,
-            }
-            | Self::Scoped {
+            } => (url, token, agent_id),
+            Self::Scoped {
                 url,
                 token,
                 agent_id,
-            } => (url, token, agent_id),
+                worker_tools,
+            } => {
+                if *worker_tools {
+                    preapprove_worker_tools(effective);
+                }
+                (url, token, agent_id)
+            }
             Self::Strip => {
                 if let Some(servers) = &mut effective.mcp_servers {
                     servers.remove(SERVER);
@@ -190,6 +207,26 @@ impl Binding {
                 "X-Ait-Agent-Id":agent_id
             }}),
         );
+    }
+}
+
+/// Add the Bot ticket worker tools on the `ait` server to `config`'s tool pre-approvals,
+/// keeping the existing ones; a policy of another shape is left for the adapter to refuse.
+fn preapprove_worker_tools(config: &mut StoredAgentConfig) {
+    let policy = config
+        .tool_policy
+        .get_or_insert_with(|| json!({"preapproved":[]}));
+    if policy.is_null() {
+        *policy = json!({"preapproved":[]});
+    }
+    let Some(entries) = policy.get_mut("preapproved").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for tool in domain::bot::permissions::worker_tools() {
+        let entry = json!({"kind":"mcp","server":SERVER,"tool":tool});
+        if !entries.contains(&entry) {
+            entries.push(entry);
+        }
     }
 }
 

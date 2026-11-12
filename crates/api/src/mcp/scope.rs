@@ -66,10 +66,12 @@ pub(super) struct Scope {
 }
 
 impl Scope {
-    /// Whether `tool` is granted; Bot-only tools are granted to Bot sessions, never subtrees.
+    /// Whether `tool` is granted; Bot-only tools are granted to Bot sessions, never subtrees,
+    /// and worker tools only to subtree Agents working on a ticket.
     pub(super) fn allows(&self, tool: &str) -> bool {
-        let bot = matches!(self.caller.kind, CallerKind::Bot { .. });
-        self.grant.permissions.allows(tool, bot)
+        self.grant
+            .permissions
+            .allows(tool, self.caller.kind.holder())
     }
 
     /// The Bot conversation that started the caller's work: a Bot session's own conversation,
@@ -142,7 +144,9 @@ enum Rule {
 fn rule(tool: &str) -> Option<Rule> {
     Some(match tool {
         "list_profiles" | "list_providers" | "bot_memory_read" | "bot_memory_update"
-        | "workspace_overview" => Rule::Open,
+        | "workspace_overview" | "bot_tickets" | "bot_ticket_update" | "report_progress" => {
+            Rule::Open
+        }
         "list_agents" | "list_pending_permissions" | "list_schedules" => Rule::Listing,
         "list_models" | "inspect_provider" => Rule::RootDirectory,
         "create_agent" => Rule::CreateAgent,

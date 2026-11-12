@@ -18,6 +18,7 @@ pub(super) mod creation;
 mod overview;
 mod queries;
 mod schedules;
+mod tickets;
 
 /// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
 /// credentials and inheriting placement and parentage from the resolved `caller` Agent.
@@ -43,7 +44,26 @@ pub(super) async fn execute(
     if overview::handles(&tool.name) {
         return overview::execute(state, &tool.name, arguments, scope).await;
     }
+    if tickets::handles(&tool.name) {
+        return tickets::execute(state, &tool.name, arguments, scope, caller).await;
+    }
+    if let Some(scope) = scope
+        && tool.name == "create_agent"
+    {
+        return tickets::create_agent(state, scope, arguments, caller).await;
+    }
+    let ticket_note = match scope {
+        Some(scope) if tool.name == "send_agent_prompt" => {
+            tickets::reopen_for_prompt(state, scope, &arguments).await
+        }
+        _ => None,
+    };
     let mut result = dispatch(state, tool, arguments, scope, caller).await?;
+    if let Some(note) = ticket_note
+        && let Some(result) = result.as_object_mut()
+    {
+        result.insert("ticketNote".to_owned(), Value::String(note));
+    }
     if let Some(scope) = scope {
         observe(state, scope, &tool.name, &result, started).await;
         scope::filter(scope, &tool.name, &mut result);

@@ -388,6 +388,7 @@ impl State {
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
             self.delete_notifications(*bot)?;
+            self.delete_tickets(*bot)?;
         }
         Ok(())
     }

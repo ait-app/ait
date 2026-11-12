@@ -11,6 +11,7 @@ use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 
 pub mod notification;
 pub mod permissions;
+pub mod ticket;
 
 /// Reserved label carrying the Bot scope of an Agent or schedule.
 pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
@@ -18,6 +19,10 @@ pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
 /// Reserved label carrying the Bot conversation that started an Agent; notifications about the
 /// Agent wake the Bot in that conversation.
 pub const BOT_CONVERSATION_LABEL: &str = "ait.bot.conversation";
+
+/// Reserved label carrying the Bot ticket an Agent works on; notifications about the Agent and
+/// its worker reports attach to that ticket.
+pub const BOT_TICKET_LABEL: &str = "ait.bot.ticket";
 
 /// Label namespace no MCP caller or guest may write; `BOT_SCOPE_LABEL` lives in it.
 pub const BOT_LABEL_PREFIX: &str = "ait.bot.";
