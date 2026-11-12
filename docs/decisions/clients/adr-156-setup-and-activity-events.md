@@ -6,7 +6,7 @@ amends:
   - workspace/adr-081-directory-change-push.md
 paths:
   - crates/metadata
-  - crates/provider
+  - crates/provider/runtime
   - packages/protocol
   - packages/client
 ---

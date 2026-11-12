@@ -6,8 +6,8 @@ amends:
   - providers/adr-027-independent-agent-session-manager.md
   - providers/adr-031-daemon-provider.md
 paths:
-  - crates/provider
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/codex
 ---
 
 # ADR-032：独立 server 接通 Codex 原生文本执行

@@ -56,7 +56,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-100：功能 crate 作为完整服务安装](daemon/adr-100-crate-level-service-installation.md)（经 [ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-129](providers/adr-129-provider-owned-skills.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md) 修订）
 - [ADR-095：组件自行声明方法元数据](daemon/adr-095-component-method-declarations.md)（经 [ADR-100](daemon/adr-100-crate-level-service-installation.md) 修订）
 - [ADR-093：以可消费 Context 逐级处理请求](daemon/adr-093-consumable-request-context.md)
-- [ADR-072：Workspace 名称与当前文档边界](daemon/adr-072-workspace-names-and-documentation.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-112](daemon/adr-112-persistence-crate.md) 修订）
+- [ADR-072：Workspace 名称与当前文档边界](daemon/adr-072-workspace-names-and-documentation.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-273](providers/adr-273-provider-crate-directory.md) 修订）
 - [ADR-064：默认离线语音与模型准备](daemon/adr-064-offline-speech.md)（经 [ADR-191](providers/adr-191-codex-native-realtime-voice.md) 修订）
 - [ADR-047：移除 Plugin 接口并独立实现 Schedule 与 Browser](daemon/adr-047-daemon-schedule-browser.md)（经 [ADR-138](workspace/adr-138-workspace-owned-schedules.md) 修订）
 - [ADR-045：移除 Hub、Chat 与 Loop 接口](daemon/adr-045-remove-hub-chat-loop.md)（经 [ADR-233](bot/adr-233-webhook-channel-center-endpoints.md) 修订）
@@ -104,7 +104,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
-- [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)
+- [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
+- [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）
 - [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)

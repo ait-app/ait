@@ -5,8 +5,8 @@ date: 2026-11-05
 amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
-  - crates/provider
-  - crates/provider-pi
+  - crates/provider/runtime
+  - crates/provider/pi
 ---
 
 # ADR-219：Pi 原生 slash-command 发现

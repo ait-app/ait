@@ -47,9 +47,9 @@ Agent 目录与 Project/Workspace 目录会并行刷新，不是所有数据都�
 已确认行为：
 
 - [WorkspaceScreen](../../../apps/mobile/src/screens/workspace/workspace-screen.tsx) 在路由聚焦、连接可用时调用 `prefetchProvidersSnapshot`。
-- [模型缓存](../../../crates/provider/src/service/provider_catalog.rs) 以目录区分 scope，最多保留 16 个 scope，60 秒后视为过期。未命中或过期时，循环逐个 `await discover` 已注册的 Provider。
-- [AgentExecution](../../../crates/provider/src/service/agent_execution.rs) 通过一个容量 64 的命令队列处理请求，worker 完成当前请求后再接下一个。模型发现、Agent 目录、事件订阅里的 Agent 查询、原生历史加载与时间线查询会进入这个执行器。
-- [请求入口](../../../crates/provider/src/rpc/agent_execution.rs) 在业务处理前还会 poll 原生会话并派发待发送输入。
+- [模型缓存](../../../crates/provider/runtime/src/service/provider_catalog.rs) 以目录区分 scope，最多保留 16 个 scope，60 秒后视为过期。未命中或过期时，循环逐个 `await discover` 已注册的 Provider。
+- [AgentExecution](../../../crates/provider/runtime/src/service/agent_execution.rs) 通过一个容量 64 的命令队列处理请求，worker 完成当前请求后再接下一个。模型发现、Agent 目录、事件订阅里的 Agent 查询、原生历史加载与时间线查询会进入这个执行器。
+- [请求入口](../../../crates/provider/runtime/src/rpc/agent_execution.rs) 在业务处理前还会 poll 原生会话并派发待发送输入。
 
 所以前端的“后台预取”虽然不直接 `await` 在路由上，仍可能先占用服务端执行器。某个 Provider 的启动、探测或模型读取慢，后来的会话读取就排队。已经运行的长任务无法仅靠调整队列顺序被抢占。
 
@@ -57,9 +57,9 @@ Agent 目录与 Project/Workspace 目录会并行刷新，不是所有数据都�
 
 ### 2. 首次查看 Agent 要加载原生历史
 
-[load_timeline](../../../crates/provider/src/service/agent_manager.rs) 在每个 daemon 进程中对每个 Agent 首次访问时调用 Provider 的 `history`，之后 reconcile 到本地时间线。它使用进程内 `loaded_timelines` 标记，daemon 重启会重新走这一步。
+[load_timeline](../../../crates/provider/runtime/src/service/agent_manager.rs) 在每个 daemon 进程中对每个 Agent 首次访问时调用 Provider 的 `history`，之后 reconcile 到本地时间线。它使用进程内 `loaded_timelines` 标记，daemon 重启会重新走这一步。
 
-Codex 的 [history 适配](../../../crates/provider-codex/src/discovery.rs) 最终调用 [inspect_native](../../../crates/provider-codex/src/native_sessions.rs)：启动 transport、initialize、`thread/read(includeTurns: true)`、转换历史并关闭 transport。因此远端 daemon 的原生程序启动和整段历史读取也在首次会话显示路径上。
+Codex 的 [history 适配](../../../crates/provider/codex/src/discovery.rs) 最终调用 [inspect_native](../../../crates/provider/codex/src/native_sessions.rs)：启动 transport、initialize、`thread/read(includeTurns: true)`、转换历史并关闭 transport。因此远端 daemon 的原生程序启动和整段历史读取也在首次会话显示路径上。
 
 这是历史检查，不等价于每次打开 Workspace 都恢复一个交互式 Agent。当前事件订阅验证 Agent 身份，也不能直接当作启动原生 writer 的证据。
 
@@ -67,9 +67,9 @@ Codex 的 [history 适配](../../../crates/provider-codex/src/discovery.rs) 最�
 
 客户端 [首屏策略](../../../apps/mobile/src/timeline/timeline-fetch-policy.ts) 是 40 个投影后的展示项。服务端实际流程是：
 
-1. [timeline RPC](../../../crates/provider/src/rpc/agent_execution.rs) 调用 `timeline.read(agent)`。
-2. [存储读取](../../../crates/provider/src/storage/timeline/progress.rs) 查询该 Agent 的 entries 和 progress，按 seq 排序，没有页级 `LIMIT`，解析全部 JSON。
-3. 旧投影分页先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after；当前纯分页语义位于 [timeline_projection/page.rs](../../../crates/provider/src/timeline_projection/page.rs)。
+1. [timeline RPC](../../../crates/provider/runtime/src/rpc/agent_execution.rs) 调用 `timeline.read(agent)`。
+2. [存储读取](../../../crates/provider/runtime/src/storage/timeline/progress.rs) 查询该 Agent 的 entries 和 progress，按 seq 排序，没有页级 `LIMIT`，解析全部 JSON。
+3. 旧投影分页先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after；当前纯分页语义位于 [timeline_projection/page.rs](../../../crates/provider/runtime/src/timeline_projection/page.rs)。
 
 所以 `limit: 40` 限制返回数量，没有限制服务端读取和投影成本。长会话冷开、再次取页、断线补齐都会重复支付这部分成本。查询还会持有共享时间线数据库锁；实际对流式写入的影响需要测量。
 
@@ -79,7 +79,7 @@ Codex 的 [history 适配](../../../crates/provider-codex/src/discovery.rs) 最�
 
 [DirectorySync](../../../apps/mobile/src/runtime/directory-sync/index.ts) 有目标 ID 的本地缓存读取，但没有对应的目标 Workspace 远程读取。缓存没有目标时，Project 与 Workspace 是先后请求，Workspace 快照事务完成后才提交。
 
-客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../../crates/metadata/src/directory/rpc/directory/listing.rs) 与 [Agent listing](../../../crates/provider/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
+客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../../crates/metadata/src/directory/rpc/directory/listing.rs) 与 [Agent listing](../../../crates/provider/runtime/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
 
 而且 [DirectorySync 服务端](../../../crates/model/src/directory_sync.rs) 的同步是“调用方构造完整投影 → replace_all 比较 → 返回变更”，增量传输并不等于增量计算。每次重新构造 Workspace 快照还会读取所有活动记录、聚合活动状态、获取各目录的 runtime 缓存。
 

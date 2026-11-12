@@ -115,7 +115,13 @@ test(
     build(main);
     mkdirSync(path.join(worktree, "crates/domain"), { recursive: true });
     writeFileSync(path.join(worktree, "crates/domain/Cargo.toml"), 'name = "domain"\n');
-    assert.deepEqual(workspaceCrates(worktree), ["domain"]);
+    // `crates/provider` is a directory of crates, so its members are found one level down.
+    mkdirSync(path.join(worktree, "crates/provider/core"), { recursive: true });
+    writeFileSync(
+      path.join(worktree, "crates/provider/core/Cargo.toml"),
+      'name = "provider-core"\n',
+    );
+    assert.deepEqual(workspaceCrates(worktree).toSorted(), ["domain", "provider-core"]);
     assert.match(seedWorktreeTarget(worktree), /Seeded target\//);
     const fingerprints = path.join(worktree, "target/debug/.fingerprint");
     assert.equal(existsSync(path.join(fingerprints, "domain-0123456789abcdef")), false);

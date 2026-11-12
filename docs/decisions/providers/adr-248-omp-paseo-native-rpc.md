@@ -13,8 +13,8 @@ amends:
   - workspace/adr-215-sandboxed-worktree-isolation.md
   - workspace/adr-223-linux-worktree-sandbox.md
 paths:
-  - crates/provider-omp
-  - crates/provider
+  - crates/provider/omp
+  - crates/provider/runtime
   - bins/daemon
 ---
 

@@ -5,8 +5,8 @@ date: 2026-10-19
 amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测

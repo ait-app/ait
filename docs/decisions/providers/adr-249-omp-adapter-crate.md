@@ -7,12 +7,12 @@ amends:
   - providers/adr-179-provider-owned-tests.md
   - daemon/adr-116-crate-visibility.md
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
   - bins/daemon
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-builtin
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/builtin
 ---
 
 # ADR-249：OMP 适配器独立为 `provider-omp` crate

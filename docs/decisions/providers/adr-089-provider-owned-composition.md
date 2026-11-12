@@ -6,9 +6,9 @@ amends:
   - providers/adr-031-daemon-provider.md
   - providers/adr-058-daemon-metadata-generation.md
 paths:
-  - crates/provider
-  - crates/provider-builtin
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/builtin
+  - crates/provider/opencode
 ---
 
 # ADR-089：内置 Provider 装配归 provider crate

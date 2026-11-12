@@ -7,7 +7,7 @@ amends:
   - workspace/adr-043-daemon-skills.md
   - workspace/adr-113-filesystem-capability-groups.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-129：Agent Skills 能力组归 provider

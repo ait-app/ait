@@ -5,9 +5,9 @@ date: 2026-11-11
 amends:
   - providers/adr-206-opencode-acp-subagents.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - apps/mobile
-  - crates/provider-opencode
+  - crates/provider/opencode
 ---
 
 # ADR-237：OpenCode 子会话终态只读核对

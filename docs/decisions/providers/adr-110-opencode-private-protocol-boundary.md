@@ -5,8 +5,8 @@ date: 2026-10-08
 amends:
   - providers/adr-074-opencode-native-provider.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-110：OpenCode 双版本私有协议边界

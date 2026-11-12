@@ -5,12 +5,12 @@ date: 2026-10-20
 amends:
   - providers/adr-119-native-account-usage-and-codex-speed.md
 paths:
-  - crates/provider
-  - crates/provider-core
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/core
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/codex
 ---
 
 # ADR-167：用量缓存按原生账号与成功快照隔离

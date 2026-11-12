@@ -7,19 +7,19 @@ use super::Tree;
 const FILES: &[(&str, &[u8])] = &[
     (
         "SKILL.md",
-        include_bytes!("../../../../../../skills/ait-orchestration/SKILL.md"),
+        include_bytes!("../../../../../../../skills/ait-orchestration/SKILL.md"),
     ),
     (
         "agents/openai.yaml",
-        include_bytes!("../../../../../../skills/ait-orchestration/agents/openai.yaml"),
+        include_bytes!("../../../../../../../skills/ait-orchestration/agents/openai.yaml"),
     ),
     (
         "references/operations.md",
-        include_bytes!("../../../../../../skills/ait-orchestration/references/operations.md"),
+        include_bytes!("../../../../../../../skills/ait-orchestration/references/operations.md"),
     ),
     (
         "references/mcp-access.md",
-        include_bytes!("../../../../../../skills/ait-orchestration/references/mcp-access.md"),
+        include_bytes!("../../../../../../../skills/ait-orchestration/references/mcp-access.md"),
     ),
 ];
 

@@ -35,7 +35,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 为 RPC 建立路由分类：Provider 查询、Agent 只读、Agent 生命周期、前台控制、跨 Agent 的目录操作。身份解析完成后按稳定 Agent ID 调度。
 - [x] 明确 session、active turn、pending terminal、input receipt、history hydration 和可读 snapshot 的所有者。定义生命周期与前台操作的冲突、事件屏障和失败后的重试规则。
 
-涉及：[service/agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)、[rpc/agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs)、[service/agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)。
+涉及：[service/agent_execution.rs](../../../crates/provider/runtime/src/service/agent_execution.rs)、[rpc/agent_execution.rs](../../../crates/provider/runtime/src/rpc/agent_execution.rs)、[service/agent_manager.rs](../../../crates/provider/runtime/src/service/agent_manager.rs)。
 
 验收：每个现有入口都有明确执行归属，所有修改同一 native session 的入口都经过其所有者；兼容 façade 不能同时通过旧 manager 和新 actor 操作同一 session。
 
@@ -45,7 +45,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] client registry 共享同一组工厂引用，catalog 成为独立共享服务；AgentManager 保留兼容访问入口。
 - [x] AgentExecution 保留可克隆入口，内部组合独立 catalog、Agent 调度器与读取服务。
 
-涉及：[ports/agent_session.rs](../../../crates/provider-core/src/ports/agent_session.rs)、[service/agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)、[service/agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)、[daemon host](../../../bins/daemon/src/host.rs)。
+涉及：[ports/agent_session.rs](../../../crates/provider/core/src/ports/agent_session.rs)、[service/agent_manager.rs](../../../crates/provider/runtime/src/service/agent_manager.rs)、[service/agent_execution.rs](../../../crates/provider/runtime/src/service/agent_execution.rs)、[daemon host](../../../bins/daemon/src/host.rs)。
 
 验收：客户端工厂可并发使用，live session 仍保持独占所有权；各 Provider 的 adapter 契约测试通过。
 
@@ -58,7 +58,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 发现设置超时；失败只更新对应 Provider。按条目维护有效期与发现 generation，选中一个 Provider 刷新不能把其他条目误标为新鲜。
 - [x] 保留 scope 数量上限和内容 hash；scope 淘汰、刷新替换、停机后的旧结果不得重新写回缓存。
 
-涉及：[service/provider_catalog.rs](../../../crates/provider/src/service/provider_catalog.rs)、其 [scope](../../../crates/provider/src/service/provider_catalog/scope.rs) 和 [draft](../../../crates/provider/src/service/provider_catalog/draft.rs)、[protocol/provider.rs](../../../crates/provider/src/protocol/provider.rs)、[rpc/agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs)。
+涉及：[service/provider_catalog.rs](../../../crates/provider/runtime/src/service/provider_catalog.rs)、其 [scope](../../../crates/provider/runtime/src/service/provider_catalog/scope.rs) 和 [draft](../../../crates/provider/runtime/src/service/provider_catalog/draft.rs)、[protocol/provider.rs](../../../crates/provider/runtime/src/protocol/provider.rs)、[rpc/agent_execution.rs](../../../crates/provider/runtime/src/rpc/agent_execution.rs)。
 
 验收：阻塞一个 discovery 时，另一个 Provider 能完成，Agent 查询、cancel 与事件处理能继续；相同 scope 的并发读取只执行一次发现。
 
@@ -70,7 +70,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] Workspace 退役、自动归档和级联操作先确定目标集合，再逐 Agent 执行，避免持有多个 Agent 的执行权相互等待。创建提交时重查 Workspace 和 Agent 的有效状态。
 - [x] 关闭失败保留 writer 所有权；归档或删除部分成功时仍清理相应 writer。没有 writer 和在途任务的空闲调度项可以回收；watch 观察记录独立保留。
 
-涉及：[service/agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)、[resume.rs](../../../crates/provider/src/service/agent_manager/resume.rs)、[native_sessions.rs](../../../crates/provider/src/service/agent_manager/native_sessions.rs)、[auto_archive.rs](../../../crates/provider/src/service/agent_manager/auto_archive.rs)、[service/agent_runtime.rs](../../../crates/provider/src/service/agent_runtime.rs)、[rpc/agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs)。
+涉及：[service/agent_manager.rs](../../../crates/provider/runtime/src/service/agent_manager.rs)、[resume.rs](../../../crates/provider/runtime/src/service/agent_manager/resume.rs)、[native_sessions.rs](../../../crates/provider/runtime/src/service/agent_manager/native_sessions.rs)、[auto_archive.rs](../../../crates/provider/runtime/src/service/agent_manager/auto_archive.rs)、[service/agent_runtime.rs](../../../crates/provider/runtime/src/service/agent_runtime.rs)、[rpc/agent_execution.rs](../../../crates/provider/runtime/src/rpc/agent_execution.rs)。
 
 验收：Agent A 的慢恢复、关闭不影响 B；同一 Agent 的重复恢复只产生一个 writer；归档、删除与恢复竞争不会重新激活 Agent。
 
@@ -81,7 +81,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] voice 的取消继续绑定已接纳的 turnId，不能取消后续 turn；客户端断开不取消普通已接纳输入。
 - [x] native 操作产生的配置事件先处理，再提交显式配置结果；本次 turn 使用的配置保持确定。
 
-涉及：[agent_manager/delivery.rs](../../../crates/provider/src/service/agent_manager/delivery.rs)、[controls.rs](../../../crates/provider/src/service/agent_manager/controls.rs)、[rpc controls](../../../crates/provider/src/rpc/agent_execution/controls.rs)、[rpc voice](../../../crates/provider/src/rpc/agent_execution/voice.rs)、[execution voice](../../../crates/provider/src/service/agent_execution/voice.rs)。
+涉及：[agent_manager/delivery.rs](../../../crates/provider/runtime/src/service/agent_manager/delivery.rs)、[controls.rs](../../../crates/provider/runtime/src/service/agent_manager/controls.rs)、[rpc controls](../../../crates/provider/runtime/src/rpc/agent_execution/controls.rs)、[rpc voice](../../../crates/provider/runtime/src/rpc/agent_execution/voice.rs)、[execution voice](../../../crates/provider/runtime/src/service/agent_execution/voice.rs)。
 
 验收：send/cancel、permission/config、rewind/send 竞争时没有重复接纳、错误 turn 取消或旧配置覆盖。
 
@@ -93,7 +93,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 以 session generation 和 turnId 隔离旧 session 的事件；terminal、config、permission、replacement 使用必要的提交屏障。只有持久化完成后更新快照和发布完成状态。
 - [x] 标题生成、自动归档与待输入派发按所属 Agent 或 Workspace 唤醒，其慢外部工作不占全局事件处理路径。
 
-涉及：[agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)、[streaming.rs](../../../crates/provider/src/service/agent_manager/streaming.rs)、[generated_titles.rs](../../../crates/provider/src/service/agent_manager/generated_titles.rs)、[auto_archive.rs](../../../crates/provider/src/service/agent_manager/auto_archive.rs)、[agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)。
+涉及：[agent_manager.rs](../../../crates/provider/runtime/src/service/agent_manager.rs)、[streaming.rs](../../../crates/provider/runtime/src/service/agent_manager/streaming.rs)、[generated_titles.rs](../../../crates/provider/runtime/src/service/agent_manager/generated_titles.rs)、[auto_archive.rs](../../../crates/provider/runtime/src/service/agent_manager/auto_archive.rs)、[agent_execution.rs](../../../crates/provider/runtime/src/service/agent_execution.rs)。
 
 验收：慢 discovery 和其他 Agent 的关闭期间，运行中的流事件持续处理；落盘失败不提前公布 idle，恢复后能按顺序提交。
 
@@ -104,7 +104,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 原生历史读取在有界后台任务执行，结果提交进入目标 Agent 的协调路径；提交前检查删除、归档、rewind、replacement 与 generation 变化。
 - [x] close 与后续 resume 设置加载屏障；慢旧历史不能覆盖新 epoch 或在完成后重新创建已删除记录。
 
-涉及：[AgentManager::load_timeline](../../../crates/provider/src/service/agent_manager.rs)、[rpc timeline 入口](../../../crates/provider/src/rpc/agent_execution.rs)、[native_sessions.rs](../../../crates/provider/src/service/agent_manager/native_sessions.rs)、[storage/timeline.rs](../../../crates/provider/src/storage/timeline.rs)。
+涉及：[AgentManager::load_timeline](../../../crates/provider/runtime/src/service/agent_manager.rs)、[rpc timeline 入口](../../../crates/provider/runtime/src/rpc/agent_execution.rs)、[native_sessions.rs](../../../crates/provider/runtime/src/service/agent_manager/native_sessions.rs)、[storage/timeline.rs](../../../crates/provider/runtime/src/storage/timeline.rs)。
 
 验收：同一 Agent 并发历史请求只读一次原生历史，不同 Agent 可并发；rewind/delete 与 hydration 竞争时旧结果被拒绝。
 
@@ -115,7 +115,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 事件订阅的身份验证改为一次有界批量读取，保留身份解析、订阅激活与事件缓冲顺序。
 - [x] Agent 目录订阅与 sync 使用读取投影，保留 generation、seq、删除与增量同步语义。存储读锁和序列化使用独立有界预算。
 
-涉及：[connection.rs](../../../crates/provider/src/connection.rs)、[connection/directory.rs](../../../crates/provider/src/connection/directory.rs)、[rpc/agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs)、[rpc/agent_runtime/listing.rs](../../../crates/provider/src/rpc/agent_runtime/listing.rs)、[storage/timeline.rs](../../../crates/provider/src/storage/timeline.rs)。
+涉及：[connection.rs](../../../crates/provider/runtime/src/connection.rs)、[connection/directory.rs](../../../crates/provider/runtime/src/connection/directory.rs)、[rpc/agent_execution.rs](../../../crates/provider/runtime/src/rpc/agent_execution.rs)、[rpc/agent_runtime/listing.rs](../../../crates/provider/runtime/src/rpc/agent_runtime/listing.rs)、[storage/timeline.rs](../../../crates/provider/runtime/src/storage/timeline.rs)。
 
 验收：一个 Agent 的创建或关闭未完成时，另一个 Agent 的目录、订阅和已加载 timeline 请求可以完成，且订阅没有缺口或重复基线。
 
@@ -125,7 +125,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] wait 同时监听状态、deadline、连接取消与停机；等待者不占生命周期或前台命令槽。
 - [x] 保留 permission、error、timeout、lastMessage 和归档后完成文本的语义；只有 durable running、没有 live writer 时不能报告成功。
 
-涉及：[agent_execution/waits.rs](../../../crates/provider/src/service/agent_execution/waits.rs)、[dispatch/agent_execution.rs](../../../crates/provider/src/dispatch/agent_execution.rs)、[rpc/agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs)。
+涉及：[agent_execution/waits.rs](../../../crates/provider/runtime/src/service/agent_execution/waits.rs)、[dispatch/agent_execution.rs](../../../crates/provider/runtime/src/dispatch/agent_execution.rs)、[rpc/agent_execution.rs](../../../crates/provider/runtime/src/rpc/agent_execution.rs)。
 
 验收：多等待者不制造全局命令流；terminal 落盘失败期间 wait 保持未完成；取消等待不取消已接纳 turn。
 
@@ -136,7 +136,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 检查 scope 切换、并发 refetch 与推送的覆盖顺序，旧响应不能回滚已应用的新快照；需要新增协议字段时同步 Rust、TS schema、SDK 和能力协商。
 - [x] 模型选择与创建表单继续验证实际 Provider 能力，不能把临时 loading 误当成永久 unavailable。
 
-涉及：[providers-snapshot.ts](../../../apps/mobile/src/data/providers-snapshot.ts)、[use-providers-snapshot.ts](../../../apps/mobile/src/hooks/use-providers-snapshot.ts)、[rust-daemon/messages.ts](../../../packages/client/src/protocol/messages.ts)、[client daemon-client.ts](../../../packages/client/src/daemon-client.ts)、[protocol/provider.rs](../../../crates/provider/src/protocol/provider.rs)。
+涉及：[providers-snapshot.ts](../../../apps/mobile/src/data/providers-snapshot.ts)、[use-providers-snapshot.ts](../../../apps/mobile/src/hooks/use-providers-snapshot.ts)、[rust-daemon/messages.ts](../../../packages/client/src/protocol/messages.ts)、[client daemon-client.ts](../../../packages/client/src/daemon-client.ts)、[protocol/provider.rs](../../../crates/provider/runtime/src/protocol/provider.rs)。
 
 验收：首次 loading 后收到 ready/error；手动刷新有明确完成或失败状态；切换目录不串用模型，旧 GET 不覆盖新推送。
 
@@ -148,7 +148,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 统一登记 catalog、hydration、actor、生成任务与 native child 的生命周期。停机先拒绝新工作，再按任务类型停止刷新或 drain 已接纳操作，关闭 session 并回收子进程，最后释放 data-directory lease。
 - [x] daemon 组装与 API 的 daemon snapshot 查询使用新的 catalog 和读取入口，保留错误码、能力声明、voice/schedule 调用与断线后的任务所有权。
 
-涉及：[daemon host](../../../bins/daemon/src/host.rs)、[agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)、[dispatch/agent_execution.rs](../../../crates/provider/src/dispatch/agent_execution.rs)、[API connection dispatch](../../../crates/api/src/connection/dispatch.rs)、[model runtime](../../../crates/model/src/runtime.rs)。
+涉及：[daemon host](../../../bins/daemon/src/host.rs)、[agent_execution.rs](../../../crates/provider/runtime/src/service/agent_execution.rs)、[dispatch/agent_execution.rs](../../../crates/provider/runtime/src/dispatch/agent_execution.rs)、[API connection dispatch](../../../crates/api/src/connection/dispatch.rs)、[model runtime](../../../crates/model/src/runtime.rs)。
 
 验收：并发创建不会突破 session 上限，任务过载有明确拒绝；关闭失败不丢失所有权；停机、调用者取消和错误展开都不会留下失管子进程或提前释放实例锁。
 
@@ -159,7 +159,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 记录按操作类别的 queue wait、native I/O、history、事件提交延迟和在途任务数，区分 catalog、Agent 生命周期、前台控制与读取预算的等待。
 - [x] 每批运行直接相关 Rust/客户端测试以及格式和 lint；准备提交时执行仓库规定的完整检查。同步更新架构、ADR 和本清单的完成状态。
 
-测试入口：[catalog tests](../../../crates/provider/src/service/provider_catalog/tests.rs)、[manager tests](../../../crates/provider/src/service/agent_manager/tests.rs)、[execution tests](../../../crates/provider/src/service/agent_execution/tests.rs)、[目录订阅 tests](../../../crates/provider/src/connection/directory/tests.rs)、[daemon process tests](../../../bins/daemon/tests/process/agent_execution.rs)、[Provider hook tests](../../../apps/mobile/src/hooks/use-providers-snapshot.test.ts)。
+测试入口：[catalog tests](../../../crates/provider/runtime/src/service/provider_catalog/tests.rs)、[manager tests](../../../crates/provider/runtime/src/service/agent_manager/tests.rs)、[execution tests](../../../crates/provider/runtime/src/service/agent_execution/tests.rs)、[目录订阅 tests](../../../crates/provider/runtime/src/connection/directory/tests.rs)、[daemon process tests](../../../bins/daemon/tests/process/agent_execution.rs)、[Provider hook tests](../../../apps/mobile/src/hooks/use-providers-snapshot.test.ts)。
 
 验收：正确性场景通过，慢操作不再引入跨 Agent 的整段排队等待；指标能够分别定位任务执行时间与预算等待。
 

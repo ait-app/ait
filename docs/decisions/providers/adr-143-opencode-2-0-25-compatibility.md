@@ -6,9 +6,9 @@ amends:
   - providers/adr-115-opencode-acp-provider.md
   - providers/adr-135-opencode-catalog-readiness.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/opencode
 ---
 
 # ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界

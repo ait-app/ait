@@ -5,9 +5,9 @@ date: 2026-10-14
 amends:
   - providers/adr-122-codex-computer-use-approval.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/codex
 ---
 
 # ADR-149：Codex 高权限档位自动批准 computer use 访问

@@ -3,17 +3,17 @@ id: ADR-215
 status: accepted
 date: 2026-11-06
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/domain
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别

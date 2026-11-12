@@ -5,20 +5,20 @@ date: 2026-11-11
 amends:
   - providers/adr-052-native-provider-capabilities.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - bins/daemon
   - packages/protocol
   - packages/client
   - apps/mobile
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-246：按 Host 记录的 Harness 用量账本

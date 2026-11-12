@@ -3,8 +3,8 @@ id: ADR-050
 status: accepted
 date: 2026-09-26
 paths:
-  - crates/provider
-  - crates/provider-claude
+  - crates/provider/runtime
+  - crates/provider/claude
 ---
 
 # ADR-050：独立 server 的 Claude Code Provider

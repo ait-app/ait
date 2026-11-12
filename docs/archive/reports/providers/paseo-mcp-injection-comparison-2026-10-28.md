@@ -61,11 +61,11 @@ Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅�
 | 验证             | 已有 MCP 服务端进程测试，但未覆盖 daemon 自动填充配置                              | 增加原生启动参数捕获、自动调用、恢复、第二轮输入、配置切换及不落盘验证                  |
 
 证据：[host](../../../../bins/daemon/src/host.rs#L85)、
-[会话配置契约](../../../../crates/provider-core/src/ports/agent_session.rs#L31)、
-[创建与持久化](../../../../crates/provider/src/service/agent_manager.rs#L487)、
-[resume](../../../../crates/provider/src/service/agent_manager.rs#L607)、
-[restore](../../../../crates/provider/src/service/agent_manager/resume.rs#L31)、
-[后续输入](../../../../crates/provider/src/service/agent_manager.rs#L785)、
+[会话配置契约](../../../../crates/provider/core/src/ports/agent_session.rs#L31)、
+[创建与持久化](../../../../crates/provider/runtime/src/service/agent_manager.rs#L487)、
+[resume](../../../../crates/provider/runtime/src/service/agent_manager.rs#L607)、
+[restore](../../../../crates/provider/runtime/src/service/agent_manager/resume.rs#L31)、
+[后续输入](../../../../crates/provider/runtime/src/service/agent_manager.rs#L785)、
 [鉴权及 query 拒绝](../../../../crates/api/src/lib.rs#L452)、
 [身份头](../../../../crates/api/src/mcp.rs#L211)、
 [配置默认值](../../../../crates/persistence/src/storage/daemon_config.rs#L43)、
@@ -74,8 +74,8 @@ Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅�
 尤其要处理后续输入：当前 manager 每次调用 `start_input` 都从 record 读取持久配置。
 如果只在创建时增加 MCP，Codex 的配置对比可能将其视为一次 MCP 配置变更并重新打开原生进程；
 DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这里是根据调用代码得出的实现风险，
-不是本次复现的故障。来源：[Codex](../../../../crates/provider-codex/src/lib.rs#L601)、
-[DSH ACP](../../../../crates/provider-deepseek-harness/src/session.rs#L105)。
+不是本次复现的故障。来源：[Codex](../../../../crates/provider/codex/src/lib.rs#L601)、
+[DSH ACP](../../../../crates/provider/deepseek-harness/src/session.rs#L105)。
 
 ### Ait Provider 现状
 
@@ -87,12 +87,12 @@ DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这�
 | OpenCode ACP                | 当前拒绝 `mcp_servers`，新建会话传空 MCP 列表            | 补 ACP MCP 能力或原生工具适配；不能统一强塞配置        |
 | DSH native、Pi、Antigravity | 当前拒绝非空 MCP 配置                                    | 补各自原生工具或 MCP 适配；仅分发 Skill 不会提供工具   |
 
-证据：[Codex/Claude 转换](../../../../crates/provider-native/src/configuration.rs#L138)、
-[DSH ACP 转换](../../../../crates/provider-deepseek-harness/src/config.rs#L61)、
-[OpenCode](../../../../crates/provider-opencode/src/config.rs#L38)、
-[DSH native](../../../../crates/provider-deepseek-harness/src/native/config.rs#L17)、
-[Pi](../../../../crates/provider-pi/src/config.rs#L27)、
-[Antigravity](../../../../crates/provider-antigravity/src/config.rs#L26)。
+证据：[Codex/Claude 转换](../../../../crates/provider/native/src/configuration.rs#L138)、
+[DSH ACP 转换](../../../../crates/provider/deepseek-harness/src/config.rs#L61)、
+[OpenCode](../../../../crates/provider/opencode/src/config.rs#L38)、
+[DSH native](../../../../crates/provider/deepseek-harness/src/native/config.rs#L17)、
+[Pi](../../../../crates/provider/pi/src/config.rs#L27)、
+[Antigravity](../../../../crates/provider/antigravity/src/config.rs#L26)。
 
 ## 建议实施顺序
 

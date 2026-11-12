@@ -5,11 +5,11 @@ date: 2026-11-08
 amends:
   - workspace/adr-215-sandboxed-worktree-isolation.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-claude
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/claude
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-223：Linux 沙箱化 Worktree

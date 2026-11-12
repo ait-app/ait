@@ -5,8 +5,8 @@ date: 2026-10-25
 amends:
   - providers/adr-180-omp-native-rpc-provider.md
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
 ---
 
 # ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口

@@ -3,14 +3,14 @@ id: ADR-150
 status: accepted
 date: 2026-10-13
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-150：所有 Provider 的上下文压缩生命周期提示

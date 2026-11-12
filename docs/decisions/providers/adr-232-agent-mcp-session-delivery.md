@@ -5,9 +5,9 @@ date: 2026-11-10
 amends:
   - providers/adr-202-agent-mcp-injection.md
 paths:
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/deepseek-harness
 ---
 
 # ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付

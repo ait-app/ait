@@ -5,8 +5,8 @@ date: 2026-10-08
 amends:
   - providers/adr-082-deepseek-harness-native-host.md
 paths:
-  - crates/provider
-  - crates/provider-deepseek-harness
+  - crates/provider/runtime
+  - crates/provider/deepseek-harness
 ---
 
 # ADR-147：DSH 原生插件情景模式与权限分离

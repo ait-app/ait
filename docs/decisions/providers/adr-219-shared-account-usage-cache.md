@@ -3,10 +3,10 @@ id: ADR-219
 status: accepted
 date: 2026-11-08
 paths:
-  - crates/provider
-  - crates/provider-core
-  - crates/provider-claude
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/core
+  - crates/provider/claude
+  - crates/provider/codex
 ---
 
 # ADR-219：共享套餐缓存与 Codex 查询进程

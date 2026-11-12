@@ -1,6 +1,7 @@
 //! Architectural regression guard, including optional, target-specific, dev and build edges.
 
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Cargo passes the complete package dependency set to this integration test.
@@ -271,8 +272,8 @@ fn violations(packages: &[Value]) -> Vec<String> {
     violations
 }
 
-#[test]
-fn all_workspace_dependency_edges_follow_current_adrs() {
+/// `cargo metadata` for this workspace; without dependencies, `packages` lists only its members.
+fn workspace_metadata() -> Value {
     let output = Command::new(env!("CARGO"))
         .args(["metadata", "--format-version", "1", "--no-deps", "--locked"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -283,7 +284,35 @@ fn all_workspace_dependency_edges_follow_current_adrs() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let metadata: Value = serde_json::from_slice(&output.stdout).unwrap();
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+#[test]
+fn every_provider_crate_directory_is_a_workspace_member() {
+    // ADR-273: the root manifest excludes `crates/provider` from `crates/*` and lists its crates,
+    // so Cargo leaves an unlisted one out of the workspace without reporting an error.
+    let metadata = workspace_metadata();
+    let members: BTreeSet<PathBuf> = metadata["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|package| PathBuf::from(package["manifest_path"].as_str().unwrap()))
+        .collect();
+    let family = Path::new(metadata["workspace_root"].as_str().unwrap()).join("crates/provider");
+    let unlisted: Vec<PathBuf> = std::fs::read_dir(family)
+        .unwrap()
+        .map(|entry| entry.unwrap().path().join("Cargo.toml"))
+        .filter(|manifest| manifest.exists() && !members.contains(manifest))
+        .collect();
+    assert!(
+        unlisted.is_empty(),
+        "provider crates missing from the workspace members: {unlisted:?}"
+    );
+}
+
+#[test]
+fn all_workspace_dependency_edges_follow_current_adrs() {
+    let metadata = workspace_metadata();
     let violations = violations(metadata["packages"].as_array().unwrap());
     assert!(
         violations.is_empty(),
@@ -860,8 +889,8 @@ fn relay_owns_rpc_using_model_contracts_without_host_or_business_dependencies() 
 
 #[test]
 fn independent_capability_sources_do_not_import_metadata_contracts_or_storage() {
-    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
-    for capability in ["provider", "terminal", "filesystem"] {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
+    for capability in ["provider/runtime", "terminal", "filesystem"] {
         let mut pending = vec![crates.join(capability).join("src")];
         while let Some(directory) = pending.pop() {
             for entry in std::fs::read_dir(directory).unwrap() {

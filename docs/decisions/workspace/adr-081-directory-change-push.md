@@ -4,7 +4,7 @@ status: accepted
 date: 2026-10-04
 paths:
   - crates/metadata
-  - crates/provider
+  - crates/provider/runtime
   - crates/model
 ---
 

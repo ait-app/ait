@@ -5,8 +5,8 @@ date: 2026-10-21
 amends:
   - providers/adr-175-restore-provider-recovery.md
 paths:
-  - crates/provider
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/codex
 ---
 
 # ADR-177：Codex 宿主异常重启后的继续执行与失败上报

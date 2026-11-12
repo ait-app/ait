@@ -9,7 +9,7 @@ async fn opencode_workspace_creation_returns_frontend_compatible_resume_handles(
     let program = fixture.root.path().join("opencode");
     std::os::unix::fs::symlink(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../crates/provider-opencode/tests/fixtures/opencode_acp.py"),
+            .join("../../crates/provider/opencode/tests/fixtures/opencode_acp.py"),
         &program,
     )
     .unwrap();

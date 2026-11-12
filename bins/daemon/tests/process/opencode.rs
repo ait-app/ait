@@ -148,7 +148,7 @@ fn fixture() -> super::native::NativeFixture {
     let program = fixture.root.path().join("opencode");
     std::os::unix::fs::symlink(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../crates/provider-opencode/tests/fixtures/opencode_acp.py"),
+            .join("../../crates/provider/opencode/tests/fixtures/opencode_acp.py"),
         &program,
     )
     .unwrap();

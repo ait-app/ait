@@ -6,8 +6,8 @@ amends:
   - providers/adr-153-opencode-acp-cold-start-budget.md
   - providers/adr-159-opencode-acp-native-observation.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-178：OpenCode 轻量可用性探测与冷恢复预算

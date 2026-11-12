@@ -6,8 +6,8 @@ amends:
   - providers/adr-180-omp-native-rpc-provider.md
   - providers/adr-190-omp-acp-settlement.md
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
 ---
 
 # ADR-194：OMP 原生空闲状态核对与有界取消

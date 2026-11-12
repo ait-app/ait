@@ -324,7 +324,7 @@ fn provider(base: &std::path::Path, registries: &Registries) -> provider::Servic
     let codex = base.join("codex");
     symlink(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../provider-codex/tests/fixtures/codex_app_server.py"),
+            .join("../provider/codex/tests/fixtures/codex_app_server.py"),
         &codex,
     )
     .unwrap();

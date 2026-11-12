@@ -1,6 +1,6 @@
 # Oh My Pi 现行规格
 
-本页列出 `crates/provider-omp` 当前生效的行为规则，供修改 OMP adapter 前核对。规则只陈述现状；
+本页列出 `crates/provider/omp` 当前生效的行为规则，供修改 OMP adapter 前核对。规则只陈述现状；
 决策过程见 [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 及其修订的
 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)、
 [ADR-194](../decisions/providers/adr-194-omp-settlement-reconciliation.md)、

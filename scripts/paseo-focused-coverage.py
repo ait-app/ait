@@ -54,7 +54,7 @@ SCOPES = [
     ]),
 ]
 # `testing` and Codex `offline` compile only under `cfg(test)` or the `test-support` feature.
-IGNORE = r"/(tests|test_support|testing)(/|\.rs$)|/provider-codex/src/realtime/media/offline\.rs$"
+IGNORE = r"/(tests|test_support|testing)(/|\.rs$)|/provider/codex/src/realtime/media/offline\.rs$"
 
 
 def command(crate, target, filters):
@@ -128,6 +128,17 @@ def line_counts(lines):
     return {"covered": sum(count > 0 for count in lines.values()), "total": len(lines)}
 
 
+def owning_crate(path):
+    """Return the package that owns a repository-relative source path."""
+    parts = Path(path).parts
+    if parts[:2] == ("bins", "daemon"):
+        return "daemon"
+    # `crates/provider/<directory>` holds `provider-<directory>`; `runtime` holds `provider`.
+    if parts[:2] == ("crates", "provider"):
+        return "provider" if parts[2] == "runtime" else f"provider-{parts[2]}"
+    return parts[1]
+
+
 def report():
     raw = TEMP / "coverage.lcov"
     lines = parse_lcov(raw)
@@ -135,8 +146,7 @@ def report():
     selected = {crate for crate, _, _ in SCOPES}
     files = []
     for path, execution in sorted(lines.items()):
-        parts = Path(path).parts
-        crate = "daemon" if parts[:2] == ("bins", "daemon") else parts[1]
+        crate = owning_crate(path)
         if crate not in selected or re.search(IGNORE, "/" + path):
             continue
         changed_execution = {line: count for line, count in execution.items()

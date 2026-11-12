@@ -28,10 +28,15 @@ pub const METHODS: &[MethodSpec] = &[
             self.write_source(root, "crates/owner/src/tests/fixture.rs", '''
 const METHODS: &[MethodSpec] = &[MethodSpec::request("connection.ping")];
 ''')
+            # A crate one level down, as under `crates/provider`, is read as well.
+            self.write_source(root, "crates/group/member/src/rpc.rs", '''
+const METHODS: &[MethodSpec] = &[MethodSpec::request("agent.list.request")];
+''')
             self.assertEqual(read_method_specs(root), {
                 "connection.ping": "request",
                 "terminal.input": "event",
                 "browser.automation.execute.response": "response",
+                "agent.list.request": "request",
             })
 
     def test_rejects_duplicate_names_across_components(self):

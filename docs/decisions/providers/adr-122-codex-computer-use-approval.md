@@ -3,9 +3,9 @@ id: ADR-122
 status: accepted
 date: 2026-10-10
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/codex
 ---
 
 # ADR-122：Codex Auto-review 的 computer use 工具批准

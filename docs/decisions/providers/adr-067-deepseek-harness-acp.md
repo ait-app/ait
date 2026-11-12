@@ -3,10 +3,10 @@ id: ADR-067
 status: accepted
 date: 2026-10-02
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-deepseek-harness
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/deepseek-harness
 ---
 
 # ADR-067：DeepSeek Harness ACP Provider

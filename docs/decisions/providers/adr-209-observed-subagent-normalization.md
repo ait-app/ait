@@ -3,11 +3,11 @@ id: ADR-209
 status: accepted
 date: 2026-10-31
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - apps/mobile
-  - crates/provider-claude
-  - crates/provider-opencode
-  - crates/provider-codex
+  - crates/provider/claude
+  - crates/provider/opencode
+  - crates/provider/codex
 ---
 
 # ADR-209：通过只读登记统一子 Agent 展示
@@ -62,7 +62,7 @@ flowchart LR
 私有观测记录另存根原生 session ID、直接原生父级、只读历史 locator 和 `ready`。
 locator 不进入公共快照，也不写入可用于 resume 的顶层 persistence 字段。
 
-[登记服务](../../../crates/provider/src/service/agent_manager/observed.rs) 按
+[登记服务](../../../crates/provider/runtime/src/service/agent_manager/observed.rs) 按
 `(provider, 根原生 session ID, 原生子 ID)` 的稳定哈希分配不透明 Ait ID。
 跨主机仍由客户端 `(serverId, agentId)` 区分。标题、cwd、工具名不参与身份生成。
 工具调用、任务与日志别名必须先由 adapter 验证；相同原生会话已有 managed 身份时

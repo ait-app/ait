@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE in this directory.
 Rust translations and modifications in crates/metadata/src/model/registry*,
 crates/metadata/src/protocol/workspace*, crates/filesystem/src/protocol/worktrees*,
 crates/filesystem/src/protocol/workspace_recovery*, crates/metadata/src/storage/registry*,
-and crates/provider/src/storage/agent_runtime* derive from:
+and crates/provider/runtime/src/storage/agent_runtime* derive from:
 getpaseo/paseo commit 2c8e8a826810337492cc5a38bb0bbd705b6fb632
 packages/server/src/server/workspace-registry.ts
 packages/server/src/server/workspace-registry-model.ts
@@ -21,17 +21,17 @@ docs/decisions/workspace/adr-030-daemon-filesystem.md.
 Agent protocol/session/runtime modules and Workspace automation ownership were
 consolidated by docs/decisions/providers/adr-031-daemon-provider.md.
 
-Native session and text-turn adaptations in crates/provider-codex/src*,
-crates/provider-core/src/ports/agent_session*, crates/provider/src/service/agent_manager*,
-crates/provider/src/protocol/agent_execution* and crates/provider/src/rpc/agent_execution*
+Native session and text-turn adaptations in crates/provider/codex/src*,
+crates/provider/core/src/ports/agent_session*, crates/provider/runtime/src/service/agent_manager*,
+crates/provider/runtime/src/protocol/agent_execution* and crates/provider/runtime/src/rpc/agent_execution*
 also reference the same pinned commit's packages/server/src/server/agent/agent-sdk-types.ts,
 agent-manager.ts, agent-loading.ts, providers/codex-app-server-agent.ts, and
 providers/codex/app-server-transport.ts. Rust changes use a bounded worker, read-only Codex
 sessions, explicit unsupported options, terminal-result polling and process-group cleanup.
 Scope and differences: docs/decisions/providers/adr-032-daemon-native-provider-execution.md.
 
-Codex protocol compatibility updates in crates/provider-codex/src*,
-crates/provider-native/src/tool_detail/subagent*, and their provider-owned tests also
+Codex protocol compatibility updates in crates/provider/codex/src*,
+crates/provider/native/src/tool_detail/subagent*, and their provider-owned tests also
 reference getpaseo/paseo commit 4f9d9d6de2236486ecc2ad886a2c37f4b92271e0:
 packages/server/src/server/agent/providers/codex-app-server-agent.ts
 packages/server/src/server/agent/providers/codex/app-server-transport.ts

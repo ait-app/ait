@@ -10,7 +10,7 @@ import {
 
 const fixtures = JSON.parse(
   readFileSync(
-    new URL("../../../crates/provider-omp/tests/fixtures/omp_dialogs.json", import.meta.url),
+    new URL("../../../crates/provider/omp/tests/fixtures/omp_dialogs.json", import.meta.url),
     "utf8",
   ),
 );

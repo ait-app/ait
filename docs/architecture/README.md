@@ -41,10 +41,12 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
 `provider-core` 只依赖 `domain` 与 `model`，`provider`、`provider-native`、`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `bot` 直接从它导入端口与协议值，
 不经 `provider` 转发（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+这 12 个 `provider*` crate 的目录都在 `crates/provider/` 下，包名等于 `crates/` 之下的路径以连字符连接
+（`crates/provider/codex` 即 `provider-codex`），唯一的例外是运行时 `provider`，目录为 `crates/provider/runtime`；其余 crate 的目录与包名一致（[ADR-273](../decisions/providers/adr-273-provider-crate-directory.md)）。
 `provider-native` 只依赖 `provider-core` 与 `domain`，只供原生 adapter 共享，`provider` 不依赖它。
 `provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider` 之间没有生产依赖；`provider-builtin` 是唯一注册内置 adapter 的 crate，
 daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。运行时仍有两份按 provider id 键控的部分副本需与它手工保持一致：
-`crates/provider/src/diagnostics.rs` 的诊断来源表（adapter 的覆盖变量与默认程序）和 `crates/provider/src/service/provider_catalog.rs` 的 Catalog 特例。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
+`crates/provider/runtime/src/diagnostics.rs` 的诊断来源表（adapter 的覆盖变量与默认程序）和 `crates/provider/runtime/src/service/provider_catalog.rs` 的 Catalog 特例。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
 `provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。非 dev 边启用会被依赖守卫拒绝。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
@@ -91,8 +93,8 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
-Provider 运行时行为测试归 `crates/provider`（执行与管理器测试驱动 `provider-codex` 的 Codex 假程序），共享工具的归 `crates/provider-native`，Antigravity 的归 `crates/provider-antigravity`，Claude Code 的归 `crates/provider-claude`，Codex 的归 `crates/provider-codex`，DeepSeek Harness 的归 `crates/provider-deepseek-harness`，MiniMax Code 的归 `crates/provider-minimax`，OMP 的归 `crates/provider-omp`，OpenCode 的归 `crates/provider-opencode`，Pi 的归 `crates/provider-pi`，
-需要多个真实 adapter 的装配测试归 `crates/provider-builtin`；daemon 测试覆盖宿主、
+Provider 运行时行为测试归 `crates/provider/runtime`（执行与管理器测试驱动 `provider-codex` 的 Codex 假程序），共享工具的归 `crates/provider/native`，Antigravity 的归 `crates/provider/antigravity`，Claude Code 的归 `crates/provider/claude`，Codex 的归 `crates/provider/codex`，DeepSeek Harness 的归 `crates/provider/deepseek-harness`，MiniMax Code 的归 `crates/provider/minimax`，OMP 的归 `crates/provider/omp`，OpenCode 的归 `crates/provider/opencode`，Pi 的归 `crates/provider/pi`，
+需要多个真实 adapter 的装配测试归 `crates/provider/builtin`；daemon 测试覆盖宿主、
 传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
 [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
 [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)。
