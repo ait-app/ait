@@ -48,6 +48,20 @@ export function rotateDaemonLog(logPath: string, limitBytes = DAEMON_LOG_ROTATE_
 const DAEMON_LOG_FILENAME = "daemon.log";
 // Connection details a later Desktop session needs to reattach to a daemon kept after quit.
 const RETAINED_DAEMON_FILENAME = "desktop-daemon.json";
+// Provider launch configuration belongs to the native adapters. Desktop overrides only
+// its daemon's address, storage and authentication, rather than discarding these settings.
+const PROVIDER_ENVIRONMENT_KEYS: Record<string, true> = {
+  AIT_SERVER_CODEX_BIN: true,
+  AIT_SERVER_CLAUDE_BIN: true,
+  AIT_SERVER_ANTIGRAVITY_BIN: true,
+  AIT_SERVER_OPENCODE_BIN: true,
+  AIT_SERVER_DEEPSEEK_HARNESS_BIN: true,
+  AIT_SERVER_DEEPSEEK_HARNESS_PROFILE: true,
+  AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT: true,
+  AIT_SERVER_PI_BIN: true,
+  AIT_SERVER_OMP_BIN: true,
+  AIT_SERVER_MINIMAX_CODE_BIN: true,
+};
 
 /** Daemon that outlives the Desktop session that launched it; the token stays out of renderers. */
 interface RetainedDaemon {
@@ -549,7 +563,9 @@ export class RustDaemonManager {
     );
     this.token = process.env.AIT_SERVER_TOKEN ?? null;
     const env = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => !key.startsWith("AIT_SERVER_")),
+      Object.entries(process.env).filter(
+        ([key]) => !key.startsWith("AIT_SERVER_") || PROVIDER_ENVIRONMENT_KEYS[key] === true,
+      ),
     );
     // Mobile registrations arrive through the account's separate Hub access link.
     env.AIT_SERVER_HUB_NOTIFICATIONS = process.env.AIT_SERVER_HUB_NOTIFICATIONS ?? "true";
