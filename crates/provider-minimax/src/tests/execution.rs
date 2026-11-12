@@ -1,9 +1,9 @@
 use super::*;
-use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use provider::service::agent_execution::AgentExecution;
+use provider::testing::{Workbench, request};
 
-fn worker(fixture: &Fixture, program: PathBuf) -> AgentExecution {
-    worker_with_client(
+fn worker(fixture: &Workbench, program: PathBuf) -> AgentExecution {
+    provider::testing::worker(
         fixture,
         model::creation::Creations::default(),
         Box::new(
@@ -13,7 +13,7 @@ fn worker(fixture: &Fixture, program: PathBuf) -> AgentExecution {
     .0
 }
 
-async fn discovered_model(execution: &AgentExecution, fixture: &Fixture, live: bool) -> Value {
+async fn discovered_model(execution: &AgentExecution, fixture: &Workbench, live: bool) -> Value {
     let models = request(
         execution,
         "provider.models.list.request",
@@ -54,7 +54,7 @@ async fn discovered_model(execution: &AgentExecution, fixture: &Fixture, live: b
 
 /// Exercise the same catalog, registry, scheduling and timeline API used by AIT clients.
 /// Uses the isolated `fixture` and `program`; `live` selects model prompts over fixture commands.
-pub(super) async fn round_trip(fixture: &Fixture, program: PathBuf, live: bool) {
+pub(super) async fn round_trip(fixture: &Workbench, program: PathBuf, live: bool) {
     let execution = worker(fixture, program.clone());
     let model = discovered_model(&execution, fixture, live).await;
     let created = request(
@@ -144,9 +144,8 @@ pub(super) async fn round_trip(fixture: &Fixture, program: PathBuf, live: bool) 
 
 #[tokio::test]
 async fn ait_catalog_execution_timeline_and_restart_preserve_conversation() {
-    let fixture = Fixture::new();
+    let fixture = Workbench::new();
     std::fs::write(fixture.cwd.join("scenario"), "rejected-model").unwrap();
-    let program =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/local/minimax/tests/fixtures/acp.py");
+    let program = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.py");
     round_trip(&fixture, program, false).await;
 }

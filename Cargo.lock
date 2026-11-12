@@ -2321,6 +2321,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-minimax",
  "provider-omp",
  "serde_json",
  "tempfile",
@@ -2342,6 +2343,25 @@ dependencies = [
  "sha2",
  "thiserror 2.0.20",
  "tokio",
+]
+
+[[package]]
+name = "provider-minimax"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

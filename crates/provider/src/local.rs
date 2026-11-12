@@ -6,6 +6,5 @@ pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod deepseek_harness;
-pub(crate) mod minimax;
 pub(crate) mod opencode;
 pub(crate) mod pi;

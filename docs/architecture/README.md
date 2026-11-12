@@ -18,8 +18,9 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 | `provider-core`    | 适配器实现、运行时驱动的 Provider 端口与协议值 | `domain`、`model`                                                              |
 | `provider-native`  | 原生适配器共享的进程、沙箱、ACP 与媒体工具     | `provider-core`、`domain`                                                      |
 | `provider`         | 原生 Agent、执行、历史、摘要、技能与 MCP 注入  | `provider-core`、`provider-native`、`domain`、`model`                          |
+| `provider-minimax` | MiniMax Code 官方 ACP 适配器                   | `provider-core`、`provider-native`、`domain`                                   |
 | `provider-omp`     | Oh My Pi 原生 RPC 适配器                       | `provider-core`、`provider-native`、`domain`                                   |
-| `provider-builtin` | 内置 adapter 列表、可执行文件默认值与覆盖变量  | `provider`、`provider-omp`                                                     |
+| `provider-builtin` | 内置 adapter 列表、可执行文件默认值与覆盖变量  | `provider`、`provider-minimax`、`provider-omp`                                 |
 | `terminal`         | PTY、快照、活动与订阅                          | `domain`、`model`                                                              |
 | `voice`            | 语音、听写、离线推理与媒体连接                 | `model`                                                                        |
 | `bot`              | Workspace Bot、Channel、隐藏会话与消息协调     | `domain`、`model`、`provider`、`provider-core`                                 |
@@ -32,11 +33,11 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 
 适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
-`provider-core` 只依赖 `domain` 与 `model`，`provider`、`provider-native`、`provider-omp` 与 `bot` 直接从它导入端口与协议值，
+`provider-core` 只依赖 `domain` 与 `model`，`provider`、`provider-native`、`provider-minimax`、`provider-omp` 与 `bot` 直接从它导入端口与协议值，
 不经 `provider` 转发（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 `provider-native` 只依赖 `provider-core` 与 `domain`，供原生 adapter 共享；`provider` 依赖它只因部分 adapter 仍在 crate 内。
-`provider-omp` 与 `provider` 之间没有生产依赖；`provider-builtin` 是唯一列出内置 adapter 的 crate，
-daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。`provider-omp` 与 `provider-builtin` 仅以 dev 边启用
+`provider-minimax`、`provider-omp` 与 `provider` 之间没有生产依赖；`provider-builtin` 是唯一列出内置 adapter 的 crate，
+daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。`provider-minimax`、`provider-omp` 与 `provider-builtin` 仅以 dev 边启用
 `provider` 的 `test-support` feature，非 dev 边启用会被依赖守卫拒绝。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
@@ -68,8 +69,8 @@ metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protoco
 ## Provider 与工作区生命周期
 
 `provider_builtin::providers` 组装内置 adapter：`provider::Providers::configured` 构建 Codex、Claude Code、
-OpenCode、DeepSeek Harness、Antigravity、Pi 与 MiniMax Code，再通过 `Providers::with` 追加 `provider-omp` 的
-Oh My Pi；daemon 只调用这一入口（[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
+OpenCode、DeepSeek Harness、Antigravity 与 Pi，再通过 `Providers::with` 追加 `provider-minimax` 的 MiniMax Code
+与 `provider-omp` 的 Oh My Pi；daemon 只调用这一入口（[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
 [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
 每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
 使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
@@ -83,7 +84,7 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
-Provider 自身行为测试归 `crates/provider`，共享工具的归 `crates/provider-native`，OMP 的归 `crates/provider-omp`，
+Provider 自身行为测试归 `crates/provider`，共享工具的归 `crates/provider-native`，MiniMax Code 的归 `crates/provider-minimax`，OMP 的归 `crates/provider-omp`，
 需要多个真实 adapter 的装配测试归 `crates/provider-builtin`；daemon 测试覆盖宿主、
 传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
 [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)。

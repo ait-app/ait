@@ -51,7 +51,13 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
         Err(AgentManagerError::ProviderUnavailable(provider)) if provider == "missing"
     ));
     assert_eq!(manager.active_turn("missing"), None);
+    assert_eq!(manager.last_message("missing"), None);
     assert!(manager.live_snapshot("missing").is_none());
+    assert!(matches!(
+        manager.configure("missing", &ConfigPatch::default()).await,
+        Err(AgentManagerError::NotFound(agent)) if agent == "missing"
+    ));
+    manager.close("missing").await.unwrap();
     assert!(manager.send("missing", "hello").await.is_err());
     manager.poll().await.unwrap();
     manager.close_all().await.unwrap();

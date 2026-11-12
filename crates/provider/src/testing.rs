@@ -6,18 +6,29 @@
 //! adapter or the built-in assembly from its own crate does not widen the runtime's production
 //! API.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use domain::workspace::registry::WorkspaceMutationContext;
 use model::ErrorCode;
+use model::creation::Creations;
 use model::events::EventHub;
-use serde_json::Value;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use serde_json::{Value, json};
 
 use crate::composition::Providers;
+use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
+use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 use provider_core::ports::controls::NativeSubagent;
+use provider_core::protocol::agent_config::ConfigPatch;
 use provider_core::protocol::timeline::NativeItem;
 
 #[cfg(test)]
@@ -107,6 +118,32 @@ impl Manager {
         self.0.close_all().await
     }
 
+    /// Persist `patch` for the subsequent turns of `agent_id`.
+    ///
+    /// # Errors
+    /// Returns validation, unavailable-provider, archived-agent, or registry errors.
+    pub async fn configure(
+        &self,
+        agent_id: &str,
+        patch: &ConfigPatch,
+    ) -> Result<(), AgentManagerError> {
+        self.0.configure(agent_id, patch).await
+    }
+
+    /// Close the live session of `agent_id`, recording its native handle.
+    ///
+    /// # Errors
+    /// Returns native close or registry failures.
+    pub async fn close(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
+        self.0.close(agent_id).await
+    }
+
+    /// The final assistant text of the latest completed turn of `agent_id`.
+    #[must_use]
+    pub fn last_message(&self, agent_id: &str) -> Option<&str> {
+        self.0.last_message(agent_id)
+    }
+
     /// The active turn of `agent_id`, if one is running.
     #[must_use]
     pub fn active_turn(&self, agent_id: &str) -> Option<&str> {
@@ -123,6 +160,123 @@ impl Manager {
     pub fn control_snapshot(&self, record: &PersistedAgentRuntimeRecord, snapshot: &mut Value) {
         self.0.control_snapshot(record, snapshot);
     }
+}
+
+/// Temporary data root and working directory of one execution test.
+#[derive(Debug)]
+pub struct Workbench {
+    /// Data root holding the file-backed registries and the display timeline.
+    pub root: tempfile::TempDir,
+    /// Existing working directory, registered as the only project and workspace.
+    pub cwd: PathBuf,
+}
+
+impl Workbench {
+    /// Create an empty data root with a `work` directory inside it.
+    ///
+    /// # Panics
+    /// Panics when the temporary directories cannot be created.
+    #[must_use]
+    pub fn new() -> Self {
+        let root = tempfile::tempdir().unwrap();
+        let cwd = root.path().join("work");
+        std::fs::create_dir(&cwd).unwrap();
+        Self { root, cwd }
+    }
+}
+
+impl Default for Workbench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Start an execution worker over file-backed registries in `bench`, with `client` registered.
+///
+/// `creations` is shared with the caller to observe agent creation. Returns the execution
+/// handle and its durable agent registry.
+///
+/// # Panics
+/// Panics when the registries, the timeline or the worker cannot be set up.
+#[must_use]
+pub fn worker(
+    bench: &Workbench,
+    creations: Creations,
+    client: Box<dyn AgentClient>,
+) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
+    spawn(
+        bench.root.path(),
+        &bench.cwd,
+        creations,
+        client,
+        |manager| manager,
+    )
+}
+
+/// Start an execution worker with registries and timeline under `root` and `cwd` registered
+/// as the only project and workspace; `configure` adjusts the manager before `client` is
+/// registered. Panics on setup errors.
+pub(crate) fn spawn(
+    root: &Path,
+    cwd: &Path,
+    creations: Creations,
+    client: Box<dyn AgentClient>,
+    configure: impl FnOnce(AgentManager) -> AgentManager,
+) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
+    let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
+    registry.initialize().unwrap();
+    let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
+    projects.initialize().unwrap();
+    let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
+    workspaces.initialize().unwrap();
+    projects.upsert(&serde_json::from_value(json!({
+        "projectId":"project-1","rootPath":cwd,"kind":"non_git","displayName":"project",
+        "createdAt":"2026-09-24T00:00:00Z","updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
+    })).unwrap()).unwrap();
+    workspaces
+        .upsert(
+            &serde_json::from_value(json!({
+                "workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":cwd,
+                "kind":"local_checkout","displayName":"main","createdAt":"2026-09-24T00:00:00Z",
+                "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
+            }))
+            .unwrap(),
+            WorkspaceMutationContext::default(),
+        )
+        .unwrap();
+    let mut manager = configure(
+        AgentManager::new(Box::new(registry.clone()))
+            .with_creations(creations)
+            .with_timeline(Timeline::open(&root.join("timeline.sqlite")).unwrap()),
+    );
+    manager.register_client(client).unwrap();
+    let worker = AgentExecution::spawn(ExecutionDependencies {
+        workspace_automation: None,
+        manager,
+        directory: AgentRuntimeDirectory::new(
+            Box::new(registry.clone()),
+            Box::new(workspaces.clone()),
+            Box::new(projects.clone()),
+        ),
+        registry: Box::new(registry.clone()),
+        workspaces: Box::new(workspaces),
+        lifetime: Arc::new(()),
+        import_directory: None,
+        projects: Box::new(projects),
+    })
+    .unwrap();
+    (worker, registry)
+}
+
+/// Execute `method` with `params` on `execution` and return its result.
+///
+/// # Panics
+/// Fails the test on an error result or when no result arrives within 30 seconds.
+pub async fn request(execution: &AgentExecution, method: &str, params: Value) -> Value {
+    tokio::time::timeout(Duration::from_secs(30), execution.execute(method, params))
+        .await
+        .unwrap_or_else(|_| panic!("{method} timed out"))
+        .unwrap_or_else(|error| panic!("{method}: {error:?}"))
 }
 
 /// Adapters in `providers`, in assembly order.

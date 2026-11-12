@@ -11,7 +11,7 @@ mod mcp;
 fn fixture() -> (tempfile::TempDir, MiniMaxClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
     let client = MiniMaxClient::new(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/local/minimax/tests/fixtures/acp.py"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/acp.py"),
     )
     .with_image_directory(root.path().join("images"));
     let spec = AgentSessionSpec {

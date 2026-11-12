@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 
 use super::super::client::OpenCodeClient;
 use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use crate::test_support::{Fixture, worker_with_client};
+use crate::testing::request;
 
 fn fixture() -> Fixture {
     let fixture = Fixture::new();

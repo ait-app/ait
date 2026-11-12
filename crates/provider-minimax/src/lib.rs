@@ -19,7 +19,7 @@ const PROVIDER: &str = "minimax-code";
 
 /// Official `MiniMax` Code executable; native credentials and history remain provider-owned.
 #[derive(Debug, Clone)]
-pub(crate) struct MiniMaxClient {
+pub struct MiniMaxClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
@@ -29,7 +29,8 @@ pub(crate) struct MiniMaxClient {
 impl MiniMaxClient {
     /// Select `program` without shell interpretation or installation side effects.
     /// Control requests are bounded to thirty seconds; inference has no host timeout.
-    pub(crate) fn new(program: PathBuf) -> Self {
+    #[must_use]
+    pub fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),
@@ -39,7 +40,8 @@ impl MiniMaxClient {
     }
 
     /// Keep submitted and returned images in the host's durable artifact directory.
-    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    #[must_use]
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = provider_native::images::ImageStore::new(directory);
         self
     }

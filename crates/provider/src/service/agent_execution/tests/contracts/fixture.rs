@@ -5,7 +5,8 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 
 use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use crate::test_support::{Fixture, worker_with_client};
+use crate::testing::request;
 use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,

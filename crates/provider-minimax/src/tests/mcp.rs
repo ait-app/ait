@@ -7,30 +7,33 @@ use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::daemon_config::FileDaemonConfigStore;
 
 use super::*;
-use crate::service::agent_manager::{AgentManager, AgentRegistration};
-use crate::service::agent_mcp::AgentMcp;
+use provider::service::agent_manager::AgentManager;
+use provider::service::agent_mcp::AgentMcp;
+use provider::testing::Manager;
 
 fn manager(
     root: &std::path::Path,
     client: MiniMaxClient,
     port: u16,
     token: &str,
-) -> (AgentManager, FileBackedAgentRuntimeRegistry) {
+) -> (Manager, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
     registry.initialize().unwrap();
     let policy = Arc::new(FileDaemonConfigStore::with_defaults(
         root.join("config.json"),
     ));
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_agent_mcp(AgentMcp::new(
-        format!("127.0.0.1:{port}").parse().unwrap(),
-        token.to_owned().into(),
-        policy,
-    ));
-    manager.register_client(Box::new(client)).unwrap();
+    let mut manager = Manager::new(
+        AgentManager::new(Box::new(registry.clone())).with_agent_mcp(AgentMcp::new(
+            format!("127.0.0.1:{port}").parse().unwrap(),
+            token.to_owned().into(),
+            policy,
+        )),
+    );
+    manager.register(Box::new(client)).unwrap();
     (manager, registry)
 }
 
-async fn turn(manager: &mut AgentManager, id: &str) {
+async fn turn(manager: &mut Manager, id: &str) {
     manager.send(id, "hello").await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while manager.active_turn(id).is_some() {
@@ -50,10 +53,7 @@ async fn injected_mcp_survives_configuration_changes_and_rebinds_on_reopening() 
     let token = uuid::Uuid::new_v4().to_string();
     let renewed = uuid::Uuid::new_v4().to_string();
     let (mut runtime, _) = manager(root.path(), client.clone(), 7316, &token);
-    runtime
-        .create(id, &spec, AgentRegistration::default())
-        .await
-        .unwrap();
+    runtime.create(id, &spec).await.unwrap();
     turn(&mut runtime, id).await;
     runtime
         .configure(

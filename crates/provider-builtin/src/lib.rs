@@ -4,9 +4,10 @@
 //! adapters it holds, their default programs, and the environment variables that override them.
 
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use provider::Providers;
+use provider_minimax::MiniMaxClient;
 use provider_omp::OmpClient;
 
 /// Built-in adapters configured from the process environment and installed native programs.
@@ -26,7 +27,10 @@ pub fn providers(data_dir: &Path) -> Providers {
 #[must_use]
 pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString>) -> Providers {
     let omp = provider_omp::installed_program(&environment);
+    let minimax = environment("AIT_SERVER_MINIMAX_CODE_BIN")
+        .map_or_else(|| PathBuf::from("mcode"), PathBuf::from);
     Providers::configured(data_dir, &environment)
+        .with(|images| MiniMaxClient::new(minimax).with_image_directory(images.to_owned()))
         .with(|images| OmpClient::new(omp).with_image_directory(images.to_owned()))
 }
 

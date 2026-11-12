@@ -3,17 +3,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use domain::agent_runtime::StoredAgentConfig;
-use domain::agent_runtime::registry::AgentRuntimeRegistry;
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::local::codex::CodexClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
-use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
-use crate::service::agent_manager::AgentManager;
-use crate::service::agent_runtime::AgentRuntimeDirectory;
+use crate::service::agent_execution::AgentExecution;
 use provider_core::ports::agent_session::AgentSessionSpec;
 
 pub(crate) mod codex_history;
@@ -82,60 +77,11 @@ pub(crate) fn worker_with_ledger(
     client: Box<dyn provider_core::ports::agent_session::AgentClient>,
     ledger: Arc<dyn UsageLedger>,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
-    let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));
-    registry.initialize().unwrap();
-    let projects = FileBackedProjectRegistry::new(fixture.root.path().join("projects.json"));
-    projects.initialize().unwrap();
-    let workspaces = FileBackedWorkspaceRegistry::new(fixture.root.path().join("workspaces.json"));
-    workspaces.initialize().unwrap();
-    projects.upsert(&serde_json::from_value(json!({
-        "projectId":"project-1","rootPath":fixture.cwd,"kind":"non_git","displayName":"project",
-        "createdAt":"2026-09-24T00:00:00Z","updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-    })).unwrap()).unwrap();
-    workspaces
-        .upsert(
-            &serde_json::from_value(json!({
-                "workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":fixture.cwd,
-                "kind":"local_checkout","displayName":"main","createdAt":"2026-09-24T00:00:00Z",
-                "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-            }))
-            .unwrap(),
-            domain::workspace::registry::WorkspaceMutationContext::default(),
-        )
-        .unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone()))
-        .with_creations(creations)
-        .with_ledger(ledger)
-        .with_timeline(
-            crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
-                .unwrap(),
-        );
-    manager.register_client(client).unwrap();
-    let worker = AgentExecution::spawn(ExecutionDependencies {
-        workspace_automation: None,
-        manager,
-        directory: AgentRuntimeDirectory::new(
-            Box::new(registry.clone()),
-            Box::new(workspaces.clone()),
-            Box::new(projects.clone()),
-        ),
-        registry: Box::new(registry.clone()),
-        workspaces: Box::new(workspaces),
-        lifetime: Arc::new(()),
-        import_directory: None,
-        projects: Box::new(projects),
-    })
-    .unwrap();
-    (worker, registry)
-}
-
-/// Execute `method` with `params` and return its result, failing the test on errors or timeout.
-pub(crate) async fn request(execution: &AgentExecution, method: &str, params: Value) -> Value {
-    tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        execution.execute(method, params),
+    crate::testing::spawn(
+        fixture.root.path(),
+        &fixture.cwd,
+        creations,
+        client,
+        |manager| manager.with_ledger(ledger),
     )
-    .await
-    .unwrap_or_else(|_| panic!("{method} timed out"))
-    .unwrap_or_else(|error| panic!("{method}: {error:?}"))
 }

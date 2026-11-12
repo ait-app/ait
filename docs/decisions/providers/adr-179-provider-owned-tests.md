@@ -8,6 +8,7 @@ paths:
   - crates/provider
   - crates/provider-native
   - crates/provider-core
+  - crates/provider-minimax
 ---
 
 # ADR-179：Provider 自身行为的测试归 provider crate

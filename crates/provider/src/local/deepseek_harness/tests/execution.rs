@@ -6,7 +6,8 @@ use serde_json::json;
 
 use super::super::DeepSeekHarnessClient;
 use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use crate::test_support::{Fixture, worker_with_client};
+use crate::testing::request;
 
 fn worker(fixture: &Fixture) -> AgentExecution {
     let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

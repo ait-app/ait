@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use crate::test_support::request;
+use crate::testing::request;
 use provider_core::protocol::prompt::AgentPrompt;
 
 mod fixture;

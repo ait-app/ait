@@ -10,7 +10,6 @@ use crate::local::antigravity::AntigravityClient;
 use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
-use crate::local::minimax::MiniMaxClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
@@ -97,8 +96,6 @@ impl Providers {
             .with_image_directory(images.clone());
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
-        let minimax = MiniMaxClient::new(program("AIT_SERVER_MINIMAX_CODE_BIN", "mcode"))
-            .with_image_directory(images.clone());
         if let Some(profile) = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE") {
             dsh = dsh.with_native_profile(profile);
         }
@@ -117,7 +114,6 @@ impl Providers {
         providers.add(opencode);
         providers.add(dsh);
         providers.add(pi);
-        providers.add(minimax);
         providers
     }
 

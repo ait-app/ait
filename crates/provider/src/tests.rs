@@ -27,7 +27,6 @@ const ADAPTERS: &[&str] = &[
     "claude",
     "codex",
     "deepseek_harness",
-    "minimax",
     "opencode",
     "pi",
 ];

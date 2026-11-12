@@ -43,7 +43,7 @@ async fn installed_mcode_creates_sessions_for_every_selectable_model() {
 async fn installed_latest_mcode_works_through_ait_and_restores_context() {
     let program =
         std::env::var_os("AIT_TEST_MINIMAX_CODE_BIN").expect("set AIT_TEST_MINIMAX_CODE_BIN");
-    let fixture = crate::test_support::Fixture::new();
+    let fixture = provider::testing::Workbench::new();
     super::execution::round_trip(&fixture, program.into(), true).await;
 }
 

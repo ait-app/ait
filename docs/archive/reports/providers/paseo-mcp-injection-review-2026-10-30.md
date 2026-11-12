@@ -35,11 +35,11 @@ Ait 当前已采用这个主链路：[host](../../../../bins/daemon/src/host.rs)
 ## 本轮已完成的两项补全
 
 1. **MiniMax Code 的 HTTP 能力接线。** 首批开关只声明 Codex、Claude、DSH ACP；但
-   [MiniMax 配置校验](../../../../crates/provider/src/local/minimax/config.rs) 已接受 HTTP MCP，
-   [原生会话](../../../../crates/provider/src/local/minimax/session.rs) 在 `session/new` 与
+   [MiniMax 配置校验](../../../../crates/provider-minimax/src/config.rs) 已接受 HTTP MCP，
+   [原生会话](../../../../crates/provider-minimax/src/session.rs) 在 `session/new` 与
    `session/resume` 中调用共享
    [ACP MCP 转换](../../../../crates/provider-native/src/acp_config.rs)，包含 HTTP headers。
-   本轮已在 [MiniMaxClient](../../../../crates/provider/src/local/minimax.rs) 声明
+   本轮已在 [MiniMaxClient](../../../../crates/provider-minimax/src/lib.rs) 声明
    `supports_agent_mcp = true`，复用现有 HTTP 通路，并在 provider 内验证启动、恢复和多轮
    配置一致。
 2. **配置更新也使用有效配置。**
@@ -49,7 +49,7 @@ Ait 当前已采用这个主链路：[host](../../../../bins/daemon/src/host.rs)
    配置，再传给 `validate_config_update` 与 `validate_selection`；registry 仍只向原记录
    写用户 patch。这与 Paseo 的双配置原则一致，也保持凭证不进入持久配置。
 
-[新增测试](../../../../crates/provider/src/local/minimax/tests/mcp.rs) 使用真实 MiniMax adapter
+[新增测试](../../../../crates/provider-minimax/src/tests/mcp.rs) 使用真实 MiniMax adapter
 与离线 ACP fixture，检查 `session/new`、`session/resume` 的 HTTP URL、Authorization 和
 `X-Ait-Agent-Id`，连续三轮输入与模型、模式更新，真实 MCP 配置变更仍被拒绝，重新打开后
 取得新端口和令牌，以及实际 `agents.json` 和新 registry 快照没有内部凭证。测试不调用

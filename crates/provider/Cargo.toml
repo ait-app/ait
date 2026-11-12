@@ -49,10 +49,12 @@ url.workspace = true
 pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.
 regex.workspace = true
+# File-backed registries behind the `testing` execution worker; only `test-support` enables it.
+persistence = { workspace = true, optional = true }
 
 [features]
 # Runtime test entry points for adapter crates' tests; never enabled by production dependents.
-test-support = []
+test-support = ["dep:persistence"]
 
 [lints]
 workspace = true

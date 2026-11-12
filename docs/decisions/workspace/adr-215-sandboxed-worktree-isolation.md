@@ -7,6 +7,7 @@ paths:
   - crates/domain
   - crates/provider-native
   - crates/provider-core
+  - crates/provider-minimax
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别
