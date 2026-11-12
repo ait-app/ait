@@ -1,0 +1,44 @@
+[package]
+name = "provider-pi"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, diagnostics.
+provider-native.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+# Private per-session MCP extension and settings files.
+tempfile.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+# Decode Pi-supported file URLs in host session configuration.
+url.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Drive the adapter through the runtime's execution worker and AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true
+# Paused clocks for version-probe cooldowns.
+tokio = { workspace = true, features = ["test-util"] }
+# Offline model API fakes for the installed-CLI tests.
+axum.workspace = true
+# Capture native diagnostics logged by the version probe.
+tracing-subscriber.workspace = true
+# Decode the tool-card schema fixture.
+serde.workspace = true
+# Stop the offline model API with its installed-CLI test.
+tokio-util.workspace = true

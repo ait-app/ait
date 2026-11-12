@@ -1,6 +1,6 @@
 //! Native history, listing and subagent transcripts (B7) against the offline peer.
 use super::*;
-use provider::ports::controls::SubagentEvent;
+use provider_core::ports::controls::SubagentEvent;
 
 #[tokio::test]
 async fn live_children_match_the_transcripts_history_discovers() {

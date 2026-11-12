@@ -6,6 +6,7 @@ amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-pi
 ---
 
 # ADR-174: Pi native session import
@@ -14,6 +15,7 @@ paths:
 - Scope: `crates/provider`; extends [ADR-156](adr-156-pi-native-rpc-provider.md).
 - Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for imported thinking preferences
   and next-prompt reasoning controls.
+- The adapter now lives in `crates/provider-pi` ([ADR-270](adr-270-provider-crate-family.md)).
 
 ## Context
 

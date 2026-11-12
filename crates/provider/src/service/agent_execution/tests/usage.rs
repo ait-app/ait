@@ -1,11 +1,12 @@
 use super::*;
 
 use crate::ports::usage_ledger::{
-    CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, RequestUsage, UsageBoundary,
-    UsageLedger,
+    CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, UsageLedger,
 };
 use crate::storage::usage_ledger::SqliteUsageLedger;
-use crate::test_support::{request, worker_with_ledger};
+use crate::test_support::worker_with_ledger;
+use crate::testing::request;
+use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 
 #[tokio::test]
 async fn usage_response_slots_stay_bounded_until_delivery_and_reject_mutations() {
@@ -157,7 +158,7 @@ async fn quota_reads_use_the_live_agent_account_and_validate_the_rpc_shape() {
 #[tokio::test]
 async fn missing_provider_binary_is_omitted_from_host_usage_rpc() {
     let fixture = Fixture::new();
-    let client = crate::local::codex::CodexClient::new(fixture.root.path().join("missing-codex"));
+    let client = provider_codex::CodexClient::new(fixture.root.path().join("missing-codex"));
     let (execution, _) = worker_with_client(
         &fixture,
         model::creation::Creations::default(),

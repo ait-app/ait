@@ -14,7 +14,7 @@ fn version_six_migration_preserves_child_history_and_persists_host_bindings() {
         descriptor: json!({"id":"child","status":"completed"}),
     };
     timeline.store_subagent("root", &child).expect("descriptor");
-    let entry = crate::protocol::timeline::NativeItem {
+    let entry = provider_core::protocol::timeline::NativeItem {
         key: "native:answer".to_owned(),
         turn_id: None,
         timestamp: "2026-10-31T00:00:00Z".to_owned(),
@@ -74,7 +74,7 @@ fn bound_child_events_and_replacements_use_the_canonical_agent_identity() {
         outbound,
     );
     subscription.activate().expect("subscribe");
-    let mut entry = crate::protocol::timeline::NativeItem {
+    let mut entry = provider_core::protocol::timeline::NativeItem {
         key: "native:answer".to_owned(),
         turn_id: Some("turn".to_owned()),
         timestamp: "2026-10-31T00:00:00Z".to_owned(),

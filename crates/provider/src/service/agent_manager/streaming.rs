@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use super::{AgentManager, AgentManagerError, AgentTurnEvent};
-use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::AgentSessionError;
 
 pub(super) fn failure_message(agent: &super::LiveAgent) -> Cow<'_, str> {
     agent
@@ -41,7 +41,7 @@ pub(super) fn prepare_failure(agent: &mut super::LiveAgent) {
             .filter(|diagnostic| diagnostic.will_retry != Some(true));
     }
     let message = failure_message(agent).into_owned();
-    agent.failure_entry = Some(crate::protocol::timeline::NativeItem {
+    agent.failure_entry = Some(provider_core::protocol::timeline::NativeItem {
         key: format!("host:provider-failure:{}", uuid::Uuid::new_v4()),
         turn_id: agent.turn.clone(),
         timestamp: now_timestamp(),
@@ -305,7 +305,7 @@ fn persist_usage(
     timeline: Option<&crate::storage::timeline::Timeline>,
     id: &str,
     agent: &super::LiveAgent,
-    usage: &crate::protocol::usage::AgentUsage,
+    usage: &provider_core::protocol::usage::AgentUsage,
 ) -> Result<(), model::ErrorCode> {
     use model::ErrorCode;
     use serde_json::json;
@@ -389,8 +389,8 @@ pub(super) fn publish_terminal(
     }
     if failed {
         let diagnostic = agent.failure_diagnostic.unwrap_or_else(|| {
-            crate::ports::diagnostics::Diagnostic::new(
-                crate::ports::diagnostics::Category::Unknown,
+            provider_core::ports::diagnostics::Diagnostic::new(
+                provider_core::ports::diagnostics::Category::Unknown,
                 "session",
             )
         });
@@ -434,8 +434,11 @@ impl AgentManager {
         agent_id: &str,
         text: &str,
     ) -> Result<(), AgentManagerError> {
-        self.steer_input(agent_id, &crate::protocol::prompt::AgentPrompt::text(text))
-            .await
+        self.steer_input(
+            agent_id,
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+        )
+        .await
     }
 
     /// Admit all rich content into the active turn, or start a turn if already idle.
@@ -444,7 +447,7 @@ impl AgentManager {
     pub(crate) async fn steer_input(
         &mut self,
         agent_id: &str,
-        prompt: &crate::protocol::prompt::AgentPrompt,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentManagerError> {
         prompt
             .validate()

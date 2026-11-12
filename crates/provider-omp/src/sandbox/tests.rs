@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::*;
-use provider::ports::environment::AgentEnvironment;
+use provider_core::ports::environment::AgentEnvironment;
 
 /// A client whose environment is exactly `variables`, so no daemon value leaks in.
 fn client(variables: &[(&str, &str)]) -> OmpClient {
@@ -58,7 +58,7 @@ fn launch(worktree: &Path, variables: &[(&str, &str)]) -> (Vec<PathBuf>, Vec<Pat
             .iter()
             .find_map(|(key, value)| (*key == name).then(|| (*value).to_owned()))
     };
-    let command = provider::local::sandbox::command(
+    let command = provider_native::sandbox::command(
         Path::new("omp"),
         crate::tests::confinement(worktree).as_ref(),
         state(&client),

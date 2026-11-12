@@ -7,6 +7,8 @@ amends:
   - providers/adr-174-pi-session-import.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-pi
 ---
 
 # ADR-176: Pi user images in the shared timeline projection
@@ -14,6 +16,7 @@ paths:
 - Scope: `crates/provider`; extends the user-image projection from
   [ADR-157](adr-157-codex-user-image-projection.md) to Pi's live input and
   [ADR-174](adr-174-pi-session-import.md) native history import and explicit refresh.
+- The adapter now lives in `crates/provider-pi` ([ADR-270](adr-270-provider-crate-family.md)).
 
 ## Context
 

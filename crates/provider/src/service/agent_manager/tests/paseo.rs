@@ -1,8 +1,8 @@
 //! Lifecycle/stream contracts adapted from Paseo's `AgentManager` regression suites.
 
-use crate::protocol::timeline::NativeItem;
 use crate::storage::timeline;
 use crate::storage::timeline::Timeline;
+use provider_core::protocol::timeline::NativeItem;
 
 use super::*;
 
@@ -388,9 +388,9 @@ async fn large_completed_tool_result_is_saved_without_closing_the_native_session
 
 #[tokio::test]
 async fn oversized_codex_mcp_result_preserves_the_session_history_and_next_turn() {
-    use crate::ports::agent_session::AgentClient;
+    use provider_core::ports::agent_session::AgentClient;
 
-    let fixture = crate::test_support::Fixture::new();
+    let fixture = provider_codex::testing::Fixture::new();
     let client = fixture.client();
     let registry = MemoryRegistry::default();
     let timeline = Timeline::memory().unwrap();
@@ -488,7 +488,7 @@ async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
 
 #[tokio::test]
 async fn classified_failures_are_durable_visible_and_not_duplicated_on_cleanup_retry() {
-    use crate::ports::diagnostics::{Category, Diagnostic};
+    use provider_core::ports::diagnostics::{Category, Diagnostic};
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();
     manager = manager.with_timeline(timeline.clone());

@@ -6,12 +6,14 @@ amends:
   - providers/adr-175-restore-provider-recovery.md
 paths:
   - crates/provider
+  - crates/provider-codex
 ---
 
 # ADR-177：Codex 宿主异常重启后的继续执行与失败上报
 
 - 部分修订：ADR-175 第 2 项；Codex 在原会话中尝试继续，其他 Provider 保持原恢复策略。
 - 延续：ADR-046、ADR-144、ADR-162。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

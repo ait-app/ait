@@ -13,7 +13,7 @@ test.use({
   e2eDaemonEnvironment: {
     AIT_SERVER_MINIMAX_CODE_BIN: path.join(
       repoRoot,
-      "crates/provider/src/local/minimax/tests/fixtures/acp.py",
+      "crates/provider-minimax/src/tests/fixtures/acp.py",
     ),
   },
 });

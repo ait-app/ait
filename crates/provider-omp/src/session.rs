@@ -16,11 +16,11 @@ use super::{
     transport::{Timeouts, Transport},
     usage,
 };
-use provider::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
-use provider::ports::diagnostics::{Category, Diagnostic};
-use provider::protocol::prompt::AgentPrompt;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_core::protocol::prompt::AgentPrompt;
 
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
@@ -574,7 +574,7 @@ impl Session {
             .map(str::trim)
             .filter(|reason| !reason.is_empty())
             .unwrap_or("OMP turn failed");
-        let diagnostic = provider::local::diagnostics::native(
+        let diagnostic = provider_native::diagnostics::native(
             &json!({"message":reason,"status":message["errorStatus"]}),
             "message_end",
         );
@@ -671,7 +671,7 @@ impl Session {
 
     /// Publish a changed usage snapshot before any turn outcome still queued, as Paseo
     /// publishes a turn's final usage before its completion.
-    fn publish_usage(&mut self, usage: provider::protocol::usage::AgentUsage) {
+    fn publish_usage(&mut self, usage: provider_core::protocol::usage::AgentUsage) {
         let events = &mut self.stream.events;
         let position = events.iter().position(is_outcome).unwrap_or(events.len());
         events.insert(position, AgentTurnEvent::Usage(usage));
@@ -1152,7 +1152,7 @@ impl AgentSession for Session {
         }
         self.runtime()
     }
-    fn subagents(&self) -> Vec<provider::ports::controls::NativeSubagent> {
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
         self.children.list()
     }
     async fn out_of_band(&mut self, prompt: &AgentPrompt) -> Result<(), AgentSessionError> {
@@ -1419,7 +1419,7 @@ fn is_outcome(event: &AgentTurnEvent) -> bool {
 /// OMP's refusal reason, bounded and redacted by separate diagnostics so that it never
 /// fails the session.
 fn native_reason(error: &Value, operation: &str) -> Option<String> {
-    let reason = provider::local::diagnostics::Diagnostics::new(LABEL);
+    let reason = provider_native::diagnostics::Diagnostics::new(LABEL);
     reason.observe_native(error, "rpc", operation);
     reason.message()
 }

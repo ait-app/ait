@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
+use provider_core::ports::account_usage::{PreparedUsage, UsageIdentity};
 
 use super::*;
 

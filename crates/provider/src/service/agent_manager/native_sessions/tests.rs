@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 
 use super::*;
-use crate::ports::native_history::SessionDescriptor;
+use provider_core::ports::native_history::SessionDescriptor;
 
 mod budget;
 
@@ -77,6 +77,7 @@ async fn archived_internal_sessions_stay_hidden_from_native_rediscovery() {
     manager
         .register_client(Box::new(ImportClient {
             provider: "working",
+            lookup: CwdLookup::Canonical,
             supported: true,
             available: Ok(true),
             sessions: Ok(sessions),
@@ -104,6 +105,7 @@ async fn recent_sessions_wait_for_the_shared_history_budget() {
     manager
         .register_client(Box::new(ImportClient {
             provider: "working",
+            lookup: CwdLookup::Canonical,
             supported: true,
             available: Ok(true),
             sessions: Ok(Vec::new()),
@@ -128,6 +130,7 @@ async fn recent_sessions_wait_for_the_shared_history_budget() {
 #[derive(Debug)]
 struct ImportClient {
     provider: &'static str,
+    lookup: CwdLookup,
     supported: bool,
     available: Result<bool, AgentSessionError>,
     sessions: Result<Vec<SessionDescriptor>, AgentSessionError>,
@@ -139,6 +142,10 @@ struct ImportClient {
 impl AgentClient for ImportClient {
     fn provider(&self) -> &str {
         self.provider
+    }
+
+    fn cwd_lookup(&self) -> CwdLookup {
+        self.lookup
     }
 
     fn supports_session_import(&self) -> bool {
@@ -166,17 +173,17 @@ impl AgentClient for ImportClient {
 
     async fn create_session(
         &self,
-        _spec: &crate::ports::agent_session::AgentSessionSpec,
-    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
+        _spec: &provider_core::ports::agent_session::AgentSessionSpec,
+    ) -> Result<Box<dyn provider_core::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not create a session")
     }
 
     async fn resume_session(
         &self,
         _handle: &AgentPersistenceHandle,
-        _spec: &crate::ports::agent_session::AgentSessionSpec,
-        _purpose: crate::ports::agent_session::AgentResumePurpose,
-    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
+        _spec: &provider_core::ports::agent_session::AgentSessionSpec,
+        _purpose: provider_core::ports::agent_session::AgentResumePurpose,
+    ) -> Result<Box<dyn provider_core::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not resume a session")
     }
 }
@@ -229,6 +236,7 @@ async fn recent_sessions_skip_absent_and_unsupported_but_preserve_real_errors_an
         manager
             .register_client(Box::new(ImportClient {
                 provider,
+                lookup: CwdLookup::Canonical,
                 supported,
                 available,
                 sessions,
@@ -266,6 +274,7 @@ async fn recent_sessions_keep_non_pi_provider_filters_canonical() {
     manager
         .register_client(Box::new(ImportClient {
             provider: "working",
+            lookup: CwdLookup::Canonical,
             supported: true,
             available: Ok(true),
             sessions: Ok(vec![SessionDescriptor {
@@ -306,6 +315,7 @@ async fn recent_sessions_reject_candidates_if_the_requested_cwd_vanishes_during_
     manager
         .register_client(Box::new(ImportClient {
             provider: "working",
+            lookup: CwdLookup::Canonical,
             supported: true,
             available: Ok(true),
             sessions: Ok(vec![SessionDescriptor {
@@ -347,11 +357,12 @@ async fn recent_sessions_preserve_the_requested_directory_spelling_for_pi() {
     let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));
     manager
         .register_client(Box::new(ImportClient {
-            provider: crate::local::pi::PROVIDER,
+            provider: "pi",
+            lookup: CwdLookup::Requested,
             supported: true,
             available: Ok(true),
             sessions: Ok(vec![SessionDescriptor {
-                provider_id: crate::local::pi::PROVIDER.to_owned(),
+                provider_id: "pi".to_owned(),
                 provider_label: "Pi".to_owned(),
                 provider_handle_id: "session".to_owned(),
                 cwd: lookup_cwd.clone(),

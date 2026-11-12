@@ -85,7 +85,7 @@ describe("shared messages tool_call schema", () => {
     const cases = JSON.parse(
       readFileSync(
         new URL(
-          "../../../crates/provider/tests/fixtures/antigravity_tool_cards.json",
+          "../../../crates/provider-antigravity/tests/fixtures/antigravity_tool_cards.json",
           import.meta.url,
         ),
         "utf8",
@@ -160,7 +160,7 @@ describe("shared messages tool_call schema", () => {
     const cases = JSON.parse(
       readFileSync(
         new URL(
-          "../../../crates/provider/tests/fixtures/opencode_tool_cards.json",
+          "../../../crates/provider-opencode/tests/fixtures/opencode_tool_cards.json",
           import.meta.url,
         ),
         "utf8",
@@ -363,7 +363,7 @@ describe("shared messages tool_call schema", () => {
 it("validates the Pi Rust adapter's tool projections with the strict item schema", () => {
   const cases = JSON.parse(
     readFileSync(
-      new URL("../../../crates/provider/tests/fixtures/pi_tool_cards.json", import.meta.url),
+      new URL("../../../crates/provider-pi/tests/fixtures/pi_tool_cards.json", import.meta.url),
       "utf8",
     ),
   ) as Array<{ name: string; item: unknown }>;

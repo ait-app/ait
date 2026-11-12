@@ -45,7 +45,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] client registry 共享同一组工厂引用，catalog 成为独立共享服务；AgentManager 保留兼容访问入口。
 - [x] AgentExecution 保留可克隆入口，内部组合独立 catalog、Agent 调度器与读取服务。
 
-涉及：[ports/agent_session.rs](../../../crates/provider/src/ports/agent_session.rs)、[service/agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)、[service/agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)、[daemon host](../../../bins/daemon/src/host.rs)。
+涉及：[ports/agent_session.rs](../../../crates/provider-core/src/ports/agent_session.rs)、[service/agent_manager.rs](../../../crates/provider/src/service/agent_manager.rs)、[service/agent_execution.rs](../../../crates/provider/src/service/agent_execution.rs)、[daemon host](../../../bins/daemon/src/host.rs)。
 
 验收：客户端工厂可并发使用，live session 仍保持独占所有权；各 Provider 的 adapter 契约测试通过。
 

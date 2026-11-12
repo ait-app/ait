@@ -6,7 +6,7 @@ use domain::workspace::sandbox::WriteConfinement;
 use model::ErrorCode;
 
 use super::{AgentManager, AgentManagerError};
-use crate::ports::agent_session::AgentSessionSpec;
+use provider_core::ports::agent_session::AgentSessionSpec;
 
 impl AgentManager {
     /// Attach the confinement required by `workspace_id` to `launch`.

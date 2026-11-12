@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::agent_execution::AgentExecution;
+use provider_core::ports::bot_session::InstructionDelivery;
 
 /// An owner-checked operation on a hidden provider session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,7 +14,8 @@ pub enum Action {
     /// Create once, or reuse an existing session with the exact same owner; returns [`Created`].
     ///
     /// The session's mode, tool preapprovals and system prompt follow the provider's
-    /// [`BotSessionSupport`]; `config.mode_id` is ignored.
+    /// [`BotSessionSupport`](provider_core::ports::bot_session::BotSessionSupport); `config.mode_id`
+    /// is ignored.
     Create {
         /// Stable preallocated runtime identity.
         agent_id: String,
@@ -77,30 +79,6 @@ pub struct TimelineCursor {
     pub epoch: String,
     /// Last source sequence observed before the Bot input.
     pub seq: u64,
-}
-
-/// How the Bot's built-in instructions reach the native session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InstructionDelivery {
-    /// Written to, and kept current in, the session's updatable system prompt.
-    SystemPrompt,
-    /// Prefixed to the next input whenever the session has not seen the current instructions.
-    TurnPrefix,
-}
-
-/// Bot-session capabilities of one provider adapter, published in the provider snapshot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BotSessionSupport {
-    /// How the Bot's instructions are delivered.
-    pub instructions: InstructionDelivery,
-    /// Strictest native read-only mode, if the provider has one.
-    pub read_only_mode: Option<&'static str>,
-    /// Whether exact `ait` tools can be preapproved through `tool_policy`.
-    pub tool_preapproval: bool,
-    /// Whether the session receives the injected `ait` HTTP MCP server at all.
-    pub ait_tools: bool,
 }
 
 /// Result of [`Action::Create`].

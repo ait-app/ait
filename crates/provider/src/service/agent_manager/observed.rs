@@ -9,8 +9,8 @@ use model::ErrorCode;
 use sha2::{Digest, Sha256};
 
 use super::{AgentManager, AgentManagerError};
-use crate::ports::controls::NativeSubagent;
 use crate::storage::timeline::Timeline;
+use provider_core::ports::controls::NativeSubagent;
 
 struct RegistrationContext<'a> {
     registry: &'a dyn AgentRuntimeRegistry,

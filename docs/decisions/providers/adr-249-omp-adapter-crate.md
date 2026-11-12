@@ -10,6 +10,9 @@ paths:
   - crates/provider
   - crates/provider-omp
   - bins/daemon
+  - crates/provider-native
+  - crates/provider-core
+  - crates/provider-builtin
 ---
 
 # ADR-249：OMP 适配器独立为 `provider-omp` crate
@@ -26,7 +29,7 @@ OMP 适配器原先位于 `provider` 内部，与运行时和其他 adapter 同�
 运行时直接持有这个具体 adapter。拆分的最初动机是为外部 ACP 客户端提供不依赖 daemon 的
 `omp-acp` 二进制。ADR-248 删除 ACP 桥接后，这个动机已不存在，但独立 crate 仍然保留：
 适配器的生产代码只用到 `provider` 的 ports、protocol 和共享原生工具，不依赖运行时服务；
-由 Cargo 强制这条边界，也是 [provider crate 拆分计划](../../plans/provider-crate-split.md)
+由 Cargo 强制这条边界，也是 [provider crate 拆分计划](../../archive/plans/provider-crate-split.md)
 的先行实现。
 
 ## 决策

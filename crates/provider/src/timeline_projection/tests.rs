@@ -2,7 +2,8 @@
 
 use super::page::select;
 use super::*;
-use crate::protocol::timeline::{Direction, NativeItem};
+use crate::protocol::timeline::Direction;
+use provider_core::protocol::timeline::NativeItem;
 
 #[test]
 fn complete_process_arguments_replace_a_partial_file_card_in_the_same_lifecycle() {

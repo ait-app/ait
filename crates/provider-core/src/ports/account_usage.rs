@@ -1,0 +1,51 @@
+//! Ephemeral account identity and a lazy quota read from the same authentication context.
+
+use std::fmt;
+
+use futures_util::future::BoxFuture;
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+
+/// Opaque authentication identity, compared only in memory and never serialized or logged.
+#[derive(Clone, PartialEq, Eq)]
+pub struct UsageIdentity([u8; 32]);
+
+impl UsageIdentity {
+    /// Hash provider and native identity material without retaining its plaintext.
+    #[must_use]
+    pub fn from_native(provider: &str, material: &[u8]) -> Self {
+        let mut digest = Sha256::new();
+        digest.update(b"ait-account-usage-v1");
+        digest.update(provider.len().to_le_bytes());
+        digest.update(provider.as_bytes());
+        digest.update(material.len().to_le_bytes());
+        digest.update(material);
+        Self(digest.finalize().into())
+    }
+}
+
+impl fmt::Debug for UsageIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("UsageIdentity(<redacted>)")
+    }
+}
+
+/// Authentication is resolved before cache lookup; polling happens only when needed.
+pub struct PreparedUsage<'a> {
+    /// Known native account identity; absence disables historical fallback and cache reuse.
+    pub identity: Option<UsageIdentity>,
+    /// Quota operation bound to the authentication context used for `identity`.
+    pub report: BoxFuture<'a, Result<Value, super::agent_session::AgentSessionError>>,
+}
+
+impl fmt::Debug for PreparedUsage<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedUsage")
+            .field("identity", &self.identity)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests;

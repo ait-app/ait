@@ -15,7 +15,7 @@ const workspace = path.join(temporary, "workspace");
 mkdirSync(fixtureBin);
 mkdirSync(workspace);
 copyFileSync(
-  path.join(root, "crates/provider/tests/fixtures/codex_app_server.py"),
+  path.join(root, "crates/provider-codex/tests/fixtures/codex_app_server.py"),
   path.join(fixtureBin, "codex"),
 );
 chmodSync(path.join(fixtureBin, "codex"), 0o755);

@@ -5,10 +5,10 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::AgentManager;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec, AgentTurnEvent};
-use crate::ports::controls::NativeSubagent;
-use crate::ports::native_history::SessionHistory;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec, AgentTurnEvent};
+use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::native_history::SessionHistory;
 
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
 
@@ -643,9 +643,9 @@ pub(super) fn publish_subagent(
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
-    event: &crate::ports::controls::SubagentEvent,
+    event: &provider_core::ports::controls::SubagentEvent,
 ) -> Result<(), ErrorCode> {
-    use crate::ports::controls::SubagentEvent;
+    use provider_core::ports::controls::SubagentEvent;
     let Some(timeline) = timeline else {
         return Ok(());
     };
@@ -751,7 +751,7 @@ pub(super) fn publish_children(
             timeline,
             events,
             agent,
-            &crate::ports::controls::SubagentEvent::Upsert(child),
+            &provider_core::ports::controls::SubagentEvent::Upsert(child),
         )
         .map_err(|_| super::AgentManagerError::Registry)?;
     }

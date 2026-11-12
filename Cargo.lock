@@ -120,6 +120,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-builtin",
  "relay",
  "reqwest",
  "schedule",
@@ -404,6 +405,7 @@ dependencies = [
  "persistence",
  "prost",
  "provider",
+ "provider-core",
  "pulldown-cmark",
  "reqwest",
  "ring",
@@ -778,7 +780,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
- "provider-omp",
+ "provider-builtin",
  "reqwest",
  "ring",
  "rustix",
@@ -2276,6 +2278,100 @@ name = "provider"
 version = "0.2.9"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider-codex",
+ "provider-core",
+ "pulldown-cmark",
+ "regex",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "provider-antigravity"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-builtin"
+version = "0.2.9"
+dependencies = [
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-antigravity",
+ "provider-claude",
+ "provider-codex",
+ "provider-deepseek-harness",
+ "provider-minimax",
+ "provider-omp",
+ "provider-opencode",
+ "provider-pi",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "provider-claude"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "unicode-normalization",
+ "uuid",
+]
+
+[[package]]
+name = "provider-codex"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",
@@ -2285,28 +2381,107 @@ dependencies = [
  "nix 0.31.3",
  "opus2",
  "persistence",
- "pulldown-cmark",
- "regex",
- "reqwest",
+ "provider",
+ "provider-core",
+ "provider-native",
  "rtc",
- "rusqlite",
  "secrecy",
  "serde",
  "serde_json",
- "serde_yaml_ng",
  "sha2",
  "tempfile",
- "thiserror 2.0.20",
  "tokio",
- "tokio-tungstenite",
  "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
- "unicode-normalization",
- "url",
  "uuid",
  "webrtc",
+]
+
+[[package]]
+name = "provider-core"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "domain",
+ "futures-util",
+ "model",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "provider-deepseek-harness"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-minimax"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-native"
+version = "0.2.9"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "nix 0.31.3",
+ "provider-core",
+ "regex",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -2321,6 +2496,8 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-core",
+ "provider-native",
  "serde",
  "serde_json",
  "sha2",
@@ -2329,6 +2506,60 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-opencode"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "reqwest",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-pi"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

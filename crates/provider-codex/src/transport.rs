@@ -1,0 +1,543 @@
+use std::path::Path;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::task::Poll;
+use std::time::Duration;
+
+use futures_util::FutureExt;
+use serde_json::{Value, json};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStdin, Command};
+use tokio::sync::{Mutex, mpsc};
+use tokio::task::JoinHandle;
+
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_native::diagnostics::{self, Diagnostics};
+use provider_native::process_group::{self, Signal};
+use tokio_util::task::AbortOnDropHandle;
+
+const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
+const MAX_EVENTS: usize = 128;
+
+mod events;
+
+#[derive(Debug)]
+pub(super) struct Transport {
+    child: Child,
+    pub(super) diagnostics: Diagnostics,
+    pub(super) failure: diagnostics::failure::Failure,
+    pub(super) rpc_error: Option<secrecy::SecretString>,
+    _stderr: AbortOnDropHandle<()>,
+    input: Arc<Mutex<ChildStdin>>,
+    messages: mpsc::Receiver<Value>,
+    reader: JoinHandle<()>,
+    pending_response: Option<AbortOnDropHandle<Result<(), AgentSessionError>>>,
+    events: events::Queue,
+    sequence: u64,
+    deadline: Duration,
+    closed: bool,
+    pub(super) user_agent: Option<String>,
+}
+
+impl Transport {
+    pub(super) fn spawn(
+        program: &Path,
+        launch: Launch<'_>,
+        deadline: Duration,
+        environment: &provider_core::ports::environment::AgentEnvironment,
+    ) -> Result<Self, AgentSessionError> {
+        let mut command = process(program, &launch, environment)?;
+        let diagnostics = Diagnostics::new("codex");
+        let mut child = command
+            .spawn()
+            .map_err(|error| diagnostics.spawn_error(&error))?;
+        let input = Arc::new(Mutex::new(
+            child.stdin.take().ok_or(AgentSessionError::Failed)?,
+        ));
+        let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let reader_diagnostics = diagnostics.clone();
+        let (sender, messages) = mpsc::channel(MAX_EVENTS);
+        let request_input = input.clone();
+        let reader = tokio::spawn(async move {
+            let mut output = BufReader::new(output);
+            loop {
+                let mut bytes = Vec::new();
+                // Paseo's Codex transport uses readline without a frame-size cap. Native
+                // images and thread/read history can exceed the client request budget.
+                let read = output.read_until(b'\n', &mut bytes).await;
+                if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    let category = if matches!(read, Ok(0)) {
+                        Category::Closed
+                    } else {
+                        Category::Protocol
+                    };
+                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
+                    break;
+                }
+                let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
+                    break;
+                };
+                if value["method"] == "mcpServer/elicitation/request"
+                    && value.get("id").is_some()
+                    && (!matches!(
+                        value["params"]["mode"].as_str(),
+                        Some("form" | "openai/form" | "openaiForm")
+                    ) || provider_native::elicitation::questions(
+                        &value["params"]["requestedSchema"],
+                    )
+                    .is_err())
+                {
+                    let rejection = json!({"id":value["id"],"result":{"action":"decline","content":null,"_meta":null}});
+                    if !matches!(
+                        tokio::time::timeout(deadline, write(&request_input, &rejection)).await,
+                        Ok(Ok(()))
+                    ) {
+                        break;
+                    }
+                    continue;
+                }
+                if value.get("method").is_some()
+                    && value.get("id").is_some()
+                    && !value["method"]
+                        .as_str()
+                        .is_some_and(super::permissions::supported)
+                {
+                    // Unknown native interactions fail closed instead of becoming implicit approval.
+                    let rejection = json!({"id":value["id"],"error":{
+                        "code":-32601,"message":"Provider interaction is not supported"}});
+                    let _ = tokio::time::timeout(deadline, write(&request_input, &rejection)).await;
+                    let _ = sender
+                        .send(json!({"method":"server/unsupportedRequest"}))
+                        .await;
+                    break;
+                }
+                // Retain the supported v2 stream in order; legacy mirror notifications must
+                // not duplicate the same native output. The bounded channel applies backpressure.
+                if value.get("id").is_none() && !retained(value["method"].as_str()) {
+                    continue;
+                }
+                if sender.send(value).await.is_err() {
+                    break;
+                }
+            }
+        });
+        Ok(Self {
+            child,
+            diagnostics: diagnostics.clone(),
+            failure: diagnostics::failure::Failure::default(),
+            rpc_error: None,
+            _stderr: AbortOnDropHandle::new(tokio::spawn(diagnostics.drain(stderr))),
+            input,
+            messages,
+            reader,
+            pending_response: None,
+            events: events::Queue::default(),
+            sequence: 0,
+            deadline,
+            closed: false,
+            user_agent: None,
+        })
+    }
+
+    pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
+        let response = self
+            .request(
+                "initialize",
+                json!({
+                    "clientInfo":{
+                        "name":"ait",
+                        "title":"Ait",
+                        "version":env!("CARGO_PKG_VERSION")
+                    },
+                    "capabilities":{"experimentalApi":true}
+                }),
+            )
+            .await?;
+        self.user_agent = response["userAgent"].as_str().map(str::to_owned);
+        let result = tokio::time::timeout(
+            self.deadline,
+            write(&self.input, &json!({"method":"initialized","params":{}})),
+        )
+        .await;
+        if !matches!(result, Ok(Ok(()))) {
+            let _ = self.close().await;
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+
+    pub(super) async fn request(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Failed);
+        }
+        self.rpc_error = None;
+        self.sequence += 1;
+        let request = json!({"id":self.sequence,"method":method,"params":params});
+        let result = tokio::time::timeout(self.deadline, async {
+            write(&self.input, &request).await?;
+            loop {
+                let mut message = self
+                    .messages
+                    .recv()
+                    .await
+                    .ok_or(AgentSessionError::Failed)?;
+                if let Some(id) = message.get("id")
+                    && message.get("method").is_none()
+                {
+                    if id.as_u64() != Some(self.sequence) {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    if let Some(error) = message.get("error") {
+                        if method == "thread/timeline/list"
+                            && (error["code"] == -32601 || (error["code"] == -32600
+                                && error["message"].as_str().is_some_and(|message| message.starts_with(
+                                    "Invalid request: unknown variant `thread/timeline/list`, expected "
+                                ))))
+                        {
+                            return Err(AgentSessionError::Unavailable);
+                        }
+                        let message = error["message"].as_str().unwrap_or_default();
+                        self.rpc_error = (!message.is_empty() && message.len() <= 8192)
+                            .then(|| message.to_owned().into());
+                        // Completion can win the race with an interrupt. Its ordered
+                        // terminal notification still owns settlement of the turn.
+                        if method == "turn/interrupt"
+                            && error["code"] == -32600
+                            && error["message"] == "no active turn to interrupt"
+                        {
+                            return Ok(json!({}));
+                        }
+                        let thread = request["params"]["threadId"].as_str().unwrap_or_default();
+                        if method == "turn/steer" && super::streaming::steer_rejected(error)
+                            || method == "thread/resume"
+                                && super::native_sessions::archived(message, thread)
+                            || method == "thread/unarchive"
+                                && super::native_sessions::already_unarchived(message, thread)
+                        {
+                            tracing::debug!(
+                                provider = "codex",
+                                operation = method,
+                                "Native provider rejected a recoverable control request"
+                            );
+                        } else {
+                            self.observe_error(error, diagnostics::native(error, "rpc"), method);
+                        }
+                        if method == "thread/resume"
+                            && writer_conflict(error, request["params"]["threadId"].as_str())
+                        {
+                            return Err(AgentSessionError::Busy);
+                        }
+                        return Err(
+                            if method != "turn/steer" || super::streaming::steer_rejected(error) {
+                                AgentSessionError::Rejected
+                            } else {
+                                AgentSessionError::Failed
+                            },
+                        );
+                    }
+                    return message
+                        .as_object_mut()
+                        .and_then(|message| message.remove("result"))
+                        .ok_or(AgentSessionError::Failed);
+                }
+                self.events.push(message).await?;
+            }
+        })
+        .await;
+        let retained = [
+            AgentSessionError::Rejected,
+            AgentSessionError::Unavailable,
+            AgentSessionError::Busy,
+        ];
+        match self.diagnostics.settle(result, method, &retained) {
+            Err(AgentSessionError::Failed) => {
+                let _ = self.close().await;
+                Err(AgentSessionError::Failed)
+            }
+            settled => settled,
+        }
+    }
+
+    /// Record `diagnostic` for `operation` and retain a sanitized explanation from `error`.
+    /// Retrying errors do not create a final message or replace a more specific failure.
+    pub(super) fn observe_error(&mut self, error: &Value, diagnostic: Diagnostic, operation: &str) {
+        self.diagnostics.observe(diagnostic, operation);
+        if diagnostic.will_retry == Some(true) || self.diagnostics.failure() == Some(diagnostic) {
+            self.failure.observe("Codex", error, diagnostic);
+        }
+    }
+
+    pub(super) async fn respond(
+        &mut self,
+        id: &Value,
+        result: Value,
+    ) -> Result<(), AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Failed);
+        }
+        if write_response(
+            &self.input,
+            &json!({"id":id,"result":result}),
+            self.deadline,
+        )
+        .await
+        .is_ok()
+        {
+            Ok(())
+        } else {
+            let _ = self.close().await;
+            Err(AgentSessionError::Failed)
+        }
+    }
+
+    /// Queue `result` for native request `id` from synchronous polling.
+    /// Rejects closed transports or an outstanding reply; `poll` observes write failures.
+    pub(super) fn queue_response(
+        &mut self,
+        id: &Value,
+        result: Value,
+    ) -> Result<(), AgentSessionError> {
+        if self.closed || self.pending_response.is_some() {
+            return Err(AgentSessionError::Failed);
+        }
+        let input = self.input.clone();
+        let mut frame = json!({"id":id});
+        frame["result"] = result;
+        let deadline = self.deadline;
+        self.pending_response = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            write_response(&input, &frame, deadline).await
+        })));
+        Ok(())
+    }
+
+    pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
+        if let Some(response) = &mut self.pending_response {
+            let Some(result) = response.now_or_never() else {
+                return Ok(None);
+            };
+            self.pending_response = None;
+            if !matches!(result, Ok(Ok(()))) {
+                self.closed = true;
+                self.diagnostics
+                    .observe(Diagnostic::new(Category::Network, "transport"), "respond");
+                return Err(AgentSessionError::Failed);
+            }
+        }
+        match self.events.poll() {
+            Ok(Poll::Ready(Some(event))) => return Ok(Some(event)),
+            Ok(Poll::Pending) => return Ok(None),
+            Ok(Poll::Ready(None)) => {}
+            Err(error) => {
+                self.closed = true;
+                self.diagnostics
+                    .observe(Diagnostic::new(Category::Protocol, "transport"), "replay");
+                return Err(error);
+            }
+        }
+        match self.messages.try_recv() {
+            Ok(message) if message.get("method").is_some() => Ok(Some(message)),
+            Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
+            Ok(_) | Err(_) => {
+                self.closed = true;
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "transport"), "poll");
+                }
+                Err(AgentSessionError::Failed)
+            }
+        }
+    }
+
+    /// Drain the old audio generation before the same thread can start another one.
+    /// Preserve ordinary text, approvals and canonical speech records in their original order.
+    /// Only media/transport notifications are discarded; they must not reach the next call.
+    pub(super) async fn wait_realtime_closed(
+        &mut self,
+        thread: &str,
+    ) -> Result<(), AgentSessionError> {
+        let mut retained = events::Queue::default();
+        let result = tokio::time::timeout(self.deadline, async {
+            loop {
+                let message = match self.events.next().await? {
+                    Some(message) => message,
+                    None => self
+                        .messages
+                        .recv()
+                        .await
+                        .ok_or(AgentSessionError::Failed)?,
+                };
+                if message["params"]["threadId"] == thread
+                    && message["method"]
+                        .as_str()
+                        .is_some_and(|method| method.starts_with("thread/realtime/"))
+                {
+                    if message["method"] == "thread/realtime/closed" {
+                        break;
+                    }
+                    if matches!(
+                        message["method"].as_str(),
+                        Some(
+                            "thread/realtime/item/started"
+                                | "thread/realtime/item/transcript/delta"
+                                | "thread/realtime/item/completed"
+                        )
+                    ) {
+                        retained.push(message).await?;
+                    }
+                } else {
+                    retained.push(message).await?;
+                }
+            }
+            while let Some(message) = self.events.next().await? {
+                retained.push(message).await?;
+            }
+            Ok::<_, AgentSessionError>(())
+        })
+        .await;
+        self.events = retained;
+        if matches!(result, Ok(Ok(()))) {
+            Ok(())
+        } else {
+            let _ = self.close().await;
+            Err(AgentSessionError::Failed)
+        }
+    }
+
+    pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.diagnostics.flush();
+        self.closed = true;
+        self.pending_response = None;
+        self.events = events::Queue::default();
+        self.reader.abort();
+        process_group::signal(self.child.id(), Signal::Kill);
+        // kill is idempotent for an already-exited child; wait always reaps it.
+        let _ = self.child.start_kill();
+        tokio::time::timeout(Duration::from_secs(2), self.child.wait())
+            .await
+            .map_err(|_| AgentSessionError::Failed)?
+            .map_err(|_| AgentSessionError::Failed)?;
+        Ok(())
+    }
+}
+
+fn writer_conflict(error: &Value, thread: Option<&str>) -> bool {
+    error["code"] == -32600
+        && thread.is_some()
+        && error["message"].as_str().and_then(|message| {
+            message
+                .strip_prefix("thread ")?
+                .strip_suffix(" already has an active writer")
+        }) == thread
+}
+
+/// Placement of one native app-server process.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Launch<'a> {
+    /// Native working directory.
+    pub(super) cwd: &'a str,
+    /// Whether the native goals feature is enabled.
+    pub(super) goals: bool,
+    /// OS write confinement for an Agent in a sandboxed Workspace.
+    pub(super) confinement: Option<&'a domain::workspace::sandbox::WriteConfinement>,
+}
+
+fn process(
+    program: &Path,
+    launch: &Launch<'_>,
+    environment: &provider_core::ports::environment::AgentEnvironment,
+) -> Result<Command, AgentSessionError> {
+    let mut command = provider_native::sandbox::command(
+        program,
+        launch.confinement,
+        provider_native::sandbox::CODEX_STATE,
+        &|name| environment.variable(name),
+    )?;
+    command.envs(environment.entries());
+    if launch.goals {
+        command.args(["--enable", "goals"]);
+    }
+    command.arg("app-server")
+        .current_dir(launch.cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        // Native diagnostics may contain prompts, paths or authentication data.
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
+    Ok(command)
+}
+
+async fn write_response(
+    input: &Mutex<ChildStdin>,
+    frame: &Value,
+    deadline: Duration,
+) -> Result<(), AgentSessionError> {
+    tokio::time::timeout(deadline, write(input, frame))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+}
+
+impl Drop for Transport {
+    fn drop(&mut self) {
+        self.reader.abort();
+        process_group::signal(self.child.id(), Signal::Kill);
+        // kill_on_drop handles exceptional paths; normal ownership ends through close + wait.
+    }
+}
+
+async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSessionError> {
+    let mut bytes = serde_json::to_vec(value).map_err(|_| AgentSessionError::Failed)?;
+    if bytes.len() >= MAX_OUTBOUND_FRAME {
+        tracing::warn!(
+            size_bytes = bytes.len(),
+            limit_bytes = MAX_OUTBOUND_FRAME,
+            "Codex app-server outbound frame exceeds size limit"
+        );
+        return Err(AgentSessionError::Failed);
+    }
+    bytes.push(b'\n');
+    let mut input = input.lock().await;
+    input
+        .write_all(&bytes)
+        .await
+        .map_err(|_| AgentSessionError::Failed)?;
+    input.flush().await.map_err(|_| AgentSessionError::Failed)
+}
+
+#[cfg(all(test, unix))]
+mod tests;
+
+fn retained(method: Option<&str>) -> bool {
+    method.is_some_and(|method| method.starts_with("thread/realtime/"))
+        || matches!(
+            method,
+            Some(
+                "error"
+                    | "turn/completed"
+                    | "thread/started"
+                    | "turn/plan/updated"
+                    | "thread/goal/updated"
+                    | "thread/goal/cleared"
+                    | "turn/started"
+                    | "thread/tokenUsage/updated"
+                    | "thread/compacted"
+                    | "serverRequest/resolved"
+                    | "item/completed"
+                    | "item/started"
+                    | "item/agentMessage/delta"
+                    | "item/reasoning/summaryTextDelta"
+                    | "item/commandExecution/outputDelta"
+                    | "item/commandExecution/terminalInteraction"
+                    | "item/fileChange/outputDelta"
+            )
+        )
+}

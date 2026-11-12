@@ -1,5 +1,6 @@
 use super::*;
-use crate::protocol::timeline::{Cursor, NativeItem};
+use crate::protocol::timeline::Cursor;
+use provider_core::protocol::timeline::NativeItem;
 
 mod paseo;
 mod upstream;

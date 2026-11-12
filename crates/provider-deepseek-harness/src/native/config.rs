@@ -1,0 +1,253 @@
+//! Native Host model catalog and session-local permission presets.
+use super::{super::PROVIDER, http::Api, presets};
+use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
+use provider_core::{ports::agent_session::AgentSessionError, protocol::provider::Details};
+use provider_native::acp_config::text;
+use serde_json::{Value, json};
+
+/// Validate Ait controls before launching a Host; exact choices are checked against native state.
+pub(crate) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+    let mut acp = config.clone();
+    acp.mode_id = None;
+    acp.feature_values = None;
+    super::super::config::validate(&acp)?;
+    if config
+        .mcp_servers
+        .iter()
+        .flatten()
+        .any(|(name, _)| !super::mcp::server_name(name))
+        || config.feature_values.iter().flatten().any(|(key, value)| {
+            key != presets::PERMISSION || !value.as_str().is_some_and(permission_id)
+        })
+        || config.mode_id.as_ref().is_some_and(|mode| {
+            if let Some(id) = mode.strip_prefix(presets::PREFIX) {
+                return id.is_empty() || id.len() > 1024 || id.chars().any(char::is_control);
+            }
+            mode.is_empty()
+                || mode.len() > 128
+                || !mode
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        })
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(())
+}
+
+/// Resolve current permissions and the native catalog across DSH protocol versions.
+/// Older Hosts embed options in the projection; newer Hosts expose a separate catalog.
+/// Returns transport/schema errors rather than substituting permissions the Host did not advertise.
+pub(super) async fn permission_selection(
+    api: &Api,
+    projection: &Value,
+) -> Result<Value, AgentSessionError> {
+    if projection.is_null() {
+        return Ok(json!({"options":[]}));
+    }
+    text(projection, "currentValue")?;
+    let mut permissions = projection.clone();
+    if permissions.get("options").is_none() {
+        let catalog = api.call("permissionPresets/catalog", json!({})).await?;
+        permissions["options"] = catalog["options"].clone();
+    }
+    if !permissions["options"].is_array() {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(permissions)
+}
+
+fn permission_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+#[derive(Debug)]
+pub(super) struct Selection {
+    pub(super) presets: Value,
+    pub(super) preset: Option<String>,
+    pub(super) catalog: Value,
+    pub(super) permissions: Value,
+    pub(super) model: Value,
+}
+
+impl Selection {
+    /// Project a native catalog and the currently composed session presets into Ait's selectors.
+    pub(super) fn details(&self) -> Result<Details, AgentSessionError> {
+        let mut details = Details::default();
+        for group in self.catalog["groups"]
+            .as_array()
+            .ok_or(AgentSessionError::Failed)?
+        {
+            let provider = text(group, "id")?;
+            for model in group["models"]
+                .as_array()
+                .ok_or(AgentSessionError::Failed)?
+            {
+                let id = json!([provider, text(model, "id")?]).to_string();
+                let thinking = model["reasoning"]["efforts"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|effort| {
+                        Ok(json!({"id":text(effort,"id")?,"label":text(effort,"name")?,
+                    "isDefault":effort["id"] == model["reasoning"]["defaultEffort"]}))
+                    })
+                    .collect::<Result<Vec<_>, AgentSessionError>>()?;
+                let mut entry = json!({"provider":PROVIDER,"id":id,"label":text(model,"name")?,"isSelectable":true,
+                    "isDefault":self.catalog["default"]["provider"] == provider && self.catalog["default"]["model"] == model["id"],
+                    "thinkingOptions":thinking});
+                if let Some(effort) = model["reasoning"]["defaultEffort"].as_str() {
+                    entry["defaultThinkingOptionId"] = json!(effort);
+                }
+                if let Some(description) = model["description"].as_str() {
+                    entry["description"] = json!(description);
+                }
+                details.models.push(entry);
+            }
+        }
+        details.modes = presets::modes(&self.presets)?;
+        if self.permissions.get("currentValue").is_some() {
+            details
+                .features
+                .push(presets::permission_feature(&self.permissions)?);
+        }
+        Ok(details)
+    }
+
+    pub(super) fn validate_controls<'a>(
+        &self,
+        config: &'a StoredAgentConfig,
+    ) -> Result<Option<&'a str>, AgentSessionError> {
+        if let Some(preset) = config
+            .mode_id
+            .as_deref()
+            .and_then(|id| id.strip_prefix(presets::PREFIX))
+            && self.preset.as_deref() != Some(preset)
+        {
+            // Plugin composition is fixed after the first turn. Never replace it on resume.
+            return Err(AgentSessionError::Rejected);
+        }
+        let permission = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get(presets::PERMISSION))
+            .and_then(Value::as_str)
+            .or_else(|| {
+                config
+                    .mode_id
+                    .as_deref()
+                    .filter(|id| !id.starts_with(presets::PREFIX))
+            });
+        if permission.is_some_and(|id| {
+            !self.permissions["options"]
+                .as_array()
+                .is_some_and(|options| {
+                    options
+                        .iter()
+                        .any(|option| option["value"] == id && id != "custom")
+                })
+        }) {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(permission)
+    }
+
+    /// Apply only explicitly requested, advertised selections; permission scope stays native.
+    pub(super) async fn apply(
+        &mut self,
+        api: &Api,
+        session: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<(), AgentSessionError> {
+        validate(config)?;
+        let details = self.details()?;
+        let permission = self.validate_controls(config)?;
+        let id = config
+            .model
+            .clone()
+            .unwrap_or_else(|| json!([self.model["provider"], self.model["model"]]).to_string());
+        let selected = details
+            .models
+            .iter()
+            .find(|model| model["id"] == id)
+            .ok_or(AgentSessionError::Rejected)?;
+        let route: Vec<String> =
+            serde_json::from_str(&id).map_err(|_| AgentSessionError::Rejected)?;
+        if route.len() != 2 {
+            return Err(AgentSessionError::Rejected);
+        }
+        let mut model = json!({"provider":route[0],"model":route[1]});
+        if let Some(effort) = config
+            .thinking_option_id
+            .as_deref()
+            .filter(|effort| !effort.is_empty())
+        {
+            if !selected["thinkingOptions"]
+                .as_array()
+                .is_some_and(|options| options.iter().any(|option| option["id"] == effort))
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            model["reasoningEffort"] = json!(effort);
+        }
+        if config.thinking_option_id.is_none()
+            && model["provider"] == self.model["provider"]
+            && model["model"] == self.model["model"]
+            && let Some(effort) = self.model.get("reasoningEffort")
+        {
+            model["reasoningEffort"] = effort.clone();
+        }
+        if model != self.model {
+            let mut request = model.clone();
+            request["sessionId"] = json!(session);
+            let result = api
+                .call("session/selectModel", json!({"request":request}))
+                .await?;
+            let acknowledged = &result["selected"];
+            if acknowledged["provider"] != model["provider"]
+                || acknowledged["model"] != model["model"]
+                || model
+                    .get("reasoningEffort")
+                    .is_some_and(|effort| acknowledged.get("reasoningEffort") != Some(effort))
+                || acknowledged.get("reasoningEffort").is_some_and(|effort| {
+                    !selected["thinkingOptions"]
+                        .as_array()
+                        .is_some_and(|options| options.iter().any(|option| option["id"] == *effort))
+                })
+            {
+                return Err(AgentSessionError::Failed);
+            }
+            self.model = acknowledged.clone();
+        }
+        if let Some(mode) = permission
+            && self.permissions["currentValue"] != mode
+        {
+            let result = api.call("commands/execute",json!({"agentId":session,"line":format!("/permission {mode}"),"submittedAttachments":[]})).await?;
+            if result["result"]["kind"] != "success" {
+                return Err(AgentSessionError::Rejected);
+            }
+            self.permissions["currentValue"] = json!(mode);
+        }
+        Ok(())
+    }
+
+    /// Return the selections actually acknowledged by the native Host.
+    pub(super) fn runtime(&self, session: &str) -> StoredAgentRuntimeInfo {
+        StoredAgentRuntimeInfo {
+            provider: PROVIDER.into(),
+            session_id: Some(session.into()),
+            model: Some(json!([self.model["provider"], self.model["model"]]).to_string()),
+            thinking_option_id: self.model["reasoningEffort"].as_str().map(str::to_owned),
+            mode_id: self
+                .preset
+                .as_ref()
+                .map(|id| format!("{}{id}", presets::PREFIX))
+                .or_else(|| self.permissions["currentValue"].as_str().map(str::to_owned)),
+            extra: None,
+        }
+    }
+}

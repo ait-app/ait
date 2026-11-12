@@ -10,8 +10,8 @@ use serde_json::Value;
 use tokio::{sync::oneshot, time::Instant};
 
 use super::{LABEL, transport::Transport};
-use provider::ports::agent_session::AgentSessionError;
-use provider::protocol::usage::AgentUsage;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::protocol::usage::AgentUsage;
 
 /// Interval between reads while a turn runs, as Paseo polls.
 const POLL_INTERVAL: Duration = Duration::from_secs(3);

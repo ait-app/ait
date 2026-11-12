@@ -34,7 +34,7 @@ fn screenshot_input_survives_restart_and_retries_without_duplicate_delivery() {
     let timeline = Timeline::open(&path).unwrap();
     let prompt = AgentPrompt {
         text: "Inspect this screenshot".to_owned(),
-        images: vec![crate::protocol::prompt::PromptImage {
+        images: vec![provider_core::protocol::prompt::PromptImage {
             data: base64::engine::general_purpose::STANDARD.encode(vec![0; 3_886_681]),
             mime_type: "image/png".to_owned(),
         }],
@@ -75,11 +75,11 @@ fn maximum_valid_input_fits_and_queue_byte_budgets_are_released_after_delivery()
     let mut prompt = AgentPrompt {
         text: "Inspect".to_owned(),
         images: vec![
-            crate::protocol::prompt::PromptImage {
+            provider_core::protocol::prompt::PromptImage {
                 data: "AAAA".repeat(8 * 1024 * 1024),
                 mime_type: "image/png".to_owned(),
             },
-            crate::protocol::prompt::PromptImage {
+            provider_core::protocol::prompt::PromptImage {
                 data: "AAAA".repeat(7 * 1024 * 1024),
                 mime_type: "image/png".to_owned(),
             },

@@ -4,12 +4,14 @@ status: accepted
 date: 2026-09-26
 paths:
   - crates/provider
+  - crates/provider-claude
 ---
 
 # ADR-050：独立 server 的 Claude Code Provider
 
 - 状态说明：Accepted；能力扩展及下述初版限制由 [ADR-052](adr-052-native-provider-capabilities.md) 更新。
 - 前置：ADR-001 v4、ADR-027、ADR-032、ADR-039、ADR-040、ADR-041
+- 适配器现位于 `crates/provider-claude`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 初版决策
 

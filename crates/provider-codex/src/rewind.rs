@@ -1,0 +1,136 @@
+use serde_json::json;
+
+use super::{CodexClient, Transport, controls, native_sessions};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_core::ports::native_history::SessionHistory;
+
+impl CodexClient {
+    pub(super) async fn native_rewind(
+        &self,
+        id: &str,
+        spec: &AgentSessionSpec,
+        message: &str,
+    ) -> Result<SessionHistory, AgentSessionError> {
+        super::validate(spec)?;
+        let mut transport = self.launch_confined(&spec.cwd, false, spec.confinement.as_ref())?;
+        let result = async {
+            transport.initialize().await?;
+            rewind(&mut transport, id, spec, message, &self.images).await
+        }
+        .await;
+        transport.close().await?;
+        result
+    }
+}
+
+async fn rewind(
+    transport: &mut Transport,
+    id: &str,
+    spec: &AgentSessionSpec,
+    message: &str,
+    images: &provider_native::images::ImageStore,
+) -> Result<SessionHistory, AgentSessionError> {
+    let source = transport
+        .request("thread/read", json!({"threadId":id,"includeTurns":true}))
+        .await?;
+    let history = native_sessions::history_with_images(&source["thread"], images)?;
+    if history.active
+        || history.descriptor.provider_handle_id != id
+        || !same_directory(&history.descriptor.cwd, &spec.cwd).await
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    let turns = source["thread"]["turns"]
+        .as_array()
+        .ok_or(AgentSessionError::Failed)?;
+    let targets: Vec<_> = turns
+        .iter()
+        .enumerate()
+        .filter(|(_, turn)| {
+            turn["items"].as_array().is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| item["type"] == "userMessage" && item["id"] == message)
+            })
+        })
+        .collect();
+    if targets.len() != 1 {
+        return Err(AgentSessionError::Rejected);
+    }
+    let index = targets[0].0;
+    let (approval, sandbox, _) = controls::policy(&spec.config, spec.confinement.is_some());
+    let mut params = json!({"threadId":id,"cwd":spec.cwd,"model":spec.config.model,
+        "approvalPolicy":approval,"sandbox":sandbox,"excludeTurns":false,
+        "beforeTurnId":turns[index]["id"],
+        "approvalsReviewer":super::workflows::reviewer(&spec.config),
+        "config":provider_native::configuration::codex(&spec.config)?});
+    if let Some(prompt) = &spec.config.system_prompt {
+        params["developerInstructions"] = json!(prompt);
+    }
+    let forked = transport.request("thread/fork", params).await?;
+    let fork = native_sessions::text(&forked["thread"], "id")?.to_owned();
+    if fork == id {
+        return Err(AgentSessionError::Failed);
+    }
+    let mut response = transport
+        .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
+        .await?;
+    let retained = response["thread"]["turns"]
+        .as_array()
+        .ok_or(AgentSessionError::Failed)?;
+    // Older app servers ignore beforeTurnId and need rollback on the fork only.
+    // Newer app servers support the exclusive fork but have removed thread/rollback.
+    if retained.len() == turns.len() {
+        if response["thread"]["id"] != fork {
+            return Err(AgentSessionError::Failed);
+        }
+        let count = u32::try_from(turns.len() - index).map_err(|_| AgentSessionError::Failed)?;
+        let rolled = transport
+            .request("thread/rollback", json!({"threadId":fork,"numTurns":count}))
+            .await?;
+        if rolled["thread"]["id"] != fork {
+            return Err(AgentSessionError::Failed);
+        }
+        response = transport
+            .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
+            .await?;
+    }
+    let mut result = native_sessions::history_with_images(&response["thread"], images)?;
+    if result.active
+        || result.descriptor.provider_handle_id != fork
+        || !same_directory(&result.descriptor.cwd, &spec.cwd).await
+    {
+        return Err(AgentSessionError::Failed);
+    }
+    let expected: Vec<_> = history
+        .entries
+        .iter()
+        .take_while(|entry| entry.turn_id.as_deref() != turns[index]["id"].as_str())
+        .collect();
+    if expected.len() != result.entries.len()
+        || !expected.iter().zip(&result.entries).all(|(old, new)| {
+            old.key == new.key && old.item == new.item && old.turn_id == new.turn_id
+        })
+    {
+        return Err(AgentSessionError::Failed);
+    }
+    // Validate the ordinary turn prefix above, then restore any canonical speech retained by
+    // the fork. Speech has no text-turn identity and must not enter the rewind target check.
+    if let Some(entries) =
+        super::realtime_history::read(transport, &response["thread"], images).await?
+    {
+        result.entries = entries;
+    }
+    Ok(result)
+}
+
+/// Compare two working directories by their canonical path.
+///
+/// Paths that cannot be resolved at all compare equal, matching the previous
+/// `canonicalize(..).ok()` comparison and keeping unresolvable input non-fatal here.
+async fn same_directory(left: &str, right: &str) -> bool {
+    tokio::fs::canonicalize(left).await.ok() == tokio::fs::canonicalize(right).await.ok()
+}
+
+#[cfg(test)]
+mod tests;

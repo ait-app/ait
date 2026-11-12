@@ -1,0 +1,398 @@
+//! ACP launch configuration only; no project files or shared native configuration are written.
+use std::path::Path;
+
+use domain::agent_runtime::StoredAgentConfig;
+use serde_json::{Value, json};
+use tokio::{process::Command, time::Instant};
+
+use super::{client::OpenCodeClient, config, observation::Source};
+use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use provider_native::{acp_transport::Transport, metadata_process::Process};
+
+const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Read and validate the CLI version a launch in `cwd` resolves, reusing an earlier probe there.
+/// Version managers can resolve a different release per directory, so the cache is per cwd.
+/// Unsupported releases return unavailable and are not cached; the next call probes again.
+pub(super) async fn version(
+    client: &OpenCodeClient,
+    cwd: &str,
+) -> Result<String, AgentSessionError> {
+    let cached = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .get(cwd)
+        .cloned();
+    if let Some(version) = cached {
+        return Ok(version);
+    }
+    let version = probe_version(client, cwd).await?;
+    client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .insert(cwd.to_owned(), version.clone());
+    Ok(version)
+}
+
+/// Probe the installed CLI version in `cwd` without the cache, for availability and diagnostics.
+/// Every cached directory is forgotten so later launches observe an upgraded or removed release.
+pub(super) async fn refresh_version(
+    client: &OpenCodeClient,
+    cwd: &str,
+) -> Result<String, AgentSessionError> {
+    let probed = probe_version(client, cwd).await;
+    let mut versions = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?;
+    versions.clear();
+    if let Ok(version) = &probed {
+        versions.insert(cwd.to_owned(), version.clone());
+    }
+    probed
+}
+
+async fn probe_version(client: &OpenCodeClient, cwd: &str) -> Result<String, AgentSessionError> {
+    let output = read(client, cwd, &["--version"]).await?;
+    let version = output
+        .trim()
+        .strip_prefix("opencode ")
+        .unwrap_or(output.trim());
+    let version = version.strip_prefix('v').unwrap_or(version);
+    let numbers = version
+        .split(['.', '-', '+'])
+        .take(3)
+        .map(str::parse::<u32>)
+        .collect::<Result<Vec<_>, _>>();
+    if !matches!(numbers.as_deref(), Ok([1 | 2, _, _])) {
+        tracing::warn!("OpenCode ACP configuration format requires OpenCode 1.x or 2.x");
+        return Err(AgentSessionError::Unavailable);
+    }
+    Ok(version.to_owned())
+}
+
+/// Whether the native release has the validated ACP catalog and form implementation.
+pub(super) fn supported(version: &str) -> bool {
+    let mut numbers = version
+        .split(['.', '-', '+'])
+        .take(3)
+        .map(str::parse::<u32>);
+    matches!(
+        (numbers.next(), numbers.next(), numbers.next()),
+        (Some(Ok(1)), Some(Ok(_)), Some(Ok(_)))
+            | (Some(Ok(2)), Some(Ok(0)), Some(Ok(25..)))
+            | (Some(Ok(2)), Some(Ok(1..)), Some(Ok(_)))
+    )
+}
+
+/// Initialize an owned ACP child in cwd; propagate launch and protocol failures.
+pub(super) async fn spawn(
+    client: &OpenCodeClient,
+    cwd: &str,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value), AgentSessionError> {
+    let (transport, capabilities, _) = launch(client, cwd, selected, Launch::default()).await?;
+    Ok((transport, capabilities))
+}
+
+/// Initialize ACP with a read-only supplement only for its verified missing metadata profile.
+pub(super) async fn observed(
+    client: &OpenCodeClient,
+    cwd: &str,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+    launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            observe: true,
+            ..Launch::default()
+        },
+    )
+    .await
+}
+
+/// Initialize an Agent's interactive ACP child, confined when its Workspace is sandboxed.
+pub(super) async fn session(
+    client: &OpenCodeClient,
+    spec: &AgentSessionSpec,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+    launch(
+        client,
+        &spec.cwd,
+        selected,
+        Launch {
+            observe: true,
+            confinement: spec.confinement.as_ref(),
+            ..Launch::default()
+        },
+    )
+    .await
+}
+
+/// Initialize an owned tool-disabled ACP child; propagate configuration and launch failures.
+pub(super) async fn auxiliary(
+    client: &OpenCodeClient,
+    cwd: &str,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value), AgentSessionError> {
+    let (transport, capabilities, _) = launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            auxiliary: true,
+            ..Launch::default()
+        },
+    )
+    .await?;
+    Ok((transport, capabilities))
+}
+
+/// Role and confinement of one native ACP child.
+#[derive(Debug, Clone, Copy, Default)]
+struct Launch<'a> {
+    /// Tool-disabled auxiliary model process.
+    auxiliary: bool,
+    /// Prepare the read-only metadata supplement.
+    observe: bool,
+    /// OS write confinement for an Agent in a sandboxed Workspace.
+    confinement: Option<&'a domain::workspace::sandbox::WriteConfinement>,
+}
+
+async fn launch(
+    client: &OpenCodeClient,
+    cwd: &str,
+    selected: &StoredAgentConfig,
+    role: Launch<'_>,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+    let started = Instant::now();
+    let deadline = started + client.startup_timeout;
+    let version = tokio::time::timeout_at(deadline, version(client, cwd))
+        .await
+        .map_err(|_| AgentSessionError::Failed)??;
+    if !supported(&version) {
+        tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.25 or newer");
+        return Err(AgentSessionError::Unavailable);
+    }
+    tracing::debug!(
+        elapsed_ms = started.elapsed().as_millis(),
+        "opencode.startup.version"
+    );
+    let legacy = version.starts_with("1.");
+    let mut command = provider_native::sandbox::command(
+        &client.program,
+        role.confinement,
+        provider_native::sandbox::OPENCODE_STATE,
+        &|name| {
+            client
+                .environment
+                .get(name)
+                .cloned()
+                .or_else(|| std::env::var(name).ok())
+        },
+    )?;
+    command.arg("acp").envs(&client.environment);
+    let mut observation = if role.observe {
+        Source::prepare(&version, client.deadline)?
+    } else {
+        None
+    };
+    if let Some(source) = &observation {
+        source.configure(&mut command)?;
+    }
+    if legacy {
+        // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
+        command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
+    }
+    configure_overlay(&mut command, client, selected, role.auxiliary, legacy)?;
+    // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
+    // Hold the clone-shared gate only through initialization, never through a session or prompt.
+    let queued = Instant::now();
+    let _startup = if legacy {
+        None
+    } else {
+        Some(
+            tokio::time::timeout_at(deadline, client.startup.lock())
+                .await
+                .map_err(|_| AgentSessionError::Failed)?,
+        )
+    };
+    tracing::debug!(
+        elapsed_ms = queued.elapsed().as_millis(),
+        "opencode.startup.queue"
+    );
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if let Some(source) = &mut observation {
+        source.release();
+    }
+    let mut transport = Transport::spawn(command, cwd, remaining, "opencode")?;
+    let initialized_at = Instant::now();
+    let initialized = if let Ok(result) = tokio::time::timeout_at(
+        deadline,
+        transport.request(
+            "initialize",
+            json!({"protocolVersion":1,
+        "clientCapabilities":{"elicitation":{"form":{}},"_meta":{"opencode/child-session-updates":true}},
+        "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
+        ),
+    )
+    .await
+    {
+        result?
+    } else {
+        let _ = transport.close().await;
+        return Err(AgentSessionError::Failed);
+    };
+    tracing::debug!(
+        elapsed_ms = initialized_at.elapsed().as_millis(),
+        "opencode.startup.initialize"
+    );
+    transport.set_control_deadline(client.deadline);
+    if initialized["protocolVersion"] != 1 {
+        return Err(AgentSessionError::Failed);
+    }
+    let capabilities = &initialized["agentCapabilities"];
+    *client
+        .capabilities
+        .write()
+        .map_err(|_| AgentSessionError::Failed)? = Some(super::client::Capabilities {
+        history: capabilities["loadSession"] == true,
+        listing: capabilities["sessionCapabilities"]["list"].is_object(),
+        deletion: capabilities["sessionCapabilities"]["delete"].is_object(),
+    });
+    Ok((
+        transport,
+        initialized["agentCapabilities"].clone(),
+        observation,
+    ))
+}
+
+fn configure_overlay(
+    command: &mut Command,
+    client: &OpenCodeClient,
+    selected: &StoredAgentConfig,
+    auxiliary: bool,
+    legacy: bool,
+) -> Result<(), AgentSessionError> {
+    if auxiliary || config::permission(selected).is_some() || selected.system_prompt.is_some() {
+        let mut overlay: Value = serde_json::from_str(&overlay(client, selected, legacy)?)
+            .map_err(|_| AgentSessionError::Rejected)?;
+        if auxiliary {
+            let agents = if legacy { "agent" } else { "agents" };
+            let agent = native_agent(&mut overlay, agents, "build")?;
+            agent.insert("steps".into(), json!(1));
+            // The native permissions remove tools from an auxiliary model's tool catalog.
+            if legacy {
+                agent.insert("permission".into(), json!({"*":"deny"}));
+            } else {
+                agent.insert(
+                    "permissions".into(),
+                    json!([{"action":"*","resource":"*","effect":"deny"}]),
+                );
+            }
+        }
+        command.env("OPENCODE_CONFIG_CONTENT", overlay.to_string());
+    }
+    Ok(())
+}
+
+fn overlay(
+    client: &OpenCodeClient,
+    selected: &StoredAgentConfig,
+    legacy: bool,
+) -> Result<String, AgentSessionError> {
+    let inherited = client
+        .environment
+        .get("OPENCODE_CONFIG_CONTENT")
+        .cloned()
+        .or_else(|| std::env::var("OPENCODE_CONFIG_CONTENT").ok());
+    let mut value: Value = inherited
+        .map_or(Ok(json!({})), |text| serde_json::from_str(&text))
+        .map_err(|_| AgentSessionError::Rejected)?;
+    if !value.is_object() {
+        return Err(AgentSessionError::Rejected);
+    }
+    if let Some(effect) = config::permission(selected) {
+        if legacy {
+            // A string is the native all-tools shorthand; retain native per-tool rules.
+            if let Some(inherited) = value["permission"].as_str() {
+                value["permission"] = json!({"*":inherited});
+            }
+            if value["permission"].is_null() {
+                value["permission"] = json!({});
+            }
+            value["permission"]
+                .as_object_mut()
+                .ok_or(AgentSessionError::Rejected)?
+                .insert("*".into(), json!(effect));
+        } else {
+            let rules = value
+                .as_object_mut()
+                .ok_or(AgentSessionError::Rejected)?
+                .entry("permissions")
+                .or_insert_with(|| json!([]))
+                .as_array_mut()
+                .ok_or(AgentSessionError::Rejected)?;
+            rules.push(json!({"action":"*","resource":"*","effect":effect}));
+        }
+    }
+    if let Some(prompt) = &selected.system_prompt {
+        let mode = selected.mode_id.as_deref().unwrap_or("build");
+        let agents = if legacy { "agent" } else { "agents" };
+        native_agent(&mut value, agents, mode)?.insert(
+            if legacy { "prompt" } else { "system" }.into(),
+            json!(prompt),
+        );
+    }
+    Ok(value.to_string())
+}
+
+fn native_agent<'a>(
+    value: &'a mut Value,
+    agents: &str,
+    mode: &str,
+) -> Result<&'a mut serde_json::Map<String, Value>, AgentSessionError> {
+    value
+        .as_object_mut()
+        .ok_or(AgentSessionError::Rejected)?
+        .entry(agents)
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or(AgentSessionError::Rejected)?
+        .entry(mode)
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or(AgentSessionError::Rejected)
+}
+
+/// Bounded read-only CLI queries; stderr is never logged or returned.
+pub(super) async fn read(
+    client: &OpenCodeClient,
+    cwd: &str,
+    arguments: &[&str],
+) -> Result<String, AgentSessionError> {
+    if !Path::new(cwd).is_dir() {
+        return Err(AgentSessionError::Rejected);
+    }
+    let process = Process::spawn(
+        Command::new(&client.program)
+            .args(arguments)
+            .envs(&client.environment)
+            .current_dir(cwd),
+    )
+    .map_err(|error| {
+        tracing::warn!(error_kind = ?error.kind(), os_error = error.raw_os_error(), "OpenCode CLI query failed to start");
+        AgentSessionError::Unavailable
+    })?;
+    tokio::time::timeout(client.startup_timeout, process.output(MAX_QUERY_BYTES))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+}
+
+#[cfg(test)]
+mod tests;

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use serde_json::{Value, json};
 
 use super::config;
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Built-in commands Ait handles out of band: name, description and argument hint, as
 /// Paseo's `OMP_HANDLED_BUILTIN_SLASH_COMMANDS`.

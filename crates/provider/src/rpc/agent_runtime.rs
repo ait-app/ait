@@ -27,7 +27,6 @@ use domain::workspace::protocol::workspace::ProjectCheckoutLitePayload;
 use domain::workspace::protocol::workspace::ProjectPlacementPayload;
 use serde_json::Value;
 
-use crate::protocol::agent_config::NullableSetting;
 use crate::protocol::agent_lifecycle::{
     AgentActionResult, AgentArchiveResult, AgentAttentionClearRequest, AgentAttentionClearResult,
     AgentCapabilityFlags, AgentDeleteResult, AgentDirectoryEntry, AgentDirectoryFilter,
@@ -46,6 +45,7 @@ use crate::service::agent_runtime::{
 };
 use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use provider_core::protocol::agent_config::NullableSetting;
 
 /// Decode and execute a business request.
 ///
@@ -495,9 +495,9 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
             .and_then(|info| info.extra.as_ref())
             .and_then(|extra| extra.get("lastUsage"))
             .and_then(|usage| {
-                serde_json::from_value::<crate::protocol::usage::AgentUsage>(usage.clone()).ok()
+                serde_json::from_value::<provider_core::protocol::usage::AgentUsage>(usage.clone()).ok()
             })
-            .filter(crate::protocol::usage::AgentUsage::is_valid),
+            .filter(provider_core::protocol::usage::AgentUsage::is_valid),
         last_error: None,
         // A hidden session never gets a generated title; its tab still needs a name.
         title: record

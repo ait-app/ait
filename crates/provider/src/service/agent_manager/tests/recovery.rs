@@ -215,7 +215,7 @@ fn recovery_does_not_insert_a_continuation_ahead_of_already_queued_user_work() {
         .reserve_input(
             &record.id,
             "newer-input",
-            &crate::protocol::prompt::AgentPrompt::text("new direction"),
+            &provider_core::protocol::prompt::AgentPrompt::text("new direction"),
             "interrupt",
         )
         .unwrap();

@@ -24,7 +24,7 @@ async fn native_errors_retain_detail_after_close_and_successful_retries_clear_it
     );
     assert_eq!(
         session.failure_diagnostic().unwrap().category,
-        provider::ports::diagnostics::Category::Quota
+        provider_core::ports::diagnostics::Category::Quota
     );
     let message = session.failure_message().unwrap().into_owned();
     assert!(message.contains("Oh My Pi"));
@@ -48,7 +48,7 @@ async fn native_errors_retain_detail_after_close_and_successful_retries_clear_it
 
 #[tokio::test]
 async fn unknown_native_and_adapter_errors_remain_specific_after_close() {
-    use provider::ports::diagnostics::Category;
+    use provider_core::ports::diagnostics::Category;
 
     for (prompt, reason, category) in [
         (
@@ -132,7 +132,7 @@ async fn invalid_frames_are_dropped_without_failing_the_turn() {
 
 #[tokio::test]
 async fn an_unexpected_exit_reports_its_code_and_a_redacted_stderr_tail() {
-    use provider::ports::diagnostics::Category;
+    use provider_core::ports::diagnostics::Category;
 
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();

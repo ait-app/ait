@@ -9,10 +9,12 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::AgentManager;
-use crate::ports::agent_session::{AgentClient, AgentSessionError};
-use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::native_sessions::RecentRequest;
 use crate::support::time::now_timestamp;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
+use provider_core::ports::native_history::{
+    CwdLookup, ListOptions, SessionDescriptor, SessionHistory,
+};
 
 impl AgentManager {
     pub(crate) async fn recent_sessions(&self, request: RecentRequest) -> Result<Value, ErrorCode> {
@@ -56,7 +58,8 @@ impl AgentManager {
             {
                 continue;
             }
-            let provider_options = listing_options(provider, &options, lookup_cwd.as_deref());
+            let provider_options =
+                listing_options(self.cwd_lookup(provider), &options, lookup_cwd.as_deref());
             let sessions = self
                 .list_importable_sessions(client.as_ref(), &provider_options)
                 .await;
@@ -388,9 +391,13 @@ fn matches_query(session: &SessionDescriptor, query: &str) -> bool {
         .any(|text| text.to_lowercase().contains(query))
 }
 
-fn listing_options(provider: &str, options: &ListOptions, lookup_cwd: Option<&str>) -> ListOptions {
+fn listing_options(
+    lookup: CwdLookup,
+    options: &ListOptions,
+    lookup_cwd: Option<&str>,
+) -> ListOptions {
     let mut provider_options = options.clone();
-    if provider == crate::local::pi::PROVIDER {
+    if lookup == CwdLookup::Requested {
         provider_options.cwd = lookup_cwd.map(str::to_owned);
     }
     provider_options

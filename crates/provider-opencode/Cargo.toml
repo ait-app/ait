@@ -1,0 +1,43 @@
+[package]
+name = "provider-opencode"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, ACP, diagnostics.
+provider-native.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+# Basic credentials of the owned native observation server.
+base64.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+# Bounded loopback HTTP and SSE reads from the owned native observation server.
+reqwest.workspace = true
+# Read-only native subagent records in OpenCode's history database.
+rusqlite.workspace = true
+rusqlite.features = ["bundled"]
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Drive the adapter through the runtime's execution worker and AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true
+tempfile.workspace = true
+# Paused clocks for startup and cancellation budgets.
+tokio = { workspace = true, features = ["test-util"] }
+# Offline model API and native observation server fakes.
+axum.workspace = true

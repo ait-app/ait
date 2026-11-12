@@ -1,7 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::protocol::timeline::{FetchRequest, NativeItem};
+use crate::protocol::timeline::FetchRequest;
 use crate::rpc::timeline::{fetch, fetch_stored};
+use provider_core::protocol::timeline::NativeItem;
 
 use super::*;
 

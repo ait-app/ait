@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use serde_json::{Map, Value, json};
 
 use crate::PROVIDER;
-use provider::ports::agent_session::AgentSessionError;
+use provider_core::ports::agent_session::AgentSessionError;
 
 /// Option OMP adds to a choice field for a typed answer.
 const OTHER: &str = "Other (type your own)";

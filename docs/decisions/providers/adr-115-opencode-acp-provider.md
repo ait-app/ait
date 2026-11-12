@@ -7,6 +7,8 @@ amends:
   - providers/adr-110-opencode-private-protocol-boundary.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-opencode
 ---
 
 # ADR-115：OpenCode 官方 ACP Provider

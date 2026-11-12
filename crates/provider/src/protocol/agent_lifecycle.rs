@@ -6,7 +6,7 @@ use domain::workspace::protocol::workspace::ProjectPlacementPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::agent_config::NullableSetting;
+use provider_core::protocol::agent_config::NullableSetting;
 
 /// Paseo Agent lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,7 +135,7 @@ pub(crate) struct AgentSnapshotPayload {
     pub(crate) runtime_info: Option<AgentRuntimeInfo>,
     /// Latest provider-reported usage, retained across disconnects and native resume.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) last_usage: Option<crate::protocol::usage::AgentUsage>,
+    pub(crate) last_usage: Option<provider_core::protocol::usage::AgentUsage>,
     /// Last provider error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) last_error: Option<String>,

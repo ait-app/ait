@@ -4,10 +4,10 @@ use std::sync::Mutex;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::*;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
-use crate::ports::native_history::{SessionDescriptor, SessionHistory};
+use provider_core::ports::native_history::{SessionDescriptor, SessionHistory};
 
 #[derive(Debug)]
 struct MetadataClient {

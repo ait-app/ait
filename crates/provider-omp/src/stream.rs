@@ -11,10 +11,10 @@ use sha2::{Digest, Sha256};
 use chrono::{TimeZone, Utc};
 use serde_json::{Value, json};
 
-use provider::local::images::{ImageStore, UNAVAILABLE_IMAGE};
-use provider::local::usage::requests;
-use provider::ports::agent_session::AgentTurnEvent;
-use provider::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_core::ports::agent_session::AgentTurnEvent;
+use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
+use provider_native::images::{ImageStore, UNAVAILABLE_IMAGE};
+use provider_native::usage::requests;
 
 use super::events;
 use super::tool_detail::{self, Report, Status};

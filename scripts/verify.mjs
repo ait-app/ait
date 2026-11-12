@@ -31,6 +31,9 @@ const RUST_INPUTS = [
   [/^skills\/ait-orchestration\//, ["provider", "daemon"]],
   [/^scripts\/fixtures\//, ["api"]],
 ];
+// ADR-270: `--all-targets` enables these crates' `test-support` feature through dev-dependencies,
+// so their production configuration is linted again as a plain library.
+const LINTED_WITHOUT_TEST_SUPPORT = ["provider", "provider-codex"];
 
 const UI_WIDE = [
   /^package(?:-lock)?\.json$/,
@@ -145,6 +148,13 @@ function rustSteps({ changed, graph, scope, ci }) {
       "warnings",
     ),
   ];
+  const production = LINTED_WITHOUT_TEST_SUPPORT.filter((name) => wide || linted.includes(name));
+  if (production.length > 0) {
+    const packages = production.flatMap((name) => ["-p", name]);
+    steps.push(
+      step("rust", "cargo", "clippy", "--locked", ...packages, "--lib", "--", "-D", "warnings"),
+    );
+  }
   const notes = [];
   if (scope === "owners" && wide) {
     notes.push("Workspace-wide Rust inputs changed; run --scope all to test every crate.");
@@ -194,7 +204,7 @@ function classifyUi(changed, exists) {
       continue;
     }
     if (UI_RELEASE.test(file)) needs.touched = needs.release = true;
-    if (file.startsWith("crates/provider/tests/fixtures/")) {
+    if (/^crates\/provider(?:-[a-z-]+)?\/tests\/fixtures\//.test(file)) {
       needs.touched = true;
       for (const name of UI_TESTED_PACKAGES) needs.packages.add(name);
       typecheckClients();

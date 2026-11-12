@@ -1,0 +1,1288 @@
+//! Codex app-server session adapter, following Paseo's native thread/turn ownership.
+
+mod async_questions;
+mod commands;
+pub(crate) mod controls;
+mod discovery;
+mod inspection;
+mod metadata;
+mod native_sessions;
+mod permissions;
+mod plans;
+mod prompts;
+mod realtime;
+mod realtime_history;
+mod realtime_timeline;
+mod rewind;
+mod sandbox;
+mod speed;
+mod streaming;
+mod subagents;
+mod terminal;
+#[cfg(all(unix, any(test, feature = "test-support")))]
+pub mod testing;
+mod transport;
+mod user_images;
+mod voice_transcript;
+mod workflows;
+
+use std::borrow::Cow;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
+use domain::workspace::sandbox::WriteConfinement;
+use serde_json::{Value, json};
+use transport::Transport;
+
+use provider_core::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+    AgentTurnEvent,
+};
+use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+
+/// A native Codex executable. Authentication remains in Codex's own environment and storage.
+#[derive(Debug, Clone)]
+pub struct CodexClient {
+    program: PathBuf,
+    realtime_media: realtime::media::Factory,
+    deadline: Duration,
+    capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
+    images: provider_native::images::ImageStore,
+    environment: provider_core::ports::environment::AgentEnvironment,
+    usage_connection: inspection::connection::Shared,
+    speed_catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
+}
+
+impl CodexClient {
+    fn launch_transport(&self, cwd: &str, goals: bool) -> Result<Transport, AgentSessionError> {
+        self.launch_confined(cwd, goals, None)
+    }
+
+    /// Launch an app-server for an Agent session, under `confinement` when it is sandboxed.
+    fn launch_confined(
+        &self,
+        cwd: &str,
+        goals: bool,
+        confinement: Option<&WriteConfinement>,
+    ) -> Result<Transport, AgentSessionError> {
+        Transport::spawn(
+            &self.program,
+            transport::Launch {
+                cwd,
+                goals,
+                confinement,
+            },
+            self.deadline,
+            &self.environment,
+        )
+    }
+
+    /// Use `program` directly without invoking a shell. Requests have a twenty-second deadline.
+    #[must_use]
+    pub fn new(program: PathBuf) -> Self {
+        Self {
+            program,
+            realtime_media: realtime::media::open,
+            deadline: Duration::from_secs(20),
+            capabilities: std::sync::Arc::default(),
+            images: provider_native::images::ImageStore::default(),
+            environment: provider_core::ports::environment::AgentEnvironment::default(),
+            usage_connection: inspection::connection::Shared::default(),
+            speed_catalog: std::sync::Arc::default(),
+        }
+    }
+
+    /// Replace only upstream media with the offline native protocol fixture.
+    #[cfg(all(unix, any(test, feature = "test-support")))]
+    #[must_use]
+    pub(crate) fn with_fixture_media(mut self) -> Self {
+        self.realtime_media = realtime::media::offline::fixture;
+        self
+    }
+
+    /// Store decoded native image output in a private, persistent directory.
+    #[must_use]
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+        self.images = provider_native::images::ImageStore::new(directory);
+        self
+    }
+
+    async fn restore_children(
+        &self,
+        restore: bool,
+        cwd: &str,
+        id: &str,
+    ) -> Result<subagents::Live, AgentSessionError> {
+        if restore {
+            subagents::Live::restore(self.native_subagents(cwd).await?, id)
+        } else {
+            Ok(subagents::Live::default())
+        }
+    }
+
+    async fn initialized_transport(
+        &self,
+        cwd: &str,
+        confinement: Option<&WriteConfinement>,
+    ) -> Result<Transport, AgentSessionError> {
+        let mut transport = self.launch_confined(cwd, false, confinement)?;
+        let result = async {
+            transport.initialize().await?;
+            self.inspect_workflows(&mut transport).await?;
+            self.ensure_models(&mut transport).await?;
+            if self.goals() {
+                transport.close().await?;
+                transport = self.launch_confined(cwd, true, confinement)?;
+                transport.initialize().await?;
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(error) = result {
+            let _ = transport.close().await;
+            return Err(error);
+        }
+        Ok(transport)
+    }
+
+    // Every session owns its quota pool, regardless of create/resume/environment entry point.
+    fn session_client(&self) -> Self {
+        Self {
+            usage_connection: inspection::connection::Shared::default(),
+            ..self.clone()
+        }
+    }
+
+    async fn open(
+        &self,
+        spec: &AgentSessionSpec,
+        resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.validate_remote(spec).await?;
+        let confined = spec.confinement.is_some();
+        let mut transport = self
+            .initialized_transport(&spec.cwd, spec.confinement.as_ref())
+            .await?;
+        let result = async {
+            let history = resume.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
+            let mut sandbox = if history {
+                sandbox::Sandbox::default()
+            } else {
+                sandbox::Sandbox::load(&mut transport, &spec.cwd, confined).await?
+            };
+            let (method, mut params) = if let Some((handle, _)) = resume {
+                if handle.provider != "codex" || handle.session_id.trim().is_empty() {
+                    return Err(AgentSessionError::Failed);
+                }
+                if history {
+                    (
+                        "thread/read",
+                        json!({"threadId":handle.session_id,"includeTurns":false}),
+                    )
+                } else {
+                    ("thread/resume", json!({"threadId":handle.session_id}))
+                }
+            } else {
+                ("thread/start", json!({}))
+            };
+            if !history {
+                launch_params(&mut params, spec, confined)?;
+            }
+            let response = if method == "thread/resume" {
+                native_sessions::resume(&mut transport, params).await?
+            } else {
+                transport.request(method, params).await?
+            };
+            sandbox.observe(&response);
+            let id = native_sessions::text(&response["thread"], "id")?.to_owned();
+            if resume.is_some_and(|(handle, _)| handle.session_id != id) {
+                return Err(AgentSessionError::Failed);
+            }
+            let info = runtime_info(&response, &id, spec);
+            Ok((id, info, history, sandbox))
+        }
+        .await;
+        match result {
+            Ok((id, info, history, sandbox)) => {
+                if history {
+                    transport.close().await?;
+                }
+                Ok(Box::new(CodexSession {
+                    transport: (!history).then_some(transport),
+                    id: id.clone(),
+                    info,
+                    realtime: None,
+                    voice_timeline: realtime_timeline::Timeline::default(),
+                    sandbox,
+                    active_turn: None,
+                    last_message: None,
+                    last_failure: None,
+                    history,
+                    cwd: spec.cwd.clone(),
+                    confinement: spec.confinement.clone(),
+                    permissions: std::collections::BTreeMap::new(),
+                    questions: async_questions::Questions::restore(saved(
+                        resume,
+                        "asyncQuestions",
+                    ))?,
+                    pending_plan: plans::Plan::restore(saved(resume, "pendingPlan"))?,
+                    latest_plan: None,
+                    stream: streaming::Stream::default(),
+                    terminal: terminal::Terminal::default(),
+                    children: self
+                        .restore_children(resume.is_some() && !history, &spec.cwd, &id)
+                        .await?,
+                    notes: provider_native::notes::Notes::restore(saved(resume, "controlNotes"))?,
+                    last_anchor: None,
+                    manual_compactions: 0,
+                    pending_goal_start: false,
+                    requests: provider_native::usage::requests::CodexRequests::default(),
+                    child_requests: std::collections::BTreeMap::new(),
+                    config: spec.config.clone(),
+                    client: self.session_client(),
+                }))
+            }
+            Err(error) => {
+                let _ = transport.close().await;
+                Err(error)
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentClient for CodexClient {
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("read-only"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
+    }
+
+    fn supports_summary_generation(&self) -> bool {
+        true
+    }
+
+    fn supports_session_import(&self) -> bool {
+        true
+    }
+
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &provider_core::ports::environment::AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        let mut client = self.clone();
+        client.environment = environment.clone();
+        client.open(spec, None).await
+    }
+
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
+        provider_native::summary_model::select(
+            self.provider(),
+            models,
+            &["gpt-6-luna", "gpt-5.6-luna", "gpt-5.4-mini", "mini"],
+        )
+    }
+
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        self.metadata(spec, prompt, schema).await
+    }
+
+    fn handles_out_of_band(&self, text: &str) -> bool {
+        commands::out_of_band(text)
+    }
+    fn persisted_permissions(&self, handle: &AgentPersistenceHandle) -> Vec<Value> {
+        async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )
+        .map(|questions| questions.pending())
+        .unwrap_or_default()
+        .into_iter()
+        .chain(
+            plans::Plan::restore(
+                handle
+                    .metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.get("pendingPlan")),
+            )
+            .ok()
+            .flatten()
+            .map(|plan| plan.request()),
+        )
+        .collect()
+    }
+    fn settings(&self, config: &StoredAgentConfig) -> Value {
+        json!({"availableModes":self.modes(),"features":self.features(config),
+            "capabilities":{"supportsDynamicModes":true,"supportsRewindConversation":true,"supportsMcpServers":true,
+                "supportsRealtimeVoice":true,"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
+    }
+
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        if spec.config.model.is_none() {
+            return Ok(Vec::new());
+        }
+        if !self.is_available().await? {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let catalog = self.discover_native(&spec.cwd).await?;
+        let _ = catalog;
+        Ok(self.features(&spec.config))
+    }
+
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        self.validate_remote(spec).await
+    }
+
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        self.native_diagnostic().await
+    }
+
+    async fn close_usage(&self) -> Result<(), AgentSessionError> {
+        self.usage_connection.close().await
+    }
+
+    async fn usage_cache_key(&self) -> Option<provider_core::ports::account_usage::UsageIdentity> {
+        inspection::connection::fingerprint(self).await
+    }
+
+    async fn prepare_usage(
+        &self,
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.prepare_native_usage().await
+    }
+
+    async fn usage(&self) -> Result<Value, AgentSessionError> {
+        self.native_usage().await
+    }
+
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        validate(spec)?;
+        self.native_commands(&spec.cwd).await
+    }
+
+    async fn subagents(
+        &self,
+        cwd: &str,
+    ) -> Result<Vec<provider_core::ports::controls::NativeSubagent>, AgentSessionError> {
+        self.native_subagents(cwd).await
+    }
+
+    async fn rewind(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
+        message: &str,
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut history = self
+            .native_rewind(&handle.session_id, spec, message)
+            .await?;
+        let mut questions = async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?;
+        let mut notes = provider_native::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?;
+        if let Some(plan) = plans::Plan::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("pendingPlan")),
+        )?
+        .filter(|plan| plan.retained(&history.entries))
+        {
+            history
+                .resume_metadata
+                .insert("pendingPlan".to_owned(), json!(plan));
+        }
+        notes.retain(&history.entries);
+        notes.history(&mut history.entries);
+        if let Some(saved) = notes.saved() {
+            history
+                .resume_metadata
+                .insert("controlNotes".to_owned(), saved);
+        }
+        questions.retain(&history.entries);
+        questions.history(&mut history.entries)?;
+        if let Some(saved) = questions.saved() {
+            history
+                .resume_metadata
+                .insert("asyncQuestions".to_owned(), saved);
+        }
+        Ok(history)
+    }
+
+    fn provider(&self) -> &'static str {
+        "codex"
+    }
+
+    fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        validate_config(config)
+    }
+
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(if self.program.components().count() > 1 {
+            self.program.is_file()
+        } else {
+            std::env::var_os("PATH").is_some_and(|paths| {
+                std::env::split_paths(&paths).any(|path| path.join(&self.program).is_file())
+            })
+        })
+    }
+
+    async fn discover(
+        &self,
+        cwd: &str,
+    ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
+        self.discover_native(cwd).await
+    }
+
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut entries = self.read_history(&handle.session_id, cwd).await?;
+        provider_native::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?
+        .history(&mut entries);
+        async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?
+        .history(&mut entries)?;
+        Ok(entries)
+    }
+
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.open(spec, None).await
+    }
+
+    async fn list_sessions(
+        &self,
+        options: &provider_core::ports::native_history::ListOptions,
+    ) -> Result<Vec<provider_core::ports::native_history::SessionDescriptor>, AgentSessionError>
+    {
+        self.list_native(options).await
+    }
+
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut history = self.inspect_native(&handle.session_id, cwd).await?;
+        if let Some(plan) = plans::Plan::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("pendingPlan")),
+        )? {
+            history
+                .resume_metadata
+                .insert("pendingPlan".to_owned(), json!(plan));
+        }
+        let notes = provider_native::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?;
+        notes.history(&mut history.entries);
+        if let Some(saved) = notes.saved() {
+            history
+                .resume_metadata
+                .insert("controlNotes".to_owned(), saved);
+        }
+        let questions = async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?;
+        questions.history(&mut history.entries)?;
+        if let Some(saved) = questions.saved() {
+            history
+                .resume_metadata
+                .insert("asyncQuestions".to_owned(), saved);
+        }
+        Ok(history)
+    }
+
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
+        purpose: AgentResumePurpose,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.open(spec, Some((handle, purpose))).await
+    }
+}
+
+#[derive(Debug)]
+struct CodexSession {
+    transport: Option<Transport>,
+    sandbox: sandbox::Sandbox,
+    id: String,
+    info: StoredAgentRuntimeInfo,
+    realtime: Option<realtime::Realtime>,
+    voice_timeline: realtime_timeline::Timeline,
+    active_turn: Option<String>,
+    last_message: Option<String>,
+    last_failure: Option<String>,
+    history: bool,
+    cwd: String,
+    confinement: Option<WriteConfinement>,
+    permissions: std::collections::BTreeMap<String, permissions::Pending>,
+    questions: async_questions::Questions,
+    pending_plan: Option<plans::Plan>,
+    latest_plan: Option<plans::Plan>,
+    children: subagents::Live,
+    notes: provider_native::notes::Notes,
+    last_anchor: Option<String>,
+    manual_compactions: u8,
+    pending_goal_start: bool,
+    /// Live per-request usage deduplicated by the thread's running token total.
+    requests: provider_native::usage::requests::CodexRequests,
+    /// Live per-request usage of each sub-agent thread, keyed by its thread id.
+    child_requests:
+        std::collections::BTreeMap<String, provider_native::usage::requests::CodexRequests>,
+    stream: streaming::Stream,
+    terminal: terminal::Terminal,
+    config: StoredAgentConfig,
+    client: CodexClient,
+}
+
+impl CodexSession {
+    fn observe_children(&mut self, method: &str, params: &Value) -> Result<(), AgentSessionError> {
+        let events = self
+            .children
+            .observe(method, params, (&self.id, &self.cwd), &self.client.images)
+            .inspect_err(|_| {
+                if let Some(transport) = &mut self.transport {
+                    transport.observe_error(
+                        &json!({"message":"Codex sub-agent event could not be processed."}),
+                        provider_core::ports::diagnostics::Diagnostic::new(
+                            provider_core::ports::diagnostics::Category::Protocol,
+                            "subagent_event",
+                        ),
+                        "observe",
+                    );
+                }
+            })?;
+        self.stream.events.extend(events);
+        Ok(())
+    }
+
+    fn finish_turn(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if params["turn"]["status"] == "failed"
+            && !params["turn"]["error"].is_null()
+            && let Some(transport) = &mut self.transport
+        {
+            transport.observe_error(
+                &params["turn"]["error"],
+                provider_native::diagnostics::native(&params["turn"]["error"], "result"),
+                "turn",
+            );
+        }
+        if let Some(turn) = &self.active_turn {
+            self.stream.finish_compactions(turn)?;
+        }
+        self.last_anchor.clone_from(&self.active_turn);
+        self.active_turn = None;
+        self.permissions
+            .retain(|_, pending| pending.request["input"]["threadId"] != self.id);
+        let queued = std::mem::take(&mut self.stream.events);
+        self.stream = streaming::Stream::default();
+        self.stream.events = queued;
+        self.manual_compactions = 0;
+        let terminal = match params.pointer("/turn/status").and_then(Value::as_str) {
+            Some("completed") => AgentTurnEvent::Completed(self.last_message.take()),
+            Some("interrupted") => AgentTurnEvent::Cancelled,
+            _ => AgentTurnEvent::Failed,
+        };
+        if matches!(terminal, AgentTurnEvent::Cancelled) {
+            for request in self.questions.pending() {
+                let id = request["id"].as_str().ok_or(AgentSessionError::Failed)?;
+                let entry = self.questions.resolve(id, &json!({"behavior":"deny"}))?;
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::Timeline(entry));
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+            }
+        }
+        self.finish_plan(matches!(terminal, AgentTurnEvent::Completed(_)))?;
+        self.stream.events.push_back(terminal);
+        Ok(self.stream.events.pop_front())
+    }
+
+    fn observe_interaction(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
+        if item["type"] == "plan"
+            && self
+                .config
+                .feature_values
+                .as_ref()
+                .is_some_and(|features| features.get("plan_mode") == Some(&json!(true)))
+        {
+            self.latest_plan = plans::Plan::receive(item, turn)?;
+        }
+        if item["delivery"] == "async"
+            && let Some(request) = self.questions.receive(item)?
+        {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionRequested(request));
+        }
+        Ok(())
+    }
+
+    fn queue_completed_item(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
+        if item["type"] == "agentMessage" && item["delivery"] != "async" {
+            self.last_message = item["text"].as_str().map(str::to_owned);
+        }
+        self.observe_interaction(item, turn)?;
+        if self.realtime.is_some() || !self.voice_timeline.promoted.is_empty() {
+            self.voice_timeline.ordinary(turn, item)?;
+        }
+        let entries =
+            discovery::timeline_items(item, turn, &discovery::timestamp(), &self.client.images)?;
+        if let Some(entry) = entries.last() {
+            self.questions.observe(entry);
+        }
+        self.stream
+            .events
+            .extend(entries.into_iter().filter_map(|mut entry| {
+                self.voice_timeline
+                    .retain_handoff(&mut entry)
+                    .then_some(AgentTurnEvent::Timeline(entry))
+            }));
+        Ok(())
+    }
+
+    async fn apply_configuration(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<(), AgentSessionError> {
+        if self.config.provider_options == config.provider_options
+            && self.config.mcp_servers == config.mcp_servers
+            && self.config.tool_policy == config.tool_policy
+            && self.config.system_prompt == config.system_prompt
+            && provider_native::configuration::codex_computer_use_auto_approval(&self.config)
+                == provider_native::configuration::codex_computer_use_auto_approval(config)
+        {
+            return Ok(());
+        }
+        if self.realtime.is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
+        if let Some(mut transport) = self.transport.take() {
+            transport.close().await?;
+        }
+        // Thread-level MCP/config changes require a new native process; resuming an
+        // already-loaded thread can return its cached configuration unchanged.
+        let confined = self.confinement.is_some();
+        let mut transport = self.client.launch_confined(
+            &self.cwd,
+            self.client.goals(),
+            self.confinement.as_ref(),
+        )?;
+        let result = async {
+            transport.initialize().await?;
+            let mut resolved_sandbox =
+                sandbox::Sandbox::load(&mut transport, &self.cwd, confined).await?;
+            let (approval, sandbox, _) = controls::policy(config, confined);
+            let response = native_sessions::resume(
+                &mut transport,
+                json!({"threadId":self.id,
+                "cwd":self.cwd,"model":config.model,"approvalPolicy":approval,"sandbox":sandbox,
+                "config":provider_native::configuration::codex(config)?,
+                "approvalsReviewer":workflows::reviewer(config),
+                "developerInstructions":config.system_prompt}),
+            )
+            .await?;
+            if response["thread"]["id"] != self.id {
+                return Err(AgentSessionError::Failed);
+            }
+            resolved_sandbox.observe(&response);
+            self.sandbox = resolved_sandbox;
+            Ok(())
+        }
+        .await;
+        if let Err(error) = result {
+            let _ = transport.close().await;
+            return Err(error);
+        }
+        self.transport = Some(transport);
+        // The new process may restart the thread's running total; ledger ids stay idempotent.
+        self.requests = provider_native::usage::requests::CodexRequests::default();
+        self.child_requests.clear();
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSession for CodexSession {
+    async fn start_realtime(
+        &mut self,
+        endpoint: model::realtime::Endpoint,
+    ) -> Result<(), AgentSessionError> {
+        self.open_realtime(endpoint).await
+    }
+
+    fn realtime_active(&self) -> bool {
+        self.realtime.is_some()
+    }
+
+    async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        self.drive_realtime().await
+    }
+
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.transport
+            .as_ref()
+            .and_then(|transport| transport.failure.message())
+            .or(self.last_failure.as_deref())
+            .map(Cow::Borrowed)
+    }
+
+    fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
+        self.transport
+            .as_ref()
+            .and_then(|transport| transport.diagnostics.failure())
+    }
+
+    async fn prepare_account_usage(
+        &self,
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.client.prepare_native_usage_in(&self.cwd).await
+    }
+
+    async fn account_usage(&self) -> Result<Value, AgentSessionError> {
+        self.client.native_usage_in(&self.cwd).await
+    }
+
+    fn pending_foreground(&self) -> bool {
+        self.pending_goal_start || self.manual_compactions > 0
+    }
+
+    fn reports_token_usage(&self) -> bool {
+        true
+    }
+
+    async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
+        if self.pending_goal_start {
+            self.transport
+                .as_mut()
+                .ok_or(AgentSessionError::Failed)?
+                .request(
+                    "thread/goal/set",
+                    json!({"threadId":self.id,"status":"paused"}),
+                )
+                .await?;
+            self.pending_goal_start = false;
+        }
+        Ok(())
+    }
+
+    async fn out_of_band(
+        &mut self,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        self.execute_command(prompt).await
+    }
+    fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
+        self.children.children()
+    }
+    fn prepare_permission_response(
+        &self,
+        id: &str,
+        response: &Value,
+    ) -> Result<Option<provider_core::protocol::prompt::AgentPrompt>, AgentSessionError> {
+        if self.questions.contains(id) {
+            self.questions.prepare(id, response)
+        } else if let Some(plan) = self
+            .pending_plan
+            .as_ref()
+            .filter(|plan| plan.request_id() == id)
+        {
+            let mut notes = self.notes.clone();
+            notes.push(plan.resolution(response)?)?;
+            plan.prepare(response)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn permission_config_patch(
+        &self,
+        id: &str,
+        response: &Value,
+    ) -> Result<Option<provider_core::protocol::agent_config::ConfigPatch>, AgentSessionError> {
+        self.plan_patch(id, response)
+    }
+
+    fn pending_permissions(&self) -> Vec<Value> {
+        self.permissions
+            .values()
+            .map(|pending| pending.request.clone())
+            .chain(self.questions.pending())
+            .chain(self.pending_plan.as_ref().map(plans::Plan::request))
+            .collect()
+    }
+
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if self.questions.contains(id) {
+            let entry = self.questions.resolve(id, response)?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(entry));
+            return Ok(());
+        }
+        if self
+            .pending_plan
+            .as_ref()
+            .is_some_and(|plan| plan.request_id() == id)
+        {
+            return self.resolve_plan(response);
+        }
+        self.answer_permission(id, response).await
+    }
+
+    fn provider(&self) -> &'static str {
+        "codex"
+    }
+
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(self.info.clone())
+    }
+
+    fn persistence(&self) -> Option<AgentPersistenceHandle> {
+        let mut metadata = std::collections::BTreeMap::new();
+        if let Some(plan) = &self.pending_plan {
+            metadata.insert("pendingPlan".to_owned(), json!(plan));
+        }
+        if let Some(saved) = self.questions.saved() {
+            metadata.insert("asyncQuestions".to_owned(), saved);
+        }
+        if let Some(saved) = self.notes.saved() {
+            metadata.insert("controlNotes".to_owned(), saved);
+        }
+        Some(AgentPersistenceHandle {
+            provider: "codex".to_owned(),
+            session_id: self.id.clone(),
+            native_handle: None,
+            metadata: (!metadata.is_empty()).then_some(metadata),
+        })
+    }
+
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start_input(
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+            config,
+        )
+        .await
+    }
+
+    async fn start_input(
+        &mut self,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        validate_config(config)?;
+        prompt.validate()?;
+        if self.history || self.active_turn.is_some() {
+            return Err(AgentSessionError::Failed);
+        }
+        self.preflight_plan(prompt)?;
+        self.last_failure = None;
+        if let Some(transport) = &mut self.transport {
+            transport.diagnostics.clear();
+            transport.failure.clear();
+        }
+
+        self.apply_configuration(config).await?;
+        let (approval, _, _) = controls::policy(config, self.confinement.is_some());
+        let sandbox = self.sandbox.policy(config);
+        let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
+        let input = commands::input(transport, &self.cwd, prompt, &self.client.environment).await?;
+        let collaboration = workflows::collaboration(
+            transport,
+            config,
+            self.info.model.as_deref(),
+            self.config
+                .feature_values
+                .as_ref()
+                .is_some_and(|values| values.contains_key("plan_mode")),
+        )
+        .await?;
+        let mut params = json!({"threadId":self.id,"input":input,
+                "model":config.model,"effort":config.thinking_option_id,"approvalPolicy":approval,
+                "clientUserMessageId":prompt.client_message_id,"outputSchema":prompt.output_schema,
+                "approvalsReviewer":workflows::reviewer(config),
+                "sandboxPolicy":sandbox,"serviceTier":self.client.service_tier(config)});
+        if let Some(collaboration) = collaboration {
+            params["collaborationMode"] = collaboration;
+        }
+        let response = transport.request("turn/start", params).await?;
+        let id = response
+            .pointer("/turn/id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or(AgentSessionError::Failed)?
+            .to_owned();
+        self.dismiss_plan_for(prompt)?;
+        self.latest_plan = None;
+        self.active_turn = Some(id.clone());
+        self.config = config.clone();
+        if config.model.is_some() {
+            self.info.model.clone_from(&config.model);
+        }
+        self.info.mode_id = Some(
+            config
+                .mode_id
+                .clone()
+                .unwrap_or_else(|| "read-only".to_owned()),
+        );
+        self.info
+            .thinking_option_id
+            .clone_from(&config.thinking_option_id);
+        self.last_message = None;
+        let queued = std::mem::take(&mut self.stream.events);
+        self.stream = streaming::Stream::default();
+        self.stream.events = queued;
+        Ok(id)
+    }
+
+    async fn steer_turn(&mut self, turn_id: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.steer_input(
+            turn_id,
+            &provider_core::protocol::prompt::AgentPrompt::text(text),
+        )
+        .await
+    }
+
+    async fn steer_input(
+        &mut self,
+        turn_id: &str,
+        prompt: &provider_core::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        prompt.validate()?;
+        if self.history
+            || self.active_turn.as_deref() != Some(turn_id)
+            || prompt.text.starts_with('/')
+            || prompt.output_schema.is_some()
+            || !self.permissions.is_empty()
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let response = self
+            .transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .request(
+                "turn/steer",
+                json!({"threadId":self.id,"expectedTurnId":turn_id,
+                    "clientUserMessageId":prompt.client_message_id,"input":prompt.codex_input()?}),
+            )
+            .await?;
+        if response
+            .get("turnId")
+            .or_else(|| response.pointer("/turn/id"))
+            .and_then(Value::as_str)
+            != Some(turn_id)
+        {
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+
+    async fn cancel_turn(&mut self, turn_id: &str) -> Result<(), AgentSessionError> {
+        if self.active_turn.as_deref() != Some(turn_id) {
+            return Err(AgentSessionError::Failed);
+        }
+        self.transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .request(
+                "turn/interrupt",
+                json!({"threadId":self.id,"turnId":turn_id}),
+            )
+            .await?;
+        Ok(())
+    }
+
+    fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if self.transport.is_none() {
+            return Ok(None);
+        }
+        // Bound per-session work so an output-heavy provider cannot starve other Agents.
+        for _ in 0..128 {
+            if let Some(event) = self.stream.events.pop_front() {
+                return Ok(Some(event));
+            }
+            let Some(message) = self
+                .transport
+                .as_mut()
+                .ok_or(AgentSessionError::Failed)?
+                .poll()?
+            else {
+                return Ok(None);
+            };
+            let method = message
+                .get("method")
+                .and_then(Value::as_str)
+                .ok_or(AgentSessionError::Failed)?;
+            if method == "server/unsupportedRequest" {
+                return Err(AgentSessionError::Unavailable);
+            }
+            if message.get("id").is_some() {
+                let event = self.capture_permission(&message)?;
+                if let AgentTurnEvent::PermissionRequested(request) = &event
+                    && self.approve_computer_use(
+                        request["id"].as_str().ok_or(AgentSessionError::Failed)?,
+                    )?
+                {
+                    continue;
+                }
+                return Ok(Some(event));
+            }
+            let params = &message["params"];
+            self.observe_children(method, params)?;
+            if method == "serverRequest/resolved"
+                && params["threadId"]
+                    .as_str()
+                    .is_some_and(|id| id == self.id || self.children.contains(id))
+            {
+                if let Some(id) = self.resolve_native_permission(&params["requestId"]) {
+                    return Ok(Some(AgentTurnEvent::PermissionResolved(id)));
+                }
+                continue;
+            }
+            if params.get("threadId").and_then(Value::as_str) != Some(&self.id) {
+                if method == "thread/tokenUsage/updated" {
+                    self.child_token_usage(params);
+                }
+                continue;
+            }
+            if method.starts_with("thread/realtime/") {
+                self.observe_realtime(method, params)?;
+                continue;
+            }
+            if let Some(event) = self.control_event(method, params)? {
+                return Ok(Some(event));
+            }
+            let turn_id = params
+                .get("turnId")
+                .or_else(|| params.pointer("/turn/id"))
+                .and_then(Value::as_str);
+            if self.active_turn.is_none() || turn_id != self.active_turn.as_deref() {
+                continue;
+            }
+            if method == "error" {
+                let mut diagnostic =
+                    provider_native::diagnostics::native(&params["error"], "notification");
+                diagnostic.will_retry = params["willRetry"].as_bool();
+                if let Some(transport) = &mut self.transport {
+                    transport.observe_error(&params["error"], diagnostic, "turn");
+                }
+                continue;
+            }
+            if let Some(event) = self.terminal.observe(method, params)? {
+                return Ok(Some(event));
+            }
+            if let Some(event) = self.stream.progress(method, params)? {
+                if let AgentTurnEvent::Progress { entry, .. } = &event {
+                    self.questions.observe(entry);
+                }
+                return Ok(Some(event));
+            }
+            if method == "item/completed" && !self.stream.complete(&params["item"])? {
+                continue;
+            }
+            if method == "item/completed" {
+                let turn = turn_id.ok_or(AgentSessionError::Failed)?;
+                self.queue_completed_item(&params["item"], turn)?;
+                if let Some(event) = self.stream.events.pop_front() {
+                    return Ok(Some(event));
+                }
+            }
+            if method == "turn/completed" {
+                return self.finish_turn(params);
+            }
+        }
+        Ok(None)
+    }
+
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let usage_closed = self.client.usage_connection.close().await;
+        if let Some(transport) = &mut self.transport {
+            if let Some(message) = transport.failure.take_message() {
+                self.last_failure = Some(message);
+            }
+            transport.close().await?;
+        }
+        self.transport = None;
+        self.realtime = None;
+        self.active_turn = None;
+        self.permissions.clear();
+        self.children.stopped();
+        self.stream = streaming::Stream::default();
+        usage_closed
+    }
+}
+
+fn runtime_info(response: &Value, id: &str, spec: &AgentSessionSpec) -> StoredAgentRuntimeInfo {
+    StoredAgentRuntimeInfo {
+        provider: "codex".to_owned(),
+        session_id: Some(id.to_owned()),
+        model: response
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| spec.config.model.clone()),
+        thinking_option_id: spec.config.thinking_option_id.clone(),
+        mode_id: Some(
+            spec.config
+                .mode_id
+                .clone()
+                .unwrap_or_else(|| "read-only".to_owned()),
+        ),
+        extra: None,
+    }
+}
+
+fn validate(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+    if spec.provider != "codex"
+        || !Path::new(&spec.cwd).is_absolute()
+        || !Path::new(&spec.cwd).is_dir()
+    {
+        return Err(AgentSessionError::Unavailable);
+    }
+    validate_config(&spec.config)
+}
+
+fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+    if config.model.as_ref().is_some_and(|model| {
+        model.trim().is_empty() || model.len() > 256 || model.chars().any(char::is_control)
+    }) || config.thinking_option_id.as_deref().is_some_and(|effort| {
+        !matches!(
+            effort,
+            "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"
+        )
+    }) || config
+        .mode_id
+        .as_deref()
+        .is_some_and(|mode| !matches!(mode, "read-only" | "auto" | "auto-review" | "full-access"))
+        || config.feature_values.as_ref().is_some_and(|map| {
+            map.iter().any(|(id, value)| match id.as_str() {
+                "service_tier" => !value
+                    .as_str()
+                    .is_some_and(|tier| !tier.is_empty() && tier.len() <= 128),
+                "fast_mode" | "plan_mode" => !value.is_boolean(),
+                _ => true,
+            })
+        })
+    {
+        return Err(AgentSessionError::Unavailable);
+    }
+    provider_native::configuration::validate(config, "codex")
+}
+
+#[cfg(all(test, unix))]
+mod tests;
+
+/// Add the cwd, policies, model and instructions that start or resume a live thread.
+///
+/// # Arguments
+///
+/// * `params` - `thread/start` or `thread/resume` parameters to extend in place
+/// * `spec` - Session specification supplying the cwd and configuration
+/// * `confined` - Whether the session runs under write confinement
+///
+/// # Errors
+///
+/// Propagates the error returned when the configuration cannot be translated to Codex config.
+fn launch_params(
+    params: &mut Value,
+    spec: &AgentSessionSpec,
+    confined: bool,
+) -> Result<(), AgentSessionError> {
+    params["cwd"] = json!(spec.cwd);
+    let (approval, sandbox, _) = controls::policy(&spec.config, confined);
+    params["approvalPolicy"] = json!(approval);
+    params["sandbox"] = json!(sandbox);
+    params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
+    if let Some(model) = &spec.config.model {
+        params["model"] = json!(model);
+    }
+    if let Some(prompt) = &spec.config.system_prompt {
+        params["developerInstructions"] = json!(prompt);
+    }
+    params["config"] = provider_native::configuration::codex(&spec.config)?;
+    Ok(())
+}
+
+fn saved<'a>(
+    resume: Option<(&'a AgentPersistenceHandle, AgentResumePurpose)>,
+    key: &str,
+) -> Option<&'a Value> {
+    resume
+        .and_then(|(handle, _)| handle.metadata.as_ref())
+        .and_then(|metadata| metadata.get(key))
+}

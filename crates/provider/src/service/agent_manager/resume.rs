@@ -4,9 +4,9 @@ use super::{
     AgentManager, AgentManagerError, Registration, map_registry, map_session, mcp_subject,
     validate_identity,
 };
-use crate::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
-use crate::protocol::agent_config::NullableSetting;
 use crate::protocol::resume::Overrides;
+use provider_core::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
+use provider_core::protocol::agent_config::NullableSetting;
 
 impl AgentManager {
     /// Register unknown native history only after interactive restore succeeds.

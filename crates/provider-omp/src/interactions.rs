@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use super::PROVIDER;
-use provider::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 
 /// Bound on one answer value.
 const MAX_ANSWER: usize = 65536;

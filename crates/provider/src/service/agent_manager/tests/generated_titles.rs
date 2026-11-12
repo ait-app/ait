@@ -39,7 +39,7 @@ async fn generated_titles_are_nonblocking_and_respect_manual_same_value_edits() 
             .append(
                 &record.id,
                 "codex",
-                &[crate::protocol::timeline::NativeItem {
+                &[provider_core::protocol::timeline::NativeItem {
                     key: "user-1".into(),
                     turn_id: None,
                     timestamp: record.created_at.clone(),
@@ -104,7 +104,7 @@ async fn shutdown_cancels_auxiliary_generation_without_requiring_model_completio
         .append(
             &record.id,
             "codex",
-            &[crate::protocol::timeline::NativeItem {
+            &[provider_core::protocol::timeline::NativeItem {
                 key: "user-1".into(),
                 turn_id: None,
                 timestamp: record.created_at.clone(),

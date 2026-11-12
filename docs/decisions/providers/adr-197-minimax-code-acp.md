@@ -4,6 +4,8 @@ status: accepted
 date: 2026-10-28
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-minimax
 ---
 
 # ADR-197：MiniMax Code 原生 ACP Provider
@@ -44,7 +46,7 @@ MiniMax 多媒体/API CLI，不提供编码 Agent 会话接口。客户端此前
 用户需要安装最新版 `@minimax-ai/code` 并执行 `mcode login`。`mmx auth login`
 不能替代 MiniMax Code 登录。安装、认证与具体能力见 [操作手册](../../operations/minimax-code.md)。
 
-离线测试在 `crates/provider/src/local/minimax/tests` 验证 native adapter 与 AIT
+离线测试在 `crates/provider-minimax/src/tests` 验证 native adapter 与 AIT
 执行器；真实测试显式启用并只在临时工作目录执行。daemon 仅调整内置 Provider
 快照与隔离测试环境。实际命令和结果见 [验证报告](../../archive/reports/providers/minimax-code-acp-2026-10-28.md)。
 

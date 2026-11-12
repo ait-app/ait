@@ -5,6 +5,7 @@ date: 2026-10-17
 paths:
   - crates/provider
   - packages/protocol
+  - crates/provider-pi
 ---
 
 # ADR-156: Pi native RPC provider
@@ -16,6 +17,7 @@ paths:
 - Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for next-prompt reasoning controls.
 - Amended by: [ADR-220](adr-220-pi-extension-notifications.md) for persisted extension notifications.
 - Amended by: [ADR-219](adr-219-pi-slash-command-discovery.md) for per-request native command discovery.
+- The adapter now lives in `crates/provider-pi` ([ADR-270](adr-270-provider-crate-family.md)).
 
 ## Context
 

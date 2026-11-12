@@ -5,33 +5,20 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Ports and protocol values shared with the native adapters.
+provider-core.workspace = true
 model.workspace = true
 domain.workspace = true
-# Codex owns the upstream peer and converts its Opus media to connection-local PCM.
-webrtc.workspace = true
-rtc.workspace = true
-opus2.workspace = true
 async-trait.workspace = true
 
 # Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true
-# Authenticated DSH Host logical streams on an owned loopback WebSocket.
-tokio-tungstenite.workspace = true
-# Validate image payloads before native prompt admission and decode provider image artifacts.
-base64.workspace = true
-# Read-only native account balance/quota inspection; credentials never enter public snapshots.
-reqwest.workspace = true
-reqwest.features = ["rustls-tls", "json", "stream"]
 secrecy.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
 rusqlite.features = ["bundled", "backup"]
 serde.workspace = true
 serde_json.workspace = true
-# Respect Codex credential storage mode before reusing a native account.
-toml.workspace = true
-# Read DSH's native credential/configuration YAML without modifying its owned files.
-serde_yaml_ng.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
@@ -39,33 +26,26 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
-# Decode Pi-supported file URLs in host session configuration.
-url.workspace = true
 # Estimate chat search hits from rendered Markdown blocks without an HTML renderer.
 pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.
 regex.workspace = true
+# File-backed registries behind the `testing` execution worker; only `test-support` enables it.
+persistence = { workspace = true, optional = true }
 
 [features]
 # Runtime test entry points for adapter crates' tests; never enabled by production dependents.
-test-support = []
+test-support = ["dep:persistence"]
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+# The Codex app-server fake that drives the execution and manager suites.
+provider-codex = { workspace = true, features = ["test-support"] }
 persistence.workspace = true
+# Encode image payloads in rich-input and inbox fixtures.
+base64.workspace = true
 # Virtual clock checks for provider-specific cold-start deadlines.
 tokio = { workspace = true, features = ["test-util"] }
-# Offline native provider fixtures, without credentials or a model API.
-axum.workspace = true
 tracing-subscriber.workspace = true
-
-[target.'cfg(target_os = "macos")'.dependencies]
-# Match Claude Agent SDK's NFC normalization of native session directory names.
-unicode-normalization.workspace = true
-
-[target.'cfg(unix)'.dependencies]
-# Signal owned native process groups directly instead of spawning `/bin/kill`.
-nix.workspace = true
-nix.features = ["signal"]

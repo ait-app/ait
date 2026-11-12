@@ -951,7 +951,7 @@ fn assistant(timestamp: i64, usage: &Value) -> Value {
         "content":[{"type":"text","text":"hi"}],"usage":usage})
 }
 
-fn queued(stream: &Stream) -> Vec<provider::ports::usage_ledger::RequestUsage> {
+fn queued(stream: &Stream) -> Vec<provider_core::ports::usage_ledger::RequestUsage> {
     stream
         .events
         .iter()

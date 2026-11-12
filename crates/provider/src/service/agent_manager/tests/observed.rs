@@ -1,8 +1,8 @@
 use super::*;
-use crate::ports::controls::NativeSubagent;
 use crate::service::agent_manager::observed::{register_children, scope};
 use crate::storage::timeline::Timeline;
 use domain::agent_runtime::observation::{ObservationHealth, ObservedStatus};
+use provider_core::ports::controls::NativeSubagent;
 
 fn child(id: &str, parent: &str, status: &str) -> NativeSubagent {
     NativeSubagent {
@@ -48,7 +48,7 @@ fn managed_native_identity_is_reused_without_forwarding_a_second_stream() {
         outbound,
     );
     subscription.activate().expect("subscribe");
-    let entry = crate::protocol::timeline::NativeItem {
+    let entry = provider_core::protocol::timeline::NativeItem {
         key: "native:item".to_owned(),
         turn_id: None,
         timestamp: "2026-10-31T00:00:00Z".to_owned(),
@@ -289,7 +289,7 @@ fn independent_execution_is_rejected_before_provider_or_input_side_effects() {
                 manager
                     .deliver(
                         id,
-                        &crate::protocol::prompt::AgentPrompt::text("write"),
+                        &provider_core::protocol::prompt::AgentPrompt::text("write"),
                         crate::protocol::agent_execution::ActiveTurnBehavior::Interrupt
                     )
                     .await

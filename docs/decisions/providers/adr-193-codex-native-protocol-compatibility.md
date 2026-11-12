@@ -6,12 +6,14 @@ amends:
   - providers/adr-041-agent-controls-provider-inspection.md
 paths:
   - crates/provider
+  - crates/provider-codex
 ---
 
 # ADR-193：Codex 原生策略、事件与恢复兼容
 
 - 修订：ADR-041 的 RPC 等待事件预算；延续 ADR-046、ADR-052、ADR-177、ADR-179、ADR-191、ADR-192。
 - 对照：Paseo `4f9d9d6de2236486ecc2ad886a2c37f4b92271e0` 与 Codex CLI 0.164.0。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

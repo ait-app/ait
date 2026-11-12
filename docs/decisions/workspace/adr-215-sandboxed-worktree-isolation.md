@@ -5,6 +5,15 @@ date: 2026-11-06
 paths:
   - crates/provider
   - crates/domain
+  - crates/provider-native
+  - crates/provider-core
+  - crates/provider-minimax
+  - crates/provider-antigravity
+  - crates/provider-claude
+  - crates/provider-deepseek-harness
+  - crates/provider-opencode
+  - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别
@@ -15,6 +24,7 @@ paths:
   原生 addon 与 Python 环境；下文 Oh My Pi 一行和受保护路径清单以该条为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
+- 沙箱适配器现位于 `crates/provider-native`（[ADR-270](../providers/adr-270-provider-crate-family.md)）。
 
 ## 背景
 

@@ -52,18 +52,12 @@ async fn unavailable_snapshot_exposes_bounded_native_guidance_and_falls_back_for
     }
 }
 
-#[cfg(unix)]
 #[tokio::test]
-async fn available_list_exposes_unsupported_pi_version_guidance() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let directory = tempfile::tempdir().unwrap();
-    let program = directory.path().join("pi");
-    std::fs::write(&program, "#!/bin/sh\nprintf '0.73.1\\n'\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+async fn available_list_exposes_native_unavailability_guidance() {
+    let guidance = "OpenCode 2.0.20: upgrade to 2.0.25 or newer.";
     let clients: BTreeMap<String, Arc<dyn AgentClient>> = BTreeMap::from([(
-        "pi".to_owned(),
-        Arc::new(crate::local::pi::PiClient::new(program)) as Arc<dyn AgentClient>,
+        "opencode".to_owned(),
+        Arc::new(UnavailableClient(guidance.to_owned())) as Arc<dyn AgentClient>,
     )]);
 
     let value = Catalog::default()
@@ -77,8 +71,5 @@ async fn available_list_exposes_unsupported_pi_version_guidance() {
         .unwrap();
 
     assert_eq!(value["providers"][0]["available"], false);
-    assert_eq!(
-        value["providers"][0]["error"],
-        "Pi 0.73.1 is unsupported; requires a supported Pi version (1.2 or newer)."
-    );
+    assert_eq!(value["providers"][0]["error"], guidance);
 }

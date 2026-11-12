@@ -14,10 +14,10 @@ use tokio_util::task::AbortOnDropHandle;
 
 use super::framing::{Decoder, Frame, MAX_LINE};
 use super::{LABEL, OmpClient};
-use provider::local::diagnostics::Diagnostics;
-use provider::local::process_group::{self, Signal};
-use provider::ports::agent_session::AgentSessionError;
-use provider::ports::diagnostics::{Category, Diagnostic};
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::diagnostics::{Category, Diagnostic};
+use provider_native::diagnostics::Diagnostics;
+use provider_native::process_group::{self, Signal};
 
 /// Frames buffered while a request waits for its response.
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
@@ -309,7 +309,7 @@ impl Transport {
         timeouts: Timeouts,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(LABEL);
-        let mut command = provider::local::sandbox::command(
+        let mut command = provider_native::sandbox::command(
             &client.program,
             confinement,
             super::sandbox::state(client),

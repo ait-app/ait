@@ -80,8 +80,8 @@ impl ExecutionState {
             .or(metadata.cwd.as_deref())
             .ok_or(ErrorCode::InvalidMessage)?;
         let canonical_cwd = super::placement::directory(cwd)?;
-        let lookup_cwd =
-            super::native_sessions::inspection_cwd(&request.handle.provider, cwd, &canonical_cwd);
+        let lookup = self.manager.cwd_lookup(&request.handle.provider);
+        let lookup_cwd = super::native_sessions::inspection_cwd(lookup, cwd, &canonical_cwd);
         let history = self
             .manager
             .inspect_native(&request.handle, lookup_cwd)

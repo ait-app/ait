@@ -14,9 +14,9 @@ use serde_json::{Value, json};
 
 use super::super::{OmpClient, PROVIDER, config, subagents};
 use super::{Journal, Workspace, paths, reader};
-use provider::ports::agent_session::AgentSessionError;
-use provider::ports::controls::NativeSubagent;
-use provider::ports::native_history::SessionHistory;
+use provider_core::ports::agent_session::AgentSessionError;
+use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::native_history::SessionHistory;
 
 /// Metadata key of the locator on a child's persistence handle.
 const LOCATOR: &str = "ompSubagent";

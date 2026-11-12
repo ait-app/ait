@@ -6,6 +6,9 @@ amends:
   - providers/adr-135-opencode-catalog-readiness.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
+  - crates/provider-opencode
 ---
 
 # ADR-153：OpenCode ACP 冷启动预算

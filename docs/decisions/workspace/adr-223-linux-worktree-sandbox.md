@@ -6,6 +6,10 @@ amends:
   - workspace/adr-215-sandboxed-worktree-isolation.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-claude
+  - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-223：Linux 沙箱化 Worktree
@@ -14,6 +18,7 @@ paths:
 - OMP 修订：[ADR-248](../providers/adr-248-omp-paseo-native-rpc.md) 第 11 条把 `extensions`、`tools`、
   `natives`、`python-env`、`profiles` 加入初始化为空目录的条目，`.yml` 与其他 YAML 一样初始化为 `{}`，
   并先创建受保护条目缺失的父目录。
+- Linux 沙箱现位于 `crates/provider-native`（[ADR-270](../providers/adr-270-provider-crate-family.md)）。
 
 ## 背景
 

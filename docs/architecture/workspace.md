@@ -107,7 +107,7 @@
   重新推导 confinement（优先 `worktreeRoot`），不随 Agent 持久化。Registry 读取失败或适配器未声明
   `supports_write_confinement` 时拒绝启动；目前声明支持的有 Claude Code、Codex、Pi、Oh My Pi、
   OpenCode、MiniMax Code（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）。
-- `provider::local::sandbox::command` 是唯一平台接缝：macOS 用 `/usr/bin/sandbox-exec -p` 加内联
+- `provider_native::sandbox::command` 是唯一平台接缝：macOS 用 `/usr/bin/sandbox-exec -p` 加内联
   profile，Linux 用 `/usr/bin/bwrap`（需支持 `--disable-userns`），其他平台返回 `Unavailable`。
   任何失败都不退化为不受限运行（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。

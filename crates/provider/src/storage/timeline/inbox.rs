@@ -4,7 +4,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
 use super::{ErrorCode, Timeline, io};
-use crate::protocol::prompt::{AgentPrompt, MAX_PROMPT_BYTES};
+use provider_core::protocol::prompt::{AgentPrompt, MAX_PROMPT_BYTES};
 
 const MAX_QUEUED_INPUTS: u64 = 32;
 // An empty queue must accept one input that passed the shared prompt validation.

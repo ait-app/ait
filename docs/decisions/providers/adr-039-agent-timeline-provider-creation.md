@@ -4,6 +4,7 @@ status: accepted
 date: 2026-09-25
 paths:
   - crates/provider
+  - crates/provider-codex
 ---
 
 # ADR-039：Agent Timeline、Provider 发现与创建过程订阅

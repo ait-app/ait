@@ -7,6 +7,7 @@ amends:
   - providers/adr-031-daemon-provider.md
 paths:
   - crates/provider
+  - crates/provider-codex
 ---
 
 # ADR-032：独立 server 接通 Codex 原生文本执行
@@ -17,6 +18,7 @@ paths:
   `agent-sdk-types.ts`、`agent-manager.ts`、`agent-loading.ts`、
   `providers/codex-app-server-agent.ts`、`providers/codex/app-server-transport.ts` 与
   `packages/protocol/src/messages.ts`；另核对本机 Codex 0.153.4 导出的 JSON schema。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 原生资源与宿主边界
 

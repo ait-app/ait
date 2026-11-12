@@ -5,7 +5,7 @@ use std::time::Duration;
 use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
 use serde_json::Value;
 
-use crate::ports::agent_session::AgentClient;
+use provider_core::ports::agent_session::AgentClient;
 
 pub(super) async fn resolve(
     clients: &BTreeMap<String, Arc<dyn AgentClient>>,

@@ -6,8 +6,8 @@ use domain::summary::{SummaryKind, SummarySelection};
 use serde_json::json;
 
 use super::*;
-use crate::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionError};
 use crate::service::summary_generation::test_config::Configuration;
+use provider_core::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionError};
 
 #[derive(Debug)]
 struct Client {
@@ -21,8 +21,8 @@ impl AgentClient for Client {
     async fn discover(
         &self,
         _: &str,
-    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
-        Ok(crate::protocol::provider::Details::default())
+    ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
+        Ok(provider_core::protocol::provider::Details::default())
     }
 
     fn summary_model(&self, _: &[Value]) -> Option<SummarySelection> {

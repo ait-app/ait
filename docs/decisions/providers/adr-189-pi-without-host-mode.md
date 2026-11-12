@@ -6,6 +6,7 @@ amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-pi
 ---
 
 # ADR-189：Pi 不暴露 Host 模式

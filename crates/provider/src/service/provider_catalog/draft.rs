@@ -5,8 +5,8 @@ use chrono::Utc;
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use crate::ports::agent_session::{AgentClient, AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::FeaturesRequest;
+use provider_core::ports::agent_session::{AgentClient, AgentSessionError, AgentSessionSpec};
 
 pub(super) async fn features(
     clients: &BTreeMap<String, Arc<dyn AgentClient>>,

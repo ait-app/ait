@@ -1,7 +1,7 @@
 use super::*;
-use crate::ports::account_usage::PreparedUsage;
-use crate::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionSpec};
 use domain::agent_runtime::AgentPersistenceHandle;
+use provider_core::ports::account_usage::PreparedUsage;
+use provider_core::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionSpec};
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -187,9 +187,7 @@ async fn installed_codex_host_cache_timing() {
         .with_test_writer()
         .try_init();
     let cache = UsageCache::default();
-    let client = Arc::new(crate::local::codex::CodexClient::new(
-        "/usr/bin/codex".into(),
-    ));
+    let client = Arc::new(provider_codex::CodexClient::new("/usr/bin/codex".into()));
     assert!(
         client.usage_cache_key().await.is_some(),
         "this audit requires file-backed credentials"

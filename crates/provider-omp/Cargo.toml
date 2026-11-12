@@ -5,8 +5,10 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Ports, prompt/timeline protocol and the shared native toolkit the adapter builds on.
-provider.workspace = true
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on.
+provider-native.workspace = true
 domain.workspace = true
 async-trait.workspace = true
 # Decode native image blobs before projecting them as provider image artifacts.

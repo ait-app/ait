@@ -6,11 +6,13 @@ amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-pi
 ---
 
 # ADR-219：Pi 原生 slash-command 发现
 
 - 范围：`crates/provider`；修订 [ADR-156](adr-156-pi-native-rpc-provider.md)。
+- 适配器现位于 `crates/provider-pi`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

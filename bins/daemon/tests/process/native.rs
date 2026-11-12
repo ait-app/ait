@@ -13,7 +13,7 @@ impl NativeFixture {
         let root = tempfile::tempdir().unwrap();
         let native = root.path().join("codex");
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../crates/provider/tests/fixtures/codex_app_server.py");
+            .join("../../crates/provider-codex/tests/fixtures/codex_app_server.py");
         symlink(source, &native).unwrap();
         let cwd = root.path().join("work");
         std::fs::create_dir(&cwd).unwrap();

@@ -7,6 +7,13 @@ amends:
   - providers/adr-089-provider-owned-composition.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
+  - crates/provider-antigravity
+  - crates/provider-claude
+  - crates/provider-deepseek-harness
+  - crates/provider-opencode
+  - crates/provider-codex
 ---
 
 # ADR-099：Provider 自选辅助小模型

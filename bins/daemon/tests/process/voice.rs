@@ -82,7 +82,7 @@ async fn legacy_voice_calls_speech_and_non_realtime_provider_then_disconnect_int
     let super::native::NativeFixture { root, cwd, path } = super::native::NativeFixture::new();
     std::os::unix::fs::symlink(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../crates/provider/tests/fixtures/claude_code.py"),
+            .join("../../crates/provider-claude/tests/fixtures/claude_code.py"),
         root.path().join("claude"),
     )
     .unwrap();

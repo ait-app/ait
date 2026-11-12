@@ -30,7 +30,7 @@ pub(crate) struct CreateRequest {
     pub(crate) initial_prompt: Option<String>,
     /// Initial inline raster images.
     #[serde(default)]
-    pub(crate) images: Vec<super::prompt::PromptImage>,
+    pub(crate) images: Vec<provider_core::protocol::prompt::PromptImage>,
     /// Initial contextual attachments.
     #[serde(default)]
     pub(crate) attachments: Vec<serde_json::Value>,
@@ -44,7 +44,7 @@ pub(crate) struct CreateRequest {
     pub(crate) config: SessionConfig,
     /// Ephemeral native child environment, excluded from Agent persistence and responses.
     #[serde(default)]
-    pub(crate) env: crate::ports::environment::AgentEnvironment,
+    pub(crate) env: provider_core::ports::environment::AgentEnvironment,
     /// Existing active Workspace whose directory replaces the draft directory.
     pub(crate) workspace_id: Option<String>,
     /// Parent Agent used for inherited Workspace placement and parentage labeling.
@@ -98,7 +98,7 @@ pub(crate) struct SendRequest {
     message_id: Option<String>,
     /// Inline raster images.
     #[serde(default)]
-    images: Vec<super::prompt::PromptImage>,
+    images: Vec<provider_core::protocol::prompt::PromptImage>,
     /// Contextual attachments.
     #[serde(default)]
     attachments: Vec<serde_json::Value>,
@@ -109,8 +109,8 @@ pub(crate) struct SendRequest {
 impl SendRequest {
     /// Consume the request's rich input after the caller resolves its Agent and delivery policy.
     #[must_use]
-    pub(crate) fn into_prompt(self) -> super::prompt::AgentPrompt {
-        super::prompt::AgentPrompt {
+    pub(crate) fn into_prompt(self) -> provider_core::protocol::prompt::AgentPrompt {
+        provider_core::protocol::prompt::AgentPrompt {
             text: self.text,
             images: self.images,
             attachments: self.attachments,

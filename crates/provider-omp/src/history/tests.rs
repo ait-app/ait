@@ -45,7 +45,7 @@ fn write_lines(path: &Path, lines: &[String]) {
     std::fs::write(path, lines.join("\n")).unwrap();
 }
 
-fn timeline(stream: &mut Stream) -> Vec<provider::protocol::timeline::NativeItem> {
+fn timeline(stream: &mut Stream) -> Vec<provider_core::protocol::timeline::NativeItem> {
     stream
         .events
         .drain(..)
@@ -225,7 +225,7 @@ fn live_messages_show_the_rows_history_shows_for_the_same_roles() {
     let (history, _) = journal
         .project(&OmpClient::new("unused".into()), &handle("id", None))
         .unwrap();
-    let mut live = Stream::new("id".into(), provider::local::images::ImageStore::default());
+    let mut live = Stream::new("id".into(), provider_native::images::ImageStore::default());
 
     for entry in &journal.entries {
         if entry["type"] == "message" && entry["message"]["role"] != "user" {
@@ -255,7 +255,7 @@ fn background_results_are_the_same_notification_in_live_output_and_history() {
     let (history, _) = journal
         .project(&OmpClient::new("missing".into()), &handle("id", None))
         .unwrap();
-    let mut live = Stream::new("id".into(), provider::local::images::ImageStore::default());
+    let mut live = Stream::new("id".into(), provider_native::images::ImageStore::default());
     live.message(&record_message(&result).unwrap()).unwrap();
     let AgentTurnEvent::Timeline(entry) = live.events.pop_front().unwrap() else {
         panic!("expected background result");
@@ -307,7 +307,7 @@ fn image_session(root: &Path, image: &Value) -> PathBuf {
 fn isolated_client(root: &Path) -> OmpClient {
     let mut client = OmpClient::new("unused".into()).with_image_directory(root.join("images"));
     client.environment =
-        provider::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
+        provider_core::ports::environment::AgentEnvironment::try_from(BTreeMap::from([
             ("HOME".to_owned(), root.to_string_lossy().into_owned()),
             (
                 "PI_CODING_AGENT_DIR".to_owned(),
@@ -338,7 +338,7 @@ fn unavailable_history_images_degrade_to_placeholders_without_affecting_live_out
         history.entries[0].item["text"]
             .as_str()
             .unwrap()
-            .ends_with(provider::local::images::UNAVAILABLE_IMAGE)
+            .ends_with(provider_native::images::UNAVAILABLE_IMAGE)
     );
     assert_eq!(
         history.descriptor.first_prompt_preview.as_deref(),
@@ -472,7 +472,7 @@ fn live_user_messages_and_skill_prompts_render_as_history_does() {
         root.path().join("history.jsonl"),
         vec![user.clone(), skill.clone()],
     );
-    let mut live = Stream::new("id".into(), provider::local::images::ImageStore::default())
+    let mut live = Stream::new("id".into(), provider_native::images::ImageStore::default())
         .with_identity_lookups();
     live.pending_inputs.extend([
         ("prompt".to_owned(), Some("client-1".to_owned())),

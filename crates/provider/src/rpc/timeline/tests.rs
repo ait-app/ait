@@ -1,5 +1,5 @@
 use super::*;
-use crate::protocol::timeline::NativeItem;
+use provider_core::protocol::timeline::NativeItem;
 
 mod budgets;
 mod paseo;

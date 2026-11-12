@@ -6,12 +6,14 @@ amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
   - crates/provider
+  - crates/provider-opencode
 ---
 
 # ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测
 
 - 范围：`provider::local::opencode`，修订 [ADR-115](adr-115-opencode-acp-provider.md)
   的观测来源，保留 ACP 执行、配置、审批和权威历史边界。
+- 适配器现位于 `crates/provider-opencode`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

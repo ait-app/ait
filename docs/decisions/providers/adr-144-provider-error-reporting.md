@@ -4,6 +4,15 @@ status: accepted
 date: 2026-10-13
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
+  - crates/provider-minimax
+  - crates/provider-antigravity
+  - crates/provider-claude
+  - crates/provider-deepseek-harness
+  - crates/provider-opencode
+  - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示

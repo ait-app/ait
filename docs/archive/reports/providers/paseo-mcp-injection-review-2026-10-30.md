@@ -35,11 +35,11 @@ Ait 当前已采用这个主链路：[host](../../../../bins/daemon/src/host.rs)
 ## 本轮已完成的两项补全
 
 1. **MiniMax Code 的 HTTP 能力接线。** 首批开关只声明 Codex、Claude、DSH ACP；但
-   [MiniMax 配置校验](../../../../crates/provider/src/local/minimax/config.rs) 已接受 HTTP MCP，
-   [原生会话](../../../../crates/provider/src/local/minimax/session.rs) 在 `session/new` 与
+   [MiniMax 配置校验](../../../../crates/provider-minimax/src/config.rs) 已接受 HTTP MCP，
+   [原生会话](../../../../crates/provider-minimax/src/session.rs) 在 `session/new` 与
    `session/resume` 中调用共享
-   [ACP MCP 转换](../../../../crates/provider/src/local/acp_config.rs)，包含 HTTP headers。
-   本轮已在 [MiniMaxClient](../../../../crates/provider/src/local/minimax.rs) 声明
+   [ACP MCP 转换](../../../../crates/provider-native/src/acp_config.rs)，包含 HTTP headers。
+   本轮已在 [MiniMaxClient](../../../../crates/provider-minimax/src/lib.rs) 声明
    `supports_agent_mcp = true`，复用现有 HTTP 通路，并在 provider 内验证启动、恢复和多轮
    配置一致。
 2. **配置更新也使用有效配置。**
@@ -49,7 +49,7 @@ Ait 当前已采用这个主链路：[host](../../../../bins/daemon/src/host.rs)
    配置，再传给 `validate_config_update` 与 `validate_selection`；registry 仍只向原记录
    写用户 patch。这与 Paseo 的双配置原则一致，也保持凭证不进入持久配置。
 
-[新增测试](../../../../crates/provider/src/local/minimax/tests/mcp.rs) 使用真实 MiniMax adapter
+[新增测试](../../../../crates/provider-minimax/src/tests/mcp.rs) 使用真实 MiniMax adapter
 与离线 ACP fixture，检查 `session/new`、`session/resume` 的 HTTP URL、Authorization 和
 `X-Ait-Agent-Id`，连续三轮输入与模型、模式更新，真实 MCP 配置变更仍被拒绝，重新打开后
 取得新端口和令牌，以及实际 `agents.json` 和新 registry 快照没有内部凭证。测试不调用
@@ -78,8 +78,8 @@ Ait 当前保留所有显式用户 `ait` 项，应保留这个取舍。来源：
 [保留自定义同名配置测试](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/agent/agent-manager.test.ts#L3825)。
 
 当前没有发现 Ait 自动注入项回流到持久 record 的来源：
-[Codex 导入](../../../../crates/provider/src/local/codex/native_sessions.rs) 仅还原模型、推理和模式，
-[Claude 导入](../../../../crates/provider/src/local/claude/history.rs) 仅还原模型；
+[Codex 导入](../../../../crates/provider-codex/src/native_sessions.rs) 仅还原模型、推理和模式，
+[Claude 导入](../../../../crates/provider-claude/src/history.rs) 仅还原模型；
 [refresh 的 apply_history](../../../../crates/provider/src/service/agent_manager/native_sessions.rs)
 不替换 `record.config`；configure 和 restore 只提交用户输入的配置。
 因此“旧内部项清理”目前是防御性扩展，不能报告为已复现的回流故障。未来若增加迁移或完整原生
@@ -104,7 +104,7 @@ HTTP 与原生目录使用同一过滤规则。Ait 的 `toolPolicy.preapproved` 
 [策略解析](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/agent/paseo-tool-policy.ts#L1)、
 [工具注册过滤](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/agent/tools/paseo-tools.ts#L737)、
 [HTTP 调用者策略](https://github.com/getpaseo/paseo/blob/1aef1ec6625f2c32cbd62cfbeb02cffb43a275d2/packages/server/src/server/bootstrap.ts#L1610)、
-[Ait 审批转换](../../../../crates/provider/src/local/configuration.rs)。
+[Ait 审批转换](../../../../crates/provider-native/src/configuration.rs)。
 
 ## Test coverage
 

@@ -10,7 +10,7 @@ use persistence::storage::registry::FileBackedWorkspaceRegistry;
 use serde_json::json;
 
 use super::*;
-use crate::ports::agent_session::{
+use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError,
 };
 

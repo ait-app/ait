@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use super::super::{LABEL, PROVIDER, config};
 use super::reader;
-use provider::ports::native_history::SessionDescriptor;
+use provider_core::ports::native_history::SessionDescriptor;
 
 /// Bytes read from the start of a file for its header, title and first prompt.
 const HEAD_BYTES: u64 = 64 * 1024;

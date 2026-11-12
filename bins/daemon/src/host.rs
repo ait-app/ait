@@ -54,7 +54,6 @@ use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
 use provider::storage::usage_ledger::SqliteUsageLedger;
-use provider_omp::OmpClient;
 use tokio::net::TcpListener;
 
 use crate::config::Config;
@@ -738,18 +737,12 @@ fn open_usage_ledger(data_dir: &std::path::Path) -> Option<Arc<SqliteUsageLedger
     }
 }
 
-/// Configure the built-in providers plus OMP, whose adapter crate the runtime does not depend
-/// on; summary calls go to `usage_ledger` when the host has one.
+/// Configure the built-in providers; summary calls go to `usage_ledger` when the host has one.
 fn compose_providers(
     data_dir: &std::path::Path,
     usage_ledger: Option<&Arc<SqliteUsageLedger>>,
 ) -> Providers {
-    let providers = Providers::new(data_dir).with(|images| {
-        OmpClient::new(provider_omp::installed_program(|name| {
-            std::env::var_os(name)
-        }))
-        .with_image_directory(images.to_owned())
-    });
+    let providers = provider_builtin::providers(data_dir);
     match usage_ledger {
         Some(ledger) => providers.with_usage_ledger(ledger.clone()),
         None => providers,

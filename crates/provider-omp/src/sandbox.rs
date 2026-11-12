@@ -4,7 +4,7 @@
 
 use super::OmpClient;
 use super::history::paths;
-use provider::local::sandbox::StateLocation;
+use provider_native::sandbox::StateLocation;
 
 /// Agent-directory entries OMP obeys or executes: its settings (`config.yml`, the
 /// `config.yaml` alternative and the legacy `settings.json` it migrates into them), custom

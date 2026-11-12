@@ -5,9 +5,9 @@ use std::borrow::Cow;
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 
 use super::{AgentManager, AgentManagerError};
-use crate::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
 use crate::ports::mcp_scope::McpSubject;
 use crate::service::agent_mcp::Binding;
+use provider_core::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
 
 impl AgentManager {
     /// Bind the daemon MCP for an interactive session; guest-created Agents are stripped.

@@ -3,7 +3,7 @@
 use domain::agent_runtime::{PersistedAgentRuntimeRecord, StoredAgentConfig};
 use serde::Deserialize;
 
-use super::agent_config::NullableSetting;
+use provider_core::protocol::agent_config::NullableSetting;
 
 /// Fields omitted by a resume request preserve the existing durable configuration.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]

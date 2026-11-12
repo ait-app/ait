@@ -220,7 +220,7 @@ async fn voice_exclusivity_blocks_interrupt_and_steer_without_reserving_or_deliv
 
 #[tokio::test]
 async fn startup_dispatches_only_unclaimed_fifo_inputs_and_keeps_uncertain_receipts_fenced() {
-    use crate::protocol::prompt::AgentPrompt;
+    use provider_core::protocol::prompt::AgentPrompt;
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
     let created = create(&execution, &fixture).await;
@@ -391,7 +391,7 @@ async fn native_goal_continuations_acquire_and_release_the_host_foreground_turn(
 
 #[tokio::test]
 async fn failed_queued_admission_does_not_block_an_independent_agent() {
-    use crate::protocol::prompt::AgentPrompt;
+    use provider_core::protocol::prompt::AgentPrompt;
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
     let first = create(&execution, &fixture).await;
@@ -464,7 +464,8 @@ async fn restart_reloads_large_completed_and_interrupted_histories_before_one_na
         let path = fixture.cwd.join(format!("native-history-{native_id}.json"));
         std::fs::write(&path, original.to_string()).unwrap();
         assert!(
-            crate::test_support::codex_history::write_large_history(&fixture) > 32 * 1024 * 1024
+            provider_codex::testing::codex_history::write_large_history(&fixture)
+                > 32 * 1024 * 1024
         );
         let (restarted, registry) = worker(&fixture);
         let prompt = json!({"agentId":id,"text":"Continue","messageId":"after-restart"});

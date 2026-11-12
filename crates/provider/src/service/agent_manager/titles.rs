@@ -4,8 +4,8 @@ use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use model::ErrorCode;
 
 use super::AgentManager;
-use crate::ports::native_history::SessionHistory;
-use crate::protocol::timeline::NativeItem;
+use provider_core::ports::native_history::SessionHistory;
+use provider_core::protocol::timeline::NativeItem;
 
 /// Return whether `record` is public and has no nonblank display title.
 pub(super) fn missing(record: &PersistedAgentRuntimeRecord) -> bool {

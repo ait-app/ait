@@ -8,11 +8,13 @@ amends:
 paths:
   - crates/provider
   - crates/voice
+  - crates/provider-codex
 ---
 
 # ADR-191：Codex Provider 拥有原生实时语音
 
 - 修订：[ADR-042](../daemon/adr-042-daemon-voice.md)、[ADR-064](../daemon/adr-064-offline-speech.md) 对 Codex 语音对话的实现选择；听写保持原有后端，旧客户端的通用语音协议继续兼容。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

@@ -4,11 +4,15 @@ status: accepted
 date: 2026-11-08
 paths:
   - crates/provider
+  - crates/provider-core
+  - crates/provider-claude
+  - crates/provider-codex
 ---
 
 # ADR-219：共享套餐缓存与 Codex 查询进程
 
 - 基线：v0.2.0（5e50a7a0）。延续 ADR-119 的账号隔离与原生额度边界。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 问题
 

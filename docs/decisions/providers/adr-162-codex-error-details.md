@@ -6,11 +6,14 @@ amends:
   - providers/adr-144-provider-error-reporting.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-codex
 ---
 
 # ADR-162：Codex 失败展示原生原因与 HTTP 状态
 
 - 修订：[ADR-144](adr-144-provider-error-reporting.md) 的 Codex 用户可见说明策略。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

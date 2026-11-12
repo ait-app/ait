@@ -3,9 +3,7 @@
 use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, decode, only};
-use crate::ports::agent_session::AgentSessionSpec;
 use crate::ports::usage_ledger::{UsageLedgerError, UsageQuery};
-use crate::protocol::agent_config::ConfigPatch;
 use crate::protocol::controls::{
     CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
 };
@@ -13,6 +11,8 @@ use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::native_sessions::canonical;
 use crate::support::rpc::encode;
+use provider_core::ports::agent_session::AgentSessionSpec;
+use provider_core::protocol::agent_config::ConfigPatch;
 
 /// Longest summary range a `provider.usage.ledger` request may cover: 400 days in milliseconds.
 const MAX_LEDGER_RANGE_MS: i64 = 400 * 24 * 60 * 60 * 1000;

@@ -5,10 +5,10 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use super::{AgentManager, AgentManagerError, map_registry};
-use crate::protocol::prompt::AgentPrompt;
-use crate::protocol::timeline::NativeItem;
 use crate::storage::timeline::{Timeline, inbox::Receipt};
 use crate::support::time::now_timestamp;
+use provider_core::protocol::prompt::AgentPrompt;
+use provider_core::protocol::timeline::NativeItem;
 
 const INTERRUPTED: &str = concat!(
     "Execution was interrupted because the host restarted. ",
