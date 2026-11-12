@@ -1,8 +1,9 @@
 //! Tool metadata and schemas, filtered by installed RPC capabilities.
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
-use domain::bot::permissions::{ToolAccess, tool_access};
+use domain::bot::permissions::{Holder, ToolAccess, tool_access};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -24,13 +25,34 @@ pub(super) struct Tool {
     read_only: bool,
 }
 
+/// Arguments only Bot sessions may pass, by tool; every other caller's schema omits them, so
+/// validation refuses them (ADR-274: only the Bot names the ticket a new Agent joins).
+const BOT_ARGUMENTS: [(&str, &str); 1] = [("create_agent", "ticketId")];
+
 impl Tool {
-    /// Return public MCP metadata without exposing internal RPC method mappings.
-    pub(super) fn descriptor(&self) -> Value {
+    /// Return public MCP metadata for `scope`'s caller without exposing internal RPC method
+    /// mappings.
+    pub(super) fn descriptor(&self, scope: Option<&Scope>) -> Value {
         json!({
-            "name":self.name,"description":self.description,"inputSchema":self.input_schema,
+            "name":self.name,"description":self.description,"inputSchema":self.schema(scope),
             "annotations":{"readOnlyHint":self.read_only,"openWorldHint":false}
         })
+    }
+
+    /// The input schema `scope`'s caller sees and is validated against: without arguments
+    /// reserved for Bot sessions unless the caller is one.
+    pub(super) fn schema(&self, scope: Option<&Scope>) -> Cow<'_, Value> {
+        let bot = scope.is_some_and(|scope| scope.caller.kind.holder() == Holder::Bot);
+        if bot || !BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name) {
+            return Cow::Borrowed(&self.input_schema);
+        }
+        let mut schema = self.input_schema.clone();
+        if let Some(properties) = schema["properties"].as_object_mut() {
+            for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
+                properties.remove(*argument);
+            }
+        }
+        Cow::Owned(schema)
     }
 }
 
@@ -43,15 +65,20 @@ pub(super) fn all() -> &'static [Tool] {
     })
 }
 
-/// Iterate installed tools visible to a caller: the host sees every tool except Bot-only ones,
-/// a scoped caller only the tools its current grant allows.
+/// Iterate installed tools visible to a caller: the host sees every tool except Bot-only and
+/// worker ones, a scoped caller only the tools its current grant allows.
 pub(super) fn granted<'a>(
     state: &'a Shared,
     scope: Option<&'a Scope>,
 ) -> impl Iterator<Item = &'static Tool> + 'a {
     installed(state).filter(move |tool| {
         scope.map_or_else(
-            || tool_access(&tool.name) != ToolAccess::BotOnly,
+            || {
+                !matches!(
+                    tool_access(&tool.name),
+                    ToolAccess::BotOnly | ToolAccess::Worker
+                )
+            },
             |scope| scope.allows(&tool.name),
         )
     })

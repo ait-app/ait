@@ -65,6 +65,7 @@ fn bot_token(access: McpAccess) -> SecretString {
         McpAccess::Scoped {
             token,
             bot_session: true,
+            worker: false,
         } => token,
         other => panic!("expected a Bot session credential, got {other:?}"),
     }
@@ -91,7 +92,11 @@ fn issued_credentials_resolve_to_their_caller_and_rotate_on_reissue() {
     let first = scoped_token(scopes.access(&subject("child", false, None, &labels)));
     let caller = scopes.resolve(first.expose_secret()).unwrap();
     assert_eq!(caller.root, WORKSPACE);
-    assert!(matches!(caller.kind, CallerKind::Subtree { ref agent_id } if agent_id == "child"));
+    assert!(
+        matches!(caller.kind, CallerKind::Subtree { ref agent_id, ticket: None }
+        if agent_id == "child")
+    );
+    assert_eq!(caller.kind.holder(), Holder::Subtree);
     let second = scoped_token(scopes.access(&subject("child", false, None, &labels)));
     assert_ne!(first.expose_secret(), second.expose_secret());
     assert!(scopes.resolve(first.expose_secret()).is_none());
@@ -104,6 +109,39 @@ fn issued_credentials_resolve_to_their_caller_and_rotate_on_reissue() {
     );
     assert!(scopes.resolve(&"0".repeat(64)).is_none());
     assert!(scopes.resolve("").is_none());
+}
+
+#[test]
+fn subtree_credential_records_a_valid_ticket_label_as_a_worker() {
+    let scopes = Scopes::new();
+    scopes.publish(&catalog_with(active_bot(WORKSPACE)));
+    let ticket = TicketId::generate();
+    let mut labels = scope_labels(WORKSPACE);
+    labels.insert(BOT_TICKET_LABEL.to_owned(), ticket.to_string());
+    let access = scopes.access(&subject("worker", false, None, &labels));
+    assert!(
+        matches!(access, McpAccess::Scoped { worker: true, .. }),
+        "{access:?}"
+    );
+    let worker = scoped_token(access);
+    let caller = scopes.resolve(worker.expose_secret()).unwrap();
+    assert_eq!(
+        caller.kind,
+        CallerKind::Subtree {
+            agent_id: "worker".to_owned(),
+            ticket: Some(ticket),
+        }
+    );
+    assert_eq!(caller.kind.holder(), Holder::Worker);
+    labels.insert(BOT_TICKET_LABEL.to_owned(), "not-a-ticket".to_owned());
+    let access = scopes.access(&subject("other", false, None, &labels));
+    assert!(
+        matches!(access, McpAccess::Scoped { worker: false, .. }),
+        "{access:?}"
+    );
+    let invalid = scoped_token(access);
+    let caller = scopes.resolve(invalid.expose_secret()).unwrap();
+    assert_eq!(caller.kind.holder(), Holder::Subtree);
 }
 
 #[test]

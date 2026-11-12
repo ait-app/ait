@@ -34,6 +34,9 @@ export const BOT_NOTIFICATION_KINDS = [
   "schedule_succeeded",
   "schedule_failed",
   "terminal_attention",
+  "ticket_blocked",
+  "ticket_done",
+  "ticket_failed",
 ] as const;
 export const BotNotificationKindSchema = z.enum(BOT_NOTIFICATION_KINDS);
 /** A Workspace event offered to the Bot; optional subject fields are `null` when absent. */
@@ -51,6 +54,9 @@ export const BotNotificationSchema = z.object({
   summary: z.string().nullish(),
   at: z.string(),
   conversationId: z.string().nullish(),
+  // Present when the subject works on one of this Bot's tickets; absent on hosts without tickets.
+  ticketId: z.string().nullish(),
+  ticketTitle: z.string().nullish(),
 });
 const BOT_KNOWN_WAKE_STATES: ReadonlySet<string> = new Set([
   "logged",
@@ -64,6 +70,7 @@ export const BOT_SKIP_REASONS = [
   "paused",
   "observed",
   "blocked",
+  "reported",
 ] as const;
 export const BotSkipReasonSchema = z.enum(BOT_SKIP_REASONS);
 /** A wake state or skip reason added by a later host is kept as text instead of failing. */
@@ -86,6 +93,69 @@ export const BotLoggedNotificationSchema = z.object({
   admittedAt: z.string(),
   notification: BotNotificationSchema,
   wake: BotWakeStatusSchema,
+});
+export const BOT_TICKET_STATUSES = ["open", "waiting", "done", "failed", "cancelled"] as const;
+export const BotTicketStatusSchema = z.enum(BOT_TICKET_STATUSES);
+/** Statuses a user may set: reopen, or close as done, failed or cancelled. */
+export const BotTicketUserStatusSchema = z.enum(["open", "done", "failed", "cancelled"]);
+export const BOT_TICKET_WAIT_REASONS = ["permission", "blocked"] as const;
+export const BOT_TICKET_REPORT_SOURCES = ["agent", "bot", "user", "system"] as const;
+export const BOT_TICKET_REPORT_KINDS = [
+  "progress",
+  "blocked",
+  "done",
+  "failed",
+  "agent_finished",
+  "agent_failed",
+  "agent_permission",
+  "note",
+  "status",
+] as const;
+// Statuses, wait reasons, report sources and kinds a later host adds are kept as text, so one
+// new value never makes the whole ticket list unreadable.
+const TicketStatusValueSchema = z.union([BotTicketStatusSchema, z.string()]);
+/** What a waiting ticket waits for: an Agent's permission request or a worker reporting blocked. */
+export const BotTicketWaitingSchema = z.object({
+  reason: z.union([z.enum(BOT_TICKET_WAIT_REASONS), z.string()]),
+  agentId: z.string(),
+  since: z.string(),
+});
+/** An Agent working on a ticket; its live state comes from the Agent directory. */
+export const BotTicketAssignmentSchema = z.object({
+  agentId: z.string(),
+  workspaceId: z.string(),
+  assignedAt: z.string(),
+});
+/** One dated entry in a ticket's history; `status` is set when the entry changed the status. */
+export const BotTicketReportSchema = z.object({
+  sequence: z.number().int().nonnegative(),
+  at: z.string(),
+  source: z.union([z.enum(BOT_TICKET_REPORT_SOURCES), z.string()]),
+  kind: z.union([z.enum(BOT_TICKET_REPORT_KINDS), z.string()]),
+  agentId: z.string().nullish(),
+  text: z.string().default(""),
+  status: TicketStatusValueSchema.nullish(),
+});
+const BotTicketFieldsSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: TicketStatusValueSchema,
+  waiting: BotTicketWaitingSchema.nullish(),
+  conversationId: z.string().nullish(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  closedAt: z.string().nullish(),
+  outcome: z.string().nullish(),
+  assignments: z.array(BotTicketAssignmentSchema).default([]),
+});
+/** A ticket as `bot.ticket.list` returns it: no request or history, only the newest report. */
+export const BotTicketSummarySchema = BotTicketFieldsSchema.extend({
+  latestReport: BotTicketReportSchema.nullish(),
+});
+/** A ticket with what was asked and the kept history, oldest report first. */
+export const BotTicketSchema = BotTicketFieldsSchema.extend({
+  request: z.string(),
+  reports: z.array(BotTicketReportSchema).default([]),
 });
 export const BotViewSchema = z.object({
   workspaceId: z.string(),
@@ -203,3 +273,10 @@ export type BotNotificationKind = z.infer<typeof BotNotificationKindSchema>;
 export type BotNotification = z.infer<typeof BotNotificationSchema>;
 export type BotWakeStatus = z.infer<typeof BotWakeStatusSchema>;
 export type BotLoggedNotification = z.infer<typeof BotLoggedNotificationSchema>;
+export type BotTicketStatus = z.infer<typeof BotTicketStatusSchema>;
+export type BotTicketUserStatus = z.infer<typeof BotTicketUserStatusSchema>;
+export type BotTicketWaiting = z.infer<typeof BotTicketWaitingSchema>;
+export type BotTicketAssignment = z.infer<typeof BotTicketAssignmentSchema>;
+export type BotTicketReport = z.infer<typeof BotTicketReportSchema>;
+export type BotTicketSummary = z.infer<typeof BotTicketSummarySchema>;
+export type BotTicket = z.infer<typeof BotTicketSchema>;

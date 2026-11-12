@@ -36,6 +36,8 @@ impl DaemonConfigStore for Policy {
 pub(in crate::service) enum Grant {
     Shared,
     Scoped(String, bool),
+    /// A worker credential: an Agent working on a Bot ticket.
+    Worker(String),
     Denied,
 }
 
@@ -85,6 +87,12 @@ impl McpScopes for FakeScopes {
             Grant::Scoped(token, bot_session) => McpAccess::Scoped {
                 token: token.into(),
                 bot_session,
+                worker: false,
+            },
+            Grant::Worker(token) => McpAccess::Scoped {
+                token: token.into(),
+                bot_session: false,
+                worker: true,
             },
             Grant::Denied => McpAccess::Denied,
         }
@@ -129,7 +137,7 @@ fn connection_maps_listener_and_preserves_user_configuration() {
         let original = stored.clone();
         let labels = BTreeMap::new();
         let binding = source
-            .bind(&subject("agent-a", &labels), &stored, true)
+            .bind(&subject("agent-a", &labels), &stored, true, false)
             .unwrap()
             .unwrap();
         let mut effective = stored.clone();
@@ -163,7 +171,7 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
     let stored = StoredAgentConfig::default();
     let labels = BTreeMap::new();
     let binding = source
-        .bind(&subject("a", &labels), &stored, true)
+        .bind(&subject("a", &labels), &stored, true, false)
         .unwrap()
         .unwrap();
     for flags in [
@@ -173,7 +181,7 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
         *policy.0.lock().unwrap() = json!({"mcp":flags});
         assert!(
             source
-                .bind(&subject("b", &labels), &stored, true)
+                .bind(&subject("b", &labels), &stored, true, false)
                 .unwrap()
                 .is_none()
         );
@@ -184,7 +192,7 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
     *policy.0.lock().unwrap() = Value::Null;
     assert_eq!(
         source
-            .bind(&subject("b", &labels), &stored, true)
+            .bind(&subject("b", &labels), &stored, true, false)
             .unwrap_err(),
         model::ErrorCode::DaemonIo
     );
@@ -199,7 +207,12 @@ fn explicit_ait_server_is_never_replaced() {
     );
     let labels = BTreeMap::new();
     let binding = source
-        .bind(&subject("a", &labels), &StoredAgentConfig::default(), true)
+        .bind(
+            &subject("a", &labels),
+            &StoredAgentConfig::default(),
+            true,
+            false,
+        )
         .unwrap()
         .unwrap();
     for server in [
@@ -214,7 +227,7 @@ fn explicit_ait_server_is_never_replaced() {
         };
         assert!(
             source
-                .bind(&subject("a", &labels), &stored, true)
+                .bind(&subject("a", &labels), &stored, true, false)
                 .unwrap()
                 .is_none()
         );
@@ -284,7 +297,9 @@ fn scoped_and_denied_bindings_override_user_ait_entry_by_policy() {
         *scopes.grant.lock().unwrap() = grant;
         *policy.0.lock().unwrap() = json!({ "mcp": flags });
         scopes.calls.lock().unwrap().clear();
-        let binding = source.bind(&subject("a", &labels), &stored, true).unwrap();
+        let binding = source
+            .bind(&subject("a", &labels), &stored, true, false)
+            .unwrap();
         assert_eq!(
             scopes.calls(),
             if released {
@@ -336,7 +351,12 @@ fn strip_removes_an_only_ait_entry_and_policy_failure_revokes_the_credential() {
     let labels = BTreeMap::new();
     assert_eq!(
         source
-            .bind(&subject("a", &labels), &StoredAgentConfig::default(), true)
+            .bind(
+                &subject("a", &labels),
+                &StoredAgentConfig::default(),
+                true,
+                false
+            )
             .unwrap_err(),
         model::ErrorCode::DaemonIo
     );
@@ -353,7 +373,7 @@ fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
     for deliverable in [true, false] {
         assert!(
             unscoped
-                .bind(&subject("a", &labels), &stored, deliverable)
+                .bind(&subject("a", &labels), &stored, deliverable, false)
                 .unwrap()
                 .is_none()
         );
@@ -368,7 +388,9 @@ fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
     ] {
         *scopes.grant.lock().unwrap() = grant;
         scopes.calls.lock().unwrap().clear();
-        let binding = source.bind(&subject("a", &labels), &stored, false).unwrap();
+        let binding = source
+            .bind(&subject("a", &labels), &stored, false, false)
+            .unwrap();
         assert_eq!(matches!(binding, Some(Binding::Strip)), stripped);
         assert_eq!(binding.is_none(), !stripped);
         let mut expected = vec!["access:a".to_owned()];
@@ -376,5 +398,81 @@ fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
             expected.push("release:a".to_owned());
         }
         assert_eq!(scopes.calls(), expected);
+    }
+}
+
+#[test]
+fn only_worker_credentials_on_additive_adapters_preapprove_the_report_tool() {
+    let report = json!({"kind":"mcp","server":"ait","tool":"report_progress"});
+    let docs = json!({"kind":"mcp","server":"docs","tool":"search"});
+    let scopes = FakeScopes::new(Grant::Shared);
+    let source = AgentMcp::new(
+        "127.0.0.1:7316".parse().unwrap(),
+        TOKEN.into(),
+        Arc::new(Policy(Mutex::new(json!({})))),
+    )
+    .with_scopes(scopes.clone());
+    let labels = BTreeMap::new();
+    let mut own = user_servers();
+    own.tool_policy = Some(json!({"preapproved":[docs.clone()]}));
+    own.provider_options = Some(BTreeMap::from([(
+        "allowedTools".to_owned(),
+        json!(["Read"]),
+    )]));
+    let worker = Grant::Worker("w".repeat(64));
+    let cases = [
+        // The user's own pre-approvals and allowed tools are kept and combined.
+        (
+            worker.clone(),
+            true,
+            &own,
+            json!({"preapproved":[docs.clone(), report.clone()]}),
+        ),
+        (
+            worker.clone(),
+            true,
+            &StoredAgentConfig::default(),
+            json!({"preapproved":[report.clone()]}),
+        ),
+        // Adapters without additive pre-approval, and every other credential, are unchanged.
+        (worker, false, &own, json!({"preapproved":[docs.clone()]})),
+        (
+            Grant::Scoped("s".repeat(64), false),
+            true,
+            &own,
+            json!({"preapproved":[docs.clone()]}),
+        ),
+        (
+            Grant::Scoped("b".repeat(64), true),
+            true,
+            &own,
+            json!({"preapproved":[docs.clone()]}),
+        ),
+        (
+            Grant::Scoped("s".repeat(64), false),
+            true,
+            &StoredAgentConfig::default(),
+            Value::Null,
+        ),
+    ];
+
+    for (grant, additive, stored, expected) in cases {
+        *scopes.grant.lock().unwrap() = grant.clone();
+        let original = stored.clone();
+        let binding = source
+            .bind(&subject("a", &labels), stored, true, additive)
+            .unwrap()
+            .unwrap();
+        let mut effective = stored.clone();
+        binding.apply(&mut effective);
+        binding.apply(&mut effective);
+
+        assert_eq!(
+            effective.tool_policy.unwrap_or_default(),
+            expected,
+            "{grant:?} additive={additive}"
+        );
+        assert_eq!(effective.provider_options, original.provider_options);
+        assert_eq!(*stored, original);
     }
 }

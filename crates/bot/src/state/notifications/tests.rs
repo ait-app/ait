@@ -31,6 +31,9 @@ fn notification(id: &str, scope: Option<&str>) -> Notification {
         summary: Some("Tests pass".to_owned()),
         at: Utc::now(),
         conversation_id: None,
+        ticket_id: None,
+        ticket_title: None,
+        turn_started_at: None,
     }
 }
 

@@ -40,6 +40,7 @@ async fn uninstalled_adapter_still_imports_sessions_and_hosts_bot_sessions_nativ
 
     assert!(!client.is_available().await.unwrap());
     assert!(client.supports_session_import());
+    assert!(client.additive_tool_preapproval());
     assert_eq!(
         client.bot_session_support(),
         BotSessionSupport {

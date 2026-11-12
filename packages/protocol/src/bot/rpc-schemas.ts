@@ -9,6 +9,9 @@ import {
   BotTurnSchema,
   BotWakeScopeSchema,
   BotLoggedNotificationSchema,
+  BotTicketSchema,
+  BotTicketSummarySchema,
+  BotTicketUserStatusSchema,
 } from "./types.js";
 
 const WorkspaceIdSchema = z.string().trim().min(1);
@@ -324,6 +327,29 @@ export const BOT_REQUEST_SCHEMAS = [
     text: z.string(),
     expected: z.string(),
   }),
+  z.strictObject({
+    type: z.literal("bot.ticket.list.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    // Closed tickets follow the open ones, most recently closed first.
+    includeClosed: z.boolean().optional(),
+    limit: z.number().int().min(1).max(128).optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.ticket.get.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    ticketId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.ticket.update.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    ticketId: z.guid(),
+    status: BotTicketUserStatusSchema,
+    // Only with a closing status.
+    outcome: z.string().optional(),
+  }),
 ] as const;
 
 export const BOT_RESPONSE_SCHEMAS = [
@@ -609,6 +635,18 @@ export const BOT_RESPONSE_SCHEMAS = [
     type: z.literal("bot.memory.update.response"),
     payload: z.object({ requestId: z.string(), revision: z.string() }),
   }),
+  z.object({
+    type: z.literal("bot.ticket.list.response"),
+    payload: z.object({ requestId: z.string(), tickets: z.array(BotTicketSummarySchema) }),
+  }),
+  z.object({
+    type: z.literal("bot.ticket.get.response"),
+    payload: z.object({ requestId: z.string(), ticket: BotTicketSchema }),
+  }),
+  z.object({
+    type: z.literal("bot.ticket.update.response"),
+    payload: z.object({ requestId: z.string(), ticket: BotTicketSchema, changed: z.boolean() }),
+  }),
 ] as const;
 
 export const BotRequestSchema = z.discriminatedUnion("type", BOT_REQUEST_SCHEMAS);
@@ -631,6 +669,12 @@ export type BotResult<M extends BotMethod> = Extract<
 export const BOT_PERMISSION_METHODS = ["bot.permissions.update.request"] as const;
 /** Notification log reads and the wake-scope setting; older hosts keep the Bot without them. */
 export const BOT_NOTIFICATION_METHODS = ["bot.notifications.list.request"] as const;
+/** Ticket reads and the owner's status changes (ADR-274); older hosts keep the Bot without them. */
+export const BOT_TICKET_METHODS = [
+  "bot.ticket.list.request",
+  "bot.ticket.get.request",
+  "bot.ticket.update.request",
+] as const;
 export const BOT_FEISHU_SETUP_METHODS = [
   "bot.channel.feishu.scan.start.request",
   "bot.channel.feishu.scan.status.request",
@@ -667,6 +711,7 @@ export const BOT_WEBHOOK_SETUP_METHODS = [
 const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_NOTIFICATION_METHODS,
+  ...BOT_TICKET_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
   ...BOT_LARK_SETUP_METHODS,
   ...BOT_TELEGRAM_SETUP_METHODS,

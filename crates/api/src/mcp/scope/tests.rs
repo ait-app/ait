@@ -34,6 +34,14 @@ fn bot() -> CallerKind {
 fn subtree() -> CallerKind {
     CallerKind::Subtree {
         agent_id: "child".to_owned(),
+        ticket: None,
+    }
+}
+
+fn worker() -> CallerKind {
+    CallerKind::Subtree {
+        agent_id: "child".to_owned(),
+        ticket: Some(domain::TicketId::generate()),
     }
 }
 
@@ -60,6 +68,19 @@ fn bot_only_tools_are_granted_to_bot_sessions_but_never_to_subtrees() {
     }
     assert!(bot.allows("bot_memory_read"));
     assert!(!subtree.allows("bot_memory_read"));
+    let worker = scope(worker(), BotPermissions::default());
+    assert!(worker.allows("create_agent"));
+    assert!(!worker.allows("bot_tickets"));
+    for tool in ["bot_tickets", "bot_ticket_update"] {
+        assert!(bot.allows(tool), "{tool}");
+        assert!(!subtree.allows(tool), "{tool}");
+    }
+    assert!(worker.allows("report_progress"));
+    assert!(!subtree.allows("report_progress"));
+    assert!(!bot.allows("report_progress"));
+    for tool in ["bot_tickets", "bot_ticket_update", "report_progress"] {
+        assert_eq!(admit(tool, &json!({})), Ok(Rule::Open), "{tool}");
+    }
 }
 
 #[test]

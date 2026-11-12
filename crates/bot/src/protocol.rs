@@ -1,6 +1,7 @@
 use domain::bot::permissions::BotPermissions;
+use domain::bot::ticket::TicketStatus;
 use domain::bot::{ChannelConfig, ExecutionConfig, WakeScope};
-use domain::{BotTurnId, ChannelId, ConversationId};
+use domain::{BotTurnId, ChannelId, ConversationId, TicketId};
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -202,6 +203,32 @@ pub(crate) struct NotificationsList {
     #[serde(default)]
     pub(crate) unseen_by: Option<ConversationId>,
     pub(crate) limit: Option<usize>,
+}
+/// A page of the Workspace Bot's tickets.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketList {
+    pub(crate) workspace_id: String,
+    /// Also list closed tickets, after the open ones.
+    #[serde(default)]
+    pub(crate) include_closed: bool,
+    pub(crate) limit: Option<usize>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) ticket_id: TicketId,
+}
+/// The user closes, cancels or reopens a ticket; titles and notes are the Bot's.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketUserUpdate {
+    pub(crate) workspace_id: String,
+    pub(crate) ticket_id: TicketId,
+    pub(crate) status: TicketStatus,
+    #[serde(default)]
+    pub(crate) outcome: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

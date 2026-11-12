@@ -8,6 +8,7 @@ import {
   BOT_PERMISSION_METHODS,
   BOT_QQ_SETUP_METHODS,
   BOT_TELEGRAM_SETUP_METHODS,
+  BOT_TICKET_METHODS,
   BOT_WEIXIN_SETUP_METHODS,
 } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
@@ -99,6 +100,10 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_NOTIFICATION_METHODS.every(has),
+      workspaceBotTickets:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_TICKET_METHODS.every(has),
       workspaceBotFeishuSetup:
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&

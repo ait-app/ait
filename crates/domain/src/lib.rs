@@ -69,6 +69,10 @@ identity!(BotId, "Stable identity of a workspace Bot.");
 identity!(ChannelId, "Identity of a Bot-owned channel instance.");
 identity!(ConversationId, "Identity of an isolated Bot conversation.");
 identity!(BotTurnId, "Identity of a durable Bot turn.");
+identity!(
+    TicketId,
+    "Identity of a unit of work a Bot delegated to Agents."
+);
 
 #[cfg(test)]
 mod tests;

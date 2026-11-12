@@ -333,6 +333,16 @@ pub trait AgentClient: Debug + Send + Sync {
         false
     }
 
+    /// Whether a `tool_policy` pre-approval only adds to what the session may run without
+    /// asking and leaves every other tool of the same MCP server available, so the runtime may
+    /// pre-approve a Bot ticket worker's own report tool (ADR-274).
+    ///
+    /// Adapters whose pre-approval is an exclusive allowlist, or that refuse a tool policy, keep
+    /// the default.
+    fn additive_tool_preapproval(&self) -> bool {
+        false
+    }
+
     /// How a Bot's own hidden session is configured on this adapter.
     ///
     /// The default delivers instructions as a turn prefix, uses the provider's default mode

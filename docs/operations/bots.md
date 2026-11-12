@@ -28,7 +28,8 @@
 重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
 当前通过持久查询读取结果，尚无 Bot 流式事件订阅。
-Bot 启动的工作结束时，Bot 会被唤醒并在发起它的对话中回报，见下文“通知与唤醒”。
+Bot 把工作交给 Agent 后即结束本轮，不在轮次中等待长时间的工作；交办的每项工作记为一个任务，
+工作结束或需要用户时 Bot 被唤醒并在发起它的对话中回报，见下文“任务”与“通知与唤醒”。
 
 ## 在 Ait 中使用
 
@@ -37,7 +38,8 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
 1. 开启测试功能后，在 Workspace 新建菜单选择 Bot；每个 Workspace 只有一个 Bot 标签页，重复打开会聚焦已有标签页。
 2. 未设置时显示设置向导：选择 Provider、模型、权限模式与推理强度后提交；可勾选“清空已保存的记忆”，否则保留之前移除的 Bot 留下的记忆。
    访客只看到未配置提示。
-3. 设置完成后进入对话，轮次显示状态与错误。由通知唤醒的轮次不显示为用户消息，见下文“通知与唤醒”。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
+3. 设置完成后进入对话，轮次显示状态与错误。由通知唤醒的轮次不显示为用户消息，见下文“通知与唤醒”；
+   输入框上方的“任务”标签列出 Bot 正在做的工作，见下文“任务”。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
    目录缺失导致的暂停会说明原因。暂停期间记忆保存、Channel 新增与启停也停用，恢复后才能修改。
 4. 在设置页可修改模型（对新对话生效）、选择唤醒范围并查看最近的通知、暂停或恢复、按 revision 编辑记忆、管理外部 Channel、移除 Bot。
    飞书 Channel 默认扫码接入，也可手动填写凭据，见下文“飞书接入”；Telegram 按页面引导粘贴 Token 并点击 Start，见下文“Telegram 接入”。两者都可改用 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用并配置允许的发送者；通过环境变量引用新建的 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
@@ -116,6 +118,108 @@ Bot 标签页尚不能查看外部对话，因此回到 Telegram 等平台的唤
 **验证范围**：以上规则由 daemon 与客户端的单元和组件测试覆盖；唤醒回复尚未在 Telegram、飞书、QQ、微信等真实平台上验收，
 移动端与桌面界面也未在真机上检查。
 
+## 任务
+
+Bot 交办的每项工作记为一个**任务**（协议与存储中称 ticket，[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)）：
+交办内容、在做它的 Agent、带日期的汇报，以及关闭时的结论。任务让 Bot 不必在一轮中等待 Agent，也让用户看到 Bot 正在为自己做哪些事。
+
+**任务如何产生**
+
+- Bot 每启动一个 Agent 就打开一个任务：标题为 Agent 标题，请求为 Agent 的初始提示，来源为发起的对话。
+  同一次创建的重试（相同 `idempotencyKey`）只有一个任务；Agent 创建失败时不留下任务。
+- Bot 为同一项工作再启动 Agent（重试、评审或并行的一部分）时指定已有任务，不另开任务。已关闭的任务需先重新打开，每个任务至多 16 个 Agent。
+- 任务中的 Agent 再启动的 Agent 加入同一任务。用户自己启动的 Agent 与定时任务运行创建的 Agent 不属于任何任务。
+- Agent 所属的任务记录在保留标签 `ait.bot.ticket` 中，由 daemon 写入；Bot、Agent 与 Ait MCP 调用都不能写入或修改。
+
+**状态与谁来关闭**
+
+| 状态        | Ait 中显示 | 含义                                                     |
+| ----------- | ---------- | -------------------------------------------------------- |
+| `open`      | 进行中     | 工作在进行                                               |
+| `waiting`   | 等你处理   | 某个 Agent 在等待审批，或汇报受阻（`blocked`），需要用户 |
+| `done`      | 已完成     | 已关闭：工作完成                                         |
+| `failed`    | 失败       | 已关闭：工作失败                                         |
+| `cancelled` | 已取消     | 已关闭：不再继续                                         |
+
+- Agent 等待审批时任务进入 `waiting`，该 Agent 越过审批（完成或失败一轮）后回到 `open`。
+- Agent 汇报 `blocked` 时任务进入 `waiting`，也包括它先请求过审批、或另一个 Agent 正在等待审批的情况（受阻优先于审批）。
+  只要有 Agent 报告受阻，任务在该 Agent 之后再汇报、或 Bot、用户把任务设回进行中之前，不会回到进行中：Agent 结束这一轮不会解除受阻；
+  几个 Agent 都受阻时，一个解除后任务继续等其余的。
+- Bot（工具 `bot_ticket_update`）与用户能关闭任务（`done`、`failed`、`cancelled`，可附结论）或重新打开；设回进行中会解除所有受阻。
+  Agent 结束一轮或汇报完成都不会关闭任务，因为 Bot 可能还要继续交代。已关闭的任务不能直接改为另一种关闭状态，需先重新打开；重新打开会清除结论。
+  对已关闭的任务以同一状态再关闭并附上新结论时保存该结论，例如你先在 Ait 中关闭，Bot 随后附上总结。
+- Ait 自己只在两种情况下改变任务，并在汇报中写明原因（来源显示为 Ait）：达到未关闭上限时自动关闭工作显然已结束的任务（见“上限”），
+  以及 Bot 用 `send_agent_prompt` 给某个 Agent 更多工作时重新打开它已关闭的任务，使该 Agent 之后的汇报能被记录。
+  新的任务需要新的 Agent；同一 Agent 的后续工作记在原任务上。
+- 关闭或取消任务不会停止它的 Agent，需要时另行停止。
+
+**Bot 的工作方式**
+
+内置指令要求 Bot 把工作交给 Agent、告诉用户已开始，然后结束本轮，不在 `wait_for_agent` 中等待长时间的工作；只有预计一分钟内结束的工作才短暂等待。
+Agent 完成、失败、等待审批，或汇报 `blocked`、`done`、`failed` 时，Bot 在交办该任务的对话中被唤醒（合并、限额与回复去向见“通知与唤醒”），
+唤醒输入的每行标出所属任务。Bot 把结果告诉用户后用 `bot_ticket_update` 关闭任务，也可以改名或追加备注。
+这些都是指令对模型的要求而不是强制规则：模型可能忘记关闭任务，用户可以在 Ait 中自行关闭，达到上限时 Ait 也会关闭 Agent 都已归档的任务。
+
+Agent 先用 `report_progress` 汇报 `done`、`failed` 或 `blocked`，随后结束这一轮时，结束通知仍记入任务与通知列表，但不再唤醒 Bot
+（设置页“最近的通知”中显示为未重复唤醒：Agent 已在任务中汇报过这一结果），一次完成只花一次模型调用。只在 Bot 已为同一结果被唤醒过时才这样：
+之前某一轮的汇报不影响之后一轮（包括 Provider 自己继续的一轮，例如 Codex 的目标续跑）；汇报受阻后又汇报进展并继续工作的一轮、
+汇报完成或受阻后失败的一轮、没有汇报就结束的一轮以及等待审批都照常唤醒。
+
+**工作者汇报**
+
+属于任务的 Agent 获得工具 `report_progress`（`kind` 为 `progress`、`blocked`、`done` 或 `failed`，`text` 1–2048 字符），Bot 在交办时要求它受阻或完成时调用。
+
+- `blocked`、`done`、`failed` 唤醒 Bot；`progress` 只记入任务。
+- 汇报不结束 Agent 的这一轮，也不关闭任务。
+- 任务已关闭或 Bot 暂停时，汇报不被记录，Agent 会得到说明并照常完成工作。
+- 带任务标签的 Agent 都能汇报，即使它没能加入任务的 Agent 列表（例如任务已有 16 个 Agent）；列表有空位时它在汇报时加入。
+- 任务中 Agent 的完成、失败与等待审批也由 Ait 自动记入任务的汇报（来源显示为 Ait）。
+- **审批**：Ait 把 `report_progress` 加入 Claude 工作者会话允许的工具（`--allowedTools`），Claude 不再为它请求审批；你自己允许的工具照旧保留。
+  其他 Provider 的工作者没有这项预授权：Codex 在 `auto`、`auto-review` 模式中、其他 Provider 在会请求审批的模式中，
+  可能先就 `report_progress` 请求审批：任务先进入“等你处理”，Bot 被唤醒说明需要审批，你批准后汇报才记录。Codex `full-access`、`read-only` 不请求。
+  原因见 ADR-274 第 10 节（Codex 的预授权会限制工作者能用的其他 Ait 工具，其他 Provider 不接受预授权）；此行为只按代码判断，尚未用真实 Provider 验证。
+
+**上限**
+
+- 每个 Bot 至多 32 个未关闭的任务。达到上限时，Bot 启动新 Agent 前 Ait 先自动关闭工作显然已结束的任务：至少有一个 Agent、且它的 Agent 全部已归档或已删除。
+  进行中的任务只在最近一次重新打开之后、它的每个 Agent 最近一条汇报都是 `done` 时关为已完成，其余关为已取消；
+  等你处理的任务（受阻或等待审批）此时已无人能继续或回答，关为已取消。结论写明是自动关闭及原因。
+  Ait 读不全 Agent 列表时不关闭任何任务。仍没有空位时 Bot 不能再启动 Agent，会得到“列出任务并关闭已完成或不再需要的任务”的提示。
+  你或 Bot 重新打开任务同样受此限制（不做自动关闭），Ait 中会说明原因。Bot 给 Agent 更多工作时，其已关闭任务的重新打开也会先做上述自动关闭；
+  仍不能重新打开时提示照常发送，Bot 会被告知该任务未重新打开、Agent 对这项工作的汇报会被拒绝。提示发送失败时任务仍保持重新打开。
+- 已关闭的任务保留最近 64 个，更早关闭的自动删除。
+- 每个任务至多 16 个 Agent，保留最近 32 条汇报；标题 256 字节、请求 4096 字节、结论与每条汇报 2048 字节，超出部分截断。
+
+**在 Ait 中查看**（Host 实现 `bot.ticket.*` 时；否则不显示任务，客户端也不发送任务请求）
+
+- 对话输入框上方的“任务”标签显示进行中的任务数，有等你处理的任务时另显示其数量。点开后列出未关闭的任务，等你处理的在前；
+  每项显示标题、状态（等待时说明原因：Agent 等待你的审批，或 Agent 受阻需要你的输入）、Agent 数与最近一条汇报。
+  已关闭的任务默认不显示，点“显示最近关闭的任务”另行加载。
+- 点开任务查看状态、关闭后的结论、请求、Agent（同一 Workspace 中的可点击打开）与按时间顺序的汇报记录，每条注明来源（Agent、Bot、你或 Ait）。
+- Host 所有者可以标记完成、取消任务（需要确认）或重新打开已关闭的任务，结论可选填；Bot 暂停时也可以。访客只读。
+- 唤醒卡片中属于任务的通知另显示“任务：标题”，点击打开该任务。
+- 列表约每 10 秒刷新，打开的任务约每 5 秒刷新。
+
+**暂停、移除与重启**
+
+- 暂停保留任务。暂停期间不记录汇报，Bot 不能打开或修改任务（因此不能启动属于任务的 Agent），用户仍可关闭、取消或重新打开。
+  暂停期间由任务中的 Agent 启动的子 Agent 仍带任务标签，恢复后第一次汇报时才出现在任务中。
+- `bot.remove` 与 Workspace 归档删除该 Bot 的全部任务；之后重新设置的 Bot 从没有任务开始。
+- 重启不改变任务。少数崩溃窗口会留下痕迹：打开任务后、创建 Agent 前崩溃，会留下没有 Agent 的进行中任务，需由 Bot 或用户关闭（自动关闭不处理没有 Agent 的任务）；
+  也可能重复一条 Ait 自动汇报。工作者汇报已保存而唤醒尚未记录时崩溃，重启时补发 1 小时内的这类唤醒，已唤醒过的不重复。
+- Bot 创建 Agent 超过 60 秒调用时限时，Bot 收到超时错误，但 Agent 的创建与任务的收尾照常完成；Bot 若随即重试，可能多出一个任务。
+  这样的创建仍占用 MCP 调用额度直到结束，至多再运行 5 分钟，超过时被放弃，可能像崩溃一样留下没有 Agent 的任务。
+  daemon 关闭时不会取消它：创建若在关闭时仍卡住，关闭会等满 15 秒期限后报错（未复现）。
+
+**降级**：0.2.10 及更早的 daemon 忽略任务数据，但无法解析含 `ticket_blocked`、`ticket_done`、`ticket_failed` 或跳过原因 `reported` 的通知日志与唤醒轮次，
+Bot 数据加载失败，daemon 启动报错 `start Bot service`。只要有 Agent 汇报过 `blocked`、`done` 或 `failed`，降级就需要删除 `<data>/workspace-bots/`，
+与上文通知的降级相同。本版本同样不能读取以后新增的任务状态、等待原因或汇报类型。
+
+**验证范围**：以上规则由 daemon 的单元与集成测试覆盖，包括以伪执行器跑通的“Bot 启动 Agent → 打开任务 → Agent 汇报 `done` → 原对话被唤醒”循环、
+达到上限时的自动关闭、`send_agent_prompt` 重新打开任务，以及每个写入点的崩溃恰好唤醒一次；
+任务界面由客户端组件测试覆盖。真实 Provider 会话中模型是否按指令交出工作、要求 Agent 汇报并关闭任务，尚未在运行中的 daemon 上验证；
+任务界面也未在真机或桌面应用中检查。
+
 ## 权限
 
 Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分组**决定。分组整体替换保存，在 Bot 的下一次 MCP 请求生效，
@@ -131,7 +235,8 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 | `terminals` | 创建终端、发送按键、读取并终止终端                                      | 否   |
 
 `create_workspace`、`respond_to_permission`、`archive_workspace`、`rename_workspace`、`list_workspaces` 永不授予 Bot，Bot 不能通过 Ait MCP 创建 worktree 或 Workspace（[ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-`bot_memory_read`、`bot_memory_update`、`workspace_overview`（作用域概览，输出上限 24 KiB）只对 Bot 自己可见。
+`bot_memory_read`、`bot_memory_update`、`bot_tickets`、`bot_ticket_update`、`workspace_overview`（作用域概览，含未关闭的任务，输出上限 24 KiB）只对 Bot 自己可见；
+`report_progress` 只对属于任务的 Agent 可见。
 
 **Agent 模式**为每个 Provider 选择一个原生模式（至多 32 个 Provider），Bot 与它启动的 Agent 只能使用该模式；
 未列出的 Provider 不能被使用。阶段 1／2 创建的 Bot 升级后得到默认分组但模式上限为空，不能启动 Agent，需在设置中配置。
@@ -163,7 +268,7 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 
 ### Bot 启动的 Agent
 
-Bot 创建的 Agent 带保留标签 `ait.bot.scope` 与记录发起对话的 `ait.bot.conversation`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具；
+Bot 创建的 Agent 带保留标签 `ait.bot.scope`、记录发起对话的 `ait.bot.conversation` 与所属任务的 `ait.bot.ticket`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具（属于任务时另有 `report_progress`）；
 作用域调用者不能写入任何 `ait.` 前缀的标签。Bot 暂停期间这些 Agent 保留完整授权（只有 Bot 自身的凭据失效）；Bot 移除后降为只读观察；
 同一 Workspace 设置新 Bot 后，新 Bot 的授权适用于该 Workspace 已有的这些 Agent 与定时任务。
 
@@ -304,7 +409,8 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
 其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.{list,reset}`、
-`bot.turn.cancel`、`bot.memory.get`，以及读取通知日志的 `bot.notifications.list`（可选 `unseenBy` 只返回某对话尚未在完成轮次中看到的通知）。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
+`bot.turn.cancel`、`bot.memory.get`，读取通知日志的 `bot.notifications.list`（可选 `unseenBy` 只返回某对话尚未在完成轮次中看到的通知），
+以及任务的 `bot.ticket.{list,get,update}`（`update` 只接受 `open`、`done`、`failed`、`cancelled` 与可选结论，访客不可调用）。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 `bot.channel.lark.connect` 提供 Lark 手动接入。基础 Channel 类型通过 `bot.channel.types.request` 查询，
 新增平台按各自的接入方法发现能力；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见

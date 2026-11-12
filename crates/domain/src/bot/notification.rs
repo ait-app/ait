@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{BotId, BotTurnId, ConversationId};
+use crate::{BotId, BotTurnId, ConversationId, TicketId};
 
 /// What happened to the notification's subject.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +24,12 @@ pub enum NotificationKind {
     ScheduleFailed,
     /// A terminal asked for attention.
     TerminalAttention,
+    /// An Agent reported that its ticket is blocked on the user.
+    TicketBlocked,
+    /// An Agent reported its part of a ticket done.
+    TicketDone,
+    /// An Agent reported its part of a ticket failed.
+    TicketFailed,
 }
 
 /// One Workspace event offered to the Bots that may care about it.
@@ -62,6 +68,18 @@ pub struct Notification {
     /// Bot conversation that started the subject, if known.
     #[serde(default)]
     pub conversation_id: Option<ConversationId>,
+    /// Bot ticket the subject works on, from its `ait.bot.ticket` label; kept only by the Bot
+    /// that owns the ticket.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_id: Option<TicketId>,
+    /// Title of [`Notification::ticket_id`], set by the owning Bot when it admits the
+    /// notification; any value the caller supplies is replaced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_title: Option<String>,
+    /// When the turn an `agent_finished` or `agent_failed` notification ends started, from the
+    /// Agent's last user message; absent when unknown and for other kinds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_started_at: Option<DateTime<Utc>>,
 }
 
 /// Why an in-scope notification did not wake the Bot.
@@ -78,6 +96,9 @@ pub enum SkipReason {
     Observed,
     /// The target conversation cannot run until the user resets it.
     Blocked,
+    /// The Agent's turn ended after the Agent already reported its outcome on the ticket
+    /// during that turn, which woke the Bot (ADR-274).
+    Reported,
 }
 
 /// Whether and how a logged notification woke the Bot.

@@ -461,6 +461,7 @@ describe("BotSettings notifications", () => {
           seenSequence: null,
           wakeScope: "own",
           notifications: [
+            entry(7, { state: "skipped", reason: "reported" }, 'Agent "g" finished'),
             entry(6, { state: "a_newer_state" }, 'Agent "f" failed'),
             entry(5, { state: "skipped", reason: "a_newer_reason" }, 'Agent "e" failed'),
             entry(4, { state: "skipped", reason: "blocked" }, 'Agent "d" failed'),
@@ -478,6 +479,7 @@ describe("BotSettings notifications", () => {
     expect(screen.getByText(/bots\.notifications\.skipped\.over_budget/)).toBeTruthy();
     expect(screen.getByText(/bots\.notifications\.skipped\.observed/)).toBeTruthy();
     expect(screen.getByText(/bots\.notifications\.skipped\.blocked/)).toBeTruthy();
+    expect(screen.getByText(/bots\.notifications\.skipped\.reported/)).toBeTruthy();
     expect(screen.getByText(/bots\.notifications\.skipped\.other/)).toBeTruthy();
     expect(screen.getByText(/bots\.notifications\.state\.other/)).toBeTruthy();
     expect(screen.getByText(/bots\.notifications\.state\.woke/)).toBeTruthy();

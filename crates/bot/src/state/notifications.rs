@@ -40,8 +40,9 @@ const WAKE_MAX_DELAY: TimeDelta = TimeDelta::seconds(30);
 const WAKE_BATCH: usize = 16;
 /// Most wake turns per conversation within [`WAKE_WINDOW`].
 const WAKE_BUDGET: usize = 12;
-/// Rolling window of [`WAKE_BUDGET`].
-const WAKE_WINDOW: TimeDelta = TimeDelta::hours(1);
+/// Rolling window of [`WAKE_BUDGET`], and how far back replays are deduplicated and lost worker
+/// report wake-ups are offered again.
+pub(super) const WAKE_WINDOW: TimeDelta = TimeDelta::hours(1);
 /// Most Agent observations kept across all conversations; the oldest are forgotten first.
 const OBSERVATION_LIMIT: usize = 256;
 /// Default and largest page of `bot.notifications.list.request`.
@@ -102,7 +103,10 @@ impl State {
         Ok(outcome)
     }
 
-    /// Append `notification` to `bot`'s log; `false` when the log already holds its id.
+    /// Append `notification` to `bot`'s log; `false` when the log already holds its id. A
+    /// notification about one of `bot`'s tickets is recorded on the ticket first, so a crash in
+    /// between repeats the ticket's report on replay rather than losing it. The end of an Agent
+    /// turn in which the Agent already reported its outcome is logged as skipped.
     fn log_notification(
         &mut self,
         bot: BotId,
@@ -111,30 +115,34 @@ impl State {
         now: DateTime<Utc>,
     ) -> Result<bool, ErrorCode> {
         // A replay of a notification that already woke the Bot, evicted from the log since.
-        if self
+        let replayed = self
             .woken
             .get(&(bot, notification.id.clone()))
-            .is_some_and(|woke| now - *woke < WAKE_WINDOW)
-        {
+            .is_some_and(|woke| now - *woke < WAKE_WINDOW);
+        let logged = self.notifications.get(&bot).is_some_and(|log| {
+            log.entries
+                .iter()
+                .any(|entry| entry.notification.id == notification.id)
+        });
+        if replayed || logged {
             return Ok(false);
         }
+        let (notification, reported) = self.attach_ticket(bot, notification, now)?;
         let log = self
             .notifications
             .entry(bot)
             .or_insert_with(|| NotificationLog::new(bot));
-        if log
-            .entries
-            .iter()
-            .any(|entry| entry.notification.id == notification.id)
-        {
-            return Ok(false);
-        }
         let sequence = log.next_sequence;
         let next_sequence = sequence
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
         let wake = if !in_scope {
             WakeStatus::Logged
+        } else if reported {
+            // The Agent's own outcome report already woke the Bot about this turn.
+            WakeStatus::Skipped {
+                reason: SkipReason::Reported,
+            }
         } else if pending(log).count() >= INBOX_LIMIT {
             WakeStatus::Skipped {
                 reason: SkipReason::InboxFull,
@@ -145,7 +153,7 @@ impl State {
         log.entries.push(LoggedNotification {
             sequence,
             admitted_at: now,
-            notification: notification.clone(),
+            notification,
             wake,
         });
         log.next_sequence = next_sequence;
@@ -229,13 +237,17 @@ impl State {
     }
 
     /// Whether a completed turn of `target` already read the Agent `notification` is about,
-    /// settled no earlier than the notification's event.
+    /// settled no earlier than the notification's event; that includes the Agent's worker
+    /// reports (ADR-274).
     fn observed(&self, target: Option<ConversationId>, notification: &Notification) -> bool {
         let about_agent = matches!(
             notification.kind,
             NotificationKind::AgentFinished
                 | NotificationKind::AgentFailed
                 | NotificationKind::AgentPermission
+                | NotificationKind::TicketBlocked
+                | NotificationKind::TicketDone
+                | NotificationKind::TicketFailed
         );
         let (Some(target), Some(agent)) = (target, &notification.agent_id) else {
             return false;

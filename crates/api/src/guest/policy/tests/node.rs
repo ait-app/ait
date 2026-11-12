@@ -21,6 +21,8 @@ async fn management_requires_a_whole_node_grant() {
             "schedule.list.request",
             "bot.get.request",
             "bot.notifications.list.request",
+            "bot.ticket.list.request",
+            "bot.ticket.get.request",
             "provider.usage.list.request",
             "provider.usage.ledger.request",
             "agent.skills.get_status.request",

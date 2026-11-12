@@ -1,8 +1,9 @@
 //! Blocking storage and runtime-secret ports for the Bot application.
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ConversationId};
+use domain::{BotId, BotTurnId, ConversationId, TicketId};
 
 /// A safe Bot persistence failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -76,4 +77,27 @@ pub trait Store: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns inaccessible storage errors.
     fn delete_notification_log(&self, bot: BotId) -> Result<(), StorageError>;
+    /// Visit every stored ticket of every Bot one at a time during startup.
+    /// # Errors
+    /// Returns record I/O failures or a rejected invariant from the visitor.
+    fn scan_tickets(
+        &self,
+        visitor: &mut dyn FnMut(Ticket) -> Result<(), StorageError>,
+    ) -> Result<(), StorageError>;
+    /// Read one ticket of `bot` with its reports.
+    /// # Errors
+    /// Returns absent, malformed or inaccessible storage errors.
+    fn ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, StorageError>;
+    /// Atomically replace one ticket.
+    /// # Errors
+    /// Returns oversized records or write failures; callers must stop on an uncertain write.
+    fn save_ticket(&self, ticket: &Ticket) -> Result<(), StorageError>;
+    /// Remove one ticket of `bot`; an absent ticket is not an error.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_ticket(&self, bot: BotId, id: TicketId) -> Result<(), StorageError>;
+    /// Remove every ticket of `bot`; absent tickets are not an error.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError>;
 }

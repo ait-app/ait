@@ -34,11 +34,25 @@ pub enum ToolAccess {
     Group(ToolGroup),
     /// Visible only to Bot credentials, never to subtrees.
     BotOnly,
+    /// Visible only to subtree credentials of Agents working on a Bot ticket, never to Bot
+    /// sessions or the host.
+    Worker,
     /// Never granted to Bot-scoped callers.
     HostOnly,
 }
 
-use ToolAccess::{BotOnly, Group, HostOnly};
+/// Which kind of scoped credential asks for a tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Holder {
+    /// A Bot's own conversation session.
+    Bot,
+    /// An Agent started inside a Bot's scope, or one of its descendants.
+    Subtree,
+    /// A subtree Agent whose `ait.bot.ticket` label assigns it to one of the Bot's tickets.
+    Worker,
+}
+
+use ToolAccess::{BotOnly, Group, HostOnly, Worker};
 use ToolGroup::{Agents, Observe, Schedules, Scripts, Stop, Terminals};
 
 /// Every daemon MCP tool name with its access class; unknown names are `HostOnly`.
@@ -83,6 +97,9 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("bot_memory_read", BotOnly),
     ("bot_memory_update", BotOnly),
     ("workspace_overview", BotOnly),
+    ("bot_tickets", BotOnly),
+    ("bot_ticket_update", BotOnly),
+    ("report_progress", Worker),
     ("create_workspace", HostOnly),
     ("respond_to_permission", HostOnly),
     ("archive_workspace", HostOnly),
@@ -99,11 +116,19 @@ pub fn tool_access(tool: &str) -> ToolAccess {
         .unwrap_or(HostOnly)
 }
 
-/// Tool names that may ever be granted to a Bot session (all except `HostOnly`).
+/// Tool names that may ever be granted to a Bot session (all except `HostOnly` and `Worker`).
 pub fn grantable_tools() -> impl Iterator<Item = &'static str> {
     TOOLS
         .iter()
-        .filter(|(_, access)| *access != HostOnly)
+        .filter(|(_, access)| !matches!(access, HostOnly | Worker))
+        .map(|(name, _)| *name)
+}
+
+/// Tool names only an Agent working on a Bot ticket may call (ADR-274).
+pub fn worker_tools() -> impl Iterator<Item = &'static str> {
+    TOOLS
+        .iter()
+        .filter(|(_, access)| matches!(access, Worker))
         .map(|(name, _)| *name)
 }
 
@@ -179,12 +204,13 @@ impl BotPermissions {
         }
     }
 
-    /// Whether `tool` may be used by a caller; `bot` marks a Bot credential (not a subtree).
+    /// Whether `tool` may be used by a scoped credential of kind `holder`.
     #[must_use]
-    pub fn allows(&self, tool: &str, bot: bool) -> bool {
+    pub fn allows(&self, tool: &str, holder: Holder) -> bool {
         match tool_access(tool) {
             HostOnly => false,
-            BotOnly => bot,
+            BotOnly => holder == Holder::Bot,
+            Worker => holder == Holder::Worker,
             Group(group) => group == Observe || self.groups.contains(&group),
         }
     }

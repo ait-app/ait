@@ -114,6 +114,11 @@ impl AgentClient for ClaudeClient {
         true
     }
 
+    /// Pre-approvals become extra `--allowedTools` entries next to the user's own.
+    fn additive_tool_preapproval(&self) -> bool {
+        true
+    }
+
     fn supports_write_confinement(&self) -> bool {
         true
     }

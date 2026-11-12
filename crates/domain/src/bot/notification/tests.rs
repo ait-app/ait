@@ -4,7 +4,7 @@ use super::{
     LoggedNotification, Notification, NotificationKind, NotificationLog, SkipReason, Wake,
     WakeStatus,
 };
-use crate::{BotId, BotTurnId, ConversationId};
+use crate::{BotId, BotTurnId, ConversationId, TicketId};
 
 fn notification() -> Notification {
     serde_json::from_value(json!({
@@ -27,9 +27,33 @@ fn minimal_notification_json_defaults_optional_subjects_and_origin() {
     assert_eq!(loaded.schedule_id, None);
     assert_eq!(loaded.summary, None);
     assert_eq!(loaded.conversation_id, None);
+    assert_eq!(loaded.ticket_id, None);
+    let value = serde_json::to_value(&loaded).unwrap();
+    assert_eq!(value["at"], "2026-11-12T08:00:00Z");
+    assert!(value.get("ticketId").is_none() && value.get("ticketTitle").is_none());
+}
+
+#[test]
+fn ticket_fields_round_trip() {
+    let mut ticketed = notification();
+    ticketed.ticket_id = Some(TicketId::generate());
+    ticketed.ticket_title = Some("Fix login".into());
+    ticketed.turn_started_at = Some(ticketed.at);
+
+    let value = serde_json::to_value(&ticketed).unwrap();
+
+    assert_eq!(value["ticketId"], json!(ticketed.ticket_id));
+    assert_eq!(value["ticketTitle"], "Fix login");
+    assert_eq!(value["turnStartedAt"], json!(ticketed.at));
+    assert!(
+        serde_json::to_value(notification())
+            .unwrap()
+            .get("turnStartedAt")
+            .is_none()
+    );
     assert_eq!(
-        serde_json::to_value(&loaded).unwrap()["at"],
-        "2026-11-12T08:00:00Z"
+        serde_json::from_value::<Notification>(value).unwrap(),
+        ticketed
     );
 }
 
@@ -42,6 +66,9 @@ fn every_kind_and_wake_status_has_a_stable_wire_name() {
         (NotificationKind::ScheduleSucceeded, "schedule_succeeded"),
         (NotificationKind::ScheduleFailed, "schedule_failed"),
         (NotificationKind::TerminalAttention, "terminal_attention"),
+        (NotificationKind::TicketBlocked, "ticket_blocked"),
+        (NotificationKind::TicketDone, "ticket_done"),
+        (NotificationKind::TicketFailed, "ticket_failed"),
     ] {
         assert_eq!(serde_json::to_value(kind).unwrap(), name);
     }
@@ -86,6 +113,12 @@ fn every_kind_and_wake_status_has_a_stable_wire_name() {
                 reason: SkipReason::Blocked,
             },
             json!({"state":"skipped","reason":"blocked"}),
+        ),
+        (
+            WakeStatus::Skipped {
+                reason: SkipReason::Reported,
+            },
+            json!({"state":"skipped","reason":"reported"}),
         ),
     ] {
         assert_eq!(serde_json::to_value(status).unwrap(), expected);

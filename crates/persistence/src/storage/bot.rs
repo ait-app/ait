@@ -1,11 +1,12 @@
-//! Atomic Bot catalog, receipts and workspace-keyed memory.
+//! Atomic Bot catalog, receipts, notification logs, tickets and workspace-keyed memory.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use domain::bot::notification::NotificationLog;
+use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ChannelId, ConversationId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
 use model::bot::{StorageError, Store};
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
@@ -185,9 +186,49 @@ impl Store for FileStore {
     fn delete_notification_log(&self, bot: BotId) -> Result<(), StorageError> {
         remove(&self.notification_path(bot))
     }
+    fn scan_tickets(
+        &self,
+        visitor: &mut dyn FnMut(Ticket) -> Result<(), StorageError>,
+    ) -> Result<(), StorageError> {
+        let mut bots = match fs::read_dir(self.root.join("tickets")) {
+            Ok(bots) => bots,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(_) => return Err(StorageError),
+        };
+        bots.try_for_each(|bot| {
+            let bot = bot.map_err(|_| StorageError)?;
+            if bot.file_type().map_err(|_| StorageError)?.is_dir() {
+                visit_records(&bot.path(), visitor)
+            } else {
+                Ok(())
+            }
+        })
+    }
+    fn ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, StorageError> {
+        read(&self.ticket_path(bot, id))?.ok_or(StorageError)
+    }
+    fn save_ticket(&self, ticket: &Ticket) -> Result<(), StorageError> {
+        write(&self.ticket_path(ticket.bot_id, ticket.id), ticket)
+    }
+    fn delete_ticket(&self, bot: BotId, id: TicketId) -> Result<(), StorageError> {
+        remove(&self.ticket_path(bot, id))
+    }
+    fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError> {
+        match fs::remove_dir_all(self.tickets_path(bot)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(StorageError),
+        }
+    }
 }
 
 impl FileStore {
+    fn tickets_path(&self, bot: BotId) -> PathBuf {
+        self.root.join("tickets").join(bot.to_string())
+    }
+    fn ticket_path(&self, bot: BotId, id: TicketId) -> PathBuf {
+        self.tickets_path(bot).join(format!("{id}.json"))
+    }
     fn notification_path(&self, bot: BotId) -> PathBuf {
         self.root.join("notifications").join(format!("{bot}.json"))
     }

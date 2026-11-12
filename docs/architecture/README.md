@@ -115,6 +115,8 @@ Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接
 Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。
 daemon 把 Agent／终端 attention（未经焦点过滤的提交后广播）与定时任务运行结果转成通知，来源对话由 `ait.bot.conversation` 标签与 `botConversation` 字段记录，
 见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)。
+Bot 交办的工作是工单（Ticket）：作用域 `create_agent` 打开或指派工单并写入 `ait.bot.ticket` 标签，Agent 经 `report_progress` 汇报，
+关于工单 Agent 的通知追加系统汇报；工单只由 Bot 或用户关闭，存储在每个工单一个文件中，见 [ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)。
 
 ## 主机、连接与客户端
 

@@ -29,6 +29,9 @@ use scope::{Failure, Scope};
 pub(super) const PATH: &str = "/mcp/agents";
 const VERSIONS: &[&str] = &["2025-03-26", "2025-06-18", "2025-11-25"];
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+/// Longest a detached call (a scoped `create_agent`) may run in all once its caller stopped
+/// waiting; it holds its call permit until then.
+const DETACHED_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Authenticated identity of one MCP request, inserted into its extensions by the guard.
 #[derive(Debug, Clone)]
@@ -176,7 +179,7 @@ async fn handle(
         "initialize" => initialize(&params),
         "ping" => Ok(json!({})),
         "tools/list" if params.get("cursor").is_none() => Ok(
-            json!({"tools":catalog::granted(&state, scope.as_ref()).map(catalog::Tool::descriptor).collect::<Vec<_>>()}),
+            json!({"tools":catalog::granted(&state, scope.as_ref()).map(|tool| tool.descriptor(scope.as_ref())).collect::<Vec<_>>()}),
         ),
         "tools/list" => Err((-32602, "This catalog has no continuation cursor")),
         "tools/call" => call(state, scope, &headers, params).await,
@@ -266,7 +269,7 @@ async fn call(
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    if !validation::matches(&tool.input_schema, &arguments) {
+    if !validation::matches(&tool.schema(scope.as_ref()), &arguments) {
         return Err((-32602, "Arguments do not match the tool input schema"));
     }
     let header = auth::single_header(headers, "x-ait-agent-id")
@@ -285,13 +288,28 @@ async fn call(
     if state.cancellation.is_cancelled() {
         return Err((-32000, "Server is draining"));
     }
+    // A scoped `create_agent` opens or joins a Bot ticket and must finish its bookkeeping
+    // (assign the Agent, or delete a ticket whose Agent was not created) even when the caller
+    // stops waiting (ADR-274 section 6).
+    let detach = (scope.is_some() && tool.name == "create_agent").then_some(DETACHED_TIMEOUT);
     let task_state = state.clone();
     state.tasks.spawn(async move {
-        let _permit = permit;
+        let tracker = task_state.tasks.clone();
+        let invocation_state = task_state.clone();
+        let invocation = async move {
+            invoke(
+                &invocation_state,
+                tool,
+                arguments,
+                scope.as_ref(),
+                caller.as_deref(),
+            )
+            .await
+        };
         let result = tokio::select! {
             () = task_state.cancellation.cancelled() => Ok(tool_result(Err(model::ErrorCode::ServerDraining.into()))),
-            result = tokio::time::timeout(CALL_TIMEOUT, invoke(&task_state, tool, arguments, scope.as_ref(), caller.as_deref())) => {
-                result.unwrap_or_else(|_| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted.into()))))
+            result = bounded(&tracker, invocation, permit, detach, CALL_TIMEOUT) => {
+                result.unwrap_or_else(|| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted.into()))))
             }
         };
         let _ = sender.send(result);
@@ -300,6 +318,41 @@ async fn call(
     receiver
         .await
         .map_err(|_| (-32603, "MCP execution failed"))?
+}
+
+/// Await `work` for at most `limit`, holding `held` (the call's permit) while it runs; `None`
+/// when the wait ran out. With `detach`, `work` runs as its own task on `tasks` together with
+/// `held`, so running out stops only the wait: the work still completes, keeping `held` until
+/// it ends, unless it outlives `detach` in all, when it is dropped. A detached task that
+/// panicked also yields `None`.
+async fn bounded<F, H>(
+    tasks: &tokio_util::task::TaskTracker,
+    work: F,
+    held: H,
+    detach: Option<Duration>,
+    limit: Duration,
+) -> Option<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+    H: Send + 'static,
+{
+    let Some(detached) = detach else {
+        let _held = held;
+        return tokio::time::timeout(limit, work).await.ok();
+    };
+    let task = tasks.spawn(async move {
+        let _held = held;
+        let finished = tokio::time::timeout(detached, work).await;
+        finished
+            .inspect_err(|_| tracing::warn!("detached MCP call ran out of time and was dropped"))
+            .ok()
+    });
+    let joined = tokio::time::timeout(limit, task).await.ok()?;
+    joined
+        .inspect_err(|error| tracing::error!(?error, "detached MCP call failed"))
+        .ok()
+        .flatten()
 }
 
 /// Resolve the `caller` Agent's context and execute `tool` as a tool result.
@@ -345,7 +398,7 @@ fn claimed<'a>(
     };
     let (own, context) = match &scope.caller.kind {
         CallerKind::Bot { session_id, .. } => (session_id.as_str(), None),
-        CallerKind::Subtree { agent_id } => (agent_id.as_str(), Some(agent_id.as_str())),
+        CallerKind::Subtree { agent_id, .. } => (agent_id.as_str(), Some(agent_id.as_str())),
     };
     if header.is_some_and(|header| header != own) {
         return Err((-32602, "Caller does not match credential"));

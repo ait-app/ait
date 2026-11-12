@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use domain::agent_runtime::StoredAgentConfig;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
 use model::storage::daemon_config::DaemonConfigStore;
@@ -55,6 +56,8 @@ impl DaemonConfigStore for Policy {
 #[derive(Debug)]
 struct Scopes {
     token: Option<String>,
+    /// Whether the credential is a Bot ticket worker's rather than a Bot session's.
+    worker: bool,
     released: Mutex<Vec<String>>,
 }
 
@@ -64,7 +67,8 @@ impl McpScopes for Scopes {
             .clone()
             .map_or(McpAccess::Denied, |token| McpAccess::Scoped {
                 token: token.into(),
-                bot_session: true,
+                bot_session: !self.worker,
+                worker: self.worker,
             })
     }
 
@@ -291,16 +295,20 @@ async fn verify_policy(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
     );
 }
 
-/// Scoped sessions replace a user `ait` entry; undeliverable credentials remove it.
+/// Scoped sessions replace a user `ait` entry; undeliverable credentials remove it. A worker
+/// credential reaches the session as any scoped one does, so an adapter without additive
+/// tool pre-approval still starts its workers.
 async fn verify_scoped(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeRegistry) {
     let shared = uuid::Uuid::new_v4().to_string();
     let bot_token = "b".repeat(64);
-    for (agent, token) in [
-        ("agent-bot", Some(bot_token.clone())),
-        ("agent-denied", None),
+    for (agent, token, worker) in [
+        ("agent-bot", Some(bot_token.clone()), false),
+        ("agent-worker", Some("w".repeat(64)), true),
+        ("agent-denied", None, false),
     ] {
         let scopes = Arc::new(Scopes {
             token: token.clone(),
+            worker,
             released: Mutex::default(),
         });
         let mcp = connection(7316, &shared, json!({})).with_scopes(scopes.clone());
@@ -336,6 +344,45 @@ async fn verify_scoped(adapter: &Adapter<'_>, registry: &FileBackedAgentRuntimeR
             "a scoped session never falls back to the shared token"
         );
     }
+}
+
+/// Open an Agent through `adapter` with a Bot ticket worker credential `token`, run one turn
+/// when the adapter completes prompts, close it, and return the configuration the registry
+/// keeps, which the binding must never change.
+///
+/// # Panics
+/// Panics when the temporary registry cannot be set up or the session cannot be opened.
+pub async fn open_worker(adapter: &Adapter<'_>, token: &str) -> StoredAgentConfig {
+    let root = tempfile::tempdir().expect("create the temporary registry root");
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry
+        .initialize()
+        .expect("initialize the file-backed registry");
+    let scopes = Arc::new(Scopes {
+        token: Some(token.to_owned()),
+        worker: true,
+        released: Mutex::default(),
+    });
+    let shared = uuid::Uuid::new_v4().to_string();
+    let mcp = connection(7316, &shared, json!({})).with_scopes(scopes);
+    let mut runtime = manager(adapter, &registry, mcp);
+    runtime
+        .create("agent-worker", &adapter.spec, AgentRegistration::default())
+        .await
+        .expect("create the worker agent");
+    if adapter.prompts {
+        turn(&mut runtime, "agent-worker").await;
+    }
+    runtime
+        .close("agent-worker")
+        .await
+        .expect("close the worker agent");
+    registry
+        .get("agent-worker")
+        .expect("read the worker agent record")
+        .expect("the worker agent record exists")
+        .config
+        .unwrap_or_default()
 }
 
 /// Read-only history sessions of archived Agents receive no daemon MCP.

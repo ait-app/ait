@@ -32,6 +32,9 @@ pub enum McpAccess {
         token: SecretString,
         /// Whether the credential belongs to a Bot's own hidden session.
         bot_session: bool,
+        /// Whether the credential belongs to an Agent working on a Bot ticket, whose report
+        /// tool adapters with additive pre-approval run without asking.
+        worker: bool,
     },
     /// Inject no `ait` server and remove any configured `ait` entry.
     Denied,

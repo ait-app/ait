@@ -20,6 +20,9 @@ fn failed(id: &str, workspace: &str, conversation: domain::ConversationId) -> No
         summary: Some("x".repeat(4096)),
         at: chrono::Utc::now(),
         conversation_id: Some(conversation),
+        ticket_id: None,
+        ticket_title: None,
+        turn_started_at: None,
     }
 }
 

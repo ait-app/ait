@@ -13,3 +13,4 @@ pub mod service;
 mod state;
 #[cfg(test)]
 mod test_support;
+pub mod tickets;

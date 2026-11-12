@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{BotPermissions, PermissionError, TOOLS, ToolAccess, ToolGroup};
-use super::{grantable_tools, tool_access};
+use super::{BotPermissions, Holder, PermissionError, TOOLS, ToolAccess, ToolGroup};
+use super::{grantable_tools, tool_access, worker_tools};
 
 fn with_modes(modes: BTreeMap<String, Vec<String>>) -> BotPermissions {
     BotPermissions {
@@ -14,7 +14,7 @@ fn with_modes(modes: BTreeMap<String, Vec<String>>) -> BotPermissions {
 fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
     let names: BTreeSet<_> = TOOLS.iter().map(|(name, _)| *name).collect();
     assert_eq!(names.len(), TOOLS.len());
-    assert_eq!(TOOLS.len(), 45);
+    assert_eq!(TOOLS.len(), 48);
     for tool in [
         "respond_to_permission",
         "archive_workspace",
@@ -28,25 +28,39 @@ fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
     assert!(!grantable_tools().any(|tool| tool == "respond_to_permission"));
     assert!(!grantable_tools().any(|tool| tool == "create_workspace"));
     assert!(grantable_tools().any(|tool| tool == "bot_memory_update"));
+    assert!(grantable_tools().any(|tool| tool == "bot_ticket_update"));
+    assert_eq!(tool_access("report_progress"), ToolAccess::Worker);
+    assert!(!grantable_tools().any(|tool| tool == "report_progress"));
+    assert_eq!(worker_tools().collect::<Vec<_>>(), ["report_progress"]);
 }
 
 #[test]
 fn observe_is_always_granted_and_bot_tools_only_for_bot() {
     let permissions = with_modes(BTreeMap::new()).normalized().unwrap();
-    assert!(permissions.allows("list_agents", false));
-    assert!(!permissions.allows("create_agent", true));
-    assert!(permissions.allows("workspace_overview", true));
-    assert!(!permissions.allows("workspace_overview", false));
-    assert!(!BotPermissions::default().allows("create_terminal", true));
-    assert!(BotPermissions::default().allows("create_schedule", false));
-    assert!(!BotPermissions::default().allows("respond_to_permission", true));
+    assert!(permissions.allows("list_agents", Holder::Subtree));
+    assert!(!permissions.allows("create_agent", Holder::Bot));
+    assert!(permissions.allows("workspace_overview", Holder::Bot));
+    assert!(!permissions.allows("workspace_overview", Holder::Subtree));
+    assert!(!permissions.allows("bot_tickets", Holder::Worker));
+    assert!(!BotPermissions::default().allows("create_terminal", Holder::Bot));
+    assert!(BotPermissions::default().allows("create_schedule", Holder::Subtree));
+    assert!(BotPermissions::default().allows("create_schedule", Holder::Worker));
+    assert!(!BotPermissions::default().allows("respond_to_permission", Holder::Bot));
+}
+
+#[test]
+fn worker_tools_are_only_for_subtree_agents_on_a_ticket() {
+    let permissions = BotPermissions::observe_only();
+    assert!(permissions.allows("report_progress", Holder::Worker));
+    assert!(!permissions.allows("report_progress", Holder::Subtree));
+    assert!(!permissions.allows("report_progress", Holder::Bot));
 }
 
 #[test]
 fn retired_workspaces_group_is_dropped_and_grants_nothing() {
     let saved: BotPermissions =
         serde_json::from_value(serde_json::json!({"groups":["workspaces"],"modes":{}})).unwrap();
-    assert!(!saved.allows("create_workspace", true));
+    assert!(!saved.allows("create_workspace", Holder::Bot));
     assert_eq!(
         saved.normalized().unwrap().groups,
         BTreeSet::from([ToolGroup::Observe])

@@ -7,14 +7,46 @@ import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { BotChat } from "./bot-chat";
 import { botKeys } from "./queries";
 
-const { botRequest, closeBotSessionTab, openPreferredWorkspaceTarget } = vi.hoisted(() => ({
-  botRequest: vi.fn(),
-  closeBotSessionTab: vi.fn(),
-  openPreferredWorkspaceTarget: vi.fn(),
-}));
+const { botRequest, closeBotSessionTab, openPreferredWorkspaceTarget, tickets } = vi.hoisted(
+  () => ({
+    tickets: { current: false },
+    botRequest: vi.fn(),
+    closeBotSessionTab: vi.fn(),
+    openPreferredWorkspaceTarget: vi.fn(),
+  }),
+);
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock("./styles", () => ({ botStyles: {}, botChatStyles: {} }));
+vi.mock("./styles", () => ({ botStyles: {}, botChatStyles: {}, botTicketStyles: {} }));
+vi.mock("./bot-tickets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./bot-tickets")>()),
+  useBotTicketsSupported: () => tickets.current,
+}));
+vi.mock("./bot-ticket-sheet", () => ({
+  BotTicketSheet: ({
+    ticketId,
+    visible,
+    readOnly,
+    onClose,
+    onDismiss,
+  }: {
+    ticketId: string;
+    visible: boolean;
+    readOnly: boolean;
+    onClose: () => void;
+    onDismiss: () => void;
+  }) => (
+    <div
+      data-testid="bot-ticket-sheet"
+      data-ticket={ticketId}
+      data-visible={visible}
+      data-read-only={readOnly}
+    >
+      <button data-testid="bot-ticket-sheet-close" onClick={onClose} />
+      <button data-testid="bot-ticket-sheet-dismiss" onClick={onDismiss} />
+    </div>
+  ),
+}));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
 vi.mock("./session-tab", () => ({ closeBotSessionTab }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true) }));
@@ -70,6 +102,10 @@ vi.mock("@/composer/dock", () => ({
 vi.mock("@/composer/pill-styles", () => ({ resolveComposerTrackTailClearance: () => 40 }));
 vi.mock("@/composer/tracks", () => ({
   ComposerTrackBar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ComposerTrackPill: ({ testID, children }: { testID: string; children: React.ReactNode }) => (
+    <div data-testid={testID}>{children}</div>
+  ),
+  ComposerTrackRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/hooks/use-settings", () => ({ useSettings: () => undefined }));
@@ -220,6 +256,7 @@ beforeEach(() => {
   botRequest.mockReset();
   openPreferredWorkspaceTarget.mockReset();
   closeBotSessionTab.mockReset();
+  tickets.current = false;
 });
 afterEach(() => {
   cleanup();
@@ -614,6 +651,113 @@ describe("Bot wake turns", () => {
     // A subject in another workspace of the Bot's scope stays plain text.
     expect(screen.getByText('Agent "elsewhere" finished')).toBeTruthy();
     expect(screen.queryByTestId("bot-wake-open-agent:elsewhere:1")).toBeNull();
+  });
+
+  describe("tasks", () => {
+    const ticketId = "66666666-6666-4666-8666-666666666666";
+    const reported: BotTurn = {
+      ...wakeTurn,
+      wake: {
+        notifications: [
+          {
+            ...notification,
+            id: `report:${ticketId}:3`,
+            kind: "ticket_blocked",
+            title: "Fix login",
+            summary: "Which provider should log in?",
+            ticketId,
+            ticketTitle: "Fix login",
+          },
+          {
+            ...notification,
+            id: `report:${ticketId}:4`,
+            kind: "ticket_done",
+            title: "Fix login",
+            summary: null,
+            ticketId,
+            ticketTitle: "Fix login",
+          },
+          {
+            ...notification,
+            id: `report:${ticketId}:5`,
+            kind: "ticket_failed",
+            title: "Fix login",
+            summary: null,
+          },
+        ],
+      },
+    };
+    function serveWithTickets(turns: BotTurn[]) {
+      botRequest.mockImplementation(async (method: string) => {
+        if (method === "bot.conversation.open.request") return { conversation };
+        if (method === "bot.conversation.list.request") return { conversations: [conversation] };
+        if (method === "bot.history.get.request") return { turns, nextSequence: null };
+        if (method === "bot.ticket.list.request") return { tickets: [] };
+        throw new Error(`Unexpected ${method}`);
+      });
+    }
+
+    it("shows no tasks and sends no ticket request on hosts without tickets", async () => {
+      serveWithTickets([reported]);
+      renderChat({});
+      await screen.findByTestId(`bot-wake-${reported.id}`);
+      expect(screen.queryByTestId("bot-tickets")).toBeNull();
+      // The task a report names stays plain text with nothing to open.
+      const named = screen.getByTestId(`bot-wake-ticket-report:${ticketId}:3`);
+      expect(named.textContent).toBe("bots.tickets.linked");
+      fireEvent.click(named);
+      expect(screen.queryByTestId("bot-ticket-sheet")).toBeNull();
+      expect(botRequest.mock.calls.some(([method]) => method.startsWith("bot.ticket."))).toBe(
+        false,
+      );
+    });
+
+    it("labels worker reports and opens the task a wake card names", async () => {
+      tickets.current = true;
+      serveWithTickets([reported]);
+      renderChat({});
+      await screen.findByTestId(`bot-wake-${reported.id}`);
+      await screen.findByTestId("bot-tickets");
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.ticket.list.request", {
+          workspaceId: "workspace",
+          limit: 50,
+        }),
+      );
+      for (const kind of ["ticket_blocked", "ticket_done", "ticket_failed"]) {
+        expect(screen.getByLabelText(`bots.notifications.kind.${kind}`)).toBeTruthy();
+      }
+      expect(screen.queryByTestId(`bot-wake-ticket-report:${ticketId}:5`)).toBeNull();
+      fireEvent.click(screen.getByTestId(`bot-wake-ticket-report:${ticketId}:3`));
+      const sheet = await screen.findByTestId("bot-ticket-sheet");
+      expect(sheet.getAttribute("data-ticket")).toBe(ticketId);
+      expect(sheet.getAttribute("data-read-only")).toBe("false");
+      // Closing keeps the sheet mounted until its dismissal finishes.
+      fireEvent.click(screen.getByTestId("bot-ticket-sheet-close"));
+      expect(screen.getByTestId("bot-ticket-sheet").getAttribute("data-visible")).toBe("false");
+      fireEvent.click(screen.getByTestId("bot-ticket-sheet-dismiss"));
+      expect(screen.queryByTestId("bot-ticket-sheet")).toBeNull();
+    });
+
+    it("opens tasks read-only for guests", async () => {
+      tickets.current = true;
+      serveWithTickets([reported]);
+      renderChat({ serverId: "shared:grant" });
+      fireEvent.click(await screen.findByTestId(`bot-wake-ticket-report:${ticketId}:4`));
+      const sheet = await screen.findByTestId("bot-ticket-sheet");
+      expect(sheet.getAttribute("data-read-only")).toBe("true");
+    });
+
+    it("hides tasks for a retired Bot", async () => {
+      tickets.current = true;
+      serveWithTickets([reported]);
+      renderChat({ bot: { ...bot, state: { kind: "retired", at: "2026-11-13" } } });
+      await screen.findByTestId(`bot-wake-${reported.id}`);
+      expect(screen.queryByTestId("bot-tickets")).toBeNull();
+      expect(botRequest.mock.calls.some(([method]) => method.startsWith("bot.ticket."))).toBe(
+        false,
+      );
+    });
   });
 
   it("collapses a silent wake turn to one note without the sentinel", async () => {

@@ -12,7 +12,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{AgentAttentionReason, PersistedAgentRuntimeRecord};
 use domain::bot::notification::{Notification, NotificationKind};
-use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL, BOT_TICKET_LABEL};
 use domain::schedule::{Run, RunStatus, Schedule, Target};
 use domain::session::protocol::SessionEventKind;
 use model::ErrorCode;
@@ -186,6 +186,7 @@ fn agent_notification(
     let at = DateTime::parse_from_rfc3339(timestamp)
         .ok()?
         .with_timezone(&Utc);
+    let ended = reason != AgentAttentionReason::Permission;
     let (kind, outcome) = match reason {
         AgentAttentionReason::Finished => (NotificationKind::AgentFinished, "finished"),
         AgentAttentionReason::Error => (NotificationKind::AgentFailed, "failed"),
@@ -216,6 +217,17 @@ fn agent_notification(
             .labels
             .get(BOT_CONVERSATION_LABEL)
             .and_then(|id| id.parse().ok()),
+        ticket_id: record
+            .labels
+            .get(BOT_TICKET_LABEL)
+            .and_then(|id| id.parse().ok()),
+        ticket_title: None,
+        turn_started_at: record
+            .last_user_message_at
+            .as_deref()
+            .filter(|_| ended)
+            .and_then(|started| DateTime::parse_from_rfc3339(started).ok())
+            .map(|started| started.with_timezone(&Utc)),
     })
 }
 
@@ -239,6 +251,9 @@ fn terminal_notification(payload: &Value, now: DateTime<Utc>) -> Option<Notifica
         summary: payload["body"].as_str().map(str::to_owned),
         at: now,
         conversation_id: None,
+        ticket_id: None,
+        ticket_title: None,
+        turn_started_at: None,
     })
 }
 
@@ -279,6 +294,9 @@ pub(super) fn schedule_notification(schedule: &Schedule, run: &Run) -> Option<No
             .map(|text| text[..text.floor_char_boundary(SUMMARY_BYTES)].to_owned()),
         at: run.ended_at.unwrap_or(run.started_at),
         conversation_id: schedule.bot_conversation,
+        ticket_id: None,
+        ticket_title: None,
+        turn_started_at: None,
     })
 }
 
