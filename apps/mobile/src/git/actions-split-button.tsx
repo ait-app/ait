@@ -138,6 +138,37 @@ export function GitActionsSplitButton({
     [gitActions.menu, gitActions.primary, gitActions.secondary],
   );
 
+  // Direct PR/MR merge actions remain available in the menu with their
+  // method-specific variants. Surface the first allowed method beside the
+  // normal PR CTA as a quick action so GitHub and GitLab expose the same
+  // visible merge affordance.
+  const quickMergeAction = useMemo(
+    () =>
+      gitActions.secondary.find(
+        (action) =>
+          action.id === "merge-pr-squash" ||
+          action.id === "merge-pr-merge" ||
+          action.id === "merge-pr-rebase",
+      ) ?? null,
+    [gitActions.secondary],
+  );
+
+  const quickMergeButtonStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.quickMergeButton,
+      (Boolean(hovered) || pressed) &&
+        inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
+      quickMergeAction?.disabled && styles.splitButtonPrimaryDisabled,
+    ],
+    [quickMergeAction?.disabled, theme.colors.surface2],
+  );
+
+  const handleQuickMergePress = useCallback(() => {
+    if (quickMergeAction) {
+      runGitAction(quickMergeAction);
+    }
+  }, [quickMergeAction, runGitAction]);
+
   if (menuOnly || !gitActions.primary) {
     if (menuOnlyActions.length === 0) {
       return null;
@@ -241,6 +272,33 @@ export function GitActionsSplitButton({
           ) : null}
         </View>
       ) : null}
+      {quickMergeAction ? (
+        <Pressable
+          testID="changes-merge-pr-cta"
+          style={quickMergeButtonStyle}
+          onPress={handleQuickMergePress}
+          disabled={quickMergeAction.disabled}
+          accessibilityRole="button"
+          accessibilityLabel={quickMergeAction.label}
+        >
+          {quickMergeAction.status === "pending" ? (
+            <LoadingSpinner
+              size="small"
+              color={theme.colors.foreground}
+              style={styles.splitButtonSpinnerOnly}
+            />
+          ) : (
+            <View style={styles.splitButtonContent}>
+              {quickMergeAction.icon}
+              {!hideLabels && (
+                <Text style={styles.splitButtonText}>
+                  {getActionDisplayLabel(quickMergeAction)}
+                </Text>
+              )}
+            </View>
+          )}
+        </Pressable>
+      ) : null}
       {gitActions.menu.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -314,6 +372,21 @@ const styles = StyleSheet.create((theme) => ({
   },
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
+  },
+  quickMergeButton: {
+    height: {
+      xs: buttonControlHeight.xs,
+      md: HEADER_CONTROL_HEIGHT,
+    },
+    paddingHorizontal: {
+      xs: theme.spacing[3],
+      md: theme.spacing[2],
+    },
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
   },
   splitButtonText: {
     fontSize: theme.fontSize.base,

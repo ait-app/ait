@@ -34,7 +34,7 @@ const GithubRepositoryPolicySchema = z
     viewerDefaultMergeMethod: null,
   });
 
-const GithubMergeFactsSchema = z
+export const GithubMergeFactsSchema = z
   .object({
     forge: z.literal("github"),
     mergeStateStatus: z.string().nullable().optional().default(null),
@@ -49,7 +49,7 @@ const GithubMergeFactsSchema = z
   })
   .passthrough();
 
-type GithubMergeFacts = z.infer<typeof GithubMergeFactsSchema>;
+export type GithubMergeFacts = z.infer<typeof GithubMergeFactsSchema>;
 
 const GITHUB_DIRECT_MERGE_STATE_ALLOWLIST = new Set(["CLEAN", "HAS_HOOKS"]);
 
