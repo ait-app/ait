@@ -104,6 +104,11 @@ test.describe("Task overview", () => {
     await expect(page.getByTestId("task-mark-read")).toHaveCount(0);
     await expect(page.getByTestId(`task-child-${child.id}`)).toBeVisible();
     await expect(page.getByTestId("task-detail")).toContainText("回调参数校验已修复");
+    const toolbar = await page.getByTestId("task-board-toolbar").boundingBox();
+    const detailHeader = await page.getByTestId("task-detail-header").boundingBox();
+    expect(
+      Math.abs(detailHeader!.y + detailHeader!.height - (toolbar!.y + toolbar!.height)),
+    ).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath("task-board-desktop.png"), fullPage: true });
 
     await page.getByTestId("task-detail-close").click();
@@ -227,6 +232,14 @@ test.describe("Task overview", () => {
     expect(doneLane!.x + doneLane!.width).toBeLessThanOrEqual(1200);
     const reviewOpen = await card(6).getByTestId("task-inline-open").boundingBox();
     expect(reviewOpen!.height).toBeLessThanOrEqual(32);
+    // Unbroken permission input (JSON, paths) wraps inside the card instead of being clipped.
+    const overflowing = await card(1).evaluate((element) => {
+      const right = element.getBoundingClientRect().right;
+      return [...element.querySelectorAll("*")].filter(
+        (child) => child.getBoundingClientRect().right > right + 1,
+      ).length;
+    });
+    expect(overflowing).toBe(0);
     await page.screenshot({
       path: testInfo.outputPath("task-board-reference-tablet.png"),
       fullPage: true,
@@ -356,7 +369,7 @@ test.describe("Task overview", () => {
           const detail = await page.getByTestId("task-detail").boundingBox();
           const project = await page
             .getByTestId("task-detail")
-            .getByText("ait-provider-integration-and-workspace-observation / Ait", { exact: true })
+            .getByText("ait-provider-integration-and-workspace-observation › Ait", { exact: true })
             .boundingBox();
           return detail && project ? project.x - detail.x : 0;
         })

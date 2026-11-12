@@ -334,10 +334,7 @@ export function TasksScreenContent() {
             </View>
           </AdaptiveModalSheet>
           {offlineHosts.length ? (
-            <View
-              style={[styles.notice, compact && styles.compactPadding]}
-              testID="task-board-notice"
-            >
+            <View style={styles.notice} testID="task-board-notice">
               <Text style={styles.noticeText}>
                 {t("taskBoard.hostsUnavailable", {
                   hosts: offlineHosts.map((host) => host.label).join(", "),
@@ -583,9 +580,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     alignItems: "center",
   },
-  compactPadding: { paddingHorizontal: theme.spacing[4] },
   notice: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
