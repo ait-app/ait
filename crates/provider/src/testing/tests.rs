@@ -57,12 +57,14 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
     let root = tempfile::tempdir().unwrap();
     let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
     let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+    // A missing absolute program is never resolved on PATH, so no installed Codex starts.
+    let program = root.path().join("missing-codex");
 
     manager
-        .register(Box::new(CodexClient::new("codex".into())))
+        .register(Box::new(CodexClient::new(program.clone())))
         .unwrap();
     assert!(matches!(
-        manager.register(Box::new(CodexClient::new("codex".into()))),
+        manager.register(Box::new(CodexClient::new(program))),
         Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"
     ));
     manager.validate_provider("codex").unwrap();
@@ -107,6 +109,7 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
         .await
         .unwrap();
     assert_eq!(snapshot["entries"][0]["provider"], "codex");
+    assert_eq!(snapshot["entries"][0]["status"], "unavailable");
     let _events = manager.events().connect();
     manager.poll().await.unwrap();
     manager.close_all().await.unwrap();
