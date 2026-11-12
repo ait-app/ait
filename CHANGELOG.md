@@ -1,7 +1,15 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.10 - 2026-11-12
 
+- Test feature: Workspace notifications wake the Workspace Bot. When an Agent it started finishes, fails or waits for permission, or one of its schedule runs settles, the Bot answers in the conversation that asked for the work, such as the Telegram chat. Updates for one conversation are grouped, limited to 12 wake turns per hour, and the Bot may stay silent. Bot settings add a Notifications card to choose between the Bot's own work (default) and every Workspace notification, with a recent list showing why any were skipped. Paused Bots and Workspaces without a Bot make no model calls.
+- Keep Claude Code background tasks marked as background across restarts and task updates, and stop their output from opening phantom new turns. Cancelling a Claude session still ends its background tasks.
+- Show a quick merge button beside the pull request or merge request action whenever a direct merge is allowed, for both GitHub and GitLab; squash, merge and rebase stay in the menu. A pull request already in GitHub's merge queue shows its queue status.
+- Task overview polish: long permission summaries wrap inside the card and stop after three lines, the details panel matches the cards' styling and no longer repeats a project name that equals the workspace name, and the details header lines up with the toolbar.
+- The sidebar no longer shows a workspace as still being created after the Host has reported it finished.
+- Web and desktop tooltips are removed as soon as they close instead of waiting for an exit animation, which could leave small grey shapes behind. Tooltips on the web no longer fade.
+- Test feature: Telegram Bot replies include the quoted passage or the replied-to message, or its media caption, so the agent sees what a reply refers to.
+- Stable releases attach the Google-signed Android APK: the release check now reads every certificate `apksigner` reports instead of matching its signer labels.
 - Native apps display host CPU and memory statistics correctly with React Native’s cancellation signals.
 
 - Native apps keep the current page and task details when folding or unfolding a device, keep conversations readable beside side panels, prevent messages from showing through the chat header, and keep dropdown options readable and clear of the keyboard.
