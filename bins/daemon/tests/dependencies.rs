@@ -58,6 +58,15 @@ fn test_only_violations(name: &str, package: &Value) -> Vec<String> {
     for member in forwarded.filter(|member| member.ends_with("/test-support")) {
         violations.push(format!("{name} forwards {member}"));
     }
+    let features = package["features"].as_object().into_iter().flatten();
+    for (feature, members) in features.filter(|(feature, _)| *feature != "test-support") {
+        if members
+            .as_array()
+            .is_some_and(|members| members.iter().any(|member| member == "test-support"))
+        {
+            violations.push(format!("{name} feature {feature} enables test-support"));
+        }
+    }
     for dependency in package["dependencies"].as_array().into_iter().flatten() {
         if dependency["kind"].as_str() == Some("dev") {
             continue;
@@ -95,12 +104,21 @@ fn dev_only_dependencies(name: &str) -> &'static [&'static str] {
 }
 
 /// Whether `dependency` is optional and enabled only by `package`'s `test-support` feature.
+///
+/// A feature enables the dependency through `dep:<key>` or the strong `<key>/<feature>` form;
+/// the weak `<key>?/<feature>` form does not enable it.
 fn enabled_only_by_test_support(package: &Value, dependency: &Value) -> bool {
     let key = dependency["rename"]
         .as_str()
         .or_else(|| dependency["name"].as_str())
         .unwrap();
-    let enabling = format!("dep:{key}");
+    let explicit = format!("dep:{key}");
+    let strong = format!("{key}/");
+    let enables = |member: &Value| {
+        member
+            .as_str()
+            .is_some_and(|member| member == explicit || member.starts_with(&strong))
+    };
     dependency["optional"] == true
         && package["features"].as_object().is_some_and(|features| {
             features
@@ -108,7 +126,7 @@ fn enabled_only_by_test_support(package: &Value, dependency: &Value) -> bool {
                 .filter(|(_, members)| {
                     members
                         .as_array()
-                        .is_some_and(|members| members.iter().any(|member| member == &enabling))
+                        .is_some_and(|members| members.iter().any(enables))
                 })
                 .map(|(feature, _)| feature.as_str())
                 .eq(["test-support"])
@@ -419,6 +437,32 @@ fn runtime_reaches_persistence_only_through_test_support() {
         ];
         assert_eq!(violations(&packages), expected);
     }
+    for (extra, expected) in [
+        (
+            "persistence/x",
+            vec!["provider -> persistence outside tests"],
+        ),
+        ("persistence?/x", vec![]),
+    ] {
+        let packages = [
+            json!({"id": "provider", "name": "provider", "dependencies": [optional.clone()],
+                "features": {"test-support": ["dep:persistence"], "extra": [extra]}}),
+            json!({"id": "persistence", "name": "persistence", "dependencies": []}),
+        ];
+        assert_eq!(violations(&packages), expected);
+    }
+}
+
+#[test]
+fn test_support_cannot_be_enabled_from_inside_its_own_package() {
+    let packages = [
+        json!({"id": "provider", "name": "provider", "dependencies": [],
+        "features": {"default": ["test-support"], "test-support": []}}),
+    ];
+    assert_eq!(
+        violations(&packages),
+        ["provider feature default enables test-support"]
+    );
 }
 
 #[test]

@@ -121,7 +121,10 @@ dev-only:  provider-<adapter> ..> provider        (adapter 测试驱动真实运
    adapter。
 
 依赖守卫（`bins/daemon/tests/dependencies.rs`）按下表登记这些 crate；“仅 dev”一列中的依赖只能以
-dev 依赖声明，其余 crate 的 `persistence` 依赖规则不变：
+dev 依赖声明，其余 crate 的 `persistence` 依赖规则不变。包内 `test-support` 以外的任何 feature
+列出 `test-support` 都视为违规，因为它会让生产构建启用测试入口。判断可选 `persistence` 依赖由哪些
+feature 启用时，`dep:persistence` 和强形式 `persistence/<feature>` 都计入，弱形式
+`persistence?/<feature>` 不启用依赖，不计入：
 
 | Package                     | 允许的 workspace 依赖                                                                  | 仅 dev                                                                                                         |
 | --------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
