@@ -15,6 +15,7 @@ mod format;
 pub(crate) mod onboarding;
 
 const API: &str = "https://api.telegram.org";
+const INPUT_TEXT_LIMIT: usize = 16 * 1024;
 /// Longest wait between admission attempts while the Bot's global backlog is full.
 const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
 const PROCESSING_REACTION: &str = "\u{1f440}";
@@ -326,7 +327,9 @@ fn incoming(
         return Ok(None);
     }
     let Some(text) = message["text"].as_str().filter(|text| {
-        !text.trim().is_empty() && text.len() <= 16 * 1024 && !onboarding::is_pairing_start(text)
+        !text.trim().is_empty()
+            && text.len() <= INPUT_TEXT_LIMIT
+            && !onboarding::is_pairing_start(text)
     }) else {
         return Ok(None);
     };
@@ -351,9 +354,38 @@ fn incoming(
             .as_i64()
             .ok_or(ErrorCode::BotIo)?
             .to_string(),
-        text: text.to_owned(),
+        text: text_with_reply(text, message),
         reply_to: message["message_id"].as_i64().map(|id| id.to_string()),
     }))
+}
+
+fn text_with_reply(text: &str, message: &Value) -> String {
+    const HEADER: &str = "\n\n[Quoted Telegram message]\n";
+    const TRUNCATED: &str = "\n[truncated]";
+
+    // A selected quote is more specific than the full replied-to message.
+    let quoted = [
+        &message["quote"]["text"],
+        &message["reply_to_message"]["text"],
+        &message["reply_to_message"]["caption"],
+    ]
+    .into_iter()
+    .filter_map(Value::as_str)
+    .find(|quoted| !quoted.trim().is_empty() && !quoted.contains('\0'));
+    let Some(quoted) = quoted else {
+        return text.to_owned();
+    };
+    let remaining = INPUT_TEXT_LIMIT.saturating_sub(text.len() + HEADER.len());
+    if remaining <= TRUNCATED.len() {
+        return text.to_owned();
+    }
+    let (quoted, suffix) = if quoted.len() > remaining {
+        let end = quoted.floor_char_boundary(remaining - TRUNCATED.len());
+        (&quoted[..end], TRUNCATED)
+    } else {
+        (quoted, "")
+    };
+    format!("{text}{HEADER}{quoted}{suffix}")
 }
 
 fn mentioned(text: &str, username: &str) -> bool {
