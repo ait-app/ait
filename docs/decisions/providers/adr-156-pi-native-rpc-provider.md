@@ -3,9 +3,9 @@ id: ADR-156
 status: accepted
 date: 2026-10-17
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - packages/protocol
-  - crates/provider-pi
+  - crates/provider/pi
 ---
 
 # ADR-156: Pi native RPC provider

@@ -3,7 +3,7 @@ id: ADR-125
 status: accepted
 date: 2026-10-11
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-125：持久化展示投影索引与按页读取 Timeline

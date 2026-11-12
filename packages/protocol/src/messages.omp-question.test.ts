@@ -7,7 +7,7 @@ import { validateWSOutboundMessage } from "./validation/ws-outbound.js";
 test("OMP questions reach live clients and reconnect snapshots without a native message", () => {
   const { request } = JSON.parse(
     readFileSync(
-      new URL("../../../crates/provider-omp/tests/fixtures/omp_question.json", import.meta.url),
+      new URL("../../../crates/provider/omp/tests/fixtures/omp_question.json", import.meta.url),
       "utf8",
     ),
   );

@@ -61,7 +61,7 @@ amends:
   - bot/adr-213-single-workspace-manager-bot.md
 paths:
   - crates/bot
-  - crates/provider
+  - crates/provider/runtime
 ---
 ```
 

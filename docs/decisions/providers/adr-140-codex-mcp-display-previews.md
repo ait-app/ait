@@ -5,9 +5,9 @@ date: 2026-10-12
 amends:
   - providers/adr-090-timeline-entry-and-page-budgets.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/codex
 ---
 
 # ADR-140：Codex MCP 超大字段使用展示预览

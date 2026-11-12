@@ -8,19 +8,19 @@ amends:
   - providers/adr-179-provider-owned-tests.md
   - providers/adr-249-omp-adapter-crate.md
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
   - bins/daemon
-  - crates/provider-core
-  - crates/provider-native
-  - crates/provider-builtin
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/core
+  - crates/provider/native
+  - crates/provider/builtin
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate
@@ -28,6 +28,8 @@ paths:
 - 状态说明：决策已接受并已实施，下文目标依赖图即当前结构；`crates/provider/src/local` 已不存在，
   拆分期间的源码分层扫描测试已删除，边界由 Cargo 依赖和依赖守卫强制。实施过程见已归档的
   [provider crate 拆分计划](../../archive/plans/provider-crate-split.md)。
+- 目录：[ADR-273](adr-273-provider-crate-directory.md) 把这 12 个 crate 移到 `crates/provider/<目录>`
+  （运行时在 `crates/provider/runtime`），包名与依赖图不变；下文的 `crates/provider…` 路径是拆分时的位置。
 - 修订：[ADR-089](adr-089-provider-owned-composition.md) 的装配归属（内置 adapter 列表移到
   `provider-builtin`，OMP 不再是宿主了解客户端类型的例外）；
   [ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 第 4 条（`provider` 可经只由

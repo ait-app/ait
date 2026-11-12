@@ -5,9 +5,9 @@ date: 2026-10-26
 amends:
   - providers/adr-191-codex-native-realtime-voice.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/codex
 ---
 
 # ADR-192：Codex 历史按页投影后计算展示预算

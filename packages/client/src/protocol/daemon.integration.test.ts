@@ -23,7 +23,7 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
     const token = randomBytes(32).toString("hex");
     await mkdir(cwd);
     await symlink(
-      join(repository, "crates/provider-codex/tests/fixtures/codex_app_server.py"),
+      join(repository, "crates/provider/codex/tests/fixtures/codex_app_server.py"),
       join(root, "codex"),
     );
     const child = spawn(

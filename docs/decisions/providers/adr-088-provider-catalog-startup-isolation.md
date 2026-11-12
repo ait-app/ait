@@ -6,7 +6,7 @@ amends:
   - providers/adr-032-daemon-native-provider-execution.md
   - providers/adr-039-agent-timeline-provider-creation.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - apps/desktop
 ---
 

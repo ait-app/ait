@@ -7,7 +7,7 @@ amends:
   - clients/adr-214-workspace-bot-tab-v2.md
 paths:
   - crates/bot
-  - crates/provider
+  - crates/provider/runtime
   - apps/mobile
 ---
 

@@ -5,7 +5,7 @@ import { AgentTimelineItemPayloadSchema } from "./messages.js";
 const cases = JSON.parse(
   readFileSync(
     new URL(
-      "../../../crates/provider-opencode/tests/fixtures/opencode-tool-history.json",
+      "../../../crates/provider/opencode/tests/fixtures/opencode-tool-history.json",
       import.meta.url,
     ),
     "utf8",

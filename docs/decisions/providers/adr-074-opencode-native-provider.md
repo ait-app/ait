@@ -3,8 +3,8 @@ id: ADR-074
 status: accepted
 date: 2026-09-30
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-074：OpenCode 原生 Provider

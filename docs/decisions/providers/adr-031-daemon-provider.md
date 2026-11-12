@@ -7,7 +7,7 @@ amends:
   - workspace/adr-029-daemon-metadata.md
   - workspace/adr-030-daemon-filesystem.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-031：拆出 provider 并统一 Workspace 自动化与 state 入口

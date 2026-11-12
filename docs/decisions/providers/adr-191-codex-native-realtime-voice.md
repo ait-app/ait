@@ -6,9 +6,9 @@ amends:
   - daemon/adr-042-daemon-voice.md
   - daemon/adr-064-offline-speech.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/voice
-  - crates/provider-codex
+  - crates/provider/codex
 ---
 
 # ADR-191：Codex Provider 拥有原生实时语音

@@ -3,10 +3,10 @@ id: ADR-119
 status: accepted
 date: 2026-10-10
 paths:
-  - crates/provider
-  - crates/provider-core
-  - crates/provider-claude
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/core
+  - crates/provider/claude
+  - crates/provider/codex
 ---
 
 # ADR-119：原生账号用量与 Codex 速度目录

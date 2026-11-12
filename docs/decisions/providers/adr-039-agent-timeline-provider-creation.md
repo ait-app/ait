@@ -3,8 +3,8 @@ id: ADR-039
 status: accepted
 date: 2026-09-25
 paths:
-  - crates/provider
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/codex
 ---
 
 # ADR-039：Agent Timeline、Provider 发现与创建过程订阅

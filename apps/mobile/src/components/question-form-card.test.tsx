@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingPermission } from "@/types/shared";
 import { AgentPermissionRequestPayloadSchema } from "@ait/protocol/messages";
 import { QuestionFormCard } from "./question-form-card";
-import ompQuestion from "../../../../crates/provider-omp/tests/fixtures/omp_question.json";
-import ompDialogs from "../../../../crates/provider-omp/tests/fixtures/omp_dialogs.json";
+import ompQuestion from "../../../../crates/provider/omp/tests/fixtures/omp_question.json";
+import ompDialogs from "../../../../crates/provider/omp/tests/fixtures/omp_dialogs.json";
 import { parseQuestionFormQuestions } from "./question-form-card-core";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));

@@ -3,7 +3,7 @@ id: ADR-133
 status: accepted
 date: 2026-10-11
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-133：先显示持久 Timeline 页面，后台校验原生历史

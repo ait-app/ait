@@ -62,16 +62,20 @@ export function chooseSeed(candidates, { device, rustVersion }) {
 
 /** Names of the crates this checkout compiles from its own, branch-specific sources. */
 export function workspaceCrates(worktree) {
-  return ["crates", "bins"].flatMap((directory) => {
-    const parent = path.join(worktree, directory);
+  // A directory without a manifest, such as `crates/provider`, groups crates one level down.
+  const packages = (parent, grouped) => {
     if (!existsSync(parent)) return [];
-    return readdirSync(parent).flatMap((entry) => {
-      const manifest = path.join(parent, entry, "Cargo.toml");
-      if (!existsSync(manifest)) return [];
-      const name = /^name\s*=\s*"([^"]+)"/m.exec(readFileSync(manifest, "utf8"))?.[1];
-      return name ? [name] : [];
-    });
-  });
+    return readdirSync(parent, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        const directory = path.join(parent, entry.name);
+        const manifest = path.join(directory, "Cargo.toml");
+        if (!existsSync(manifest)) return grouped ? [] : packages(directory, true);
+        const name = /^name\s*=\s*"([^"]+)"/m.exec(readFileSync(manifest, "utf8"))?.[1];
+        return name ? [name] : [];
+      });
+  };
+  return ["crates", "bins"].flatMap((directory) => packages(path.join(worktree, directory), false));
 }
 
 // Cargo trusts a unit when its dep-info is newer than the sources. A clone can satisfy that with

@@ -7,8 +7,8 @@ amends:
   - providers/adr-174-pi-session-import.md
   - providers/adr-185-native-provider-failure-details.md
 paths:
-  - crates/provider
-  - crates/provider-pi
+  - crates/provider/runtime
+  - crates/provider/pi
 ---
 
 # ADR-211：Pi 推理偏好在下一条 prompt 前应用

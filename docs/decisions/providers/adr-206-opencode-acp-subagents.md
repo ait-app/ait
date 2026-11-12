@@ -5,8 +5,8 @@ date: 2026-10-31
 amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属

@@ -3,11 +3,11 @@ id: ADR-058
 status: accepted
 date: 2026-09-27
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/metadata
-  - crates/provider-native
-  - crates/provider-claude
-  - crates/provider-codex
+  - crates/provider/native
+  - crates/provider/claude
+  - crates/provider/codex
 ---
 
 # ADR-058：Server 的有界 metadata generation

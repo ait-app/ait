@@ -3,9 +3,9 @@ id: ADR-197
 status: accepted
 date: 2026-10-28
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-minimax
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/minimax
 ---
 
 # ADR-197：MiniMax Code 原生 ACP Provider

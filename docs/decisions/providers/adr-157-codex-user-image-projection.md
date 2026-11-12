@@ -3,11 +3,11 @@ id: ADR-157
 status: accepted
 date: 2026-10-18
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - apps/mobile
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-codex
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/codex
 ---
 
 # ADR-157：整图输入与 Codex 用户图片的跨设备展示

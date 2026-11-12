@@ -7,7 +7,7 @@
 
 ## 实施结果
 
-新增 [provider](../../../../crates/provider/src/lib.rs)，集中 Agent 的协议、端口、服务、
+新增 [provider](../../../../crates/provider/runtime/src/lib.rs)，集中 Agent 的协议、端口、服务、
 RPC 校验/投影、SQLite catalog 和 JSON runtime registry。纯 Agent 类型仍在 domain。
 
 | 能力                                  | 已实现方法数 | 当前归属                                                                                                   |

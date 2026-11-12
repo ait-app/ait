@@ -4,7 +4,7 @@ status: accepted
 date: 2026-10-08
 paths:
   - bins/daemon
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-109：本地故障证据与 Harness 日志采集

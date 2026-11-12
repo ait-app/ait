@@ -16,7 +16,7 @@ ENTRY = re.compile(
 def read_method_specs(root=ROOT):
     """Return unique method names and directions from production component declarations."""
     methods = {}
-    for path in sorted((root / "crates").glob("*/src/**/*.rs")):
+    for path in sorted((root / "crates").glob("**/src/**/*.rs")):
         if "tests" in path.parts or path.name.endswith("tests.rs"):
             continue
         for declaration in DECLARATION.findall(path.read_text()):

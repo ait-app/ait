@@ -157,7 +157,7 @@ export async function startE2EWorker(
     }
     await mkdir(dataDir, { recursive: true });
     await copyFile(
-      path.join(repoRoot, "crates/provider-codex/tests/fixtures/codex_app_server.py"),
+      path.join(repoRoot, "crates/provider/codex/tests/fixtures/codex_app_server.py"),
       codexFixture,
     );
     await chmod(codexFixture, 0o755);

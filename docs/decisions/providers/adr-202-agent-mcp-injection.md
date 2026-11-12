@@ -5,14 +5,14 @@ date: 2026-10-29
 amends:
   - daemon/adr-148-daemon-mcp.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/api
-  - crates/provider-minimax
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/minimax
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-202：Agent MCP 运行时自动注入

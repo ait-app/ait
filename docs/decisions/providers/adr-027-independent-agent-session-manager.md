@@ -3,8 +3,8 @@ id: ADR-027
 status: accepted
 date: 2026-09-23
 paths:
-  - crates/provider
-  - crates/provider-core
+  - crates/provider/runtime
+  - crates/provider/core
 ---
 
 # ADR-027：独立 AgentSession 与 AgentManager 生命周期边界

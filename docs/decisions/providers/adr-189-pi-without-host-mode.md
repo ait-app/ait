@@ -5,8 +5,8 @@ date: 2026-10-24
 amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
-  - crates/provider
-  - crates/provider-pi
+  - crates/provider/runtime
+  - crates/provider/pi
 ---
 
 # ADR-189：Pi 不暴露 Host 模式

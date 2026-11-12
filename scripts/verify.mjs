@@ -204,7 +204,7 @@ function classifyUi(changed, exists) {
       continue;
     }
     if (UI_RELEASE.test(file)) needs.touched = needs.release = true;
-    if (/^crates\/provider(?:-[a-z-]+)?\/tests\/fixtures\//.test(file)) {
+    if (/^crates\/provider\/[a-z-]+\/tests\/fixtures\//.test(file)) {
       needs.touched = true;
       for (const name of UI_TESTED_PACKAGES) needs.packages.add(name);
       typecheckClients();

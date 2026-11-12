@@ -3,8 +3,8 @@ id: ADR-180
 status: accepted
 date: 2026-10-21
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
 ---
 
 # ADR-180：Oh My Pi 原生 RPC Provider

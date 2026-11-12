@@ -5,8 +5,8 @@ date: 2026-10-27
 amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-195：OpenCode 独立取消信号与确认期限

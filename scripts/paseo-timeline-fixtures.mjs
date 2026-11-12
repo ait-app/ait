@@ -141,10 +141,10 @@ const source = {
   ),
   upstreamTestsExecuted: testCount,
 };
-const destination = "crates/provider/tests/fixtures/paseo-timeline-projection.json";
+const destination = "crates/provider/runtime/tests/fixtures/paseo-timeline-projection.json";
 writeFixture(destination, { source, cases });
 console.log(JSON.stringify({ destination, tests: testCount, cases: cases.length }));
-const forkDestination = "crates/provider/tests/fixtures/paseo-fork-context.json";
+const forkDestination = "crates/provider/runtime/tests/fixtures/paseo-fork-context.json";
 writeFixture(forkDestination, { source, cases: forkCases });
 console.log(JSON.stringify({ destination: forkDestination, cases: forkCases.length }));
 

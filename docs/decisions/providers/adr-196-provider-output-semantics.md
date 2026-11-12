@@ -3,10 +3,10 @@ id: ADR-196
 status: accepted
 date: 2026-10-25
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - apps/mobile
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-196：Provider 输出分类与每轮 Thinking 展示

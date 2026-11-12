@@ -5,18 +5,18 @@ date: 2026-10-21
 amends:
   - providers/adr-089-provider-owned-composition.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
-  - crates/provider-builtin
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
+  - crates/provider/builtin
+  - crates/provider/omp
 ---
 
 # ADR-179：Provider 自身行为的测试归 provider crate

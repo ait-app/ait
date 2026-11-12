@@ -133,21 +133,21 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 71
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 48
         }
       ],
       "tests": [
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions/plans.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_controls/session_events.rs"
       ],
@@ -251,15 +251,15 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 99
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions/plans.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
         "bins/daemon/tests/process/session.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -340,32 +340,32 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/connection.rs",
+          "file": "crates/provider/runtime/src/connection.rs",
           "line": 117
         },
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 155
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 80
         }
       ],
       "tests": [
         "crates/protocol/src/methods/tests.rs",
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/environment.rs",
-        "crates/provider/src/service/agent_execution/tests/placement.rs",
-        "crates/provider/src/service/agent_execution/tests/rich_input.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/environment.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/placement.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/rich_input.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_controls/session_events.rs",
         "bins/daemon/tests/process/agent_execution.rs",
@@ -1352,12 +1352,12 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 46
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
         "bins/daemon/tests/process/agent_runtime.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -1402,16 +1402,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 79
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/native_sessions.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/native_sessions.rs",
           "line": 50
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/fork_context.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/fork_context.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
       "assessment": "修复投影边界验证、工具摘要和子任务日志",
@@ -1476,17 +1476,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 72
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 59
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/subscriptions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/subscriptions.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -1531,17 +1531,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 73
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 60
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/subscriptions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/subscriptions.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -1620,17 +1620,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 69
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 33
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -1976,7 +1976,7 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 169
         }
       ],
@@ -2056,7 +2056,7 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 93
         }
       ],
@@ -2105,12 +2105,12 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 92
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复按相同投影搜索并定位 seqEnd",
@@ -2164,12 +2164,12 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 166
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/subscriptions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/subscriptions.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
@@ -2221,14 +2221,14 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 44
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
         "bins/daemon/tests/process/agent_execution.rs",
         "bins/daemon/tests/process/agent_runtime.rs",
         "bins/daemon/tests/process/native_sessions.rs"
@@ -3452,18 +3452,18 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 102
         }
       ],
       "tests": [
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/delivery.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/delivery.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_execution.rs",
         "bins/daemon/tests/process/agent_execution/paseo_api.rs"
       ],
@@ -5036,12 +5036,12 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 47
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
         "bins/daemon/tests/process/agent_runtime.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -5181,17 +5181,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/dispatch/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/dispatch/agent_runtime.rs",
           "line": 7
         },
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 48
         }
       ],
       "tests": [
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
         "bins/daemon/tests/process/agent_runtime.rs",
         "bins/daemon/tests/process/terminal.rs"
       ],
@@ -5247,32 +5247,32 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/connection.rs",
+          "file": "crates/provider/runtime/src/connection.rs",
           "line": 117
         },
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 155
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 80
         }
       ],
       "tests": [
         "crates/protocol/src/methods/tests.rs",
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/environment.rs",
-        "crates/provider/src/service/agent_execution/tests/placement.rs",
-        "crates/provider/src/service/agent_execution/tests/rich_input.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/environment.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/placement.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/rich_input.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_controls/session_events.rs",
         "bins/daemon/tests/process/agent_execution.rs",
@@ -6190,14 +6190,14 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 45
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
         "bins/daemon/tests/process/agent_execution.rs",
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/agent_runtime.rs"
@@ -6594,14 +6594,14 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 41
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_runtime/tests/paseo_api.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_runtime/tests/paseo_api.rs",
         "bins/daemon/tests/process/agent_runtime.rs"
       ],
       "assessment": "修复 keyset 分页及上游多字段模糊搜索",
@@ -6739,24 +6739,24 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/connection.rs",
+          "file": "crates/provider/runtime/src/connection.rs",
           "line": 153
         },
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 42
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions/plans.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_execution.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
@@ -6812,20 +6812,20 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 91
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/delivery.rs",
-        "crates/provider/src/service/agent_execution/tests/fork_context.rs",
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/delivery.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/fork_context.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/agent_history.rs",
@@ -6917,27 +6917,27 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 132
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 63
         },
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 40
         }
       ],
       "tests": [
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
-        "crates/provider/src/service/agent_runtime/tests/paseo_api.rs",
-        "crates/provider/src/service/agent_runtime/tests/synchronization.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/runtime/src/service/agent_runtime/tests/paseo_api.rs",
+        "crates/provider/runtime/src/service/agent_runtime/tests/synchronization.rs",
         "bins/daemon/tests/process/agent_execution/directory_sync.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation/identity.rs",
@@ -7103,16 +7103,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 76
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/native_sessions.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/native_sessions.rs",
           "line": 21
         }
       ],
       "tests": [
-        "crates/provider-opencode/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
       "assessment": "核对输入与路由；仅安装 Codex/Claude，外部账号服务未做真实调用",
@@ -8039,21 +8039,21 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 85
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 52
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/provider_catalog/tests.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo/current.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复全局目录作用域及 cwd 规范化",
@@ -8821,17 +8821,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 77
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/native_sessions.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/native_sessions.rs",
           "line": 26
         }
       ],
       "tests": [
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -8998,17 +8998,17 @@
           "line": 135
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 81
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 48
         }
       ],
       "tests": [
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/provider_catalog/tests.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "核对输入与路由；仅安装 Codex/Claude，外部账号服务未做真实调用",
@@ -9049,16 +9049,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 70
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 32
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -9134,18 +9134,18 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 84
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 44
         }
       ],
       "tests": [
-        "crates/provider/src/service/provider_catalog/tests.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo/current.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复 draftConfig 输入和当前草稿的功能值；失败内联返回",
@@ -9218,20 +9218,20 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 82
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 239
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/provider_catalog/tests.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo/current.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复隐藏模型过滤与全局目录作用域",
@@ -9279,16 +9279,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 83
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 240
         }
       ],
       "tests": [
-        "crates/provider/src/service/provider_catalog/tests.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复全局目录作用域及 cwd 规范化",
@@ -11233,11 +11233,11 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 74
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 21
         }
       ],
@@ -11286,11 +11286,11 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 75
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 28
         }
       ],
@@ -11492,17 +11492,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 78
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/native_sessions.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/native_sessions.rs",
           "line": 27
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
@@ -11548,17 +11548,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 86
         },
         {
-          "file": "crates/provider/src/service/provider_catalog.rs",
+          "file": "crates/provider/runtime/src/service/provider_catalog.rs",
           "line": 56
         }
       ],
       "tests": [
-        "crates/provider/src/service/provider_catalog/tests.rs",
-        "crates/provider/src/service/provider_catalog/tests/paseo.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests.rs",
+        "crates/provider/runtime/src/service/provider_catalog/tests/paseo.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复全局目录作用域及 cwd 规范化",
@@ -11703,17 +11703,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 95
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
         "bins/daemon/tests/process/agent_execution.rs"
       ],
       "assessment": "修复 overrides、显式归档恢复、未知原生 handle 直接恢复及 cwd 覆盖后继续输入",
@@ -12804,28 +12804,28 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 96
         }
       ],
       "tests": [
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/delivery.rs",
-        "crates/provider/src/service/agent_execution/tests/fork_context.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
-        "crates/provider/src/service/agent_execution/tests/rich_input.rs",
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
-        "crates/provider/src/service/agent_execution/tests/subscriptions.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions/plans.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/delivery.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/fork_context.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/rich_input.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/subscriptions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_controls/session_events.rs",
         "bins/daemon/tests/process/agent_execution.rs",
@@ -12992,16 +12992,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 101
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 72
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13052,16 +13052,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 100
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 71
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
         "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13110,17 +13110,17 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 97
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 69
         }
       ],
       "tests": [
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
         "bins/daemon/tests/process/session.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13176,16 +13176,16 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 98
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution/controls.rs",
           "line": 70
         }
       ],
       "tests": [
-        "crates/provider/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
         "bins/daemon/tests/process/session.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -14468,14 +14468,14 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/rpc/agent_runtime.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_runtime.rs",
           "line": 43
         }
       ],
       "tests": [
-        "crates/provider/src/protocol/agent_lifecycle/tests.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/protocol/agent_lifecycle/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/agent_runtime.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
@@ -14644,46 +14644,46 @@
       },
       "handlers": [
         {
-          "file": "crates/provider/src/dispatch.rs",
+          "file": "crates/provider/runtime/src/dispatch.rs",
           "line": 158
         },
         {
-          "file": "crates/provider/src/dispatch/agent_execution.rs",
+          "file": "crates/provider/runtime/src/dispatch/agent_execution.rs",
           "line": 43
         },
         {
-          "file": "crates/provider/src/rpc/agent_execution.rs",
+          "file": "crates/provider/runtime/src/rpc/agent_execution.rs",
           "line": 112
         },
         {
-          "file": "crates/provider/src/service/agent_execution.rs",
+          "file": "crates/provider/runtime/src/service/agent_execution.rs",
           "line": 183
         },
         {
-          "file": "crates/provider/src/service/agent_execution/waits.rs",
+          "file": "crates/provider/runtime/src/service/agent_execution/waits.rs",
           "line": 45
         }
       ],
       "tests": [
-        "crates/provider/src/capabilities/tests.rs",
-        "crates/provider-claude/src/tests/execution.rs",
-        "crates/provider-claude/src/tests/execution/rewind.rs",
-        "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider-opencode/src/tests/execution.rs",
-        "crates/provider/src/service/agent_execution/tests.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions.rs",
-        "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
-        "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
-        "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "crates/provider/src/service/agent_execution/tests/delivery.rs",
-        "crates/provider/src/service/agent_execution/tests/fork_context.rs",
-        "crates/provider/src/service/agent_execution/tests/resume.rs",
-        "crates/provider/src/service/agent_execution/tests/rich_input.rs",
-        "crates/provider/src/service/agent_execution/tests/streaming.rs",
-        "crates/provider/src/service/agent_execution/tests/subscriptions.rs",
-        "crates/provider/src/service/agent_execution/tests/titles.rs",
-        "crates/provider/src/service/agent_execution/tests/voice.rs",
-        "crates/provider/src/service/agent_execution/tests/waits.rs",
+        "crates/provider/runtime/src/capabilities/tests.rs",
+        "crates/provider/claude/src/tests/execution.rs",
+        "crates/provider/claude/src/tests/execution/rewind.rs",
+        "crates/provider/deepseek-harness/src/tests/execution.rs",
+        "crates/provider/opencode/src/tests/execution.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/async_questions/plans.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/auto_archive.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/controls.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/delivery.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/fork_context.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/resume.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/rich_input.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/streaming.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/subscriptions.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/titles.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/voice.rs",
+        "crates/provider/runtime/src/service/agent_execution/tests/waits.rs",
         "bins/daemon/tests/process/agent_controls.rs",
         "bins/daemon/tests/process/agent_controls/session_events.rs",
         "bins/daemon/tests/process/agent_execution.rs",

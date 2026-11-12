@@ -6,9 +6,9 @@ amends:
   - providers/adr-074-opencode-native-provider.md
   - providers/adr-110-opencode-private-protocol-boundary.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/opencode
 ---
 
 # ADR-115：OpenCode 官方 ACP Provider

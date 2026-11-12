@@ -5,15 +5,15 @@ date: 2026-09-26
 amends:
   - providers/adr-050-claude-code-provider.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-052: Native provider capability completion

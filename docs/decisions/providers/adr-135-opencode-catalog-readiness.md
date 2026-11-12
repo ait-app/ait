@@ -5,8 +5,8 @@ date: 2026-10-10
 amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
-  - crates/provider
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/opencode
 ---
 
 # ADR-135：OpenCode 目录就绪与配置确认

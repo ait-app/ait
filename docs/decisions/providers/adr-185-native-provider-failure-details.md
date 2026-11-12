@@ -6,16 +6,16 @@ amends:
   - providers/adr-144-provider-error-reporting.md
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-minimax
-  - crates/provider-antigravity
-  - crates/provider-claude
-  - crates/provider-deepseek-harness
-  - crates/provider-opencode
-  - crates/provider-pi
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

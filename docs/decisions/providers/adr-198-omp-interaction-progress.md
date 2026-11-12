@@ -6,8 +6,8 @@ amends:
   - providers/adr-190-omp-acp-settlement.md
   - providers/adr-194-omp-settlement-reconciliation.md
 paths:
-  - crates/provider
-  - crates/provider-omp
+  - crates/provider/runtime
+  - crates/provider/omp
 ---
 
 # ADR-198：OMP 交互等待期间持续发布事件

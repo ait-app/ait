@@ -5,8 +5,8 @@ date: 2026-10-27
 amends:
   - providers/adr-041-agent-controls-provider-inspection.md
 paths:
-  - crates/provider
-  - crates/provider-codex
+  - crates/provider/runtime
+  - crates/provider/codex
 ---
 
 # ADR-193：Codex 原生策略、事件与恢复兼容

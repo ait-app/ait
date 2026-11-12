@@ -5,10 +5,10 @@ date: 2026-10-16
 amends:
   - providers/adr-135-opencode-catalog-readiness.md
 paths:
-  - crates/provider
-  - crates/provider-native
-  - crates/provider-core
-  - crates/provider-opencode
+  - crates/provider/runtime
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/opencode
 ---
 
 # ADR-153：OpenCode ACP 冷启动预算
