@@ -4,6 +4,8 @@ status: accepted
 date: 2026-10-02
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-067：DeepSeek Harness ACP Provider

@@ -5,6 +5,8 @@ date: 2026-10-18
 paths:
   - crates/provider
   - apps/mobile
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-157：整图输入与 Codex 用户图片的跨设备展示

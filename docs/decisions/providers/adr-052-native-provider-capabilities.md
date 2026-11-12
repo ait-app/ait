@@ -6,6 +6,8 @@ amends:
   - providers/adr-050-claude-code-provider.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-052: Native provider capability completion

@@ -6,6 +6,7 @@ amends:
   - providers/adr-122-codex-computer-use-approval.md
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-149：Codex 高权限档位自动批准 computer use 访问

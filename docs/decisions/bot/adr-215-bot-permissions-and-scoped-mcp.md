@@ -12,6 +12,7 @@ paths:
   - crates/bot
   - crates/api
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-215：Bot 权限与作用域 MCP 凭据

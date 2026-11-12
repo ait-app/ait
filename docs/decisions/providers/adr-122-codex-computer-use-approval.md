@@ -4,6 +4,7 @@ status: accepted
 date: 2026-10-10
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-122：Codex Auto-review 的 computer use 工具批准

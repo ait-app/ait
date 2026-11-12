@@ -10,6 +10,8 @@ paths:
   - crates/provider
   - crates/provider-omp
   - bins/daemon
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-249：OMP 适配器独立为 `provider-omp` crate

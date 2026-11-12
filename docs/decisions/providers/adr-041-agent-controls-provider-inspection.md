@@ -6,6 +6,7 @@ amends:
   - providers/adr-027-independent-agent-session-manager.md
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-041：Agent 原生控制与 Provider 诊断、用量

@@ -6,6 +6,8 @@ amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-121：ACP 轮次关联与原生历史结算

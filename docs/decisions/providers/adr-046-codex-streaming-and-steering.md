@@ -4,6 +4,7 @@ status: accepted
 date: 2026-09-25
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-046：Codex 增量显示历史与运行中追加输入

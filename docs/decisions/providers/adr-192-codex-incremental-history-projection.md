@@ -6,6 +6,7 @@ amends:
   - providers/adr-191-codex-native-realtime-voice.md
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-192：Codex 历史按页投影后计算展示预算

@@ -10,6 +10,8 @@ paths:
   - packages/protocol
   - packages/client
   - apps/mobile
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-246：按 Host 记录的 Harness 用量账本
@@ -38,7 +40,7 @@ paths:
   `AgentManager` 把它归入当前调用时补上 `agent_id` 与 `recorded_at`（写入时间）。
 - 同一 `segment_id` 的分帧按字段取最大值合并，重复上报同一值不会重复计数。
 - 累计计数器只做差分、不求和：任一字段回落视为进程重启并重置基线；重启后的第一个累计快照只作基线，计 0。
-  差分助手放在共享的 `local/usage/cumulative.rs`。带运行总量的帧（如 Codex `total.totalTokens`）仅在总量大于
+  差分助手放在共享的 `crates/provider-native/src/usage/cumulative.rs`。带运行总量的帧（如 Codex `total.totalTokens`）仅在总量大于
   上次已接受值时采纳，重复或乱序帧丢弃。
 - `boundary`：`request`（提供方按请求给出）、`turn`（整轮只有一个数）、`cumulative_delta`（由累计值差分）。
 - 不记录猜测的费用：只存提供方自己报告的 `cost_usd_reported`；价格表估算是读取时的后续功能。

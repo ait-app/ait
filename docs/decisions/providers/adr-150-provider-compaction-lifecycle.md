@@ -4,6 +4,7 @@ status: accepted
 date: 2026-10-13
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-150：所有 Provider 的上下文压缩生命周期提示

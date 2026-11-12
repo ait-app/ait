@@ -4,6 +4,7 @@ status: accepted
 date: 2026-09-25
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-040：原生 Session 发现、导入、刷新与上下文导出

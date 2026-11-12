@@ -4,6 +4,7 @@ status: accepted
 date: 2026-11-08
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-219：共享套餐缓存与 Codex 查询进程

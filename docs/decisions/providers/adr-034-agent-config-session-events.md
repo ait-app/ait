@@ -7,6 +7,7 @@ amends:
   - workspace/adr-029-daemon-metadata.md
 paths:
   - crates/provider
+  - crates/provider-core
 ---
 
 # ADR-034：Agent 后续 turn 配置与 Session 事件/心跳

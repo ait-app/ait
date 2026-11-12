@@ -7,6 +7,8 @@ amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

@@ -4,6 +4,8 @@ status: accepted
 date: 2026-10-13
 paths:
   - crates/provider
+  - crates/provider-native
+  - crates/provider-core
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示

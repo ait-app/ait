@@ -7,6 +7,7 @@ amends:
   - providers/adr-174-pi-session-import.md
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-176: Pi user images in the shared timeline projection

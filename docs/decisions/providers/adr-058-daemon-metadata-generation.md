@@ -5,6 +5,7 @@ date: 2026-09-27
 paths:
   - crates/provider
   - crates/metadata
+  - crates/provider-native
 ---
 
 # ADR-058：Server 的有界 metadata generation

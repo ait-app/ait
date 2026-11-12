@@ -6,6 +6,7 @@ amends:
   - providers/adr-144-provider-error-reporting.md
 paths:
   - crates/provider
+  - crates/provider-native
 ---
 
 # ADR-162：Codex 失败展示原生原因与 HTTP 状态
