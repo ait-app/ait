@@ -332,6 +332,10 @@ pub trait AgentClient: Debug + Send + Sync {
         false
     }
 
+    /// Invalidate adapter-cached discovery data for `cwd` before a fresh snapshot read.
+    /// Default no-op; adapters with a discovery cache (e.g. the OMP role catalog) override it.
+    fn refresh_discovery_cache(&self, _cwd: &str) {}
+
     /// How a Bot's own hidden session is configured on this adapter.
     ///
     /// The default delivers instructions as a turn prefix, uses the provider's default mode

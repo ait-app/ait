@@ -80,24 +80,37 @@ fn modes_are_dynamic_while_mcp_and_rewind_stay_deferred() {
 }
 
 #[tokio::test]
-async fn drafts_offer_no_controls_and_start_no_process() {
+async fn drafts_offer_no_tier_controls_and_start_no_process() {
     let (root, client, mut spec) = fixture();
     spec.config = with_fast(&spec.config, true);
     spec.config.model = Some(json!(["unknown", "model"]).to_string());
 
-    assert!(client.draft_features(&spec).await.unwrap().is_empty());
+    // Fast needs a live session's native state, so a draft has no tier controls. Discovered
+    // model roles are the only draft-time features and come from the metadata CLI.
+    let draft = client.draft_features(&spec).await.unwrap();
+    assert!(draft.iter().all(|feature| {
+        feature["id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("modelRole."))
+    }));
     assert!(
         client.settings(&spec.config)["features"]
             .as_array()
             .unwrap()
-            .is_empty()
+            .iter()
+            .all(|feature| feature["id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("modelRole.")))
     );
     spec.config.model = Some("unknown/model".to_owned());
     assert_eq!(
         client.draft_features(&spec).await,
         Err(AgentSessionError::Rejected)
     );
-    assert!(!root.path().join("agent/calls.jsonl").exists());
+    // A draft starts no conversation process. The metadata reads that feed role discovery are
+    // not launches, so only `--mode` command lines may be absent.
+    let calls = calls_after(root.path(), 0);
+    assert!(launches(&calls).is_empty(), "{calls:?}");
 }
 
 #[tokio::test]

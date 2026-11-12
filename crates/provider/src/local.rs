@@ -15,7 +15,7 @@ pub(crate) mod deepseek_harness;
 pub mod diagnostics;
 mod elicitation;
 pub mod images;
-mod metadata_process;
+pub mod metadata_process;
 pub(crate) mod minimax;
 mod notes;
 pub(crate) mod opencode;

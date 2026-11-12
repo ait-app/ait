@@ -71,6 +71,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             if key == "transport" {
                 return !matches!(value.as_str(), Some("acp" | "rpc"));
             }
+            if super::roles::is_key(key) {
+                return !super::roles::valid(key, value);
+            }
             (key != FAST_MODE && !LEGACY_FEATURES.contains(&key.as_str())) || !value.is_boolean()
         })
     {
@@ -262,6 +265,9 @@ pub(super) struct Launch<'a> {
     pub(super) resume_model: Option<&'a str>,
     /// Fast selection restored once OMP is ready.
     pub(super) fast: Option<bool>,
+    /// Private AIT-owned overlay file OMP reads through `--config`; absent when every role
+    /// inherits the layered native setting.
+    pub(super) overlay: Option<&'a str>,
 }
 
 /// Build OMP's argv in Paseo's order: `--mode rpc-ui --approval-mode X [--smol m] [--slow m]
@@ -299,6 +305,11 @@ pub(super) fn launch_arguments(config: &StoredAgentConfig, launch: &Launch<'_>) 
         .filter(|prompt| !prompt.is_empty())
     {
         args.extend(["--append-system-prompt".to_owned(), prompt.to_owned()]);
+    }
+    // Explicit role assignments ride a private overlay; inherited roles leave the native
+    // layered settings untouched and create no file.
+    if let Some(overlay) = launch.overlay {
+        args.extend(["--config".to_owned(), overlay.to_owned()]);
     }
     args
 }

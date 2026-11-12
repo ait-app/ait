@@ -279,10 +279,16 @@ pub(super) fn calls_after(root: &std::path::Path, skip: usize) -> Vec<Value> {
 }
 
 /// Return the argv of every OMP process the fixture logged.
+/// Command lines of the native conversation processes the fixture recorded.
+///
+/// A conversation transport starts with `--mode`; read-only metadata reads (`config list`,
+/// `models`) report layered settings and are not launches, so they must not count towards
+/// the launch-shape assertions.
 pub(super) fn launches(calls: &[Value]) -> Vec<Vec<String>> {
     calls
         .iter()
         .filter_map(|call| serde_json::from_value(call.get("args")?.clone()).ok())
+        .filter(|args: &Vec<String>| args.first().is_some_and(|arg| arg == "--mode"))
         .collect()
 }
 
