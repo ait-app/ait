@@ -89,6 +89,7 @@ fn dev_only_dependencies(name: &str) -> &'static [&'static str] {
         "daemon" => &[],
         "provider" => &["persistence", "provider-codex"],
         "api" => &["persistence", "provider-builtin"],
+        "provider-builtin" => &["domain", "model", "persistence"],
         "provider-codex" => &["persistence", "provider"],
         "provider-pi"
         | "provider-opencode"
@@ -145,7 +146,6 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "metadata",
             "filesystem",
             "provider",
-            "provider-core",
             "provider-builtin",
             "api",
             "terminal",
@@ -162,7 +162,6 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "model",
             "terminal",
             "provider",
-            "provider-core",
             "provider-builtin",
             "domain",
             "metadata",
@@ -196,7 +195,6 @@ fn allowed_dependencies(name: &str) -> Option<&'static [&'static str]> {
             "model",
             "persistence",
             "provider",
-            "provider-core",
             "provider-codex",
             "provider-pi",
             "provider-opencode",
@@ -386,6 +384,48 @@ fn daemon_reaches_adapters_only_through_the_built_in_assembly() {
         {"name":"provider-omp", "path":"../provider-omp"}
     ]})];
     assert_eq!(violations(&packages), ["daemon -> provider-omp"]);
+}
+
+#[test]
+fn hosts_and_the_assembly_declare_only_the_family_edges_they_use() {
+    let edge = |name: &str, kind: Value| json!({"name": name, "path": "x", "kind": kind});
+    for host in ["daemon", "api"] {
+        let packages = [json!({"id": host, "name": host, "dependencies": [
+            edge("provider", Value::Null),
+            edge("provider-core", Value::Null),
+        ]})];
+        assert_eq!(violations(&packages), [format!("{host} -> provider-core")]);
+    }
+    let bot = [json!({"id": "bot", "name": "bot", "dependencies": [
+        edge("provider", Value::Null),
+        edge("provider-core", Value::Null),
+    ]})];
+    assert!(violations(&bot).is_empty());
+    let assembly = |kind: Value| {
+        [
+            json!({"id": "provider-builtin", "name": "provider-builtin", "dependencies": [
+                edge("provider", Value::Null),
+                edge("provider-pi", Value::Null),
+                edge("provider-core", kind.clone()),
+                edge("domain", kind.clone()),
+                edge("model", kind.clone()),
+                edge("persistence", kind),
+            ]}),
+        ]
+    };
+    assert_eq!(
+        violations(&assembly(Value::Null)),
+        [
+            "provider-builtin -> provider-core",
+            "provider-builtin -> domain outside tests",
+            "provider-builtin -> model outside tests",
+            "provider-builtin -> persistence outside tests",
+        ]
+    );
+    assert_eq!(
+        violations(&assembly(json!("dev"))),
+        ["provider-builtin -> provider-core"]
+    );
 }
 
 #[test]

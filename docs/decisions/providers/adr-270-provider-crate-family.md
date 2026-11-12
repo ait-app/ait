@@ -109,9 +109,9 @@ dev-only:  provider-<adapter> ..> provider        (adapter 测试驱动真实运
    测试构建与该 adapter 链接的副本会定义两个不同的 `AgentClient` trait。
 3. **`Providers` 作为容器留在运行时，`provider-builtin` 拥有内置列表。**
    [ADR-249](adr-249-omp-adapter-crate.md) 加入的 `Providers::with` 已能接收其他 crate 的 adapter。
-   过渡期间 `Providers::configured` 只构造仍在 `provider` 中的 adapter，`provider_builtin::configured`
-   追加已拆出的 adapter；最后一个 adapter 移出后，`configured` 由 `Providers::empty` 取代。
-   daemon 只调用 `provider_builtin::configured`，不再单独注册 OMP。`summary_generation::Generation`
+   `provider-builtin` 从空容器 `Providers::empty` 开始，用 `Providers::with` 追加全部内置 adapter。
+   daemon 只调用 `provider_builtin::providers`（`provider_builtin::configured` 供测试注入环境变量），
+   不再单独注册 OMP。`summary_generation::Generation`
    与 `UsageLedger` 保持 crate 私有，adapter 模块也不临时公开。注册顺序不可观察：摘要生成器和
    catalog 都按名称索引 adapter。
 4. **adapter 测试留在 adapter 的 crate，只经 `provider::testing` 访问运行时**（feature
@@ -143,18 +143,21 @@ feature 启用时，`dep:persistence` 和强形式 `persistence/<feature>` 都�
 | `provider-native`         | `domain`、`provider-core`                                                        | —                                                                                                              |
 | 八个 `provider-<adapter>` | `domain`、`model`、`provider-core`、`provider-native`、`provider`、`persistence` | `provider`、`persistence`；除 `provider-codex` 外还有 `model`                                                  |
 | `provider`                | `domain`、`model`、`persistence`、`provider-core`、`provider-codex`              | `provider-codex`；`persistence`，除非该依赖可选、`test-support` 列出 `dep:persistence` 且没有其他 feature 列出 |
-| `provider-builtin`        | `domain`、`model`、`persistence`、`provider`、`provider-core`、八个 adapter      | `persistence`                                                                                                  |
+| `provider-builtin`        | `domain`、`model`、`persistence`、`provider`、八个 adapter                       | `domain`、`model`、`persistence`                                                                               |
 | `bot`                     | 原有列表加 `provider-core`                                                       | —                                                                                                              |
-| `api`                     | 原有列表加 `provider-core`、`provider-builtin`                                   | `provider-builtin`                                                                                             |
-| `daemon`                  | 原有列表加 `provider-core`、`provider-builtin`                                   | —                                                                                                              |
+| `api`                     | 原有列表加 `provider-builtin`                                                    | `provider-builtin`                                                                                             |
+| `daemon`                  | 原有列表加 `provider-builtin`                                                    | —                                                                                                              |
 
 `provider-omp` 与其他七个 adapter 适用同一行规则。`provider` 不依赖 `provider-native`，adapter 中只有
-`provider-codex` 可作为它的 dev 依赖；`daemon` 与 `api` 的允许列表不含任何 adapter，只经
-`provider-builtin` 到达它们，`bot` 不依赖任何 adapter。
+`provider-codex` 可作为它的 dev 依赖；`daemon` 与 `api` 的允许列表不含任何 adapter，也不含
+`provider-core`，只经 `provider-builtin` 到达 adapter；`bot` 直接使用 `provider-core`，不依赖任何 adapter。
+`provider-builtin` 的生产依赖只有 `provider` 与八个 adapter。
 
 ## 后果与限制
 
-修改单个 adapter 只构建并运行该 adapter 的测试；修改契约或共享工具会选中整个家族，这与现状相同。
+修改单个 adapter 只选中该 adapter、`provider-builtin` 及其宿主 `api` 与 `daemon`；修改 `provider-codex`
+还会选中运行时一侧（`provider`、依赖它的 `bot` 和以 dev 边依赖它的其他 adapter），这是第 5 条的代价。
+修改运行时同样选中这些 crate；修改契约或共享工具会选中整个家族，与拆分前相同。
 新 adapter 加入 `provider-builtin` 即可，宿主不了解任何客户端类型。行为、wire 格式、持久化格式、
 环境变量和 provider id 都不变。
 
@@ -162,5 +165,5 @@ feature 启用时，`dep:persistence` 和强形式 `persistence/<feature>` 都�
 移除运行时代码中按字符串识别具体 provider 的七处特例（它们不是编译期依赖）；用脚本化客户端替换
 运行时测试中的 Codex 夹具。
 
-`sandbox/linux` 和若干 adapter 含 `cfg(target_os = "linux")` 代码，移动这些代码的步骤只在 macOS
-本地验证不够，需要 CI 的 Linux Rust 任务通过。
+`provider-native` 的 `sandbox/linux` 和若干 adapter 含 `cfg(target_os = "linux")` 代码，只有 CI 的
+Linux Rust 任务编译并运行它们。
