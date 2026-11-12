@@ -613,6 +613,8 @@ fn workspace_create_worktree(
                             forge: Some("github".to_owned()),
                             number: number.get(),
                             project_path: None,
+                            expected_head_sha: None,
+                            expected_base_sha: None,
                         }
                     })
                 }),

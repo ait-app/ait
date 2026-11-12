@@ -9,6 +9,7 @@ use filesystem::git::local::provisioning::LocalDirectorySource;
 use filesystem::git::local::worktrees::LocalManagedWorktrees;
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
 use metadata::worktrees::service::worktrees::Worktrees;
+use metadata::worktrees::service::worktrees::provisioning::WorkspaceWorktrees;
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
@@ -110,6 +111,15 @@ impl Fixture {
             .unwrap()
             .workspace_id;
         let scopes = Scopes::new();
+        let worktrees = Arc::new(Mutex::new(Worktrees::new(
+            Box::new(projects.clone()),
+            Box::new(workspaces.clone()),
+            Box::new(LocalManagedWorktrees::new(
+                data.join("worktrees"),
+                Arc::new(LocalForge::new()),
+            )),
+            "test-server".to_owned(),
+        )));
         let bots = Bots::spawn(Dependencies {
             store: Arc::new(persistence::storage::bot::FileStore::new(data.join("bots"))),
             workspaces: Arc::new(workspaces.clone()),
@@ -117,25 +127,17 @@ impl Fixture {
             executor: Arc::new(Idle),
             credentials: Arc::new(Idle),
             scopes: scopes.clone(),
+            worktrees: Arc::new(WorkspaceWorktrees::new(worktrees.clone())),
         })
         .unwrap();
         let agents = Arc::new(Recorded {
             calls: Mutex::default(),
             workspace: workspace.clone(),
         });
-        let worktrees = Worktrees::new(
-            Box::new(projects),
-            Box::new(workspaces),
-            Box::new(LocalManagedWorktrees::new(
-                data.join("worktrees"),
-                Arc::new(LocalForge::new()),
-            )),
-            "test-server".to_owned(),
-        );
         let runner = AgentRunner {
             execution: agents.clone(),
             directory,
-            worktrees: Arc::new(Mutex::new(worktrees)),
+            worktrees,
             scopes,
         };
         let schedules = Schedules::spawn(

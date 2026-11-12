@@ -147,6 +147,7 @@ export const ja: TranslationResources = {
     tooLong: "メッセージは 16 KiB 以内にしてください。",
     memoryTooLong: "メモリは 32 KiB 以内にしてください。",
     channels: "チャンネル",
+    githubChannel: en.bots.githubChannel,
     addChannel: "チャンネルを追加",
     channelType: "チャンネルの種類",
     telegram: "Telegram",

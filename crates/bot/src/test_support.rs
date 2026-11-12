@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use domain::bot::SessionOwner;
 use model::ErrorCode;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use persistence::storage::bot::FileStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use provider::service::bot_execution::Action;
@@ -70,6 +71,45 @@ struct NoCredentials;
 impl Credentials for NoCredentials {
     fn resolve(&self, _: &str) -> Result<SecretString, ErrorCode> {
         Err(ErrorCode::BotIo)
+    }
+}
+
+#[derive(Debug)]
+struct NoWorktrees;
+
+impl WorktreeProvisioning for NoWorktrees {
+    fn prepare_directory(
+        &self,
+        _: &str,
+        _: &domain::workspace::worktrees::DirectoryGit,
+    ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+        Err(worktree_unavailable())
+    }
+
+    fn archive(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<(), domain::workspace::worktrees::WorktreeCreationError> {
+        Err(worktree_unavailable())
+    }
+
+    fn create(
+        &self,
+        _: &domain::workspace::worktrees::WorktreeCreation,
+        _: &str,
+    ) -> Result<
+        domain::workspace::worktrees::CreatedWorktreeWorkspace,
+        domain::workspace::worktrees::WorktreeCreationError,
+    > {
+        Err(worktree_unavailable())
+    }
+}
+
+fn worktree_unavailable() -> domain::workspace::worktrees::WorktreeCreationError {
+    domain::workspace::worktrees::WorktreeCreationError {
+        code: "test_unavailable",
+        message: "Worktrees are unavailable in this fixture".to_owned(),
     }
 }
 
@@ -178,6 +218,7 @@ impl Fixture {
             executor: self.native.clone(),
             credentials,
             scopes: self.scopes.clone(),
+            worktrees: Arc::new(NoWorktrees),
         })
         .unwrap()
     }

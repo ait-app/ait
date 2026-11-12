@@ -75,6 +75,7 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
             message_id: "event-1".into(),
             text: "hello".into(),
             reply_to: None,
+            context: None,
         })
         .unwrap();
     let turn_id = serde_json::from_value(input["turn"]["id"].clone()).unwrap();

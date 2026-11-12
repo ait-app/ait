@@ -1,4 +1,6 @@
-use domain::bot::{ChannelConfig, TurnStatus};
+use domain::bot::{
+    ChannelConfig, GithubReviewContext, GithubReviewTrigger, TurnContext, TurnStatus,
+};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
@@ -108,7 +110,7 @@ fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
         state
             .execute("bot.channel.types.request", json!({}))
             .unwrap(),
-        json!({"supported":["builtin","telegram","feishu"],"email":{"supported":false,"planned":true}})
+        json!({"supported":["builtin","telegram","feishu","github"],"email":{"supported":false,"planned":true}})
     );
     let status = state
         .execute(
@@ -150,7 +152,82 @@ fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {
         message_id: message.into(),
         text: "hello".into(),
         reply_to: None,
+        context: None,
     }
+}
+
+#[test]
+fn github_review_triggers_for_the_same_head_reuse_the_first_turn() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = ChannelId::generate();
+    state
+        .execute(
+            "bot.channel.create.request",
+            json!({
+                "workspaceId":WORKSPACE,
+                "channelId":channel,
+                "enabled":true,
+                "config":{
+                    "kind":"github",
+                    "appId":"123",
+                    "privateKeyRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_PRIVATE_KEY",
+                    "webhookSecretRef":"env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+                    "installationId":"456",
+                    "mention":"ait-review",
+                    "repositories":[{
+                        "fullName":"owner/repository",
+                        "projectId":"project-1",
+                        "allowedSenders":["maintainer"]
+                    }]
+                }
+            }),
+        )
+        .unwrap();
+    let context = |trigger, workspace: &str| {
+        Some(TurnContext::GithubReview(GithubReviewContext {
+            repository: "owner/repository".to_owned(),
+            project_id: "project-1".to_owned(),
+            pull_number: 7,
+            title: "Change".to_owned(),
+            url: "https://github.com/owner/repository/pull/7".to_owned(),
+            base_ref: "main".to_owned(),
+            head_ref: "feature".to_owned(),
+            base_sha: "1".repeat(40),
+            head_sha: "2".repeat(40),
+            trigger,
+            trigger_user: "maintainer".to_owned(),
+            trigger_comment_id: None,
+            workspace_id: workspace.to_owned(),
+        }))
+    };
+    let request = |text: &str, context| Incoming {
+        channel_id: channel,
+        peer: "repo:5:pr:7".to_owned(),
+        sender: "github-review".to_owned(),
+        thread: Some("2".repeat(40)),
+        message_id: "github-review:stable".to_owned(),
+        text: text.to_owned(),
+        reply_to: None,
+        context,
+    };
+    let first = state
+        .accept(request(
+            "mention mandate",
+            context(GithubReviewTrigger::Mention, "workspace-first"),
+        ))
+        .unwrap();
+    let duplicate = state
+        .accept(request(
+            "assignment mandate",
+            context(GithubReviewTrigger::ReviewerAssignment, "workspace-second"),
+        ))
+        .unwrap();
+    assert_eq!(duplicate["duplicate"], true);
+    assert_eq!(duplicate["turn"]["id"], first["turn"]["id"]);
 }
 
 #[test]

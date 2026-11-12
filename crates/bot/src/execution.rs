@@ -65,6 +65,7 @@ async fn perform(
             agent_id: run.conversation.session_id.clone(),
             message_id: run.turn.id.to_string(),
             text,
+            output_schema: review_schema(&run.turn, &run.config.provider),
         },
     );
     tokio::select! {
@@ -77,6 +78,39 @@ async fn perform(
     bots.progress(run.turn.id, TurnStatus::Running, None, None)
         .await?;
     wait_for_completion(bots, executor, run).await
+}
+
+fn review_schema(turn: &Turn, provider: &str) -> Option<serde_json::Value> {
+    turn.context
+        .as_ref()
+        .filter(|_| matches!(provider, "codex" | "claude"))
+        .map(|_| {
+            serde_json::json!({
+                "type":"object",
+                "additionalProperties":false,
+                "required":["summary","findings"],
+                "properties":{
+                    "summary":{"type":"string"},
+                    "findings":{
+                        "type":"array",
+                        "maxItems":100,
+                        "items":{
+                            "type":"object",
+                            "additionalProperties":false,
+                            "required":["path","line","side","severity","title","body"],
+                            "properties":{
+                                "path":{"type":"string"},
+                                "line":{"type":"integer","minimum":1},
+                                "side":{"type":"string","enum":["LEFT","RIGHT"]},
+                                "severity":{"type":"string","enum":["high","medium","low"]},
+                                "title":{"type":"string"},
+                                "body":{"type":"string"}
+                            }
+                        }
+                    }
+                }
+            })
+        })
 }
 
 async fn wait_for_completion(
@@ -342,3 +376,7 @@ async fn cancel(
     bots.progress(run.turn.id, TurnStatus::Cancelled, None, None)
         .await
 }
+
+#[cfg(test)]
+#[path = "execution/tests.rs"]
+mod tests;

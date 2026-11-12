@@ -64,7 +64,6 @@ fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configu
         Err(ErrorCode::ResourceExhausted)
     );
 }
-
 #[test]
 fn capacity_counts_only_live_bots_and_channels() {
     let fixture = Fixture::new();
@@ -288,6 +287,7 @@ fn reply_references_may_exceed_the_identifier_limit_but_stay_bounded() {
         message_id: message.into(),
         text: "hello".into(),
         reply_to: Some(reply_to),
+        context: None,
     };
     assert!(state.accept(incoming("1", "t".repeat(4096))).is_ok());
     assert_eq!(

@@ -10,8 +10,9 @@ use model::ErrorCode;
 use model::bot::Store;
 use model::hub::Center;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorktreeProvisioning;
 use secrecy::SecretString;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -25,9 +26,9 @@ use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::protocol::{ChannelCreate, decode};
-use crate::state::{State, StoredChannel};
+use crate::state::{ReviewPreparation, State, StoredChannel};
 
-/// One enabled Webhook channel whose endpoint is hosted by the center.
+/// One enabled automation channel whose public endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookBot {
@@ -39,7 +40,7 @@ pub struct WebhookBot {
     pub title: String,
     /// `active` or `paused`.
     pub state: &'static str,
-    /// Always `webhook`.
+    /// `webhook` or `github`.
     pub kind: &'static str,
 }
 
@@ -57,6 +58,8 @@ pub struct Dependencies {
     pub credentials: Arc<dyn Credentials>,
     /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
     pub scopes: Arc<Scopes>,
+    /// Temporary pull-request worktree provisioning and cleanup.
+    pub worktrees: Arc<dyn WorktreeProvisioning>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -76,6 +79,9 @@ struct Worker {
     cancellation: CancellationToken,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
+    credentials: Arc<dyn Credentials>,
+    worktrees: Arc<dyn WorktreeProvisioning>,
+    workspaces: Arc<dyn WorkspaceRegistry>,
     scopes: Arc<Scopes>,
     feishu: FeishuOnboarding,
     telegram: TelegramOnboarding,
@@ -94,11 +100,12 @@ pub struct Bots(Arc<Worker>);
 
 enum Operation {
     Rpc(String, Value),
-    Accept(Incoming),
+    Accept(Box<Incoming>),
     Cursor(ChannelId, i64),
     ChannelCursor(ChannelId),
     PhotonProjectClaimed(String),
     ChannelStatus(ChannelId, Value),
+    WebhookObserved(ChannelId, String, String),
     Account(ChannelId, String),
     Progress(
         BotTurnId,
@@ -120,6 +127,8 @@ enum Operation {
     WebhookTurn(String, BotTurnId),
     CreateWebhook(ChannelCreate),
     WebhookChannel(String, ChannelId),
+    GithubChannel(String, ChannelId),
+    ReviewPrepared(BotTurnId, Result<String, ()>),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -142,6 +151,9 @@ impl Bots {
     /// # Errors
     /// Returns invalid storage or runtime-start failures; no external account is contacted here.
     pub fn spawn(dependencies: Dependencies) -> Result<Self, Error> {
+        let workspaces = dependencies.workspaces.clone();
+        let credentials = dependencies.credentials.clone();
+        let worktrees = dependencies.worktrees.clone();
         let state = State::load(
             dependencies.store,
             dependencies.workspaces,
@@ -162,6 +174,9 @@ impl Bots {
             cancellation,
             closed: observed,
             executor: dependencies.executor,
+            credentials: credentials.clone(),
+            worktrees,
+            workspaces,
             scopes: dependencies.scopes,
             feishu: FeishuOnboarding::default(),
             telegram: TelegramOnboarding::default(),
@@ -175,7 +190,7 @@ impl Bots {
         std::thread::Builder::new()
             .name("ait-bot".into())
             .spawn(move || {
-                runtime.block_on(serve(worker, state, receiver, dependencies.credentials));
+                runtime.block_on(serve(worker, state, receiver, credentials));
                 let _ = closed.send(true);
             })
             .map_err(|_| Error::Worker)?;
@@ -250,8 +265,64 @@ impl Bots {
             "bot.channel.webhook.rotate.request" => {
                 crate::channels::webhook::rotate(self, decode(params)?).await
             }
+            "bot.channel.github.create.request" => {
+                crate::channels::github::create(self, decode(params)?).await
+            }
+            "bot.github.webhook.receive.request" => self.github_webhook(decode(params)?).await,
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
+    }
+
+    /// Verify and admit one GitHub App webhook delivery.
+    ///
+    /// Valid deliveries outside the configured repository, sender, or trigger scope are ignored.
+    /// # Errors
+    /// Returns malformed headers or payloads, invalid signatures, GitHub API failures, and durable
+    /// Bot admission failures.
+    pub(crate) async fn github_webhook(
+        &self,
+        request: crate::protocol::GithubWebhook,
+    ) -> Result<Value, ErrorCode> {
+        use base64::Engine as _;
+
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(&request.body_base64)
+            .map_err(|_| ErrorCode::InvalidMessage)?;
+        if body.len() > 700 * 1024 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let channel: Channel = decode(
+            self.call(Operation::GithubChannel(
+                request.workspace_id,
+                request.channel_id,
+            ))
+            .await?,
+        )?;
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(45))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| ErrorCode::BotIo)?;
+        let incoming = crate::channels::github_webhook(
+            &channel,
+            &self.0.credentials,
+            &client,
+            &request.event,
+            &request.delivery,
+            &request.signature,
+            &body,
+        )
+        .await?;
+        self.webhook_observed(channel.id, &request.event).await;
+        let Some(incoming) = incoming else {
+            return Ok(json!({"accepted":true,"ignored":true}));
+        };
+        let admission = self.accept(incoming).await?;
+        Ok(json!({
+            "accepted": matches!(admission, Admission::Accepted),
+            "backlogged": matches!(admission, Admission::Backlogged)
+        }))
     }
 
     /// Use this Host's serve link for webhook endpoints; later attachments are ignored.
@@ -346,7 +417,7 @@ impl Bots {
         if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::ServerDraining);
         }
-        let receipt = self.send(Operation::Accept(incoming)).await?;
+        let receipt = self.send(Operation::Accept(Box::new(incoming))).await?;
         Ok(if receipt["accepted"] == true {
             Admission::Accepted
         } else {
@@ -443,6 +514,15 @@ impl Bots {
     pub(crate) async fn channel_status(&self, channel: ChannelId, status: Value) {
         let _ = self.call(Operation::ChannelStatus(channel, status)).await;
     }
+    async fn webhook_observed(&self, channel: ChannelId, event: &str) {
+        let _ = self
+            .call(Operation::WebhookObserved(
+                channel,
+                event.to_owned(),
+                chrono::Utc::now().to_rfc3339(),
+            ))
+            .await;
+    }
     pub(crate) async fn account(
         &self,
         channel: ChannelId,
@@ -514,6 +594,16 @@ impl Bots {
             .await
             .map(|_| ())
     }
+
+    pub(crate) async fn archive_review(&self, workspace_id: String) -> Result<(), ErrorCode> {
+        let worktrees = self.0.worktrees.clone();
+        tokio::task::spawn_blocking(move || {
+            worktrees.archive(&workspace_id, &chrono::Utc::now().to_rfc3339())
+        })
+        .await
+        .map_err(|_| ErrorCode::BotIo)?
+        .map_err(|_| ErrorCode::BotIo)
+    }
 }
 
 async fn serve(
@@ -561,6 +651,11 @@ async fn serve(
                     tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
                 }
             }
+            let preparations = if stopping {
+                Vec::new()
+            } else {
+                state.review_preparations()
+            };
             let ready = if stopping {
                 Vec::new()
             } else if let Ok(ready) = state.ready() {
@@ -574,14 +669,15 @@ async fn serve(
             } else {
                 state.channels()
             };
-            (state, accounts, ready, desired)
+            (state, accounts, preparations, ready, desired)
         })
         .await;
-        let Ok((next, next_accounts, ready, desired)) = processed else {
+        let Ok((next, next_accounts, preparations, ready, desired)) = processed else {
             break;
         };
         state = next;
         accounts = next_accounts;
+        spawn_review_preparations(&bots, &tasks, preparations);
         for run in ready {
             tasks.spawn(crate::execution::run(
                 bots.clone(),
@@ -591,6 +687,9 @@ async fn serve(
         }
         for channel in std::mem::take(&mut state.released_webhooks) {
             tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
+        }
+        for channel in std::mem::take(&mut state.released_github) {
+            tasks.spawn(crate::channels::github::release(bots.clone(), channel));
         }
         for (owner, action) in std::mem::take(&mut state.session_actions) {
             let executor = bots.0.executor.clone();
@@ -611,6 +710,31 @@ async fn serve(
     tasks.wait().await;
 }
 
+fn spawn_review_preparations(
+    bots: &Bots,
+    tasks: &TaskTracker,
+    preparations: Vec<ReviewPreparation>,
+) {
+    for preparation in preparations {
+        let worker = bots.clone();
+        let worktrees = bots.0.worktrees.clone();
+        let workspaces = bots.0.workspaces.clone();
+        tasks.spawn(async move {
+            let turn_id = preparation.turn_id;
+            let prepared = tokio::task::spawn_blocking(move || {
+                prepare_review(&*worktrees, &*workspaces, &preparation.context)
+            })
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .ok_or(());
+            let _ = worker
+                .send(Operation::ReviewPrepared(turn_id, prepared))
+                .await;
+        });
+    }
+}
+
 fn apply(
     state: &mut State,
     accounts: &mut BTreeMap<String, ChannelId>,
@@ -622,7 +746,7 @@ fn apply(
             state.cancel(&decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
-        Operation::Accept(incoming) => state.accept_channel(incoming),
+        Operation::Accept(incoming) => state.accept_channel(*incoming),
         Operation::SyncToken(channel, token) => {
             state.advance_sync(channel, token).map(|()| Value::Null)
         }
@@ -638,6 +762,16 @@ fn apply(
         }
         Operation::ChannelStatus(channel, value) => {
             state.channel_status.insert(channel, value);
+            Ok(Value::Null)
+        }
+        Operation::WebhookObserved(channel, event, observed_at) => {
+            let status = state
+                .channel_status
+                .entry(channel)
+                .or_insert_with(|| json!({"state":"connected"}));
+            let status = status.as_object_mut().ok_or(ErrorCode::BotIo)?;
+            status.insert("lastWebhookAt".to_owned(), Value::String(observed_at));
+            status.insert("lastWebhookEvent".to_owned(), Value::String(event));
             Ok(Value::Null)
         }
         Operation::AccountAvailable(identity) => {
@@ -685,6 +819,65 @@ fn apply(
         Operation::WebhookChannel(workspace, channel) => state
             .check_webhook_channel(&workspace, channel)
             .map(|()| Value::Null),
+        Operation::GithubChannel(workspace, channel_id) => {
+            let channel = state.github_channel(&workspace, channel_id)?;
+            serde_json::to_value(channel).map_err(|_| ErrorCode::BotIo)
+        }
+        Operation::ReviewPrepared(turn_id, workspace_id) => state
+            .review_prepared(turn_id, workspace_id)
+            .map(|()| Value::Null),
+    }
+}
+
+fn prepare_review(
+    worktrees: &dyn WorktreeProvisioning,
+    workspaces: &dyn WorkspaceRegistry,
+    context: &domain::bot::GithubReviewContext,
+) -> Result<String, domain::workspace::worktrees::WorktreeCreationError> {
+    if let Some(existing) = workspaces
+        .get(&context.workspace_id)
+        .map_err(|_| review_workspace_error())?
+    {
+        if existing.archived_at.is_none() && existing.project_id == context.project_id {
+            return Ok(existing.workspace_id);
+        }
+        return Err(review_workspace_error());
+    }
+    let short = context.head_sha.get(..12).unwrap_or(&context.head_sha);
+    let created = worktrees.create(
+        &domain::workspace::worktrees::WorktreeCreation {
+            cwd: None,
+            project_id: Some(context.project_id.clone()),
+            workspace_id: Some(context.workspace_id.clone()),
+            title: Some(format!(
+                "Review {}#{} at {short}",
+                context.repository, context.pull_number
+            )),
+            worktree_slug: Some(format!("github-review-{}-{short}", context.pull_number)),
+            ref_name: Some(context.head_ref.clone()),
+            base_branch: None,
+            branch_name: None,
+            action: domain::workspace::worktrees::WorktreeAction::Checkout,
+            checkout_source: Some(domain::workspace::worktrees::WorktreeChangeRequest {
+                forge: Some("github".to_owned()),
+                number: context.pull_number,
+                project_path: Some(context.repository.clone()),
+                expected_head_sha: Some(context.head_sha.clone()),
+                expected_base_sha: Some(context.base_sha.clone()),
+            }),
+            first_agent_prompt: None,
+            expects_initial_agent: false,
+            sandbox: None,
+        },
+        &chrono::Utc::now().to_rfc3339(),
+    )?;
+    Ok(created.workspace.workspace_id)
+}
+
+fn review_workspace_error() -> domain::workspace::worktrees::WorktreeCreationError {
+    domain::workspace::worktrees::WorktreeCreationError {
+        code: "review_workspace",
+        message: "Review Workspace is unavailable".to_owned(),
     }
 }
 

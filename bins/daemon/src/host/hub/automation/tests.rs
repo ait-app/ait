@@ -86,6 +86,9 @@ fn publication_lists_reachable_bots() {
     assert_eq!(body["bots"][0]["state"], "active");
     assert!(body["bots"][0]["channelId"].is_string());
     assert_eq!(body["bots"][0]["kind"], "webhook");
+    let mut github = bot("active");
+    github.kind = "github";
+    assert_eq!(publication(&[github])["bots"][0]["kind"], "github");
     let paused = publication(&[bot("paused")]);
     assert_eq!(
         paused["enabled"], false,

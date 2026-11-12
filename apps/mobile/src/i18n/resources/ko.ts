@@ -144,6 +144,7 @@ export const ko: TranslationResources = {
     tooLong: "메시지는 16 KiB 이하여야 합니다.",
     memoryTooLong: "메모리는 32 KiB 이하여야 합니다.",
     channels: "채널",
+    githubChannel: en.bots.githubChannel,
     addChannel: "채널 추가",
     channelType: "채널 유형",
     telegram: "Telegram",

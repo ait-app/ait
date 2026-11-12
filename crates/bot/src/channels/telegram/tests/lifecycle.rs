@@ -240,6 +240,7 @@ async fn telegram_accumulates_multiple_assistant_messages_in_one_reply() {
         message_id: "update-1".into(),
         text: "hello".into(),
         reply_to: Some("42".into()),
+        context: None,
     })
     .await
     .unwrap();

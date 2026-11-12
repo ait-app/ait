@@ -23,11 +23,73 @@ pub(super) fn plan(
     validate_branch(repo, &base)?;
     let branch = unique_branch(repo, &target.local_branch);
     fetch_checkout(repo, &target.checkout_refs, &branch)?;
+    verify_object(repo, &branch, target.head_sha.as_deref(), "head")?;
+    if let Some(base_sha) = target.base_sha.as_deref() {
+        fetch_base(repo, &target.checkout_refs, &base, base_sha)?;
+        verify_object(repo, base_sha, Some(base_sha), "base")?;
+    }
     Ok(CreatePlan {
         branch_name: branch.clone(),
-        comparison_base_ref: Some(base),
+        comparison_base_ref: target.base_sha.clone().or(Some(base)),
         arguments: vec![branch],
     })
+}
+
+fn fetch_base(
+    repo: &Path,
+    refs: &[ChangeRequestCheckoutRef],
+    base: &str,
+    expected: &str,
+) -> Result<(), WorktreeError> {
+    let temporary = format!("refs/ait/base/{}", uuid::Uuid::new_v4());
+    let reference = format!("refs/heads/{base}");
+    let mut matched = false;
+    for candidate in refs {
+        let specification = format!("{reference}:{temporary}");
+        let output = git(
+            repo,
+            &["fetch", "--no-tags", &candidate.remote, &specification],
+            WRITE_TIMEOUT,
+            &[0, 1, 128],
+        )?;
+        if output.status.success()
+            && optional_git(repo, &["rev-parse", "--verify", &temporary]).as_deref()
+                == Some(expected)
+        {
+            matched = true;
+            break;
+        }
+    }
+    let cleanup = git(repo, &["update-ref", "-d", &temporary], READ_TIMEOUT, &[0]);
+    cleanup?;
+    if matched {
+        Ok(())
+    } else {
+        Err(WorktreeError::Io(
+            "Pull request base revision no longer matches the admitted review".to_owned(),
+        ))
+    }
+}
+
+fn verify_object(
+    repo: &Path,
+    reference: &str,
+    expected: Option<&str>,
+    label: &str,
+) -> Result<(), WorktreeError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let observed = optional_git(
+        repo,
+        &["rev-parse", "--verify", &format!("{reference}^{{commit}}")],
+    );
+    if observed.as_deref() != Some(expected) {
+        return Err(WorktreeError::Io(format!(
+            "Pull request {label} revision no longer matches the admitted review"
+        )));
+    }
+    Ok(())
 }
 
 fn fetch_checkout(

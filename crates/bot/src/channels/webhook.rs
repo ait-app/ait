@@ -2,7 +2,8 @@
 //! call into it over the center's own Hub session, as a Webhook input.
 //!
 //! Creating one asks the center over this Host's serve link for the endpoint; the center
-//! keeps the secret and returns it once, so the daemon stores only the endpoint and URL.
+//! keeps the secret and returns it once. Generic Webhook channels show it to the owner; channel
+//! types that re-verify inbound signatures may store it in the Host's private credential store.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,10 +34,10 @@ pub(crate) const FAILED_ERROR: &str = "centerError";
 /// What the center issues for one channel.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Issued {
-    endpoint_id: String,
-    url: String,
-    secret: String,
+pub(crate) struct Issued {
+    pub(crate) endpoint_id: String,
+    pub(crate) url: String,
+    pub(crate) secret: String,
 }
 
 fn failed(reason: &str) -> Value {
@@ -77,16 +78,17 @@ async fn call(
 }
 
 /// Ask the center for `channel`'s endpoint; a repeated call replaces the secret.
-async fn issue(
+pub(crate) async fn issue_at(
     center: &Arc<dyn Center>,
+    method: &'static str,
     workspace: &str,
     channel: ChannelId,
 ) -> Result<Issued, &'static str> {
-    let scope = link(Some(center), CREATE_METHOD)?;
+    let scope = link(Some(center), method)?;
     let value = call(
         center.as_ref(),
         scope,
-        CREATE_METHOD,
+        method,
         json!({"workspaceId":workspace,"channelId":channel}),
     )
     .await?;
@@ -95,6 +97,14 @@ async fn issue(
         return Err(FAILED_ERROR);
     }
     Ok(issued)
+}
+
+async fn issue(
+    center: &Arc<dyn Center>,
+    workspace: &str,
+    channel: ChannelId,
+) -> Result<Issued, &'static str> {
+    issue_at(center, CREATE_METHOD, workspace, channel).await
 }
 
 /// Create an enabled webhook channel whose endpoint the center issues now.
@@ -156,21 +166,18 @@ pub(crate) async fn rotate(bots: &Bots, request: ChannelRequest) -> Result<Value
 /// Remove a deleted channel's endpoint; best effort, since the center stops routing to
 /// channels this Host no longer publishes.
 pub(crate) async fn release(bots: Bots, channel: ChannelId) {
+    release_at(bots, channel, DELETE_METHOD).await;
+}
+
+pub(crate) async fn release_at(bots: Bots, channel: ChannelId, method: &'static str) {
     let Some(center) = bots.center() else {
         return;
     };
-    let Ok(scope) = link(Some(&center), DELETE_METHOD) else {
+    let Ok(scope) = link(Some(&center), method) else {
         tracing::info!(%channel, "Center unreachable; its webhook endpoint stays until removed there");
         return;
     };
-    if let Err(reason) = call(
-        center.as_ref(),
-        scope,
-        DELETE_METHOD,
-        json!({"channelId":channel}),
-    )
-    .await
-    {
+    if let Err(reason) = call(center.as_ref(), scope, method, json!({"channelId":channel})).await {
         tracing::info!(%channel, reason, "Could not remove a deleted channel's webhook endpoint");
     }
 }

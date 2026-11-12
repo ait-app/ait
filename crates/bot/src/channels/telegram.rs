@@ -359,6 +359,7 @@ fn incoming(
             .to_string(),
         text: text.to_owned(),
         reply_to: message["message_id"].as_i64().map(|id| id.to_string()),
+        context: None,
     }))
 }
 

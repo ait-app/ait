@@ -209,6 +209,8 @@ fn gitlab_checkout_resolves_refs_and_fork_trust_without_querying_github() {
             forge: None,
             number: 42,
             project_path: None,
+            expected_head_sha: None,
+            expected_base_sha: None,
         },
         None,
     );
@@ -223,6 +225,8 @@ fn gitlab_checkout_resolves_refs_and_fork_trust_without_querying_github() {
         forge: Some("gitlab".to_owned()),
         number: 42,
         project_path: None,
+        expected_head_sha: None,
+        expected_base_sha: None,
     };
     let mut value = mr();
     value["source_project_id"] = json!(12);
@@ -279,7 +283,9 @@ fn unknown_hosts_do_not_default_to_github_and_negative_probes_are_bounded() {
                 &domain::workspace::worktrees::WorktreeChangeRequest {
                     forge: None,
                     number: 42,
-                    project_path: None
+                    project_path: None,
+                    expected_head_sha: None,
+                    expected_base_sha: None,
                 },
                 None
             )

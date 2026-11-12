@@ -188,6 +188,7 @@ export const ru: TranslationResources = {
     tooLong: "Сообщение не должно превышать 16 КиБ.",
     memoryTooLong: "Память не должна превышать 32 КиБ.",
     channels: "Каналы",
+    githubChannel: en.bots.githubChannel,
     addChannel: "Добавить канал",
     channelType: "Тип канала",
     telegram: "Telegram",
