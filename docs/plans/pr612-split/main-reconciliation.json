@@ -1,0 +1,606 @@
+{
+  "schema_version": 1,
+  "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "merge_base": "84f89951e080f848260c283bf01c5d35950fb00e",
+  "interpretation": "Main-covered is a behavior-level code-inspection result, not full task acceptance and not a synonym for path overlap. No entire 547-path donor file delta has been proven fully main-covered. All 26 post-base overlaps have individual current-main preservation/merge decisions below; future feature PRs must execute and test those decisions.",
+  "main_covered_behaviors": [
+    {
+      "id": "M01",
+      "disposition": "main-covered",
+      "tasks": ["16", "17"],
+      "behavior": "Codex native Goal set/pause/resume/clear and pending native start bookkeeping already exist. Native mutation is awaited before notes are committed; cancellation regression asserts pending Goal is paused once.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/codex/commands.rs",
+          "lines": [34, 79],
+          "blob": "6585cc3ed0cd6d4214d23ac8618900509d08dcf5",
+          "excerpt": "        let (name, args) = split(&prompt.text).ok_or(AgentSessionError::Rejected)?;\n        let (method, params, message) = match name {\n            \"compact\" if args.is_empty() && self.manual_compactions == 0 => (\n                Some(\"thread/compact/start\"),\n                json!({\"threadId\":self.id}),\n                \"Context compaction requested.\".to_owned(),\n            ),\n            \"goal\" if self.client.goals() => goal(&self.id, args),\n            _ => return Err(AgentSessionError::Rejected),\n        };\n        let message_id = prompt\n            .client_message_id\n            .as_deref()\n            .ok_or(AgentSessionError::Rejected)?;\n        let entry = NativeItem {\n            key: format!(\"native:codex:control:{message_id}\"),\n            turn_id: self\n                .active_turn\n                .clone()\n                .or_else(|| self.last_anchor.clone()),\n            timestamp: discovery::timestamp(),\n            item: json!({\"type\":\"assistant_message\",\"messageId\":format!(\"control:{message_id}\"),\"text\":message}),\n        };\n        // Capacity validation precedes any native mutation, so rejection is definitive.\n        let mut notes = self.notes.clone();\n        notes.push(entry.clone())?;\n        let goal_wait = method == Some(\"thread/goal/set\")\n            && params[\"status\"] == \"active\"\n            && self.active_turn.is_none();\n        if let Some(method) = method {\n            self.transport\n                .as_mut()\n                .ok_or(AgentSessionError::Failed)?\n                .request(method, params)\n                .await?;\n        }\n        if name == \"compact\" {\n            self.manual_compactions += 1;\n        }\n        if name == \"goal\" && method.is_some() {\n            self.pending_goal_start = goal_wait;\n        }\n        self.notes = notes;\n        self.stream\n            .events\n            .push_back(AgentTurnEvent::Timeline(entry));",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/codex/commands.rs#L34-L79"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/codex/commands.rs",
+          "lines": [149, 177],
+          "blob": "6585cc3ed0cd6d4214d23ac8618900509d08dcf5",
+          "excerpt": "fn goal(thread: &str, args: &str) -> (Option<&'static str>, Value, String) {\n    match args.to_ascii_lowercase().as_str() {\n        \"\" => (\n            None,\n            Value::Null,\n            \"Usage: /goal <objective>|pause|resume|clear\".to_owned(),\n        ),\n        \"pause\" => (\n            Some(\"thread/goal/set\"),\n            json!({\"threadId\":thread,\"status\":\"paused\"}),\n            \"Goal paused.\".to_owned(),\n        ),\n        \"resume\" => (\n            Some(\"thread/goal/set\"),\n            json!({\"threadId\":thread,\"status\":\"active\"}),\n            \"Goal resumed.\".to_owned(),\n        ),\n        \"clear\" => (\n            Some(\"thread/goal/clear\"),\n            json!({\"threadId\":thread}),\n            \"Goal cleared.\".to_owned(),\n        ),\n        _ => (\n            Some(\"thread/goal/set\"),\n            json!({\"threadId\":thread,\"objective\":args,\"status\":\"active\"}),\n            format!(\"Goal set: {args}\"),\n        ),\n    }\n}",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/codex/commands.rs#L149-L177"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/codex/tests.rs",
+          "lines": [130, 150],
+          "blob": "0b57f8b2756618f338779da3703f989379d90abb",
+          "excerpt": "#[tokio::test]\nasync fn cancelling_a_pending_goal_pauses_native_work_once_and_releases_admission() {\n    let fixture = Fixture::new();\n    fixture.mode(\"workflows\");\n    let client = fixture.client();\n    let mut session = client.create_session(&fixture.spec()).await.unwrap();\n    let mut prompt = crate::protocol::prompt::AgentPrompt::text(\"/goal waiting fixture\");\n    prompt.client_message_id = Some(\"goal-request\".to_owned());\n    session.out_of_band(&prompt).await.unwrap();\n    assert!(session.pending_foreground());\n    session.cancel_pending().await.unwrap();\n    session.cancel_pending().await.unwrap();\n    assert!(!session.pending_foreground());\n    let requests = fixture.requests();\n    let goals: Vec<_> = requests\n        .iter()\n        .filter(|request| request[\"method\"] == \"thread/goal/set\")\n        .collect();\n    assert_eq!(goals.len(), 2);\n    assert_eq!(goals[1][\"params\"][\"status\"], \"paused\");\n    session.close().await.unwrap();",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/codex/tests.rs#L130-L150"
+        }
+      ],
+      "remaining": "Reuse native operations and regression; unify Goal UI/persistence/reconciliation with one continuation arbiter. This does not prove task16/17 acceptance or all crash cases; tests were inspected, not rerun."
+    },
+    {
+      "id": "M02",
+      "disposition": "main-covered",
+      "tasks": ["03", "05", "23"],
+      "behavior": "Existing AgentProfile materialization and toAgentConfigApply omit blank model/mode/thinking and empty feature values, preserving unspecified running-agent fields. No provider reassignment is sent.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/agent-profiles/internal/materialize-profile.ts",
+          "lines": [3, 29],
+          "blob": "00604321e5a21856f27498e02089e24e75e84427",
+          "excerpt": "/**\n * A profile with its blank fields resolved away. Storage keeps every field\n * optional and lets the user clear one to an empty string; applying has to know\n * the difference between \"set this\" and \"leave whatever is there alone\", and\n * every consumer would otherwise re-derive the same trim-and-drop rules.\n */\nexport interface MaterializedAgentProfile {\n  provider: string;\n  /** Empty when the profile names no model, meaning \"leave the model alone\". */\n  modelId: string;\n  modeId: string;\n  thinkingOptionId: string;\n  featureValues: Record<string, unknown>;\n}\n\nfunction trimmed(value: string | undefined): string {\n  return value?.trim() ?? \"\";\n}\n\nexport function materializeAgentProfile(profile: AgentProfile): MaterializedAgentProfile {\n  return {\n    provider: trimmed(profile.provider),\n    modelId: trimmed(profile.model),\n    modeId: trimmed(profile.modeId),\n    thinkingOptionId: trimmed(profile.thinkingOptionId),\n    featureValues: profile.featureValues ?? {},\n  };",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/agent-profiles/internal/materialize-profile.ts#L3-L29"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/agent-profiles/internal/materialize-profile.ts",
+          "lines": [45, 59],
+          "blob": "00604321e5a21856f27498e02089e24e75e84427",
+          "excerpt": "/**\n * The payload for a running agent. Omitted fields are left alone by the daemon,\n * so a profile that names no mode does not reset the agent's mode. Provider is\n * absent because a running agent cannot change the process it is.\n */\nexport function toAgentConfigApply(profile: MaterializedAgentProfile): AgentConfigApply {\n  return {\n    ...(profile.modelId ? { modelId: profile.modelId } : {}),\n    ...(profile.modeId ? { modeId: profile.modeId } : {}),\n    ...(profile.thinkingOptionId ? { thinkingOptionId: profile.thinkingOptionId } : {}),\n    ...(Object.keys(profile.featureValues).length > 0\n      ? { featureValues: profile.featureValues }\n      : {}),\n  };\n}",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/agent-profiles/internal/materialize-profile.ts#L45-L59"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/agent-profiles/internal/materialize-profile.test.ts",
+          "lines": [58, 92],
+          "blob": "d4c81d1ea7b4ba6b7d431c101de4d9a4a4c7bdd9",
+          "excerpt": "      toAgentConfigApply(\n        materializeAgentProfile(\n          profile({\n            model: \"claude-opus-5\",\n            modeId: \"plan\",\n            thinkingOptionId: \"think-hard\",\n            featureValues: { web_search: true },\n          }),\n        ),\n      ),\n    ).toEqual({\n      modelId: \"claude-opus-5\",\n      modeId: \"plan\",\n      thinkingOptionId: \"think-hard\",\n      featureValues: { web_search: true },\n    });\n  });\n\n  it(\"omits what the profile leaves alone rather than clearing it\", () => {\n    expect(toAgentConfigApply(materializeAgentProfile(profile({ modeId: \"plan\" })))).toEqual({\n      modeId: \"plan\",\n    });\n  });\n\n  it(\"omits an empty feature map so the agent keeps its own feature values\", () => {\n    expect(\n      toAgentConfigApply(materializeAgentProfile(profile({ featureValues: {} }))),\n    ).not.toHaveProperty(\"featureValues\");\n  });\n\n  it(\"never carries a provider, which a running agent cannot change\", () => {\n    expect(\n      toAgentConfigApply(materializeAgentProfile(profile({ model: \"claude-opus-5\" }))),\n    ).not.toHaveProperty(\"provider\");\n  });",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/agent-profiles/internal/materialize-profile.test.ts#L58-L92"
+        }
+      ],
+      "remaining": "Keep this store/patch contract; build normal settings navigation and separate OMP native presets. Do not introduce donor modelPresets storage. Mode reconciliation at lines32-42 currently clears unavailable mode in a materialized value, so unknown persisted-value acceptance needs caller-level review, not an unqualified coverage claim."
+    },
+    {
+      "id": "M03",
+      "disposition": "main-covered",
+      "tasks": ["02"],
+      "behavior": "providersSnapshot already shares host/cwd query keys, normalizes cwd, supports provider-filtered refresh requests, reuses content hashes/cache/query deduplication, rejects cancelled/older revisions, and invalidates command queries after refresh.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/data/providers-snapshot.ts",
+          "lines": [16, 43],
+          "blob": "08a23f6b3345a72ae5fbb188aa70c566946119c8",
+          "excerpt": "export const PROVIDERS_SNAPSHOT_QUERY_ROOT = \"providersSnapshot\";\n\nexport function normalizeProvidersSnapshotCwd(cwd?: string | null): string | null {\n  return normalizeWorkspacePath(cwd);\n}\n\nexport function providersSnapshotQueryRoot(serverId: string | null) {\n  return [PROVIDERS_SNAPSHOT_QUERY_ROOT, serverId] as const;\n}\n\nexport function providersSnapshotQueryKey(serverId: string | null, cwd?: string | null) {\n  const normalizedCwd = normalizeProvidersSnapshotCwd(cwd);\n  return normalizedCwd\n    ? ([PROVIDERS_SNAPSHOT_QUERY_ROOT, serverId, \"cwd\", normalizedCwd] as const)\n    : ([PROVIDERS_SNAPSHOT_QUERY_ROOT, serverId, \"home\"] as const);\n}\n\nexport function providersSnapshotRequestOptions(input: {\n  cwd?: string | null;\n  providers?: AgentProvider[];\n  ifNoneMatch?: string;\n}) {\n  const normalizedCwd = normalizeProvidersSnapshotCwd(input.cwd);\n  return {\n    ...(normalizedCwd ? { cwd: normalizedCwd } : {}),\n    ...(input.providers ? { providers: input.providers } : {}),\n    ...(input.ifNoneMatch ? { ifNoneMatch: input.ifNoneMatch } : {}),\n  };",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/data/providers-snapshot.ts#L16-L43"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/data/providers-snapshot.ts",
+          "lines": [118, 175],
+          "blob": "08a23f6b3345a72ae5fbb188aa70c566946119c8",
+          "excerpt": "  if (input.signal?.aborted) throw new CancelledError();\n  snapshot = await cache.materialize(input.serverId, snapshot);\n  const current = queryClient.getQueryData<Snapshot>(queryKey);\n  if (isNewerSnapshot(current, snapshot)) return current;\n  if (snapshot.compactSnapshot && snapshot.snapshotHash) {\n    await cache.write({\n      serverId: input.serverId,\n      cwd: input.cwd,\n      hash: snapshot.snapshotHash,\n      generatedAt: snapshot.generatedAt,\n      fetchedAt: snapshot.fetchedAt,\n      compactSnapshot: snapshot.compactSnapshot,\n      signal: input.signal,\n    });\n  }\n  if (input.signal?.aborted) throw new CancelledError();\n  const latest = queryClient.getQueryData<Snapshot>(queryKey);\n  if (isNewerSnapshot(latest, snapshot)) return latest;\n  replaceProviderSnapshotIcons(input.serverId, snapshot.entries);\n  return snapshot;\n}\n\nexport async function refreshAndApplyProvidersSnapshot(input: {\n  client: SnapshotClient & Pick<DaemonClient, \"refreshProvidersSnapshot\">;\n  queryClient: QueryClient;\n  serverId: string;\n  cwd: string | null;\n  providers?: AgentProvider[];\n  cache?: ProviderSnapshotCache;\n}) {\n  const result = await input.client.refreshProvidersSnapshot(\n    providersSnapshotRequestOptions(input),\n  );\n  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);\n  await input.queryClient.cancelQueries({ queryKey, exact: true });\n  const controller = new AbortController();\n  const deadline = Date.now() + 120_000;\n  while (true) {\n    const snapshot = await fetchProvidersSnapshot({ ...input, signal: controller.signal });\n    const pending = snapshot.refreshing?.some(\n      (provider) => !input.providers || input.providers.includes(provider),\n    );\n    input.queryClient.setQueryData(queryKey, snapshot);\n    if (!pending) break;\n    if (Date.now() >= deadline) throw new Error(\"Provider refresh timed out\");\n    await waitForRefresh(controller.signal);\n  }\n  void input.queryClient.invalidateQueries({\n    queryKey: agentCommandsQueryRoot(input.serverId),\n    exact: false,\n  });\n  if (isProvidersSnapshotHomeScope(input.cwd)) {\n    void input.queryClient.invalidateQueries({\n      queryKey: providersSnapshotQueryRoot(input.serverId),\n      exact: false,\n    });\n  }\n  return result;",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/data/providers-snapshot.ts#L118-L175"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "apps/mobile/src/data/providers-snapshot.ts",
+          "lines": [178, 185],
+          "blob": "08a23f6b3345a72ae5fbb188aa70c566946119c8",
+          "excerpt": "function isNewerSnapshot(current: Snapshot | undefined, incoming: Snapshot): current is Snapshot {\n  return (\n    current?.generation !== undefined &&\n    current.generation === incoming.generation &&\n    current.revision !== undefined &&\n    incoming.revision !== undefined &&\n    current.revision > incoming.revision\n  );",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/apps/mobile/src/data/providers-snapshot.ts#L178-L185"
+        }
+      ],
+      "remaining": "Task02 extends/reuses this entry point across all real consumers and verifies provider/host/cwd switching, unknown persisted selections and late responses. Existing scope/revision mechanisms do not establish every consumer acceptance case."
+    },
+    {
+      "id": "M04",
+      "disposition": "main-covered",
+      "tasks": ["01"],
+      "behavior": "The native OMP transport already starts the user-selected binary through sandbox::command with OMP_STATE, inherited provider environment, piped stdio, owned process group and bounded framing.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/omp/transport.rs",
+          "lines": [46, 78],
+          "blob": "1db79ca9e1fd570596192e65d776d66545ed4110",
+          "excerpt": "impl Transport {\n    /// Start the native RPC process in `cwd` with `args`, under `confinement` for an Agent\n    /// in a sandboxed Workspace.\n    /// Returns launch, confinement or missing-pipe failures.\n    pub(super) fn spawn(\n        client: &OmpClient,\n        cwd: &str,\n        args: &[String],\n        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,\n    ) -> Result<Self, AgentSessionError> {\n        let diagnostics = Diagnostics::new(LABEL);\n        let mut command = crate::local::sandbox::command(\n            &client.program,\n            confinement,\n            crate::local::sandbox::OMP_STATE,\n            &|name| client.environment.variable(name),\n        )?;\n        command\n            .args(args)\n            .current_dir(cwd)\n            .envs(client.environment.entries())\n            .stdin(Stdio::piped())\n            .stdout(Stdio::piped())\n            .stderr(Stdio::piped())\n            .kill_on_drop(true);\n        #[cfg(unix)]\n        command.process_group(0);\n        let mut child = command\n            .spawn()\n            .map_err(|error| diagnostics.spawn_error(&error))?;\n        let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;\n        let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;\n        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/omp/transport.rs#L46-L78"
+        }
+      ],
+      "remaining": "The AgentSession creation path still calls bridge::Session::open and daemon main still owns OmpAcp. Reuse native transport, replace internal ACP-facing Session, preserve sandbox on create/restore/reopen, and move CLI/distribution to standalone ait-omp-acp; do not call the whole boundary main-covered."
+    }
+  ],
+  "deletion_decisions": [
+    {
+      "id": "D01",
+      "disposition": "delete",
+      "tasks": ["01"],
+      "behavior": "Remove daemon OmpAcp CLI dispatch after standalone bridge cutover; do not leave aliases/shims or duplicate entry points.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "bins/daemon/src/main.rs",
+          "lines": [62, 80],
+          "blob": "4e444092182edaf3cacb4e93a2a87d68b90ce6f0",
+          "excerpt": "    if let Some(config::Command::OmpAcp { omp_bin }) = cli\n        .command\n        .take_if(|command| matches!(command, config::Command::OmpAcp { .. }))\n    {\n        let program = omp_bin\n            .or_else(|| std::env::var_os(\"AIT_SERVER_OMP_BIN\").map(Into::into))\n            .unwrap_or_else(|| \"omp\".into());\n        return provider::omp_acp::serve(program)\n            .await\n            .context(\"serve OMP ACP bridge\");\n    }\n    let directory = config::data_directory(&cli, |name| std::env::var_os(name))?;\n    match cli.command.take() {\n        Some(config::Command::Login(options)) => return device::login(&directory, options).await,\n        Some(config::Command::Logout) => return device::logout(&directory).await,\n        Some(config::Command::Status { json }) => return device::status(&directory, json),\n        Some(config::Command::OmpAcp { .. }) => {\n            unreachable!(\"OMP ACP handled before daemon configuration\")\n        }",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/bins/daemon/src/main.rs#L62-L80"
+        }
+      ]
+    },
+    {
+      "id": "D02",
+      "disposition": "delete",
+      "tasks": ["01"],
+      "behavior": "Remove the internal ACP-facing Session client when Ait creates/restores OMP sessions; retain ACP conversion/serve only for external bridge clients.",
+      "evidence": [
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/omp.rs",
+          "lines": [181, 188],
+          "blob": "c07c07a78d657923497dda8ea855189fc3b5723d",
+          "excerpt": "    }\n\n    async fn create_session(\n        &self,\n        spec: &AgentSessionSpec,\n    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {\n        Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)\n    }",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/omp.rs#L181-L188"
+        },
+        {
+          "commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+          "path": "crates/provider/src/local/omp/bridge.rs",
+          "lines": [46, 66],
+          "blob": "afa398c55787820f0c3082db7f2c7362fee4380e",
+          "excerpt": "/// ACP-facing host session; the same engine also serves external stdio clients.\n#[derive(Debug)]\npub(super) struct Session {\n    engine: engine::Engine,\n    events: VecDeque<AgentTurnEvent>,\n    sequence: u64,\n    id: String,\n}\n\nimpl Session {\n    /// Initialize the Ait bridge and create/resume one official OMP runtime through ACP.\n    /// Invalid configuration or native failures reject without replaying any user input.\n    pub(super) async fn open(\n        client: &OmpClient,\n        spec: &AgentSessionSpec,\n        handle: Option<&AgentPersistenceHandle>,\n    ) -> Result<Self, AgentSessionError> {\n        super::config::validate_spec(spec)?;\n        let mut session = Self {\n            engine: engine::Engine::new(client.clone()),\n            events: VecDeque::new(),",
+          "url": "https://github.com/ait-app/ait/blob/248a93cf6ab409c8151e3a45ef6803ad418d6305/crates/provider/src/local/omp/bridge.rs#L46-L66"
+        }
+      ]
+    },
+    {
+      "id": "D03",
+      "disposition": "delete",
+      "tasks": ["03", "23"],
+      "behavior": "Reject donor Ait-managed providers.<id>.modelPresets storage and rename/same-name synchronization rather than migrating a second Profile store; delete imported remnants if an implementation slice ever contains them. No unrelated main storage deletion.",
+      "evidence": [
+        {
+          "commit": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+          "path": "crates/provider/src/service/presets/ait.rs",
+          "lines": [1, 19],
+          "blob": "3da5616eeec1bd5d5c2dec3fd663e19e6aa05c82",
+          "excerpt": "//! Ait-managed presets for providers whose harness has no native preset store.\n//!\n//! The records live in daemon configuration under `providers.<id>.modelPresets`, so one provider\n//! can be rewritten without touching another and a daemon restart preserves the list.\n\nuse std::sync::Arc;\n\nuse domain::preset::validate_presets;\nuse model::storage::daemon_config::DaemonConfigStore;\nuse serde_json::json;\n\nuse crate::ports::preset::Preset;\n\n/// The daemon-config key that holds one provider's managed presets.\npub(crate) const FIELD: &str = \"modelPresets\";\n\n/// Preset store backed by daemon configuration.\n#[derive(Debug, Clone)]\npub(crate) struct AitPresets {",
+          "url": "https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/service/presets/ait.rs#L1-L19"
+        },
+        {
+          "commit": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+          "path": "crates/provider/src/service/presets/ait.rs",
+          "lines": [69, 82],
+          "blob": "3da5616eeec1bd5d5c2dec3fd663e19e6aa05c82",
+          "excerpt": "    /// Create or replace one preset, leaving other providers untouched.\n    ///\n    /// `original` names the preset being edited. When it differs from `preset.name` this is a\n    /// rename: the old entry is replaced in the same write, and a different preset already\n    /// using the new name rejects instead of being silently overwritten.\n    ///\n    /// # Errors\n    /// Returns a client-readable rejection before writing anything.\n    pub(crate) fn save(\n        &self,\n        provider: &str,\n        preset: &Preset,\n        original: Option<&str>,\n    ) -> Result<(), String> {",
+          "url": "https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/service/presets/ait.rs#L69-L82"
+        }
+      ]
+    },
+    {
+      "id": "D04",
+      "disposition": "delete",
+      "tasks": ["06", "07", "25", "32"],
+      "behavior": "Reject donor generic agent.native_action.request routing; migrate only actual feature consumers to typed ports/protocol/UI and remove generic gateway remnants at cutover.",
+      "evidence": [
+        {
+          "commit": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+          "path": "crates/provider/src/rpc/agent_execution/controls.rs",
+          "lines": [90, 110],
+          "blob": "1168690abb0a1e46201141e12786487f5c622f95",
+          "excerpt": "        &mut self,\n        method: &str,\n        params: Value,\n    ) -> Result<Value, ErrorCode> {\n        match method {\n            \"agent.native_action.request\" => {\n                only(&params, &[\"agentId\", \"action\", \"arguments\"])?;\n                let id = self.resolve(\n                    params[\"agentId\"]\n                        .as_str()\n                        .ok_or(ErrorCode::InvalidMessage)?,\n                )?;\n                self.active_workspace(&id)?;\n                let action = params[\"action\"].as_str().ok_or(ErrorCode::InvalidMessage)?;\n                let completion = self\n                    .manager\n                    .begin_action(&id, action, &params[\"arguments\"])\n                    .await?;\n                self.pending_response = Some(Box::pin(async move {\n                    let result = completion.await.map_err(|_| ErrorCode::AgentIo)?;\n                    Ok(",
+          "url": "https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/rpc/agent_execution/controls.rs#L90-L110"
+        }
+      ]
+    }
+  ],
+  "overlaps": [
+    {
+      "path": "CHANGELOG.md",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "b4e93ff9a08b750f9b1fd0dbf6c9f14e6ae5d5d5",
+      "base_blob": "f3f359d4e127182f2437bd0ce1b43db0cbff1889",
+      "main_hunks": ["@@ -2,0 +3,22 @@ # Ait changelog"],
+      "decision": "Main adds 0.2.6/0.2.7 release notes for task overview, templates, webhook and reliability/MCP fixes. Preserve those entries; donor release narrative is reference only, and each split records only its own feature.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/agent-stream/view.tsx",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "7a55f3827cc58b153edc6bec59ee12f406f70954",
+      "base_blob": "739d8d8539ee5212f5f62139c8de175d8e53e1e4",
+      "main_hunks": [
+        "@@ -0,0 +1,2 @@",
+        "@@ -21,3 +22,0 @@ import {",
+        "@@ -26 +24,0 @@ import type { ToastApi } from \"@/components/toast-host\";",
+        "@@ -28 +25,0 @@ import { ToolCallSheetProvider } from \"@/components/tool-call-sheet\";",
+        "@@ -42 +38,0 @@ import { useSessionStore } from \"@/stores/session-store\";",
+        "@@ -58,7 +54,2 @@ import type { DaemonClient } from \"@ait/client/internal/daemon-client\";",
+        "@@ -78,9 +69 @@ import { useTranslation } from \"react-i18next\";",
+        "@@ -88 +71 @@ import Animated, { FadeIn, FadeOut } from \"react-native-reanimated\";",
+        "@@ -100 +82,0 @@ import { returnToTimelineTail } from \"./timeline-tail-navigation\";",
+        "@@ -1339,291 +1320,0 @@ function ToolCallSlot({",
+        "@@ -1714,72 +1404,0 @@ const stylesheet = StyleSheet.create((theme) => ({"
+      ],
+      "decision": "Main extracts PermissionRequestCard into a shared component for task overview and removes the old local implementation/styles. Apply donor interaction/Timeline widgets to the new shared renderer/component; do not resurrect the deleted inline card or undo task-board reuse.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/components/schedules/schedule-form-sheet.tsx",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "b97644ed34f1e992db3da93f2b8608f21f8856d1",
+      "base_blob": "194656e31aed70553fa8b4a3481c6ac69949e1a7",
+      "main_hunks": [
+        "@@ -15 +15 @@ import {",
+        "@@ -31,0 +32 @@ import { CadenceEditor } from \"@/components/schedules/cadence-editor\";",
+        "@@ -67,0 +69,5 @@ import { useScheduleWorkspaces } from \"@/schedules/use-schedule-workspaces\";",
+        "@@ -414,0 +421 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v",
+        "@@ -705,0 +713,17 @@ function ScheduleFormContent({",
+        "@@ -719 +743 @@ function ScheduleFormContent({",
+        "@@ -728 +752 @@ function ScheduleFormContent({",
+        "@@ -740 +764 @@ function ScheduleFormContent({",
+        "@@ -744,0 +769 @@ function ScheduleFormContent({",
+        "@@ -753,0 +779 @@ function ScheduleFormContent({",
+        "@@ -755,0 +782,44 @@ function ScheduleFormContent({",
+        "@@ -760,3 +830,3 @@ function ScheduleFormContent({",
+        "@@ -768,6 +838,9 @@ function ScheduleFormContent({",
+        "@@ -783 +856 @@ function ScheduleFormContent({",
+        "@@ -786 +859,2 @@ function ScheduleFormContent({",
+        "@@ -800,0 +875 @@ interface ScheduleFormFieldsProps {",
+        "@@ -812,0 +888 @@ function ScheduleFormFields({",
+        "@@ -842 +918 @@ function ScheduleFormFields({",
+        "@@ -855,52 +931,16 @@ function ScheduleFormFields({",
+        "@@ -908,6 +948,14 @@ function ScheduleFormFields({",
+        "@@ -915,6 +963,4 @@ function ScheduleFormFields({",
+        "@@ -922,7 +967,0 @@ function ScheduleFormFields({",
+        "@@ -930,21 +969,4 @@ function ScheduleFormFields({",
+        "@@ -952 +974,8 @@ function ScheduleFormFields({",
+        "@@ -954,6 +983,5 @@ function ScheduleFormFields({",
+        "@@ -961 +989,9 @@ function ScheduleFormFields({",
+        "@@ -962,0 +999,48 @@ function ScheduleFormFields({",
+        "@@ -964 +1048 @@ function ScheduleFormFields({",
+        "@@ -1479 +1563 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1484 +1568 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1486,0 +1571,34 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1499 +1617 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1538 +1656,2 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1539,0 +1659 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1543 +1663 @@ const styles = StyleSheet.create((theme) => {",
+        "@@ -1544,0 +1665 @@ const styles = StyleSheet.create((theme) => {"
+      ],
+      "decision": "Main adds ScheduleTemplatePicker, template application/revision, content/execution sections and scroll reset. Task02 changes only catalog refresh access in this current form; preserve template values, stepped layout and timing/limits behavior.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/ar.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "4126e4172cf639526a0a78ff757d83336253723d",
+      "base_blob": "5ee665805ef95b1e0d7a3c9d3ebbc15947e656e9",
+      "main_hunks": [
+        "@@ -55,0 +56,53 @@ export const ar: TranslationResources = {",
+        "@@ -229,0 +283,22 @@ export const ar: TranslationResources = {",
+        "@@ -1804,0 +1880 @@ export const ar: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/en.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "b6f100c34c25482fec38fcf439807ba0d541ec33",
+      "base_blob": "3d8f44f29d461b7254cf797d8ddf822965bf879c",
+      "main_hunks": [
+        "@@ -1,0 +2,53 @@ export const en = {",
+        "@@ -232,0 +286,24 @@ export const en = {",
+        "@@ -2138,0 +2216,75 @@ export const en = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/es.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "dc9b8716cab87765bcfc08ef9f3abba8b6dbf2b3",
+      "base_blob": "f5368538018debc6279077530fd078e2c462d3f4",
+      "main_hunks": [
+        "@@ -19,0 +20,54 @@ export const es: TranslationResources = {",
+        "@@ -205,0 +260,24 @@ export const es: TranslationResources = {",
+        "@@ -1828,0 +1907 @@ export const es: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/fr.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "66745a92d3d9cc780b2acd09bcbeeb5a1b99240d",
+      "base_blob": "5871ff933fbcf2bc70e5ab6da7ac50b6f9b232a6",
+      "main_hunks": [
+        "@@ -19,0 +20,54 @@ export const fr: TranslationResources = {",
+        "@@ -208,0 +263,24 @@ export const fr: TranslationResources = {",
+        "@@ -1834,0 +1913 @@ export const fr: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/ja.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "20e1c38d84351a2c1f705c5b10ad7565fa1e06b4",
+      "base_blob": "5c5573ed7024c62ef4fa9387b84caf23d671a142",
+      "main_hunks": [
+        "@@ -4,0 +5,53 @@ export const ja: TranslationResources = {",
+        "@@ -186,0 +240,25 @@ export const ja: TranslationResources = {",
+        "@@ -1777,0 +1856,73 @@ export const ja: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/ko.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "c104c6c5b57786c3884af7edd9f6e4d74edd2ecc",
+      "base_blob": "07981a3c6f08e2af504850b971b7c70a1a37a7b4",
+      "main_hunks": [
+        "@@ -4,0 +5,53 @@ export const ko: TranslationResources = {",
+        "@@ -180,0 +234,24 @@ export const ko: TranslationResources = {",
+        "@@ -1764,0 +1842,74 @@ export const ko: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/pt-BR.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "1f7eaf472dff69a81ccec71e9e9d851f2938cb67",
+      "base_blob": "410555e02ec676dcf5b230aca1f4ea184d66213a",
+      "main_hunks": [
+        "@@ -19,0 +20,54 @@ export const ptBR: TranslationResources = {",
+        "@@ -205,0 +260,23 @@ export const ptBR: TranslationResources = {",
+        "@@ -1813,0 +1891 @@ export const ptBR: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/ru.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "94b6ac553d9a88790867965a73773ca50247bc81",
+      "base_blob": "b19be314839876e97e938b1d60e4ddb2fafee8d5",
+      "main_hunks": [
+        "@@ -41,0 +42,53 @@ export const ru: TranslationResources = {",
+        "@@ -230,0 +284,24 @@ export const ru: TranslationResources = {",
+        "@@ -1834,0 +1912 @@ export const ru: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/src/i18n/resources/zh-CN.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "f4d4714ad697da0ebd629e48fdc32b20a405406d",
+      "base_blob": "34a0b5ef4040697cfcdd70d6f754f0ad89dda829",
+      "main_hunks": [
+        "@@ -4,0 +5,53 @@ export const zhCN: TranslationResources = {",
+        "@@ -210,0 +264,20 @@ export const zhCN: TranslationResources = {",
+        "@@ -2067,0 +2141,69 @@ export const zhCN: TranslationResources = {"
+      ],
+      "decision": "Main adds taskBoard labels, Webhook setup/secret/error labels and schedule templates (localized or English fallback). Preserve these exact existing namespaces; add only slice-owned native-control/BTW/Goal strings, with no bot feature expansion.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "apps/mobile/test-stubs/lucide-react-native.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "8488e081edbd19458e83d58cd84f9ebf8725c130",
+      "base_blob": "4b9d83028957f5582aa88689bf97c5bc4e5e9f3e",
+      "main_hunks": [
+        "@@ -22,0 +23 @@ export const Blocks = StubIcon;",
+        "@@ -38,0 +40 @@ export const ClipboardPaste = StubIcon;",
+        "@@ -66,0 +69 @@ export const Layers = StubIcon;",
+        "@@ -91,0 +95 @@ export const QrCode = StubIcon;",
+        "@@ -104,0 +109 @@ export const Smartphone = StubIcon;",
+        "@@ -138,0 +144,6 @@ export const ZoomOut = StubIcon;"
+      ],
+      "decision": "Main adds BookOpen, Clock3, LayoutGrid, Radar, SlidersHorizontal, LayoutDashboard, GitFork and WifiOff stubs for templates/task overview. Keep them and add only icons actually used by new slices.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "bins/daemon/src/host/tests.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "426814dea7a2bc6d705936941eddb26dee7d3905",
+      "base_blob": "b586222b3317ffd17da7b13eec565e76ae1db9bc",
+      "main_hunks": [
+        "@@ -142 +142 @@ async fn each_composite_service_installs_all_its_methods_without_other_component"
+      ],
+      "decision": "Main raises published capability expectation 236→241 for five webhook methods. Preserve the five main methods and derive any additional split expectations from its actual registrations, not donor old totals.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "bins/daemon/tests/process/catalog.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "6769af0f69f7e1467d7197663715f73ea81bc865",
+      "base_blob": "d9e45ce44a245fac0fa583d9277514de59cbc595",
+      "main_hunks": [
+        "@@ -28,2 +28,2 @@ async fn production_installs_every_in_scope_method_without_placeholders() {",
+        "@@ -57 +57 @@ async fn production_installs_every_in_scope_method_without_placeholders() {"
+      ],
+      "decision": "Main expectations are published241/implemented240/catalog221 (formerly236/235/216). Keep current method sets and update only for owned split additions/removals; no stale donor counts.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "crates/api/src/capabilities/tests.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "3bb47f6f7e93b76643bb9b6571eb5a1563d061f4",
+      "base_blob": "86ec08163cc6953073425405aabfcd9121a5286f",
+      "main_hunks": [
+        "@@ -39 +39 @@ fn empty_host_keeps_only_builtin_api_methods() {",
+        "@@ -71 +71 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate()",
+        "@@ -76 +76 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate()"
+      ],
+      "decision": "Main registered count241 and implemented count240 include webhook registrations. Retain uniqueness/envelope tests and current registrations; compose split method deltas rather than copying donor totals.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "crates/api/src/connection.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "fdb700cce901056b0bf7ecdacea57bf0fa80d182",
+      "base_blob": "fbe9e78b5fdfe5f6526ebf70e4d4082008e4787b",
+      "main_hunks": [
+        "@@ -66 +66 @@ impl ConnectionSubscriptions {",
+        "@@ -70,0 +71,31 @@ pub(super) struct Peer<'a> {",
+        "@@ -82 +113,2 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>, guest: Option<G",
+        "@@ -97 +129 @@ pub(super) async fn serve_frames<K>(",
+        "@@ -167,5 +199,3 @@ pub(super) async fn serve_frames<K>(",
+        "@@ -177 +207 @@ pub(super) async fn serve_frames<K>(",
+        "@@ -214 +244 @@ async fn read(",
+        "@@ -215,0 +246,2 @@ async fn read(",
+        "@@ -239,0 +272 @@ async fn read(",
+        "@@ -271,0 +305 @@ async fn read(",
+        "@@ -360,0 +395,6 @@ async fn process_message(",
+        "@@ -454,0 +495,21 @@ async fn process_message(",
+        "@@ -572,0 +634,5 @@ async fn process_request("
+      ],
+      "decision": "Main adds Admitted::{Owner,Guest,Automation}, per-session revocation, Peer.automation, refusal of automation response/event/binary frames and automation request policy. Preserve these security checks while adapting provider control response routing; do not bypass restricted automation via a generic gateway.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "crates/api/src/connection/validation/tests.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "2c1e3da1cd6af9156638bd7ba03b2a830cdee63f",
+      "base_blob": "fd75f0d83d39cdf5521ba9f43fdbfcd08272ce06",
+      "main_hunks": [
+        "@@ -10 +10 @@ fn catalog_and_implemented_methods_keep_their_envelope_metadata() {"
+      ],
+      "decision": "Main implemented name expectation is240, not235. Keep envelope uniqueness coverage and use latest-main methods plus only the split-owned delta.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "crates/api/src/tests.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "53ec7a7948bcef787545ed2151c7a2e897886fcf",
+      "base_blob": "82f9b0271b81f308a1816d8ace106b5b3d893252",
+      "main_hunks": ["@@ -208 +208 @@ fn assert_default_capabilities(info: &ServerInfo) {"],
+      "decision": "Main assert_default_capabilities expects241. Preserve main default advertised methods when adding/removing split methods.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "crates/api/src/tests/placeholders.rs",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "e601ea68e7f57b5e2492cacddc77075df3c5f9d0",
+      "base_blob": "101d6ba4e1552aab24240c593592b689f2ffbf50",
+      "main_hunks": [
+        "@@ -17 +17 @@ async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_erro"
+      ],
+      "decision": "Main placeholder expectation221 replaces216. Preserve current canonical envelope/error coverage and derive split registration changes explicitly.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "docs/architecture/README.md",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "bf4917ae145b6602d302ca16908d8d4d88d3c427",
+      "base_blob": "2ed181e4421b3e8538400e598ebdeff7548e16cf",
+      "main_hunks": ["@@ -87,0 +88 @@ ## Provider 与工作区生命周期"],
+      "decision": "Main documents center-hosted Webhook via existing serve link and confined service session, ADR-233. Keep this paragraph; append only approved provider boundary changes and their own ADR.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "f2b66fd43748afbc2716cf97884f8cd7375f3858",
+      "base_blob": "a65dacca714ebe8c788392c7ece3812ed3116cc2",
+      "main_hunks": [
+        "@@ -15,0 +16 @@ ## Bot",
+        "@@ -23 +24 @@ ## Bot",
+        "@@ -25 +26 @@ ## Bot",
+        "@@ -58 +59 @@ ## Daemon 与协议",
+        "@@ -177,0 +179,2 @@ ## 客户端、连接与品牌",
+        "@@ -187 +190 @@ ## 客户端、连接与品牌",
+        "@@ -190 +193 @@ ## 客户端、连接与品牌",
+        "@@ -193 +196 @@ ## 客户端、连接与品牌",
+        "@@ -210 +213 @@ ## 客户端、连接与品牌",
+        "@@ -219 +222 @@ ## 客户端、连接与品牌"
+      ],
+      "decision": "Main occupies ADR-233 for Bot Webhook, ADR-234 for Play release and ADR-235 for TestFlight release and updates amendment links. Donor provider ADR233–235 collide: never copy donor index/numbers; allocate unused numbers after refetch and regenerate the complete index.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "package.json",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "db4b9dce2e628fbd22ac5c059a859f0b0debfbc1",
+      "base_blob": "9b5032616de723931939bb762943d80339758a68",
+      "main_hunks": ["@@ -3 +3 @@", "@@ -44 +44 @@"],
+      "decision": "Main version is0.2.7 and test:mobile-release includes scripts/xcode-cloud-release.test.mjs. Preserve version and existing scripts; S3 adds only package:daemon alias to existing release-assets daemon command.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "packages/client/src/protocol/connection.test.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "c69d77818f163eee15cff280ce240949f410f6ba",
+      "base_blob": "f654c95def367a994d48c0242823c5b02c0085cf",
+      "main_hunks": [
+        "@@ -240 +240,2 @@ describe(\"Rust v1 connection\", () => {",
+        "@@ -252,0 +254 @@ describe(\"Rust v1 connection\", () => {",
+        "@@ -264,0 +267 @@ describe(\"Rust v1 connection\", () => {",
+        "@@ -929 +932 @@ describe(\"Rust v1 connection\", () => {",
+        "@@ -931 +934 @@ describe(\"Rust v1 connection\", () => {"
+      ],
+      "decision": "Main adds workspaceBotWebhookSetup old/new-host assertions and method count226 (was224). Preserve webhook gating and test method deltas for split features without rolling back current counts.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "packages/client/src/protocol/messages.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "6f4154531b9ad84d575b86219f2fd088fe504f29",
+      "base_blob": "d847378a7577185404cb5af8012b6099e47fa265",
+      "main_hunks": ["@@ -3,0 +4 @@ import {", "@@ -114,0 +116,4 @@ export function serverInfo("],
+      "decision": "Main imports BOT_WEBHOOK_SETUP_METHODS and computes workspaceBotWebhookSetup only when workspace-bots-v2 and every required bot/webhook method exist. Preserve this gate; add separately typed capability downgrades for split features.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    },
+    {
+      "path": "packages/protocol/src/messages.ts",
+      "main_commit": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+      "main_blob": "ec6fb0d5edb721abbf770327ec137b033f94463b",
+      "base_blob": "53361e3d9e5a66fd22410a2c40227ffd654711b7",
+      "main_hunks": ["@@ -3478,0 +3479 @@ export const ServerInfoStatusPayloadSchema = z"],
+      "decision": "Main adds optional workspaceBotWebhookSetup boolean in ServerInfoStatusPayloadSchema. Preserve the optional field and compatibility; add only feature-owned typed message schemas, not generic native_action or a second preset store.",
+      "status": "source-reconciled; implementation merge not performed",
+      "whole_file_main_covered": false
+    }
+  ],
+  "deferred": "commands.json explicitly records54 deferred command entries; they are not delivered via builtin denial or generic forms.",
+  "verification": "Read-only source inspection at pinned main/donor; no Rust/frontend runtime tests were run for this documentation supplement."
+}

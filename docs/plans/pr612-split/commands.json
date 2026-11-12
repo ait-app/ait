@@ -1,0 +1,1762 @@
+[
+  {
+    "id": "C01",
+    "command": "/vibe",
+    "aliases": [],
+    "source_row": 2,
+    "tasks": ["33"],
+    "disposition": "rewrite",
+    "decision": "OMP-only public RPC/extension adapter; no generic orchestration form or TUI parity claim.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/vibe",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/vibe <任务> 提交 director 首轮；裸命令保留原生进入/退出语义。",
+      "Ait 实现要求": "主输入框；… 中最多提供填入命令的快捷项。原生确认后显示 Vibe on；退出中止 director 与 worker，不能要求先等待任务结束。",
+      "1141639b 文本路由（非逐功能验收）": "有专用 /vibe 路径；需修运行中退出和模式可见性，移除通用 Vibe 编排表单",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L316",
+      "本轮实现状态（不等同实机验收）": "真实 Tai 已验收：主输入任务、确认后模式提示、运行中退出；good 实现中取消、fast 独立校验完成"
+    }
+  },
+  {
+    "id": "C02",
+    "command": "/goal",
+    "aliases": [],
+    "source_row": 3,
+    "tasks": ["16", "18"],
+    "disposition": "rewrite",
+    "decision": "Native-first fixed strategy; confirmed native operations; absent budget/set capability stays unavailable.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/goal",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/goal <目标>；set/show/pause/resume/drop/budget 保留原义，已有目标不得被普通新提示悄悄覆盖。",
+      "Ait 实现要求": "创建在主输入框；Goal 状态卡放目标、预算、暂停/继续/结束等有语义的操作。裸命令在已有目标时打开管理，不等同统一开关。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L334",
+      "本轮实现状态（不等同实机验收）": "部分：公开 RPC 创建/查看/暂停/恢复/移除；budget 与已有目标 set 尚未实现"
+    }
+  },
+  {
+    "id": "C03",
+    "command": "/guided-goal",
+    "aliases": [],
+    "source_row": 4,
+    "tasks": ["20"],
+    "disposition": "rewrite",
+    "decision": "Main-conversation clarification; explicit user confirmation before Goal start.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/guided-goal",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/guided-goal [rough objective] 在主会话访谈，再由原生 goal create 建立目标。",
+      "Ait 实现要求": "主输入框灰色参数提示；访谈阶段可显示“澄清目标”，创建确认后才显示 Goal on。不得改成填写 objective/token_budget 的通用表单。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L360",
+      "本轮实现状态（不等同实机验收）": "真实 Tai 已验收访谈、用户确认、原生目标建立与暂停；预算等未支持操作另列"
+    }
+  },
+  {
+    "id": "C04",
+    "command": "/plan",
+    "aliases": [],
+    "source_row": 5,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/plan",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/plan [prompt] 启用/退出计划模式并按原生规则处理首轮。",
+      "Ait 实现要求": "复用现有计划模式控件和主输入框；显示 Plan 状态，与 Vibe/Goal 的互斥和暂停状态同步。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L284",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C05",
+    "command": "/loop",
+    "aliases": [],
+    "source_row": 6,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/loop",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/loop [count|duration] [--while|--until '<cmd>'] [prompt]；保留循环、挂起和退出语义。",
+      "Ait 实现要求": "主输入框；紧凑显示剩余轮次/时间或暂停状态。循环条件是原生命令参数，不转换成后台定时任务，也不新增整块常驻面板。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L372",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C06",
+    "command": "/queue",
+    "aliases": [],
+    "source_row": 7,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/queue",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/queue <message> 在当前任务让出后发送。",
+      "Ait 实现要求": "主输入框及现有待发送队列；可查看/撤回，保留附件和原始文本，不能当作普通立即发送。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L399",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C07",
+    "command": "/btw",
+    "aliases": [],
+    "source_row": 8,
+    "tasks": ["09", "14", "15"],
+    "disposition": "rewrite",
+    "decision": "Fixed persisted context, isolated side execution, follow-ups and transfer to a new nonrunning draft; donor native branch promotion is not retained.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/btw",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/btw [question] 提问；裸命令查看 BTW 历史。",
+      "Ait 实现要求": "默认隐藏；主输入框启动 BTW。胶囊内支持新问题、Follow up、Branch 和结束。收起保留草稿；结束单独取消并移除窗口/胶囊，重载不重开；原生历史保留。",
+      "1141639b 文本路由（非逐功能验收）": "原生 BTW RPC；单轮完成问答经公开扩展创建并切换分支，原日志不变。多轮、忙碌或 leaf 变化拒绝；不内置 SDK/Bun。",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L490",
+      "本轮实现状态（不等同实机验收）": "18.17.0 外部实装与 390px GUI 通过（本地模拟模型 API）；追问、分支、结束及重启恢复已验收，非 Tai 推理。"
+    }
+  },
+  {
+    "id": "C08",
+    "command": "/tan",
+    "aliases": [],
+    "source_row": 9,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/tan",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/tan <work> 启动旁支工作 Agent。",
+      "Ait 实现要求": "主输入框；观测、追问和取消进入统一子 Agent 列表。不能误作只读 BTW 或要求先手工建立 worker。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L506",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C09",
+    "command": "/omfg",
+    "aliases": [],
+    "source_row": 10,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/omfg",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/omfg <complaint> 根据抱怨形成原生 TTSR 规则。",
+      "Ait 实现要求": "主输入框；保留原生生成/应用流程和结果反馈，不仅把文本当普通问答。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L519",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C10",
+    "command": "/cleanse",
+    "aliases": [],
+    "source_row": 11,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/cleanse",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/cleanse [request] [--all] 诊断并通过原生子 Agent 处理项目问题。",
+      "Ait 实现要求": "主输入框；进度和子 Agent 复用既有组件。不要求用户填写内部 agent id。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L532",
+      "本轮实现状态（不等同实机验收）": "未完成：RPC 目录无可执行 handler，当前明确拒绝；不是已交付能力"
+    }
+  },
+  {
+    "id": "C11",
+    "command": "/ratchet",
+    "aliases": [],
+    "source_row": 12,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/ratchet",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/ratchet [flow and goal] 启动原生迭代评估。",
+      "Ait 实现要求": "主输入框；保留工具能力检查、执行进度及停止路径。不能改成一个无目标的 on/off 开关。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L691",
+      "本轮实现状态（不等同实机验收）": "保留实际原生 handler；尚未完成所有参数和完整流程验收"
+    }
+  },
+  {
+    "id": "C12",
+    "command": "/force",
+    "aliases": ["/force:"],
+    "source_row": 13,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "主输入框",
+      "命令": "/force",
+      "别名": "/force:",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/force <tool-name> [prompt]，含 /force: 别名；仅约束下一轮工具选择。",
+      "Ait 实现要求": "主输入框提供当前真实工具候选，等待执行时显示一次性约束，消费后清除；不把它当永久工具权限设置。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L43",
+      "本轮实现状态（不等同实机验收）": "保留实际原生 handler；尚未完成所有参数和完整流程验收"
+    }
+  },
+  {
+    "id": "C13",
+    "command": "/model",
+    "aliases": ["/models"],
+    "source_row": 14,
+    "tasks": ["02", "05"],
+    "disposition": "rewrite",
+    "decision": "Existing model selector and native-confirmed configuration only; builtin text blocked.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/model",
+      "别名": "/models",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/model、/models 选择会话模型。",
+      "Ait 实现要求": "模型选择仅由 Ait 现有模型选择器完成。/model、/models 不出现在 …、斜杠补全或快捷命令中；手输拒绝，不自动跳转，不发送模型，不允许绕过统一配置事务。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L412",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C14",
+    "command": "/switch",
+    "aliases": [],
+    "source_row": 15,
+    "tasks": ["05", "21"],
+    "disposition": "rewrite",
+    "decision": "Model/role resolution uses typed configuration; no text bypass.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/switch",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/switch [model] 支持原生模型解析、角色别名、thinking 后缀。",
+      "Ait 实现要求": "仅通过 Ait 模型选择器和统一配置事务切换；支持需要的模型、角色别名解析和 thinking 语义，并同步实际生效状态。屏蔽 /switch。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L456",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C15",
+    "command": "/modelpreset",
+    "aliases": [],
+    "source_row": 16,
+    "tasks": ["23"],
+    "disposition": "rewrite",
+    "decision": "OMP native CRUD/apply only; separate from existing AgentProfile, no rename or name-based sync.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/modelpreset",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/modelpreset list/save/switch/delete。",
+      "Ait 实现要求": "齿轮后的统一预设页完成列表、保存、应用、删除，角色→模型→思考等级表单，保留来源权限。屏蔽 /modelpreset 全部子命令，不要求手写配置。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L800",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C16",
+    "command": "/effort",
+    "aliases": [],
+    "source_row": 17,
+    "tasks": ["05", "21"],
+    "disposition": "rewrite",
+    "decision": "Model-supported reasoning values and native confirmation.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/effort",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/effort [level] 选择模型支持的思考档位。",
+      "Ait 实现要求": "现有思考等级控件按模型能力给候选并同步生效值。屏蔽 /effort。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L850",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C17",
+    "command": "/advisor",
+    "aliases": [],
+    "source_row": 18,
+    "tasks": ["21", "22"],
+    "disposition": "rewrite",
+    "decision": "Dynamic role data; Claude advisor runtime-gated, no universal OMP role schema.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/advisor",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off 切换；status 查看；dump 输出；configure 配置模型。",
+      "Ait 实现要求": "启停用会话开关，模型配置用齿轮角色页，状态/历史在该功能上下文查看；未配置模型不能显示运行中。屏蔽 /advisor 命令入口，底层原生能力供 GUI 使用。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L62",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C18",
+    "command": "/prewalk",
+    "aliases": [],
+    "source_row": 19,
+    "tasks": ["21"],
+    "disposition": "rewrite",
+    "decision": "Only publicly supported dynamic provider role/handoff semantics; no invented fixed cross-provider roles.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/prewalk",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "[into]、restart [from] [into]、off 是一次性模型交接。",
+      "Ait 实现要求": "模型设置页选择来源/目标模型及思考等级，明确武装、重启、取消的一次性交接语义。只用 Ait 控件，屏蔽 /prewalk 参数命令旁路。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L725",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C19",
+    "command": "/fast",
+    "aliases": [],
+    "source_row": 20,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/fast",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off/status；ultra 是额外服务档位。",
+      "Ait 实现要求": "复用 Ait 速度/服务档位控件，能力允许时展示 off/priority/ultra；持续显示实际选中状态。屏蔽 /fast 配置命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L507",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C20",
+    "command": "/slow",
+    "aliases": [],
+    "source_row": 21,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/slow",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off/status；原生含不同 Provider 的低优先级语义。",
+      "Ait 实现要求": "纳入同一速度/服务档位控件，保留不同 Provider 的低优先级含义，避免与 fast 矛盾。屏蔽 /slow 配置命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L535",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C21",
+    "command": "/skillful",
+    "aliases": [],
+    "source_row": 22,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/skillful",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off/status 控制本会话是否向模型列出可用 skills。",
+      "Ait 实现要求": "低频会话选项中的开关，控制是否向模型列出 skills，不等同技能安装。屏蔽 /skillful 命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L563",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C22",
+    "command": "/extended-context",
+    "aliases": [],
+    "source_row": 23,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/extended-context",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off/status 控制扩展上下文设置。",
+      "Ait 实现要求": "上下文设置中的开关，说明真实原生作用域与费用影响，不将持久设置误标为会话局部。屏蔽 /extended-context 命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L619",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C23",
+    "command": "/computer",
+    "aliases": [],
+    "source_row": 24,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/computer",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "裸命令/on/off/status 控制本会话 computer-use prelude。",
+      "Ait 实现要求": "会话能力开关，失败回滚并说明不可用原因，不替代权限控件。屏蔽 /computer 配置命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L646",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C24",
+    "command": "/browser",
+    "aliases": [],
+    "source_row": 25,
+    "tasks": ["05"],
+    "disposition": "rewrite",
+    "decision": "Existing capability-specific controls reflect confirmed native values and partial success; builtin text bypass blocked.",
+    "source": {
+      "分类": "开关与配置",
+      "命令": "/browser",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "headless/visible 或裸命令切换浏览器可见模式。",
+      "Ait 实现要求": "浏览器能力设置的 headless/visible 二选一，区别于工具启用与打开浏览器。屏蔽 /browser 配置命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L504",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C25",
+    "command": "/settings",
+    "aliases": [],
+    "source_row": 26,
+    "tasks": ["03", "05"],
+    "disposition": "rewrite",
+    "decision": "Ordinary settings navigation and typed confirmed fields; no generic native_action gateway.",
+    "source": {
+      "分类": "Provider 设置",
+      "命令": "/settings",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "打开 OMP 设置。",
+      "Ait 实现要求": "齿轮直接进入 Provider 设置，使用常规表单；屏蔽 /settings，不提供输入后跳转 GUI 的额外入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L257",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C26",
+    "command": "/setup",
+    "aliases": ["/providers"],
+    "source_row": 27,
+    "tasks": ["32"],
+    "disposition": "rewrite",
+    "decision": "Native provider/account objects in settings; protect credentials, no internal IDs as inputs.",
+    "source": {
+      "分类": "Provider 设置",
+      "命令": "/setup",
+      "别名": "/providers",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/setup [providers]，别名 /providers，管理 Provider 接入。",
+      "Ait 实现要求": "齿轮内 Provider 接入页完成配置，保留主机、cwd；屏蔽 /setup 和 /providers。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L266",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C27",
+    "command": "/agents",
+    "aliases": [],
+    "source_row": 28,
+    "tasks": ["21", "24"],
+    "disposition": "rewrite",
+    "decision": "Keep dynamic role configuration distinct from observed running children.",
+    "source": {
+      "分类": "模型与角色",
+      "命令": "/agents",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "配置原生 agent 的模型、prewalk、advisor。",
+      "Ait 实现要求": "齿轮内设置原生 Agent 模型、prewalk 和 advisor；与运行中子 Agent 列表分开。屏蔽 /agents 命令入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L580",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C28",
+    "command": "/login",
+    "aliases": [],
+    "source_row": 29,
+    "tasks": ["32"],
+    "disposition": "rewrite",
+    "decision": "Labeled native account selection and native auth flow with credential protection.",
+    "source": {
+      "分类": "Provider 设置",
+      "命令": "/login",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "选择原生账号提供方，按原生 OAuth 流程登录。",
+      "Ait 实现要求": "账号页选择提供方并完成原生 OAuth，无内部 providerId 输入；屏蔽 /login。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L680",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C29",
+    "command": "/logout",
+    "aliases": [],
+    "source_row": 30,
+    "tasks": ["32"],
+    "disposition": "rewrite",
+    "decision": "Target actual account object; identity-bound usage invalidation.",
+    "source": {
+      "分类": "Provider 设置",
+      "命令": "/logout",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "退出选定的原生账号。",
+      "Ait 实现要求": "账号列表的退出操作，明确对象与结果；屏蔽 /logout，不暴露 credentialId。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L733",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C30",
+    "command": "/extensions",
+    "aliases": ["/status"],
+    "source_row": 31,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "查询与状态",
+      "命令": "/extensions",
+      "别名": "/status",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "别名 /status；原生是 Extension Control Center，不是 token 统计。",
+      "Ait 实现要求": "… 中单一“OMP 状态”点击生成对应扩展状态卡，进一步管理进入齿轮；/extensions、/status 作为同一原生状态来源去重，不能冒充 token 统计。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L570",
+      "本轮实现状态（不等同实机验收）": "未完成：当前屏蔽；扩展状态、仪表盘与远程 trace 尚需适配"
+    }
+  },
+  {
+    "id": "C31",
+    "command": "/session",
+    "aliases": [],
+    "source_row": 32,
+    "tasks": ["04"],
+    "disposition": "rewrite",
+    "decision": "Existing typed readonly run/Timeline usage only; full native dashboard is deferred.",
+    "source": {
+      "分类": "混合子命令",
+      "命令": "/session",
+      "别名": "",
+      "入口策略": "按子操作区分原生查询/任务与 GUI 管理",
+      "原生语义": "info 查看本会话信息；delete 删除；pin 绑定 OAuth 账号。",
+      "Ait 实现要求": "info 可点击或输入后生成会话信息卡；delete 命令入口屏蔽，走会话删除；pin 是账号绑定，命令入口屏蔽，走账号选择，不与置顶混淆。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L245",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C32",
+    "command": "/usage",
+    "aliases": [],
+    "source_row": 33,
+    "tasks": ["04", "32"],
+    "disposition": "rewrite",
+    "decision": "Existing AgentUsage/account statistics; unknown is not zero and cumulative snapshots are not summed.",
+    "source": {
+      "分类": "查询与状态",
+      "命令": "/usage",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "show 查询额度/用量；reset 消耗可用的额度重置机会。",
+      "Ait 实现要求": "show/裸命令生成用量卡，可从 … 单击执行；reset 不提供普通查询入口，改用卡内账号操作并说明会消耗原生重置机会。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L399",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C33",
+    "command": "/stats",
+    "aliases": [],
+    "source_row": 34,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "查询与状态",
+      "命令": "/stats",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "启动原生统计仪表盘，可指定 host/port。",
+      "Ait 实现要求": "… 提供独立“原生统计仪表盘”入口，打开客户端可达的原生 Web 页面。当前会话统计卡不冒充仪表盘；host/port 不是日常用户表单。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L446",
+      "本轮实现状态（不等同实机验收）": "未完成：当前屏蔽；扩展状态、仪表盘与远程 trace 尚需适配"
+    }
+  },
+  {
+    "id": "C34",
+    "command": "/trace",
+    "aliases": [],
+    "source_row": 35,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Not delivered by this split: incomplete native workflow or full native stats/status dashboard. Preserve explicit unavailable handling and plugin-source exceptions.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/trace",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "打开当前会话在统计仪表盘中的 trace。",
+      "Ait 实现要求": "诊断/统计中的深链接，保留会话身份；可在结果卡中提供链接，不输出一段未处理的 localhost 地址。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L203",
+      "本轮实现状态（不等同实机验收）": "未完成：当前屏蔽；扩展状态、仪表盘与远程 trace 尚需适配"
+    }
+  },
+  {
+    "id": "C35",
+    "command": "/tools",
+    "aliases": [],
+    "source_row": 36,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/tools",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "查询当前 Agent 实际可用工具。",
+      "Ait 实现要求": "… 点击生成工具列表卡，细节折叠；不是工具开关编辑器。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L522",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C36",
+    "command": "/context",
+    "aliases": [],
+    "source_row": 37,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/context",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "只读上下文快照及估算 token。",
+      "Ait 实现要求": "… 点击生成摘要卡，可展开内容或查看详情；注明快照时间和估算，不打断当前任务或改动草稿。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L551",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C37",
+    "command": "/jobs",
+    "aliases": [],
+    "source_row": 38,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/jobs",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "查看/full 查看完整后台作业；kill 取消指定作业或全部。",
+      "Ait 实现要求": "查询给状态卡并链接统一活动列表；取消放目标作业行，按对象名称操作，不要求手填 id。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L323",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C38",
+    "command": "/todo",
+    "aliases": [],
+    "source_row": 39,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/todo",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "查看及 edit/copy/expand/collapse/export/import/append/start/done/drop/rm。",
+      "Ait 实现要求": "复用任务列表：直接编辑、勾选、放弃、删除、折叠；导入导出使用文件选择。禁止把 edit 转成 GUI 内 Markdown 配置编辑。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L207",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C39",
+    "command": "/dirs",
+    "aliases": [],
+    "source_row": 40,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/dirs",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "查询本会话多根目录。",
+      "Ait 实现要求": "… 点击显示目录卡或定位工作区目录列表；显示真实宿主路径和作用域。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L883",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C40",
+    "command": "/changelog",
+    "aliases": [],
+    "source_row": 41,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/changelog",
+      "别名": "",
+      "入口策略": "原生查询/操作入口；点击结果卡或明确的目标视图",
+      "原生语义": "默认/last [N]/full 查看 OMP 更新记录。",
+      "Ait 实现要求": "Provider 帮助/版本入口或命令结果卡；不常驻输入工具栏，也不与 Ait 更新记录混淆。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L484",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C41",
+    "command": "/hotkeys",
+    "aliases": [],
+    "source_row": 42,
+    "tasks": ["06"],
+    "disposition": "exclude",
+    "decision": "Terminal-only UI/exit command is blocked, never forwarded to the model or reinterpreted as Ait navigation; no replacement feature.",
+    "source": {
+      "分类": "终端专属",
+      "命令": "/hotkeys",
+      "别名": "",
+      "入口策略": "终端专属命令屏蔽；不另造替代功能",
+      "原生语义": "查询快捷键。",
+      "Ait 实现要求": "屏蔽 OMP 终端快捷键命令及内容，不能列成 Ait 可操作按键。Ait 快捷键只从自身既有帮助入口查看，不借此命令跳转。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L513",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C42",
+    "command": "/hub",
+    "aliases": ["/subagents"],
+    "source_row": 43,
+    "tasks": ["24"],
+    "disposition": "rewrite",
+    "decision": "Guide/stop observed native children with parent validation; not arbitrary worker ID control.",
+    "source": {
+      "分类": "查询和对象操作",
+      "命令": "/hub",
+      "别名": "/subagents",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/hub，别名 /subagents，观察运行中和已完成子 Agent。",
+      "Ait 实现要求": "打开统一子 Agent 列表；详情、指导、取消在对象上下文里，不另外生成一份 Vibe worker 管理器。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L611",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C43",
+    "command": "/plan-review",
+    "aliases": [],
+    "source_row": 44,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "对象上下文",
+      "命令": "/plan-review",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "重新打开当前计划的审阅流程。",
+      "Ait 实现要求": "当前 Plan 卡的审阅操作，进入既有计划审阅视图；屏蔽用于打开 TUI 审阅层的命令入口，保留原生审阅业务语义。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L305",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C44",
+    "command": "/new",
+    "aliases": [],
+    "source_row": 45,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/new",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "新建原生会话。",
+      "Ait 实现要求": "屏蔽 /new，复用 Ait 新会话入口，维护原生与宿主身份，不在 … 复制另一条创建路径。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L176",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C45",
+    "command": "/clear",
+    "aliases": [],
+    "source_row": 46,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/clear",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "清空当前会话上下文，保留会话身份。",
+      "Ait 实现要求": "屏蔽 /clear；会话菜单提供清空上下文，保留原生会话身份，不复用归档并新建草稿。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L207",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C46",
+    "command": "/delete",
+    "aliases": [],
+    "source_row": 47,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/delete",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "删除当前原生会话并进入新会话。",
+      "Ait 实现要求": "屏蔽 /delete；会话对象删除明确范围与确认，不能只归档却声称原生日志已删除。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L218",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C47",
+    "command": "/fresh",
+    "aliases": [],
+    "source_row": 48,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/fresh",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "仅重置 Provider 流状态，保留本地会话记录。",
+      "Ait 实现要求": "会话恢复/诊断操作重置 Provider 流，保留记录；屏蔽 /fresh 快捷管理命令，不冒充清空上下文。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L185",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C48",
+    "command": "/compact",
+    "aliases": [],
+    "source_row": 49,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/compact",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "默认压缩，支持 soft/remote/snapcompact；按原生规则接受 focus，snapcompact 不接受 focus。",
+      "Ait 实现要求": "无参数点击直接执行并在会话流显示进度/结果；附加说明仍可在主输入框输入。自动压缩开关与这次手动压缩分开。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L227",
+      "本轮实现状态（不等同实机验收）": "保留实际原生 handler；尚未完成所有参数和完整流程验收"
+    }
+  },
+  {
+    "id": "C49",
+    "command": "/shake",
+    "aliases": [],
+    "source_row": 50,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/shake",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "elide/images/thinking 移除对应重型上下文内容。",
+      "Ait 实现要求": "上下文菜单中的明确选择，显示将影响哪类内容；不能做成含义不清的“清理”按钮或冒充 compact。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L321",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C50",
+    "command": "/handoff",
+    "aliases": [],
+    "source_row": 51,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/handoff",
+      "别名": "",
+      "入口策略": "保留主输入框命令；不创建通用参数表单",
+      "原生语义": "/handoff [focus instructions] 生成交接文档并在原会话压缩。",
+      "Ait 实现要求": "保留主输入框附加说明；无参数快捷点击可执行，文档和完成状态进会话流；不能自动新建另一个 Agent 替换原生含义。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L350",
+      "本轮实现状态（不等同实机验收）": "保留实际原生 handler；尚未完成所有参数和完整流程验收"
+    }
+  },
+  {
+    "id": "C51",
+    "command": "/resume",
+    "aliases": [],
+    "source_row": 52,
+    "tasks": ["25"],
+    "disposition": "rewrite",
+    "decision": "Existing native history identity selection and restoration; no log rewriting or duplicate writer.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/resume",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "恢复指定会话，可含原生跨 Provider 来源参数。",
+      "Ait 实现要求": "复用会话列表/导入选择器；列表可读、归属明确，切换时处理活动任务和草稿，不能让用户粘贴内部 session id。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L424",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C52",
+    "command": "/pin",
+    "aliases": [],
+    "source_row": 53,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/pin",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "置顶指定或当前会话。",
+      "Ait 实现要求": "会话列表中的置顶操作，立即反映原生确认状态；与 /session pin 绑定账号不同。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L460",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C53",
+    "command": "/unpin",
+    "aliases": [],
+    "source_row": 54,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/unpin",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "取消置顶指定或当前会话。",
+      "Ait 实现要求": "与置顶同一控件；本版本原生已注册，Ait 的固定命令表遗漏，必须补入语义映射。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "官方已注册，Ait EXPORTED 缺失；原生目录返回此 builtin 时被拒绝",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L475",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C54",
+    "command": "/rename",
+    "aliases": [],
+    "source_row": 55,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/rename",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "有 title 则改名；无 title 时原生可调用模型生成名称。",
+      "Ait 实现要求": "屏蔽 /rename；标题处编辑与自动命名分别提供，后者可能调用模型，保留原生语义。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L679",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C55",
+    "command": "/move",
+    "aliases": [],
+    "source_row": 56,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/move",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "把会话迁移到另一个目录。",
+      "Ait 实现要求": "工作区/会话菜单选择目标目录并展示影响；同步 Ait cwd 与原生身份，不能仅改进程 cwd。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L757",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C56",
+    "command": "/wt",
+    "aliases": ["/worktree"],
+    "source_row": 57,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/wt",
+      "别名": "/worktree",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/wt、/worktree 把会话及工作区变更迁移到新 worktree。",
+      "Ait 实现要求": "复用工作区功能，展示目标分支和迁移状态；不是只创建空 worktree。Vibe 等原生互斥规则必须保留。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L787",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C57",
+    "command": "/branch",
+    "aliases": ["/rewind"],
+    "source_row": 58,
+    "tasks": ["25"],
+    "disposition": "rewrite",
+    "decision": "Native history object targeting only where supported; unrelated BTW transfer must create a nonrunning draft.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/branch",
+      "别名": "/rewind",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/branch、/rewind 回到选定消息，旧路径保留为分支。",
+      "Ait 实现要求": "消息行/会话树上的分支操作，按消息内容选择；不要将内部 entryId 暴露为输入项。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L621",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C58",
+    "command": "/fork",
+    "aliases": [],
+    "source_row": 59,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/fork",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "复制会话；pane/window/tab 是终端展示变体。",
+      "Ait 实现要求": "屏蔽 /fork 命令入口；会话对象上的复制功能产生 Ait 可见的新会话；pane/window/tab 终端专属变体全部屏蔽，不新增终端布局功能。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L631",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C59",
+    "command": "/tree",
+    "aliases": [],
+    "source_row": 60,
+    "tasks": ["25"],
+    "disposition": "rewrite",
+    "decision": "Readable history object selection; native identity and projection committed together.",
+    "source": {
+      "分类": "会话和上下文",
+      "命令": "/tree",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "切换会话树分支。",
+      "Ait 实现要求": "会话历史中的可读树选择，显示当前节点；切换后同步宿主会话状态，不用原始 JSON 树代替界面。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L671",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C60",
+    "command": "/quit",
+    "aliases": ["/q"],
+    "source_row": 61,
+    "tasks": ["06"],
+    "disposition": "exclude",
+    "decision": "Terminal-only UI/exit command is blocked, never forwarded to the model or reinterpreted as Ait navigation; no replacement feature.",
+    "source": {
+      "分类": "终端专属",
+      "命令": "/quit",
+      "别名": "/q",
+      "入口策略": "终端专属命令屏蔽；不另造替代功能",
+      "原生语义": "/quit、/q 退出 OMP 应用。",
+      "Ait 实现要求": "屏蔽 /quit、/q，不把退出 OMP TUI 重新解释为退出 Ait、关闭标签或归档。会话结束和原生进程回收由 Ait 既有生命周期操作管理。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L131",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C61",
+    "command": "/exit",
+    "aliases": [],
+    "source_row": 62,
+    "tasks": ["06"],
+    "disposition": "exclude",
+    "decision": "Terminal-only UI/exit command is blocked, never forwarded to the model or reinterpreted as Ait navigation; no replacement feature.",
+    "source": {
+      "分类": "终端专属",
+      "命令": "/exit",
+      "别名": "",
+      "入口策略": "终端专属命令屏蔽；不另造替代功能",
+      "原生语义": "退出 OMP 应用，与 /quit 共用原生退出处理。",
+      "Ait 实现要求": "屏蔽 /exit，不重新解释为关闭 Ait 或归档当前会话。Ait 自有会话操作负责生命周期。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L892",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C62",
+    "command": "/restart",
+    "aliases": [],
+    "source_row": 63,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/restart",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "用相同启动参数重启 OMP 并恢复会话。",
+      "Ait 实现要求": "屏蔽 /restart；会话诊断操作由 Ait 管理重启外部 OMP、恢复句柄与状态，不制造第二个 writer。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L897",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C63",
+    "command": "/mcp",
+    "aliases": [],
+    "source_row": 64,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/mcp",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "add/list/remove/test/reauth/unauth/enable/disable/smithery-search/login/logout/reconnect/reload/resources/prompts/notifications/help。",
+      "Ait 实现要求": "齿轮内 OMP MCP 管理；服务器选择、scope、开关、连接测试和授权是具体控件。只读查询可回会话卡，不用命令参数总表或原始配置替代管理。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L756",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C64",
+    "command": "/skills",
+    "aliases": [],
+    "source_row": 65,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/skills",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "search/install/installed/update，含项目/全局作用域。",
+      "Ait 实现要求": "使用现有技能管理界面承载 OMP 来源，保留原生存储和 scope；调用 skill 的动态斜杠命令仍在主输入框。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-skills.ts#L65",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C65",
+    "command": "/marketplace",
+    "aliases": [],
+    "source_row": 66,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/marketplace",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "add/remove/update/list/discover/install/uninstall/installed/upgrade/help。",
+      "Ait 实现要求": "齿轮内扩展来源/插件管理，搜索、安装、更新、卸载为对象操作；原生插件管理不等于打包或安装 OMP 运行时。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-marketplace.ts#L45",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C66",
+    "command": "/plugins",
+    "aliases": ["/plugin"],
+    "source_row": 67,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/plugins",
+      "别名": "/plugin",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/plugins、/plugin，list/enable/disable。",
+      "Ait 实现要求": "同一扩展管理界面中的列表和带状态开关；按真实对象操作，不建第二份插件面板。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-marketplace.ts#L425",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C67",
+    "command": "/reload-plugins",
+    "aliases": [],
+    "source_row": 68,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/reload-plugins",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "重载原生插件、技能、工具、命令等目录。",
+      "Ait 实现要求": "扩展页一个“重新加载”操作；完成后刷新命令/工具快照，失败保留可用目录并说明，不凭点击先宣布成功。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-marketplace.ts#L489",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C68",
+    "command": "/memory",
+    "aliases": [],
+    "source_row": 69,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "混合子命令",
+      "命令": "/memory",
+      "别名": "",
+      "入口策略": "按子操作区分原生查询/任务与 GUI 管理",
+      "原生语义": "view/stats/diagnose/queue/sync/clear/reset/enqueue/rebuild；mm list/show/history/seed/delete/reload。",
+      "Ait 实现要求": "view/stats/diagnose/queue 与 mm list/show/history 可作为查询回执；sync/clear/reset/enqueue/rebuild 与 mm seed/delete/reload 在 Provider 记忆页用明确对象操作，管理命令入口屏蔽。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L589",
+      "本轮实现状态（不等同实机验收）": "公开只读形式保留；单击查询已接会话卡，混合管理子命令屏蔽；待实机逐项验收"
+    }
+  },
+  {
+    "id": "C69",
+    "command": "/security",
+    "aliases": [],
+    "source_row": 70,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "混合子命令",
+      "命令": "/security",
+      "别名": "",
+      "入口策略": "按子操作区分原生查询/任务与 GUI 管理",
+      "原生语义": "plan/scan/status/cancel/scans/show/import/export/validate/compare/disposition 是原生安全扫描工作流。",
+      "Ait 实现要求": "保留原生扫描命令工作流与参数补全，状态/结果是卡片，扫描对象提供取消、比较、验证、处置、导入导出。它是扫描业务，不能误映射成 Ait 访问权限控件。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-modes.ts#L236",
+      "本轮实现状态（不等同实机验收）": "保留实际原生 handler；尚未完成所有参数和完整流程验收"
+    }
+  },
+  {
+    "id": "C70",
+    "command": "/ssh",
+    "aliases": [],
+    "source_row": 71,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/ssh",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "add/list/remove/help 管理 SSH 主机定义。",
+      "Ait 实现要求": "主机/连接管理入口承载，明确这是 OMP 原生 SSH 配置；不静默改成 Ait daemon 主机列表或泄露密钥。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L153",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C71",
+    "command": "/forget-approvals",
+    "aliases": [],
+    "source_row": 72,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/forget-approvals",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "清除原生记住的文件和目录授权。",
+      "Ait 实现要求": "权限控件后的“清除已记住授权”，说明范围并给回执；不等同关闭沙箱或清除 Ait 登录信息。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L121",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C72",
+    "command": "/add-dir",
+    "aliases": [],
+    "source_row": 73,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/add-dir",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "添加原生会话的工作区根目录。",
+      "Ait 实现要求": "工作区目录管理中的添加选择器，携带当前宿主；不能在 Provider 的全局设置页把会话范围写成全局。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L822",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C73",
+    "command": "/remove-dir",
+    "aliases": [],
+    "source_row": 74,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "集成和维护",
+      "命令": "/remove-dir",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "删除会话中的一个工作区根目录。",
+      "Ait 实现要求": "同一目录列表的移除操作；显示目录名与引用影响，不要求用户再手输路径。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L854",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C74",
+    "command": "/export",
+    "aliases": [],
+    "source_row": 75,
+    "tasks": ["26", "27"],
+    "disposition": "rewrite",
+    "decision": "Persisted Timeline MD/HTML and OMP native HTML with actual download.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/export",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/export [--themes] [path] 生成 HTML 文件。",
+      "Ait 实现要求": "会话导出菜单，结果卡提供文件名/下载；原生主机写入与客户端保存分清，不只显示服务端路径。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L179",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C75",
+    "command": "/dump",
+    "aliases": [],
+    "source_row": 76,
+    "tasks": ["26"],
+    "disposition": "rewrite",
+    "decision": "Persisted Timeline export with explicit content/format; no raw native debug-file dashboard.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/dump",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "输出会话文本，可含 all/anon 选项及原生请求调试文件路径。",
+      "Ait 实现要求": "会话的复制/导出操作；复制发生在用户客户端，脱敏选项明确，内部路径放详情，不直接刷满时间线。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L230",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C76",
+    "command": "/copy",
+    "aliases": [],
+    "source_row": 77,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/copy",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "选择会话文本或代码复制。",
+      "Ait 实现要求": "复用消息/代码块的复制操作，保留选择能力；不是让远程 OMP 写宿主剪贴板。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L574",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C77",
+    "command": "/open",
+    "aliases": [],
+    "source_row": 78,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/open",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "打开最近或选定链接。",
+      "Ait 实现要求": "复用消息链接与打开操作；由客户端安全打开，不在 daemon 主机启动浏览器。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L626",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C78",
+    "command": "/local",
+    "aliases": [],
+    "source_row": 79,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/local",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "打开会话 local:// 文件。",
+      "Ait 实现要求": "从文件/产物列表选择并用 Ait 已有编辑器打开，保留会话作用域；不是模型预设配置编辑入口。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L600",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C79",
+    "command": "/git",
+    "aliases": [],
+    "source_row": 80,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/git",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "原生 diff/staging/commit UI，支持 revision。",
+      "Ait 实现要求": "复用 Ait 工作区 Git 视图，按实际 revision 定位；不要嵌一套终端 GUI，也不要把它当 git shell 指令执行。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-session.ts#L589",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C80",
+    "command": "/share",
+    "aliases": [],
+    "source_row": 81,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/share",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "把会话通过原生加密链接分享。",
+      "Ait 实现要求": "会话分享入口，显示内容范围和真实原生返回链接；不能只做本地导出却声称分享完成。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L292",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C81",
+    "command": "/collab",
+    "aliases": [],
+    "source_row": 82,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/collab",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "start/view/list/stop/status；区分可交互与只读分享。",
+      "Ait 实现要求": "会话协作入口，展示共享状态/参与者与停止；list/status 可给卡片，链接按原生能力创建。不能与静态 /share 混为一谈。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L318",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C82",
+    "command": "/join",
+    "aliases": [],
+    "source_row": 83,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/join",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "/join <link> 加入原生协作会话。",
+      "Ait 实现要求": "协作链接打开/加入入口，呈现来宾权限与连接状态；不把链接当普通模型提示。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L447",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C83",
+    "command": "/leave",
+    "aliases": [],
+    "source_row": 84,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "文件和协作",
+      "命令": "/leave",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "离开原生协作会话。",
+      "Ait 实现要求": "当前协作状态中的离开操作；不删除原会话，不退出整个 Ait。 原生斜杠管理/导航入口从 … 与补全中移除，手输拒绝；不自动跳转 GUI。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-collaboration.ts#L479",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C84",
+    "command": "/pause",
+    "aliases": [],
+    "source_row": 85,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "运行控制",
+      "命令": "/pause",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "冻结主 Agent、子 Agent 和 advisor，随后可恢复。",
+      "Ait 实现要求": "在运行状态附近提供整组可恢复的暂停/继续控件；主 Agent、子 Agent、advisor 均符合原生语义才可启用。屏蔽 TUI /pause 屏幕入口，不能用 abort 冒充。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L111",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C85",
+    "command": "/live",
+    "aliases": [],
+    "source_row": 86,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "运行控制",
+      "命令": "/live",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "启动原生实时语音。",
+      "Ait 实现要求": "输入区现有语音入口承接客户端音频、连接、静音、结束；屏蔽打开 TUI 的 /live 入口，不偷偷使用远程 daemon 麦克风。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L93",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C86",
+    "command": "/record",
+    "aliases": [],
+    "source_row": 87,
+    "tasks": ["06"],
+    "disposition": "exclude",
+    "decision": "Terminal-only UI/exit command is blocked, never forwarded to the model or reinterpreted as Ait navigation; no replacement feature.",
+    "source": {
+      "分类": "终端专属",
+      "命令": "/record",
+      "别名": "",
+      "入口策略": "终端专属命令屏蔽；不另造替代功能",
+      "原生语义": "录制 OMP 终端画面供 omp play 回放。",
+      "Ait 实现要求": "完全屏蔽：不进入 …、斜杠补全或可点击操作；手输说明仅适用于 OMP 终端，不传给模型。不另造录屏/录音替代。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-control.ts#L102",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C87",
+    "command": "/debug",
+    "aliases": [],
+    "source_row": 88,
+    "tasks": ["06"],
+    "disposition": "exclude",
+    "decision": "Terminal-only UI/exit command is blocked, never forwarded to the model or reinterpreted as Ait navigation; no replacement feature.",
+    "source": {
+      "分类": "终端专属",
+      "命令": "/debug",
+      "别名": "",
+      "入口策略": "终端专属命令屏蔽；不另造替代功能",
+      "原生语义": "打开原生调试工具选择。",
+      "Ait 实现要求": "屏蔽原生 TUI debug 选择器，不做通用参数表单；确有独立宿主适配的诊断能力进入 Ait 既有开发者入口。",
+      "1141639b 文本路由（非逐功能验收）": "内置命令文本被过滤/拒绝；独立 Ait 入口需按本表对照",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L580",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  },
+  {
+    "id": "C88",
+    "command": "/retry",
+    "aliases": [],
+    "source_row": 89,
+    "tasks": ["06"],
+    "disposition": "defer",
+    "decision": "Outside the authorized feature queue; preserve provenance-aware discovery/denial and existing supported behavior only. A generic parameter form or blocked builtin is not feature delivery.",
+    "source": {
+      "分类": "会话与历史",
+      "命令": "/retry",
+      "别名": "",
+      "入口策略": "GUI 完整承接；原生斜杠管理/导航入口屏蔽",
+      "原生语义": "重试上一轮失败的 Agent 任务。",
+      "Ait 实现要求": "失败消息/错误卡的重试按钮，保留原生重试语义；屏蔽重复的 /retry 管理入口，区别自动重试与停止重试。",
+      "1141639b 文本路由（非逐功能验收）": "原生命令文本已放行；不代表全部子命令或 GUI 路径完成验收",
+      "官方源码": "https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/slash-commands/builtin-lifecycle.ts#L545",
+      "本轮实现状态（不等同实机验收）": "内置命令屏蔽规则已收拢；对应 GUI 的完整承接仍需逐项验收，不能据此认定完成"
+    }
+  }
+]
