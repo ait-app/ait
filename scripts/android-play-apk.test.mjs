@@ -154,6 +154,37 @@ Source Stamp Signer certificate SHA-256 digest: ${"12".repeat(32)}
       verifyGoogleSignedApk({ badging, certificates: rotated, plan, certificateSha256 }).signers,
       ["ef".repeat(32), digest],
     );
+  // Verbatim build-tools 37 output for the 0.2.9 Play APK (labels changed again; PQC hybrid signer).
+  const v32 = `V3.2 Hybrid Classical Signer: (minSdkVersion=37, maxSdkVersion=2147483647) certificate DN: CN=Android, OU=Android, O=Google Inc., L=Mountain View, ST=California, C=US
+V3.2 Hybrid Classical Signer: (minSdkVersion=37, maxSdkVersion=2147483647) certificate SHA-256 digest: 0695da433c257c1a3a4c74916e0c9c74d96eefd6f2f628151969261abe55605f
+V3.2 Hybrid Classical Signer: (minSdkVersion=37, maxSdkVersion=2147483647) certificate SHA-1 digest: 7aa32c4b9b134ad5069997692845092402ff6af8
+V3.2 Hybrid PQC Signer: (minSdkVersion=37, maxSdkVersion=2147483647) certificate SHA-256 digest: 85e395ff7943d376b92f82bc0b72fd37907e0fbc5eef42409765817ada51c899
+V3.0 Signer: certificate DN: CN=Android, OU=Android, O=Google Inc., L=Mountain View, ST=California, C=US
+V3.0 Signer: certificate SHA-256 digest: 36115a64a7a90ca08dd0748e5068b8c1996a1d5215612c39d58c842b9b93c840
+V3.0 Signer: certificate SHA-1 digest: 09f6aa209329255471d9a8932f0a1fa46097f3e8
+Source Stamp Signer: certificate SHA-256 digest: 3257d599a49d2c961a471ca9843f59d341a405884583fc087df4237b733bbd6d
+WARNING: APK Signature Scheme v3 signer #1: Unknown additional attribute: ID 0x9f06b79c
+`;
+  const v32Signers = [
+    "0695da433c257c1a3a4c74916e0c9c74d96eefd6f2f628151969261abe55605f",
+    "85e395ff7943d376b92f82bc0b72fd37907e0fbc5eef42409765817ada51c899",
+    "36115a64a7a90ca08dd0748e5068b8c1996a1d5215612c39d58c842b9b93c840",
+  ];
+  for (const certificateSha256 of v32Signers)
+    assert.deepEqual(
+      verifyGoogleSignedApk({ badging, certificates: v32, plan, certificateSha256 }).signers,
+      v32Signers,
+    );
+  assert.throws(
+    () =>
+      verifyGoogleSignedApk({
+        badging,
+        certificates: v32,
+        plan,
+        certificateSha256: "3257d599a49d2c961a471ca9843f59d341a405884583fc087df4237b733bbd6d",
+      }),
+    /not among the APK signers/,
+  );
   assert.throws(
     () =>
       verifyGoogleSignedApk({
