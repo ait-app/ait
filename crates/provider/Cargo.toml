@@ -19,11 +19,6 @@ async-trait.workspace = true
 
 # Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true
-# Validate image payloads before native prompt admission and decode provider image artifacts.
-base64.workspace = true
-# Read-only native account balance/quota inspection; credentials never enter public snapshots.
-reqwest.workspace = true
-reqwest.features = ["rustls-tls", "json", "stream"]
 secrecy.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
@@ -57,6 +52,8 @@ workspace = true
 
 [dev-dependencies]
 persistence.workspace = true
+# Encode image payloads in rich-input, inbox and Codex history fixtures.
+base64.workspace = true
 # Virtual clock checks for provider-specific cold-start deadlines.
 tokio = { workspace = true, features = ["test-util"] }
 # Offline native provider fixtures, without credentials or a model API.

@@ -13,10 +13,10 @@
   [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - 内置 adapter 列表只在 `crates/provider-builtin`：`provider_builtin::providers` 先用
-  `provider::Providers::configured` 构建仍在 `provider` 内的 Codex、OpenCode、
+  `provider::Providers::configured` 构建仍在 `provider` 内的 Codex 与
   Pi，再用 `Providers::with` 追加 `provider-antigravity` 的 `AntigravityClient`、
-  `provider-claude` 的 `ClaudeClient`、`provider-deepseek-harness` 的 `DeepSeekHarnessClient`、`provider-minimax` 的 `MiniMaxClient` 与 `provider-omp` 的 `OmpClient`，共享同一图片目录；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
-  负责注册与摘要生成器装配。`provider-builtin` 的生产依赖只有 `provider`、`provider-antigravity`、`provider-claude`、`provider-deepseek-harness`、`provider-minimax` 与 `provider-omp`。
+  `provider-claude` 的 `ClaudeClient`、`provider-deepseek-harness` 的 `DeepSeekHarnessClient`、`provider-minimax` 的 `MiniMaxClient`、`provider-omp` 的 `OmpClient` 与 `provider-opencode` 的 `OpenCodeClient`，共享同一图片目录（`OpenCodeClient` 与迁出前一样不接收该目录）；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
+  负责注册与摘要生成器装配。`provider-builtin` 的生产依赖只有 `provider`、`provider-antigravity`、`provider-claude`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp` 与 `provider-opencode`。
   可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖随 adapter 列表维护（OMP 的经 `provider_omp::installed_program`）；
   构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
@@ -66,6 +66,14 @@
   `test-support` feature 下编译，非 dev 依赖边启用或转发该 feature 会被依赖守卫拒绝
   （[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)，已由
   [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
+- OpenCode 的 adapter 在 `crates/provider-opencode`，生产依赖为 `provider-core`、`provider-native` 与
+  `domain`（`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `OpenCodeClient`；
+  `provider` 与 daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它，可执行文件默认 `opencode`，
+  由 `AIT_SERVER_OPENCODE_BIN` 覆盖。OpenCode 测试与 ACP、观测服务、子会话假程序和工具卡片、工具历史样本归
+  `provider-opencode`，需要执行 worker、`AgentManager`、Timeline、所有权 lane 或 Provider 目录的场景使用
+  `provider::testing`
+  （[ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)、
+  [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - 摘要生成器只收录实现结构化辅助生成的 adapter，辅助会话不进入前台 Agent registry；生成接口
   `SummaryGenerator` 的共享契约在 `model::summary`
   （[ADR-101](../decisions/providers/adr-101-provider-summary-generator.md)、
@@ -198,7 +206,7 @@
 ## 测试归属
 
 - Provider 协议、发现、执行、权限、原生历史、恢复与回退的测试归所属 adapter 的 crate
-  （`crates/provider`，Antigravity 为 `crates/provider-antigravity`，Claude Code 为 `crates/provider-claude`，DeepSeek Harness 为 `crates/provider-deepseek-harness`，MiniMax Code 为 `crates/provider-minimax`，Oh My Pi 为 `crates/provider-omp`；共享工具的测试归 `crates/provider-native`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
+  （`crates/provider`，Antigravity 为 `crates/provider-antigravity`，Claude Code 为 `crates/provider-claude`，DeepSeek Harness 为 `crates/provider-deepseek-harness`，MiniMax Code 为 `crates/provider-minimax`，Oh My Pi 为 `crates/provider-omp`，OpenCode 为 `crates/provider-opencode`；共享工具的测试归 `crates/provider-native`），放在所属模块的测试子文件；daemon 只测宿主生命周期、传输和跨能力组合，断言的能力边界决定归属
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
   [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。
 - 需要多个真实 adapter 与真实运行时协作的装配测试归 `crates/provider-builtin`，经 `provider::testing`

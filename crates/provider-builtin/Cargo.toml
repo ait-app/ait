@@ -13,6 +13,7 @@ provider-claude.workspace = true
 provider-deepseek-harness.workspace = true
 provider-minimax.workspace = true
 provider-omp.workspace = true
+provider-opencode.workspace = true
 
 [lints]
 workspace = true

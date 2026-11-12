@@ -160,7 +160,7 @@ describe("shared messages tool_call schema", () => {
     const cases = JSON.parse(
       readFileSync(
         new URL(
-          "../../../crates/provider/tests/fixtures/opencode_tool_cards.json",
+          "../../../crates/provider-opencode/tests/fixtures/opencode_tool_cards.json",
           import.meta.url,
         ),
         "utf8",

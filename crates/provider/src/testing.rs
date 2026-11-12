@@ -27,6 +27,7 @@ use crate::protocol::resume::Overrides;
 use crate::protocol::timeline::FetchRequest;
 use crate::rpc::timeline::fetch_stored;
 use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
+use crate::service::agent_manager::ownership::Owners;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
@@ -307,6 +308,63 @@ impl Manager {
     #[must_use]
     pub fn timeline(&self) -> Option<Timeline> {
         self.0.timeline()
+    }
+
+    /// The native subagents of `agent_id`: the stored descriptors merged with its live session's
+    /// and the adapter's discovered children.
+    ///
+    /// # Errors
+    /// Returns unknown agents, agents without a native handle or adapter, and adapter or
+    /// storage failures.
+    pub async fn subagents(&self, agent_id: &str) -> Result<Vec<NativeSubagent>, ErrorCode> {
+        self.0.subagents(agent_id).await
+    }
+
+    /// The complete native history of `child`, a subagent of `parent`.
+    ///
+    /// # Errors
+    /// Returns unknown parents, unregistered adapters, native read failures, and
+    /// `InvalidMessage` when the history belongs to another parent, session or directory.
+    pub async fn child_history(
+        &self,
+        parent: &str,
+        child: &NativeSubagent,
+    ) -> Result<SessionHistory, ErrorCode> {
+        self.0.child_history(parent, child).await
+    }
+
+    /// A manager sharing this one's adapters, registry, timeline and provider catalog, whose
+    /// live sessions belong to `lane` of `lanes`, as one execution lane's manager does.
+    #[must_use]
+    pub fn fork(&self, lanes: &Lanes, lane: &str) -> Self {
+        Self(self.0.fork(Some(lanes.0.owner(lane.to_owned()))))
+    }
+
+    /// Cancel provider discovery and wait until every accepted discovery task has stopped.
+    pub async fn close_providers(&self) {
+        self.0.catalog().close().await;
+    }
+}
+
+/// Owner lanes shared by forked managers, routing agents and native sessions to one lane each.
+#[derive(Debug, Clone, Default)]
+pub struct Lanes(Owners);
+
+impl Lanes {
+    /// The lane that owns `agent_id`, assigning the agent its own lane when none does.
+    ///
+    /// # Errors
+    /// Returns `AgentIo` when the shared routing state is poisoned.
+    pub fn agent(&self, agent_id: &str) -> Result<String, ErrorCode> {
+        self.0.agent(agent_id).map_err(Into::into)
+    }
+
+    /// Bind `record` and its native session identities to `lane`.
+    ///
+    /// # Errors
+    /// Returns `CatalogBusy` when another lane owns the agent or one of its native identities.
+    pub fn bind(&self, lane: &str, record: &PersistedAgentRuntimeRecord) -> Result<(), ErrorCode> {
+        self.0.bind(lane, record).map_err(Into::into)
     }
 }
 

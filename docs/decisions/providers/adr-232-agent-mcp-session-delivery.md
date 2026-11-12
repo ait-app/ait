@@ -5,7 +5,7 @@ date: 2026-11-10
 amends:
   - providers/adr-202-agent-mcp-injection.md
 paths:
-  - crates/provider/src/local/opencode
+  - crates/provider-opencode
   - crates/provider/src/local/pi
   - crates/provider-deepseek-harness
 ---

@@ -358,7 +358,7 @@
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/environment.rs",
@@ -5265,7 +5265,7 @@
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/environment.rs",
@@ -6750,7 +6750,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/protocol/agent_lifecycle/tests.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
@@ -6820,7 +6820,7 @@
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
         "crates/provider/src/service/agent_execution/tests/delivery.rs",
         "crates/provider/src/service/agent_execution/tests/fork_context.rs",
@@ -7112,7 +7112,7 @@
         }
       ],
       "tests": [
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
       "assessment": "核对输入与路由；仅安装 Codex/Claude，外部账号服务未做真实调用",
@@ -8050,7 +8050,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
@@ -8830,7 +8830,7 @@
         }
       ],
       "tests": [
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
@@ -9007,7 +9007,7 @@
         }
       ],
       "tests": [
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
@@ -9229,7 +9229,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
         "bins/daemon/tests/process/agent_history.rs"
@@ -11710,7 +11710,7 @@
       "tests": [
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
         "crates/provider/src/service/agent_execution/tests/resume.rs",
@@ -12812,7 +12812,7 @@
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
@@ -14669,7 +14669,7 @@
         "crates/provider-claude/src/tests/execution.rs",
         "crates/provider-claude/src/tests/execution/rewind.rs",
         "crates/provider-deepseek-harness/src/tests/execution.rs",
-        "crates/provider/src/local/opencode/tests/execution.rs",
+        "crates/provider-opencode/src/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",

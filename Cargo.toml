@@ -28,6 +28,7 @@ provider-deepseek-harness = { path = "crates/provider-deepseek-harness" }
 provider-minimax = { path = "crates/provider-minimax" }
 provider-native = { path = "crates/provider-native" }
 provider-omp = { path = "crates/provider-omp" }
+provider-opencode = { path = "crates/provider-opencode" }
 relay = { path = "crates/relay" }
 schedule = { path = "crates/schedule" }
 terminal = { path = "crates/terminal" }

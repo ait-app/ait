@@ -6,6 +6,7 @@ amends:
   - providers/adr-115-opencode-acp-provider.md
 paths:
   - crates/provider
+  - crates/provider-opencode
 ---
 
 # ADR-195：OpenCode 独立取消信号与确认期限

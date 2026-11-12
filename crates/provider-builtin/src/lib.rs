@@ -12,6 +12,7 @@ use provider_claude::ClaudeClient;
 use provider_deepseek_harness::DeepSeekHarnessClient;
 use provider_minimax::MiniMaxClient;
 use provider_omp::OmpClient;
+use provider_opencode::OpenCodeClient;
 
 /// Built-in adapters configured from the process environment and installed native programs.
 ///
@@ -39,6 +40,8 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
         environment("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Some("acp".as_ref());
     let minimax = environment("AIT_SERVER_MINIMAX_CODE_BIN")
         .map_or_else(|| PathBuf::from("mcode"), PathBuf::from);
+    let opencode = environment("AIT_SERVER_OPENCODE_BIN")
+        .map_or_else(|| PathBuf::from("opencode"), PathBuf::from);
     Providers::configured(data_dir, &environment)
         .with(|images| {
             antigravity
@@ -64,6 +67,7 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
         })
         .with(|images| MiniMaxClient::new(minimax).with_image_directory(images.to_owned()))
         .with(|images| OmpClient::new(omp).with_image_directory(images.to_owned()))
+        .with(|_| OpenCodeClient::new(opencode))
 }
 
 #[cfg(test)]

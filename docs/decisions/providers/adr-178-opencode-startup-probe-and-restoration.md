@@ -7,6 +7,7 @@ amends:
   - providers/adr-159-opencode-acp-native-observation.md
 paths:
   - crates/provider
+  - crates/provider-opencode
 ---
 
 # ADR-178：OpenCode 轻量可用性探测与冷恢复预算

@@ -203,3 +203,57 @@ async fn manager_delegates_native_session_listing_inspection_and_import() {
     );
     assert!(with_timeline.timeline().is_some());
 }
+
+#[tokio::test]
+async fn manager_delegates_subagent_reads_owner_lanes_and_catalog_shutdown() {
+    let root = tempfile::tempdir().unwrap();
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry.initialize().unwrap();
+    let cwd = root.path().to_str().unwrap().to_owned();
+    let mut manager = Manager::new(AgentManager::new(Box::new(registry)));
+    // A missing absolute program is never resolved on PATH, so no installed Codex starts.
+    manager
+        .register(Box::new(CodexClient::new(
+            root.path().join("missing-codex"),
+        )))
+        .unwrap();
+
+    assert_eq!(
+        manager.subagents("missing").await,
+        Err(ErrorCode::AgentNotFound)
+    );
+    let child = NativeSubagent {
+        persistence: None,
+        id: "child".to_owned(),
+        parent_id: "missing".to_owned(),
+        cwd: cwd.clone(),
+        descriptor: json!({}),
+    };
+    assert_eq!(
+        manager.child_history("missing", &child).await.unwrap_err(),
+        ErrorCode::AgentNotFound
+    );
+
+    let lanes = Lanes::default();
+    assert_eq!(lanes.agent("unbound").unwrap(), "agent:unbound");
+    let record: PersistedAgentRuntimeRecord = serde_json::from_value(json!({
+        "id":"agent", "provider":"codex", "cwd":cwd,
+        "createdAt":"2026-11-12T00:00:00Z", "updatedAt":"2026-11-12T00:00:00Z",
+        "persistence":{"provider":"codex","sessionId":"session"}
+    }))
+    .unwrap();
+    lanes.bind("first", &record).unwrap();
+    assert_eq!(lanes.agent("agent").unwrap(), "first");
+    assert_eq!(lanes.bind("second", &record), Err(ErrorCode::CatalogBusy));
+    let forked = manager.fork(&lanes, "first");
+    forked.validate_provider("codex").unwrap();
+
+    manager.close_providers().await;
+    assert_eq!(
+        forked
+            .0
+            .read_providers("provider.snapshot.get.request", json!({"cwd":cwd}))
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
+}

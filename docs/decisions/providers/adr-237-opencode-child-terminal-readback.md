@@ -7,6 +7,7 @@ amends:
 paths:
   - crates/provider
   - apps/mobile
+  - crates/provider-opencode
 ---
 
 # ADR-237：OpenCode 子会话终态只读核对

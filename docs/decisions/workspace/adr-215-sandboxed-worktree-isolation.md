@@ -11,6 +11,7 @@ paths:
   - crates/provider-antigravity
   - crates/provider-claude
   - crates/provider-deepseek-harness
+  - crates/provider-opencode
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别

@@ -10,6 +10,7 @@ paths:
   - crates/provider-antigravity
   - crates/provider-claude
   - crates/provider-deepseek-harness
+  - crates/provider-opencode
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示

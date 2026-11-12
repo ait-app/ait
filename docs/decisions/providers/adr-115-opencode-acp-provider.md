@@ -8,6 +8,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-opencode
 ---
 
 # ADR-115：OpenCode 官方 ACP Provider

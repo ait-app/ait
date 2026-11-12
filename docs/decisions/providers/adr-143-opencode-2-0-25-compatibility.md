@@ -8,6 +8,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-opencode
 ---
 
 # ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界

@@ -8,6 +8,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-builtin
+  - crates/provider-opencode
 ---
 
 # ADR-089：内置 Provider 装配归 provider crate

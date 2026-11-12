@@ -8,6 +8,7 @@ paths:
   - crates/provider
   - crates/provider-native
   - crates/provider-core
+  - crates/provider-opencode
 ---
 
 # ADR-121：ACP 轮次关联与原生历史结算
