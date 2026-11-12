@@ -53,15 +53,77 @@ fn identity_route() -> axum::routing::MethodRouter {
     })
 }
 
-async fn assert_group_privacy_warning(bots: &Bots, channel: ChannelId) {
+/// The privacy warning reaches the channel status a client reads.
+///
+/// The channel is disabled, so the supervisor runs no transport for it and nothing else writes
+/// its status; an enabled channel is rewritten by the supervisor's own reconnect attempts.
+#[tokio::test]
+async fn telegram_publishes_the_group_privacy_warning_to_the_channel_status() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    bots.execute("bot.setup.request", setup(WORKSPACE))
+        .await
+        .unwrap();
+    let id = ChannelId::generate();
+    bots.execute(
+        "bot.channel.create.request",
+        json!({
+            "workspaceId":WORKSPACE,"channelId":id,"enabled":false,
+            "config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST",
+                "allowedSenders":["1"],"allowGroups":true}
+        }),
+    )
+    .await
+    .unwrap();
+    let channel = fixture
+        .store
+        .catalog()
+        .unwrap()
+        .channels
+        .into_iter()
+        .find(|entry| entry.id == id)
+        .unwrap();
+    let app = Router::new()
+        .route("/botfake/getMe", identity_route())
+        .route(
+            "/botfake/getWebhookInfo",
+            post(|| async { Json(json!({"ok":true,"result":{"url":""}})) }),
+        )
+        .route(
+            "/botfake/getUpdates",
+            post(|| async { Json(json!({"ok":false,"error_code":400})) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let cancel = CancellationToken::new();
+    // The disabled channel refuses delivery, so the run ends once its status is published.
+    run_at(
+        &bots,
+        &channel,
+        (
+            &client,
+            &SecretString::from("fake".to_owned()),
+            &format!("http://{address}"),
+        ),
+        &cancel,
+    )
+    .await
+    .unwrap_err();
     let status = bots
         .execute(
             "bot.channel.status.request",
-            json!({"workspaceId":WORKSPACE,"channelId":channel}),
+            json!({"workspaceId":WORKSPACE,"channelId":id}),
         )
         .await
         .unwrap();
+    assert_eq!(status["connection"]["state"], "connected");
     assert_eq!(status["connection"]["error"], GROUP_PRIVACY_WARNING);
+    bots.shutdown().await.unwrap();
+    server.abort();
 }
 
 #[tokio::test]
@@ -149,7 +211,6 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
                         && turn.reply.as_deref() == Some("reply:@ait_bot follow up")
                 }));
                 assert_eq!(reactions.load(Ordering::SeqCst), 2);
-                assert_group_privacy_warning(&bots, channel.id).await;
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;

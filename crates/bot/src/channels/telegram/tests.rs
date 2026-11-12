@@ -58,3 +58,30 @@ fn telegram_routes_allowlisted_senders_and_mentioned_threads() {
             .is_none()
     );
 }
+
+#[test]
+fn connected_status_warns_only_when_group_privacy_hides_accepted_mentions() {
+    let groups = channel();
+    let mut direct_only = channel();
+    direct_only.config = ChannelConfig::Telegram {
+        token_ref: "env:AIT_SERVER_CREDENTIAL_TELEGRAM".into(),
+        allowed_senders: vec!["1".into()],
+        allow_groups: false,
+    };
+    let private = json!({"can_read_all_group_messages":false});
+    let open = json!({"can_read_all_group_messages":true});
+
+    let warned = connected_status(&groups, &private, 2);
+    let silent = [
+        connected_status(&groups, &open, 2),
+        connected_status(&direct_only, &private, 2),
+    ];
+
+    assert_eq!(
+        warned,
+        json!({"state":"connected","accountId":"2","error":GROUP_PRIVACY_WARNING})
+    );
+    for status in silent {
+        assert_eq!(status, json!({"state":"connected","accountId":"2"}));
+    }
+}
