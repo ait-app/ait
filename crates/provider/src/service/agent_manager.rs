@@ -321,7 +321,7 @@ impl AgentManager {
     /// Discover models and capabilities through the registered native adapters.
     /// # Errors
     /// Returns invalid requests, unavailable adapter or safe discovery/cache errors.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) async fn providers(
         &mut self,
         method: &str,

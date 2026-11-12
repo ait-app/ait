@@ -7,6 +7,7 @@ paths:
   - crates/provider-native
   - crates/provider-core
   - crates/provider-minimax
+  - crates/provider-antigravity
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示

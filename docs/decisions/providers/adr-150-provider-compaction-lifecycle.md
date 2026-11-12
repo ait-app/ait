@@ -5,6 +5,7 @@ date: 2026-10-13
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-antigravity
 ---
 
 # ADR-150：所有 Provider 的上下文压缩生命周期提示

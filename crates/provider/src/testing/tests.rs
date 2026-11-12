@@ -30,6 +30,26 @@ fn timeline_access_reads_appended_and_reconciled_entries() {
         (replaced, vec![entry("b", "second")])
     );
     assert!(timeline_subagents(&timeline, "agent").unwrap().is_empty());
+
+    let page = fetch_timeline(
+        &timeline,
+        "agent",
+        json!({"agentId":"agent","direction":"tail","limit":30}),
+        &Value::Null,
+        Some(false),
+    )
+    .unwrap();
+    assert_eq!(page["entries"][0]["item"]["text"], "second");
+    assert_eq!(
+        fetch_timeline(
+            &timeline,
+            "agent",
+            json!({"limit":"all"}),
+            &Value::Null,
+            None
+        ),
+        Err(ErrorCode::InvalidMessage)
+    );
 }
 
 #[tokio::test]
@@ -59,6 +79,35 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
     ));
     manager.close("missing").await.unwrap();
     assert!(manager.send("missing", "hello").await.is_err());
+    assert!(
+        manager
+            .send_input("missing", &AgentPrompt::text("hello"))
+            .await
+            .is_err()
+    );
+    assert!(manager.restore("missing").await.is_err());
+    let spec = AgentSessionSpec {
+        provider: "missing".to_owned(),
+        cwd: root.path().to_str().unwrap().to_owned(),
+        config: domain::agent_runtime::StoredAgentConfig::default(),
+        confinement: None,
+    };
+    assert!(
+        manager
+            .create_with_environment("agent", &spec, &AgentEnvironment::default())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        manager.usage(None, Some("missing"), false).await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
+    let snapshot = manager
+        .providers("provider.snapshot.get.request", json!({"cwd":root.path()}))
+        .await
+        .unwrap();
+    assert_eq!(snapshot["entries"][0]["provider"], "codex");
+    let _events = manager.events().connect();
     manager.poll().await.unwrap();
     manager.close_all().await.unwrap();
 }

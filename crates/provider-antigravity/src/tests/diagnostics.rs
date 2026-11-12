@@ -6,9 +6,9 @@ use model::outbound::{Frame, Outbound};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
 use super::*;
-use crate::local::antigravity::diagnostics::Failure;
-use crate::service::agent_manager::{AgentManager, AgentRegistration};
-use crate::storage::timeline::Timeline;
+use crate::diagnostics::Failure;
+use provider::service::agent_manager::AgentManager;
+use provider::testing::Manager;
 
 #[tokio::test]
 async fn persists_failure_details_in_tools_snapshots_terminal_events_and_activity() {
@@ -31,10 +31,11 @@ async fn assert_failure(scenario: &str, expected: Failure) {
     )]))
     .unwrap();
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let timeline = Timeline::memory().unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    let timeline = provider::testing::memory_timeline().unwrap();
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()));
     let environment = client.environment.clone();
-    manager.register_client(Box::new(client)).unwrap();
+    manager.register(Box::new(client)).unwrap();
     let activity = Arc::new(Mutex::new(Vec::new()));
     let observer = activity.clone();
     let connection = manager.events().connect();
@@ -52,19 +53,14 @@ async fn assert_failure(scenario: &str, expected: Failure) {
         .unwrap();
     subscription.activate().unwrap();
     let (outbound, mut output) = Outbound::new();
-    let stream = timeline.events().observe(
+    let stream = provider::testing::timeline_events(&timeline).observe(
         "test".to_owned(),
         std::collections::BTreeSet::from(["agy-agent".to_owned()]),
         outbound,
     );
     stream.activate().unwrap();
     manager
-        .create_with_environment(
-            "agy-agent",
-            &spec,
-            AgentRegistration::default(),
-            &environment,
-        )
+        .create_with_environment("agy-agent", &spec, &environment)
         .await
         .unwrap();
     manager.send("agy-agent", "diagnostic").await.unwrap();
@@ -90,16 +86,16 @@ async fn assert_failure(scenario: &str, expected: Failure) {
             .iter()
             .any(|event| event["content"] == expected.message())
     );
-    let (_, rows) = timeline.read("agy-agent").unwrap();
+    let (_, rows) = provider::testing::timeline_entries(&timeline, "agy-agent").unwrap();
     let tools: Vec<_> = rows
         .iter()
-        .filter(|row| row.entry.item["type"] == "tool_call")
+        .filter(|row| row.item["type"] == "tool_call")
         .collect();
     let tool = tools.last().unwrap();
-    assert!(tools.iter().all(|row| row.entry.key == tool.entry.key));
-    assert_eq!(tool.entry.item["status"], "failed", "{scenario}");
+    assert!(tools.iter().all(|row| row.key == tool.key));
+    assert_eq!(tool.item["status"], "failed", "{scenario}");
     assert_eq!(
-        tool.entry.item["error"]["message"],
+        tool.item["error"]["message"],
         expected.message(),
         "{scenario}"
     );

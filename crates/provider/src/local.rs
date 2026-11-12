@@ -2,7 +2,6 @@
 
 #[cfg(test)]
 mod agent_mcp_injection;
-pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod deepseek_harness;

@@ -16,8 +16,8 @@ fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().canonicalize().unwrap();
     // An immutable executable avoids ETXTBSY when concurrent forks inherit writable handles.
-    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/local/antigravity/tests/fixtures/agy.py");
+    let program =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/agy.py");
     let mut client = AntigravityClient::new(program).with_image_directory(cwd.join("images"));
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "AGY_FIXTURE_LOG".to_owned(),
@@ -109,12 +109,14 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
             .iter()
             .all(|entry| entry.get("input").is_none())
     );
-    let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(
-        persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
-            directory.path().join("agents.json"),
-        ),
-    ));
-    manager.register_client(Box::new(client)).unwrap();
+    let mut manager = provider::testing::Manager::new(
+        provider::service::agent_manager::AgentManager::new(Box::new(
+            persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+                directory.path().join("agents.json"),
+            ),
+        )),
+    );
+    manager.register(Box::new(client)).unwrap();
     let snapshot = manager
         .providers("provider.snapshot.get.request", json!({"cwd":spec.cwd}))
         .await
@@ -370,17 +372,15 @@ async fn missing_explicit_binary_is_unavailable_without_installation_fallback() 
 async fn manager_persists_timeline_and_resume_identity_across_restart() {
     use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
-    use crate::service::agent_manager::{AgentManager, AgentRegistration};
-    use crate::storage::timeline::Timeline;
+    use provider::service::agent_manager::AgentManager;
+    use provider::testing::Manager;
     let (directory, client, spec) = fixture();
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let timeline = Timeline::memory().unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
-    manager.register_client(Box::new(client.clone())).unwrap();
-    let initial = manager
-        .create("agy-agent", &spec, AgentRegistration::default())
-        .await
-        .unwrap();
+    let timeline = provider::testing::memory_timeline().unwrap();
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()));
+    manager.register(Box::new(client.clone())).unwrap();
+    let initial = manager.create("agy-agent", &spec).await.unwrap();
     manager.send("agy-agent", "hello").await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while manager.active_turn("agy-agent").is_some() {
@@ -391,35 +391,24 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
     .await
     .unwrap();
     assert_eq!(manager.last_message("agy-agent"), Some("Hello world"));
-    let (_, entries) = timeline.read("agy-agent").unwrap();
-    assert!(
-        entries
-            .iter()
-            .any(|row| row.entry.item["type"] == "tool_call")
-    );
+    let (_, entries) = provider::testing::timeline_entries(&timeline, "agy-agent").unwrap();
+    assert!(entries.iter().any(|row| row.item["type"] == "tool_call"));
     let text: String = entries
         .iter()
-        .filter(|row| row.entry.item["type"] == "assistant_message")
-        .filter_map(|row| row.entry.item["text"].as_str())
+        .filter(|row| row.item["type"] == "assistant_message")
+        .filter_map(|row| row.item["text"].as_str())
         .collect();
     assert_eq!(text, "Hello world");
     manager.close_all().await.unwrap();
-    let mut restored = AgentManager::new(Box::new(registry)).with_timeline(timeline.clone());
-    restored.register_client(Box::new(client)).unwrap();
-    let resumed = restored
-        .restore("agy-agent", &crate::protocol::resume::Overrides::default())
-        .await
-        .unwrap();
+    let mut restored =
+        Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
+    restored.register(Box::new(client)).unwrap();
+    let resumed = restored.restore("agy-agent").await.unwrap();
     assert_eq!(resumed.persistence, initial.persistence);
-    let original: Vec<_> = entries.into_iter().map(|row| row.entry).collect();
-    let retained: Vec<_> = timeline
-        .read("agy-agent")
+    let retained = provider::testing::timeline_entries(&timeline, "agy-agent")
         .unwrap()
-        .1
-        .into_iter()
-        .map(|row| row.entry)
-        .collect();
-    assert_eq!(retained, original);
+        .1;
+    assert_eq!(retained, entries);
     restored.send("agy-agent", "after restart").await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while restored.active_turn("agy-agent").is_some() {
@@ -429,13 +418,12 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
     })
     .await
     .unwrap();
-    let text: String = timeline
-        .read("agy-agent")
+    let text: String = provider::testing::timeline_entries(&timeline, "agy-agent")
         .unwrap()
         .1
         .iter()
-        .filter(|row| row.entry.item["type"] == "assistant_message")
-        .filter_map(|row| row.entry.item["text"].as_str())
+        .filter(|row| row.item["type"] == "assistant_message")
+        .filter_map(|row| row.item["text"].as_str())
         .collect();
     assert_eq!(text, "Hello worldHello world");
     restored.close_all().await.unwrap();

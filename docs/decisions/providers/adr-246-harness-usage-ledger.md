@@ -13,6 +13,7 @@ paths:
   - crates/provider-native
   - crates/provider-core
   - crates/provider-minimax
+  - crates/provider-antigravity
 ---
 
 # ADR-246：按 Host 记录的 Harness 用量账本

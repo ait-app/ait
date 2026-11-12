@@ -16,19 +16,25 @@ use domain::workspace::registry::WorkspaceMutationContext;
 use model::ErrorCode;
 use model::creation::Creations;
 use model::events::EventHub;
+use model::session::SessionEvents;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use serde_json::{Value, json};
 
 use crate::composition::Providers;
+use crate::protocol::resume::Overrides;
+use crate::protocol::timeline::FetchRequest;
+use crate::rpc::timeline::fetch_stored;
 use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 use provider_core::ports::controls::NativeSubagent;
+use provider_core::ports::environment::AgentEnvironment;
 use provider_core::protocol::agent_config::ConfigPatch;
+use provider_core::protocol::prompt::AgentPrompt;
 use provider_core::protocol::timeline::NativeItem;
 
 #[cfg(test)]
@@ -160,6 +166,73 @@ impl Manager {
     pub fn control_snapshot(&self, record: &PersistedAgentRuntimeRecord, snapshot: &mut Value) {
         self.0.control_snapshot(record, snapshot);
     }
+
+    /// Create `agent_id` from `spec` with a default registration and private per-process
+    /// `environment` overrides that never enter the registry.
+    ///
+    /// # Errors
+    /// Returns identity, admission, native launch or registration failures.
+    pub async fn create_with_environment(
+        &mut self,
+        agent_id: &str,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.0
+            .create_with_environment(agent_id, spec, AgentRegistration::default(), environment)
+            .await
+    }
+
+    /// Submit one complete rich `prompt` to `agent_id`.
+    ///
+    /// # Errors
+    /// Returns invalid input, busy ownership, native admission or persistence failures.
+    pub async fn send_input(
+        &mut self,
+        agent_id: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<(), AgentManagerError> {
+        self.0.send_input(agent_id, prompt).await
+    }
+
+    /// Restore the persisted `agent_id` without overriding any of its stored settings.
+    ///
+    /// # Errors
+    /// Returns missing identity, busy input, invalid settings, provider or persistence failures.
+    pub async fn restore(
+        &mut self,
+        agent_id: &str,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.0.restore(agent_id, &Overrides::default()).await
+    }
+
+    /// Execute the provider catalog request `method` with `params` over the registered adapters.
+    ///
+    /// # Errors
+    /// Returns invalid requests, unavailable adapters or discovery and cache errors.
+    pub async fn providers(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
+        self.0.providers(method, params).await
+    }
+
+    /// Read account or host quotas of `provider_id`, scoped to the live `agent_id` when given;
+    /// `force` refreshes the source instead of reusing the cache.
+    ///
+    /// # Errors
+    /// Returns unknown identity, invalid scope, registry failure or an oversized projection.
+    pub async fn usage(
+        &self,
+        agent_id: Option<&str>,
+        provider_id: Option<&str>,
+        force: bool,
+    ) -> Result<Value, ErrorCode> {
+        self.0.usage(agent_id, provider_id, force).await
+    }
+
+    /// The connection event service that publishes the manager's activity notifications.
+    #[must_use]
+    pub fn events(&self) -> SessionEvents {
+        self.0.events()
+    }
 }
 
 /// Temporary data root and working directory of one execution test.
@@ -178,9 +251,9 @@ impl Workbench {
     /// Panics when the temporary directories cannot be created.
     #[must_use]
     pub fn new() -> Self {
-        let root = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().expect("create the temporary data root");
         let cwd = root.path().join("work");
-        std::fs::create_dir(&cwd).unwrap();
+        std::fs::create_dir(&cwd).expect("create the working directory");
         Self { root, cwd }
     }
 }
@@ -224,15 +297,21 @@ pub(crate) fn spawn(
     configure: impl FnOnce(AgentManager) -> AgentManager,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
-    registry.initialize().unwrap();
+    registry
+        .initialize()
+        .expect("initialize the agent registry");
     let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
-    projects.initialize().unwrap();
+    projects
+        .initialize()
+        .expect("initialize the project registry");
     let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
-    workspaces.initialize().unwrap();
+    workspaces
+        .initialize()
+        .expect("initialize the workspace registry");
     projects.upsert(&serde_json::from_value(json!({
         "projectId":"project-1","rootPath":cwd,"kind":"non_git","displayName":"project",
         "createdAt":"2026-09-24T00:00:00Z","updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-    })).unwrap()).unwrap();
+    })).expect("decode the test project")).expect("register the test project");
     workspaces
         .upsert(
             &serde_json::from_value(json!({
@@ -240,16 +319,20 @@ pub(crate) fn spawn(
                 "kind":"local_checkout","displayName":"main","createdAt":"2026-09-24T00:00:00Z",
                 "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
             }))
-            .unwrap(),
+            .expect("decode the test workspace"),
             WorkspaceMutationContext::default(),
         )
-        .unwrap();
+        .expect("register the test workspace");
     let mut manager = configure(
         AgentManager::new(Box::new(registry.clone()))
             .with_creations(creations)
-            .with_timeline(Timeline::open(&root.join("timeline.sqlite")).unwrap()),
+            .with_timeline(
+                Timeline::open(&root.join("timeline.sqlite")).expect("open the display timeline"),
+            ),
     );
-    manager.register_client(client).unwrap();
+    manager
+        .register_client(client)
+        .expect("register the adapter under test");
     let worker = AgentExecution::spawn(ExecutionDependencies {
         workspace_automation: None,
         manager,
@@ -264,7 +347,7 @@ pub(crate) fn spawn(
         import_directory: None,
         projects: Box::new(projects),
     })
-    .unwrap();
+    .expect("start the execution worker");
     (worker, registry)
 }
 
@@ -277,6 +360,30 @@ pub async fn request(execution: &AgentExecution, method: &str, params: Value) ->
         .await
         .unwrap_or_else(|_| panic!("{method} timed out"))
         .unwrap_or_else(|error| panic!("{method}: {error:?}"))
+}
+
+/// Largest serialized size, in bytes, of one display timeline entry the runtime stores.
+pub const MAX_TIMELINE_ENTRY_BYTES: usize = crate::storage::timeline::MAX_ENTRY_BYTES;
+
+/// Fetch one page of the stored display history in `scope`, as `agent.timeline.get.request`
+/// answers it.
+///
+/// `request` holds the request parameters, `agent` the agent metadata of the response envelope
+/// and `history_needs_refresh` the optional refresh flag reserved in the response budget.
+///
+/// # Errors
+/// Returns `InvalidMessage` for undecodable parameters, and storage, cursor validation or
+/// response-budget errors.
+pub fn fetch_timeline(
+    timeline: &Timeline,
+    scope: &str,
+    request: Value,
+    agent: &Value,
+    history_needs_refresh: Option<bool>,
+) -> Result<Value, ErrorCode> {
+    let request: FetchRequest =
+        serde_json::from_value(request).map_err(|_| ErrorCode::InvalidMessage)?;
+    fetch_stored(&request, timeline, scope, agent, history_needs_refresh)
 }
 
 /// Adapters in `providers`, in assembly order.

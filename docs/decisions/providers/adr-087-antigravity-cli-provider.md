@@ -4,6 +4,7 @@ status: accepted
 date: 2026-10-06
 paths:
   - crates/provider
+  - crates/provider-antigravity
 ---
 
 # ADR-087：Antigravity CLI 原生 Provider

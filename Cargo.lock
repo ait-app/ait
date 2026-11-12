@@ -2314,6 +2314,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "provider-antigravity"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "provider-builtin"
 version = "0.2.9"
 dependencies = [
@@ -2321,6 +2340,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-antigravity",
  "provider-minimax",
  "provider-omp",
  "serde_json",

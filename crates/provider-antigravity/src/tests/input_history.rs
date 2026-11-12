@@ -2,12 +2,11 @@ use super::*;
 
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
-use crate::protocol::timeline::FetchRequest;
-use crate::rpc::timeline::fetch_stored;
-use crate::service::agent_manager::{AgentManager, AgentRegistration};
-use crate::storage::timeline::Timeline;
+use provider::service::agent_manager::AgentManager;
+use provider::storage::timeline::Timeline;
+use provider::testing::{Manager, fetch_timeline};
 
-async fn finish(manager: &mut AgentManager) {
+async fn finish(manager: &mut Manager) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while manager.active_turn("agent").is_some() {
             manager.poll().await.unwrap();
@@ -24,12 +23,10 @@ async fn inputs_precede_replies_in_live_storage_and_reopened_history() {
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
     let database = directory.path().join("timeline.sqlite3");
     let timeline = Timeline::open(&database).unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
-    manager.register_client(Box::new(client.clone())).unwrap();
-    let initial = manager
-        .create("agent", &spec, AgentRegistration::default())
-        .await
-        .unwrap();
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone()));
+    manager.register(Box::new(client.clone())).unwrap();
+    let initial = manager.create("agent", &spec).await.unwrap();
     for id in ["first", "second"] {
         let prompt = AgentPrompt {
             text: "same question".to_owned(),
@@ -39,13 +36,11 @@ async fn inputs_precede_replies_in_live_storage_and_reopened_history() {
         manager.send_input("agent", &prompt).await.unwrap();
         finish(&mut manager).await;
     }
-    let (_, rows) = timeline.read("agent").unwrap();
+    let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
     let mut speakers: Vec<_> = rows
         .iter()
-        .filter_map(|row| match row.entry.item["type"].as_str() {
-            Some("user_message" | "assistant_message") => {
-                Some(row.entry.item["type"].as_str().unwrap())
-            }
+        .filter_map(|row| match row.item["type"].as_str() {
+            Some("user_message" | "assistant_message") => Some(row.item["type"].as_str().unwrap()),
             _ => None,
         })
         .collect();
@@ -64,12 +59,10 @@ async fn inputs_precede_replies_in_live_storage_and_reopened_history() {
     drop(timeline);
 
     let timeline = Timeline::open(&database).unwrap();
-    let mut restored = AgentManager::new(Box::new(registry)).with_timeline(timeline.clone());
-    restored.register_client(Box::new(client)).unwrap();
-    let resumed = restored
-        .restore("agent", &crate::protocol::resume::Overrides::default())
-        .await
-        .unwrap();
+    let mut restored =
+        Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
+    restored.register(Box::new(client)).unwrap();
+    let resumed = restored.restore("agent").await.unwrap();
     assert_eq!(resumed.persistence, initial.persistence);
     restored
         .send_input(
@@ -83,9 +76,8 @@ async fn inputs_precede_replies_in_live_storage_and_reopened_history() {
         .await
         .unwrap();
     finish(&mut restored).await;
-    let request: FetchRequest =
-        serde_json::from_value(json!({"agentId":"agent","direction":"tail","limit":30})).unwrap();
-    let page = fetch_stored(&request, &timeline, "agent", &Value::Null, Some(false)).unwrap();
+    let request = json!({"agentId":"agent","direction":"tail","limit":30});
+    let page = fetch_timeline(&timeline, "agent", request, &Value::Null, Some(false)).unwrap();
     let messages: Vec<_> = page["entries"]
         .as_array()
         .unwrap()

@@ -85,7 +85,7 @@ describe("shared messages tool_call schema", () => {
     const cases = JSON.parse(
       readFileSync(
         new URL(
-          "../../../crates/provider/tests/fixtures/antigravity_tool_cards.json",
+          "../../../crates/provider-antigravity/tests/fixtures/antigravity_tool_cards.json",
           import.meta.url,
         ),
         "utf8",

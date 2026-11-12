@@ -1,15 +1,16 @@
 use super::*;
-use crate::service::agent_manager::{AgentManager, AgentRegistration};
+use provider::service::agent_manager::AgentManager;
+use provider::testing::Manager;
 
 #[tokio::test]
 async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
     let (directory, client, spec) = fixture();
-    let mut manager = AgentManager::new(Box::new(
+    let mut manager = Manager::new(AgentManager::new(Box::new(
         persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
             directory.path().join("agents.json"),
         ),
-    ));
-    manager.register_client(Box::new(client)).unwrap();
+    )));
+    manager.register(Box::new(client)).unwrap();
     let report = manager.usage(None, Some(PROVIDER), true).await.unwrap();
     let host = &report["providers"][0];
     assert_eq!(host["status"], "available", "{host}");
@@ -44,12 +45,7 @@ async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
     ]))
     .unwrap();
     manager
-        .create_with_environment(
-            "quota-agent",
-            &spec,
-            AgentRegistration::default(),
-            &environment,
-        )
+        .create_with_environment("quota-agent", &spec, &environment)
         .await
         .unwrap();
     let agent = manager
@@ -103,12 +99,12 @@ async fn quota_query_failures_are_bounded_and_never_expose_native_error_text() {
         if scenario == "hung" {
             client.deadline = Duration::from_millis(100);
         }
-        let mut manager = AgentManager::new(Box::new(
+        let mut manager = Manager::new(AgentManager::new(Box::new(
             persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
                 directory.path().join("agents.json"),
             ),
-        ));
-        manager.register_client(Box::new(client)).unwrap();
+        )));
+        manager.register(Box::new(client)).unwrap();
         let report = tokio::time::timeout(
             Duration::from_secs(3),
             manager.usage(None, Some(PROVIDER), true),

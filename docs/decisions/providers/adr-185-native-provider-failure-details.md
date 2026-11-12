@@ -10,6 +10,7 @@ paths:
   - crates/provider-native
   - crates/provider-core
   - crates/provider-minimax
+  - crates/provider-antigravity
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

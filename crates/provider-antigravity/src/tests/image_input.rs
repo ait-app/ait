@@ -5,10 +5,9 @@ use std::path::Path;
 
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
-use crate::protocol::timeline::FetchRequest;
-use crate::rpc::timeline::fetch_stored;
-use crate::service::agent_manager::{AgentManager, AgentRegistration};
-use crate::storage::timeline::Timeline;
+use provider::service::agent_manager::AgentManager;
+use provider::storage::timeline::Timeline;
+use provider::testing::{Manager, fetch_timeline};
 
 #[tokio::test]
 async fn image_requests_reach_agy_and_remain_visible_in_reopened_history() {
@@ -16,11 +15,12 @@ async fn image_requests_reach_agy_and_remain_visible_in_reopened_history() {
     let database = directory.path().join("timeline.sqlite3");
     let timeline = Timeline::open(&database).unwrap();
     let registry = FileBackedAgentRuntimeRegistry::new(directory.path().join("agents.json"));
-    let mut manager = AgentManager::new(Box::new(registry)).with_timeline(timeline.clone());
+    let mut manager =
+        Manager::new(AgentManager::new(Box::new(registry)).with_timeline(timeline.clone()));
     let environment = client.environment.clone();
-    manager.register_client(Box::new(client)).unwrap();
+    manager.register(Box::new(client)).unwrap();
     manager
-        .create_with_environment("agent", &spec, AgentRegistration::default(), &environment)
+        .create_with_environment("agent", &spec, &environment)
         .await
         .unwrap();
     let image = PromptImage {
@@ -48,9 +48,8 @@ async fn image_requests_reach_agy_and_remain_visible_in_reopened_history() {
     drop(manager);
     drop(timeline);
     let timeline = Timeline::open(&database).unwrap();
-    let request: FetchRequest =
-        serde_json::from_value(json!({"agentId":"agent","direction":"tail","limit":30})).unwrap();
-    let page = fetch_stored(&request, &timeline, "agent", &Value::Null, Some(false)).unwrap();
+    let request = json!({"agentId":"agent","direction":"tail","limit":30});
+    let page = fetch_timeline(&timeline, "agent", request, &Value::Null, Some(false)).unwrap();
     let messages: Vec<_> = page["entries"]
         .as_array()
         .unwrap()

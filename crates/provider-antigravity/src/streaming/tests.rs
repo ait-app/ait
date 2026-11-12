@@ -37,14 +37,14 @@ fn submitted_text_is_bounded_lossless_and_reconciles_the_client_only_once() {
         entries
             .iter()
             .all(|entry| serde_json::to_vec(entry).unwrap().len()
-                < crate::storage::timeline::MAX_ENTRY_BYTES)
+                < provider::testing::MAX_TIMELINE_ENTRY_BYTES)
     );
 }
 
 #[test]
 fn tool_details_match_shared_client_schema_fixtures() {
     let cases: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/antigravity_tool_cards.json"
+        "../../tests/fixtures/antigravity_tool_cards.json"
     ))
     .unwrap();
     for case in cases {

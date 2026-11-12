@@ -26,7 +26,7 @@ const PROVIDER: &str = "antigravity";
 
 /// Installed native CLI; credentials, permissions and conversation storage remain AGY-owned.
 #[derive(Debug, Clone)]
-pub(crate) struct AntigravityClient {
+pub struct AntigravityClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
@@ -38,7 +38,7 @@ impl AntigravityClient {
     ///
     /// Startup and discovery are bounded to thirty seconds; foreground turns have no timeout.
     #[must_use]
-    pub(crate) fn new(program: PathBuf) -> Self {
+    pub fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),
@@ -49,7 +49,7 @@ impl AntigravityClient {
 
     /// Keep submitted images in the host's private artifact directory for native reads and history.
     #[must_use]
-    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = provider_native::images::ImageStore::new(directory);
         self
     }
@@ -58,7 +58,7 @@ impl AntigravityClient {
     ///
     /// Returns an unavailable launcher when no executable exists. Does not install software.
     #[must_use]
-    pub(crate) fn installed() -> Self {
+    pub fn installed() -> Self {
         Self::new(discovery::installed_program())
     }
 }
