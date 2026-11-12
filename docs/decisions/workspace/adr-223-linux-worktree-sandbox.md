@@ -9,6 +9,7 @@ paths:
   - crates/provider-native
   - crates/provider-claude
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-223：Linux 沙箱化 Worktree

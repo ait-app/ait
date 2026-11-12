@@ -12,7 +12,6 @@ mod composition;
 /// Bounded read-only native harness evidence collection.
 pub mod diagnostics;
 pub mod dispatch;
-pub mod local;
 pub mod ports;
 pub(crate) mod protocol;
 pub mod rpc;

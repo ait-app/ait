@@ -1,12 +1,10 @@
 //! Adapter container and the auxiliary generation assembled from it.
 
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
-use crate::local::codex::CodexClient;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::service::summary_generation::Generation;
@@ -61,29 +59,18 @@ impl Providers {
         Ok(())
     }
 
-    /// Configure the built-in adapters that still live in this crate, reading launcher
-    /// overrides from `environment`; `provider-builtin` appends the extracted adapters.
+    /// An empty assembly whose adapters store native image artifacts under `data_dir`.
     ///
-    /// `data_dir` is the daemon's persistent storage root and `environment` resolves variables
-    /// such as `AIT_SERVER_CODEX_BIN`, letting in-process hosts select offline native programs
-    /// without mutating the process environment. Returns adapters without starting processes.
-    #[doc(hidden)]
+    /// `data_dir` is the daemon's persistent storage root; `provider-builtin` adds the built-in
+    /// adapters with [`Providers::with`]. Returns the container without creating storage.
     #[must_use]
-    pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString>) -> Self {
-        let program = |name: &str, fallback: &str| {
-            environment(name).map_or_else(|| PathBuf::from(fallback), PathBuf::from)
-        };
-        let images = data_dir.join("agents/provider-images");
-        let codex = CodexClient::new(program("AIT_SERVER_CODEX_BIN", "codex"))
-            .with_image_directory(images.clone());
-        let mut providers = Self {
+    pub fn empty(data_dir: &Path) -> Self {
+        Self {
             clients: Vec::new(),
             summary_clients: Vec::new(),
             usage_ledger: Arc::new(NoopUsageLedger),
-            images,
-        };
-        providers.add(codex);
-        providers
+            images: data_dir.join("agents/provider-images"),
+        }
     }
 
     /// Add an adapter owned by another crate, built for the shared native image directory.

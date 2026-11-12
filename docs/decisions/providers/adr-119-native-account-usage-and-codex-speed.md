@@ -6,6 +6,7 @@ paths:
   - crates/provider
   - crates/provider-core
   - crates/provider-claude
+  - crates/provider-codex
 ---
 
 # ADR-119：原生账号用量与 Codex 速度目录
@@ -13,6 +14,7 @@ paths:
 - 更新：2026-10-17，统一 Fast 别名并改为直接开关。
 - 2026-10-20：第 4 项缓存策略由 [ADR-167](adr-167-account-scoped-successful-usage.md) 修订，增加账号身份与 live-session 隔离的成功快照。
 - 关系：延续 ADR-027 的会话端口与 Manager 生命周期边界、ADR-047 的 Plugin 移除，以及 ADR-091 的独立会话调度。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

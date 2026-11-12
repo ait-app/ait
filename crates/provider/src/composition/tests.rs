@@ -45,9 +45,9 @@ impl AgentClient for External {
 #[test]
 fn external_adapters_join_the_assembly_with_the_shared_image_directory() {
     let root = tempfile::tempdir().unwrap();
-    let assembled = Providers::configured(root.path(), |_| None).clients.len();
+    let assembled = Providers::empty(root.path()).clients.len();
     let mut received = None;
-    let providers = Providers::configured(root.path(), |_| None).with(|images| {
+    let providers = Providers::empty(root.path()).with(|images| {
         received = Some(images.to_owned());
         External
     });
@@ -68,22 +68,20 @@ async fn summary_generators_record_their_calls_in_the_installed_host_ledger() {
         CallOutcome, CallSource, UsageGroup, UsageLedger, UsageQuery,
     };
 
-    let fixture = crate::test_support::Fixture::new();
+    let fixture = provider_codex::testing::Fixture::new();
     let data = tempfile::tempdir().unwrap();
     let ledger = Arc::new(SqliteUsageLedger::open(data.path()).unwrap());
     let config = Arc::new(Configuration::default());
     config
         .patch(&json!({"metadataGeneration":{"providers":[{"provider":"codex","model":"m"}]}}))
         .unwrap();
-    let generator = Providers::configured(fixture.root.path(), |name| {
-        Some(if name == "AIT_SERVER_CODEX_BIN" {
-            fixture.program.clone().into_os_string()
-        } else {
-            fixture.root.path().join(name).into_os_string()
+    let generator = Providers::empty(fixture.root.path())
+        .with(|images| {
+            provider_codex::CodexClient::new(fixture.program.clone())
+                .with_image_directory(images.to_owned())
         })
-    })
-    .with_usage_ledger(ledger.clone())
-    .summary_generator(config);
+        .with_usage_ledger(ledger.clone())
+        .summary_generator(config);
     std::fs::write(
         fixture.cwd.join("metadata-response.json"),
         r#"{"title":"Recorded title"}"#,

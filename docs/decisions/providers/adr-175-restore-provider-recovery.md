@@ -6,6 +6,7 @@ amends:
   - clients/adr-170-revert-error-diagnostics-and-recovery.md
 paths:
   - crates/provider
+  - crates/provider-codex
 ---
 
 # ADR-175：独立恢复 Provider 错误详情与重启收尾

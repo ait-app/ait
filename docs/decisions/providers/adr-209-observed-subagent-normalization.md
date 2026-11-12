@@ -7,6 +7,7 @@ paths:
   - apps/mobile
   - crates/provider-claude
   - crates/provider-opencode
+  - crates/provider-codex
 ---
 
 # ADR-209：通过只读登记统一子 Agent 展示

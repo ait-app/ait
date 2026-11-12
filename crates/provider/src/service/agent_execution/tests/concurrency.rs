@@ -46,7 +46,7 @@ impl Gate {
 
 #[derive(Debug)]
 struct GatedClient {
-    native: crate::local::codex::CodexClient,
+    native: provider_codex::CodexClient,
     gate: Arc<Gate>,
 }
 

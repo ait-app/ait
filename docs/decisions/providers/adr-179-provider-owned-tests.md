@@ -14,6 +14,7 @@ paths:
   - crates/provider-deepseek-harness
   - crates/provider-opencode
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-179：Provider 自身行为的测试归 provider crate

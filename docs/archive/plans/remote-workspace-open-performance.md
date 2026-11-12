@@ -59,7 +59,7 @@ Agent 目录与 Project/Workspace 目录会并行刷新，不是所有数据都�
 
 [load_timeline](../../../crates/provider/src/service/agent_manager.rs) 在每个 daemon 进程中对每个 Agent 首次访问时调用 Provider 的 `history`，之后 reconcile 到本地时间线。它使用进程内 `loaded_timelines` 标记，daemon 重启会重新走这一步。
 
-Codex 的 [history 适配](../../../crates/provider/src/local/codex/discovery.rs) 最终调用 [inspect_native](../../../crates/provider/src/local/codex/native_sessions.rs)：启动 transport、initialize、`thread/read(includeTurns: true)`、转换历史并关闭 transport。因此远端 daemon 的原生程序启动和整段历史读取也在首次会话显示路径上。
+Codex 的 [history 适配](../../../crates/provider-codex/src/discovery.rs) 最终调用 [inspect_native](../../../crates/provider-codex/src/native_sessions.rs)：启动 transport、initialize、`thread/read(includeTurns: true)`、转换历史并关闭 transport。因此远端 daemon 的原生程序启动和整段历史读取也在首次会话显示路径上。
 
 这是历史检查，不等价于每次打开 Workspace 都恢复一个交互式 Agent。当前事件订阅验证 Agent 身份，也不能直接当作启动原生 writer 的证据。
 

@@ -13,6 +13,7 @@ paths:
   - crates/provider-claude
   - crates/provider-opencode
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-052: Native provider capability completion

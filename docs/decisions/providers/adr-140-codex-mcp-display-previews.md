@@ -7,11 +7,13 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-codex
 ---
 
 # ADR-140：Codex MCP 超大字段使用展示预览
 
 - 范围：Codex MCP 工具展示；修订 ADR-090 对超大 MCP 字段的处理。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

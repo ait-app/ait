@@ -10,6 +10,7 @@ provider.workspace = true
 # Adapters extracted into their own crates, appended to the runtime's set.
 provider-antigravity.workspace = true
 provider-claude.workspace = true
+provider-codex.workspace = true
 provider-deepseek-harness.workspace = true
 provider-minimax.workspace = true
 provider-omp.workspace = true

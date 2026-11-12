@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use provider::Providers;
 use provider_antigravity::AntigravityClient;
 use provider_claude::ClaudeClient;
+use provider_codex::CodexClient;
 use provider_deepseek_harness::DeepSeekHarnessClient;
 use provider_minimax::MiniMaxClient;
 use provider_omp::OmpClient;
@@ -35,6 +36,8 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
     let antigravity = environment("AIT_SERVER_ANTIGRAVITY_BIN");
     let claude =
         environment("AIT_SERVER_CLAUDE_BIN").map_or_else(|| PathBuf::from("claude"), PathBuf::from);
+    let codex =
+        environment("AIT_SERVER_CODEX_BIN").map_or_else(|| PathBuf::from("codex"), PathBuf::from);
     let dsh = environment("AIT_SERVER_DEEPSEEK_HARNESS_BIN");
     let dsh_profile = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE");
     let dsh_acp =
@@ -44,7 +47,8 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
     let opencode = environment("AIT_SERVER_OPENCODE_BIN")
         .map_or_else(|| PathBuf::from("opencode"), PathBuf::from);
     let pi = environment("AIT_SERVER_PI_BIN").map_or_else(|| PathBuf::from("pi"), PathBuf::from);
-    Providers::configured(data_dir, &environment)
+    Providers::empty(data_dir)
+        .with(|images| CodexClient::new(codex).with_image_directory(images.to_owned()))
         .with(|images| {
             antigravity
                 .map_or_else(AntigravityClient::installed, |program| {

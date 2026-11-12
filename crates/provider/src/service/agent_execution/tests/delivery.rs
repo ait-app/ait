@@ -464,7 +464,8 @@ async fn restart_reloads_large_completed_and_interrupted_histories_before_one_na
         let path = fixture.cwd.join(format!("native-history-{native_id}.json"));
         std::fs::write(&path, original.to_string()).unwrap();
         assert!(
-            crate::test_support::codex_history::write_large_history(&fixture) > 32 * 1024 * 1024
+            provider_codex::testing::codex_history::write_large_history(&fixture)
+                > 32 * 1024 * 1024
         );
         let (restarted, registry) = worker(&fixture);
         let prompt = json!({"agentId":id,"text":"Continue","messageId":"after-restart"});

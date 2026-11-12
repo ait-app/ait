@@ -6,6 +6,7 @@ paths:
   - crates/provider
   - apps/mobile
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-196：Provider 输出分类与每轮 Thinking 展示

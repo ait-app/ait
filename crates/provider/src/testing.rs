@@ -31,6 +31,7 @@ use crate::service::agent_manager::ownership::Owners;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
+use crate::timeline_projection::project;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
 use provider_core::ports::controls::NativeSubagent;
 use provider_core::ports::environment::AgentEnvironment;
@@ -608,6 +609,31 @@ pub fn timeline_entries(
 ) -> Result<(String, Vec<NativeItem>), ErrorCode> {
     let (epoch, rows) = timeline.read(agent)?;
     Ok((epoch, rows.into_iter().map(|row| row.entry).collect()))
+}
+
+/// The generation and ordered display entries of `agent`, each with its stored sequence.
+///
+/// # Errors
+/// Returns storage or invalid persisted-data errors.
+pub fn timeline_rows(
+    timeline: &Timeline,
+    agent: &str,
+) -> Result<(String, Vec<(u64, NativeItem)>), ErrorCode> {
+    let (epoch, rows) = timeline.read(agent)?;
+    Ok((
+        epoch,
+        rows.into_iter().map(|row| (row.seq, row.entry)).collect(),
+    ))
+}
+
+/// The display items of `agent` after the projection that merges lifecycle updates of one
+/// native item, in display order.
+///
+/// # Errors
+/// Returns storage or invalid persisted-data errors.
+pub fn projected_timeline_items(timeline: &Timeline, agent: &str) -> Result<Vec<Value>, ErrorCode> {
+    let (_, rows) = timeline.read(agent)?;
+    Ok(project(&rows).into_iter().map(|entry| entry.item).collect())
 }
 
 /// Append `entries` produced by `provider` to the display history of `agent`.

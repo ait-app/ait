@@ -158,7 +158,7 @@ async fn quota_reads_use_the_live_agent_account_and_validate_the_rpc_shape() {
 #[tokio::test]
 async fn missing_provider_binary_is_omitted_from_host_usage_rpc() {
     let fixture = Fixture::new();
-    let client = crate::local::codex::CodexClient::new(fixture.root.path().join("missing-codex"));
+    let client = provider_codex::CodexClient::new(fixture.root.path().join("missing-codex"));
     let (execution, _) = worker_with_client(
         &fixture,
         model::creation::Creations::default(),

@@ -20,8 +20,10 @@ SCOPES = [
         "service::agent_execution::", "service::agent_manager::", "service::agent_runtime::",
         "service::provider_catalog::", "service::workspace_attention::", "rpc::timeline::",
         "rpc::fork_context::", "rpc::agent_execution::", "rpc::agent_runtime::", "connection::",
-        "local::codex::", "storage::timeline::", "protocol::tests::",
+        "storage::timeline::", "protocol::tests::",
     ]),
+    # Every test of the adapter crate.
+    ("provider-codex", ["--lib"], []),
     ("provider-core", ["--lib"], ["ports::environment::", "ports::agent_session::"]),
     # Every test of the adapter crate.
     ("provider-claude", ["--lib"], []),

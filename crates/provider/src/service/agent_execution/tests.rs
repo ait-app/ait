@@ -14,7 +14,8 @@ mod waits;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
-use crate::test_support::{Fixture, worker_with_client};
+use crate::test_support::worker_with_client;
+use provider_codex::testing::Fixture;
 
 #[tokio::test]
 async fn configuration_commits_atomically_applies_next_turn_and_survives_restart() {

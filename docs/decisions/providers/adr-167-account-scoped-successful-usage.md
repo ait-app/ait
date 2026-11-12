@@ -10,6 +10,7 @@ paths:
   - crates/provider-antigravity
   - crates/provider-claude
   - crates/provider-deepseek-harness
+  - crates/provider-codex
 ---
 
 # ADR-167：用量缓存按原生账号与成功快照隔离

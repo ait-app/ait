@@ -8,6 +8,7 @@ amends:
 paths:
   - crates/provider
   - crates/provider-core
+  - crates/provider-codex
 ---
 
 # ADR-034：Agent 后续 turn 配置与 Session 事件/心跳

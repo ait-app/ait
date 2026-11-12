@@ -2278,20 +2278,16 @@ name = "provider"
 version = "0.2.9"
 dependencies = [
  "async-trait",
- "axum",
  "base64 0.22.1",
  "chrono",
  "domain",
  "futures-util",
  "model",
- "nix 0.31.3",
- "opus2",
  "persistence",
+ "provider-codex",
  "provider-core",
- "provider-native",
  "pulldown-cmark",
  "regex",
- "rtc",
  "rusqlite",
  "secrecy",
  "serde",
@@ -2301,11 +2297,9 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-util",
- "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
- "webrtc",
 ]
 
 [[package]]
@@ -2337,6 +2331,7 @@ dependencies = [
  "provider",
  "provider-antigravity",
  "provider-claude",
+ "provider-codex",
  "provider-deepseek-harness",
  "provider-minimax",
  "provider-omp",
@@ -2370,6 +2365,38 @@ dependencies = [
  "tokio-util",
  "unicode-normalization",
  "uuid",
+]
+
+[[package]]
+name = "provider-codex"
+version = "0.2.9"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "nix 0.31.3",
+ "opus2",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "rtc",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "webrtc",
 ]
 
 [[package]]

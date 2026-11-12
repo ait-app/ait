@@ -17,7 +17,7 @@ export async function createScheduleHost() {
   const dataDir = await mkdtemp(path.join(tmpdir(), "schedule-secondary-"));
   const fixturePath = path.join(dataDir, "codex-offline");
   const fixture = await readFile(
-    path.join(repoRoot, "crates/provider/tests/fixtures/codex_app_server.py"),
+    path.join(repoRoot, "crates/provider-codex/tests/fixtures/codex_app_server.py"),
     "utf8",
   );
   await writeFile(

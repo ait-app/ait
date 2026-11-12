@@ -92,7 +92,7 @@ async fn draft_feature_failures_are_inline_and_do_not_fabricate_feature_values()
 #[cfg(unix)]
 #[tokio::test]
 async fn native_codex_draft_features_discover_workflows_without_opening_a_thread() {
-    let fixture = crate::test_support::Fixture::new();
+    let fixture = provider_codex::testing::Fixture::new();
     fixture.mode("workflows");
     let clients = BTreeMap::from([(
         "codex".to_owned(),

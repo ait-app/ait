@@ -7,11 +7,13 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-codex
 ---
 
 # ADR-149：Codex 高权限档位自动批准 computer use 访问
 
 - 关系：修订 [ADR-122](adr-122-codex-computer-use-approval.md) 的档位范围与原生请求处理边界。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

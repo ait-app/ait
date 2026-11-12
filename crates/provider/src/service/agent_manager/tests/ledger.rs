@@ -5,8 +5,8 @@ use super::*;
 use crate::ports::usage_ledger::{CallOutcome, CallSource};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::storage::timeline::Timeline;
-use crate::test_support::Fixture;
 use crate::test_support::usage_ledger::{RecordingLedger, Write};
+use provider_codex::testing::Fixture;
 use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use provider_core::protocol::prompt::AgentPrompt;
 

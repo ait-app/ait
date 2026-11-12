@@ -5,11 +5,14 @@ date: 2026-10-10
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-codex
 ---
 
 # ADR-122：Codex Auto-review 的 computer use 工具批准
 
 档位范围与访问批准由 [ADR-149](adr-149-codex-computer-use-access-auto-approval.md) 修订。
+
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::*;
-use crate::local::codex::CodexClient;
+use provider_codex::CodexClient;
 use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };

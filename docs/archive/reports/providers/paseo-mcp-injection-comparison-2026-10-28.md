@@ -74,7 +74,7 @@ Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅�
 尤其要处理后续输入：当前 manager 每次调用 `start_input` 都从 record 读取持久配置。
 如果只在创建时增加 MCP，Codex 的配置对比可能将其视为一次 MCP 配置变更并重新打开原生进程；
 DSH ACP 对启动配置和后续 MCP 配置不一致会直接拒绝输入。这里是根据调用代码得出的实现风险，
-不是本次复现的故障。来源：[Codex](../../../../crates/provider/src/local/codex.rs#L598)、
+不是本次复现的故障。来源：[Codex](../../../../crates/provider-codex/src/lib.rs#L601)、
 [DSH ACP](../../../../crates/provider-deepseek-harness/src/session.rs#L105)。
 
 ### Ait Provider 现状

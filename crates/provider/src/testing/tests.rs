@@ -2,7 +2,7 @@ use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use serde_json::json;
 
 use super::*;
-use crate::local::codex::CodexClient;
+use provider_codex::CodexClient;
 
 fn entry(key: &str, text: &str) -> NativeItem {
     NativeItem {
@@ -62,6 +62,31 @@ fn timeline_access_reads_appended_and_reconciled_entries() {
     let (_, entries) = timeline_entries(&timeline, "agent").unwrap();
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[1].item["text"], "third");
+}
+
+#[test]
+fn timeline_rows_keep_sequences_and_projection_merges_one_tool_lifecycle() {
+    let tool = |key: &str, status: &str| NativeItem {
+        item: json!({"type":"tool_call","callId":"call","name":"shell","status":status}),
+        ..entry(key, "")
+    };
+    let entries = [
+        tool("running", "running"),
+        tool("done", "completed"),
+        entry("reply", "after"),
+    ];
+    let timeline = memory_timeline().unwrap();
+    let (epoch, positions) = append_timeline(&timeline, "agent", "codex", &entries).unwrap();
+
+    let (read, rows) = timeline_rows(&timeline, "agent").unwrap();
+    assert_eq!(read, epoch);
+    assert_eq!(rows, positions.into_iter().zip(entries).collect::<Vec<_>>());
+
+    let items = projected_timeline_items(&timeline, "agent").unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["callId"], "call");
+    assert_eq!(items[0]["status"], "completed");
+    assert_eq!(items[1]["text"], "after");
 }
 
 #[tokio::test]

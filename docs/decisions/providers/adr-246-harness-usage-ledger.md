@@ -18,6 +18,7 @@ paths:
   - crates/provider-deepseek-harness
   - crates/provider-opencode
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-246：按 Host 记录的 Harness 用量账本

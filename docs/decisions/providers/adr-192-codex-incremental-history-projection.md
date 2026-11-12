@@ -7,12 +7,14 @@ amends:
 paths:
   - crates/provider
   - crates/provider-native
+  - crates/provider-codex
 ---
 
 # ADR-192：Codex 历史按页投影后计算展示预算
 
 - 修订：[ADR-191](adr-191-codex-native-realtime-voice.md) 的原始历史字节限制；延续 [ADR-157](adr-157-codex-user-image-projection.md) 的图片落盘、[ADR-140](adr-140-codex-mcp-display-previews.md) 的工具摘要和 [ADR-185](adr-185-native-provider-failure-details.md) 的失败说明。
 - 问题：[Issue #491](https://github.com/ait-app/ait/issues/491)。
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

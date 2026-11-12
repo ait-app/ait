@@ -15,6 +15,7 @@ paths:
   - crates/provider-deepseek-harness
   - crates/provider-opencode
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-185：各 Provider 保留原生失败原因

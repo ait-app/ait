@@ -37,7 +37,7 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
     // Keep the executable immutable while concurrent tests spawn native processes; the link
     // also scopes the fake's optional diagnostic cwd overrides to this test.
     let codex = root.path().join("codex");
-    symlink(fake("provider", "codex_app_server.py"), &codex).unwrap();
+    symlink(fake("provider-codex", "codex_app_server.py"), &codex).unwrap();
     let cwd = root.path().join("work");
     std::fs::create_dir(&cwd).unwrap();
     let config = Arc::new(Configuration::default());

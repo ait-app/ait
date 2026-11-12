@@ -390,7 +390,7 @@ async fn large_completed_tool_result_is_saved_without_closing_the_native_session
 async fn oversized_codex_mcp_result_preserves_the_session_history_and_next_turn() {
     use provider_core::ports::agent_session::AgentClient;
 
-    let fixture = crate::test_support::Fixture::new();
+    let fixture = provider_codex::testing::Fixture::new();
     let client = fixture.client();
     let registry = MemoryRegistry::default();
     let timeline = Timeline::memory().unwrap();

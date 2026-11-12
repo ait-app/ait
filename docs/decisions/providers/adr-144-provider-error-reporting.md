@@ -12,6 +12,7 @@ paths:
   - crates/provider-deepseek-harness
   - crates/provider-opencode
   - crates/provider-pi
+  - crates/provider-codex
 ---
 
 # ADR-144：Provider 安全诊断与持久失败提示
