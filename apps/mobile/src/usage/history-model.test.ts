@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   cacheHitRate,
   combineUsageHistory,
-  hasLowerBound,
   historyWindow,
   isLedgerUnsupported,
-  isLowerBound,
   ledgerProviderLabel,
   resolveHostHistoryTotals,
   sumAll,
@@ -89,14 +87,6 @@ describe("row figures", () => {
     expect(cacheHitRate(row({}, { inputTokens: 100, cacheReadTokens: 300 }))).toBe(0.75);
     expect(cacheHitRate(row({}, { inputTokens: 0, cacheReadTokens: 0 }))).toBeNull();
     expect(cacheHitRate(row({}, { inputTokens: 40, cacheReadTokens: 0 }))).toBe(0);
-  });
-
-  it("marks rows with partial or missing calls as lower bounds", () => {
-    expect(isLowerBound(row({}))).toBe(false);
-    expect(isLowerBound(row({}, { lowerBoundCalls: 1 }))).toBe(true);
-    expect(isLowerBound(row({}, { missingCalls: 2 }))).toBe(true);
-    expect(hasLowerBound({ byModel: [row({})], byDay: [row({}, { missingCalls: 1 })] })).toBe(true);
-    expect(hasLowerBound({ byModel: [row({})], byDay: [row({})] })).toBe(false);
   });
 });
 

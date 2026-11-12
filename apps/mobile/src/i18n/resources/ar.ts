@@ -2474,7 +2474,6 @@ export const ar: TranslationResources = {
       cacheWrite: "الكتابة في الذاكرة المؤقتة {{value}}",
       cacheHitRate: "إصابات الذاكرة المؤقتة {{value}}",
       reportedCost: "التكلفة التي أبلغ عنها المزوّد {{value}}",
-      lowerBound: "≥ تعني حدًا أدنى: بعض الاستدعاءات أبلغت عن جزء من استخدام الرموز أو لم تبلغ عنه.",
       recordedSince: "يبدأ سجل الاستخدام في {{date}}. لا توجد سجلات أقدم.",
       empty: "لا توجد استدعاءات في هذه الفترة",
       unreachable: "غير محسوبة، تعذّر الاتصال: {{hosts}}",

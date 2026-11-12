@@ -10,13 +10,10 @@ import {
   formatLedgerCount,
   formatLedgerDate,
   formatLedgerDay,
-  formatLedgerTokens,
   formatReportedCost,
 } from "./format";
 import {
   cacheHitRate,
-  hasLowerBound,
-  isLowerBound,
   ledgerProviderLabel,
   totalTokens,
   type HostHistoryTotals,
@@ -54,7 +51,6 @@ export function UsageHistoryBody({
       ) : null}
       <UsageHistoryTables history={history} locale={locale} />
       <View style={styles.notes}>
-        {hasLowerBound(history) ? <Note text={copy.lowerBound} /> : null}
         {history.recordedSince !== null ? (
           <Note text={copy.recordedSince(formatLedgerDate(history.recordedSince, locale))} />
         ) : null}
@@ -152,8 +148,7 @@ function LedgerRowView({
   bordered: boolean;
 }) {
   const copy = useUsageCopy().history;
-  const lowerBound = isLowerBound(row);
-  const tokens = (value: number) => formatLedgerTokens(value, lowerBound, locale);
+  const tokens = (value: number) => formatLedgerCount(value, locale);
   const hitRate = cacheHitRate(row);
   const cost = formatReportedCost(row, locale);
   const details = [
@@ -182,7 +177,7 @@ function LedgerRowView({
   );
 }
 
-/** A host's totals: calls, requests and tokens on one line, with the notes that qualify them. */
+/** A host's totals: calls, requests and tokens on one line, with when its history starts. */
 export function HostHistoryTotalsBody({
   totals,
   hostLabel,
@@ -211,23 +206,19 @@ export function HostHistoryTotalsBody({
       );
     case "ready": {
       const row = totals.totals;
-      const lowerBound = isLowerBound(row);
       const summary = [
         copy.calls(formatLedgerCount(row.calls, locale)),
         copy.requests(formatLedgerCount(row.requests, locale)),
-        copy.tokens(formatLedgerTokens(totalTokens(row), lowerBound, locale)),
+        copy.tokens(formatLedgerCount(totalTokens(row), locale)),
       ].join(" · ");
       return (
         <View style={styles.body}>
           <View style={[settingsStyles.card, styles.row]}>
             <Text style={styles.rowLabel}>{summary}</Text>
           </View>
-          {lowerBound || totals.recordedSince !== null ? (
+          {totals.recordedSince !== null ? (
             <View style={styles.notes}>
-              {lowerBound ? <Note text={copy.lowerBound} /> : null}
-              {totals.recordedSince !== null ? (
-                <Note text={copy.recordedSince(formatLedgerDate(totals.recordedSince, locale))} />
-              ) : null}
+              <Note text={copy.recordedSince(formatLedgerDate(totals.recordedSince, locale))} />
             </View>
           ) : null}
         </View>

@@ -2733,7 +2733,6 @@ export const en = {
       cacheWrite: "Cache write {{value}}",
       cacheHitRate: "Cache hit {{value}}",
       reportedCost: "Provider-reported cost {{value}}",
-      lowerBound: "≥ marks a lower bound: some calls reported partial token usage or none.",
       recordedSince: "Usage history starts {{date}}. Nothing earlier was recorded.",
       empty: "No calls in this period",
       unreachable: "Not counted, unable to reach: {{hosts}}",

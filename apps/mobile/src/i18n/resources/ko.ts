@@ -2505,8 +2505,6 @@ export const ko: TranslationResources = {
       cacheWrite: "캐시 쓰기 {{value}}",
       cacheHitRate: "캐시 적중 {{value}}",
       reportedCost: "제공자 보고 비용 {{value}}",
-      lowerBound:
-        "≥ 는 하한값입니다: 일부 호출이 토큰 사용량을 일부만 보고했거나 보고하지 않았습니다.",
       recordedSince: "사용 기록은 {{date}}부터 시작됩니다. 그 이전 기록은 없습니다.",
       empty: "이 기간에 호출이 없습니다",
       unreachable: "집계 제외, 연결할 수 없음: {{hosts}}",
