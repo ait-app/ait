@@ -88,6 +88,11 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 可用 `AIT_SERVER_BIN` 指定 binary。测试使用临时数据目录，覆盖实际浏览器鉴权、SDK RPC、
 重连、错误令牌、页面连接及刷新恢复，结束后清理。
 
+`app.config.js` 启用 React Compiler（`experiments.reactCompiler`）；`babel.config.js` 的
+`react-compiler.sources` 过滤把规范化后的 `/packages/protocol/` 源码排除在编译之外——
+协议 schema 与生成校验器不含 React 组件，避免其大型控制流图拖慢桌面启动与协议热重载。
+Windows 反斜杠路径先规范化再匹配；应用组件仍正常编译。该过滤只影响构建，不改变协议运行时行为。
+
 原生账户边界见 [ADR-076](../../docs/decisions/clients/adr-076-android-account-relay.md) 和
 [ADR-084](../../docs/decisions/clients/adr-084-ios-account-relay.md)。
 直接连接边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
