@@ -2,35 +2,34 @@
 
 本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
 各能力当前生效的约束及其 ADR 见现行规格：[Provider](provider.md)、[Workspace](workspace.md)、
-[Bot](bot.md)、[连接与传输](connection.md)。ADR 被接受后，结论并入对应规格。
+[Bot](bot.md)、[连接与传输](connection.md)，以及 [Oh My Pi](omp.md)。ADR 被接受后，结论并入对应规格。
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
-独立外部 ACP 入口 `bins/omp-acp` 产出 `ait-omp-acp`；它只负责 CLI/stdio，协议转换和原生 RPC 归 provider，
-见 [ADR-237](../decisions/providers/adr-237-omp-native-session-and-standalone-acp.md)。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 ## Rust 能力边界
 
-| Crate         | 职责                                          | 生产代码的内部依赖                                   |
-| ------------- | --------------------------------------------- | ---------------------------------------------------- |
-| `domain`      | 业务值、记录、不变量与纯投影                  | 无                                                   |
-| `model`       | 协作端口、协议、请求资源与共享协调            | `domain`                                             |
-| `persistence` | 原子文件、Registry、具体文件持久化适配器      | `model`、`domain`                                    |
-| `metadata`    | 基础连接、Project/Workspace、配置与生命周期   | `domain`、`model`                                    |
-| `filesystem`  | 文件、Git、Forge、worktree/clone 本地适配器   | `domain`、`model`                                    |
-| `provider`    | 原生 Agent、执行、历史、摘要、技能与 MCP 注入 | `domain`、`model`                                    |
-| `terminal`    | PTY、快照、活动与订阅                         | `domain`、`model`                                    |
-| `voice`       | 语音、听写、离线推理与媒体连接                | `model`                                              |
-| `bot`         | Workspace Bot、Channel、隐藏会话与消息协调    | `domain`、`model`、`provider`                        |
-| `schedule`    | 定时任务服务与协议                            | `domain`、`model`                                    |
-| `browser`     | 浏览器自动化与 TCP 隧道                       | `model`                                              |
-| `relay`       | Hub serve、下载 Relay、控制与传输             | `model`                                              |
-| `host-link`   | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
-| `api`         | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
-| `daemon`      | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
-| `ait-omp-acp` | 外部 ACP CLI、stdio、诊断与退出               | `model`、`provider`                                  |
+| Crate          | 职责                                          | 生产代码的内部依赖                                   |
+| -------------- | --------------------------------------------- | ---------------------------------------------------- |
+| `domain`       | 业务值、记录、不变量与纯投影                  | 无                                                   |
+| `model`        | 协作端口、协议、请求资源与共享协调            | `domain`                                             |
+| `persistence`  | 原子文件、Registry、具体文件持久化适配器      | `model`、`domain`                                    |
+| `metadata`     | 基础连接、Project/Workspace、配置与生命周期   | `domain`、`model`                                    |
+| `filesystem`   | 文件、Git、Forge、worktree/clone 本地适配器   | `domain`、`model`                                    |
+| `provider`     | 原生 Agent、执行、历史、摘要、技能与 MCP 注入 | `domain`、`model`                                    |
+| `provider-omp` | Oh My Pi 原生 RPC 适配器                      | `provider`、`domain`                                 |
+| `terminal`     | PTY、快照、活动与订阅                         | `domain`、`model`                                    |
+| `voice`        | 语音、听写、离线推理与媒体连接                | `model`                                              |
+| `bot`          | Workspace Bot、Channel、隐藏会话与消息协调    | `domain`、`model`、`provider`                        |
+| `schedule`     | 定时任务服务与协议                            | `domain`、`model`                                    |
+| `browser`      | 浏览器自动化与 TCP 隧道                       | `model`                                              |
+| `relay`        | Hub serve、下载 Relay、控制与传输             | `model`                                              |
+| `host-link`    | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
+| `api`          | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
+| `daemon`       | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
 
 适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
+`provider-omp → provider` 同样单向，daemon 负责注册 OMP；`provider` 的 `test-support` feature 只允许 dev 边启用。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
 
@@ -60,8 +59,9 @@ metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protoco
 
 ## Provider 与工作区生命周期
 
-`provider::Providers` 组装 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、
-Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
+`provider::Providers` 组装 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi
+与 MiniMax Code；daemon 通过 `Providers::with` 追加 `provider-omp` 的 Oh My Pi
+（[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)）。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
 每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
 使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、
@@ -74,8 +74,9 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
-Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
-[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
+Provider 自身行为测试归 `crates/provider`，OMP 的归 `crates/provider-omp`；daemon 测试覆盖宿主、
+传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
+[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)。
 
 Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
@@ -148,3 +149,6 @@ node 分享允许更广的节点操作，分享和账号授权保留给所有者
 源码与产物使用 daemon 名称；`server.*`、`server_info`、`/v1/server/info`、`AIT_SERVER_*` 与已有数据目录
 保留协议兼容拼写。旧 CLI、独立 worker 和旧 Project SQLite 架构已退役，不属于当前 workspace。
 历史边界应按 ADR 的修订关系阅读；早期移植和已完成方案见[归档](../archive/README.md)。
+
+主机资源监控归 `metadata::daemon`，按需采样并由共享客户端侧栏展示；缓存、历史和停刷规则见
+[连接规格](connection.md#主机资源监控)与 [ADR-247](../decisions/daemon/adr-247-host-resource-monitor.md)。

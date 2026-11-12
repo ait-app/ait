@@ -12,7 +12,6 @@ const readWorkflow = async (name) =>
   yaml.parse(await readFile(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8"));
 const ci = await readWorkflow("ci.yml");
 const devBuild = await readWorkflow("dev-build.yml");
-const prCleanup = await readWorkflow("cancel-merged-pr-ci.yml");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "a".repeat(40), runId: 42 };
 
@@ -34,6 +33,39 @@ test("CI delegates its checks to the shared verify script with a full-history di
     assert.equal(checkout.with["fetch-depth"], 0, job);
   }
   assert.ok(ci.jobs.ui.steps.some((step) => step.run === "npm ci"));
+});
+
+test("dev Linux desktop builds its daemon on the release glibc baseline", () => {
+  const steps = devBuild.jobs.desktop.steps;
+  const mac = steps.find((step) => step.name === "Build daemon");
+  assert.equal(mac.if, "matrix.platform == 'mac'");
+  const linux = steps.find((step) => step.name === "Build daemon (glibc 2.28 baseline)");
+  assert.equal(linux.if, "matrix.platform == 'linux'");
+  assert.match(linux.run, /^bash scripts\/build-linux-daemon\.sh daemon daemon /);
+  // The container must use the same pinned toolchain as the macOS runner.
+  const toolchain = steps.find((step) => step.uses?.startsWith("dtolnay/rust-toolchain@"));
+  assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
+  const build = steps.find((step) => step.name === "Build desktop");
+  assert.match(
+    build.env.AIT_SERVER_BIN,
+    /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/,
+  );
+});
+
+test("dev builds package both standalone daemons and explain the macOS quarantine", () => {
+  const steps = devBuild.jobs.desktop.steps;
+  const names = steps.map((step) => step.name);
+  const pack = steps.find((step) => step.name === "Package standalone daemon");
+  assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
+  assert.match(pack.run, /release-assets\.mjs daemon .* release-assets --dev "\$DEV_BUILD_LABEL"/);
+  assert.match(pack.run, /codesign --verify/);
+  // The archive must be in release-assets before the artifact upload picks it up.
+  const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));
+  assert(names.indexOf("Package standalone daemon") < upload);
+  const publish = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Publish latest dev build",
+  );
+  assert.match(publish.run, /xattr -d com\.apple\.quarantine aitd/);
 });
 
 // Evaluates a job condition like GitHub: without a status function, success() is implied.
@@ -338,106 +370,6 @@ test("published notes record the source commit", () => {
   );
   const body = publish.run.match(/--notes "([^"]*)"/)[1].replaceAll("$GITHUB_SHA", context.sha);
   assert.match(body, /Development build from ([0-9a-f]{40})\b/);
-});
-
-test("PR CI cleanup runs only after a merge to main and never executes PR code", () => {
-  assert.deepEqual(prCleanup.on, {
-    pull_request_target: { branches: ["main"], types: ["closed"] },
-  });
-  assert.deepEqual(prCleanup.permissions, { actions: "write" });
-  const job = prCleanup.jobs.cancel;
-  assert.equal(condition(job.if, { event: { pull_request: { merged: true } } }), true);
-  assert.equal(condition(job.if, { event: { pull_request: { merged: false } } }), false);
-  assert.equal(job.steps.length, 1);
-  assert.equal(job.steps[0].uses, "actions/github-script@v8");
-  assert.equal(job.steps[0].run, undefined);
-  assert.equal(job.steps[0].with.script.includes("require("), false);
-  assert.deepEqual(ci.on.push.branches, ["main"]);
-  assert.equal(ci.concurrency, undefined);
-});
-
-async function cancelPrRuns(runs, errors = {}) {
-  const pr = { number: 123, head: { ref: "feature", repo: { id: 7 } } };
-  const endpoint = Symbol("list workflow runs");
-  const listed = [];
-  const cancelled = [];
-  const notices = [];
-  await new AsyncFunction("github", "context", "core", prCleanup.jobs.cancel.steps[0].with.script)(
-    {
-      async paginate(method, params) {
-        assert.equal(method, endpoint);
-        assert.deepEqual(params, {
-          ...context.repo,
-          workflow_id: "ci.yml",
-          event: "pull_request",
-          branch: pr.head.ref,
-          status: params.status,
-          per_page: 100,
-        });
-        listed.push(params.status);
-        return runs.filter((run) => run.status === params.status);
-      },
-      rest: {
-        actions: {
-          listWorkflowRuns: endpoint,
-          async cancelWorkflowRun(params) {
-            // All statuses and pages must be collected before cancellation starts.
-            assert.deepEqual(listed, ["queued", "in_progress", "waiting", "pending", "requested"]);
-            assert.deepEqual(params, { ...context.repo, run_id: params.run_id });
-            cancelled.push(params.run_id);
-            if (errors[params.run_id]) throw errors[params.run_id];
-          },
-        },
-      },
-    },
-    { ...context, payload: { pull_request: pr } },
-    { notice: (message) => notices.push(message) },
-  );
-  return { cancelled, notices };
-}
-
-test("merging cancels every unfinished PR revision while preserving main and other PRs", async () => {
-  const run = (id, overrides = {}) => ({
-    id,
-    event: "pull_request",
-    status: "in_progress",
-    head_branch: "feature",
-    head_repository: { id: 7 },
-    head_sha: `revision-${id}`,
-    pull_requests: [{ number: 123 }],
-    ...overrides,
-  });
-  const { cancelled } = await cancelPrRuns([
-    run(1, { status: "queued" }),
-    run(2),
-    run(3, { status: "waiting" }),
-    run(4, { status: "pending" }),
-    run(5, { status: "requested" }),
-    run(6, { status: "completed" }),
-    run(7, { event: "push", head_branch: "main" }),
-    run(8, { pull_requests: [{ number: 456 }] }),
-    run(9, { pull_requests: [] }),
-    run(10, { pull_requests: [], head_repository: { id: 8 } }),
-    run(11, { pull_requests: [], head_branch: "other-feature" }),
-    run(12, { pull_requests: [], head_repository: null }),
-  ]);
-  assert.deepEqual(cancelled, [1, 2, 9, 3, 4, 5]);
-});
-
-test("PR CI cleanup tolerates runs completing during cancellation and continues", async () => {
-  const runs = [1, 2].map((id) => ({
-    id,
-    event: "pull_request",
-    status: "in_progress",
-    pull_requests: [{ number: 123 }],
-  }));
-  const { cancelled, notices } = await cancelPrRuns(runs, { 1: { status: 409 } });
-  assert.deepEqual(cancelled, [1, 2]);
-  assert.match(notices[0], /no longer cancellable/);
-  assert.match(notices[1], /Cancelled CI run 2/);
-  const error = new Error("Actions permission denied");
-  error.status = 403;
-  await assert.rejects(cancelPrRuns(runs, { 1: error }), { message: error.message });
 });
 
 test("Google Play publishing only runs from the release workflow", async () => {

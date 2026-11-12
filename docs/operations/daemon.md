@@ -153,7 +153,7 @@ npm run dev:mobile
   [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
 - [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。
 - [Pi](pi.md)使用本机 `pi --mode rpc`；`AIT_SERVER_PI_BIN` 覆盖程序路径。
-- [Oh My Pi](oh-my-pi.md)通过 Ait ACP 桥接官方 RPC，支持原生 v2 传输；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
+- [Oh My Pi](oh-my-pi.md)每个 Agent 运行一个官方 `omp --mode rpc-ui` 进程，直接使用原生 RPC；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
 - [MiniMax Code](minimax-code.md)使用官方 `mcode acp`；`AIT_SERVER_MINIMAX_CODE_BIN` 覆盖程序路径。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。
@@ -163,6 +163,49 @@ npm run dev:mobile
 
 Linux 无人值守运行支持 `aitd login` 和 `aitd run`，
 接入条件与命令见 [无人值守 daemon](headless-daemon.md)。
+
+## 用量账本
+
+每台 Host 在 `<data_dir>/agents/usage.sqlite3` 记录它发起的 Provider（harness）调用，以及可获得的请求级 token 用量，
+设计见 [ADR-246](../decisions/providers/adr-246-harness-usage-ledger.md)，规格见 [Provider 规格](../architecture/provider.md#harness-用量账本)。
+
+- **启动与关闭**：账本在启动时打开，把上次运行遗留的 `running` 调用标记为 `interrupted`；关闭时写完队列再退出。
+  文件无法打开时 daemon 记录 error 日志并继续运行但不记录，此时 `provider.usage.ledger.request` 返回 `unsupported_capability`。
+  账本写入失败只记日志，不影响或延迟轮次。
+- **保留期**：明细行（`calls`、`requests`）保留 90 天，`daily_usage` 日汇总（UTC 日）无限期保留。
+  按 `outcome` 分组只读明细行，因此只覆盖 90 天窗口；`missing_calls` 等其他计数来自日汇总。
+- **隐私**：不记录提示词或输出文本、文件路径和凭据；数据留在本机，不进入 Hub outbox，也不上传。
+- **可信度标记**：调用的 `usage_status` 为 `exact`（每个请求都是 `request` 边界且完整）、`lower_bound`（可能漏记）或
+  `missing`（无请求或 Provider 不上报）；请求的 `boundary` 为 `request`、`turn` 或 `cumulative_delta`。
+  失败、取消或被中断的调用可能丢失进行中的请求，因此永远不是 `exact`：有请求时为 `lower_bound`，没有时为 `missing`。
+  应用对含 `lower_bound` 或 `missing` 调用的数值显示“≥”。
+
+### 各适配器的精度
+
+| Provider                | 边界               | 说明                                                                                                            |
+| ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Claude                  | `request`          | 含子 Agent 帧（有则计入）                                                                                       |
+| Codex                   | `request`          | `input` 已扣除缓存读写；`cache_write` 取 `cacheWriteInputTokens`，缺失时为 0；子 Agent 线程在父轮次运行期间计入 |
+| Pi、OMP                 | `request`          |                                                                                                                 |
+| MiniMax                 | `turn`             | 整轮合计                                                                                                        |
+| Antigravity             | `cumulative_delta` | 累计值求差；进程重启后的第一轮只作基线，该调用显示为 `missing`                                                  |
+| OpenCode、ACP、DeepSeek | `missing`          | 只有调用次数                                                                                                    |
+| 摘要与标题调用          | `missing`          | 只有调用次数                                                                                                    |
+
+### 已知限制
+
+- Claude 在轮次结束后才到达的后台子 Agent 帧不计入；Codex 子 Agent 线程在父轮次结束后才上报的用量同样不计入。
+- OMP 子 Agent 的 token 不计入。
+- 心跳提示沿用该 Agent 自己的来源（通常为 `user`）；定时任务创建的 Agent 来源为 `schedule`，按标签查找。
+- MiniMax 与 Antigravity 的缓存语义按其上报原样映射，缓存可能与 `input` 重叠。
+- Pi 的一个分段在接近显示事件上限时可能被丢弃，并记录警告。
+
+### 查询与客户端
+
+`provider.usage.ledger.request` 按 `from`（含）和 `to`（不含，毫秒）汇总，范围最长 400 天，
+`groupBy` 取 `provider`、`model`、`source`、`outcome` 或 `day`。客户端读取 `features.providerUsageLedger`
+协商；SDK 为 `DaemonClient.listUsageLedger`。应用的 Usage 对话框 → History 标签页显示 24 小时 / 7 天 / 30 天，
+汇总所有 Host，不可达的 Host 单独列出；Host 设置页显示 30 天合计。
 
 ## 统一发布与本地 API 凭据
 

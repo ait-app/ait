@@ -21,7 +21,7 @@ jobs:
   build:
     name: Build ait-bin
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && github.event.release.tag_name != 'dev') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     container: archlinux:base-devel
     timeout-minutes: 120
     concurrency:
@@ -62,7 +62,7 @@ jobs:
   publish:
     name: Publish ait-bin
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     container: archlinux:base
     timeout-minutes: 30
     environment: aur

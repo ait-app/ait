@@ -18,6 +18,7 @@ use clap as _;
 use jsonwebtoken as _;
 use model as _;
 use persistence as _;
+use provider_omp as _;
 use ring as _;
 use schedule as _;
 use secrecy as _;

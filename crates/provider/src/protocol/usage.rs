@@ -5,31 +5,31 @@ use serde::{Deserialize, Serialize};
 /// Latest provider token, cost and context facts, compatible with Paseo `AgentUsage`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct AgentUsage {
+pub struct AgentUsage {
     /// Reported input tokens, with the provider's own accounting scope.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) input_tokens: Option<u64>,
+    pub input_tokens: Option<u64>,
     /// Reported cached input tokens.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) cached_input_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
     /// Reported output tokens.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) output_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
     /// Native reported cost in USD; absent for subscription providers without cost reporting.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) total_cost_usd: Option<f64>,
+    pub total_cost_usd: Option<f64>,
     /// Native reported maximum context size.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) context_window_max_tokens: Option<u64>,
+    pub context_window_max_tokens: Option<u64>,
     /// Tokens occupying the active model request, rather than cumulative session usage.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) context_window_used_tokens: Option<u64>,
+    pub context_window_used_tokens: Option<u64>,
 }
 
 impl AgentUsage {
     /// Reject negative/nonfinite costs or token counters outside exact JSON integer range.
     #[must_use]
-    pub(crate) fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         [
             self.input_tokens,
             self.cached_input_tokens,

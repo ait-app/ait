@@ -14,11 +14,11 @@ pub(crate) const MAX_PROMPT_BYTES: usize = 63 * 1024 * 1024;
 /// An inline raster image, using the existing Paseo wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct PromptImage {
+pub struct PromptImage {
     /// Strict standard base64 bytes; data URLs belong in provider output conversion.
-    pub(crate) data: String,
+    pub data: String,
     /// Supported raster media type.
-    pub(crate) mime_type: String,
+    pub mime_type: String,
 }
 
 impl PromptImage {
@@ -43,26 +43,26 @@ impl PromptImage {
 /// One complete logical user input. Voice and schedule callers can keep using plain text.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct AgentPrompt {
+pub struct AgentPrompt {
     /// User-authored text, at most 64 KiB; may be empty when attachments are present.
     #[serde(default)]
-    pub(crate) text: String,
+    pub text: String,
     /// Optional inline images, transported in acknowledged chunks for large messages.
     #[serde(default)]
-    pub(crate) images: Vec<PromptImage>,
+    pub images: Vec<PromptImage>,
     /// Existing Paseo text, review, forge and uploaded-file attachment objects.
     #[serde(default)]
-    pub(crate) attachments: Vec<Value>,
+    pub attachments: Vec<Value>,
     /// Client-supplied stable input identity, preserved independently of native turn IDs.
-    pub(crate) client_message_id: Option<String>,
+    pub client_message_id: Option<String>,
     /// Optional native structured-output constraint for this input.
-    pub(crate) output_schema: Option<Value>,
+    pub output_schema: Option<Value>,
 }
 
 impl AgentPrompt {
     /// Construct an unadorned text prompt without choosing a message identity.
     #[must_use]
-    pub(crate) fn text(text: &str) -> Self {
+    pub fn text(text: &str) -> Self {
         Self {
             text: text.to_owned(),
             ..Self::default()
@@ -72,7 +72,7 @@ impl AgentPrompt {
     /// Validate the entire input before reserving or submitting any part of it.
     /// # Errors
     /// Rejects empty, oversized or malformed input, including unsupported attachment shapes.
-    pub(crate) fn validate(&self) -> Result<(), AgentSessionError> {
+    pub fn validate(&self) -> Result<(), AgentSessionError> {
         if self.text.len() > 65536
             || self.text.contains('\0')
             || self.images.len() > 50
@@ -119,7 +119,7 @@ impl AgentPrompt {
     /// Produce provider-independent ordered text/image blocks after validation.
     /// # Errors
     /// Returns malformed or oversized prompt errors.
-    pub(crate) fn blocks(&self) -> Result<Vec<Value>, AgentSessionError> {
+    pub fn blocks(&self) -> Result<Vec<Value>, AgentSessionError> {
         self.validate()?;
         let mut blocks = Vec::new();
         for attachment in self

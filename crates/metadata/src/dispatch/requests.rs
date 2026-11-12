@@ -170,6 +170,7 @@ pub(super) async fn daemon(
         matches!(
             context.request.method.as_str(),
             "daemon.get_status.request"
+                | "daemon.host_stats.request"
                 | "daemon.config.reload.request"
                 | "daemon.update.request"
                 | "diagnostics.request"

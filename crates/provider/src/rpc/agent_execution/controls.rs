@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::agent_session::AgentSessionSpec;
+use crate::ports::usage_ledger::{UsageLedgerError, UsageQuery};
 use crate::protocol::agent_config::ConfigPatch;
 use crate::protocol::controls::{
     CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
@@ -11,6 +12,10 @@ use crate::protocol::controls::{
 use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::native_sessions::canonical;
+use crate::support::rpc::encode;
+
+/// Longest summary range a `provider.usage.ledger` request may cover: 400 days in milliseconds.
+const MAX_LEDGER_RANGE_MS: i64 = 400 * 24 * 60 * 60 * 1000;
 
 impl ExecutionState {
     pub(super) async fn unified_subagents(&self, params: Value) -> Result<Value, ErrorCode> {
@@ -117,6 +122,22 @@ impl ExecutionState {
             .usage(agent.as_deref(), provider, force)
             .await
             .map_err(Into::into)
+    }
+
+    /// Summarize this host's usage ledger for a validated `provider.usage.ledger` request.
+    /// # Errors
+    /// Rejects malformed or out-of-bounds queries as invalid; maps ledger read failures.
+    pub(super) async fn usage_ledger(&self, params: Value) -> Result<Value, ErrorCode> {
+        let query: UsageQuery = decode(params)?;
+        if !is_valid_ledger_query(&query) {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let summary = self
+            .manager
+            .usage_ledger_summary(query)
+            .await
+            .map_err(map_ledger)?;
+        encode(summary, ErrorCode::AgentIo)
     }
 
     pub(super) async fn rewind(&mut self, params: Value) -> Result<Value, ErrorCode> {
@@ -354,5 +375,28 @@ impl ExecutionState {
             .ok_or(ErrorCode::AgentNotFound)?;
         self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
         Ok(())
+    }
+}
+
+/// Whether `query` covers a nonempty range of at most 400 days and groups by each dimension at
+/// most once, by at least one.
+fn is_valid_ledger_query(query: &UsageQuery) -> bool {
+    let groups = &query.group_by;
+    query
+        .to
+        .checked_sub(query.from)
+        .is_some_and(|range| range > 0 && range <= MAX_LEDGER_RANGE_MS)
+        && !groups.is_empty()
+        && groups
+            .iter()
+            .enumerate()
+            .all(|(index, group)| !groups[..index].contains(group))
+}
+
+/// Map a ledger read failure: a host without a ledger lacks the capability; a failed read is I/O.
+pub(super) const fn map_ledger(error: UsageLedgerError) -> ErrorCode {
+    match error {
+        UsageLedgerError::Unavailable => ErrorCode::UnsupportedCapability,
+        UsageLedgerError::Failed => ErrorCode::AgentIo,
     }
 }

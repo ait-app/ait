@@ -9,12 +9,10 @@ import {
 import { useSessionStore } from "@/stores/session-store";
 import { buildTaskBoard, type TaskBoardHost } from "./model";
 
-/** Directory demand is shared with the sidebar; no per-agent history subscriptions. */
-export function useTaskBoard() {
+/** Read the shared directory snapshot without starting a second directory demand. */
+export function useTaskBoardModel() {
   const hosts = useHosts();
-  const directory = useAggregatedAgents();
   const hostIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
-  const statuses = useHostRuntimeConnectionStatuses(hostIds);
   const agentMaps = useSessionStore(
     useShallow((state) => hostIds.map((id) => state.sessions[id]?.agents)),
   );
@@ -30,6 +28,15 @@ export function useTaskBoard() {
     }));
     return buildTaskBoard(inputs);
   }, [agentMaps, workspaceMaps, hosts]);
+  return { ...model, hosts, hostIds };
+}
+
+/** Directory demand is shared with the sidebar; no per-agent history subscriptions. */
+export function useTaskBoard() {
+  const model = useTaskBoardModel();
+  const { hosts, hostIds } = model;
+  const directory = useAggregatedAgents();
+  const statuses = useHostRuntimeConnectionStatuses(hostIds);
   // The directory hook subscribes to runtime changes, including errors while a
   // connection remains online. Do not present failed loads as an empty board.
   const unavailableHosts = hosts.filter((host) => {

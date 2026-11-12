@@ -4,6 +4,7 @@ import {
 } from "@ait/protocol/agent-state-bucket";
 import type { WorkspaceStateBucket } from "@ait/protocol/agent-state-bucket";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import type { ProjectIconTarget } from "@/projects/icon-target";
 
 export const TASK_LANES = ["needs_action", "running", "review", "done"] as const;
 export type TaskLane = (typeof TASK_LANES)[number];
@@ -23,6 +24,8 @@ export interface BoardTask {
   projectKey: string;
   projectName: string;
   workspaceName: string;
+  branchName?: string | null;
+  projectIconTarget?: ProjectIconTarget;
   ownBucket: WorkspaceStateBucket;
   bucket: WorkspaceStateBucket;
   activityAt: number;
@@ -48,9 +51,9 @@ function pathName(path: string): string {
 }
 
 export function taskLane(bucket: WorkspaceStateBucket): TaskLane {
-  if (bucket === "needs_input" || bucket === "failed") return "needs_action";
+  if (bucket === "needs_input") return "needs_action";
   if (bucket === "running") return "running";
-  return bucket === "attention" ? "review" : "done";
+  return bucket === "attention" || bucket === "failed" ? "review" : "done";
 }
 
 function ownBucket(agent: Agent): WorkspaceStateBucket {
@@ -97,6 +100,16 @@ export function buildTaskBoard(hosts: readonly TaskBoardHost[]): TaskBoardModel 
         projectKey: taskKey(host.serverId, workspace?.projectId || agent.cwd),
         projectName,
         workspaceName: workspace?.title?.trim() || workspace?.name || pathName(agent.cwd),
+        branchName: workspace?.gitRuntime?.currentBranch ?? workspace?.initialBranch ?? null,
+        projectIconTarget: workspace
+          ? {
+              serverId: host.serverId,
+              projectId: workspace.projectId,
+              projectViewKey: taskKey(host.serverId, workspace.projectId),
+              iconWorkingDir: workspace.projectRootPath,
+              customIconRevision: workspace.projectCustomIconRevision,
+            }
+          : undefined,
         ownBucket: bucket,
         bucket,
         activityAt: agent.lastActivityAt.getTime(),
@@ -193,6 +206,7 @@ export function filterTaskBoard(tasks: readonly BoardTask[], filters: TaskFilter
             member.agent.model ?? member.agent.runtimeInfo?.model,
             member.projectName,
             member.workspaceName,
+            member.branchName,
             member.hostLabel,
             member.agent.cwd,
           ].join(" "),

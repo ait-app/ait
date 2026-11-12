@@ -1,8 +1,20 @@
+import { hostMonitorZh } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
+  hostMonitor: hostMonitorZh,
   taskBoard: {
+    taskCount: "{{count}} 个任务",
+    filters: "筛选",
+    resetFilters: "重置筛选",
+    showTasks: "显示 {{count}} 个任务",
+    showSubtasks: "显示子任务",
+    collapseLane: "收起{{lane}}列",
+    expandLane: "展开{{lane}}列",
+    open: "打开",
+    answer: "回答",
+    readOnly: "只读",
     runCommand: "运行命令",
     loadFailed: "未能加载任务",
     title: "任务总览",
@@ -2514,6 +2526,30 @@ export const zhCN: TranslationResources = {
     clientUnavailable: "主机连接尚未就绪",
     retry: "重试",
     tooltipLoading: "正在加载套餐用量…",
+    history: {
+      tab: "历史",
+      byProvider: "按提供方",
+      byModel: "按模型",
+      byDay: "按天",
+      unknownModel: "未知模型",
+      calls: "调用 {{value}}",
+      failedCalls: "失败 {{value}}",
+      requests: "请求 {{value}}",
+      tokens: "Token {{value}}",
+      input: "输入 {{value}}",
+      output: "输出 {{value}}",
+      cacheRead: "缓存读取 {{value}}",
+      cacheWrite: "缓存写入 {{value}}",
+      cacheHitRate: "缓存命中 {{value}}",
+      reportedCost: "提供方报告的费用 {{value}}",
+      lowerBound: "≥ 表示下限：部分调用只报告了部分 token 用量或未报告。",
+      recordedSince: "用量历史从 {{date}} 开始，更早的记录不存在。",
+      empty: "此期间没有调用",
+      unreachable: "未计入，无法连接：{{hosts}}",
+      failed: "无法从 {{host}} 加载用量历史：{{reason}}",
+      notRecorded: "{{hosts}} 未记录用量历史",
+      hostTotals: "用量历史（最近 30 天）",
+    },
   },
   pairing: {
     connectionMethods: {

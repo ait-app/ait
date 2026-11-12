@@ -12,15 +12,16 @@ mod composition;
 /// Bounded read-only native harness evidence collection.
 pub mod diagnostics;
 pub mod dispatch;
-mod local;
-pub mod omp_acp;
+pub mod local;
 pub mod ports;
-pub(crate) mod protocol;
+pub mod protocol;
 pub mod rpc;
 pub mod service;
 pub mod skills;
 pub mod storage;
 pub(crate) mod support;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 mod timeline_projection;
 
 pub use composition::Providers;

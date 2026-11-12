@@ -144,7 +144,9 @@ impl LocalForge {
                 forge: Some("github".to_owned()),
             });
         };
-        let arguments = strings(&["pr", "view", "--json", STATUS_FIELDS]);
+        let mut arguments = strings(&["pr", "view"]);
+        arguments.extend(renamed_upstream(cwd, &branch)?);
+        arguments.extend(strings(&["--json", STATUS_FIELDS]));
         match self.gh(cwd, context, &arguments, READ_TIMEOUT) {
             Ok(output) => {
                 let value = parse_json(&output)?;
@@ -816,17 +818,8 @@ fn resolve_base(
     if let Some(requested) = requested.map(str::trim).filter(|value| !value.is_empty()) {
         return Ok(normalize_branch(requested));
     }
-    if let Some(reference) = git_optional(
-        cwd,
-        &[
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ],
-        READ_TIMEOUT,
-    )? {
-        return Ok(normalize_branch(&reference));
+    if let Some(reference) = origin_default_branch(cwd)? {
+        return Ok(reference);
     }
     for candidate in ["main", "master"] {
         if candidate != head
@@ -844,6 +837,67 @@ fn resolve_base(
         ForgeFailureKind::Unknown,
         "Unable to determine base branch for PR",
     ))
+}
+
+fn origin_default_branch(cwd: &Path) -> Result<Option<String>, ForgeRuntimeError> {
+    git_optional(
+        cwd,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ],
+        READ_TIMEOUT,
+    )
+    .map(|reference| reference.as_deref().map(normalize_branch))
+}
+
+/// Returns the upstream branch name `gh pr view` must be given explicitly for `branch`.
+///
+/// `gh` finds the current branch's pull request through `@{push}`. Under `push.default=simple`
+/// that does not resolve after `git push -u origin HEAD:<other-name>`, so `gh` falls back to the
+/// local branch name and misses the pull request opened from `<other-name>`. The configured
+/// upstream names the pushed branch in that case. An upstream equal to the remote default branch
+/// only records the starting point and is ignored, because it would match unrelated pull requests.
+///
+/// # Errors
+///
+/// Returns a Git failure when the local branch configuration cannot be read.
+fn renamed_upstream(cwd: &Path, branch: &str) -> Result<Option<String>, ForgeRuntimeError> {
+    let Some(merge) = git_optional(
+        cwd,
+        &[
+            "config",
+            "--local",
+            "--get",
+            &format!("branch.{branch}.merge"),
+        ],
+        READ_TIMEOUT,
+    )?
+    else {
+        return Ok(None);
+    };
+    let Some(upstream) = merge.strip_prefix("refs/heads/") else {
+        return Ok(None);
+    };
+    if upstream == branch
+        || git_optional(
+            cwd,
+            &[
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                &format!("{branch}@{{push}}"),
+            ],
+            READ_TIMEOUT,
+        )?
+        .is_some()
+        || origin_default_branch(cwd)?.as_deref() == Some(upstream)
+    {
+        return Ok(None);
+    }
+    Ok(Some(upstream.to_owned()))
 }
 
 fn normalize_branch(value: &str) -> String {

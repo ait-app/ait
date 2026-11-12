@@ -17,7 +17,7 @@ jobs:
   prepare:
     # Manual runs from other branches never publish.
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     # Covers waiting for a CI run that is still in progress on this commit.
     timeout-minutes: 75
     permissions:
@@ -54,7 +54,7 @@ jobs:
       matrix:
         include:
           - label: Linux x86_64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
             platform: linux
             arch: x64
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      # Linux compiles both native tools in manylinux, which installs its own toolchain.
+      # Linux compiles the daemon inside the manylinux container, which installs its own toolchain.
       - uses: dtolnay/rust-toolchain@1.98.1
         if: matrix.platform == 'mac'
         with:
@@ -100,17 +100,16 @@ jobs:
           version=$(node --input-type=module -e 'import { devDisplayVersion } from "./scripts/dev-build.mjs"; console.log(devDisplayVersion(process.env.DEV_BUILD_LABEL))')
           echo "AIT_BUILD_VERSION=$version" >> "$GITHUB_ENV"
           echo "EXPO_PUBLIC_AIT_BUILD_VERSION=$version" >> "$GITHUB_ENV"
-      - name: Build native tools
+      - name: Build daemon
         if: matrix.platform == 'mac'
-        run: cargo build --locked --release -p daemon --bin daemon -p ait-omp-acp --bin ait-omp-acp --target "${{ matrix.rust_target }}"
+        run: cargo build --locked --release -p daemon --bin daemon --target "${{ matrix.rust_target }}"
       # Match release builds: the runner's glibc 2.39 would lock dev builds out of older distributions.
-      - name: Build native tools (glibc 2.28 baseline)
+      - name: Build daemon (glibc 2.28 baseline)
         if: matrix.platform == 'linux'
         run: bash scripts/build-linux-daemon.sh daemon daemon "${{ matrix.rust_target }}" 1.98.1
       - name: Build desktop
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
-          AIT_OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
         run: |
           npm run build:desktop-assets
           (cd apps/desktop && node scripts/prepare-daemon.mjs && npm run build:main)
@@ -136,17 +135,13 @@ jobs:
         run: |
           version=$(node -p 'require("./package.json").version')
           node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets --dev "$DEV_BUILD_LABEL"
-      # Same binaries as the desktop. macOS keeps ad-hoc signatures and is not notarized.
+      # Same binary as the desktop bundle. macOS keeps the linker's ad-hoc signature and is not notarized.
       - name: Package standalone daemon
         env:
           PLATFORM: ${{ matrix.platform }}
           DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
-          OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
         run: |
-          if [ "$PLATFORM" = mac ]; then
-            codesign --verify --verbose "$DAEMON_BIN"
-            codesign --verify --verbose "$OMP_ACP_BIN"
-          fi
+          if [ "$PLATFORM" = mac ]; then codesign --verify --verbose "$DAEMON_BIN"; fi
           version=$(node -p 'require("./package.json").version')
           node scripts/release-assets.mjs daemon "$PLATFORM" "$version" "$DAEMON_BIN" release-assets --dev "$DEV_BUILD_LABEL"
       # Restrict user namespaces so the installed packages must fall back to their SUID helper.
@@ -174,7 +169,7 @@ jobs:
     if: needs.prepare.outputs.publish == 'true'
     env:
       DEV_BUILD_LABEL: ${{ needs.prepare.outputs.label }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
@@ -229,7 +224,7 @@ jobs:
         run: |
           gh release create dev release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title "Ait Dev $DEV_BUILD_LABEL" --prerelease --latest=false \
-            --notes "Development build from $GITHUB_SHA. Replaced by the next manually published dev build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone tools after a browser download, run \`xattr -d com.apple.quarantine aitd ait-omp-acp\` in the extracted folder." \
+            --notes "Development build from $GITHUB_SHA. Replaced by the next manually published dev build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone aitd after a browser download, run \`xattr -d com.apple.quarantine aitd\` in the extracted folder." \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/dev" >> "$GITHUB_STEP_SUMMARY"
       # Runs only after every step above succeeds, so a failed publish keeps both platforms'

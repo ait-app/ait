@@ -7,29 +7,19 @@ import { execFileSync } from "node:child_process";
 const desktop = fileURLToPath(new URL("..", import.meta.url));
 const root = path.resolve(desktop, "../..");
 
-export function stageDaemon({ binary, bridge, directory, version }) {
-  for (const [name, executable] of [
-    ["aitd", binary],
-    ["ait-omp-acp", bridge],
-  ]) {
-    const actual = execFileSync(executable, ["--version"], { encoding: "utf8" }).trim();
-    if (actual !== `${name} ${version}`) {
-      throw new Error(`Expected ${name} ${version}, received ${actual}`);
-    }
+export function stageDaemon({ binary, directory, version }) {
+  const actual = execFileSync(binary, ["--version"], { encoding: "utf8" }).trim();
+  if (actual !== `aitd ${version}`) {
+    throw new Error(`Expected aitd ${version}, received ${actual}`);
   }
   // This directory is generated packaging input. Never carry old sidecars forward.
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
   // Cargo builds `daemon`; packages ship it as `aitd` (ADR-212).
-  for (const [name, executable] of [
-    ["aitd", binary],
-    ["ait-omp-acp", bridge],
-  ]) {
-    const staged = path.join(directory, name);
-    copyFileSync(executable, staged);
-    chmodSync(staged, 0o755);
-  }
-  return directory;
+  const staged = path.join(directory, "aitd");
+  copyFileSync(binary, staged);
+  chmodSync(staged, 0o755);
+  return staged;
 }
 
 function main() {
@@ -37,14 +27,20 @@ function main() {
     throw new Error("Ait desktop releases support macOS and Linux only.");
   }
   const binary = process.env.AIT_SERVER_BIN || path.join(root, "target/release/daemon");
-  const bridge = process.env.AIT_OMP_ACP_BIN || path.join(root, "target/release/ait-omp-acp");
-  const targets = [];
-  if (!process.env.AIT_SERVER_BIN) targets.push("-p", "daemon", "--bin", "daemon");
-  if (!process.env.AIT_OMP_ACP_BIN) targets.push("-p", "ait-omp-acp", "--bin", "ait-omp-acp");
-  if (targets.length) {
+  if (!process.env.AIT_SERVER_BIN) {
     execFileSync(
       "cargo",
-      ["build", "--locked", "--release", "--target-dir", path.join(root, "target"), ...targets],
+      [
+        "build",
+        "--locked",
+        "--release",
+        "--target-dir",
+        path.join(root, "target"),
+        "-p",
+        "daemon",
+        "--bin",
+        "daemon",
+      ],
       { cwd: root, stdio: "inherit" },
     );
   }
@@ -52,11 +48,10 @@ function main() {
   const version = sourceVersion(pkg.version, root);
   const staged = stageDaemon({
     binary: path.resolve(binary),
-    bridge: path.resolve(bridge),
     directory: path.join(desktop, "release-resources/daemon"),
     version,
   });
-  console.log(`Staged daemon and OMP ACP bridge ${version}: ${staged}`);
+  console.log(`Staged daemon ${version}: ${staged}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href)

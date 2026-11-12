@@ -34,6 +34,8 @@ flate2.workspace = true
 # QQ scan-to-create returns the new bot's secret sealed with AES-256-GCM.
 ring.workspace = true
 async-trait.workspace = true
+# Telegram renders provider CommonMark through its restricted HTML parse mode.
+pulldown-cmark.workspace = true
 
 [dev-dependencies]
 persistence.workspace = true

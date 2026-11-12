@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -17,7 +18,9 @@ const schedulePluralForms = {
 };
 
 export const fr: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Exécuter une commande",
     loadFailed: "Impossible de charger les tâches",
     title: "Vue des tâches",
@@ -2389,6 +2392,32 @@ export const fr: TranslationResources = {
     clientUnavailable: "La connexion à l'hôte n'est pas prête",
     retry: "Réessayer",
     tooltipLoading: "Chargement de l'utilisation du forfait…",
+    history: {
+      tab: "Historique",
+      byProvider: "Par fournisseur",
+      byModel: "Par modèle",
+      byDay: "Par jour",
+      unknownModel: "Modèle inconnu",
+      calls: "Appels {{value}}",
+      failedCalls: "Échecs {{value}}",
+      requests: "Requêtes {{value}}",
+      tokens: "Jetons {{value}}",
+      input: "Entrée {{value}}",
+      output: "Sortie {{value}}",
+      cacheRead: "Lecture du cache {{value}}",
+      cacheWrite: "Écriture du cache {{value}}",
+      cacheHitRate: "Succès du cache {{value}}",
+      reportedCost: "Coût indiqué par le fournisseur {{value}}",
+      lowerBound:
+        "≥ indique une borne inférieure : certains appels n'ont indiqué qu'une partie de leur usage de jetons, ou rien.",
+      recordedSince:
+        "L'historique d'utilisation commence le {{date}}. Rien n'a été enregistré avant.",
+      empty: "Aucun appel sur cette période",
+      unreachable: "Non comptés, injoignables : {{hosts}}",
+      failed: "Impossible de charger l'historique d'utilisation de {{host}} : {{reason}}",
+      notRecorded: "L'historique d'utilisation n'est pas enregistré sur {{hosts}}",
+      hostTotals: "Historique d'utilisation, 30 derniers jours",
+    },
   },
   pairing: {
     connectionMethods: {

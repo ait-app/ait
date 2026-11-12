@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -17,7 +18,9 @@ const schedulePluralForms = {
 };
 
 export const es: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Ejecutar comando",
     loadFailed: "No se pudieron cargar las tareas",
     title: "Resumen de tareas",
@@ -2380,6 +2383,31 @@ export const es: TranslationResources = {
     clientUnavailable: "La conexión con el host no está lista",
     retry: "Reintentar",
     tooltipLoading: "Cargando el uso del plan…",
+    history: {
+      tab: "Historial",
+      byProvider: "Por proveedor",
+      byModel: "Por modelo",
+      byDay: "Por día",
+      unknownModel: "Modelo desconocido",
+      calls: "Llamadas {{value}}",
+      failedCalls: "Fallidas {{value}}",
+      requests: "Solicitudes {{value}}",
+      tokens: "Tokens {{value}}",
+      input: "Entrada {{value}}",
+      output: "Salida {{value}}",
+      cacheRead: "Lectura de caché {{value}}",
+      cacheWrite: "Escritura de caché {{value}}",
+      cacheHitRate: "Aciertos de caché {{value}}",
+      reportedCost: "Coste informado por el proveedor {{value}}",
+      lowerBound:
+        "≥ indica un mínimo: algunas llamadas informaron solo parte de su uso de tokens, o nada.",
+      recordedSince: "El historial de uso empieza el {{date}}. No hay registros anteriores.",
+      empty: "No hay llamadas en este periodo",
+      unreachable: "Sin contar, no se pudo conectar: {{hosts}}",
+      failed: "No se pudo cargar el historial de uso de {{host}}: {{reason}}",
+      notRecorded: "El historial de uso no se registra en {{hosts}}",
+      hostTotals: "Historial de uso, últimos 30 días",
+    },
   },
   pairing: {
     connectionMethods: {

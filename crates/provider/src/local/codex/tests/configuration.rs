@@ -386,3 +386,156 @@ async fn thread_usage_notifications_without_turn_identity_are_retained() {
     ));
     session.close().await.unwrap();
 }
+
+/// Run one turn of `text`, returning its id, request segments and snapshot count.
+async fn usage_turn(
+    session: &mut dyn AgentSession,
+    text: &str,
+    config: &StoredAgentConfig,
+) -> (String, Vec<crate::ports::usage_ledger::RequestUsage>, usize) {
+    let turn = session.start_turn(text, config).await.unwrap();
+    let mut requests = Vec::new();
+    let mut snapshots = 0;
+    loop {
+        match terminal(session).await.unwrap() {
+            AgentTurnEvent::RequestUsage(request) => requests.push(request),
+            AgentTurnEvent::Usage(_) => snapshots += 1,
+            AgentTurnEvent::Completed(_) => return (turn, requests, snapshots),
+            event => assert!(!matches!(event, AgentTurnEvent::Failed)),
+        }
+    }
+}
+
+fn segment_ids(requests: &[crate::ports::usage_ledger::RequestUsage]) -> Vec<&str> {
+    requests
+        .iter()
+        .map(|request| request.segment_id.as_str())
+        .collect()
+}
+
+#[tokio::test]
+async fn request_usage_is_deduplicated_by_running_total_and_queued_before_completion() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
+    let (turn, requests, snapshots) =
+        usage_turn(session.as_mut(), "request-usage", &spec.config).await;
+    assert_eq!(
+        snapshots, 4,
+        "every notification still publishes its snapshot"
+    );
+    assert_eq!(
+        segment_ids(&requests),
+        [format!("codex:{turn}:107"), format!("codex:{turn}:150")]
+    );
+    assert_eq!(
+        (
+            requests[0].input_tokens,
+            requests[0].cache_read_tokens,
+            requests[0].output_tokens,
+            requests[0].reasoning_tokens
+        ),
+        (70, 30, 7, Some(3))
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn request_usage_cursor_restarts_with_a_relaunched_app_server() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let mut spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    usage_turn(session.as_mut(), "request-usage", &spec.config).await;
+    // A changed system prompt relaunches the app server and resumes the same thread.
+    spec.config.system_prompt = Some("relaunch".to_owned());
+
+    let (turn, requests, _) = usage_turn(session.as_mut(), "request-usage", &spec.config).await;
+
+    assert_eq!(
+        segment_ids(&requests),
+        [format!("codex:{turn}:107"), format!("codex:{turn}:150")],
+        "lower totals from the new process are accepted"
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn usage_replayed_on_resume_adds_no_segment_to_the_next_turn() {
+    let fixture = Fixture::new();
+    fixture.mode("replay-usage");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    usage_turn(session.as_mut(), "request-usage", &spec.config).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+
+    // The resumed app server re-reports the previous turn's last usage under that turn.
+    let (_, requests, snapshots) = usage_turn(resumed.as_mut(), "after-resume", &spec.config).await;
+
+    assert_eq!(
+        snapshots, 1,
+        "the replayed snapshot still reaches the context meter"
+    );
+    assert_eq!(segment_ids(&requests), Vec::<&str>::new());
+    resumed.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn sub_agent_usage_counts_toward_the_active_turn_until_its_terminal_event() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let child = format!("child-{}", session.persistence().unwrap().session_id);
+
+    // The child reports 40 twice and 70 while running, 90 after its turn and 120 after ours.
+    let (turn, requests, snapshots) =
+        usage_turn(session.as_mut(), "subagent-usage", &spec.config).await;
+
+    assert_eq!(
+        snapshots, 0,
+        "a child's usage never replaces the parent's snapshot"
+    );
+    assert_eq!(
+        segment_ids(&requests),
+        [
+            format!("codex:{turn}:{child}:40"),
+            format!("codex:{turn}:{child}:70")
+        ]
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.parent.as_deref() == Some(child.as_str()))
+    );
+    assert_eq!(
+        (
+            requests[0].input_tokens,
+            requests[0].cache_read_tokens,
+            requests[0].output_tokens
+        ),
+        (15, 5, 3)
+    );
+    let late = tokio::time::timeout(Duration::from_millis(300), async {
+        loop {
+            if let Some(AgentTurnEvent::RequestUsage(request)) = session.poll_turn().unwrap() {
+                return request;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await;
+    assert!(
+        late.is_err(),
+        "usage after the terminal event belongs to no call"
+    );
+    session.close().await.unwrap();
+}

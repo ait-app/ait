@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 /// Opaque authentication identity, compared only in memory and never serialized or logged.
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct UsageIdentity([u8; 32]);
+pub struct UsageIdentity([u8; 32]);
 
 impl UsageIdentity {
     /// Hash provider and native identity material without retaining its plaintext.
@@ -30,7 +30,7 @@ impl fmt::Debug for UsageIdentity {
 }
 
 /// Authentication is resolved before cache lookup; polling happens only when needed.
-pub(crate) struct PreparedUsage<'a> {
+pub struct PreparedUsage<'a> {
     /// Known native account identity; absence disables historical fallback and cache reuse.
     pub(crate) identity: Option<UsageIdentity>,
     /// Quota operation bound to the authentication context used for `identity`.

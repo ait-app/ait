@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -53,7 +54,9 @@ const scheduleCadencePluralForms = {
 };
 
 export const ar: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "تشغيل أمر",
     loadFailed: "تعذر تحميل المهام",
     title: "نظرة عامة على المهام",
@@ -2349,6 +2352,30 @@ export const ar: TranslationResources = {
     clientUnavailable: "الاتصال بالمضيف ليس جاهزًا",
     retry: "إعادة المحاولة",
     tooltipLoading: "جارٍ تحميل استخدام الخطة…",
+    history: {
+      tab: "السجل",
+      byProvider: "حسب المزوّد",
+      byModel: "حسب النموذج",
+      byDay: "حسب اليوم",
+      unknownModel: "نموذج غير معروف",
+      calls: "الاستدعاءات {{value}}",
+      failedCalls: "الفاشلة {{value}}",
+      requests: "الطلبات {{value}}",
+      tokens: "الرموز {{value}}",
+      input: "الإدخال {{value}}",
+      output: "الإخراج {{value}}",
+      cacheRead: "قراءة الذاكرة المؤقتة {{value}}",
+      cacheWrite: "الكتابة في الذاكرة المؤقتة {{value}}",
+      cacheHitRate: "إصابات الذاكرة المؤقتة {{value}}",
+      reportedCost: "التكلفة التي أبلغ عنها المزوّد {{value}}",
+      lowerBound: "≥ تعني حدًا أدنى: بعض الاستدعاءات أبلغت عن جزء من استخدام الرموز أو لم تبلغ عنه.",
+      recordedSince: "يبدأ سجل الاستخدام في {{date}}. لا توجد سجلات أقدم.",
+      empty: "لا توجد استدعاءات في هذه الفترة",
+      unreachable: "غير محسوبة، تعذّر الاتصال: {{hosts}}",
+      failed: "تعذّر تحميل سجل الاستخدام من {{host}}: {{reason}}",
+      notRecorded: "لا يُسجَّل سجل الاستخدام على {{hosts}}",
+      hostTotals: "سجل الاستخدام، آخر 30 يومًا",
+    },
   },
   pairing: {
     connectionMethods: {

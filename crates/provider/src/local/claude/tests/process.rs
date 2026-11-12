@@ -575,6 +575,94 @@ async fn native_stream_emits_usage_before_terminal_completion() {
 }
 
 #[tokio::test]
+async fn live_requests_are_queued_before_completion_and_resume_replays_none() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
+    let turn = session.start_turn("usage", &spec.config).await.unwrap();
+    let mut requests = Vec::new();
+    loop {
+        match next(session.as_mut()).await.unwrap() {
+            AgentTurnEvent::RequestUsage(request) => requests.push(request),
+            AgentTurnEvent::Completed(_) => break,
+            AgentTurnEvent::Failed => panic!("usage turn failed"),
+            _ => {}
+        }
+    }
+    assert_eq!(requests.len(), 1);
+    assert!(
+        requests[0]
+            .segment_id
+            .starts_with(&format!("claude:{turn}:"))
+    );
+    assert_eq!(
+        requests[0].boundary,
+        crate::ports::usage_ledger::UsageBoundary::Request
+    );
+    assert_eq!(
+        (requests[0].input_tokens, requests[0].cache_read_tokens),
+        (10, 20)
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed.start_turn("plain", &spec.config).await.unwrap();
+    loop {
+        match next(resumed.as_mut()).await.unwrap() {
+            AgentTurnEvent::RequestUsage(request) => panic!("replayed {request:?}"),
+            AgentTurnEvent::Completed(_) => break,
+            AgentTurnEvent::Failed => panic!("resumed turn failed"),
+            _ => {}
+        }
+    }
+    resumed.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn frames_consumed_by_a_steer_after_settlement_add_no_requests_after_completion() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let turn = session
+        .start_turn("usage-follow-up", &spec.config)
+        .await
+        .unwrap();
+    // Let the result and both follow-up messages arrive so the steer drains them unpopped.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(matches!(
+        session.steer_turn(&turn, "late").await,
+        Err(AgentSessionError::Rejected)
+    ));
+    let mut events = Vec::new();
+    while let Ok(event) =
+        tokio::time::timeout(Duration::from_millis(300), next(session.as_mut())).await
+    {
+        events.push(event.unwrap());
+    }
+    let completed = events
+        .iter()
+        .position(|event| matches!(event, AgentTurnEvent::Completed(_)))
+        .expect("the foreground turn completes");
+    assert!(matches!(
+        events[..completed].iter().find_map(|event| match event {
+            AgentTurnEvent::RequestUsage(request) => Some(request.segment_id.as_str()),
+            _ => None,
+        }),
+        Some(id) if id.starts_with(&format!("claude:{turn}:"))
+    ));
+    assert!(
+        !events[completed..]
+            .iter()
+            .any(|event| matches!(event, AgentTurnEvent::RequestUsage(_))),
+        "{events:?}"
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn rich_input_preserves_images_attachments_identity_and_output_schema_at_native_boundary() {
     let (root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();

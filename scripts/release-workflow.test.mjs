@@ -89,7 +89,7 @@ if (args[0] !== "release") process.exit(9);
 switch (args[1]) {
   case "view":
     if (!state.release) process.exit(1);
-    if (args.includes("--json")) console.log(state.assets.length);
+    if (args.includes("--json")) console.log(state.assets.join("\\n"));
     process.exit(0);
   case "create":
     if (state.release) process.exit(2);

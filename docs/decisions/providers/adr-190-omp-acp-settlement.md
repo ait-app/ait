@@ -1,18 +1,20 @@
 ---
 id: ADR-190
-status: accepted
+status: superseded
 date: 2026-10-25
 amends:
   - providers/adr-180-omp-native-rpc-provider.md
 paths:
   - crates/provider
+  - crates/provider-omp
 ---
 
 # ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口
 
+- 状态说明：Superseded，被 [ADR-248](adr-248-omp-paseo-native-rpc.md) 整体取代：ACP 桥接、`_omp/*` 通道、
+  `ait-acp-aliases/` 别名记录和 `daemon omp-acp` 子命令均已删除，OMP Provider 直接驱动原生 RPC。
 - 结算修订：[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充原生空闲状态核对与有界取消。
-- 入口修订：[ADR-237](adr-237-omp-native-session-and-standalone-acp.md) 将 Ait 内部改为直接原生 Session，
-  外部入口改为独立 `ait-omp-acp`，并保留共享别名恢复和精确 sandbox confinement。
+- 入口修订：[ADR-249](adr-249-omp-adapter-crate.md) 将适配器移入 `provider-omp`。
 
 ## 背景
 
@@ -60,7 +62,7 @@ ACP 是固定入口，原有 RPC 功能必须保留，适配责任归 Ait。不�
 Ait 的 ACP 入口明确标识自身及 RPC 后端，不宣称使用 OMP 自带 ACP。
 原生工具和插件只需安装在 OMP 中。桥接层提供协议能力，不能将 OMP RPC 本身未导出的
 任意 TUI 组件工厂、主题或编辑器组件宣称为可远程渲染；具体通道、预算和限制见
-[架构与兼容表](../../architecture/omp-acp-bridge.md)。
+架构与兼容表（该页已随桥接删除，可从 Git 历史查阅）。
 
 测试必须以未修改的官方 CLI 为基线，并使用不同插件名称验证共用路径。
 定制版 OMP 的旧测试结果不能作为官方兼容证明；当前证据见

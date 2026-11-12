@@ -34,7 +34,7 @@ impl<T: Clone> NullableSetting<T> {
 /// An omitted value preserves the setting; an explicit null restores provider inheritance.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct ConfigPatch {
+pub struct ConfigPatch {
     /// Explicit workflow mode; null is rejected by the service.
     #[serde(default)]
     pub(crate) mode_id: NullableSetting,

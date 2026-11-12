@@ -154,6 +154,7 @@ pub(super) async fn execution(
                 | "agent.subagents.list.request"
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
+                | "provider.usage.ledger.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);

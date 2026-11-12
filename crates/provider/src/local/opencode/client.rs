@@ -110,6 +110,13 @@ impl AgentClient for OpenCodeClient {
     ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
         super::subagents::history::discover(self, cwd).await
     }
+
+    async fn reconcile_subagents(
+        &self,
+        children: Vec<crate::ports::controls::NativeSubagent>,
+    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+        super::subagents::durable::reconcile(self, children).await
+    }
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
         match launcher::refresh_version(self, &cwd.to_string_lossy()).await {

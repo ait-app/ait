@@ -41,11 +41,7 @@ function createPackagedApp(root: string) {
   );
   expect(archive.status, archive.stderr).toBe(0);
   writeFileSync(join(resources, "app-dist", "index.html"), "<!doctype html><title>Ait</title>");
-  for (const name of ["aitd", "ait-omp-acp"]) {
-    writeFileSync(join(resources, "bin", name), `#!/bin/sh\necho '${name} ${version}'\n`, {
-      mode: 0o755,
-    });
-  }
+  writeFileSync(join(resources, "bin", "aitd"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(
     join(app, "Ait"),
     `#!${process.execPath}\nconsole.log(JSON.stringify(process.argv.slice(2)));\n`,

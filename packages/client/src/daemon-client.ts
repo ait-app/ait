@@ -112,6 +112,8 @@ import type {
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
+  ProviderUsageLedgerResponseMessage,
+  UsageLedgerGroup,
   DaemonGetStatusResponse,
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
@@ -501,6 +503,7 @@ type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
+type ProviderUsageLedgerPayload = ProviderUsageLedgerResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -5255,6 +5258,20 @@ export class DaemonClient {
     });
   }
 
+  /** Read this daemon host's shared resource snapshot. History is opt-in. */
+  async getHostStats(
+    includeHistory = false,
+  ): Promise<import("@ait/protocol/host-monitor").HostSnapshot> {
+    if (this.lastServerInfoMessage?.features?.hostStats !== true) {
+      throw new Error("Update the host to read resource statistics.");
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "daemon.host_stats.request", includeHistory },
+      responseType: "daemon.host_stats.response",
+      timeout: 5_000,
+    });
+  }
+
   async getDaemonStatus(options?: DaemonStatusOptions): Promise<DaemonStatusPayload> {
     if (!this.lastServerInfoMessage) throw new DaemonConnectionError("Transport not connected");
     if (this.lastServerInfoMessage?.features?.daemonStatusRpc !== true) {
@@ -5413,6 +5430,27 @@ export class DaemonClient {
         ...(options?.agentId ? { agentId: options.agentId } : {}),
         ...(options?.providerId ? { providerId: options.providerId } : {}),
         ...(options?.forceRefresh ? { forceRefresh: true } : {}),
+      },
+    });
+  }
+
+  /**
+   * Summarize this host's harness usage ledger over `[from, to)` (Unix ms, UTC), grouped by
+   * `groupBy`. Requires `features.providerUsageLedger`.
+   */
+  async listUsageLedger(options: {
+    from: number;
+    to: number;
+    groupBy: UsageLedgerGroup[];
+    requestId?: string;
+  }): Promise<ProviderUsageLedgerPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "provider.usage.ledger.request",
+        from: options.from,
+        to: options.to,
+        groupBy: options.groupBy,
       },
     });
   }

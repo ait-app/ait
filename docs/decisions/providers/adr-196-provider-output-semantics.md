@@ -10,6 +10,8 @@ paths:
 # ADR-196：Provider 输出分类与每轮 Thinking 展示
 
 - 范围：Provider 原生投影、OMP ACP 桥接与共享客户端展示；沿用 ADR-190 的所有权边界。
+- 后续修订：[ADR-248](adr-248-omp-paseo-native-rpc.md) 取消 OMP `async-result` 的 Background job 工具结果，
+  改为按 `<system-notice>` 投影为通知；ACP 桥接已删除。
 
 ## 背景
 

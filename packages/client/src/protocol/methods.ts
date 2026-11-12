@@ -70,6 +70,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.get.response",
   },
+  "daemon.host_stats.request": {
+    method: "daemon.host_stats.request",
+    kind: "request",
+    channel: 3,
+    response: "daemon.host_stats.response",
+  },
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
     kind: "request",
@@ -597,6 +603,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "provider.usage.list.response",
+  },
+  "provider.usage.ledger.request": {
+    method: "provider.usage.ledger.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.usage.ledger.response",
   },
   "provider.sessions.recent.list.request": {
     method: "provider.sessions.recent.list.request",

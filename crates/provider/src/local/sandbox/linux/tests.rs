@@ -40,6 +40,15 @@ fn missing_protected_entries_are_initialized_without_overwriting_existing_conten
     let hooks = root.path().join("hooks");
     protect(&hooks).expect("directory guard");
     assert!(hooks.is_dir());
+    // OMP rejects an empty models.yml, and its protected entries sit below `agent`.
+    let models = root.path().join("agent/models.yml");
+    protect(&models).expect("nested yaml guard");
+    assert_eq!(fs::read_to_string(&models).expect("yaml"), "{}\n");
+    for directory in ["extensions", "tools", "natives", "python-env", "profiles"] {
+        let code = root.path().join("agent").join(directory);
+        protect(&code).expect("code directory guard");
+        assert!(code.is_dir(), "{directory}");
+    }
     let toml = root.path().join("config.toml");
     protect(&toml).expect("toml guard");
     assert!(fs::read(&toml).expect("toml").is_empty());

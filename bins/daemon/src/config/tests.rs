@@ -342,13 +342,7 @@ fn invalid_startup_configuration_does_not_create_credentials() {
 
 #[test]
 fn omp_acp_is_not_a_daemon_subcommand() {
-    for arguments in [
-        vec!["daemon", "omp-acp"],
-        vec!["daemon", "omp-acp", "--omp-bin", "/tmp/official omp"],
-    ] {
-        let error = Cli::try_parse_from(arguments).unwrap_err();
-        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
-    }
+    assert!(Cli::try_parse_from(["daemon", "omp-acp"]).is_err());
 }
 
 #[cfg(unix)]

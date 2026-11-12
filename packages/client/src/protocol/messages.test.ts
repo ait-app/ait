@@ -26,6 +26,7 @@ it.each(["workspace", "project"] as const)(
       "subscription.release.request",
       "session.events.set_subscription.request",
       "workspace.label.list.request",
+      "daemon.host_stats.request",
     ]);
     const info = serverInfo(
       {
@@ -41,6 +42,7 @@ it.each(["workspace", "project"] as const)(
       directorySync: false,
       explicitEventSubscriptions: false,
       workspaceLabels: false,
+      hostStats: false,
       projectList: scope === "project",
       workspaceMultiplicity: true,
     });
@@ -183,6 +185,13 @@ describe("Ait host capabilities", () => {
       }
     },
   );
+  it("enables the usage ledger only when the host implements its method", () => {
+    expect(info(["provider.usage.ledger.request"])?.features?.providerUsageLedger).toBe(true);
+    expect(info(["provider.usage.list.request"])?.features).toMatchObject({
+      providerUsageList: true,
+      providerUsageLedger: false,
+    });
+  });
   it("enables cached timeline reads only with the versioned feature and timeline method", () => {
     for (const supported of [false, true]) {
       for (const implemented of [false, true]) {
@@ -482,4 +491,9 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
       validateWSOutboundMessage({ type: "session", message: eventMessage(method, params) }).success,
     ).toBe(true);
   }
+});
+
+it("advertises host monitoring only when the daemon declares its method", () => {
+  expect(info([])?.features?.hostStats).toBe(false);
+  expect(info(["daemon.host_stats.request"])?.features?.hostStats).toBe(true);
 });

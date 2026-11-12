@@ -2,6 +2,12 @@ use serde_json::Value;
 
 use crate::protocol::usage::AgentUsage;
 
+/// Shared cumulative-counter differencing for adapters that only report running totals.
+pub(super) mod cumulative;
+
+/// Live per-request segments for the usage ledger; history replay never feeds them.
+pub mod requests;
+
 pub(super) fn codex(value: &Value) -> Option<AgentUsage> {
     let last = value.get("last")?.as_object()?;
     let usage = AgentUsage {

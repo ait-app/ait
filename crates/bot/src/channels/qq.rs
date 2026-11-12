@@ -22,10 +22,12 @@ use crate::service::Bots;
 
 const API: &str = "https://api.sgroup.qq.com";
 const TOKEN_URL: &str = "https://bots.qq.com/app/getAppAccessToken";
-/// `GROUP_AND_C2C_EVENT`: private messages and group @mentions.
+/// `GROUP_AND_C2C_EVENT`: private messages and group messages.
 const INTENTS: u64 = 1 << 25;
 const PRIVATE_MESSAGE: &str = "C2C_MESSAGE_CREATE";
-const GROUP_MESSAGE: &str = "GROUP_AT_MESSAGE_CREATE";
+const GROUP_AT_MESSAGE: &str = "GROUP_AT_MESSAGE_CREATE";
+/// Full group-message delivery can replace the mention-only event when QQ enables it.
+const GROUP_ALL_MESSAGE: &str = "GROUP_MESSAGE_CREATE";
 const PRIVATE_PEER: &str = "c2c";
 const GROUP_PEER: &str = "group";
 const OP_DISPATCH: u64 = 0;
@@ -476,18 +478,11 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
             };
             (format!("{PRIVATE_PEER}:{sender}"), sender, content.trim())
         }
-        GROUP_MESSAGE if *allow_groups => {
-            let (Some(group), Some(sender)) = (
-                data["group_openid"].as_str(),
-                data["author"]["member_openid"].as_str(),
-            ) else {
+        GROUP_AT_MESSAGE | GROUP_ALL_MESSAGE if *allow_groups => {
+            let Some(fields) = group_fields(data) else {
                 return Ok(None);
             };
-            (
-                format!("{GROUP_PEER}:{group}"),
-                sender,
-                strip_mention(content),
-            )
+            fields
         }
         _ => return Ok(None),
     };
@@ -506,6 +501,17 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
         text: text.to_owned(),
         reply_to: Some(message_id.to_owned()),
     }))
+}
+
+/// Extract the common fields from a QQ group message.
+fn group_fields(data: &Value) -> Option<(String, &str, &str)> {
+    let group = data["group_openid"].as_str()?;
+    let sender = data["author"]["member_openid"].as_str()?;
+    Some((
+        format!("{GROUP_PEER}:{group}"),
+        sender,
+        strip_mention(data["content"].as_str().unwrap_or_default()),
+    ))
 }
 
 #[cfg(test)]
