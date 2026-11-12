@@ -2,15 +2,9 @@
   "id": "S3",
   "title": "Reuse daemon packaging entry point",
   "priority": 36,
-  "depends_on": [
-    "00"
-  ],
-  "donor_sections": [
-    21
-  ],
-  "donor_paths": [
-    "package.json"
-  ],
+  "depends_on": ["00"],
+  "donor_sections": [21],
+  "donor_paths": ["package.json"],
   "implementation": "Added root package:daemon alias resolving the existing node scripts/release-assets.mjs daemon implementation (platform linux|mac, VERSION, BINARY, DEST, optional --dev LABEL). No new packager, no release performed, root package version untouched (0.2.7 stays). Donor scripts/release-assets.test.mjs hunk (OMP runtime bundling assertions) belongs to the OMP boundary tasks and was not imported. Existing release-assets tests stay unchanged; the alias is proven by a throwaway actual npm run package:daemon fixture smoke (release and --dev forms, real tar archive inspection), removed after proof — no permanent wiring/source-copy test. Additive CLI alias only: existing direct script invocations and CI are unchanged; documented in docs/operations/releasing.md and CHANGELOG.md. No new ADR (entry-point alias within existing release ownership).",
   "acceptance": "Script resolves the existing daemon implementation and archive expectations; focused release-assets checks pass without releasing artifacts. Verified by actual npm run package:daemon invocations against fixture binaries with real tar archive inspection (throwaway smoke), plus the unchanged existing release-assets suite.",
   "status": "in_review",
