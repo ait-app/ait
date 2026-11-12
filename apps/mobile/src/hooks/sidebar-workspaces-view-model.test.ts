@@ -85,6 +85,40 @@ describe("createSidebarWorkspaceEntry workspace directory label", () => {
 });
 
 describe("createSidebarWorkspaceEntry completion reconciliation", () => {
+  it("retires a pending create after the workspace directory reports completion", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.statusEnteredAt = new Date(2_000);
+    const pendingCreateAttempts = {
+      draft: {
+        draftId: "draft",
+        serverId: "srv",
+        workspaceId: descriptor.id,
+        agentId: "agent",
+        clientMessageId: "message",
+        text: "review task",
+        timestamp: 1_000,
+        lifecycle: "sent" as const,
+      },
+    };
+
+    expect(
+      createSidebarWorkspaceEntry({
+        serverId: "srv",
+        workspace: descriptor,
+        pendingCreateAttempts,
+      }).statusBucket,
+    ).toBe("done");
+
+    descriptor.statusEnteredAt = new Date(500);
+    expect(
+      createSidebarWorkspaceEntry({
+        serverId: "srv",
+        workspace: descriptor,
+        pendingCreateAttempts,
+      }).statusBucket,
+    ).toBe("running");
+  });
+
   it.each([1_000, 2_000])(
     "retires cached running activity at %i after directory completion",
     (at) => {
