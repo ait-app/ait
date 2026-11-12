@@ -417,6 +417,11 @@ pub trait AgentClient: Debug + Send + Sync {
     fn handles_out_of_band(&self, _text: &str) -> bool {
         false
     }
+
+    /// Invalidate adapter-cached discovery data for `cwd` before a fresh snapshot read.
+    /// Default no-op; adapters with a discovery cache (e.g. the OMP role catalog) override it.
+    fn refresh_discovery_cache(&self, _cwd: &str) {}
+
     /// Restore durable session-scoped questions without opening a native writer.
     /// Native tool approvals are deliberately excluded because their transport has expired.
     fn persisted_permissions(&self, _handle: &AgentPersistenceHandle) -> Vec<serde_json::Value> {

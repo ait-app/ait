@@ -11,6 +11,7 @@ mod framing;
 mod history;
 mod interactions;
 mod prompt;
+mod roles;
 mod sandbox;
 mod session;
 mod stream;
@@ -24,6 +25,7 @@ use std::path::PathBuf;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
+use sha2::Digest;
 
 use provider_core::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
@@ -44,7 +46,22 @@ pub struct OmpClient {
     timeouts: transport::Timeouts,
     environment: AgentEnvironment,
     images: provider_native::images::ImageStore,
+    /// Role catalogs by cwd and environment identity; the client is already host-scoped.
+    role_catalogs:
+        std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, RoleSnapshot>>>,
 }
+
+/// One cached role catalog plus the per-key read serialization gate.
+#[derive(Debug, Clone)]
+struct RoleSnapshot {
+    catalog: Option<std::sync::Arc<roles::Catalog>>,
+    identity: std::sync::Arc<()>,
+    fresh: bool,
+    gate: std::sync::Arc<tokio::sync::Mutex<()>>,
+    updated: std::time::Instant,
+}
+
+const ROLE_CACHE_MAX: usize = 32;
 
 impl OmpClient {
     /// Use `program` directly, inheriting the local OMP configuration and authentication.
@@ -55,6 +72,9 @@ impl OmpClient {
             timeouts: transport::Timeouts::default(),
             environment: AgentEnvironment::default(),
             images: provider_native::images::ImageStore::default(),
+            role_catalogs: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::BTreeMap::new(),
+            )),
         }
     }
 
@@ -63,6 +83,104 @@ impl OmpClient {
     pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = provider_native::images::ImageStore::new(directory);
         self
+    }
+}
+
+impl OmpClient {
+    /// Identity key for the role catalog: cwd plus the client environment (host-scoped client).
+    fn role_catalog_key(&self, cwd: &str) -> String {
+        let mut digest = sha2::Sha256::new();
+        digest.update(cwd.as_bytes());
+        digest.update([0]);
+        for (key, value) in self.environment.entries() {
+            digest.update(key.as_bytes());
+            digest.update([0]);
+            digest.update(value.as_bytes());
+            digest.update([0]);
+        }
+        format!("{:x}", digest.finalize())
+    }
+
+    /// Read the role catalog for `cwd`, serialized per identity and cached (LRU 32).
+    /// A stale-identity reply is never committed: the cache is keyed by the current identity.
+    async fn role_catalog(
+        &self,
+        cwd: &str,
+    ) -> Result<std::sync::Arc<roles::Catalog>, AgentSessionError> {
+        let key = self.role_catalog_key(cwd);
+        let gate = {
+            let mut catalogs = self
+                .role_catalogs
+                .lock()
+                .map_err(|_| AgentSessionError::Failed)?;
+            if !catalogs.contains_key(&key) {
+                if catalogs.len() >= ROLE_CACHE_MAX {
+                    let oldest = catalogs
+                        .iter()
+                        .filter(|(_, snapshot)| std::sync::Arc::strong_count(&snapshot.gate) == 1)
+                        .min_by_key(|(_, snapshot)| snapshot.updated)
+                        .map(|(key, _)| key.clone())
+                        .ok_or(AgentSessionError::Busy)?;
+                    catalogs.remove(&oldest);
+                }
+                catalogs.insert(
+                    key.clone(),
+                    RoleSnapshot {
+                        catalog: None,
+                        identity: std::sync::Arc::new(()),
+                        fresh: false,
+                        gate: std::sync::Arc::new(tokio::sync::Mutex::new(())),
+                        updated: std::time::Instant::now(),
+                    },
+                );
+            }
+            catalogs[&key].gate.clone()
+        };
+        let _guard = gate.lock().await;
+        let (identity, previous) = {
+            let mut catalogs = self
+                .role_catalogs
+                .lock()
+                .map_err(|_| AgentSessionError::Failed)?;
+            let snapshot = catalogs.get_mut(&key).ok_or(AgentSessionError::Failed)?;
+            snapshot.updated = std::time::Instant::now();
+            if snapshot.fresh
+                && let Some(catalog) = &snapshot.catalog
+            {
+                return Ok(catalog.clone());
+            }
+            (snapshot.identity.clone(), snapshot.catalog.clone())
+        };
+        let result = roles::Catalog::read(self, cwd)
+            .await
+            .map(std::sync::Arc::new);
+        let mut catalogs = self
+            .role_catalogs
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?;
+        let snapshot = catalogs.get_mut(&key).ok_or(AgentSessionError::Failed)?;
+        if !std::sync::Arc::ptr_eq(&identity, &snapshot.identity) {
+            return Err(AgentSessionError::Failed);
+        }
+        match result {
+            Ok(catalog) => {
+                snapshot.catalog = Some(catalog.clone());
+                snapshot.fresh = true;
+                Ok(catalog)
+            }
+            Err(error) => previous.ok_or(error),
+        }
+    }
+
+    /// Invalidate the cached role catalog for `cwd` (snapshot refresh entry point).
+    fn invalidate_role_catalog(&self, cwd: &str) {
+        let key = self.role_catalog_key(cwd);
+        if let Ok(mut catalogs) = self.role_catalogs.lock()
+            && let Some(snapshot) = catalogs.get_mut(&key)
+        {
+            snapshot.identity = std::sync::Arc::new(());
+            snapshot.fresh = false;
+        }
     }
 }
 
@@ -98,15 +216,39 @@ impl AgentClient for OmpClient {
         config::validate(config)
     }
 
-    fn settings(&self, _config: &StoredAgentConfig) -> Value {
+    /// Reject role assignments the live catalog cannot resolve before any session starts.
+    ///
+    /// Structural shape is already checked by [`config::validate`]. This gate runs before the
+    /// process is created, so an unresolvable assignment never reaches a `--config` overlay.
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        config::validate_spec(spec)?;
+        if roles::overrides(&spec.config).is_empty() {
+            return Ok(());
+        }
+        match self.role_catalog(&spec.cwd).await {
+            Ok(catalog) => catalog.validate(&spec.config),
+            // No catalog means no authority to accept an assignment; inherit is already
+            // excluded above because it writes no overlay entry.
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; assignment rejected");
+                Err(AgentSessionError::Rejected)
+            }
+        }
+    }
+
+    fn settings(&self, config: &StoredAgentConfig) -> Value {
         // Fast is the only feature, and only a live session's native state can offer it. A mode
         // change relaunches OMP between turns (D23); MCP servers and rewind are not offered yet.
-        json!({"availableModes":config::modes(),"features":[],"capabilities":{
+        json!({"availableModes":config::modes(),"features":roles::stored_features(config),"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
             "supportsDynamicModes":true,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
+    }
+
+    fn refresh_discovery_cache(&self, cwd: &str) {
+        self.invalidate_role_catalog(cwd);
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
@@ -117,8 +259,18 @@ impl AgentClient for OmpClient {
         let mut probe = session::probe(self, cwd, self.timeouts).await?;
         let result = config::discover(&mut probe).await;
         let closed = probe.close().await;
-        let details = result?;
+        let mut details = result?;
         closed?;
+        // Role discovery is read-only; on failure keep baseline features (stored keys only).
+        match self.role_catalog(cwd).await {
+            Ok(catalog) => catalog.append(&mut details, &StoredAgentConfig::default()),
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; baseline features kept");
+                details
+                    .features
+                    .extend(roles::stored_features(&StoredAgentConfig::default()));
+            }
+        }
         Ok(details)
     }
 
@@ -130,8 +282,18 @@ impl AgentClient for OmpClient {
         if !self.is_available().await? {
             return Err(AgentSessionError::Unavailable);
         }
-        // As in Paseo, drafts offer no controls: Fast is read from a live session's state.
-        Ok(Vec::new())
+        // As in Paseo, drafts offer no tier controls: Fast is read from a live session's state.
+        // Role assignments apply through the overlay, so a draft can still offer them from the
+        // discovered catalog.
+        let mut features = Vec::new();
+        match self.role_catalog(&spec.cwd).await {
+            Ok(catalog) => features.extend(catalog.features(&spec.config)),
+            Err(error) => {
+                tracing::warn!(error=?error,"OMP role catalog unavailable; stored role keys kept");
+                features.extend(roles::stored_features(&spec.config));
+            }
+        }
+        Ok(features)
     }
 
     async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
