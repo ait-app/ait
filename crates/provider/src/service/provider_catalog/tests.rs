@@ -50,7 +50,7 @@ struct NativeClient;
 #[async_trait::async_trait]
 impl AgentClient for NativeClient {
     fn provider(&self) -> &'static str {
-        "claude"
+        "native"
     }
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
         Ok(false)

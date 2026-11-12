@@ -85,6 +85,28 @@ test("a crate path with no known owner fails open to the whole workspace", () =>
   assert.match(find(result, "nextest"), /--workspace/);
 });
 
+test("the runtime and Codex are linted again without the test-support their tests enable", () => {
+  const family = [
+    crate("provider-core"),
+    crate("provider", ["provider-core", "provider-codex"]),
+    crate("provider-codex", ["provider-core", "provider"]),
+    crate("provider-pi", ["provider-core", "provider"]),
+    crate("provider-builtin", ["provider", "provider-codex", "provider-pi"]),
+  ];
+  const production = (changed, graphOverride = family) =>
+    commands(plan(changed, { graph: graphOverride }), "rust").filter((command) =>
+      command.includes(" --lib "),
+    );
+  const both = ["cargo clippy --locked -p provider -p provider-codex --lib -- -D warnings"];
+  assert.deepEqual(production(["crates/provider/src/lib.rs"]), both);
+  assert.deepEqual(production(["Cargo.lock"]), both);
+  assert.deepEqual(production(["crates/provider-pi/src/lib.rs"]), []);
+  // Only the crates in the linted set are named.
+  assert.deepEqual(production(["crates/provider/src/lib.rs"], graph), [
+    "cargo clippy --locked -p provider --lib -- -D warnings",
+  ]);
+});
+
 test("CI selects the ci nextest profile", () => {
   const result = plan(["crates/voice/src/lib.rs"], { ci: true });
   assert.match(find(result, "nextest"), /--profile ci$/);

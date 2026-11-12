@@ -4,7 +4,10 @@
 //! Production dependents never enable the feature, and the dependency guard rejects non-dev
 //! edges that do. Each item delegates to a crate-private runtime operation, so testing an
 //! adapter or the built-in assembly from its own crate does not widen the runtime's production
-//! API.
+//! API. Some items adapt rather than forward (`create_internal`, `recent_sessions`,
+//! `fetch_timeline`, `timeline_entries`, `projected_timeline_items`, `spawn`): they build the
+//! registration, decode the JSON request, map stored rows or set up registries themselves, so
+//! `AgentRegistration`, `FetchRequest` and `RecentRequest` stay crate-private.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

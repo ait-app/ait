@@ -3,6 +3,7 @@ use serde_json::json;
 
 use super::*;
 use provider_codex::CodexClient;
+use provider_core::ports::native_history::CwdLookup;
 
 fn entry(key: &str, text: &str) -> NativeItem {
     NativeItem {
@@ -109,6 +110,7 @@ async fn manager_delegates_registration_and_reports_unknown_agents() {
         manager.validate_provider("missing"),
         Err(AgentManagerError::ProviderUnavailable(provider)) if provider == "missing"
     ));
+    assert_eq!(manager.0.cwd_lookup("missing"), CwdLookup::Canonical);
     assert_eq!(manager.active_turn("missing"), None);
     assert_eq!(manager.last_message("missing"), None);
     assert!(manager.live_snapshot("missing").is_none());

@@ -387,6 +387,19 @@ fn daemon_reaches_adapters_only_through_the_built_in_assembly() {
 }
 
 #[test]
+fn api_uses_the_built_in_assembly_only_in_tests() {
+    for (kind, expected) in [
+        (Value::Null, vec!["api -> provider-builtin outside tests"]),
+        (json!("dev"), vec![]),
+    ] {
+        let packages = [json!({"id":"api", "name":"api", "dependencies":[
+            {"name":"provider-builtin", "path":"../provider-builtin", "kind":kind}
+        ]})];
+        assert_eq!(violations(&packages), expected);
+    }
+}
+
+#[test]
 fn hosts_and_the_assembly_declare_only_the_family_edges_they_use() {
     let edge = |name: &str, kind: Value| json!({"name": name, "path": "x", "kind": kind});
     for host in ["daemon", "api"] {

@@ -53,7 +53,8 @@ SCOPES = [
         "pagination::", "schedule::", "storage::",
     ]),
 ]
-IGNORE = r"/(tests|test_support)(/|\.rs$)"
+# `testing` and Codex `offline` compile only under `cfg(test)` or the `test-support` feature.
+IGNORE = r"/(tests|test_support|testing)(/|\.rs$)|/provider-codex/src/realtime/media/offline\.rs$"
 
 
 def command(crate, target, filters):
@@ -210,7 +211,7 @@ def report():
         value = summary[key]
         paragraphs.append(f"| {label} | {value['percent']}% | {value['covered']} / {value['total']} |")
     paragraphs += ["", "不是逐接口语义覆盖率，也不是 workspace 覆盖率。macOS arm64，默认 features。",
-                   "测试文件和 test_support 被排除；不可执行的类型定义、注释及未编译的平台代码不进入 LLVM 行分母。",
+                   "测试文件、test_support 与只由 test-support feature 编译的 testing 和 Codex offline 媒体被排除；不可执行的类型定义、注释及未编译的平台代码不进入 LLVM 行分母。",
                    f"Linux/Windows 和真实认证 Provider 未运行。{sum(result['ignored'] for result in results)} 个既有在线 Provider 测试保持 ignored。", "",
                    "复现：`python3 scripts/paseo-focused-coverage.py --run`。该脚本只运行下面列出的定向测试。",
                    "HTML 位于 `target/llvm-cov/html/index.html`；可评审的文件/行证据为 [coverage.json](coverage.json)。", "",
