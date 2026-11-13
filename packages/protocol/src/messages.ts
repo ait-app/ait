@@ -6282,6 +6282,37 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderPresetsDescribeResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.describe.response"),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    descriptor: ProviderPresetDescriptorSchema,
+    requestId: z.string(),
+  }),
+});
+
+export const ProviderPresetsListResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.list.response"),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    presets: z.array(ProviderPresetEntrySchema),
+    error: z.string().nullable().optional(),
+    requestId: z.string(),
+  }),
+});
+
+/** Save and delete share one acknowledgement: the stored name or a readable reason. */
+export const ProviderPresetsMutationResponseMessageSchema = z.object({
+  type: z.literal(["provider.presets.save.response", "provider.presets.delete.response"]),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    saved: z.string().nullable().optional(),
+    deleted: z.string().nullable().optional(),
+    error: z.string().nullable().optional(),
+    requestId: z.string(),
+  }),
+});
+
 export const ProviderUsageToneSchema = z.enum(["default", "ok", "warning", "danger"]);
 export const ProviderUsageStatusSchema = z.enum(["available", "unavailable", "error"]);
 
@@ -6850,6 +6881,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProvidersSnapshotUpdateMessageSchema,
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
+  ProviderPresetsDescribeResponseMessageSchema,
+  ProviderPresetsListResponseMessageSchema,
+  ProviderPresetsMutationResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ProviderUsageLedgerResponseMessageSchema,
   ListCommandsResponseSchema,
@@ -7025,6 +7059,15 @@ export type GetProvidersSnapshotResponseMessage = z.infer<
 export type ProvidersSnapshotUpdateMessage = z.infer<typeof ProvidersSnapshotUpdateMessageSchema>;
 export type RefreshProvidersSnapshotResponseMessage = z.infer<
   typeof RefreshProvidersSnapshotResponseMessageSchema
+>;
+export type ProviderPresetsDescribeResponseMessage = z.infer<
+  typeof ProviderPresetsDescribeResponseMessageSchema
+>;
+export type ProviderPresetsListResponseMessage = z.infer<
+  typeof ProviderPresetsListResponseMessageSchema
+>;
+export type ProviderPresetsMutationResponseMessage = z.infer<
+  typeof ProviderPresetsMutationResponseMessageSchema
 >;
 export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
