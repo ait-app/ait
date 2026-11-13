@@ -868,6 +868,12 @@ export const en = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "Schedule “{{name}}” · run {{runId}}",
+      scheduleUnnamed: "Schedule · run {{runId}}",
+      botWake: "Ait notifications",
+      botInstructions: "Sent by Ait",
+    },
     diagram: {
       diagram: "Diagram",
       zoomIn: "Zoom in",

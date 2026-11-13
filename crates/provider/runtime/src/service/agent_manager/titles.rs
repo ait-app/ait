@@ -1,6 +1,7 @@
 //! Display titles derived from existing user input, without creating provider turns.
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
+use domain::input_envelope;
 use model::ErrorCode;
 
 use super::AgentManager;
@@ -18,7 +19,13 @@ pub(super) fn missing(record: &PersistedAgentRuntimeRecord) -> bool {
 }
 
 /// Normalize `text` into at most 200 UTF-16 units, returning `None` for empty input.
+///
+/// An Ait-generated input contributes only the text a person reads as the message.
 pub(super) fn from_prompt(text: &str) -> Option<String> {
+    let envelope = input_envelope::parse(text);
+    let text = envelope
+        .as_ref()
+        .map_or(text, |envelope| envelope.text.as_ref());
     let mut title = String::new();
     let mut units = 0;
     let mut space = false;

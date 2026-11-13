@@ -169,6 +169,10 @@
   片段（assistant 还需 `messageId` 一致）；跨工具调用的每轮单一 Thinking 由共享客户端组合
   （[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)、
   [ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
+- Ait 自己写入的输入（定时任务与心跳运行、Bot 指令前缀与唤醒通知）统一为 `<ait-input kind=…>` 信封。
+  runtime 在发布、读取投影与会话标题处调用 `domain::input_envelope`，把信封内的正文与 `origin`
+  一并输出；存储行保留发送时的原文，重放与原生历史导入得到同样投影
+  （[ADR-276](../decisions/providers/adr-276-ait-input-envelope-and-origin.md)）。
 - 原生角色与事件类型由 adapter 解释，客户端不按文本猜测用途；例如 OMP `async-result` 的
   `<system-notice>` 投影为 `notification`
   （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)，OMP 部分已由
@@ -194,7 +198,7 @@
 - 所有 Provider 使用同一 Timeline `todo` 完整快照：`items` 中保留文本、完成标记、可选原生 ID、
   `pending` / `in_progress` / `completed` 状态与 active form。空列表明确清空；没有快照不改变状态。
   原生程序拥有任务与写入行为，Ait 只投影和展示，不创建通用 TODO 工具或另建任务数据库
-  （[ADR-276](../decisions/providers/adr-276-provider-todo-snapshots.md)）。
+  （[ADR-277](../decisions/providers/adr-277-provider-todo-snapshots.md)）。
 - 原生接入：Claude 的 TodoWrite 与 TaskCreate/TaskUpdate/TaskList、Codex 的原生 plan、
   OMP 的 phases、DSH Host 的 `todo/write`、Pi 官方 TODO 扩展的成功 `todo` 结果
   `details.todos`（保留 ID，失败不更新）；OpenCode、MiniMax 与 DSH ACP 的标准

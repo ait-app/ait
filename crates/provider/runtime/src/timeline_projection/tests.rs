@@ -225,3 +225,27 @@ fn pagination_matches_all_recorded_paseo_cases() {
     }
     assert_eq!(count, 11);
 }
+
+#[test]
+fn ait_inputs_display_their_message_text_and_origin() {
+    let scheduled = input_envelope::schedule("s1", "r1", None, "Run </b> report");
+    let source = rows(&json!({"rows":[
+        {"seq":1,"turnId":"turn","timestamp":"2026-11-13T00:00:00Z",
+            "item":{"type":"user_message","text":scheduled,"messageId":"m1"}},
+        {"seq":2,"turnId":"turn","timestamp":"2026-11-13T00:00:01Z",
+            "item":{"type":"user_message","text":"<ait-input kind=\"schedule\"> quoted"}}
+    ]}));
+
+    let projected = project(&source);
+
+    assert_eq!(
+        projected[0].item,
+        json!({"type":"user_message","text":"Run </b> report","messageId":"m1",
+            "origin":{"kind":"schedule","scheduleId":"s1","runId":"r1"}})
+    );
+    assert_eq!(projected[1].item, source[1].entry.item);
+    assert_eq!(
+        ait_input(&json!({"type":"assistant_message","text":scheduled})),
+        None
+    );
+}

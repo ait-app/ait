@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use domain::input_envelope;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -75,7 +76,35 @@ fn deserialize_item<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result
     Value::deserialize(deserializer).map(normalize_item)
 }
 
+/// Display form of an Ait-generated `user_message`: the text a person reads as the message, plus
+/// an `origin` naming the Ait component that wrote it.
+///
+/// # Returns
+///
+/// `None` for every other item, which displays unchanged.
+pub(crate) fn ait_input(item: &Value) -> Option<Value> {
+    if item["type"] != "user_message" {
+        return None;
+    }
+    let envelope = input_envelope::parse(item["text"].as_str()?)?;
+    let mut projected: serde_json::Map<String, Value> = item
+        .as_object()?
+        .iter()
+        .filter(|(key, _)| *key != "text")
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    projected.insert("text".to_owned(), Value::String(envelope.text.into_owned()));
+    projected.insert(
+        "origin".to_owned(),
+        serde_json::to_value(envelope.origin).ok()?,
+    );
+    Some(Value::Object(projected))
+}
+
 fn normalize_item(mut item: Value) -> Value {
+    if let Some(projected) = ait_input(&item) {
+        return projected;
+    }
     if item["type"] != "tool_call" {
         return item;
     }

@@ -1,5 +1,5 @@
 ---
-id: ADR-276
+id: ADR-277
 status: accepted
 date: 2026-11-13
 paths:
@@ -18,7 +18,7 @@ paths:
   - apps/mobile/src/composer/task-list
 ---
 
-# ADR-276：Provider 原生 TODO 统一为完整快照
+# ADR-277：Provider 原生 TODO 统一为完整快照
 
 ## 背景
 

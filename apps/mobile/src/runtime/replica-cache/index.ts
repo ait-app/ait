@@ -18,6 +18,7 @@ import {
   AgentTimelineItemPayloadSchema,
   CompactionTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
+  UserMessageOriginSchema,
   VoiceTranscriptSchema,
   VoiceTimelineItemSchema,
 } from "@ait/protocol/messages";
@@ -125,6 +126,7 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
     ...TimelineItemBaseShape,
     kind: z.literal("user_message"),
     voiceTranscript: VoiceTranscriptSchema.optional(),
+    origin: UserMessageOriginSchema.optional(),
     clientMessageId: z.string().optional(),
     messageId: z.string().optional(),
     text: z.string(),
@@ -464,6 +466,7 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
         ...(item.voiceTranscript?.length ? { voiceTranscript: item.voiceTranscript } : {}),
+        ...(item.origin ? { origin: item.origin } : {}),
       };
     case "assistant_message":
       return {
@@ -558,6 +561,7 @@ function deserializeBuiltinTimelineItem(
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
         ...(item.voiceTranscript?.length ? { voiceTranscript: item.voiceTranscript } : {}),
+        ...(item.origin ? { origin: item.origin } : {}),
       };
     case "assistant_message":
       return {

@@ -750,6 +750,12 @@ export const ja: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "スケジュール「{{name}}」 · 実行 {{runId}}",
+      scheduleUnnamed: "スケジュール · 実行 {{runId}}",
+      botWake: "Ait の通知",
+      botInstructions: "Ait から送信",
+    },
     diagram: {
       diagram: "図",
       zoomIn: "拡大",
