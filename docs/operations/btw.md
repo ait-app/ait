@@ -88,4 +88,4 @@ OMP 18.17.0 的 `tai/deepseek-v4.1-flash`，推理连接本机已配置的真实
 背景和回答为测试内容，不是完整 App 或真实模型端到端运行的截图。
 
 端口、存储与交接契约见 [Provider 规格](../architecture/provider.md#执行与会话所有权) 和
-[ADR-277](../decisions/providers/adr-277-shared-btw-sessions.md)。
+[ADR-278](../decisions/providers/adr-278-shared-btw-sessions.md)。

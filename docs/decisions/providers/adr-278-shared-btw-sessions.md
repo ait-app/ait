@@ -1,5 +1,5 @@
 ---
-id: ADR-277
+id: ADR-278
 status: accepted
 date: 2026-11-13
 amends:
@@ -19,7 +19,7 @@ paths:
   - apps/mobile/src/components/btw-window.tsx
 ---
 
-# ADR-277：共享 BTW 侧会话与完整会话交接
+# ADR-278：共享 BTW 侧会话与完整会话交接
 
 ## 背景
 

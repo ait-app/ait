@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use rusqlite::{Connection, OptionalExtension, params};
+use serde_json::{Value, json};
 
 use crate::protocol::timeline::{Direction, FetchRequest};
 use crate::timeline_projection::page::{self, Header, Page};
@@ -18,6 +19,28 @@ pub(super) fn bounds(database: &Connection, agent: &str) -> Result<(u64, u64), E
          COALESCE((SELECT seq FROM display_sources WHERE agent=?1 ORDER BY seq DESC LIMIT 1),0)",
         [agent], |row| Ok((row.get(0)?, row.get(1)?)),
     ).map_err(io)
+}
+
+/// Seek the latest canonical task snapshot for `agent` in the caller's consistent `epoch`.
+/// Returns null for no task list, retaining explicit empty lists and reporting storage/decode errors.
+pub(super) fn tasks(database: &Connection, agent: &str, epoch: &str) -> Result<Value, ErrorCode> {
+    let snapshot: Option<(u64, String)> = database
+        .query_row(
+            "SELECT seq,json_extract(entry,'$.item.items')
+             FROM display_sources INDEXED BY display_todos
+             WHERE agent=? AND CASE WHEN json_valid(entry)
+                 THEN json_extract(entry,'$.item.type')='todo' ELSE 0 END
+             ORDER BY seq DESC LIMIT 1",
+            [agent],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(io)?;
+    let Some((seq, encoded)) = snapshot else {
+        return Ok(Value::Null);
+    };
+    let items: Vec<Value> = serde_json::from_str(&encoded).map_err(io)?;
+    Ok(json!({"epoch":epoch,"seq":seq,"items":items}))
 }
 
 struct Read<'a> {

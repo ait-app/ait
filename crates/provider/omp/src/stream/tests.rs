@@ -698,12 +698,12 @@ fn todo_results_and_reminders_show_lists_without_tool_rows_or_repeats() {
     stream.message(&todo_result("t3", 1003, phases)).unwrap();
 
     let rows = timeline(&mut stream);
-    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows.len(), 1, "{rows:?}");
     assert_eq!(rows[0].key, "native:omp:session:todo:t1");
     assert_eq!(rows[0].item["items"][0]["text"], "one");
     assert!(rows[0].turn_id.is_none());
-    assert_eq!(rows[1].item["items"].as_array().unwrap().len(), 1);
-    assert_eq!(rows[1].turn_id.as_deref(), Some("turn"));
+    assert_eq!(rows[0].item["items"].as_array().unwrap().len(), 2);
+    assert_eq!(rows[0].item["items"][0]["group"]["title"], "Build");
     assert!(stream.tools.is_empty());
 }
 
@@ -767,6 +767,8 @@ fn telemetry_events_show_rows_and_compactions_pair_their_lifecycle() {
 #[test]
 fn omp_state_todos_show_once_unless_a_list_already_shows_them() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    stream.state_todos(&json!({"todoPhases":[]}));
+    assert!(stream.events.is_empty());
     let phases = json!([{"name":"Plan","tasks":[{"content":"one","status":"pending"}]}]);
     stream
         .message(&todo_result("t1", 1000, phases.clone()))
@@ -774,9 +776,13 @@ fn omp_state_todos_show_once_unless_a_list_already_shows_them() {
     timeline(&mut stream);
 
     stream.state_todos(&json!({"todoPhases":phases}));
+    assert!(stream.events.is_empty());
+    stream.state_todos(&json!({"todoPhases":[]}));
     stream.state_todos(&json!({"todoPhases":[]}));
     stream.state_todos(&json!({}));
-    assert!(stream.events.is_empty());
+    let cleared = timeline(&mut stream);
+    assert_eq!(cleared.len(), 1);
+    assert_eq!(cleared[0].item, json!({"type":"todo","items":[]}));
 
     let changed = json!([{"name":"Plan","tasks":[{"content":"one","status":"completed"}]}]);
     stream.state_todos(&json!({"todoPhases":changed}));
@@ -785,6 +791,27 @@ fn omp_state_todos_show_once_unless_a_list_already_shows_them() {
     assert_eq!(rows.len(), 1);
     assert!(rows[0].key.contains(":notice:"));
     assert_eq!(rows[0].item["items"][0]["completed"], true);
+}
+
+#[test]
+fn todo_reminders_are_fallbacks_and_cannot_replace_or_resurrect_authoritative_phases() {
+    let reminder = json!({"type":"todo_reminder","todos":[{"content":"Open","status":"pending"}]});
+    let mut stream = Stream::new("session".into(), ImageStore::default());
+    stream.consume(&reminder).unwrap();
+    assert_eq!(timeline(&mut stream).len(), 1);
+    stream.state_todos(&json!({"todoPhases":[{"name":"Phase","tasks":[
+        {"content":"Done","status":"completed"},{"content":"Open","status":"pending"}
+    ]}]}));
+    timeline(&mut stream);
+    stream.consume(&reminder).unwrap();
+    assert!(timeline(&mut stream).is_empty());
+    stream.state_todos(&json!({"todoPhases":[]}));
+    assert_eq!(
+        timeline(&mut stream)[0].item,
+        json!({"type":"todo","items":[]})
+    );
+    stream.consume(&reminder).unwrap();
+    assert!(timeline(&mut stream).is_empty());
 }
 
 fn task_call() -> Value {

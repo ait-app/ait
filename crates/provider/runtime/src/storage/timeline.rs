@@ -123,6 +123,9 @@ impl Timeline {
             CREATE TABLE IF NOT EXISTS display_sources(agent TEXT NOT NULL, seq INTEGER NOT NULL,
                 provider TEXT NOT NULL, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
                 PRIMARY KEY(agent,seq));
+            CREATE INDEX IF NOT EXISTS display_todos ON display_sources(agent,seq)
+                WHERE CASE WHEN json_valid(entry)
+                    THEN json_extract(entry,'$.item.type')='todo' ELSE 0 END;
             PRAGMA application_id=1096045644;",
             )
             .map_err(io)?;

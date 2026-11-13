@@ -857,11 +857,29 @@ impl Stream {
             "running"
         };
         let suffix = format!("tool:{id}");
+        let todo = (status == "completed")
+            .then(|| {
+                if name == "todo" {
+                    super::todo::snapshot(result)
+                } else {
+                    provider_native::todo::tool_input(name, &tool.input)
+                }
+            })
+            .flatten();
         let item = json!({"type":"tool_call","callId":format!("native:pi:{}:{suffix}",self.turn),
             "name":name,"status":status,"error":if status == "failed" { json!("Tool execution failed.") } else { Value::Null },"detail":tool_detail(tool, output)});
         self.tool_item(&suffix, item, preview_bytes, done)?;
         if done {
             self.tools.remove(id);
+        }
+        if let Some(item) = todo {
+            let bytes = serde_json::to_vec(&item)
+                .map_err(|_| AgentSessionError::Failed)?
+                .len();
+            self.byte_budget(bytes)?;
+            self.push(AgentTurnEvent::Timeline(
+                self.entry(&format!("todo:{id}"), item),
+            ))?;
         }
         Ok(())
     }

@@ -335,6 +335,33 @@ describe("ReplicaCache", () => {
     expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toEqual(value);
   });
 
+  it("retains native TODO phases and task state across a cache restart", async () => {
+    const storage = new MemoryStorage();
+    const writer = createCache(storage);
+    const item: StreamItem = {
+      kind: "todo_list",
+      id: "todo",
+      provider: "omp",
+      timestamp: new Date(1),
+      timelineCursor: { epoch: "epoch-1", seq: 12 },
+      activity: { type: "started", task: "Build" },
+      items: [
+        {
+          id: "4",
+          text: "Build",
+          activeForm: "Building",
+          status: "in_progress",
+          completed: false,
+          group: { id: "phase:0", title: "Implementation" },
+        },
+      ],
+    };
+    const value = { ...timeline(), items: [item] };
+    writer.commitTimeline(SERVER_ID, "agent-1", value);
+    await writer.flush();
+    expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toEqual(value);
+  });
+
   it("retains canonical voice snapshots and session boundaries across a cache restart", async () => {
     const storage = new MemoryStorage();
     const writer = createCache(storage);

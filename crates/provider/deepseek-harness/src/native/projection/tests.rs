@@ -1,6 +1,46 @@
 use super::*;
 
 #[test]
+fn native_todo_writes_replay_with_stable_keys_and_reset_with_the_native_turn() {
+    // @deepseek-ai/dsh-tool-todo appends todo/write independently of tool receipts.
+    let events = [
+        json!({"type":"turn/start","data":{"turn":1}}),
+        json!({"type":"todo/write","data":{"todos":[{"content":"Build","status":"in_progress"}]}}),
+        json!({"type":"todo/write","data":{"todos":[{"content":"Build","status":"completed"}]}}),
+        json!({"type":"turn/start","data":{"turn":2}}),
+        json!({"type":"todo/write","data":{"todos":[]}}),
+    ];
+    let replay = || {
+        let mut stream = Stream::default();
+        let mut tools = BTreeMap::new();
+        for (index, event) in events.iter().enumerate() {
+            let mut event = event.clone();
+            event["seq"] = json!(index + 1);
+            event["time"] =
+                json!(1_700_000_000_000_i64 + i64::try_from(index).expect("fixture index"));
+            apply(&mut stream, &mut tools, &event, "session").unwrap();
+        }
+        stream
+            .events
+            .into_iter()
+            .map(|event| match event {
+                AgentTurnEvent::Timeline(entry) => entry,
+                other => panic!("unexpected event: {other:?}"),
+            })
+            .collect::<Vec<_>>()
+    };
+    let first = replay();
+    assert_eq!(first, replay());
+    assert_eq!(first.len(), 4);
+    assert_eq!(first[0].key, "native:dsh:v2:session:event:2:0");
+    assert_eq!(first[0].item["items"][0]["status"], "in_progress");
+    assert_eq!(first[1].item["items"][0]["completed"], true);
+    assert_eq!(first[2].item, json!({"type":"todo","items":[]}));
+    assert_eq!(first[2].turn_id.as_deref(), Some("dsh:session:2"));
+    assert_eq!(first[3].item, json!({"type":"todo","items":[]}));
+}
+
+#[test]
 fn unfinished_native_compaction_fails_at_turn_end_and_malformed_owner_is_rejected() {
     let mut stream = Stream::default();
     let mut tools = BTreeMap::new();

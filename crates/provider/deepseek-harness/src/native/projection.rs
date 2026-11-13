@@ -37,6 +37,7 @@ pub(super) fn apply(
         Some("turn/start") => {
             let turn = data["turn"].as_u64().ok_or(AgentSessionError::Failed)?;
             stream.begin(format!("dsh:{session}:{turn}"));
+            stream.clear_todos()?;
             tools.clear();
         }
         Some("turn/end") => stream.finish_compactions(),
@@ -44,6 +45,7 @@ pub(super) fn apply(
             .events
             .push_back(AgentTurnEvent::Timeline(user(event, session)?)),
         Some("compaction/start" | "compaction/end") => compaction(stream, event, session)?,
+        Some("todo/write") => stream.todos(&data["todos"])?,
         Some("assistant/message") => {
             let message = &data["message"];
             for block in message["content"]
