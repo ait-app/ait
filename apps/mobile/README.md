@@ -19,7 +19,7 @@ npm run dev:mobile
 
 入口先构建共享包与 Rust binary，再启动 daemon 和 Expo；Ctrl+C 同时停止两者。
 daemon 默认数据目录为 `.tmp/app/server`，可用 `AIT_SERVER_DATA_DIR` 覆盖。支持
-`AIT_SERVER_BIN`（已有 binary）、`AIT_SERVER_LISTEN` 和 `EXPO_PORT`。若修改服务端口，
+`AITD_BIN`（已有 binary）、`AIT_SERVER_LISTEN` 和 `EXPO_PORT`。若修改服务端口，
 连接表单也须填写对应端口。`npm run web --workspace=@ait/mobile` 是同一入口。
 
 ## 分别启动
@@ -85,7 +85,7 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 ```
 
 最后一条从仓库根运行，需要已编译的 `target/debug/daemon`、Web 导出和 Playwright Chromium；
-可用 `AIT_SERVER_BIN` 指定 binary。测试使用临时数据目录，覆盖实际浏览器鉴权、SDK RPC、
+可用 `AITD_BIN` 指定 binary。测试使用临时数据目录，覆盖实际浏览器鉴权、SDK RPC、
 重连、错误令牌、页面连接及刷新恢复，结束后清理。
 
 `app.config.js` 启用 React Compiler（`experiments.reactCompiler`）；`babel.config.js` 的

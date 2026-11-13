@@ -24,7 +24,8 @@ const FORBIDDEN_SERVER_ENVIRONMENT: Record<string, string> = {
   AIT_SERVER_DATA_DIR: "/unrelated-runtime",
   AIT_SERVER_LOG_LEVEL: "debug",
   AIT_SERVER_MCP_SOCKET: "/tmp/unrelated-mcp.sock",
-  AIT_SERVER_BIN: "/unrelated/daemon",
+  AITD_BIN: "/unrelated/daemon",
+  AIT_SERVER_BIN: "/legacy/daemon",
   AIT_SERVER_CUSTOM_SECRET: "unrelated-secret",
 };
 

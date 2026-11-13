@@ -44,7 +44,7 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 `AIT_SERVER_*` 是兼容名称。未显式指定数据目录时，独立 daemon 与桌面依次使用已存在的
 `~/.ait`、`~/.ait-server-desktop`、`~/.ait-server`；都不存在时创建 `~/.ait`，旧目录不会被移动
 （[ADR-216](../decisions/clients/adr-216-default-data-directory-ait.md)）。开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
-`AIT_SERVER_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
+`AITD_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
 
 桌面启动内置 daemon 时按白名单透传 Provider 启动环境：八个 `AIT_SERVER_*_BIN`
 （`CODEX`、`CLAUDE`、`ANTIGRAVITY`、`OPENCODE`、`DEEPSEEK_HARNESS`、`PI`、`OMP`、`MINIMAX_CODE`）

@@ -144,7 +144,7 @@ jobs:
           rm -rf target/sherpa-onnx-prebuilt
       - name: Build daemon and run web client smoke test
         env:
-          E2E_AIT_SERVER_BIN: ${{ github.workspace }}/target/debug/daemon
+          E2E_AITD_BIN: ${{ github.workspace }}/target/debug/daemon
           # A selected root survives worker teardown, which keeps server.log for the next step.
           E2E_AIT_DATA_ROOT: ${{ runner.temp }}/ait-e2e
         run: |

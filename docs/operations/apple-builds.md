@@ -17,7 +17,7 @@ AIT_DESKTOP_SMOKE=1 npm run build:dmg
 流程：共享 TypeScript 包 → Electron 专用 Web 导出 → Rust `daemon` release binary →
 Electron 主进程 → electron-builder DMG。当前命令只构建宿主架构：Apple Silicon 是 arm64，
 Intel 是 x64。Rust binary 和 Electron 必须同架构，不支持直接生成 universal 包。
-`AIT_SERVER_BIN` 可指定已有的同架构 binary；默认从当前仓库编译。
+`AITD_BIN` 可指定已有的同架构 binary；默认从当前仓库编译。
 
 输出：`apps/desktop/release/Ait-<version>-local-<arch>.dmg`，其中包含 `Ait.app`。
 Rust daemon 位于 App 的 `Contents/Resources/bin/aitd`，Web 页面位于 `app-dist`。

@@ -16,7 +16,7 @@ model cards apply it, and a draft's first message preserves its saved role assig
 npm run test:e2e:smoke --workspace=@ait/mobile
 ```
 
-`E2E_AIT_SERVER_BIN=/absolute/path/to/server` skips the Cargo build. The binary must
+`E2E_AITD_BIN=/absolute/path/to/server` skips the Cargo build. The binary must
 implement Ait's v1 API. No installed or published Paseo server is used.
 
 - Workers allocate their own data directory, port, token and provider fixture.

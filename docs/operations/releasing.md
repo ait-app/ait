@@ -368,7 +368,7 @@ Linux x86_64：
 ```bash
 npm ci
 cargo build --locked --release -p daemon --bin daemon --target x86_64-unknown-linux-gnu
-AIT_SERVER_BIN="$PWD/target/x86_64-unknown-linux-gnu/release/daemon" \
+AITD_BIN="$PWD/target/x86_64-unknown-linux-gnu/release/daemon" \
   AIT_DESKTOP_SMOKE=1 npm run package:linux
 ```
 
@@ -382,7 +382,7 @@ npm ci
 AIT_DESKTOP_SMOKE=1 npm run package:mac
 ```
 
-`package:mac` 生成 DMG 与 ZIP；`package:linux` 生成 AppImage 与 tar.gz。省略 `AIT_SERVER_BIN`
+`package:mac` 生成 DMG 与 ZIP；`package:linux` 生成 AppImage 与 tar.gz。省略 `AITD_BIN`
 会从当前源码构建 release daemon；提供该变量时仍检查二进制版本。只允许原生目标平台、架构。
 
 无签名凭据时，本机开发验证使用 `AIT_DESKTOP_SMOKE=1 npm run build:dmg`。它生成

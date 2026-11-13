@@ -36,7 +36,7 @@ const child = spawn(process.execPath, [path.join(root, "apps/mobile/scripts/dev-
     ...process.env,
     AIT_SERVER_TOKEN: token,
     AIT_SERVER_DATA_DIR: data,
-    AIT_SERVER_BIN: process.env.AIT_SERVER_BIN ?? path.join(root, "target/debug/daemon"),
+    AITD_BIN: process.env.AITD_BIN ?? path.join(root, "target/debug/daemon"),
     AIT_SERVER_LISTEN: `127.0.0.1:${serverPort}`,
     EXPO_PORT: String(expoPort),
     EXPO_NO_TELEMETRY: "1",

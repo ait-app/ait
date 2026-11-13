@@ -61,7 +61,7 @@ build() {
   local -x XDG_CACHE_HOME="$_ait_cache/tools"
   local -x TMPDIR="$_ait_cache/tmp"
   local -x CARGO_TARGET_DIR="$_ait_cache/cargo-target"
-  local -x AIT_SERVER_BIN="$CARGO_TARGET_DIR/release/daemon"
+  local -x AITD_BIN="$CARGO_TARGET_DIR/release/daemon"
   local -x AIT_BUILD_VERSION="git-$(git -C "$_ait_checkout" show -s --format=%cs HEAD)-$(git -C "$_ait_checkout" rev-parse --short=8 HEAD)"
   local -x EXPO_PUBLIC_AIT_BUILD_VERSION="$AIT_BUILD_VERSION"
   local -x CI=1 EXPO_NO_TELEMETRY=1
