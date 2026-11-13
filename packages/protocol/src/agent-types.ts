@@ -396,6 +396,17 @@ export type VoiceTimelineItem = { type: "voice"; id: string; sessionId: string }
   | { kind: "session"; status: "started" | "ended" | "failed" }
 );
 
+/** The Ait component that wrote an input instead of the user typing it. */
+export type UserMessageOrigin =
+  | {
+      kind: "schedule";
+      scheduleId: string;
+      runId: string;
+      name?: string;
+    }
+  | { kind: "bot_instructions" }
+  | { kind: "bot_wake" };
+
 export type AgentTimelineItem =
   | VoiceTimelineItem
   | {
@@ -406,6 +417,8 @@ export type AgentTimelineItem =
       /** Provider image URLs or host paths, resolved through the connected daemon. */
       imageSources?: string[];
       voiceTranscript?: VoiceTranscriptEntry[];
+      /** Set when Ait generated this input; `text` then holds only the message a person reads. */
+      origin?: UserMessageOrigin;
     }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }

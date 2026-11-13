@@ -9,6 +9,7 @@ use anyhow::Context;
 use bot::mcp::Scopes;
 use domain::bot::permissions::Holder;
 use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
+use domain::input_envelope;
 use domain::schedule::{Run, RunStatus, Schedule, Target};
 use domain::workspace::lifecycle::WorkspaceCreation;
 use domain::workspace::records::PersistedWorkspaceRecord;
@@ -453,18 +454,11 @@ impl AgentRunner {
                     .record(outcome.agent_id.clone(), outcome.workspace_id.clone())
                     .await
                     .map_err(|_| "Cannot persist scheduled agent")?;
-                let heading = schedule.name.as_ref().map_or_else(
-                    || format!("Schedule fired (id={}, run={run_id}).", schedule.id),
-                    |name| {
-                        format!(
-                            "Schedule \"{name}\" fired (id={}, run={run_id}).",
-                            schedule.id
-                        )
-                    },
-                );
-                format!(
-                    "<ait-system>\n{heading}\n{}\n</ait-system>",
-                    schedule.prompt
+                input_envelope::schedule(
+                    &schedule.id,
+                    run_id,
+                    schedule.name.as_deref(),
+                    &schedule.prompt,
                 )
             }
             Target::NewAgent { config } => {
@@ -474,6 +468,7 @@ impl AgentRunner {
                 }
                 self.create_agent(schedule, config, occurrence, outcome)
                     .await?;
+                // A new Agent's prompt stays bare so a slash command in it still runs.
                 schedule.prompt.clone()
             }
         };

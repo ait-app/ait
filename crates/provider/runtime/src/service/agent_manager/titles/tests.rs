@@ -37,3 +37,12 @@ fn only_nonempty_user_messages_supply_history_titles() {
     assert_eq!(from_entries(&entries), Some("First question".to_owned()));
     assert_eq!(from_entries(&entries[..3]), None);
 }
+
+#[test]
+fn ait_inputs_title_by_their_message_text() {
+    let scheduled = input_envelope::schedule("s1", "r1", Some("nightly"), "Run report");
+    let bot = input_envelope::bot_instructions("rules", "Fix login");
+
+    assert_eq!(from_prompt(&scheduled), Some("Run report".to_owned()));
+    assert_eq!(from_prompt(&bot), Some("Fix login".to_owned()));
+}

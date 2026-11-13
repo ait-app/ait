@@ -769,6 +769,12 @@ export const ptBR: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "Agendamento “{{name}}” · execução {{runId}}",
+      scheduleUnnamed: "Agendamento · execução {{runId}}",
+      botWake: "Notificações do Ait",
+      botInstructions: "Enviado pelo Ait",
+    },
     diagram: {
       diagram: "Diagrama",
       zoomIn: "Aproximar",

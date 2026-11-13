@@ -348,7 +348,7 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     bots.shutdown().await.unwrap();
 }
 
-const PREFIX: &str = "<ait-bot-instructions>\n";
+const PREFIX: &str = "<ait-input kind=\"bot_instructions\">\n";
 
 fn session(created: bool, delivery: &str) -> Value {
     json!({"created":created,"instructionDelivery":delivery})
@@ -449,7 +449,7 @@ async fn turn_prefix_instructions_are_sent_on_every_turn() {
     ] {
         assert!(text.starts_with(PREFIX), "{text}");
         assert!(
-            text.ends_with(&format!("\n</ait-bot-instructions>\n\n{user}")),
+            text.ends_with(&format!("\n</ait-input>\n\n{user}")),
             "{text}"
         );
     }
@@ -587,7 +587,7 @@ async fn a_notification_wakes_the_bot_once_and_an_unconfigured_workspace_stays_u
         turn["reply"]
             .as_str()
             .unwrap()
-            .starts_with("reply:<ait-notifications>")
+            .starts_with("reply:<ait-input kind=\"bot_wake\">")
     );
     let listed = bots
         .execute(

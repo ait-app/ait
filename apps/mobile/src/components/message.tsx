@@ -36,6 +36,7 @@ import type { AgentMessage } from "@ait/protocol/agent-message";
 import type {
   AgentCapabilityFlags,
   ToolCallDetail,
+  UserMessageOrigin,
   VoiceTranscriptEntry,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment } from "@ait/protocol/messages";
@@ -104,6 +105,7 @@ interface UserMessageProps {
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
   voiceTranscript?: VoiceTranscriptEntry[];
+  origin?: UserMessageOrigin;
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -327,6 +329,11 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
   },
+  origin: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing[1],
+  },
   text: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.content,
@@ -396,6 +403,26 @@ function UserMessageImagePill({ image, onOpen, accessibilityLabel }: UserMessage
 
 const MESSAGE_TEXT_DATASET = { messageText: "true" };
 
+/** Names the Ait component that wrote an input instead of the user typing it. */
+function useUserMessageOriginLabel(origin?: UserMessageOrigin): string | null {
+  const { t } = useTranslation();
+  return useMemo(() => {
+    if (!origin) {
+      return null;
+    }
+    switch (origin.kind) {
+      case "schedule":
+        return origin.name
+          ? t("message.origin.scheduleNamed", { name: origin.name, runId: origin.runId })
+          : t("message.origin.scheduleUnnamed", { runId: origin.runId });
+      case "bot_wake":
+        return t("message.origin.botWake");
+      case "bot_instructions":
+        return t("message.origin.botInstructions");
+    }
+  }, [origin, t]);
+}
+
 export const UserMessage = memo(function UserMessage({
   serverId,
   agentId,
@@ -404,6 +431,7 @@ export const UserMessage = memo(function UserMessage({
   images = [],
   imageSources = [],
   voiceTranscript,
+  origin,
   attachments = [],
   timestamp,
   capabilities,
@@ -424,6 +452,7 @@ export const UserMessage = memo(function UserMessage({
   );
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const hasText = message.trim().length > 0;
+  const originLabel = useUserMessageOriginLabel(origin);
   const hasImages = images.length > 0 || imageSources.length > 0;
   const hasAttachments = attachments.length > 0;
   const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
@@ -535,6 +564,11 @@ export const UserMessage = memo(function UserMessage({
                 );
               })}
             </View>
+          ) : null}
+          {originLabel ? (
+            <Text style={userMessageStylesheet.origin} testID="user-message-origin">
+              {originLabel}
+            </Text>
           ) : null}
           {hasText ? (
             <Text selectable style={userMessageStylesheet.text} dataSet={MESSAGE_TEXT_DATASET}>

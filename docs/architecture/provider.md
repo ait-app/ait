@@ -169,6 +169,10 @@
   片段（assistant 还需 `messageId` 一致）；跨工具调用的每轮单一 Thinking 由共享客户端组合
   （[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)、
   [ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
+- Ait 自己写入的输入（定时任务与心跳运行、Bot 指令前缀与唤醒通知）统一为 `<ait-input kind=…>` 信封。
+  runtime 在发布、读取投影与会话标题处调用 `domain::input_envelope`，把信封内的正文与 `origin`
+  一并输出；存储行保留发送时的原文，重放与原生历史导入得到同样投影
+  （[ADR-276](../decisions/providers/adr-276-ait-input-envelope-and-origin.md)）。
 - 原生角色与事件类型由 adapter 解释，客户端不按文本猜测用途；例如 OMP `async-result` 的
   `<system-notice>` 投影为 `notification`
   （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)，OMP 部分已由

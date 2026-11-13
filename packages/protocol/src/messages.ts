@@ -665,6 +665,17 @@ export const VoiceTranscriptSchema = z
   .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
   .max(256);
 
+export const UserMessageOriginSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("schedule"),
+    scheduleId: z.string(),
+    runId: z.string(),
+    name: z.string().optional(),
+  }),
+  z.object({ kind: z.literal("bot_instructions") }),
+  z.object({ kind: z.literal("bot_wake") }),
+]);
+
 export const VoiceTimelineItemSchema = z.intersection(
   z.object({ type: z.literal("voice"), id: z.string(), sessionId: z.string() }),
   z.discriminatedUnion("kind", [
@@ -689,6 +700,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     clientMessageId: z.string().optional(),
     imageSources: z.array(z.string()).optional(),
     voiceTranscript: VoiceTranscriptSchema.optional(),
+    origin: UserMessageOriginSchema.optional(),
   }),
   z.object({
     type: z.literal("assistant_message"),
