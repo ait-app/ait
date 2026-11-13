@@ -60,6 +60,10 @@
   `git fetch origin --prune --quiet`。全进程最多两个并发，单次限 120 秒并禁用凭据提示；
   它从不修改 HEAD、索引或工作树。无 origin 的目录跳过
   （[ADR-069](../decisions/workspace/adr-069-background-git-fetch.md)）。
+- Agent 一轮以完成或失败结束时，daemon 读取该 Agent `cwd` 的本地 checkout 状态（不 fetch），
+  有变化时发布 `checkout.status.update`，让客户端及时切换未提交变更与基准比较。同一目录至少间隔
+  60 秒读取一次，间隔内再次结束的轮次合并为间隔到期时的一次读取；与后台 fetch 共用“上次发布”
+  记录，任一来源只在状态变化时发布。
 
 ## Checkout 刷新与背压
 
