@@ -557,3 +557,27 @@ export function normalizeProjectSettingsRouteId(value: string | string[] | undef
   const id = Array.isArray(value) ? value[0] : value;
   return typeof id === "string" ? id : "";
 }
+
+/**
+ * Create and edit live on separate static segments. Expo-router matches raw
+ * (still percent-encoded) segments static-before-dynamic at equal depth, so a
+ * dynamic route beside `create` would let the literal id `create` resolve to
+ * the create form. Under `edit/` the two routes never sit at the same depth
+ * and every id — including `create`, `edit` and `new` — stays addressable.
+ * Ids remain opaque: no parsing or validation of their shape.
+ */
+export function buildAgentProfileCreateRoute(serverId: string) {
+  const normalized = trimNonEmpty(serverId);
+  if (!normalized) {
+    throw new Error("buildAgentProfileCreateRoute requires a non-empty serverId");
+  }
+  return `/settings/hosts/${encodeSegment(normalized)}/agent-profiles/create` as const;
+}
+
+export function buildAgentProfileEditRoute(serverId: string, profileId: string) {
+  const normalized = trimNonEmpty(serverId);
+  if (!normalized || !profileId.trim()) {
+    throw new Error("buildAgentProfileEditRoute requires a serverId and profileId");
+  }
+  return `/settings/hosts/${encodeSegment(normalized)}/agent-profiles/edit/${encodeSegment(profileId)}` as const;
+}

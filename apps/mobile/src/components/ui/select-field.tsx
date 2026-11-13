@@ -22,6 +22,8 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 export interface SelectFieldDisplay {
   label: string;
   description?: string;
+  /** The value is stored but absent from the current catalog; it reads as unresolved. */
+  unresolved?: boolean;
 }
 
 export interface SelectFieldOption<TValue> {

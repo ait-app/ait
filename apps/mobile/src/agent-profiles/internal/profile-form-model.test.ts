@@ -82,53 +82,6 @@ describe("openAgentProfileForm", () => {
     expect(state.disclosure.showModelField).toBe(false);
   });
 
-  it("seeds create mode from a model seed before the catalog lands", () => {
-    const model = openAgentProfileForm({
-      mode: "create",
-      seed: { provider: "claude", modelId: "claude-opus-5", name: "Opus 5" },
-    });
-    const state = model.getState();
-
-    expect(state.name).toBe("Opus 5");
-    expect(state.provider).toBe("claude");
-    expect(state.modelId).toBe("claude-opus-5");
-    expect(state.providerDisplay).toEqual({ label: "claude" });
-    expect(state.modelDisplay).toEqual({ label: "claude-opus-5" });
-    expect(state.catalogResolution).toBe("idle");
-  });
-
-  it("upgrades a seeded model to catalog labels without touching the selection", () => {
-    const model = openAgentProfileForm({
-      mode: "create",
-      seed: { provider: "claude", modelId: "claude-opus-5", name: "Opus 5" },
-    });
-    model.applyProviderCatalog(ENTRIES);
-    const state = model.getState();
-
-    expect(state.providerDisplay).toEqual({ label: "Claude Code" });
-    expect(state.modelDisplay).toEqual({ label: "Opus 5" });
-    expect(state.modelId).toBe("claude-opus-5");
-    expect(state.canSubmit).toBe(true);
-    expect(state.submitValue).toMatchObject({
-      name: "Opus 5",
-      provider: "claude",
-      model: "claude-opus-5",
-    });
-  });
-
-  it("ignores the seed in edit mode", () => {
-    const model = openAgentProfileForm({
-      mode: "edit",
-      profile: { id: "p1", name: "UI work", provider: "claude", model: "claude-haiku-4-5" },
-      seed: { provider: "codex", modelId: "gpt-5.2-codex", name: "Nope" },
-    });
-    const state = model.getState();
-
-    expect(state.name).toBe("UI work");
-    expect(state.provider).toBe("claude");
-    expect(state.modelId).toBe("claude-haiku-4-5");
-  });
-
   it("lists only enabled providers", () => {
     const model = openWithCatalog({ mode: "create" });
 
@@ -210,16 +163,95 @@ describe("openAgentProfileForm", () => {
     expect(state.catalogResolution).toBe("complete");
   });
 
-  it("keeps a stored value the catalog does not know", () => {
+  it("keeps an unknown stored model raw and flags it unresolved once the catalog lands", () => {
     const model = openAgentProfileForm({
       mode: "edit",
-      profile: { id: "p1", name: "Legacy", provider: "claude", model: "claude-retired-3" },
+      profile: {
+        id: "p1",
+        name: "Legacy",
+        provider: "claude",
+        model: "claude-retired-3",
+        thinkingOptionId: "think-hard",
+      },
+    });
+
+    // Nothing is known yet, so the id reads as itself and is not marked missing.
+    expect(model.getState().modelDisplay).toEqual({ label: "claude-retired-3" });
+
+    model.applyProviderCatalog(ENTRIES);
+    const state = model.getState();
+
+    expect(state.modelId).toBe("claude-retired-3");
+    expect(state.modelDisplay).toEqual({ label: "claude-retired-3", unresolved: true });
+    expect(state.submitValue?.model).toBe("claude-retired-3");
+    expect(state.disclosure.showModelField).toBe(true);
+    // The unknown id is not a selectable option, and no catalog default replaces it.
+    expect(optionValues(state.modelOptions)).not.toContain("claude-retired-3");
+
+    // The stored thinking level is likewise preserved raw rather than rebound to
+    // the catalog default model's options.
+    expect(state.thinkingOptionId).toBe("think-hard");
+    expect(state.thinkingDisplay).toEqual({ label: "think-hard", unresolved: true });
+    expect(state.submitValue?.thinkingOptionId).toBe("think-hard");
+
+    // Choosing a real model clears the flag; the stored value only changes when picked.
+    model.setModel("claude-opus-5", { label: "Opus 5" });
+    expect(model.getState().modelDisplay).toEqual({ label: "Opus 5" });
+    expect(model.getState().submitValue?.model).toBe("claude-opus-5");
+  });
+
+  it("keeps a known stored model resolved", () => {
+    const model = openAgentProfileForm({
+      mode: "edit",
+      profile: { id: "p1", name: "UI work", provider: "claude", model: "claude-haiku-4-5" },
+    });
+    model.applyProviderCatalog(ENTRIES);
+    const state = model.getState();
+
+    expect(state.modelDisplay).toEqual({ label: "Haiku 4.5" });
+    expect(state.modelDisplay?.unresolved).toBeUndefined();
+    expect(state.modelId).toBe("claude-haiku-4-5");
+    expect(state.submitValue?.model).toBe("claude-haiku-4-5");
+  });
+
+  it("leaves fields the stored profile omits unspecified, before and after the catalog", () => {
+    const model = openAgentProfileForm({
+      mode: "edit",
+      profile: { id: "p1", name: "Bare", provider: "claude" },
+    });
+
+    expect(model.getState().submitValue).toEqual({ name: "Bare", provider: "claude" });
+
+    model.applyProviderCatalog(ENTRIES);
+    const state = model.getState();
+
+    expect(state.modelId).toBe("");
+    expect(state.modeId).toBe("");
+    expect(state.thinkingOptionId).toBe("");
+    expect(state.modelDisplay).toBeNull();
+    expect(state.modeDisplay).toBeNull();
+    expect(state.thinkingDisplay).toBeNull();
+
+    // Editing another field must not materialize a catalog default on the way out.
+    model.setName("Bare renamed");
+    expect(model.getState().submitValue).toEqual({ name: "Bare renamed", provider: "claude" });
+  });
+
+  it("leaves provider-scoped fields unspecified after switching provider in edit mode", () => {
+    const model = openAgentProfileForm({
+      mode: "edit",
+      profile: { id: "p1", name: "Bare", provider: "claude", model: "claude-opus-5" },
     });
     model.applyProviderCatalog(ENTRIES);
 
-    expect(model.getState().modelId).toBe("claude-retired-3");
-    expect(model.getState().modelDisplay).toEqual({ label: "claude-retired-3" });
-    expect(model.getState().disclosure.showModelField).toBe(true);
+    model.setProvider("codex", { label: "Codex" });
+    const state = model.getState();
+
+    expect(state.modelId).toBe("");
+    expect(state.modeId).toBe("");
+    expect(state.thinkingOptionId).toBe("");
+    expect(state.modelDisplay).toBeNull();
+    expect(state.submitValue).toEqual({ name: "Bare", provider: "codex" });
   });
 
   describe("provider cascade", () => {
@@ -433,6 +465,55 @@ describe("openAgentProfileForm", () => {
       expect(model.getState().featureResolution).toBe("complete");
       expect(model.getState().disclosure.showFeaturesField).toBe(false);
     });
+    it("keeps stored feature values when an edit listing comes back empty", () => {
+      const model = openAgentProfileForm({
+        mode: "edit",
+        profile: {
+          id: "p1",
+          name: "UI work",
+          provider: "claude",
+          model: "claude-retired-3",
+          featureValues: { webSearch: true },
+        },
+      });
+      model.applyProviderCatalog(ENTRIES);
+      // A host that cannot resolve the stored model reports no features; that
+      // must not erase values a newer client stored.
+      model.applyFeatures(model.getState().featureRequestKey ?? "", []);
+
+      expect(model.getState().featureResolution).toBe("complete");
+      expect(model.getState().featureValues).toEqual({ webSearch: true });
+      expect(model.getState().submitValue?.featureValues).toEqual({ webSearch: true });
+    });
+
+    it("never installs a late listing for the previous selection under the new one", () => {
+      const model = openAgentProfileForm({
+        mode: "edit",
+        profile: {
+          id: "p1",
+          name: "UI work",
+          provider: "claude",
+          model: "model|a",
+          modeId: "plan",
+        },
+      });
+      model.applyProviderCatalog(ENTRIES);
+      const oldKey = model.getState().featureRequestKey ?? "";
+
+      model.setModel("model", { label: "Model" });
+      model.setMode("a|plan", { label: "A plan" });
+      const newKey = model.getState().featureRequestKey ?? "";
+      // The two requests differ, but a delimiter join would collide them.
+      expect(newKey).not.toBe(oldKey);
+
+      model.applyFeatures(oldKey, [
+        { type: "toggle", id: "webSearch", label: "Web search", value: false },
+      ]);
+
+      expect(model.getState().featureResolution).toBe("pending");
+      expect(model.getState().features).toEqual([]);
+      expect(model.getState().disclosure.showFeaturesField).toBe(false);
+    });
   });
 
   it("blocks submission while a save is in flight", () => {
@@ -470,9 +551,17 @@ describe("buildFeatureRequestKey", () => {
   });
 
   it("separates the fields so a value cannot bleed across positions", () => {
-    expect(buildFeatureRequestKey({ provider: "claude", model: "a|b" })).toBe("claude|a|b||");
     expect(buildFeatureRequestKey({ provider: "claude", modeId: "a" })).not.toBe(
       buildFeatureRequestKey({ provider: "claude", model: "a" }),
+    );
+  });
+
+  it("keeps ids containing the old join delimiter distinct", () => {
+    const withModel = buildFeatureRequestKey({ provider: "p", model: "a|b" });
+    const shifted = buildFeatureRequestKey({ provider: "p", model: "a", modeId: "b" });
+    expect(withModel).not.toBe(shifted);
+    expect(buildFeatureRequestKey({ provider: "p", model: 'a","b' })).not.toBe(
+      buildFeatureRequestKey({ provider: "p", model: "a", modeId: "b" }),
     );
   });
 });
