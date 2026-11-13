@@ -7,6 +7,7 @@ mod mcp;
 mod probe;
 mod session;
 mod streaming;
+mod todo;
 mod transport;
 
 use std::borrow::Cow;

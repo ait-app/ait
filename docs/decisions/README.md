@@ -105,6 +105,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-276：Provider 原生 TODO 统一为完整快照](providers/adr-276-provider-todo-snapshots.md)
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
 - [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）

@@ -184,9 +184,7 @@ impl Stream {
                     entry: progress,
                 });
             } else {
-                step.published = true;
-                self.events
-                    .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+                publish_step(&mut self.events, step);
             }
         } else {
             self.events.push_back(AgentTurnEvent::Progress {
@@ -299,9 +297,7 @@ impl Stream {
                     }
                 }
             }
-            step.published = true;
-            self.events
-                .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+            publish_step(&mut self.events, step);
         }
         if !self.assistant_seen && !response.is_empty() {
             let key = format!(
@@ -394,6 +390,28 @@ impl Stream {
             }));
         }
     }
+}
+
+fn publish_step(events: &mut VecDeque<AgentTurnEvent>, step: &mut Step) {
+    step.published = true;
+    events.push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+    if let Some(entry) = task_snapshot(step) {
+        events.push_back(AgentTurnEvent::Timeline(entry));
+    }
+}
+
+fn task_snapshot(step: &Step) -> Option<NativeItem> {
+    if step.entry.item["status"] != "completed" {
+        return None;
+    }
+    let item =
+        provider_native::todo::tool_input(step.tool["name"].as_str()?, &step.tool["parameters"])?;
+    Some(NativeItem {
+        key: format!("{}:todo", step.entry.key),
+        turn_id: step.entry.turn_id.clone(),
+        timestamp: step.entry.timestamp.clone(),
+        item,
+    })
 }
 
 fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, AgentSessionError> {

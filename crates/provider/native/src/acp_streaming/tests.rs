@@ -3,6 +3,91 @@ use serde_json::json;
 use super::*;
 
 #[test]
+fn compatible_native_todo_tools_publish_confirmed_snapshots_without_overriding_native_plans() {
+    let replay = |status: &str, native: bool| {
+        let mut stream = Stream::default();
+        stream.begin("turn".into());
+        stream
+            .update(
+                &json!({"sessionUpdate":"tool_call","toolCallId":"todo-tool",
+            "title":"todo_write","status":"pending","rawInput":{"todos":[
+                {"content":"1. Build","status":"in_progress"}]}}),
+            )
+            .unwrap();
+        if native {
+            stream
+                .update(&json!({"sessionUpdate":"plan","entries":[]}))
+                .unwrap();
+        }
+        stream
+            .update(
+                &json!({"sessionUpdate":"tool_call_update","toolCallId":"todo-tool",
+            "status":status}),
+            )
+            .unwrap();
+        stream
+            .events
+            .into_iter()
+            .filter_map(|event| match event {
+                AgentTurnEvent::Timeline(entry) => Some(entry),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let completed = replay("completed", false);
+    assert_eq!(completed.len(), 2);
+    assert_eq!(completed[0].item["type"], "tool_call");
+    assert_eq!(completed[1].item["items"][0]["text"], "1. Build");
+    assert_eq!(completed[1].key, replay("completed", false)[1].key);
+    assert_eq!(replay("failed", false).len(), 1);
+    let native = replay("completed", true);
+    assert_eq!(native.len(), 2);
+    assert_eq!(native[0].item, json!({"type":"todo","items":[]}));
+    assert_eq!(native[1].item["type"], "tool_call");
+}
+
+#[test]
+fn acp_plan_snapshots_flush_text_preserve_repeated_states_and_replay_stable_keys() {
+    let updates = [
+        json!({"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"First"}}),
+        json!({"sessionUpdate":"plan","entries":[{"content":"Build","status":"in_progress"}]}),
+        json!({"sessionUpdate":"plan","entries":[]}),
+        json!({"sessionUpdate":"plan","entries":[{"content":"Build","status":"in_progress"}]}),
+    ];
+    let replay = || {
+        let mut stream = Stream::default();
+        stream.begin("turn".into());
+        for update in &updates {
+            stream.update(update).unwrap();
+        }
+        stream
+            .events
+            .into_iter()
+            .filter_map(|event| match event {
+                AgentTurnEvent::Timeline(entry) => Some(entry),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let first = replay();
+    let second = replay();
+    assert_eq!(
+        first.iter().map(|entry| &entry.key).collect::<Vec<_>>(),
+        second.iter().map(|entry| &entry.key).collect::<Vec<_>>()
+    );
+    assert_eq!(first.len(), 4);
+    assert_eq!(first[0].item["text"], "First");
+    assert_eq!(first[1].item, first[3].item);
+    assert_ne!(first[1].key, first[3].key);
+    assert_eq!(first[2].item, json!({"type":"todo","items":[]}));
+    assert!(
+        first
+            .iter()
+            .all(|entry| entry.turn_id.as_deref() == Some("turn"))
+    );
+}
+
+#[test]
 fn acp_compaction_updates_emit_start_and_failure_and_ignore_duplicate_states() {
     let mut stream = Stream::default();
     stream.begin("turn".to_owned());

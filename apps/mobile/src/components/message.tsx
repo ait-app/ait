@@ -1541,6 +1541,9 @@ export const TodoListCard = memo(function TodoListCard({
     );
   }, [items, t]);
 
+  // An empty initial snapshot carries clearing state for history, without announcing new work.
+  if (items.length === 0 && activity.type === "created" && activity.count === 0) return null;
+
   return (
     <ExpandableBadge
       label={activityDisplay.label}

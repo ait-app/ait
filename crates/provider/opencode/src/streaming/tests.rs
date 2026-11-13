@@ -1,6 +1,131 @@
 use super::*;
 
 #[test]
+fn compatible_native_todo_tools_publish_confirmed_snapshots_without_overriding_native_plans() {
+    let replay = |status: &str, native: bool| {
+        let mut stream = Stream::for_turn(ImageStore::default(), "turn".into());
+        stream
+            .update(
+                &json!({"sessionUpdate":"tool_call","toolCallId":"todo-tool",
+            "title":"update_plan","status":"pending","rawInput":{"plan":[
+                {"step":"1. Build","status":"in_progress"}]}}),
+            )
+            .unwrap();
+        if native {
+            stream
+                .update(&json!({"sessionUpdate":"plan","entries":[]}))
+                .unwrap();
+        }
+        stream
+            .update(
+                &json!({"sessionUpdate":"tool_call_update","toolCallId":"todo-tool",
+            "status":status}),
+            )
+            .unwrap();
+        stream
+            .events
+            .into_iter()
+            .filter_map(|event| match event {
+                AgentTurnEvent::Timeline(entry) => Some(entry),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let completed = replay("completed", false);
+    assert_eq!(completed.len(), 2);
+    assert_eq!(completed[0].item["type"], "tool_call");
+    assert_eq!(completed[1].item["items"][0]["text"], "1. Build");
+    assert_eq!(completed[1].key, replay("completed", false)[1].key);
+    assert_eq!(replay("failed", false).len(), 1);
+    let native = replay("completed", true);
+    assert_eq!(native.len(), 2);
+    assert_eq!(native[0].item, json!({"type":"todo","items":[]}));
+    assert_eq!(native[1].item["type"], "tool_call");
+}
+
+#[test]
+fn acp_plan_snapshots_are_provider_independent_and_replay_in_native_order() {
+    let updates = [
+        json!({"sessionUpdate":"user_message_chunk","messageId":"input","content":{"type":"text","text":"Work"}}),
+        json!({"sessionUpdate":"agent_message_chunk","messageId":"answer","content":{"type":"text","text":"Starting"}}),
+        json!({"sessionUpdate":"plan","entries":[{"content":"Build","status":"in_progress"}]}),
+        json!({"sessionUpdate":"plan","entries":[]}),
+        json!({"sessionUpdate":"plan","entries":[{"content":"Build","status":"in_progress"}]}),
+    ];
+    let replay = || {
+        let mut stream = Stream::default();
+        for update in &updates {
+            stream.update(update).unwrap();
+        }
+        stream
+            .events
+            .into_iter()
+            .filter_map(|event| match event {
+                AgentTurnEvent::Timeline(entry) => Some(entry),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let first = replay();
+    let second = replay();
+    assert_eq!(
+        first.iter().map(|entry| &entry.key).collect::<Vec<_>>(),
+        second.iter().map(|entry| &entry.key).collect::<Vec<_>>()
+    );
+    assert_eq!(first.len(), 5);
+    assert_eq!(first[1].item["text"], "Starting");
+    assert_eq!(first[2].item, first[4].item);
+    assert_ne!(first[2].key, first[4].key);
+    assert_eq!(first[3].item, json!({"type":"todo","items":[]}));
+    assert!(
+        first
+            .iter()
+            .all(|entry| entry.turn_id.as_deref() == Some("input"))
+    );
+}
+
+#[test]
+fn plan_identity_is_scoped_to_each_native_turn_in_live_and_history_streams() {
+    let mut history = Stream::default();
+    for id in ["first", "second"] {
+        history
+            .update(&json!({"sessionUpdate":"user_message_chunk","messageId":id,
+            "content":{"type":"text","text":"Work"}}))
+            .unwrap();
+        history
+            .update(&json!({"sessionUpdate":"plan","entries":[
+            {"content":"Build","status":"pending"}]}))
+            .unwrap();
+        history
+            .update(&json!({"sessionUpdate":"plan","entries":[]}))
+            .unwrap();
+    }
+    let history_keys = history
+        .events
+        .into_iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo" => Some(entry.key),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mut live_keys = Vec::new();
+    for id in ["first", "second"] {
+        let mut live = Stream::for_turn(ImageStore::default(), id.into());
+        live.update(&json!({"sessionUpdate":"plan","entries":[
+            {"content":"Build","status":"pending"}]}))
+            .unwrap();
+        live.update(&json!({"sessionUpdate":"plan","entries":[]}))
+            .unwrap();
+        live_keys.extend(live.events.into_iter().filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => Some(entry.key),
+            _ => None,
+        }));
+    }
+    assert_eq!(history_keys, live_keys);
+    assert_ne!(history_keys[0], history_keys[2]);
+}
+
+#[test]
 fn native_usage_keeps_positive_counts_and_compaction_reductions_without_claiming_zero() {
     let mut stream = Stream::default();
     for used in [629_883, 12_000, 0] {

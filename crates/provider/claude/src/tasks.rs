@@ -1,12 +1,14 @@
 //! Project native legacy and ID-based task tools into immutable todo snapshots.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use provider_core::ports::agent_session::AgentSessionError;
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Default)]
 pub(super) struct Tasks {
     items: BTreeMap<String, Value>,
+    order: Vec<String>,
     calls: BTreeMap<String, (String, Value)>,
     applied: BTreeSet<String>,
 }
@@ -73,7 +75,12 @@ impl Tasks {
     }
 
     fn snapshot(&self) -> Value {
-        json!({"type":"todo","items":self.items.values().collect::<Vec<_>>()})
+        let items: Vec<&Value> = self
+            .order
+            .iter()
+            .filter_map(|id| self.items.get(id))
+            .collect();
+        json!({"type":"todo","items":items})
     }
 
     fn replace(&mut self, values: &Value, legacy: bool) -> Result<(), AgentSessionError> {
@@ -82,6 +89,7 @@ impl Tasks {
             return Err(AgentSessionError::Failed);
         }
         self.items.clear();
+        self.order.clear();
         for (index, value) in values.iter().enumerate() {
             if let Some(mut item) = item(value) {
                 let id = text(&item, "id")
@@ -89,6 +97,9 @@ impl Tasks {
                     .or_else(|| legacy.then(|| format!("legacy:{index}")));
                 if let Some(id) = id {
                     item["id"] = json!(id);
+                    if !self.items.contains_key(&id) {
+                        self.order.push(id.clone());
+                    }
                     self.items.insert(id, item);
                 }
             }
@@ -113,13 +124,16 @@ impl Tasks {
                 else {
                     return Ok(false);
                 };
-                if self.items.len() >= 1024 {
+                if self.items.len() >= 1024 && !self.items.contains_key(id) {
                     return Err(AgentSessionError::Failed);
                 }
                 let mut value =
                     json!({"id":id,"text":subject,"status":"pending","completed":false});
                 if let Some(active) = text(input, "activeForm") {
                     value["activeForm"] = json!(active);
+                }
+                if !self.items.contains_key(id) {
+                    self.order.push(id.to_owned());
                 }
                 self.items.insert(id.to_owned(), value);
             }
@@ -135,6 +149,7 @@ impl Tasks {
                     .or_else(|| result["statusChange"]["to"].as_str());
                 if status == Some("deleted") {
                     self.items.remove(id);
+                    self.order.retain(|current_id| current_id != id);
                     return Ok(true);
                 }
                 if let Some(status) = status {

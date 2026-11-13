@@ -1444,6 +1444,25 @@ describe("stream reducer canonical tool calls", () => {
     ]);
   });
 
+  it.each([
+    "codex",
+    "claude",
+    "opencode",
+    "deepseek-harness",
+    "antigravity",
+    "pi",
+    "omp",
+    "minimax",
+  ] as const)(
+    "%s preserves an explicit empty TODO snapshot during history hydration",
+    (provider) => {
+      const state = hydrateStreamState([
+        { event: todoTimeline([], provider), timestamp: new Date("2026-11-13T10:00:00Z") },
+      ]);
+      expect(state).toEqual([expect.objectContaining({ kind: "todo_list", provider, items: [] })]);
+    },
+  );
+
   it("reports new work after completed tasks without reopening anything", () => {
     const state = hydrateStreamState([
       {
@@ -1575,6 +1594,34 @@ describe("stream reducer canonical tool calls", () => {
       ]);
 
       expect(state.filter(isAgentToolCallItem)).toEqual([]);
+    },
+  );
+
+  it.each(["claude", "opencode", "pi"] as const)(
+    "%s task tool fallback preserves in-progress status and active form",
+    (provider) => {
+      const state = hydrateStreamState([
+        {
+          event: canonicalToolTimeline({
+            provider,
+            callId: "tasks",
+            name: "TodoWrite",
+            status: "completed",
+            input: {
+              todos: [{ content: "Verify", activeForm: "Verifying", status: "in_progress" }],
+            },
+          }),
+          timestamp: new Date("2026-11-13T10:00:00Z"),
+        },
+      ]);
+      expect(state).toEqual([
+        expect.objectContaining({
+          kind: "todo_list",
+          items: [
+            { text: "Verify", activeForm: "Verifying", status: "in_progress", completed: false },
+          ],
+        }),
+      ]);
     },
   );
 
@@ -2449,5 +2496,24 @@ describe("notification timeline items", () => {
       { kind: "notification", level: "error", message: "Command blocked" },
     ]);
     expect(new Set(state.map((item) => item.id)).size).toBe(state.length);
+  });
+});
+
+describe("native TODO phase preservation", () => {
+  it("retains canonical phase metadata in live updates and history hydration", () => {
+    const group = { id: "phase:1", title: "Implementation" };
+    const event: AgentStreamEventPayload = {
+      type: "timeline",
+      provider: "omp",
+      item: { type: "todo", items: [{ text: "Build", completed: false, group }] },
+    };
+    const timestamp = new Date("2026-11-13T06:00:00.000Z");
+    for (const state of [
+      reduceStreamUpdate([], event, timestamp),
+      hydrateStreamState([{ event, timestamp }], { source: "canonical" }),
+    ]) {
+      const todo = state.find((item) => item.kind === "todo_list");
+      expect(todo?.kind === "todo_list" ? todo.items[0].group : undefined).toEqual(group);
+    }
   });
 });

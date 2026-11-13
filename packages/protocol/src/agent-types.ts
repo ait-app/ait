@@ -377,6 +377,8 @@ export interface AgentTaskItem {
   id?: string;
   status?: "pending" | "in_progress" | "completed";
   activeForm?: string;
+  /** Native phase identity and title, preserving provider task groups and their order. */
+  group?: { id: string; title: string };
 }
 
 /** Ordered speech within a single provider handoff, separate from text turns. */

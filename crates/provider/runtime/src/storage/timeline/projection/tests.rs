@@ -7,6 +7,7 @@ use provider_core::protocol::timeline::NativeItem;
 use super::*;
 
 mod compatibility;
+mod task_snapshots;
 
 fn item(seq: u64, item: Value) -> NativeItem {
     NativeItem {

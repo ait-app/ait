@@ -20,7 +20,7 @@ fn repaired_process_cache_respects_the_page_byte_budget() {
         let request: FetchRequest = serde_json::from_value(json!({"agentId":"agent",
             "direction":direction,"limit":2,"cursor":{"epoch":epoch,"seq":cursor}}))
         .unwrap();
-        let page = timeline.page(&request, "agent", |_| Ok(budget)).unwrap();
+        let page = timeline.page(&request, "agent", |_, _| Ok(budget)).unwrap();
         assert_eq!(page.entries.len(), 1);
         assert!(serde_json::to_vec(&page.entries).unwrap().len() <= budget);
         assert_eq!(page.entries[0].item["detail"]["type"], "unknown");

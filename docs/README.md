@@ -25,6 +25,7 @@
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [任务总览](operations/task-board.md)：跨主机任务看板、父子任务、审批、停止、已读和归档。
+- [Provider TODO](architecture/provider.md#原生-todo)：原生任务完整快照、支持范围与输入区 TODO 胶囊。
 - [OpenCode 子会话终态核对](decisions/providers/adr-237-opencode-child-terminal-readback.md)：已验证的原生子项通过只读持久记录纠正遗漏的完成通知。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
 - [主机资源监控](architecture/connection.md#主机资源监控)：侧栏读数、历史与采样生命周期。
