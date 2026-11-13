@@ -1,5 +1,5 @@
 ---
-id: ADR-236
+id: ADR-275
 status: proposed
 date: 2026-11-11
 paths:
@@ -16,7 +16,7 @@ paths:
   - apps/mobile/src/screens/settings
 ---
 
-# ADR-236：共享模型目录刷新与选择保值
+# ADR-275：共享模型目录刷新与选择保值
 
 - 复用主线已有的 provider snapshot 作用域、内容哈希缓存与 generation/revision 单调保护；
   本 ADR 只约束客户端共享刷新的入口、失败保留与身份归属，不新增 daemon 协议字段。

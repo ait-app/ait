@@ -7,8 +7,13 @@
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-task02-model-refresh",
   "inherited_implementation_commit": "bdff56dea198e74b8a3268ea1a3d476b1a4b8987",
   "updated_at": "2026-11-11",
-  "depends_on": ["00"],
-  "donor_sections": [6, 23],
+  "depends_on": [
+    "00"
+  ],
+  "donor_sections": [
+    6,
+    23
+  ],
   "donor_paths": [
     "apps/mobile/src/bots/bot-select.tsx",
     "apps/mobile/src/bots/bot-settings.tsx",
@@ -67,7 +72,7 @@
         "result": "PASS: 0 warnings, 0 errors; 19 files formatted."
       },
       {
-        "command": "ADR-236 (proposed) + architecture README + CHANGELOG + adr index + check:docs",
+        "command": "ADR-275 (proposed) + architecture README + CHANGELOG + adr index + check:docs",
         "result": "PASS bg_664: 7 documentation tests, 223 ADRs indexed and 559 Markdown documents verified. ADR236 is proposed, with explicit internal UI contract versus unchanged public Provider/API/SDK disclosure."
       },
       {
@@ -85,7 +90,7 @@
     ]
   },
   "blockers": [],
-  "adr": "ADR-236",
+  "adr": "ADR-275",
   "compatibility": "Public SDK methods, daemon wire and saved configuration schemas unchanged; old hosts retain stale-GET downgrade. Internal interfaces DID change: new shared refresh entry, refetchIfStale's connected-host semantics, optional SelectField.onOpen and existing ModelBrowser retry callback used on provider drill-down. Actual consumers migrated; no native adapter/CLI/binary change. See ADR236 interface table.",
   "cleanup": "catalog-acp.cjs has an existing model-search-across-providers consumer, so the shared fixture remains; task02's now-unused dynamic-file extension was removed. No new Rust/global mock provider, generic ACP registration or manual HELLO machinery.",
   "platform_limits": "Actual browser web/native fixture smoke, not a physical Android/iOS or packaged Electron claim. No Rust source changes, therefore no Rust tests or clippy reruns.",

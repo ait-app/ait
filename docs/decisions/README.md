@@ -105,13 +105,13 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
 - [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）
 - [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
 - [ADR-237：OpenCode 子会话终态只读核对](providers/adr-237-opencode-child-terminal-readback.md)
-- [ADR-236：共享模型目录刷新与选择保值](providers/adr-236-shared-model-catalog-refresh.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
