@@ -126,13 +126,24 @@ impl Transport {
                     .take(MAX_FRAME as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
-                    let category = if matches!(read, Ok(0)) {
-                        Category::Closed
-                    } else {
-                        Category::Protocol
+                let complete = matches!(read, Ok(1..)) && bytes.last() == Some(&b'\n');
+                if !complete {
+                    // A provider that exits right after its last frame leaves the trailing
+                    // newline out; that frame is complete and is delivered before the end.
+                    let trailing = (bytes.last() != Some(&b'\n'))
+                        .then(|| serde_json::from_slice::<Value>(&bytes).ok())
+                        .flatten();
+                    let Some(message) = trailing else {
+                        let category = if matches!(read, Ok(0)) {
+                            Category::Closed
+                        } else {
+                            Category::Protocol
+                        };
+                        reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
+                        break;
                     };
-                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
+                    let _ = send_record(&sender, &budget, &bytes, message).await;
+                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
                     break;
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
@@ -151,21 +162,12 @@ impl Transport {
                     let _ = tokio::time::timeout(deadline, write(&reader_input, &reply)).await;
                     break;
                 }
-                let Ok(size) = u32::try_from(bytes.len()) else {
-                    break;
-                };
-                let Ok(permit) = budget.clone().acquire_many_owned(size).await else {
-                    break;
-                };
-                let record = Record {
-                    value: message,
-                    _budget: permit,
-                };
-                if sender.send(record).await.is_err() {
+                if !send_record(&sender, &budget, &bytes, message).await {
                     break;
                 }
             }
         });
+
         Ok(Self {
             child,
             diagnostics,
@@ -317,6 +319,28 @@ impl Drop for Transport {
         self.reader.abort();
         process_group::signal(self.child.id(), Signal::Kill);
     }
+}
+
+/// Send one parsed frame, holding its byte budget until the reader releases it.
+async fn send_record(
+    sender: &mpsc::Sender<Record>,
+    budget: &Arc<Semaphore>,
+    bytes: &[u8],
+    message: Value,
+) -> bool {
+    let Ok(size) = u32::try_from(bytes.len()) else {
+        return false;
+    };
+    let Ok(permit) = budget.clone().acquire_many_owned(size).await else {
+        return false;
+    };
+    sender
+        .send(Record {
+            value: message,
+            _budget: permit,
+        })
+        .await
+        .is_ok()
 }
 
 async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSessionError> {

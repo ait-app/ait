@@ -27,7 +27,11 @@ impl DeepSeekHarnessClient {
         }
         let mut probe = self.metadata_command(&spec.cwd);
         probe.args(["--profile", "headless", "--dump-config"]);
-        let configuration = metadata_process::output(&mut probe).await?;
+        // A wedged native command must not hold the summary call forever.
+        let configuration =
+            tokio::time::timeout(self.deadline, metadata_process::output(&mut probe))
+                .await
+                .map_err(|_| AgentSessionError::Failed)??;
         let mut patch = isolated_patch(&configuration, &model, prompt, schema)?;
         if let Some(effort) = &spec.config.thinking_option_id {
             if model[0] != "deepseek-official" {
@@ -47,7 +51,10 @@ impl DeepSeekHarnessClient {
         command
             .args(["--profile", "headless", "--patch"])
             .arg(&patch_path);
-        metadata_process::output(&mut command).await
+        let output = tokio::time::timeout(self.deadline, metadata_process::output(&mut command))
+            .await
+            .map_err(|_| AgentSessionError::Failed)??;
+        Ok(output)
     }
 
     fn metadata_command(&self, cwd: &str) -> Command {

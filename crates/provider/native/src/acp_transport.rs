@@ -73,6 +73,18 @@ impl Transport {
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    // A provider that exits right after its last frame leaves the trailing
+                    // newline out; that frame is complete and is delivered before the end.
+                    let trailing = (bytes.last() != Some(&b'\n'))
+                        .then(|| serde_json::from_slice::<Value>(&bytes).ok())
+                        .flatten()
+                        .filter(|message| message["jsonrpc"] == "2.0");
+                    if let Some(message) = trailing {
+                        let _ = sender.send(message).await;
+                        reader_diagnostics
+                            .observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+                        break;
+                    }
                     let category = if matches!(read, Ok(0)) {
                         Category::Closed
                     } else {
@@ -89,7 +101,12 @@ impl Transport {
                         .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
                     break;
                 };
-                if message["jsonrpc"] != "2.0" || sender.send(message).await.is_err() {
+                if message["jsonrpc"] != "2.0" {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
+                    break;
+                }
+                if sender.send(message).await.is_err() {
                     break;
                 }
             }

@@ -154,7 +154,7 @@ npm run dev:mobile
 
 - Codex 使用本机 `codex app-server`；`AIT_SERVER_CODEX_BIN` 覆盖程序路径。
 - [Claude Code](claude-code.md)使用本机认证与原生会话；`AIT_SERVER_CLAUDE_BIN` 覆盖路径。
-- [DeepSeek Harness](deepseek-harness.md)使用 stdio ACP 与动态模型目录。
+- [DeepSeek Harness](deepseek-harness.md)默认使用原生 Web Host；设置 `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp` 时改用 stdio ACP。
 - OpenCode 使用官方 `opencode acp`；`AIT_SERVER_OPENCODE_BIN` 覆盖程序路径，见
   [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
 - [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。

@@ -49,13 +49,19 @@ impl ProjectConfigStore for LocalProjectConfigStore {
     ) -> Result<ProjectConfigWrite, ProjectConfigStoreError> {
         let root = Path::new(root);
         let path = root.join(PROJECT_CONFIG_FILE_NAME);
+        let mut bytes =
+            serde_json::to_vec_pretty(config).map_err(|_| ProjectConfigStoreError::Write)?;
+        bytes.push(b'\n');
+        // The read path rejects a larger document, so a write beyond the limit is refused
+        // instead of leaving a project configuration file that can no longer be loaded.
+        if u64::try_from(bytes.len()).map_or(true, |length| length > u64::from(MAX_CONFIG_BYTES)) {
+            return Err(ProjectConfigStoreError::Write);
+        }
         let mut staged =
             tempfile::NamedTempFile::new_in(root).map_err(|_| ProjectConfigStoreError::Write)?;
-        serde_json::to_writer_pretty(staged.as_file_mut(), config)
-            .map_err(|_| ProjectConfigStoreError::Write)?;
         staged
             .as_file_mut()
-            .write_all(b"\n")
+            .write_all(&bytes)
             .and_then(|()| staged.as_file_mut().sync_all())
             .map_err(|_| ProjectConfigStoreError::Write)?;
         let current_path = read_path(root).map_err(|_| ProjectConfigStoreError::Write)?;
@@ -64,6 +70,7 @@ impl ProjectConfigStore for LocalProjectConfigStore {
         if current_revision != expected_revision {
             return Ok(ProjectConfigWrite::Stale { current_revision });
         }
+        install_mode(&staged, &path).map_err(|_| ProjectConfigStoreError::Write)?;
         staged
             .persist(&path)
             .map_err(|_| ProjectConfigStoreError::Write)?;
@@ -79,6 +86,21 @@ impl ProjectConfigStore for LocalProjectConfigStore {
             revision,
         })
     }
+}
+
+// The staged file replaces the project configuration, so it carries the mode the project file
+// already had; a new project file stays readable like the sources beside it.
+#[cfg(unix)]
+fn install_mode(staged: &tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode =
+        std::fs::metadata(path).map_or(0o644, |metadata| metadata.permissions().mode() & 0o777);
+    std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(mode))
+}
+
+#[cfg(not(unix))]
+fn install_mode(_staged: &tempfile::NamedTempFile, _path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 // Prefer Ait even when it is invalid; select the legacy file only when Ait is absent.

@@ -356,7 +356,9 @@ async fn serve(
             Some(result)=jobs.join_next(),if !jobs.is_empty()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,runner.as_ref(),finished){pending.push(*finished);}},
             _=tick.tick()=>{
                 pending=pending.into_iter().filter_map(|finished|settle(&mut engine,runner.as_ref(),finished).err().map(|entry|*entry)).collect();
-                if pending.is_empty()&& let Ok(due)=engine.due(Utc::now()){for id in due {launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,false,None));}}
+                // A run that cannot be persisted holds back only its own schedule: `due`
+                // and `begin` already refuse a schedule with a running occurrence.
+                if let Ok(due)=engine.due(Utc::now()){for id in due {launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,false,None));}}
             }
         }
     }

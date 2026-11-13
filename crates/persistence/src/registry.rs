@@ -7,6 +7,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use indexmap::IndexMap;
 use serde::{Serialize, de::DeserializeOwned};
 
+/// Largest registry file the loader accepts, like the other document stores.
+const MAX_REGISTRY_BYTES: u64 = 32 * 1024 * 1024;
+
 /// A registry load, validation, or commit failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum Error {
@@ -88,13 +91,16 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     fn loaded(&self) -> Result<MutexGuard<'_, State<R>>, E> {
         let mut state = self.state.lock().map_err(|_| E::from(Error::Frozen))?;
         if !state.loaded {
-            let records: Vec<R> = match crate::File::new(self.path.clone()).read() {
+            let records: Vec<R> = match crate::File::new(self.path.clone())
+                .read_limited(MAX_REGISTRY_BYTES)
+            {
                 Ok(bytes) => {
                     serde_json::from_slice(&bytes).map_err(|_| E::from(Error::InvalidFile))?
                 }
                 Err(crate::Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                     Vec::new()
                 }
+                Err(crate::Error::TooLarge) => return Err(E::from(Error::InvalidFile)),
                 Err(_) => return Err(E::from(Error::Io)),
             };
             for record in records {

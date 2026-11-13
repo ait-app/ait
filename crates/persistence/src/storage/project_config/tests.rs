@@ -111,3 +111,32 @@ fn oversized_documents_are_rejected_without_parsing() {
         Err(ProjectConfigStoreError::Invalid)
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_written_project_config_keeps_the_mode_of_the_file_it_replaces() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().to_str().unwrap();
+    let store = LocalProjectConfigStore;
+    let path = fixture.path().join(PROJECT_CONFIG_FILE_NAME);
+    std::fs::write(&path, "{}").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    store.write(root, &json!({"future":true}), None).unwrap();
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o644);
+}
+
+#[test]
+fn a_document_beyond_the_read_limit_is_refused_instead_of_persisted() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().to_str().unwrap();
+    let store = LocalProjectConfigStore;
+    let oversized = json!({"note":"x".repeat(usize::try_from(MAX_CONFIG_BYTES).unwrap() + 1)});
+    assert_eq!(
+        store.write(root, &oversized, None),
+        Err(ProjectConfigStoreError::Write)
+    );
+    // The persisted project configuration stays within the limit the read path enforces.
+    assert_eq!(store.read(root).unwrap().config, None);
+}

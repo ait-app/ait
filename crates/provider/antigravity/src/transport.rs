@@ -177,6 +177,17 @@ impl Transport {
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    // A provider that exits right after its last frame leaves the trailing
+                    // newline out; that frame is complete and is delivered before the end.
+                    let trailing = (bytes.last() != Some(&b'\n'))
+                        .then(|| serde_json::from_slice::<Value>(&bytes).ok())
+                        .flatten()
+                        .filter(|message| message["event"].is_string());
+                    if let Some(message) = trailing {
+                        let _ = sender.send(message).await;
+                        diagnostics.observe(Failure::Exit);
+                        break;
+                    }
                     diagnostics.observe(if matches!(read, Ok(0)) {
                         Failure::Exit
                     } else {

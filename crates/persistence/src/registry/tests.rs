@@ -99,14 +99,14 @@ fn invalid_files_records_and_failed_writers_preserve_committed_state() {
     let path = root.path().join("records.json");
     let file = crate::File::new(&path);
     file.write(b"broken").unwrap();
-    let mut store = registry(path);
+    let mut store = registry(path.clone());
     assert_eq!(store.initialize(), Err(Error::InvalidFile));
     assert_eq!(insert(&store, record("one", 1.0)), Err(Error::InvalidFile));
-    assert_eq!(file.read().unwrap(), b"broken");
+    assert_eq!(std::fs::read(&path).unwrap(), b"broken");
     file.write(b"[]").unwrap();
     store.initialize().unwrap();
     insert(&store, record("one", 1.0)).unwrap();
-    let before = file.read().unwrap();
+    let before = std::fs::read(&path).unwrap();
     assert_eq!(
         insert(&store, record("bad", f64::NAN)),
         Err(Error::InvalidRecord)
@@ -122,7 +122,7 @@ fn invalid_files_records_and_failed_writers_preserve_committed_state() {
         }
     }));
     assert_eq!(insert(&store, record("two", 2.0)), Err(Error::Io));
-    assert_eq!(file.read().unwrap(), before);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     assert_eq!(store.list().unwrap(), [record("one", 1.0)]);
     fail.store(false, Ordering::SeqCst);
     insert(&store, record("two", 2.0)).unwrap();

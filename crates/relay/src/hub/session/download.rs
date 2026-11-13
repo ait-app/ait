@@ -97,8 +97,11 @@ pub(super) async fn serve(session: &mut Session, request: &[u8]) -> Result<(), &
             .map_err(|_| "cancelled")
     };
     tokio::select! {
-        code = reader => Err(code),
+        // A download the peer already completed is reported as done: the reader sees the
+        // closed session afterwards and must not mask the writer's result.
+        biased;
         result = writer => result,
+        code = reader => Err(code),
     }
 }
 

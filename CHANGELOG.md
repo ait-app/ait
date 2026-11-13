@@ -1,5 +1,14 @@
 # Ait changelog
 
+## Unreleased
+
+- Configuration that would grow past the size its own reader accepts is now refused instead of being written as a file that can no longer be loaded: a daemon `config.json` beyond 4 MiB, a project `ait.json` beyond 4 MiB, and a registry file beyond 32 MiB. Writing a project `ait.json` keeps the mode the file already had, so a shared checkout stays readable.
+- One schedule whose occurrence cannot be saved no longer holds back every other schedule; the others keep running.
+- A hub download the peer already completed is reported as done instead of as cancelled.
+- A provider that exits right after its last frame no longer loses that frame: the frame is delivered and the closed stream is reported as closed instead of as a protocol error.
+- Resuming an ACP session that answers with another session id is rejected instead of addressing a session the agent does not have.
+- Reading the DeepSeek Harness environment skips a variable that is not valid Unicode instead of aborting the session, and its summary commands now end with the client's deadline instead of waiting for a wedged native process.
+
 ## 0.2.11 - 2026-11-13
 
 - The Task overview keeps its search box visible, and the task count heading opens the filters. It shows the active Host and project scope, such as "mba.local / ait 12 tasks", and the filter icon is highlighted while any filter or sort is set.

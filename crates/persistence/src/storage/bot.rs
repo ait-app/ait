@@ -113,11 +113,13 @@ impl Store for FileStore {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(StorageError),
             _ => Ok(()),
         };
-        absent(fs::remove_file(
-            self.root.join("conversations").join(format!("{id}.json")),
-        ))?;
+        // The turns go first: a failure there leaves the conversation record in place, so the
+        // caller can retry instead of holding an index entry for a deleted conversation.
         absent(fs::remove_dir_all(
             self.root.join("turns").join(id.to_string()),
+        ))?;
+        absent(fs::remove_file(
+            self.root.join("conversations").join(format!("{id}.json")),
         ))
     }
     fn turns(&self, id: ConversationId) -> Result<Vec<Turn>, StorageError> {

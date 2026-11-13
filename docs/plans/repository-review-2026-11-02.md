@@ -158,3 +158,79 @@
       （重连使用默认 2.2 秒，不可用为 3.2 秒）；连接很快恢复时仍显示「正在重连」。建议在状态回到
       `online` 时主动关闭当前提示。
       修复：toast 返回只作用于自身的关闭回调；连接恢复、退出账号、切换连接或卸载时关闭提示，不会关闭后来出现的其他提示。回归：`use-online-service-connection-notice.test.tsx`、`toast-host.test.tsx`。
+
+## 2026-11-13 全仓库审查遗留事项
+
+来源：2026-11-13 的全仓库审查（Rust 工作区 + 移动端、Web 与桌面端）。已确认且改动较小的缺陷
+已在同一批改动中修复；下列各项经复核后确认但尚未修复，各自保留原始触发条件。
+
+- [ ] **一个无法落盘的定时任务运行会冻结全部定时任务。**
+      `crates/schedule/src/service.rs` 的 tick 只在 `pending` 为空时才调用 `engine.due()`。
+      一次结算失败（存储写不进去）的运行会永久留在 `pending` 里，之后所有定时任务都不再启动，
+      `schedule.run_once.request` 也一律返回 `Error::Storage`。
+      建议：`due()` 与 `begin()` 已按「运行中的 occurrence」拒绝重复运行，tick 无需再用 `pending`
+      挡住全部调度。
+
+- [ ] **定时任务的运行记录不会裁剪，文档可能超过存储上限后无法再写。**
+      `crates/schedule/src/engine.rs` 只限制单个任务的运行数量（4096），不裁剪历史；一次运行最多
+      保留 64 KiB 输出。文档超过 `crates/persistence/src/storage/schedule.rs` 的 16 MiB 上限后，
+      `save` 返回 `Error::Conflict`，该任务的运行停在 `Running`，删除与修改也被拒绝。
+      建议：保存冲突时丢弃最旧的已结算运行（含输出）后重试一次。
+
+- [ ] **一条损坏的定时任务记录会让 daemon 无法启动。**
+      `Engine::open` 是全有或全无：提示超过 64 KiB、`maxRuns` 为 0、Agent id 不是 UUID 或
+      时区无法解析的记录会让整个打开失败，错误经 `Schedules::spawn` 冒泡到 daemon 启动，
+      此时 API 尚未起来，没有任何修复入口。
+      建议：隔离这一条记录（标记为已结束）并保留其余记录。
+
+- [ ] **权限答复在追问失败时不会送达 Provider。**
+      `crates/provider/runtime/src/service/agent_manager/controls.rs` 先解析追问、再把追问答复
+      投递给 Provider，最后才调用 `respond_permission`。追问投递失败（队列忙、Provider 拒绝）
+      时提前返回，Provider 永远收不到这次权限答复，Agent 会一直停在 `permission` 状态。
+      建议：先答复 Provider，再投递追问；追问失败不应跳过答复。
+
+- [ ] **lane 失败时不会关闭其原生会话。**
+      `crates/provider/runtime/src/service/agent_execution/lane.rs` 只在关停、通道关闭和空闲
+      过期时调用 `close(state)`；出错分支直接跳出，`ExecutionState` 连同其中的原生会话被丢弃。
+      子进程会随 `Drop` 结束，但持久状态仍是 `Running`，lane 的路由别名也不会释放。
+      建议：出错分支同样关闭 lane 的状态。
+
+- [ ] **`agent.items.close.request` 会吞掉归档失败。**
+      `crates/provider/runtime/src/rpc/agent_runtime.rs` 用 `filter_map` 丢弃归档错误，答复里
+      的 `agents` 列表因此可能短于请求的 id；调用方无法区分「没有可关闭的」和「关闭失败」。
+      同一路径还直接使用请求里的原始 id，而目录查询支持前缀解析，短 id 会静默关闭不到任何东西。
+      建议：先解析 id，再逐个报告失败。
+
+- [ ] **运行时为每个被改动的 Agent 保留一条永久别名。**
+      `Owners::agent` 会在每次改动时插入 `id -> agent:{id}`，只有 lane 拆除时才会移除；
+      `loaded_timelines` 也只在硬删除时清理，存活进程内的 Agent 越多，两个集合越大。
+      建议：作用域查询不生成路由别名；归档时一并清理历史标记。
+
+- [ ] **排队输入的 Agent 列表被截断在 1024 个。**
+      `crates/provider/runtime/src/storage/timeline/inbox.rs` 的 `queued_agents` 用
+      `ORDER BY agent LIMIT 1024`，超出部分在没有活跃 lane 时不会获得 lane，其排队输入一直
+      得不到投递。
+      建议：对身份查询分页，或去掉该上限（它不读取提示正文）。
+
+- [ ] **DSH 的 `cancel_turn` 在回合真正结束前就返回。**
+      `crates/provider/deepseek-harness/src/native/session.rs` 只发送 `session/cancel`，
+      `self.active` 要等原生 `turn/end` 才清空；原生不再发这个事件时，运行时又会因为
+      `interruption_requested` 放弃重试，该会话此后的每次 `start` 都被拒绝。
+      建议：在有界超时内等待回合结束，超时后清空 `self.active` 并给出取消事件。
+
+- [ ] **ACP 未答复的权限请求被丢弃，却告诉宿主已经解决。**
+      `crates/provider/native/src/acp_streaming.rs` 的 `settle` 把待答复的权限请求直接转成
+      `PermissionResolved` 事件，没有给原生会话发送 ACP 答复；原生若在权限未决时中止了回合，
+      它的请求 id 永远收不到答复。OpenCode 适配器发送 `cancelled` 才是正确做法。
+      建议：结算前先撤回待答复的权限。
+
+- [ ] **自动化运行时从不释放每个工作区的状态。**
+      `crates/metadata/src/automation/local.rs` 的 `scripts`、`runs`、`setups` 与
+      `workspace_ports` 只有插入没有删除；工作区归档或删除后，其运行历史（每个运行最多 64 KiB
+      输出缓冲）和脚本进程仍然常驻，daemon 的内存随见过的工作区数量单调增长。
+      建议：工作区归档或删除时调用一个释放该工作区状态的入口。
+
+- [ ] **创建回执永不淘汰，每次创建都会重写整个文件。**
+      `crates/persistence/src/storage/creation.rs` 的 `put` 只插入不删除，回执文件随 daemon
+      存活时间单调增长；每次创建都要重新序列化并同步整个数组。
+      建议：给回执加上淘汰策略，并在写入时顺带清理过期项。
