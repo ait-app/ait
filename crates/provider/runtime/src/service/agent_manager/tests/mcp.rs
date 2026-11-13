@@ -354,7 +354,8 @@ async fn denied_bot_session_launches_without_ait_server() {
 
 #[tokio::test]
 async fn a_worker_on_an_additive_adapter_runs_its_report_tool_without_asking() {
-    let report = json!({"preapproved":[{"kind":"mcp","server":"ait","tool":"report_progress"}]});
+    let report = json!({"preapproved":[{"kind":"mcp","server":"ait","tool":"report_progress"},
+        {"kind":"mcp","server":"ait","tool":"ticket_read"}]});
     for (support, expected) in [(Support::AdditiveHttp, Some(report)), (Support::Http, None)] {
         let (mut manager, registry, client, _) = scoped(Grant::Worker("w".repeat(64)), json!({}));
         let additive = matches!(support, Support::AdditiveHttp);

@@ -8,6 +8,7 @@ use super::*;
 
 mod confinement;
 mod notifications;
+mod recall;
 mod schedules;
 mod support;
 mod tickets;
@@ -30,6 +31,7 @@ async fn scoped_credential_lists_only_granted_tools() {
         "bot_memory_update",
         "bot_tickets",
         "bot_ticket_update",
+        "bot_read",
     ] {
         assert!(bot.contains(granted), "{granted}: {bot:?}");
     }
@@ -41,6 +43,7 @@ async fn scoped_credential_lists_only_granted_tools() {
         "list_workspaces",
         "create_terminal",
         "report_progress",
+        "ticket_read",
     ] {
         assert!(!bot.contains(withheld), "{withheld}");
     }
@@ -51,6 +54,7 @@ async fn scoped_credential_lists_only_granted_tools() {
         "workspace_overview",
         "bot_tickets",
         "bot_ticket_update",
+        "bot_read",
     ];
     assert!(bot_only.iter().all(|tool| !host.contains(*tool)));
     let expected: BTreeSet<_> = host
@@ -332,8 +336,14 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
     let other = scoped
         .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)
         .await;
-    let overview = scoped
+    // A conversation that is not the owner's sees only the Agents of its own tasks (ADR-280).
+    let stranger = scoped
         .call(&credential, None, "workspace_overview", json!({}))
+        .await;
+    assert_eq!(structured(&stranger)["botAgents"], json!([]));
+    let owner = scoped.owner_credential().await;
+    let overview = scoped
+        .call(&owner, None, "workspace_overview", json!({}))
         .await;
     let overview = structured(&overview);
     let listed: Vec<_> = overview["botAgents"]
@@ -365,6 +375,7 @@ fn bot_only_names() -> BTreeSet<String> {
         "workspace_overview",
         "bot_tickets",
         "bot_ticket_update",
+        "bot_read",
     ]
     .map(str::to_owned)
     .into()

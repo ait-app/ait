@@ -48,6 +48,11 @@ export const bots = {
   message: "الرسالة",
   cancel: "إلغاء الدور",
   emptyChat: "أرسل رسالة لبدء محادثة.",
+  conversation: "المحادثة",
+  conversationOwner: "Ait (أنت)",
+  conversationOtherChannel: "قناة أخرى",
+  conversationReadOnly:
+    "للقراءة فقط: تجري هذه المحادثة في {{channel}}. هنا تقبل محادثتك في Ait وحدها الرسائل.",
   session: "جلسة Bot",
   reset: "محادثة جديدة",
   resetConfirm:

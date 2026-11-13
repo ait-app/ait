@@ -2,13 +2,15 @@
 
 use std::collections::BTreeSet;
 
+use bot::recall::Sight;
 use model::ErrorCode;
 use serde_json::{Value, json};
 
 use crate::Shared;
 use crate::connection::rpc;
 
-use super::creation;
+use super::overview::AGENT_PAGE;
+use super::{creation, recall};
 
 /// Return whether a capability `value` reports a business rejection.
 pub(super) fn failed(value: &Value) -> bool {
@@ -29,18 +31,25 @@ pub(super) async fn status(state: &Shared, arguments: Value) -> Result<Value, Er
 }
 
 /// Return a compact Agent directory page filtered and bounded by `arguments` in `state`,
-/// limited to `workspaces` when given.
+/// limited to `workspaces` when given and to the Agents `sight` reaches (ADR-280 §4).
+///
+/// A sight that reaches only its own work reads the newest [`AGENT_PAGE`] Agents, keeps those it
+/// reaches up to `limit`, and reports `truncated` instead of a cursor: the directory's cursor
+/// encodes the id and update time of the last Agent it read, which may be someone else's.
 /// # Errors
 /// Returns invalid filters, pagination or directory failures.
 pub(super) async fn agents(
     state: &Shared,
     arguments: &Value,
     workspaces: Option<&BTreeSet<String>>,
+    sight: Option<&Sight>,
 ) -> Result<Value, ErrorCode> {
+    let limit = arguments["limit"].as_u64().unwrap_or(50);
+    let restricted = recall::external(sight);
     let mut params = json!({
         "filter":{"includeArchived":arguments["includeArchived"].as_bool().unwrap_or(false)},
         "sort":[{"key":"updated_at","direction":"desc"}],
-        "page":{"limit":arguments["limit"].as_u64().unwrap_or(50)}
+        "page":{"limit":if restricted { AGENT_PAGE } else { limit }}
     });
     if let Some(statuses) = arguments.get("statuses") {
         params["filter"]["statuses"] = statuses.clone();
@@ -53,14 +62,21 @@ pub(super) async fn agents(
     let entries = value["entries"]
         .as_array()
         .ok_or(ErrorCode::InvalidMessage)?;
-    let agents: Vec<_> = entries.iter().map(|entry| {
-        let agent = &entry["agent"];
+    let mut agents: Vec<_> = entries.iter().map(|entry| &entry["agent"])
+        .filter(|agent| recall::sees_agent(sight, agent)).map(|agent| {
         json!({"id":agent["id"],"title":agent["title"],"provider":agent["provider"],
             "cwd":agent["cwd"],"workspaceId":agent["workspaceId"],"status":agent["status"],
             "labels":agent["labels"],"updatedAt":agent["updatedAt"],"archivedAt":agent["archivedAt"],
             "pendingPermissions":agent["pendingPermissions"]})
     }).collect();
-    Ok(json!({"agents":agents,"nextCursor":value["pageInfo"]["nextCursor"]}))
+    let next = &value["pageInfo"]["nextCursor"];
+    if !restricted {
+        return Ok(json!({"agents":agents,"nextCursor":next}));
+    }
+    let kept = usize::try_from(limit).unwrap_or(usize::MAX);
+    let truncated = agents.len() > kept || next.is_string();
+    agents.truncate(kept);
+    Ok(json!({"agents":agents,"nextCursor":null,"truncated":truncated}))
 }
 
 /// Return a Workspace page and next cursor selected by `arguments` from `state`.
@@ -76,13 +92,14 @@ pub(super) async fn workspaces(state: &Shared, arguments: &Value) -> Result<Valu
 }
 
 /// Read all visible pending permissions through bounded directory pages in `state`, limited to
-/// Agents in `workspaces` when given; entries carry only Agent ids, so they are filtered at the
-/// source.
+/// Agents in `workspaces` when given and to the Agents `sight` reaches (ADR-280 §4); entries
+/// carry only Agent ids, so they are filtered at the source.
 /// # Errors
 /// Returns existing directory or malformed result errors.
 pub(super) async fn permissions(
     state: &Shared,
     workspaces: Option<&BTreeSet<String>>,
+    sight: Option<&Sight>,
 ) -> Result<Value, ErrorCode> {
     let mut params = json!({"page":{"limit":200}});
     within(&mut params, workspaces);
@@ -92,8 +109,11 @@ pub(super) async fn permissions(
         let entries = value["entries"]
             .as_array()
             .ok_or(ErrorCode::InvalidMessage)?;
-        for entry in entries {
-            let agent = &entry["agent"];
+        let reached = entries
+            .iter()
+            .map(|entry| &entry["agent"])
+            .filter(|agent| recall::sees_agent(sight, agent));
+        for agent in reached {
             if let Some(pending) = agent["pendingPermissions"].as_array() {
                 permissions.extend(
                     pending

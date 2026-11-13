@@ -5,7 +5,13 @@ fn ticket_tools_are_routed_here_and_others_are_not() {
     for tool in ["bot_tickets", "bot_ticket_update", "report_progress"] {
         assert!(handles(tool), "{tool}");
     }
-    for tool in ["create_agent", "workspace_overview", "bot_memory_read"] {
+    for tool in [
+        "create_agent",
+        "workspace_overview",
+        "bot_memory_read",
+        "bot_read",
+        "ticket_read",
+    ] {
         assert!(!handles(tool), "{tool}");
     }
 }

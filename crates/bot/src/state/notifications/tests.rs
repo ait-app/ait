@@ -281,7 +281,7 @@ fn pending_notifications_coalesce_into_one_wake_turn_after_quiet() {
     );
     assert!(
         turn.text
-            .contains("Fix login [agent agent-1]\n  Tests pass")
+            .contains("Fix login [agent agent-1] (read notification/1)\n  Tests pass")
     );
     assert_eq!(turn.conversation_id, owner(&mut state));
     assert_eq!(

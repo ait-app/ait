@@ -48,6 +48,11 @@ export const bots = {
   message: "메시지",
   cancel: "턴 취소",
   emptyChat: "메시지를 보내 대화를 시작하세요.",
+  conversation: "대화",
+  conversationOwner: "Ait (나)",
+  conversationOtherChannel: "기타 채널",
+  conversationReadOnly:
+    "읽기 전용: 이 대화는 {{channel}}에서 진행됩니다. 여기서는 Ait 대화에서만 메시지를 보낼 수 있습니다.",
   session: "Bot 세션",
   reset: "새 대화",
   resetConfirm: "새 대화를 시작할까요? 기존 메시지는 유지되며 최신 Bot 설정이 적용됩니다.",

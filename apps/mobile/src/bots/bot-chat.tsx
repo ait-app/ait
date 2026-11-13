@@ -29,6 +29,12 @@ import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness"
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
+import {
+  BotConversationSwitch,
+  conversationChannel,
+  fetchBotConversations,
+  useBotConversations,
+} from "./bot-conversations";
 import { BotTicketSheet } from "./bot-ticket-sheet";
 import { BotTicketsTrack, useBotTicketsSupported } from "./bot-tickets";
 import { BotSilentNote, BotWakeHeader, visibleBotMessages } from "./bot-wake";
@@ -248,8 +254,11 @@ export function BotChat({
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
       if (!writable) {
-        const { conversations } = await client.botRequest("bot.conversation.list.request", {
-          workspaceId,
+        // The switcher lists the same conversations, so both reads share one request.
+        const conversations = await queryClient.fetchQuery({
+          queryKey: botKeys.conversations(serverId, workspaceId, bot.builtinChannelId),
+          queryFn: () => fetchBotConversations(client, workspaceId),
+          staleTime: 1_000,
         });
         return conversations.find((item) => item.channelId === bot.builtinChannelId) ?? null;
       }
@@ -257,7 +266,23 @@ export function BotChat({
         .conversation;
     },
   });
-  const history = useBotHistory(serverId, workspaceId, conversation.data?.id, interactive);
+  // Another channel's conversation shown read-only, or the built-in one when none is chosen.
+  const conversations = useBotConversations(
+    serverId,
+    workspaceId,
+    bot.builtinChannelId,
+    interactive,
+  );
+  const [viewedId, setViewedId] = useState<string | null>(null);
+  const viewed = viewedId
+    ? (conversations.data?.find((item) => item.id === viewedId) ?? null)
+    : null;
+  const history = useBotHistory(
+    serverId,
+    workspaceId,
+    viewed?.id ?? conversation.data?.id,
+    interactive,
+  );
   const openTarget = useOpenFromBot(serverId, workspaceId);
   // A retired Bot has no tickets to read; older hosts serve none.
   const ticketsShown = useBotTicketsSupported(serverId) && bot.state.kind !== "retired";
@@ -384,16 +409,27 @@ export function BotChat({
   };
   const errors = [
     conversation.error,
+    conversations.error,
     history.error,
     send.error,
     reset.error,
     resume.error,
     cancel.error,
   ].filter(Boolean);
-  const trackShown = Boolean(sessionAgentId) || ticketsShown;
+  const shownSession = viewed ? undefined : sessionAgentId;
+  const trackShown = Boolean(shownSession) || ticketsShown;
   const paddingBottom = trackShown ? resolveComposerTrackTailClearance(compact) : undefined;
   const content = (
     <View style={chatStyles.transcript}>
+      <BotConversationSwitch
+        conversations={conversations.data ?? []}
+        builtinChannelId={bot.builtinChannelId}
+        value={viewed ? viewed.id : null}
+        onChange={(id) => {
+          atBottom.current = true;
+          setViewedId(id);
+        }}
+      />
       {conversation.isPending && !conversation.data && bot.state.kind !== "retired" ? (
         <BotLoadingSpinner />
       ) : null}
@@ -431,11 +467,11 @@ export function BotChat({
       />
       {trackShown ? (
         <ComposerTrackBar>
-          {sessionAgentId ? (
+          {shownSession ? (
             <BotSessionTrack
               serverId={serverId}
               workspaceId={workspaceId}
-              sessionAgentId={sessionAgentId}
+              sessionAgentId={shownSession}
               provider={bot.execution.provider}
               busy={busy}
             />
@@ -472,7 +508,14 @@ export function BotChat({
   );
   const composer = (
     <View style={chatStyles.composerRail}>
-      {pausedMessage ? (
+      {viewed ? (
+        <View style={chatStyles.notice} testID="bot-conversation-read-only">
+          <Text style={[styles.hint, styles.grow]}>
+            {t("bots.conversationReadOnly", { channel: conversationChannel(viewed, t) })}
+          </Text>
+        </View>
+      ) : null}
+      {pausedMessage && !viewed ? (
         <View style={chatStyles.notice}>
           <Text style={[styles.hint, styles.grow]}>{pausedMessage}</Text>
           {!readOnly ? (
@@ -493,7 +536,7 @@ export function BotChat({
           {error?.message}
         </Text>
       ))}
-      {!readOnly ? (
+      {!readOnly && !viewed ? (
         <MessageInput
           ref={input}
           value=""

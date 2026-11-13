@@ -14,7 +14,7 @@ fn with_modes(modes: BTreeMap<String, Vec<String>>) -> BotPermissions {
 fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
     let names: BTreeSet<_> = TOOLS.iter().map(|(name, _)| *name).collect();
     assert_eq!(names.len(), TOOLS.len());
-    assert_eq!(TOOLS.len(), 48);
+    assert_eq!(TOOLS.len(), 50);
     for tool in [
         "respond_to_permission",
         "archive_workspace",
@@ -31,7 +31,13 @@ fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
     assert!(grantable_tools().any(|tool| tool == "bot_ticket_update"));
     assert_eq!(tool_access("report_progress"), ToolAccess::Worker);
     assert!(!grantable_tools().any(|tool| tool == "report_progress"));
-    assert_eq!(worker_tools().collect::<Vec<_>>(), ["report_progress"]);
+    assert!(grantable_tools().any(|tool| tool == "bot_read"));
+    assert_eq!(tool_access("ticket_read"), ToolAccess::Worker);
+    assert!(!grantable_tools().any(|tool| tool == "ticket_read"));
+    assert_eq!(
+        worker_tools().collect::<Vec<_>>(),
+        ["report_progress", "ticket_read"]
+    );
 }
 
 #[test]
@@ -54,6 +60,12 @@ fn worker_tools_are_only_for_subtree_agents_on_a_ticket() {
     assert!(permissions.allows("report_progress", Holder::Worker));
     assert!(!permissions.allows("report_progress", Holder::Subtree));
     assert!(!permissions.allows("report_progress", Holder::Bot));
+    assert!(permissions.allows("ticket_read", Holder::Worker));
+    assert!(!permissions.allows("ticket_read", Holder::Subtree));
+    assert!(!permissions.allows("ticket_read", Holder::Bot));
+    assert!(permissions.allows("bot_read", Holder::Bot));
+    assert!(!permissions.allows("bot_read", Holder::Worker));
+    assert!(!permissions.allows("bot_read", Holder::Subtree));
 }
 
 #[test]

@@ -402,8 +402,9 @@ fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
 }
 
 #[test]
-fn only_worker_credentials_on_additive_adapters_preapprove_the_report_tool() {
+fn only_worker_credentials_on_additive_adapters_preapprove_the_worker_tools() {
     let report = json!({"kind":"mcp","server":"ait","tool":"report_progress"});
+    let read = json!({"kind":"mcp","server":"ait","tool":"ticket_read"});
     let docs = json!({"kind":"mcp","server":"docs","tool":"search"});
     let scopes = FakeScopes::new(Grant::Shared);
     let source = AgentMcp::new(
@@ -426,13 +427,13 @@ fn only_worker_credentials_on_additive_adapters_preapprove_the_report_tool() {
             worker.clone(),
             true,
             &own,
-            json!({"preapproved":[docs.clone(), report.clone()]}),
+            json!({"preapproved":[docs.clone(), report.clone(), read.clone()]}),
         ),
         (
             worker.clone(),
             true,
             &StoredAgentConfig::default(),
-            json!({"preapproved":[report.clone()]}),
+            json!({"preapproved":[report.clone(), read.clone()]}),
         ),
         // Adapters without additive pre-approval, and every other credential, are unchanged.
         (worker, false, &own, json!({"preapproved":[docs.clone()]})),

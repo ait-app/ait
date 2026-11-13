@@ -19,6 +19,7 @@ import { ChannelScanSetup, QqManualSetup, QqPairing } from "./scan-setup";
 import { ImessageGuidedSetup } from "./imessage-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
+import { KIND_LABELS } from "./channel-kinds";
 import { botStyles as styles } from "./styles";
 import { TelegramGuidedSetup } from "./telegram-setup";
 import { WebhookDetails, WebhookSetup } from "./webhook-setup";
@@ -35,16 +36,6 @@ type ExternalKind =
   | "qq"
   | "photon_imessage"
   | "webhook";
-const KIND_LABELS = {
-  telegram: "bots.telegram",
-  feishu: "bots.feishu",
-  lark: "bots.lark",
-  weixin: "bots.weixin",
-  qq: "bots.qq",
-  photon_imessage: "bots.imessage",
-  webhook: "bots.webhook",
-} as const;
-
 function parseSenders(text: string): string[] {
   return text
     .split(/[,\n]/)

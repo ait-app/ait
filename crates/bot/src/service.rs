@@ -27,6 +27,7 @@ use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::protocol::{ChannelCreate, decode};
+use crate::recall::{Origin, Read, Sight};
 use crate::state::{State, StoredChannel};
 use crate::tickets::{AssignTicket, OpenTicket, OpenedTicket, WorkerReport};
 
@@ -148,6 +149,8 @@ enum Operation {
         std::time::Instant,
     ),
     Ticket(Box<TicketOperation>),
+    Read(Box<Read>),
+    Sight(String, Origin),
 }
 
 /// A ticket entry point of the scoped MCP (ADR-274).
@@ -494,6 +497,38 @@ impl Bots {
             self.ticket(TicketOperation::Reopen(root, ticket, agent))
                 .await?,
         )
+    }
+
+    /// Read one Bot resource for a scoped MCP caller (ADR-280): tickets, conversations, turns,
+    /// notifications and Agents by id, in bounded pages whose cut text points at the resource
+    /// that returns it whole. Reads never write, wake or move a conversation's unseen cursor.
+    /// # Errors
+    /// Returns `InvalidMessage` for an unknown resource or page bounds, `BotNotFound` without a
+    /// current Bot or for a missing record, `Forbidden` for a record of a conversation the
+    /// reader may not read, `ServerDraining` once stopping, and storage or lifecycle failures.
+    pub async fn read(&self, read: Read) -> Result<Value, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        self.send(Operation::Read(Box::new(read))).await
+    }
+
+    /// What a caller of `root`'s current Bot whose work came from `origin` may read and reach
+    /// (ADR-280 §4): the sight of that conversation, which for the owner conversation is
+    /// everything and for another conversation only what it originated and the Agents of its
+    /// own tasks. An Agent's work came from its ticket's conversation, or else from its
+    /// conversation label. An external viewer comes with the origin of every ticket, so Agents
+    /// are decided by their labels without asking again.
+    /// # Returns
+    /// `None` for an Agent whose work came from no conversation, which is not restricted.
+    /// # Errors
+    /// Returns `BotNotFound` without a current Bot, `ServerDraining` once stopping, and worker
+    /// lifecycle failures.
+    pub async fn sight(&self, root: String, origin: Origin) -> Result<Option<Sight>, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        decode(self.send(Operation::Sight(root, origin)).await?)
     }
 
     /// Run a ticket entry point, waiting for command capacity so a busy worker never refuses
@@ -935,6 +970,10 @@ fn apply(
             serde_json::to_value(notified).map_err(|_| ErrorCode::BotIo)
         }
         Operation::Ticket(operation) => apply_ticket(state, *operation),
+        Operation::Read(read) => state.read(&read),
+        Operation::Sight(root, origin) => {
+            serde_json::to_value(state.sight(&root, origin)?).map_err(|_| ErrorCode::BotIo)
+        }
     }
 }
 

@@ -196,7 +196,6 @@ Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron�
 
 - **真实平台验收**：唤醒回复在 Telegram、飞书、QQ、微信上的投递只有模拟测试，尚无人用真实账号验证；
   QQ 主动消息配额与飞书不在话题内回复的实际体验也未确认。移动端与桌面界面未在真机上检查。
-- **Ait 中只读查看外部对话**：Bot 标签页只显示主对话，回到 Telegram 等平台的唤醒轮次在 Ait 中看不到。
 - **复用的定时任务 Agent**：`archiveOnFinish: false` 的定时任务 Agent 之后被复用时仍带运行标签，其通知不再产生。
 - **重启后的观察**：“已观察”只保存在内存中，daemon 重启后同一结果可能再唤醒一次；尚未决定是否值得持久化。
 - **降级**：有活动的 Workspace 升级后实际上无法降级到不支持通知的 daemon（ADR-271 第 12 节），需决定是否提供导出或清理工具。
@@ -223,6 +222,20 @@ Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron�
 - **访客**：只有整个 Host 的访客能读取任务；Workspace 与项目访客看不到。
 - **降级**：任何 Agent 汇报过 `blocked`、`done` 或 `failed` 后，降级到 0.2.10 需要删除 `<data>/workspace-bots/`（ADR-274 第 13 节）；
   daemon 也不能容忍以后新增的任务枚举值。
+
+### 按 id 回读
+
+原计划没有这一阶段，在任务之后加入，对照 DeepSeek 的 Chain of Recall 与 Inline／Spill。Bot 用 `bot_read` 按 id 读取任务、对话、轮次、通知与 Agent，
+概览与唤醒输入中被截断的文本带全文长度与读取指针；工作者用 `ticket_read` 读自己的任务；外部对话之间的读取由 daemon 按凭据隔离；
+Bot 标签页可只读查看外部对话。契约见 [ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)，
+用户可见行为见 [Workspace Bot](../operations/bots.md#任务)。
+
+截至 2026-11-14 已实现，由 `crates/bot`、`crates/api`、`crates/domain`、`crates/provider/*`、`packages/protocol` 与 `apps/mobile/src/bots` 的测试覆盖。尚未完成：
+
+- **共享的读取面**：Workspace 记忆、定时任务、终端与脚本按设计在对话之间共享（ADR-280 第 4 节）；记忆进入每个对话的指令，
+  是否需要所有者专用的记忆尚未决定。
+- **外部对话的显示名**：Ait 不保存外部平台的聊天与发送者名称，对话只以 Channel 种类与 id 标识。
+- **真实会话验收**：Bot 是否按指针读取、跟进任务前是否先读任务，尚未在真实 Provider 会话中验证；对话选择未在真机或浏览器端到端用例中检查。
 
 ### Channel 与对话
 

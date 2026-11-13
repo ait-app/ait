@@ -48,6 +48,27 @@ vi.mock("./bot-ticket-sheet", () => ({
   ),
 }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
+vi.mock("@/components/ui/select-field", () => ({
+  SelectField: ({
+    value,
+    options,
+    onChange,
+    testID,
+  }: {
+    value: string;
+    options: { id: string; label: string }[];
+    onChange: (value: string) => void;
+    testID: string;
+  }) => (
+    <select data-testid={testID} value={value} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 vi.mock("./session-tab", () => ({ closeBotSessionTab }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true) }));
 vi.mock("@/components/markdown/renderer", () => ({
@@ -807,5 +828,131 @@ describe("Bot wake turns", () => {
     expect(await screen.findByText("NO_REPLY")).toBeTruthy();
     expect(screen.getByTestId("user-message").textContent).toBe("hello");
     expect(screen.queryByTestId(`bot-silent-${receipt.id}`)).toBeNull();
+  });
+});
+
+describe("Bot conversations in other channels", () => {
+  const telegram = {
+    ...conversation,
+    id: "66666666-6666-4666-8666-666666666666",
+    channelId: "77777777-7777-4777-8777-777777777777",
+    channelKind: "telegram",
+    peer: "chat-7",
+    sender: "alice",
+    thread: null,
+    sessionAgentId: "99999999-9999-4999-8999-999999999999",
+    lastActivityAt: "2026-11-14T00:00:00Z",
+  };
+  const answered: BotTurn = {
+    ...receipt,
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    conversationId: telegram.id,
+    text: "Is the fix deployed?",
+    reply: "Deployed.",
+    messages: [{ id: "m1", text: "Deployed.", status: "completed" }],
+  };
+  const woke: BotTurn = {
+    ...answered,
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    messageId: "notification:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    sequence: 2,
+    text: '<ait-input kind="bot_wake">machine text</ait-input>',
+    reply: "NO_REPLY",
+    messages: [{ id: "m2", text: "NO_REPLY", status: "completed" }],
+    silent: true,
+    wake: {
+      notifications: [
+        {
+          id: "agent:a1:1",
+          workspaceId: "workspace",
+          kind: "agent_finished",
+          agentId: "a1",
+          title: 'Agent "deploy" finished',
+          summary: null,
+          at: "2026-11-14T00:00:00Z",
+          conversationId: telegram.id,
+        },
+      ],
+    },
+  };
+
+  function serve(conversations: (typeof conversation)[]) {
+    botRequest.mockImplementation(async (method: string, params: { conversationId?: string }) => {
+      if (method === "bot.conversation.open.request") return { conversation };
+      if (method === "bot.conversation.list.request") return { conversations };
+      if (method === "bot.history.get.request")
+        return {
+          turns: params.conversationId === telegram.id ? [answered, woke] : [receipt],
+          nextSequence: null,
+        };
+      throw new Error(`Unexpected ${method}`);
+    });
+  }
+
+  it("shows another channel's conversation read-only, rendered like the built-in one", async () => {
+    serve([conversation, telegram]);
+    renderChat({});
+    const switcher = (await screen.findByTestId("bot-conversation")) as HTMLSelectElement;
+    expect([...switcher.options].map((option) => option.textContent)).toEqual([
+      "bots.conversationOwner",
+      "bots.telegram · chat-7 · alice",
+    ]);
+    await screen.findByText("reply");
+    expect(screen.getByTestId("bot-message-input")).toBeTruthy();
+
+    fireEvent.change(switcher, { target: { value: telegram.id } });
+
+    expect(await screen.findByText("Deployed.")).toBeTruthy();
+    expect(screen.getByText("Is the fix deployed?")).toBeTruthy();
+    expect(screen.getByTestId(`bot-wake-${woke.id}`)).toBeTruthy();
+    expect(screen.getByTestId(`bot-silent-${woke.id}`)).toBeTruthy();
+    expect(screen.queryByText("reply")).toBeNull();
+    expect(screen.getByTestId("bot-conversation-read-only")).toBeTruthy();
+    expect(screen.queryByTestId("bot-message-input")).toBeNull();
+    expect(screen.queryByTestId("bot-reset")).toBeNull();
+    expect(screen.queryByTestId(`subagent-${telegram.sessionAgentId}`)).toBeNull();
+    expect(
+      botRequest.mock.calls.some(
+        ([method, params]) =>
+          method === "bot.history.get.request" && params.conversationId === telegram.id,
+      ),
+    ).toBe(true);
+    expect(botRequest.mock.calls.map(([method]) => method)).not.toContain(
+      "bot.message.send.request",
+    );
+
+    // Choosing the built-in conversation again restores the composer.
+    fireEvent.change(switcher, { target: { value: "" } });
+    expect(await screen.findByText("reply")).toBeTruthy();
+    expect(screen.getByTestId("bot-message-input")).toBeTruthy();
+    expect(screen.queryByTestId("bot-conversation-read-only")).toBeNull();
+  });
+
+  it("offers no switch while the Bot has only its built-in conversation", async () => {
+    serve([conversation]);
+    renderChat({});
+    await screen.findByText("reply");
+    await waitFor(() =>
+      expect(botRequest.mock.calls.map(([method]) => method)).toContain(
+        "bot.conversation.list.request",
+      ),
+    );
+    expect(screen.queryByTestId("bot-conversation")).toBeNull();
+  });
+
+  it("lets a guest read other conversations too, without writing", async () => {
+    serve([conversation, telegram]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BotChat serverId="shared:grant" workspaceId="workspace" cwd="/w" bot={bot} interactive />
+      </QueryClientProvider>,
+    );
+    const switcher = (await screen.findByTestId("bot-conversation")) as HTMLSelectElement;
+    fireEvent.change(switcher, { target: { value: telegram.id } });
+    expect(await screen.findByText("Deployed.")).toBeTruthy();
+    expect(screen.queryByTestId("bot-message-input")).toBeNull();
+    expect(botRequest.mock.calls.map(([method]) => method)).not.toContain(
+      "bot.conversation.open.request",
+    );
   });
 });

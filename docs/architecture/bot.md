@@ -150,9 +150,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   追加 `report_progress` 的预授权（与用户的预授权和 `allowedTools` 合并，持久记录不变），所以 Claude 工作者不再就它请求审批。
   Codex 的预授权是排他白名单、其他 Provider 拒绝 `tool_policy`，它们保持默认：Codex 在 `auto`、`auto-review` 中与其他 Provider 在会请求审批的模式中
   仍可能先就 `report_progress` 请求审批；未用真实 Provider 验证（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 7、10 节）。
-- `workspace_overview.tickets`：至多 20 个未关闭工单，每项 `{id,title,status,waiting,thisConversation,agents,latestReport,updatedAt}`；
-  `agents` 的状态从概览已读的 Agent 目录合并，目录读完整而找不到时为 `archived`，不完整时为 `null`；最新汇报文本截到 512 字节，
-  超出 24 KiB 时与其他文本一起先去掉，再参与列表截断（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 10 节）。
+- `workspace_overview.tickets`：至多 20 个未关闭工单，每项 `{id,title,status,waiting,thisConversation,agents,latestReport,updatedAt,read}`；
+  `agents` 的状态从概览已读的 Agent 目录合并，目录读完整而找不到时为 `archived`，不完整时为 `null`；最新汇报文本超过 512 字符时溢出为读取指针，
+  超出 24 KiB 时与其他文本一起先缩为只有长度与指针，再参与列表截断（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 10 节，[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 7 节）。
 - 通知带 `ticketId` 时，只有拥有该工单的 Bot 保留它并填入 `ticketTitle`，其余 Bot 的副本清除两者；`agent_*` 通知先向工单追加系统汇报再写日志，
   工单文件读不出时记日志并照常接纳（不追加汇报）。
   `blocked`、`done`、`failed` 汇报产生 `ticket_blocked`、`ticket_done`、`ticket_failed` 通知，在工单的对话中唤醒 Bot，`progress` 不唤醒；
@@ -171,6 +171,31 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 内置指令要求 Bot 交出工作后结束本轮、只短暂等待预计一分钟内结束的工作、在 Agent 提示中要求其调用 `report_progress`、
   同一任务的新 Agent 提供 `ticketId`、回报结果后关闭工单，并说明 `send_agent_prompt` 会重新打开 Agent 的工单、新任务需要新 Agent
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 12 节）。
+
+## 按 id 回读与对话隔离
+
+- Bot 工具 `bot_read`（`ToolAccess::BotOnly`）与工作者工具 `ticket_read`（`ToolAccess::Worker`，与 `report_progress` 一起进入 Claude 工作者的预授权）
+  都经 `bot::service::Bots::read(bot::recall::Read)` 在 Bot worker 中投影，不是客户端 RPC：读取范围由调用者凭据决定。
+  `agent/<id>` 的 Agent 记录与工单指派的实时状态由 `crates/api` 从 Agent 目录读取并合并，Bot 侧只投影工单、对话、轮次与通知（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、5、6 节）。
+- 资源：`tickets`、`tickets/closed`、`ticket/<id>`（及 `/reports`、`/report/<n>`、`/request`、`/outcome`）、`conversations`、`conversation/<id>`、
+  `turn/<id>`（及 `/input`、`/message/<n>`）、`notifications`、`notification/<序号>`、`agent/<id>`；工作者的资源不带工单 id（`ticket`、`ticket/reports` 等）。
+  页面上的每个 id 都能再读，通知以日志序号寻址，自由文本的通知 id 不出现在页面上（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
+- 常量（`bot::recall`）：文本页 `TEXT_PAGE = 4000`、至多 `TEXT_PAGE_LIMIT = 8000` 字符；列表 `LIST_PAGE = 20`、至多 `LIST_PAGE_LIMIT = 50` 条，以 `nextOffset` 续读；
+  列表项内文本预览 400 字符、单个对象页内 1200 字符、唤醒输入摘要 600 字符。长度按字符计。截断的文本为 `{"preview","chars","read"}`；
+  Agent 目录不带 Agent 的结果文本，Agent 的结果与转录用 `get_agent_activity` 读取（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、2 节）。
+- 读取是纯读取：不写盘、不唤醒、不记录观察、不推进 `notificationCursor`；退役 Bot 不可读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
+- 读取者：调用者对话在内置 Channel 上时为所有者，可读全部、可触达作用域内全部 Agent；其他对话（含 Webhook 与 Bot 已不拥有的对话）只读自己、来源为自己的工单与通知，
+  别人的工单只给存根（标题、状态、不含 Agent 的等待原因、`restricted:true`），别人的通知读作未保留，其余返回 `Forbidden`；工作者只读自己的工单，页面不含其他工单、对话或通知 id
+  （[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）。
+- Agent 触达：`bot::recall::Viewer::sees_agent` 按标签判定，`ait.bot.ticket` 是有来源对话的已知工单时由工单来源决定，否则由 `ait.bot.conversation` 决定，
+  Bot 未启动的 Agent 对外部对话不可触达。`Bots::sight(root, Origin)` 为外部对话返回 `Sight`（读取者加 Bot 全部工单的来源）；子树调用者的
+  `Origin::Agent` 带它的工单与对话标签，Bot 取工单的来源对话，没有时取标签，两者都没有时返回 `None`（不受限）。`crates/api` 一次取得后套用于
+  `bot_read agent/<id>`、`scope::confine` 的 Agent 目标（九个 Agent 工具，拒绝在执行前，不触发重新打开工单与观察）、`list_agents`、`list_pending_permissions`、
+  `create_agent` 的 `ticketId`、`workspace_overview` 的 `botAgents`、`otherAgents` 与别人工单的 `agents`（只给数量）。受限的调用者的 `list_agents`
+  读最新 200 个 Agent 后过滤，不返回目录游标（它编码最后读到的 Agent 的 id），以 `truncated` 表示没有列全。所有者对话及其启动的 Agent 不受限制。
+  Workspace 记忆、定时任务、终端与脚本按设计在对话之间共享（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）。
+- 唤醒输入每行以 `(read notification/<序号>)` 结尾，摘要超过 600 字符时截断并标明全文长度，仍在 `bot_wake` 信封内；内置指令要求 Bot 按指针读取、
+  跟进工单前先读它，并在所有者对话中查询其他对话（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 7 节）。
 
 ## 原生权限与会话配置
 
@@ -196,9 +221,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   `rename_workspace`、`list_workspaces` 及未登记的工具名永不授予。`workspaces` 分组仍可解析，但不授予工具且保存时移除
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-- `bot_memory_read`、`bot_memory_update`、`workspace_overview`、`bot_tickets`、`bot_ticket_update` 只对 Bot 自身凭据可见，
-  子树与主机令牌都看不到；`report_progress`（`ToolAccess::Worker`）只对带工单标签的子树凭据可见，不进入 Bot 会话的工具预授权
-  （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)）。
+- `bot_memory_read`、`bot_memory_update`、`workspace_overview`、`bot_tickets`、`bot_ticket_update`、`bot_read` 只对 Bot 自身凭据可见，
+  子树与主机令牌都看不到；`report_progress`、`ticket_read`（`ToolAccess::Worker`）只对带工单标签的子树凭据可见，不进入 Bot 会话的工具预授权
+  （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）。
 - `modes` 线上形状仍为 `{ [provider]: string[] }`，保存时截断为第一项，执行时也只放行第一项；未列出的 Provider
   不可使用。`create_agent` 未指定模式时取该项；`set_agent_mode` 与 `update_agent` 按目标 Agent 当前 Provider 校验，
   `update_agent` 的 features 只允许 `fast_mode`
@@ -303,6 +328,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   且 `bot.get` 返回 `wakeScope`；不满足时隐藏，`bot.setup` 不发送 `wakeScope`。`bot.update` 修改唤醒范围时不发送 `execution`
   （支持通知的 Host 省略时保持不变），不会覆盖其他设备对模型的修改。列表对未知的唤醒状态与跳过原因显示通用文本
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 3、4 节）。
+- `bot.conversation.list`（及 `open`、`reset` 返回的对话）带可选的 `channelKind` 与 `lastActivityAt`。Bot 标签页在 Bot 有外部对话时显示对话选择，
+  默认且唯一可输入的是内置对话；外部对话只读显示，轮次渲染与内置对话相同，不显示输入框、重置、取消与会话入口；访客按现有读取规则可查看（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 8 节）。
 - 带 `wake` 的轮次以通知列表代替用户消息展示，不显示围栏输入；同一 Workspace 的 Agent 与定时任务可打开。
   `silent` 轮次显示为一行说明；唤醒轮次在任何状态下都不显示恰为 `NO_REPLY` 的消息，执行中也不显示可能成为该标记的前缀。
   协议中通知 `kind` 接受未知值，旧 Host 的轮次与 Bot 视图解析不变

@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use crate::Shared;
 use crate::connection::rpc;
 
-use super::tools::creation;
+use super::tools::{creation, recall};
 
 /// Label namespace owned by Ait; scoped callers may write no label in it.
 const AIT_LABEL_PREFIX: &str = "ait.";
@@ -144,9 +144,8 @@ enum Rule {
 fn rule(tool: &str) -> Option<Rule> {
     Some(match tool {
         "list_profiles" | "list_providers" | "bot_memory_read" | "bot_memory_update"
-        | "workspace_overview" | "bot_tickets" | "bot_ticket_update" | "report_progress" => {
-            Rule::Open
-        }
+        | "workspace_overview" | "bot_tickets" | "bot_ticket_update" | "report_progress"
+        | "bot_read" | "ticket_read" => Rule::Open,
         "list_agents" | "list_pending_permissions" | "list_schedules" => Rule::Listing,
         "list_models" | "inspect_provider" => Rule::RootDirectory,
         "create_agent" => Rule::CreateAgent,
@@ -181,8 +180,10 @@ fn rule(tool: &str) -> Option<Rule> {
 /// # Errors
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
 /// labels, features or modes outside the cap (including a schedule's effective mode), and Bot
-/// heartbeats; a guided refusal for editing a schedule not created by a Bot or for running or
-/// resuming such a schedule without a stored mode; and propagates target lookup failures.
+/// heartbeats; a guided refusal for an Agent a caller restricted to an external conversation's
+/// work may not reach (ADR-280 §4), for
+/// editing a schedule not created by a Bot or for running or resuming such a schedule without a
+/// stored mode; and propagates target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
@@ -205,7 +206,7 @@ pub(super) async fn confine(
                 .map(drop)
         }
         rule @ (Rule::Agent | Rule::AgentMode | Rule::UpdateAgent) => {
-            let agent = creation::require_success(state, &arguments["agentId"]).await?;
+            let agent = reachable(state, scope, &arguments["agentId"], context).await?;
             let id = text(&agent["id"])?;
             retarget(
                 scope,
@@ -262,6 +263,34 @@ pub(super) async fn confine(
         }
     };
     Ok(confined?)
+}
+
+/// Resolve Agent target `id` for `scope`'s caller and require that its sight reaches it
+/// (ADR-280 §4): a caller whose work came from an external conversation only the Agents of
+/// that conversation's tasks, one whose work came from the owner's conversation or from none
+/// every Agent the Workspace scope allows. `context` is a subtree caller's own Agent record.
+///
+/// For a restricted caller an id that names no Agent is refused like an Agent of someone
+/// else, so the refusal does not confirm that a title or prefix exists.
+/// # Errors
+/// Returns the unreachable-Agent refusal, and propagates lookup and Bot failures.
+async fn reachable(
+    state: &Shared,
+    scope: &Scope,
+    id: &Value,
+    context: Option<&Value>,
+) -> Result<Value, Failure> {
+    let sight = recall::sight(state, scope, context).await?;
+    let refused = Failure::Refused(recall::UNREACHABLE_AGENT);
+    let agent = match creation::require_success(state, id).await {
+        Err(ErrorCode::InvalidMessage) if recall::external(sight.as_ref()) => return Err(refused),
+        other => other?,
+    };
+    if recall::sees_agent(sight.as_ref(), &agent) {
+        Ok(agent)
+    } else {
+        Err(refused)
+    }
 }
 
 /// Remove out-of-scope entries from list results that cannot be filtered at the source.

@@ -297,18 +297,18 @@ impl State {
         };
         let batch = &sequences[..sequences.len().min(WAKE_BATCH)];
         let log = self.notifications.get(&bot).ok_or(ErrorCode::BotIo)?;
-        let notifications: Vec<Notification> = log
+        let entries: Vec<(u64, &Notification)> = log
             .entries
             .iter()
             .filter(|entry| batch.contains(&entry.sequence))
-            .map(|entry| entry.notification.clone())
+            .map(|entry| (entry.sequence, &entry.notification))
             .collect();
-        let mut turn = super::queued_turn(
-            &conversation,
-            String::new(),
-            crate::instructions::wake_input(&notifications),
-            now,
-        );
+        let input = crate::instructions::wake_input(&entries);
+        let notifications: Vec<Notification> = entries
+            .into_iter()
+            .map(|(_, notification)| notification.clone())
+            .collect();
+        let mut turn = super::queued_turn(&conversation, String::new(), input, now);
         let id = turn.id;
         turn.message_id = format!("notification:{id}");
         turn.wake = Some(Wake { notifications });

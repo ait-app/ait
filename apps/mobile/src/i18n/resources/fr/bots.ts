@@ -52,6 +52,11 @@ export const bots = {
   message: "Message",
   cancel: "Annuler le tour",
   emptyChat: "Envoyez un message pour démarrer une conversation.",
+  conversation: "Conversation",
+  conversationOwner: "Ait (vous)",
+  conversationOtherChannel: "Autre canal",
+  conversationReadOnly:
+    "Lecture seule : cette conversation a lieu sur {{channel}}. Ici, seule votre conversation Ait accepte des messages.",
   session: "Session du Bot",
   reset: "Nouvelle conversation",
   resetConfirm:

@@ -16,6 +16,7 @@
 - A provider that exits right after its last frame no longer loses that frame: the frame is delivered and the closed stream is reported as closed instead of as a protocol error.
 - Resuming an ACP session that answers with another session id is rejected instead of addressing a session the agent does not have.
 - Reading the DeepSeek Harness environment skips a variable that is not valid Unicode instead of aborting the session, and its summary commands now end with the client's deadline instead of waiting for a wedged native process.
+- Test feature: the Workspace Bot can look up its own records by id instead of guessing: a task's full request and report history, an earlier turn of a conversation, a notification's full text, the agent behind a task, and in your Ait conversation what happened in its other chats, such as a task handed over in Telegram. Long text in the Bot's overview and wake-ups is cut short with a pointer to the whole of it. Each external chat can read only itself and the tasks it started, and can see, direct or stop only the agents of those tasks, as can the agents it starts, so one person's conversation and results never reach another's chat; the Workspace memory, schedules, terminals and scripts stay shared by all chats. Agents working on a task can read that task, including what the other agents on it reported. The Bot tab can show the Bot's conversations in other channels read-only, to the owner and to guests (guests could already read them through the Host API). The Host daemon must be upgraded.
 
 ## 0.2.12 - 2026-11-14
 

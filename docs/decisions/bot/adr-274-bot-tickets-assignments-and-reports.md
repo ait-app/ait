@@ -397,7 +397,8 @@ T 未关闭（否则 `BotConflict`）。不要求 A 在指派中：指派只是�
 
   `thisConversation` 表示工单来自调用的对话；`agents` 的状态从概览已读的 Agent 目录（作用域内最近更新的 200 个未归档 Agent）合并，
   目录读完整而找不到时为 `"archived"`，读不完整时为 `null`（未知）；`latestReport.text` 截到 512 字节，没有汇报时为 `null`。
-  计入 24 KiB 预算：超限时与 Agent 的 `lastMessage`、通知的 `summary` 一起先去掉 `latestReport.text`，再参与最长列表优先的截断，并置 `truncated`。
+  计入 24 KiB 预算：超限时与通知的 `summary` 一起先去掉 `latestReport.text`，再参与最长列表优先的截断，并置 `truncated`
+  （ADR-280 第 7 节改为换成长度与读取指针）。概览的 Agent 条目不带结果文本：Agent 目录没有它，Agent 的结果用 `get_agent_activity` 读取。
 
 ### 11. 生命周期
 

@@ -3,7 +3,7 @@ use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{State, project_conversation};
+use super::State;
 use crate::channels::Incoming;
 use crate::protocol::{ConversationRequest, History, MemoryUpdate, Send, WorkspaceRequest};
 
@@ -36,7 +36,7 @@ impl State {
             reply_to: None,
         };
         let conversation = self.route(&incoming)?;
-        Ok(json!({"conversation":project_conversation(&conversation)}))
+        Ok(json!({"conversation":self.project_conversation(&conversation)}))
     }
     pub(crate) fn route(&mut self, incoming: &Incoming) -> Result<Conversation, ErrorCode> {
         let channel = self
@@ -202,7 +202,7 @@ impl State {
             self.progress(id, TurnStatus::Cancelled, None, None)?;
         }
         self.renew(&mut conversation)?;
-        Ok(json!({"conversation":project_conversation(&conversation)}))
+        Ok(json!({"conversation":self.project_conversation(&conversation)}))
     }
     /// Move a running turn's conversation to a new native session and generation, carrying the
     /// running turn and queued input along; used when the old session cannot reach the Bot's
