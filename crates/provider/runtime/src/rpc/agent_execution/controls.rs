@@ -103,6 +103,7 @@ impl ExecutionState {
     pub(super) async fn presets(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
         let provider = params["provider"]
             .as_str()
+            .filter(|provider| crate::service::presets::valid_provider(provider))
             .ok_or(ErrorCode::InvalidMessage)?;
         self.manager
             .presets(method, provider, params)

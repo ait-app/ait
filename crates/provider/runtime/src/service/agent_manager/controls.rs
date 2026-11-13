@@ -93,6 +93,20 @@ impl AgentManager {
                 snapshot["availableModes"] = controls["availableModes"].clone();
                 snapshot["features"] = controls["features"].clone();
             }
+            // The unified preset editor owns the non-native stores, so a provider without a
+            // native `modelPreset` gains one here and a provider with one keeps it untouched.
+            if let (Some(presets), Some(features)) =
+                (self.presets.as_ref(), snapshot["features"].as_array_mut())
+            {
+                let mut merged = std::mem::take(features);
+                presets.apply(
+                    &record.provider,
+                    client.owns_native_presets(),
+                    &mut merged,
+                    &record.config.clone().unwrap_or_default(),
+                );
+                *features = merged;
+            }
             if let (Some(target), Some(flags)) = (
                 snapshot["capabilities"].as_object_mut(),
                 settings["capabilities"].as_object(),
