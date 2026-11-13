@@ -66,3 +66,7 @@ Provider 名称或各自的任务格式，新 Provider 就需要重复修改客�
 Provider 宣称支持任务推断已完成适配。任务修改仍由模型使用原生工具完成，卡片只读。
 
 现行支持范围见 [Provider 规格](../../architecture/provider.md#原生-todo)。
+
+原生阶段任务的界面示例来自 Tai 真实任务：
+[规划](../../assets/todo/tai-planning.png)、[执行中](../../assets/todo/tai-execution.png)、
+[全部完成](../../assets/todo/tai-completed.png)、[测试与验收阶段](../../assets/todo/tai-verification.png)。
