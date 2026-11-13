@@ -72,7 +72,12 @@ impl Transport {
                     .take(MAX_FRAME as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                // Without a newline, only a short successful read proves EOF. Reaching the
+                // `take` limit may leave unread bytes and must remain a protocol failure.
+                let trailing = matches!(read, Ok(1..))
+                    && bytes.len() < MAX_FRAME
+                    && bytes.last() != Some(&b'\n');
+                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
                     let category = if matches!(read, Ok(0)) {
                         Category::Closed
                     } else {
@@ -89,7 +94,16 @@ impl Transport {
                         .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
                     break;
                 };
-                if message["jsonrpc"] != "2.0" || sender.send(message).await.is_err() {
+                if message["jsonrpc"] != "2.0" {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
+                    break;
+                }
+                if sender.send(message).await.is_err() {
+                    break;
+                }
+                if trailing {
+                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
                     break;
                 }
             }
@@ -344,3 +358,6 @@ pub fn response(message: &Value) -> Result<Value, AgentSessionError> {
     }
     Err(AgentSessionError::Failed)
 }
+
+#[cfg(all(test, unix))]
+mod tests;

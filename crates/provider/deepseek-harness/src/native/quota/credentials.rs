@@ -36,7 +36,9 @@ impl Context {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
-        let environment = std::env::vars()
+        // A non-Unicode environment entry is skipped instead of aborting the session open.
+        let environment = std::env::vars_os()
+            .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
             .map(|(key, value)| (key, SecretString::from(value)))
             .chain(
                 client

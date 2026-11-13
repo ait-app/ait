@@ -225,6 +225,21 @@ fn invalid_or_symlink_documents_are_rejected_without_replacing_current() {
 }
 
 #[test]
+fn a_document_beyond_the_read_limit_is_refused_instead_of_persisted() {
+    let directory = tempfile::tempdir().unwrap();
+    let config_store = store(&directory);
+    config_store.get().unwrap();
+    let oversized = "x".repeat(4 * 1024 * 1024 + 1);
+    assert!(matches!(
+        config_store.patch(&json!({"appendSystemPrompt": oversized})),
+        Err(DaemonConfigStoreError::Invalid)
+    ));
+    // The persisted configuration stays within the limit the read path enforces.
+    let reopened = store(&directory);
+    assert_eq!(reopened.get().unwrap()["appendSystemPrompt"], "");
+}
+
+#[test]
 fn concurrent_reload_never_installs_a_config_older_than_a_completed_patch() {
     let directory = tempfile::tempdir().unwrap();
     let store = store(&directory);

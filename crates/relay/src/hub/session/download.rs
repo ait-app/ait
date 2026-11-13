@@ -54,19 +54,17 @@ pub(super) async fn serve(session: &mut Session, request: &[u8]) -> Result<(), &
     let (complete_tx, complete_rx) = oneshot::channel();
     let inbound = &mut session.inbound;
     let reader = async {
-        let mut complete = Some(complete_tx);
-        loop {
-            match inbound.recv().await {
-                Some(Frame::Text(text))
-                    if std::str::from_utf8(&text).is_ok_and(download::completed) =>
-                {
-                    if let Some(complete) = complete.take() {
-                        let _ = complete.send(());
-                    }
-                }
-                Some(_) => return "invalid_message",
-                None => return "cancelled",
+        match inbound.recv().await {
+            Some(Frame::Text(text))
+                if std::str::from_utf8(&text).is_ok_and(download::completed) =>
+            {
+                let _ = complete_tx.send(());
+                // The writer now owns completion; an EOF after the acknowledgement cannot
+                // cancel it before it observes the notification in its next poll.
+                std::future::pending::<&'static str>().await
             }
+            Some(_) => "invalid_message",
+            None => "cancelled",
         }
     };
     let mut outlet = Outlet {
@@ -97,8 +95,8 @@ pub(super) async fn serve(session: &mut Session, request: &[u8]) -> Result<(), &
             .map_err(|_| "cancelled")
     };
     tokio::select! {
-        code = reader => Err(code),
         result = writer => result,
+        code = reader => Err(code),
     }
 }
 

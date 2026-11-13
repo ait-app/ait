@@ -120,7 +120,7 @@ sha256sum --check SHA256SUMS
 ## 构建与签名
 
 runner 执行 `npm ci` → `npm run build:ui-deps` → `expo prebuild --platform android --clean`
-→ `gradlew :app:bundleRelease`。使用 Java 17、Node 24、`APP_VARIANT=production` 和
+→ `gradlew :app:bundleRelease`。使用 Java 17、Node 26、`APP_VARIANT=production` 和
 `AIT_ANDROID_HERMES_O0=1`。AGP 的 `android.injected.signing.*` 属性将 release 签名覆盖为
 上传 keystore；构建结束始终清理临时 keystore。
 

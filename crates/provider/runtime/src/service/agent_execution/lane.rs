@@ -164,10 +164,19 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
         handle.block_on(async move {
             let started = Instant::now();
             state.observe_messages();
-            let _ = state.manager.reconcile().await;
-            let _ = state.manager.poll().await;
-            let _ = state.manager.dispatch_pending_inputs().await;
-            let _ = state.publish();
+            // A background drain never fails the lane, so its errors are logged instead of dropped.
+            if let Err(error) = state.manager.reconcile().await {
+                tracing::warn!(error = ?error, "Agent reconcile failed");
+            }
+            if let Err(error) = state.manager.poll().await {
+                tracing::warn!(error = ?error, "Agent poll failed");
+            }
+            if let Err(error) = state.manager.dispatch_pending_inputs().await {
+                tracing::warn!(error = ?error, "Queued Agent input dispatch failed");
+            }
+            if let Err(error) = state.publish() {
+                tracing::warn!(error = ?error, "Agent state publication failed");
+            }
             if state.manager.has_sessions() {
                 tracing::debug!(
                     elapsed_ms = started.elapsed().as_millis(),

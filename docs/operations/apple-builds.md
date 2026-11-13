@@ -112,7 +112,7 @@ npm run build:ios:ipa
 
 ## Xcode Cloud 依赖安装
 
-`apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 22 和 Ruby 3.4，并使用
+`apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 26 和 Ruby 3.4，并使用
 `apps/mobile/ios/Gemfile.lock` 固定 Bundler、CocoaPods 及其 Ruby 依赖版本。
 CocoaPods 当前固定为 1.16.2，与 `Podfile.lock` 的 `COCOAPODS` 字段一致。
 Cloud 使用冻结的 Ruby 依赖和 `bundle exec pod install --deployment`，不采用 runner

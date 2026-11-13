@@ -37,14 +37,14 @@ export APPLE_TEAM_ID="${APPLE_TEAM_ID:-SVS7GV79T9}"
 export EXTRA_PACKAGER_ARGS="${EXTRA_PACKAGER_ARGS:---max-workers 2}"
 unset AIT_WEB_PLATFORM
 
-echo "[Ait] Preparing Node.js 22 and Ruby 3.4"
-if ! brew list --versions node@22 >/dev/null 2>&1; then
-  brew install node@22
+echo "[Ait] Preparing Node.js 26 and Ruby 3.4"
+if ! brew list --versions node@26 >/dev/null 2>&1; then
+  brew install node@26
 fi
 if ! brew list --versions ruby@3.4 >/dev/null 2>&1; then
   brew install ruby@3.4
 fi
-export PATH="$(brew --prefix node@22)/bin:$(brew --prefix ruby@3.4)/bin:$(brew --prefix)/bin:$PATH"
+export PATH="$(brew --prefix node@26)/bin:$(brew --prefix ruby@3.4)/bin:$(brew --prefix)/bin:$PATH"
 
 # The runner's Homebrew CocoaPods version may differ from Podfile.lock.
 # Keep Ruby gems inside the checkout and invoke the locked bundle explicitly.

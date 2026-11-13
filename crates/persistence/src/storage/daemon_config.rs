@@ -172,6 +172,11 @@ fn write_atomic(path: &Path, value: &Value) -> Result<(), DaemonConfigStoreError
     let mut bytes =
         serde_json::to_vec_pretty(value).map_err(|_| DaemonConfigStoreError::Invalid)?;
     bytes.push(b'\n');
+    // The read path rejects a larger document, so a write beyond the limit is refused
+    // instead of leaving a configuration file that can no longer be loaded.
+    if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_CONFIG_BYTES) {
+        return Err(DaemonConfigStoreError::Invalid);
+    }
     crate::File::new(path)
         .write(&bytes)
         .map_err(|_| DaemonConfigStoreError::Io)

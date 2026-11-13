@@ -343,9 +343,12 @@ async fn serve(
             command=receiver.recv()=>match command {
                 Some(Command::Request(method,params,reply))=>{
                     if method=="schedule.run_once.request" {
-                        if !pending.is_empty() { let _ = reply.send(Err(Error::Storage)); continue; }
                         let id=only(&params,&["scheduleId"]).and_then(|()|params["scheduleId"].as_str().map(str::to_owned).ok_or(Error::Invalid));
-                        match id {Ok(id)=>launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,true,Some(reply))),Err(error)=>{let _=reply.send(Err(error));}}
+                        match id {
+                            Ok(id) if pending.iter().any(|finished: &Finished| finished.id == id) => { let _ = reply.send(Err(Error::Storage)); },
+                            Ok(id)=>launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,true,Some(reply))),
+                            Err(error)=>{let _=reply.send(Err(error));}
+                        }
                     } else {
                         accept_request(&mut engine, &runner, &mut validations, (method, params, reply));
                     }
@@ -356,7 +359,9 @@ async fn serve(
             Some(result)=jobs.join_next(),if !jobs.is_empty()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,runner.as_ref(),finished){pending.push(*finished);}},
             _=tick.tick()=>{
                 pending=pending.into_iter().filter_map(|finished|settle(&mut engine,runner.as_ref(),finished).err().map(|entry|*entry)).collect();
-                if pending.is_empty()&& let Ok(due)=engine.due(Utc::now()){for id in due {launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,false,None));}}
+                // A run that cannot be persisted holds back only its own schedule: `due`
+                // and `begin` already refuse a schedule with a running occurrence.
+                if let Ok(due)=engine.due(Utc::now()){for id in due {launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,false,None));}}
             }
         }
     }

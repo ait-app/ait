@@ -96,6 +96,17 @@ for line in sys.stdin:
             continue
         if prompt == "exit":
             sys.exit(1)
+        if prompt == "final-frame":
+            sys.stdout.write(json.dumps({"type":"result", "subtype":"success", "is_error":False,
+                "session_id":session, "result":"Final frame"}))
+            sys.exit(0)
+        if prompt.startswith("frame-at-limit:"):
+            limit = int(prompt.split(":", 1)[1])
+            frame = json.dumps({"type":"result", "subtype":"success", "is_error":False,
+                "session_id":session, "result":"Must be rejected"})
+            sys.stdout.write(frame.ljust(limit) + '\n')
+            sys.stdout.flush()
+            continue
         if prompt == "malformed":
             print('{broken', flush=True)
             continue

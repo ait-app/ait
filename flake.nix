@@ -35,7 +35,7 @@
               cargo-llvm-cov
               cargo-nextest
               rust-analyzer
-              nodejs_24
+              nodejs_26
               pnpm
               pkg-config
               cmake

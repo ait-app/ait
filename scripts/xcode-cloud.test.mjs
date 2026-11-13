@@ -70,7 +70,7 @@ test("Cloud bootstrap selects locked CocoaPods over a different host version", (
 
     const tools = {
       brew: 'case "$1" in --prefix) printf "%s\\n" "$FIXTURE_PREFIX" ;; esac',
-      node: 'printf "v22.0.0\\n"',
+      node: 'printf "v26.13.1\\n"',
       ruby: 'printf "ruby 3.4\\n"',
       gem: "exit 0",
       // Stop after tool setup, before changing dependencies or invoking Xcode.

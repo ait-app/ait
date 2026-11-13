@@ -73,7 +73,16 @@ pub(super) async fn open(
     };
     let result = transport.request(method, params).await?;
     let id = match handle {
-        Some(handle) => handle.session_id.clone(),
+        Some(handle) => {
+            // A resumed session must answer with the handle it was given, or the later
+            // requests would address a session the agent does not have.
+            if let Some(reported) = acp_config::text(&result, "sessionId").ok()
+                && reported != handle.session_id
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            handle.session_id.clone()
+        }
         None => acp_config::text(&result, "sessionId")?.to_owned(),
     };
     let mut session = Session {
