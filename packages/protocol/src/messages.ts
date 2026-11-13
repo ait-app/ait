@@ -116,11 +116,50 @@ const MutableDaemonProviderModelSchema = z
   })
   .passthrough();
 
+/** Where a provider's model presets live, and which operations its store supports. */
+export const ProviderPresetDescriptorSchema = z.object({
+  backend: z.enum(["native", "ait"]),
+  canCreate: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+  canRename: z.boolean(),
+  reason: z.string().optional(),
+});
+
+/** One preset as the unified editor shows it. */
+export const ProviderPresetSchema = z.object({
+  name: z.string().min(1).max(256),
+  model: z.string().min(1).max(256),
+  thinkingOptionId: z.string().max(256).optional(),
+  featureValues: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** List-only ownership from the same store read; missing metadata stays read-only. */
+export const ProviderPresetEntrySchema = ProviderPresetSchema.extend({
+  source: z.enum(["ait", "global", "project"]).optional(),
+  editable: z.boolean().optional(),
+});
+export type ProviderPresetEntry = z.infer<typeof ProviderPresetEntrySchema>;
+
+export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
+export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
+
+/** One Ait-managed preset for a provider without a native preset store. */
+const MutableDaemonProviderPresetSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    model: z.string().min(1).max(256),
+    thinkingOptionId: z.string().min(1).max(256).optional(),
+    featureValues: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
 const MutableDaemonProviderConfigSchema = z
   .object({
     paseoTools: ProviderPaseoToolsPolicySchema.optional(),
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
+    modelPresets: z.array(MutableDaemonProviderPresetSchema).max(64).optional(),
   })
   .passthrough();
 
@@ -1753,6 +1792,39 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+/** Preset requests share one shape: the provider, plus an optional working directory. */
+export const ProviderPresetsDescribeRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.describe.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsListRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.list.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsSaveRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.save.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  preset: ProviderPresetSchema,
+  /** Name of the record being edited, so renaming replaces it instead of adding another. */
+  original: z.string().min(1).max(256).optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsDeleteRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.delete.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  name: z.string().min(1).max(256),
+  requestId: z.string(),
+});
+
 export const ProviderUsageListRequestMessageSchema = z.object({
   type: z.literal("provider.usage.list.request"),
   agentId: z.string().optional(),
@@ -3180,6 +3252,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   GetProvidersSnapshotRequestMessageSchema,
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
+  ProviderPresetsDescribeRequestMessageSchema,
+  ProviderPresetsListRequestMessageSchema,
+  ProviderPresetsSaveRequestMessageSchema,
+  ProviderPresetsDeleteRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
   ProviderUsageLedgerRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
@@ -7021,6 +7097,18 @@ export type RefreshProvidersSnapshotRequestMessage = z.infer<
 >;
 export type ProviderDiagnosticRequestMessage = z.infer<
   typeof ProviderDiagnosticRequestMessageSchema
+>;
+export type ProviderPresetsDescribeRequestMessage = z.infer<
+  typeof ProviderPresetsDescribeRequestMessageSchema
+>;
+export type ProviderPresetsListRequestMessage = z.infer<
+  typeof ProviderPresetsListRequestMessageSchema
+>;
+export type ProviderPresetsSaveRequestMessage = z.infer<
+  typeof ProviderPresetsSaveRequestMessageSchema
+>;
+export type ProviderPresetsDeleteRequestMessage = z.infer<
+  typeof ProviderPresetsDeleteRequestMessageSchema
 >;
 export type ScheduleCreateRequest = z.infer<typeof ScheduleCreateRequestSchema>;
 export type ScheduleListRequest = z.infer<typeof ScheduleListRequestSchema>;
