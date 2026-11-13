@@ -317,3 +317,39 @@ fn concurrent_creates_all_survive_without_lost_updates() {
         "a lost update dropped a concurrently created preset"
     );
 }
+
+#[tokio::test]
+async fn role_assignments_survive_a_reopen_at_full_fidelity() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, store) = service(&root);
+    let cwd = root.path().to_str().unwrap();
+    let mut assigned = preset("director", "gpt-5");
+    assigned.thinking_option_id = Some("high".to_owned());
+    assigned.feature_values = std::collections::BTreeMap::from([
+        (
+            "modelRole.advisor".to_owned(),
+            serde_json::json!("gpt-5-mini"),
+        ),
+        ("modelRole.worker".to_owned(), serde_json::json!("gpt-5")),
+    ]);
+    service
+        .save("codex", cwd, None, &assigned, None)
+        .await
+        .unwrap();
+
+    // Reopening over the same file must return the whole configuration, not just the model:
+    // the role assignments are what the preset exists to carry.
+    let reopened = PresetService::new(store.clone());
+    let listed = reopened.list("codex", cwd, None).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].preset.model, "gpt-5");
+    assert_eq!(listed[0].preset.thinking_option_id.as_deref(), Some("high"));
+    assert_eq!(
+        listed[0].preset.feature_values.get("modelRole.advisor"),
+        Some(&serde_json::json!("gpt-5-mini"))
+    );
+    assert_eq!(
+        listed[0].preset.feature_values.get("modelRole.worker"),
+        Some(&serde_json::json!("gpt-5"))
+    );
+}
