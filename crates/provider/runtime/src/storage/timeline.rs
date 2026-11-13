@@ -344,6 +344,8 @@ impl Timeline {
         // The caller retains the database lock so concurrent commits cannot reorder events.
         let binding = subagents::binding(database, agent)?;
         for (seq, entry) in entries {
+            let projected = crate::timeline_projection::ait_input(&entry.item);
+            let item = projected.as_ref().unwrap_or(&entry.item);
             if let Some((parent, child)) = agent
                 .strip_prefix("subagent:")
                 .and_then(|scope| scope.split_once(':'))
@@ -353,13 +355,13 @@ impl Timeline {
                     "agent.provider_subagents.update",
                     &json!({
                     "kind":"timeline","parentAgentId":parent,"subagentId":child,"provider":provider,
-                    "item":entry.item,"timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
+                    "item":item,"timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
                 );
                 if binding.is_none() {
                     continue;
                 }
             }
-            let mut event = json!({"type":"timeline","provider":provider,"item":entry.item});
+            let mut event = json!({"type":"timeline","provider":provider,"item":item});
             if let Some(turn) = &entry.turn_id {
                 event["turnId"] = json!(turn);
             }

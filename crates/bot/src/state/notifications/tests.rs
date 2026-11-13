@@ -277,7 +277,7 @@ fn pending_notifications_coalesce_into_one_wake_turn_after_quiet() {
     assert_eq!(turn.message_id, format!("notification:{}", turn.id));
     assert!(
         turn.text
-            .starts_with("<ait-notifications>\n- agent_finished at ")
+            .starts_with("<ait-input kind=\"bot_wake\">\n- agent_finished at ")
     );
     assert!(
         turn.text

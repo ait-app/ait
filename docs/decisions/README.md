@@ -15,7 +15,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 - [ADR-274：Bot 工单、指派与汇报](bot/adr-274-bot-tickets-assignments-and-reports.md)
 - [ADR-272：国际版 Lark Channel 与区域隔离](bot/adr-272-lark-channel.md)
-- [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md) 修订）
+- [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-276](providers/adr-276-ait-input-envelope-and-origin.md) 修订）
 - [ADR-233：中心托管的 Workspace Bot Webhook Channel](bot/adr-233-webhook-channel-center-endpoints.md)
 - [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)
@@ -105,6 +105,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
 - [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）

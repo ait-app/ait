@@ -17,7 +17,7 @@ import {
   upsertUserMessage,
   upsertUserMessageAcrossStream,
 } from "./stream";
-import type { AgentProvider, ToolCallDetail } from "@ait/protocol/agent-types";
+import type { AgentProvider, ToolCallDetail, UserMessageOrigin } from "@ait/protocol/agent-types";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import { buildToolCallDisplayModel } from "@ait/protocol/tool-call-display";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
@@ -2449,5 +2449,71 @@ describe("notification timeline items", () => {
       { kind: "notification", level: "error", message: "Command blocked" },
     ]);
     expect(new Set(state.map((item) => item.id)).size).toBe(state.length);
+  });
+});
+
+describe("Ait-generated input origins", () => {
+  const scheduleOrigin: UserMessageOrigin = {
+    kind: "schedule",
+    scheduleId: "s1",
+    runId: "r1",
+    name: "nightly",
+  };
+
+  function originEvent(
+    origin: UserMessageOrigin = scheduleOrigin,
+    text = "Run the nightly report",
+  ): AgentStreamEventPayload {
+    return {
+      type: "timeline",
+      provider: "codex",
+      turnId: "turn",
+      item: { type: "user_message", messageId: "scheduled", text, origin },
+    };
+  }
+
+  it("carries the origin into live and replayed user messages", () => {
+    const live = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: originEvent(),
+      timestamp: new Date(1),
+    });
+    const replay = hydrateStreamState([{ event: originEvent(), timestamp: new Date(1) }]);
+    const expected = { text: "Run the nightly report", origin: scheduleOrigin };
+    expect(live.tail).toEqual([expect.objectContaining(expected)]);
+    expect(replay).toEqual([expect.objectContaining(expected)]);
+  });
+
+  it("replaces a cached raw envelope with the projected text and origin", () => {
+    const cached = createUserMessage({
+      messageId: "scheduled",
+      text: '<ait-input kind="schedule" schedule-id="s1" run-id="r1">\nRun the nightly report\n</ait-input>',
+      timestamp: new Date(1),
+    });
+    const applied = applyStreamEvent({
+      tail: [cached],
+      head: [],
+      event: originEvent(),
+      timestamp: new Date(2),
+    });
+    expect(applied.tail).toEqual([
+      expect.objectContaining({ text: "Run the nightly report", origin: scheduleOrigin }),
+    ]);
+  });
+
+  it("keeps an origin that names the bot's own inputs", () => {
+    const applied = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: originEvent({ kind: "bot_wake" }, "- agent_finished at t: done"),
+      timestamp: new Date(1),
+    });
+    expect(applied.tail).toEqual([
+      expect.objectContaining({
+        text: "- agent_finished at t: done",
+        origin: { kind: "bot_wake" },
+      }),
+    ]);
   });
 });

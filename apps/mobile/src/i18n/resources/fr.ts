@@ -774,6 +774,12 @@ export const fr: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "Planification « {{name}} » · exécution {{runId}}",
+      scheduleUnnamed: "Planification · exécution {{runId}}",
+      botWake: "Notifications Ait",
+      botInstructions: "Envoyé par Ait",
+    },
     diagram: {
       diagram: "Diagramme",
       zoomIn: "Zoomer",

@@ -136,6 +136,38 @@ fn committed_rows_and_epoch_survive_restart_and_replay_is_immutable() {
 }
 
 #[test]
+fn live_events_show_ait_inputs_by_origin_while_rows_keep_the_sent_text() {
+    let timeline = Timeline::memory().unwrap();
+    let (outbound, mut receiver) = model::outbound::Outbound::new();
+    let subscription = timeline.events().subscribe(
+        "sub".to_owned(),
+        std::collections::BTreeSet::from(["agent".to_owned()]),
+        outbound,
+    );
+    subscription.activate().unwrap();
+    let sent = domain::input_envelope::bot_wake("- agent_finished at t: done");
+
+    timeline
+        .append("agent", "codex", &[item("wake", &sent)])
+        .unwrap();
+
+    let frame = receiver.try_recv().unwrap();
+    let model::outbound::Frame::Text(text) = &frame.message else {
+        panic!("JSON event");
+    };
+    let event: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        event["params"]["event"]["item"],
+        json!({"type":"user_message","text":"- agent_finished at t: done",
+            "origin":{"kind":"bot_wake"}})
+    );
+    assert_eq!(
+        timeline.read("agent").unwrap().1[0].entry.item["text"],
+        sent
+    );
+}
+
+#[test]
 fn storage_errors_and_oversized_items_do_not_publish_uncommitted_rows() {
     let timeline = Timeline::memory().unwrap();
     let (outbound, mut receiver) = model::outbound::Outbound::new();

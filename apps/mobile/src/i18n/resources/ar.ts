@@ -784,6 +784,12 @@ export const ar: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "جدولة “{{name}}” · التشغيل {{runId}}",
+      scheduleUnnamed: "جدولة · التشغيل {{runId}}",
+      botWake: "إشعارات Ait",
+      botInstructions: "أُرسلت من Ait",
+    },
     diagram: {
       diagram: "مخطط",
       zoomIn: "تكبير",

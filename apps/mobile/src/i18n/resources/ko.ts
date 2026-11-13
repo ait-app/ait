@@ -739,6 +739,12 @@ export const ko: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "일정 “{{name}}” · 실행 {{runId}}",
+      scheduleUnnamed: "일정 · 실행 {{runId}}",
+      botWake: "Ait 알림",
+      botInstructions: "Ait에서 보냄",
+    },
     diagram: {
       diagram: "다이어그램",
       zoomIn: "확대",

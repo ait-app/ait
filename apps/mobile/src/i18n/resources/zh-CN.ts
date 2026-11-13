@@ -831,6 +831,12 @@ export const zhCN: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "定时任务“{{name}}” · 运行 {{runId}}",
+      scheduleUnnamed: "定时任务 · 运行 {{runId}}",
+      botWake: "Ait 通知",
+      botInstructions: "由 Ait 发送",
+    },
     diagram: {
       diagram: "图表",
       zoomIn: "放大",

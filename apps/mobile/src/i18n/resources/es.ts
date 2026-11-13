@@ -770,6 +770,12 @@ export const es: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "Tarea programada «{{name}}» · ejecución {{runId}}",
+      scheduleUnnamed: "Tarea programada · ejecución {{runId}}",
+      botWake: "Notificaciones de Ait",
+      botInstructions: "Enviado por Ait",
+    },
     diagram: {
       diagram: "Diagrama",
       zoomIn: "Acercar",

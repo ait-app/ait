@@ -82,7 +82,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   该轮次 `completed` 后才生效，以其他方式结束则丢弃；生效后关于该 Agent、目标为该对话且不晚于该时间的 `agent_*` 待唤醒条目记为
   `skipped/observed`。观察只在内存中保留，有界
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 14 节）。
-- 唤醒轮次带 `wake.notifications`，`messageId` 为 `notification:<turnId>`，无 `replyTo`，输入是 `<ait-notifications>` 围栏。
+- 唤醒轮次带 `wake.notifications`，`messageId` 为 `notification:<turnId>`，无 `replyTo`，输入是 `<ait-input kind="bot_wake">` 围栏；
+  Bot 指令前缀的围栏同样是 `<ait-input kind="bot_instructions">`，时间线投影拆出来源与用户正文
+  （[ADR-276](../decisions/providers/adr-276-ait-input-envelope-and-origin.md)）。
   先提交轮次再标记日志，启动时按仍排队的唤醒轮次携带的通知 id 补标记，因此重启不丢失也不重复唤醒。用户取消或 reset 的唤醒轮次不再重新唤醒；
   服务停止时被取消（或因此 `uncertain`）以及启动时发现仍在执行的唤醒轮次，其通知回到收件箱重试一次，被打断的轮次计入预算；
   两种情况都先保存改回 `pending` 的日志，再写入轮次的新状态，因此其间崩溃也只重试一次

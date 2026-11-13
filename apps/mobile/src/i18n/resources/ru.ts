@@ -793,6 +793,12 @@ export const ru: TranslationResources = {
     },
   },
   message: {
+    origin: {
+      scheduleNamed: "Расписание «{{name}}» · запуск {{runId}}",
+      scheduleUnnamed: "Расписание · запуск {{runId}}",
+      botWake: "Уведомления Ait",
+      botInstructions: "Отправлено Ait",
+    },
     diagram: {
       diagram: "Диаграмма",
       zoomIn: "Увеличить масштаб",
