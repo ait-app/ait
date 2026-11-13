@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
 use model::methods::InboundKind;
@@ -10,11 +10,38 @@ async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_erro
     let catalog = capabilities::implemented_methods()
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
+    let catalog_names = catalog.keys().copied().collect::<BTreeSet<_>>();
+    let installed_names = implemented
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
     let placeholders = catalog
         .into_iter()
-        .filter(|(method, _)| !implemented.iter().any(|ready| ready == method))
+        .filter(|(method, _)| !installed_names.contains(method))
         .collect::<Vec<_>>();
-    assert_eq!(placeholders.len(), 228);
+    let placeholder_names = placeholders
+        .iter()
+        .map(|(method, _)| *method)
+        .collect::<BTreeSet<_>>();
+    assert!(placeholder_names.is_disjoint(&installed_names));
+    assert_eq!(
+        catalog_names,
+        installed_names
+            .union(&placeholder_names)
+            .copied()
+            .collect::<BTreeSet<_>>()
+    );
+    for method in [
+        "agent.side_question.ask.request",
+        "agent.side_question.cancel.request",
+        "agent.side_question.history.request",
+        "agent.side_question.transfer.request",
+    ] {
+        assert!(
+            placeholders.contains(&(method, InboundKind::Request)),
+            "{method}"
+        );
+    }
     assert!(placeholders.contains(&("workspace.get.request", InboundKind::Request)));
     for batch in placeholders.chunks(64) {
         let mut socket = fixture.socket().await;
@@ -126,7 +153,7 @@ async fn removed_groups_are_not_negotiable_and_requests_are_unknown() {
         };
         [name.to_owned(), canonical]
     })
-    .collect::<std::collections::BTreeSet<_>>();
+    .collect::<BTreeSet<_>>();
     let mut socket = fixture.socket().await;
     let mut offer = hello();
     offer["capabilities"] = json!(names);
