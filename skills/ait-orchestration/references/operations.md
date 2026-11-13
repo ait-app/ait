@@ -9,14 +9,15 @@ not a replacement for the current catalog.
 
 | Profile value                              | `create_agent` argument                                    |
 | ------------------------------------------ | ---------------------------------------------------------- |
-| `provider` and discovered or saved `model` | `provider` as `provider/model`                             |
+| `provider` and discovered or saved `model` | Separate `provider` and `model` fields                     |
 | `modeId`                                   | `settings.modeId`                                          |
 | `thinkingOptionId`                         | `settings.thinkingOptionId`                                |
 | `featureValues`                            | `settings.features`                                        |
 | `notes`                                    | Selection guidance; put the actual task in `initialPrompt` |
 
 Omit absent optional settings. `update_agent` accepts metadata and runtime `settings`; its model
-field is `settings.model`, whereas creation selects the model in the `provider/model` pair.
+field is `settings.model`, whereas creation uses the top-level `model` field. Older servers without
+that field accept a combined `provider/model` value. Do not combine the two formats.
 Use `set_agent_mode` for a mode-only change. Settings apply to the next turn through Provider rules;
 they do not create an additional Agent.
 
@@ -71,6 +72,8 @@ An external caller supplies `workspaceId` and `provider`; a trusted Agent caller
 Resolve the user's timezone to an explicit IANA timezone when wall-clock timing matters; omission
 uses UTC. Verify cron, lifetime limits, and any requested initial run before creating it.
 
+Unlike `create_agent`, `create_schedule` still uses combined `provider/model` in `provider` and has no separate `model` field.
+
 Typical argument shapes, with values selected from the user's task and live discovery:
 
 ```json
@@ -92,6 +95,16 @@ Replace example IDs and provider/model values with actual results. Use `inspect_
 `schedule_logs` for status and runs. `run_schedule_once` adds a run without changing cron;
 pausing and resuming use their dedicated tools. `update_schedule` takes `id`: `cron` and `every`
 are alternatives, and `expiresIn` and `clearExpires: true` are alternatives.
+It also patches `provider` and a separate `model`: omission keeps the stored model when the Provider
+is unchanged. Switching Provider without a model clears the old model to use the new Provider default;
+a combined `provider/model` supplies one, a nonblank string replaces it, and `null` uses the Provider
+default; unlike `create_agent`, a combined `provider/model` plus a separate model is accepted when
+the models match after trimming, while a conflicting model or combined value plus `model: null` is rejected.
+Host callers switching Provider must explicitly supply `mode`; `mode: null` selects the native default.
+Bot callers use the new Provider default allowed by their permission cap when mode is omitted.
+Check the live `update_schedule` schema: if it lacks `model`, omit that field and use the legacy
+`provider/model` format to replace the model (use `inspect_schedule` to find the current provider).
+Clearing the model with `model: null` requires a server whose schema supports it.
 
 Use `create_heartbeat` only to send recurring prompts into the current, trusted calling Agent.
 Ait heartbeats persist across daemon restarts and need explicit `delete_heartbeat` cleanup.

@@ -45,6 +45,78 @@ describe("Paseo tool-call detail presentation", () => {
     },
   );
 
+  it("places the top-level model after provider in create_agent details", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "mcp__ait__create_agent",
+        {
+          labels: { task: "review" },
+          model: "openai/gpt-5.4",
+          settings: { modeId: "read-only" },
+          workspaceId: "wks_123",
+          provider: "codex",
+          title: "Review",
+          initialPrompt: "Review the changes.",
+        },
+        undefined,
+      ),
+    ).toEqual([
+      { kind: "prose", title: "Prompt", text: "Review the changes." },
+      {
+        kind: "fields",
+        title: "Details",
+        fields: [
+          { label: "Title", value: "Review" },
+          { label: "Provider", value: "codex" },
+          { label: "Model", value: "openai/gpt-5.4" },
+          { label: "Workspace", value: "wks_123" },
+          { label: "Settings", value: "Mode: read-only" },
+          { label: "Labels", value: "Task: review" },
+        ],
+      },
+    ]);
+  });
+
+  it("places the schedule model between provider and cwd", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "mcp__ait__update_schedule",
+        { model: "namespace/model", cwd: "/repo", provider: "codex", id: "sch_123" },
+        undefined,
+      ),
+    ).toEqual([
+      {
+        kind: "fields",
+        title: "Details",
+        fields: [
+          { label: "ID", value: "sch_123" },
+          { label: "Provider", value: "codex" },
+          { label: "Model", value: "namespace/model" },
+          { label: "Working directory", value: "/repo" },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps the update_agent model nested in settings", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "mcp__ait__update_agent",
+        { agentId: "agt_123", settings: { model: "openai/gpt-5.4" } },
+        undefined,
+      ),
+    ).toEqual([
+      {
+        kind: "fields",
+        title: "Details",
+        fields: [
+          { label: "Agent", value: "agt_123" },
+          { label: "Settings", value: "Model: openai/gpt-5.4" },
+        ],
+      },
+    ]);
+  });
+
   it("formats schedule cadence and nested settings without JSON syntax", () => {
     const sections = buildPaseoToolDetailSections(
       "mcp__ait__create_schedule",

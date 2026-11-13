@@ -490,3 +490,22 @@ fn scoped_callers_cannot_write_any_ait_label() {
     let mut create = json!({"provider":"codex/gpt","labels":{"team":"ait"}});
     rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut create).unwrap();
 }
+
+#[test]
+fn separate_model_selection_obeys_the_same_mode_cap() {
+    let scope = capped_scope(bot());
+    let mut separate = json!({"provider":"codex","model":"namespace/model"});
+    let mut combined = json!({"provider":"codex/namespace/model"});
+    rewrite_create_agent(&scope, None, origin(), &mut separate).unwrap();
+    rewrite_create_agent(&scope, None, origin(), &mut combined).unwrap();
+    assert_eq!(separate["settings"], combined["settings"]);
+    for mut arguments in [
+        json!({"provider":"claude","model":"namespace/model"}),
+        json!({"provider":"codex","model":"namespace/model","settings":{"modeId":"full-access"}}),
+    ] {
+        assert_eq!(
+            rewrite_create_agent(&scope, None, origin(), &mut arguments),
+            Err(ErrorCode::Forbidden)
+        );
+    }
+}

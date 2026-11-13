@@ -296,6 +296,147 @@ fn update_inherits_cron_zone_and_clears_nullable_fields() {
     assert_eq!(updated["schedule"]["name"], Value::Null);
 }
 #[test]
+fn native_schedule_rejects_combined_provider_without_saving() {
+    let (mut engine, store) = fixture();
+    let mut params = input();
+    params["target"] = json!({"type":"new-agent","config":{"provider":"codex/gpt-5"}});
+    assert!(matches!(
+        engine.request("schedule.create.request", params.clone(), now()),
+        Err(Error::Invalid)
+    ));
+    assert!(store.load().unwrap().is_empty());
+
+    params["target"]["config"] = json!({"provider":"codex","model":"openai/gpt-5"});
+    let created = engine
+        .request("schedule.create.request", params, now())
+        .unwrap();
+    let id = &created["schedule"]["id"];
+    let before = serde_json::to_value(store.load().unwrap()).unwrap();
+    assert!(matches!(
+        engine.request(
+            "schedule.update.request",
+            json!({"scheduleId":id,"newAgentConfig":{"provider":"codex/gpt-5"}}),
+            now(),
+        ),
+        Err(Error::Invalid)
+    ));
+    assert_eq!(serde_json::to_value(store.load().unwrap()).unwrap(), before);
+    let inspected = engine
+        .request("schedule.inspect.request", json!({"scheduleId":id}), now())
+        .unwrap();
+    assert_eq!(
+        inspected["schedule"]["target"],
+        created["schedule"]["target"]
+    );
+}
+
+#[test]
+fn provider_patch_resets_omitted_provider_settings_only_when_provider_changes() {
+    for (patch, provider, model, mode, thinking) in [
+        (
+            json!({"cwd":"/repo"}),
+            "codex",
+            Some("original-model"),
+            Some("auto"),
+            Some("minimal"),
+        ),
+        (
+            json!({"provider":" codex "}),
+            "codex",
+            Some("original-model"),
+            Some("auto"),
+            Some("minimal"),
+        ),
+        (
+            json!({"provider":"claude","modeId":null}),
+            "claude",
+            None,
+            None,
+            None,
+        ),
+        (
+            json!({"provider":"claude","modeId":null,"model":"replacement"}),
+            "claude",
+            Some("replacement"),
+            None,
+            None,
+        ),
+        (
+            json!({"provider":"claude","modeId":null,"model":null}),
+            "claude",
+            None,
+            None,
+            None,
+        ),
+        (
+            json!({"provider":"claude","modeId":"plan"}),
+            "claude",
+            None,
+            Some("plan"),
+            None,
+        ),
+        (
+            json!({"provider":"claude","modeId":null}),
+            "claude",
+            None,
+            None,
+            None,
+        ),
+        (
+            json!({"provider":"claude","modeId":null,"thinkingOptionId":"off"}),
+            "claude",
+            None,
+            None,
+            Some("off"),
+        ),
+        (
+            json!({"provider":"claude","modeId":null,"thinkingOptionId":null}),
+            "claude",
+            None,
+            None,
+            None,
+        ),
+    ] {
+        let (mut engine, _) = fixture();
+        let mut params = input();
+        params["target"] = json!({"type":"new-agent","config":{
+            "provider":"codex","model":"original-model","modeId":"auto",
+            "thinkingOptionId":"minimal"
+        }});
+        let created = engine
+            .request("schedule.create.request", params, now())
+            .unwrap();
+        let id = &created["schedule"]["id"];
+
+        let updated = engine
+            .request(
+                "schedule.update.request",
+                json!({"scheduleId":id,"newAgentConfig":patch}),
+                now(),
+            )
+            .unwrap();
+
+        let config = &updated["schedule"]["target"]["config"];
+        assert_eq!(config["provider"], provider, "{patch}");
+        assert_eq!(
+            config.get("model").and_then(Value::as_str),
+            model,
+            "{patch}"
+        );
+        assert_eq!(
+            config.get("modeId").and_then(Value::as_str),
+            mode,
+            "{patch}"
+        );
+        assert_eq!(
+            config.get("thinkingOptionId").and_then(Value::as_str),
+            thinking,
+            "{patch}"
+        );
+    }
+}
+
+#[test]
 fn invalid_inputs_never_write() {
     let (mut engine, _) = fixture();
     for patch in [
@@ -329,3 +470,249 @@ mod mutation;
 mod recovery;
 
 mod workspace;
+
+#[test]
+fn model_patch_resets_omitted_thinking_only_when_model_changes() {
+    for (patch, model, thinking) in [
+        (json!({"model":"original"}), Some("original"), Some("max")),
+        (json!({"model":"replacement"}), Some("replacement"), None),
+        (json!({"model":null}), None, None),
+        (json!({"model":""}), None, None),
+        (
+            json!({"model":"replacement","thinkingOptionId":"high"}),
+            Some("replacement"),
+            Some("high"),
+        ),
+        (
+            json!({"model":"replacement","thinkingOptionId":null}),
+            Some("replacement"),
+            None,
+        ),
+    ] {
+        let (mut engine, _) = fixture();
+        let mut params = input();
+        params["target"] = json!({"type":"new-agent","config":{
+            "provider":"omp","model":"original","modeId":"auto","thinkingOptionId":"max"
+        }});
+        let created = engine
+            .request("schedule.create.request", params, now())
+            .unwrap();
+        let updated = engine
+            .request(
+                "schedule.update.request",
+                json!({"scheduleId":created["schedule"]["id"],"newAgentConfig":patch}),
+                now(),
+            )
+            .unwrap();
+        let config = &updated["schedule"]["target"]["config"];
+        assert_eq!(config["provider"], "omp", "{patch}");
+        assert_eq!(config["modeId"], "auto", "{patch}");
+        assert_eq!(
+            config.get("model").and_then(Value::as_str),
+            model,
+            "{patch}"
+        );
+        assert_eq!(
+            config.get("thinkingOptionId").and_then(Value::as_str),
+            thinking,
+            "{patch}"
+        );
+    }
+}
+
+#[test]
+fn loaded_legacy_provider_allows_updates_without_resupplying_provider() {
+    for (patch, provider, model, thinking) in [
+        (
+            json!({"prompt":"updated"}),
+            "codex/gpt-5",
+            None,
+            Some("high"),
+        ),
+        (
+            json!({"cadence":{"type":"cron","expression":"0 10 * * *"}}),
+            "codex/gpt-5",
+            None,
+            Some("high"),
+        ),
+        (
+            json!({"newAgentConfig":{"model":"replacement"}}),
+            "codex",
+            Some("replacement"),
+            None,
+        ),
+        (
+            json!({"newAgentConfig":{"model":null}}),
+            "codex",
+            None,
+            None,
+        ),
+        (
+            json!({"newAgentConfig":{"model":"gpt-5"}}),
+            "codex",
+            Some("gpt-5"),
+            Some("high"),
+        ),
+        (
+            json!({"newAgentConfig":{"cwd":"/tmp"}}),
+            "codex",
+            Some("gpt-5"),
+            Some("high"),
+        ),
+        (
+            json!({"newAgentConfig":{"provider":"codex"}}),
+            "codex",
+            Some("gpt-5"),
+            Some("high"),
+        ),
+    ] {
+        let (mut engine, store) = fixture();
+        let id = create(&mut engine);
+        store.0.lock().unwrap().0[0].target = Target::NewAgent {
+            config: json!({"provider":"codex/gpt-5","thinkingOptionId":"high"}),
+        };
+        let mut engine = Engine::open(Box::new(store.clone()), now()).unwrap();
+        let mut params = patch.clone();
+        params["scheduleId"] = json!(id);
+        let updated = engine
+            .request("schedule.update.request", params, now())
+            .unwrap();
+        let schedule = &updated["schedule"];
+        if let Some(config) = patch.get("newAgentConfig") {
+            for (key, value) in config.as_object().unwrap() {
+                assert_eq!(&schedule["target"]["config"][key], value);
+            }
+        } else {
+            for (key, value) in patch.as_object().unwrap() {
+                assert_eq!(&schedule[key], value);
+            }
+        }
+        let config = &schedule["target"]["config"];
+        assert_eq!(config["provider"], provider, "{patch}");
+        assert_eq!(
+            config.get("model").and_then(Value::as_str),
+            model,
+            "{patch}"
+        );
+        assert_eq!(
+            config.get("thinkingOptionId").and_then(Value::as_str),
+            thinking,
+            "{patch}"
+        );
+        assert_eq!(
+            serde_json::to_value(&store.load().unwrap()[0]).unwrap(),
+            *schedule
+        );
+    }
+}
+
+#[test]
+fn clearing_absent_model_preserves_thinking_option() {
+    for model in [Value::Null, json!(""), json!("  ")] {
+        let (mut engine, store) = fixture();
+        let mut params = input();
+        params["target"] = json!({"type":"new-agent","config":{
+            "provider":"omp","modeId":"auto","thinkingOptionId":"max"
+        }});
+        let created = engine
+            .request("schedule.create.request", params, now())
+            .unwrap();
+        let updated = engine
+            .request(
+                "schedule.update.request",
+                json!({"scheduleId":created["schedule"]["id"],"newAgentConfig":{"model":model}}),
+                now(),
+            )
+            .unwrap();
+        assert_eq!(updated["schedule"]["target"], created["schedule"]["target"]);
+        assert_eq!(
+            serde_json::to_value(&store.load().unwrap()[0]).unwrap(),
+            updated["schedule"]
+        );
+    }
+}
+
+#[test]
+fn provider_switch_requires_explicit_mode_without_saving() {
+    let (mut engine, store) = fixture();
+    let mut params = input();
+    params["target"] = json!({"type":"new-agent","config":{
+        "provider":"codex","model":"gpt-5","modeId":"auto-review"
+    }});
+    let created = engine
+        .request("schedule.create.request", params, now())
+        .unwrap();
+    let before = serde_json::to_value(store.load().unwrap()).unwrap();
+    assert!(
+        engine
+            .request(
+                "schedule.update.request",
+                json!({
+                    "scheduleId":created["schedule"]["id"],"newAgentConfig":{"provider":"omp"}
+                }),
+                now()
+            )
+            .is_err()
+    );
+    assert_eq!(serde_json::to_value(store.load().unwrap()).unwrap(), before);
+}
+
+#[test]
+fn repairing_legacy_provider_preserves_embedded_model() {
+    let mut target = Target::NewAgent {
+        config: json!({
+            "provider":"codex/openai/gpt-5","modeId":"auto-review"
+        }),
+    };
+    patch_new_agent_config(&mut target, &json!({"provider":" codex "})).unwrap();
+    let Target::NewAgent { config } = target else {
+        panic!("new-agent target")
+    };
+    assert_eq!(
+        config,
+        json!({"provider":"codex","model":"openai/gpt-5","modeId":"auto-review"})
+    );
+}
+
+#[test]
+fn legacy_config_patch_preserves_existing_separate_model() {
+    let mut target = Target::NewAgent {
+        config: json!({
+            "provider":"codex/openai/gpt-5","model":"replacement","thinkingOptionId":"high"
+        }),
+    };
+    patch_new_agent_config(&mut target, &json!({"cwd":"/tmp"})).unwrap();
+    let Target::NewAgent { config } = target else {
+        panic!("new-agent target")
+    };
+    assert_eq!(
+        config,
+        json!({
+            "provider":"codex","model":"replacement","thinkingOptionId":"high","cwd":"/tmp"
+        })
+    );
+}
+
+#[test]
+fn replacing_target_with_legacy_provider_is_rejected_without_saving() {
+    let (mut engine, store) = fixture();
+    let id = create(&mut engine);
+    store.0.lock().unwrap().0[0].target = Target::NewAgent {
+        config: json!({"provider":"codex/gpt-5"}),
+    };
+    let mut engine = Engine::open(Box::new(store.clone()), now()).unwrap();
+    let before = store.load().unwrap();
+    assert!(
+        engine
+            .request(
+                "schedule.update.request",
+                json!({"scheduleId":id,"target":before[0].target}),
+                now(),
+            )
+            .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(store.load().unwrap()).unwrap(),
+        serde_json::to_value(before).unwrap()
+    );
+}

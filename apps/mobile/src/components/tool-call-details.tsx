@@ -14,7 +14,7 @@ import type { ToolCallDetail } from "@ait/protocol/agent-types";
 import {
   buildPaseoToolDetailSections,
   type PaseoToolDetailSection,
-} from "@ait/protocol/paseo-tool-call-detail";
+} from "@ait/protocol/paseo-tool-presentation/detail-sections";
 import { buildLineDiff, parseUnifiedDiff, type DiffLine } from "@/utils/tool-call-parsers";
 import { highlightDiffLines } from "@/utils/diff-highlight";
 import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";

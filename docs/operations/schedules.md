@@ -90,3 +90,19 @@ Workspace，保存后获得固定归属；不会根据目录自动分配 Workspa
 更新接口支持 `target`、`startAt`，以及旧版 `newAgentConfig` 补丁，但 `target` 和
 `newAgentConfig` 不可同时提供。已绑定的 `workspaceId` 不能修改。详细边界与持久化版本
 兼容性见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。
+
+`schedule.update.request` 的 `newAgentConfig` 补丁若将 `provider` 改为与已存值不同的值，
+必须显式提供 `modeId`，否则拒绝保存；`modeId: null` 显式选择原生默认模式。
+未在本次补丁中提供的 `model` 和 `thinkingOptionId` 清除，使用新 Provider 的默认值。
+例如，已存配置为 `{"provider":"codex","model":"gpt-5","modeId":"read-only"}` 时，
+补丁 `{"provider":"claude"}` 被拒绝；`{"provider":"claude","modeId":"plan"}` 清除旧模型并选择 `plan` 模式。Provider 和模型不变时，省略的字段保留；
+显式提供的字段按补丁更新，其中上述三个字段的 `null`、空串或纯空白值表示清除。
+切换 Provider 时的清除规则适用于原生接口和 MCP，见 [ADR-250](../decisions/daemon/adr-250-mcp-agent-model-selection.md)。
+
+模型实际改变时，若补丁未提供 `thinkingOptionId`，也会清除旧 thinking 选项；显式提供则按补丁更新。
+未存模型时发送 `model: null` 不改变有效模型，因此保留 thinking 选项。此规则适用于原生接口和 MCP。
+历史记录中的合并 Provider 值仍可加载；仅修改提示词、周期等配置外字段时保持原值。
+任何 `newAgentConfig` 补丁都会先将历史合并值拆为裸 Provider 和独立模型，即使未提供 `provider`；
+已有独立模型优先于内嵌模型，再应用本次显式模型补丁。将 `codex/gpt-5` 规范化为 `codex` 和 `gpt-5`
+不算 Provider 切换；模型补丁按规范化后的模型判断是否清除 thinking 选项，`model: null` 会清除内嵌模型。
+新建、整体替换 `target` 或显式更新 Provider 时必须使用裸 ID；Provider 补丁先去除首尾空白。

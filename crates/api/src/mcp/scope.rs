@@ -374,11 +374,13 @@ fn cap_target(permissions: &BotPermissions, agent: &Value, mode: &Value) -> Resu
 }
 
 /// Require `create_agent`'s provider and `settings.modeId` to be within `permissions`' cap,
-/// selecting the provider's default mode when none is requested.
+/// selecting the provider's default mode when none is requested. Request validation has already
+/// checked the selection; resolving it again here uses the same provider interpretation.
 /// # Errors
-/// Returns `InvalidMessage` for a malformed provider and `Forbidden` outside the cap.
+/// Returns `Forbidden` outside the cap; defensively propagates `InvalidMessage` if called with
+/// an unvalidated, malformed selection.
 fn cap_mode(permissions: &BotPermissions, arguments: &mut Value) -> Result<(), ErrorCode> {
-    let (provider, _) = creation::provider_model(&arguments["provider"], true)?;
+    let (provider, _) = creation::agent_selection(arguments)?;
     let requested = arguments
         .pointer("/settings/modeId")
         .and_then(Value::as_str);
@@ -407,7 +409,7 @@ fn rewrite_create_schedule(
             .cloned()
             .ok_or(ErrorCode::InvalidMessage)?;
     }
-    let (provider, _) = creation::provider_model(&arguments["provider"], false)?;
+    let (provider, _) = creation::provider_model(&arguments["provider"])?;
     let mode = scope
         .grant
         .permissions
@@ -475,7 +477,7 @@ fn cap_schedule_update(
     arguments: &mut Value,
 ) -> Result<bool, ErrorCode> {
     let provider = match arguments.get("provider") {
-        Some(patch) => creation::provider_model(patch, false)?.0.to_owned(),
+        Some(patch) => creation::provider_model(patch)?.0.to_owned(),
         None if arguments.get("mode").is_some() => text(&schedule["target"]["config"]["provider"])?,
         None => return Ok(false),
     };

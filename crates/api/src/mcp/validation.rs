@@ -2,6 +2,22 @@
 
 use serde_json::Value;
 
+/// Validate `arguments` against the schema for `tool` and `scope`, including provider/model
+/// selection for agent creation, schedule model patches and a bare provider for model discovery.
+/// # Errors
+/// Returns corrective guidance for malformed selections or invalid schema arguments.
+pub(super) fn arguments(
+    tool: &super::catalog::Tool,
+    scope: Option<&super::Scope>,
+    arguments: &Value,
+) -> Result<(), &'static str> {
+    super::tools::validate_selection(tool.name.as_str(), arguments)?;
+    if !matches(&tool.schema(scope), arguments) {
+        return Err("Arguments do not match the tool input schema");
+    }
+    Ok(())
+}
+
 /// Return whether `value` satisfies the static catalog's supported `schema` constraints.
 pub(super) fn matches(schema: &Value, value: &Value) -> bool {
     if schema

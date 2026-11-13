@@ -206,9 +206,12 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
             .call(&credential, None, "create_agent", escalated)
             .await,
     );
+    let mut separate = create("Grandchild");
+    separate["provider"] = json!("codex");
+    separate["model"] = json!("offline-model");
     let grandchild = id(
         &scoped
-            .call(&credential, None, "create_agent", create("Grandchild"))
+            .call(&credential, None, "create_agent", separate)
             .await,
         "/agent/id",
     );
@@ -261,6 +264,35 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     let labels = scoped.labels(&grandchild).await;
     assert_eq!(labels[BOT_SCOPE_LABEL], scoped.workspace);
     assert_eq!(labels[BOT_CONVERSATION_LABEL], conversation, "{labels}");
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn agent_creation_preserves_provider_and_namespaced_model_through_rpc() {
+    let scoped = Scoped::start().await;
+    scoped.setup(codex_modes(&["auto"])).await;
+    let bot = scoped.bot_credential();
+    for selection in [
+        json!({"provider":"codex","model":"namespace/offline-model"}),
+        json!({"provider":"codex/namespace/offline-model"}),
+        json!({"provider":"codex/namespace/offline-model","model":null}),
+    ] {
+        let mut arguments = create("Model selection");
+        arguments
+            .as_object_mut()
+            .unwrap()
+            .extend(selection.as_object().unwrap().clone());
+        let response = scoped.call(&bot, None, "create_agent", arguments).await;
+        let agent = id(&response, "/agent/id");
+        let stored = scoped
+            .rpc("agent.get.request", json!({"agentId":agent}))
+            .await;
+        assert_eq!(stored["agent"]["provider"], "codex", "{stored}");
+        assert_eq!(
+            stored["agent"]["model"], "namespace/offline-model",
+            "{stored}"
+        );
+    }
     scoped.stop().await;
 }
 

@@ -62,20 +62,18 @@ pub(super) async fn agent(
     mut arguments: Value,
     caller: Option<&Value>,
 ) -> Result<Value, ErrorCode> {
-    let (provider, model) = provider_model(&arguments["provider"], true)?;
+    let (provider, model) = agent_selection(&arguments)?;
     let provider = provider.to_owned();
-    let model = model.map(str::to_owned);
+    let model = model.to_owned();
     directory(state, &mut arguments, caller).await?;
     let mut config = take(&mut arguments, "settings")?.unwrap_or_else(|| json!({}));
-    if config.get("model").is_some() {
-        return Err(ErrorCode::InvalidMessage);
-    }
     rename(&mut config, "features", "featureValues")?;
     config["provider"] = json!(provider);
     config["model"] = json!(model);
     config["cwd"] = take(&mut arguments, "cwd")?.ok_or(ErrorCode::InvalidMessage)?;
     config["title"] = take(&mut arguments, "title")?.ok_or(ErrorCode::InvalidMessage)?;
     take(&mut arguments, "provider")?;
+    take(&mut arguments, "model")?;
     arguments["config"] = config;
     if let Some(caller) = caller {
         arguments["callerAgentId"] = caller["id"].clone();
@@ -83,13 +81,30 @@ pub(super) async fn agent(
     rpc::execute(state, "agent.create.request", arguments).await
 }
 
-/// Split `value` at its first slash, requiring a model when `required_model` is true.
+/// Resolve explicit `provider` and `model` fields or a legacy combined selection in `arguments`.
+/// Trim surrounding whitespace in either format, preserving the model's namespace and contents.
+/// A null `model` is treated as omitted for legacy clients.
 /// # Errors
-/// Rejects non-text, blank segments or a missing required model.
-pub(in crate::mcp) fn provider_model(
-    value: &Value,
-    required_model: bool,
-) -> Result<(&str, Option<&str>), ErrorCode> {
+/// Rejects missing or blank selections and any mixture of the two formats.
+pub(in crate::mcp) fn agent_selection(arguments: &Value) -> Result<(&str, &str), ErrorCode> {
+    let (provider, combined_model) = provider_model(&arguments["provider"])?;
+    let model = arguments.get("model").filter(|model| !model.is_null());
+    match (model, combined_model) {
+        (Some(model), None) => model
+            .as_str()
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+            .map(|model| (provider, model))
+            .ok_or(ErrorCode::InvalidMessage),
+        (None, Some(model)) => Ok((provider, model)),
+        (Some(_), Some(_)) | (None, None) => Err(ErrorCode::InvalidMessage),
+    }
+}
+
+/// Split `value` at its first slash, accepting a bare provider without a model.
+/// # Errors
+/// Rejects non-text or blank segments.
+pub(in crate::mcp) fn provider_model(value: &Value) -> Result<(&str, Option<&str>), ErrorCode> {
     let value = value.as_str().ok_or(ErrorCode::InvalidMessage)?.trim();
     if let Some((provider, model)) = value.split_once('/') {
         let (provider, model) = (provider.trim(), model.trim());
@@ -98,7 +113,7 @@ pub(in crate::mcp) fn provider_model(
         }
         return Ok((provider, Some(model)));
     }
-    if value.is_empty() || required_model {
+    if value.is_empty() {
         return Err(ErrorCode::InvalidMessage);
     }
     Ok((value, None))

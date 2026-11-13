@@ -30,6 +30,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-250：MCP Agent 创建与定时任务更新的 Provider 和模型字段](daemon/adr-250-mcp-agent-model-selection.md)
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
@@ -38,7 +39,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-180：消息 Hub 服务端点（ait-hub-v1）](daemon/adr-180-hub-serve-endpoint.md)（经 [ADR-181](daemon/adr-181-hub-host-publication.md)、[ADR-200](daemon/adr-200-headless-independent-transports.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-155：可协商的持久 Relay 数据隧道](daemon/adr-155-persistent-relay-data-tunnel.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
-- [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)（经 [ADR-202](providers/adr-202-agent-mcp-injection.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md) 修订）
+- [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)（经 [ADR-202](providers/adr-202-agent-mcp-injection.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-250](daemon/adr-250-mcp-agent-model-selection.md) 修订）
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
 - [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
@@ -78,7 +79,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)（经 [ADR-223](workspace/adr-223-linux-worktree-sandbox.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
-- [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
+- [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-250](daemon/adr-250-mcp-agent-model-selection.md)、[ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)
 - [ADR-131：metadata 按能力组组织模块](workspace/adr-131-metadata-capability-groups.md)（经 [ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）

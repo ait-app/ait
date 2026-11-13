@@ -110,15 +110,15 @@ fn unknown_or_conflicting_isolation_is_an_invalid_message() {
 #[test]
 fn provider_pairs_keep_slashes_inside_model_names() {
     assert_eq!(
-        creation::provider_model(&json!("codex/openai/model"), true).unwrap(),
+        creation::provider_model(&json!("codex/openai/model")).unwrap(),
         ("codex", Some("openai/model"))
     );
     assert_eq!(
-        creation::provider_model(&json!("codex"), false).unwrap(),
+        creation::provider_model(&json!("codex")).unwrap(),
         ("codex", None)
     );
-    for value in [json!("codex"), json!("/model"), json!("codex/"), json!("")] {
-        assert!(creation::provider_model(&value, true).is_err());
+    for value in [json!("/model"), json!("codex/"), json!(""), Value::Null] {
+        assert!(creation::provider_model(&value).is_err());
     }
 }
 
@@ -243,6 +243,39 @@ fn a_read_counts_the_attention_its_snapshot_shows() {
             settled(tool, &result),
             Some(("agent-1".to_owned(), parsed(attention))),
             "{tool} {result}"
+        );
+    }
+}
+
+#[test]
+fn agent_selection_preserves_model_ids_and_rejects_ambiguous_formats() {
+    for arguments in [
+        json!({"provider":"provider","model":"namespace/model"}),
+        json!({"provider":"provider/namespace/model"}),
+        json!({"provider":"provider/namespace/model","model":null}),
+        json!({"provider":" provider ","model":" \tnamespace/model\n"}),
+        json!({"provider":" provider / namespace/model \n"}),
+    ] {
+        assert_eq!(
+            creation::agent_selection(&arguments).unwrap(),
+            ("provider", "namespace/model")
+        );
+    }
+    assert_eq!(
+        creation::agent_selection(&json!({"provider":"provider","model":" model "})).unwrap(),
+        ("provider", "model")
+    );
+    for arguments in [
+        json!({"provider":"provider"}),
+        json!({"provider":"provider","model":null}),
+        json!({"provider":"provider","model":" "}),
+        json!({"provider":"provider","model":"\t\n"}),
+        json!({"provider":"provider/model","model":"model"}),
+        json!({"provider":"provider/model","model":"other"}),
+    ] {
+        assert_eq!(
+            creation::agent_selection(&arguments),
+            Err(ErrorCode::InvalidMessage)
         );
     }
 }

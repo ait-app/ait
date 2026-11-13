@@ -162,7 +162,7 @@ pub(super) async fn provider(
     mut arguments: Value,
     caller: Option<&Value>,
 ) -> Result<Value, ErrorCode> {
-    let (provider, model) = creation::provider_model(&arguments["provider"], false)?;
+    let (provider, model) = creation::provider_model(&arguments["provider"])?;
     let provider = provider.to_owned();
     let model = model.map(str::to_owned);
     creation::directory(state, &mut arguments, caller).await?;

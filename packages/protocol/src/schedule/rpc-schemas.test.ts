@@ -4,8 +4,73 @@ import {
   ScheduleListRequestSchema,
   ScheduleUpdateRequestSchema,
 } from "./rpc-schemas.js";
+import { ScheduleTargetSchema } from "./types.js";
 
 describe("schedule RPC schemas", () => {
+  it.each(["codex/gpt-5", "codex/namespace/model", "", " "])(
+    "rejects invalid provider %j in create, target replacement and config patches",
+    (provider) => {
+      const target = { type: "new-agent", config: { provider } };
+      const create = ScheduleCreateRequestSchema.safeParse({
+        type: "schedule.create.request",
+        requestId: "create-1",
+        workspaceId: "wks-example",
+        prompt: "Run the task",
+        cadence: { type: "every", everyMs: 60_000 },
+        target,
+      });
+      const update = { type: "schedule.update.request", requestId: "update-1", scheduleId: "s" };
+      for (const result of [
+        create,
+        ScheduleUpdateRequestSchema.safeParse({ ...update, target }),
+        ScheduleUpdateRequestSchema.safeParse({ ...update, newAgentConfig: { provider } }),
+      ]) {
+        expect(result.success).toBe(false);
+        if (provider.includes("/")) {
+          expect(result.error?.issues[0]?.message).toContain("bare provider id");
+          expect(result.error?.issues[0]?.message).toContain("separate model field");
+        }
+      }
+    },
+  );
+
+  it("trims bare provider ids and preserves model namespaces in all write forms", () => {
+    const config = { provider: " custom-provider ", model: "namespace/model" };
+    const target = { type: "new-agent", config };
+    const create = ScheduleCreateRequestSchema.parse({
+      type: "schedule.create.request",
+      requestId: "create-1",
+      workspaceId: "wks-example",
+      prompt: "Run the task",
+      cadence: { type: "every", everyMs: 60_000 },
+      target,
+    });
+    const update = ScheduleUpdateRequestSchema.parse({
+      type: "schedule.update.request",
+      requestId: "update-1",
+      scheduleId: "s",
+      target,
+      newAgentConfig: config,
+    });
+    const expected = { ...target, config: { ...config, provider: "custom-provider" } };
+    expect(create.target).toEqual(expected);
+    expect(update.target).toEqual(expected);
+    expect(update.newAgentConfig).toEqual(expected.config);
+  });
+
+  it("still reads legacy provider/model targets and accepts unrelated patches", () => {
+    const target = { type: "new-agent", config: { provider: "codex/gpt-5" } };
+    expect(ScheduleTargetSchema.parse(target)).toEqual(target);
+    expect(
+      ScheduleUpdateRequestSchema.safeParse({
+        type: "schedule.update.request",
+        requestId: "update-1",
+        scheduleId: "s",
+        prompt: "Updated task",
+      }).success,
+    ).toBe(true);
+  });
+
   it("round-trips new-agent run options on create requests", () => {
     expect(
       ScheduleCreateRequestSchema.parse({

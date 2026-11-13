@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { AgentProviderSchema } from "../provider-manifest.js";
 
+// Writes require bare IDs; read targets remain compatible with stored legacy provider/model values.
+export const ScheduleProviderIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^/]+$/, "Use a bare provider id; put the model in the separate model field.");
+
 export const ScheduleStatusSchema = z.enum(["active", "paused", "completed"]);
 export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;
 

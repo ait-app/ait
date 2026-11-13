@@ -1,27 +1,28 @@
 import { z } from "zod";
 import {
   ScheduleCadenceSchema,
+  ScheduleProviderIdSchema,
   ScheduleRunSchema,
   ScheduleSummarySchema,
   StoredScheduleSchema,
   ScheduleTargetSchema,
 } from "./types.js";
 
-const ScheduleCreateNewAgentConfigSchema = ScheduleTargetSchema.options[1].shape.config;
+const ScheduleRequestTargetSchema = z.discriminatedUnion("type", [
+  ScheduleTargetSchema.options[0],
+  ScheduleTargetSchema.options[1].extend({
+    config: ScheduleTargetSchema.options[1].shape.config.extend({
+      provider: ScheduleProviderIdSchema,
+    }),
+  }),
+]);
 
 const ScheduleCreateTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("self"),
     agentId: z.guid(),
   }),
-  z.object({
-    type: z.literal("agent"),
-    agentId: z.guid(),
-  }),
-  z.object({
-    type: z.literal("new-agent"),
-    config: ScheduleCreateNewAgentConfigSchema,
-  }),
+  ...ScheduleRequestTargetSchema.options,
 ]);
 
 export const ScheduleCreateRequestSchema = z.object({
@@ -81,7 +82,7 @@ export const ScheduleRunOnceRequestSchema = z.object({
 });
 
 const ScheduleUpdateNewAgentConfigSchema = z.object({
-  provider: z.string().trim().min(1).optional(),
+  provider: ScheduleProviderIdSchema.optional(),
   model: z.string().trim().min(1).nullable().optional(),
   modeId: z.string().trim().min(1).nullable().optional(),
   thinkingOptionId: z.string().trim().min(1).nullable().optional(),
@@ -95,7 +96,7 @@ export const ScheduleUpdateRequestSchema = z.object({
   requestId: z.string(),
   scheduleId: z.string(),
   workspaceId: z.string().trim().min(1).optional(),
-  target: ScheduleTargetSchema.optional(),
+  target: ScheduleRequestTargetSchema.optional(),
   name: z.string().nullable().optional(),
   prompt: z.string().min(1).optional(),
   cadence: ScheduleCadenceSchema.optional(),

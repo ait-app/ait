@@ -188,6 +188,7 @@ impl Engine {
     }
     fn create(&mut self, params: Value, now: DateTime<Utc>) -> Result<Value, Error> {
         let request: Create = serde_json::from_value(params).map_err(|_| Error::Invalid)?;
+        validate_provider_id(&request.target)?;
         validate(&request.prompt, &request.target, request.max_runs)?;
         validate_workspace_id(&request.workspace_id)?;
         if let Some(root) = &request.bot_scope {
@@ -350,6 +351,9 @@ impl Engine {
         if let Some(value) = params.get("expiresAt") {
             record.expires_at =
                 serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
+        }
+        if params.get("target").is_some() || params.get("newAgentConfig").is_some() {
+            validate_provider_id(&record.target)?;
         }
         validate(&record.prompt, &record.target, record.max_runs)?;
         record.updated_at = now;
@@ -586,6 +590,16 @@ pub(crate) fn only(value: &Value, fields: &[&str]) -> Result<(), Error> {
     }
     Ok(())
 }
+fn validate_provider_id(target: &Target) -> Result<(), Error> {
+    if let Target::NewAgent { config } = target
+        && config["provider"]
+            .as_str()
+            .is_some_and(|id| id.contains('/'))
+    {
+        return Err(Error::Invalid);
+    }
+    Ok(())
+}
 fn validate(prompt: &str, target: &Target, max_runs: Option<u64>) -> Result<(), Error> {
     if prompt.trim().is_empty() || prompt.len() > 64 * 1024 || max_runs == Some(0) {
         return Err(Error::Invalid);
@@ -653,11 +667,51 @@ fn patch_new_agent_config(target: &mut Target, value: &Value) -> Result<(), Erro
     let Target::NewAgent { config } = target else {
         return Err(Error::Invalid);
     };
+    let stored = config["provider"].as_str().ok_or(Error::Invalid)?.trim();
+    let (previous, embedded_model) = stored
+        .split_once('/')
+        .map_or((stored, None), |(provider, model)| {
+            (provider.trim(), Some(model.trim()))
+        });
+    let previous = previous.to_owned();
+    if config.get("model").is_none()
+        && let Some(model) = embedded_model.filter(|model| !model.is_empty())
+    {
+        config["model"] = json!(model);
+    }
+    config["provider"] = json!(previous);
+    if let Some(provider) = value.get("provider") {
+        let provider = provider.as_str().ok_or(Error::Invalid)?.trim();
+        let provider_changed = provider != previous;
+        if provider_changed && value.get("modeId").is_none() {
+            return Err(Error::Invalid);
+        }
+        if provider_changed {
+            let config = config.as_object_mut().ok_or(Error::Invalid)?;
+            for key in ["model", "thinkingOptionId"] {
+                if value.get(key).is_none() {
+                    config.remove(key);
+                }
+            }
+        }
+    }
+    if value.get("model").is_some_and(|model| {
+        let patched_model = model.as_str().filter(|model| !model.trim().is_empty());
+        config.get("model").and_then(Value::as_str) != patched_model
+    }) && value.get("thinkingOptionId").is_none()
+    {
+        config
+            .as_object_mut()
+            .ok_or(Error::Invalid)?
+            .remove("thinkingOptionId");
+    }
     for (key, value) in value.as_object().ok_or(Error::Invalid)? {
         if ["model", "modeId", "thinkingOptionId"].contains(&key.as_str())
             && (value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty()))
         {
             config.as_object_mut().ok_or(Error::Invalid)?.remove(key);
+        } else if key == "provider" {
+            config[key] = json!(value.as_str().ok_or(Error::Invalid)?.trim());
         } else {
             config[key] = value.clone();
         }

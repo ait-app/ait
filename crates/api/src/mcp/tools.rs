@@ -20,6 +20,34 @@ mod queries;
 mod schedules;
 mod tickets;
 
+/// Validate tool-specific provider/model selections before execution.
+/// # Errors
+/// Returns corrective guidance for invalid discovery, creation, or schedule selections.
+pub(super) fn validate_selection(name: &str, arguments: &Value) -> Result<(), &'static str> {
+    if name == "list_models"
+        && arguments["provider"]
+            .as_str()
+            .is_some_and(|provider| provider.contains('/'))
+    {
+        return Err(
+            "list_models requires a bare provider id, such as codex or claude. \
+             Do not include a model or use the combined provider/model format.",
+        );
+    }
+    if name == "create_agent" && creation::agent_selection(arguments).is_err() {
+        return Err(
+            "create_agent requires a provider and model. Use list_models if needed, then pass \
+             the bare provider and the returned model id verbatim in the separate model field. \
+             The legacy provider/model format is also accepted when model is omitted or null. \
+             Do not combine both formats; no default model is inferred.",
+        );
+    }
+    if name == "update_schedule" {
+        schedules::selection(arguments)?;
+    }
+    Ok(())
+}
+
 /// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
 /// credentials and inheriting placement and parentage from the resolved `caller` Agent.
 /// # Errors

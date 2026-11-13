@@ -38,7 +38,7 @@ pub(super) async fn create(
         }
         creation::directory(state, &mut arguments, caller).await?;
         let provider = take(&mut arguments, "provider")?.ok_or(ErrorCode::InvalidMessage)?;
-        let (provider, model) = creation::provider_model(&provider, false)?;
+        let (provider, model) = creation::provider_model(&provider)?;
         let mut config = json!({"provider":provider,"cwd":take(&mut arguments,"cwd")?});
         if let Some(model) = model {
             config["model"] = json!(model);
@@ -104,6 +104,23 @@ pub(super) async fn operate(
     }
     if tool.name == "update_schedule" {
         arguments = update(arguments)?;
+        let config = &arguments["newAgentConfig"];
+        let stored = schedule["target"]["config"]["provider"]
+            .as_str()
+            .unwrap_or_default();
+        let previous = stored
+            .split_once('/')
+            .map_or(stored, |(provider, _)| provider);
+        if config["provider"]
+            .as_str()
+            .is_some_and(|provider| provider != previous.trim())
+            && config.get("modeId").is_none()
+        {
+            return Ok(
+                json!({"error":"update_schedule requires an explicit mode when changing providers. \
+                Send mode with a mode id for the new provider, or mode: null to use its native default."}),
+            );
+        }
     }
     let limit = take(&mut arguments, "limit")?;
     let method = if tool.name == "delete_heartbeat" {
@@ -151,20 +168,9 @@ fn update(mut arguments: Value) -> Result<Value, ErrorCode> {
     } else if clear {
         arguments["expiresAt"] = Value::Null;
     }
-    let mut config = json!({});
-    if let Some(value) = take(&mut arguments, "provider")? {
-        let (provider, model) = creation::provider_model(&value, false)?;
-        config["provider"] = json!(provider);
-        if let Some(model) = model {
-            config["model"] = json!(model);
-        }
-    }
-    if let Some(model) = take(&mut arguments, "model")? {
-        if config.get("model").is_some_and(|current| current != &model) {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        config["model"] = model;
-    }
+    let mut config = selection(&arguments).map_err(|_| ErrorCode::InvalidMessage)?;
+    take(&mut arguments, "provider")?;
+    take(&mut arguments, "model")?;
     for (old, new) in [("cwd", "cwd"), ("mode", "modeId")] {
         if let Some(value) = take(&mut arguments, old)? {
             config[new] = value;
@@ -174,6 +180,41 @@ fn update(mut arguments: Value) -> Result<Value, ErrorCode> {
         arguments["newAgentConfig"] = config;
     }
     Ok(arguments)
+}
+
+/// Parse a schedule's provider/model patch for validation and native conversion.
+/// # Errors
+/// Returns corrective guidance for invalid or conflicting model selections.
+pub(super) fn selection(arguments: &Value) -> Result<Value, &'static str> {
+    let mut config = json!({});
+    if let Some(value) = arguments.get("provider") {
+        let (provider, model) = creation::provider_model(value)
+            .map_err(|_| "update_schedule requires a bare provider or provider/model value.")?;
+        config["provider"] = json!(provider);
+        if let Some(model) = model {
+            config["model"] = json!(model);
+        }
+    }
+    if let Some(model) = arguments.get("model") {
+        let model = match model {
+            Value::String(model) if !model.trim().is_empty() => json!(model.trim()),
+            Value::Null => Value::Null,
+            Value::String(_) => {
+                return Err("update_schedule model must be a nonblank string or null. \
+                Send null to clear the model and use the provider default.");
+            }
+            _ => return Err("Arguments do not match the tool input schema"),
+        };
+        if config.get("model").is_some_and(|current| current != &model) {
+            return Err(
+                "update_schedule model conflicts with the combined provider/model value. \
+                Use a bare provider id with the separate model field; send model: null to clear it. \
+                If using both formats, the models must match.",
+            );
+        }
+        config["model"] = model;
+    }
+    Ok(config)
 }
 
 fn expiry_at(value: &Value) -> Result<Value, ErrorCode> {

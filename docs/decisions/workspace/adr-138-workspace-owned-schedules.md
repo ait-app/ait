@@ -11,6 +11,7 @@ paths:
 # ADR-138：定时任务固定归属于 Workspace
 
 - 修订：[ADR-047](../daemon/adr-047-daemon-schedule-browser.md) 中新 Agent 任务每次创建独立 Workspace 的执行方式；仅旧版未绑定任务保留原行为。
+- 后续修订：[ADR-250](../daemon/adr-250-mcp-agent-model-selection.md) 明确定时任务配置的裸 Provider、模型补丁、模式选择与历史记录兼容规则。
 
 ## 背景
 

@@ -161,7 +161,8 @@ Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot
   "params": {
     "name": "create_agent",
     "arguments": {
-      "provider": "codex/<list_models 返回的模型 ID>",
+      "provider": "<provider ID>",
+      "model": "<list_models 返回的完整模型 ID>",
       "title": "修复登录问题",
       "cwd": "/absolute/project/path",
       "initialPrompt": "修复登录问题并运行相关测试",
@@ -170,6 +171,20 @@ Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot
   }
 }
 ```
+
+`create_agent` 优先使用独立的 `provider` 和 `model` 字段；两种格式均去除 Provider 与模型 ID 的首尾空白，保留模型 ID 内部的命名空间和斜杠。
+兼容旧的 `provider/model` 合并值，此时省略 `model` 或设为 `null`；两种格式不能混用，也不自动选择默认模型。
+`create_schedule` 继续使用合并的 `provider/model`，不接受独立 `model` 字段；`update_schedule` 的独立字段遵循下述补丁语义。
+
+`update_schedule` 使用补丁语义：省略 `model` 且 Provider 不变时保留已存模型；切换 Provider 且未指定模型时清除旧模型，使用新 Provider 默认值（若 `provider` 使用合并格式，则以其中的模型更新）。
+宿主切换 Provider 时必须显式提供 `mode`，否则拒绝保存；`mode: null` 显式选择新 Provider 原生默认模式。Bot 未指定模式时使用权限上限允许的新 Provider 默认模式。
+非空字符串替换模型（空串和纯空白拒绝），`model: null` 清除模型并使用 Provider 默认值；这与 `create_agent` 将 `null` 视为未指定不同。
+独立字段和合并值中的模型字符串均在比较和存储前去除首尾空白，保留模型 ID 内部的命名空间和斜杠。
+同时传入合并的 `provider/model` 与独立 `model` 时，两处模型必须相同；合并值与 `model: null` 冲突并拒绝。
+模型补丁不在保存时验证 Provider 是否支持该模型，实际可用性由运行时 Provider 判断；更新前应使用
+`list_models` 查询有效 Provider 的模型。发现列表不作为严格白名单，以保留自定义模型支持。
+例如 `{"id":"x","model":null}` 清除模型，`{"id":"x","provider":"codex","model":null,"mode":null}` 更换 Provider、清除模型并显式选择原生默认模式，
+而 `{"id":"x","provider":"codex/gpt","model":null}` 同时要求设置与清除模型，因此无效。
 
 创建和 prompt 在输入接纳后返回。用 `get_agent_status` / `get_agent_activity` 检查进展，
 或用 `wait_for_agent` 等待，默认 30 秒、最多 45 秒。超时返回 `status: "timeout"`，

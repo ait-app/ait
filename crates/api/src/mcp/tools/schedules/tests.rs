@@ -55,3 +55,69 @@ fn schedule_patch_translates_cadence_expiry_and_native_config() {
         assert!(update(input).is_err());
     }
 }
+
+#[test]
+fn schedule_model_patch_distinguishes_omission_replacement_and_clear() {
+    let omitted = update(json!({"scheduleId":"s","prompt":"changed"})).unwrap();
+    assert!(omitted.get("newAgentConfig").is_none());
+
+    let provider_only = update(json!({"scheduleId":"s","provider":"codex"})).unwrap();
+    assert_eq!(provider_only["newAgentConfig"], json!({"provider":"codex"}));
+
+    for model in [json!("namespace/model"), Value::Null] {
+        let patched = update(json!({"scheduleId":"s","model":model})).unwrap();
+        assert_eq!(patched["newAgentConfig"], json!({"model":model}));
+
+        let patched = update(json!({"scheduleId":"s","provider":"codex","model":model})).unwrap();
+        assert_eq!(
+            patched["newAgentConfig"],
+            json!({"provider":"codex","model":model})
+        );
+    }
+}
+
+#[test]
+fn schedule_combined_selection_rejects_conflicting_model_patches() {
+    for selection in [
+        json!({"provider":"codex/namespace/model"}),
+        json!({"provider":"codex/namespace/model","model":"namespace/model"}),
+    ] {
+        let patched = update(selection).unwrap();
+        assert_eq!(
+            patched["newAgentConfig"],
+            json!({"provider":"codex","model":"namespace/model"})
+        );
+    }
+    for model in [Value::Null, json!("other-model")] {
+        assert_eq!(
+            update(json!({"provider":"codex/namespace/model","model":model})),
+            Err(ErrorCode::InvalidMessage)
+        );
+    }
+}
+
+#[test]
+fn schedule_model_patch_trims_separate_and_combined_models() {
+    for selection in [
+        json!({"model":" namespace/model "}),
+        json!({"provider":" codex ","model":" namespace/model "}),
+        json!({"provider":" codex/namespace/model "}),
+        json!({"provider":"codex/namespace/model","model":" namespace/model "}),
+    ] {
+        let patched = update(selection).unwrap();
+        assert_eq!(patched["newAgentConfig"]["model"], "namespace/model");
+    }
+}
+
+#[test]
+fn schedule_model_patch_rejects_blank_and_non_text_models() {
+    for model in [json!(""), json!(" \t\n"), json!(42), json!(false)] {
+        for provider in [None, Some("codex"), Some("codex/model")] {
+            let mut arguments = json!({"scheduleId":"s","model":model});
+            if let Some(provider) = provider {
+                arguments["provider"] = json!(provider);
+            }
+            assert_eq!(update(arguments), Err(ErrorCode::InvalidMessage));
+        }
+    }
+}

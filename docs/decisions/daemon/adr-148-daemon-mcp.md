@@ -9,7 +9,7 @@ paths:
 
 # ADR-148：daemon 的无状态 MCP 编排接口
 
-- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是。
+- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是；[ADR-250](adr-250-mcp-agent-model-selection.md) 为 `create_agent` 增加独立 Provider 与模型字段，并定义 `update_schedule` 的独立模型补丁，均兼容旧合并格式。
 
 ## 背景
 

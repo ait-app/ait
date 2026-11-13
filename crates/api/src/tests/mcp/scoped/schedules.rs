@@ -66,20 +66,31 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
     let conversation = ConversationId::generate();
     let bot = scoped.bot_credential_in(conversation);
 
-    let created = scoped
-        .call(
-            &bot,
-            None,
-            "create_schedule",
-            json!({"provider":"codex/offline-model","prompt":"report","cron":CRON}),
-        )
-        .await;
-    let stored = scoped.stored(&schedule_id(&created)).await;
-    assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
-    assert_eq!(stored["botConversation"], json!(conversation), "{stored}");
-    assert_eq!(stored["workspaceId"], scoped.workspace.as_str());
-    assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");
-    assert_eq!(stored["target"]["config"]["model"], "offline-model");
+    for (provider, model) in [
+        ("codex/offline-model", Some("offline-model")),
+        ("codex", None),
+    ] {
+        let created = scoped
+            .call(
+                &bot,
+                None,
+                "create_schedule",
+                json!({"provider":provider,"prompt":"report","cron":CRON}),
+            )
+            .await;
+        let stored = scoped.stored(&schedule_id(&created)).await;
+        assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
+        assert_eq!(stored["botConversation"], json!(conversation), "{stored}");
+        assert_eq!(stored["workspaceId"], scoped.workspace.as_str());
+        let config = &stored["target"]["config"];
+        assert_eq!(config["provider"], "codex", "{stored}");
+        assert_eq!(config["modeId"], "auto", "{stored}");
+        assert_eq!(
+            config.get("model"),
+            model.map(|model| json!(model)).as_ref(),
+            "{stored}"
+        );
+    }
 
     for provider in ["claude", "claude/model"] {
         forbidden(
@@ -105,6 +116,15 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
             .await,
     );
 
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn scoped_schedule_create_inherits_provider_and_preserves_origin() {
+    let scoped = Scoped::start().await;
+    scoped.setup(codex_modes(&["auto", "read-only"])).await;
+    let conversation = ConversationId::generate();
+
     // A subtree caller inherits its own provider when none is named.
     let child = scoped.subtree_agent().await;
     let credential = scoped.subtree_credential(&child);
@@ -121,6 +141,10 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
     assert!(stored.get("botConversation").is_none(), "{stored}");
     assert_eq!(stored["target"]["config"]["provider"], "codex");
     assert_eq!(stored["target"]["config"]["modeId"], "auto");
+    assert!(
+        stored["target"]["config"].get("model").is_none(),
+        "{stored}"
+    );
 
     // A subtree caller started from a conversation passes that origin on.
     let labelled = scoped
@@ -161,10 +185,145 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .await;
     let stored = scoped.stored(&schedule_id(&host)).await;
     assert!(stored.get("botScope").is_none(), "{stored}");
+    assert_eq!(stored["target"]["config"]["provider"], "codex");
+    assert!(
+        stored["target"]["config"].get("model").is_none(),
+        "{stored}"
+    );
     assert!(
         stored["target"]["config"].get("modeId").is_none(),
         "{stored}"
     );
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn scoped_schedule_model_patches_reach_stored_config() {
+    let scoped = Scoped::start().await;
+    scoped.setup(codex_modes(&["auto"])).await;
+    let bot = scoped.bot_credential();
+    let created = scoped
+        .call(
+            &bot,
+            None,
+            "create_schedule",
+            json!({"provider":"codex/original-model","prompt":"report","cron":CRON}),
+        )
+        .await;
+    let id = schedule_id(&created);
+    let before = scoped.stored(&id).await;
+    let mut expected_config = before["target"]["config"].clone();
+    assert_eq!(expected_config["model"], "original-model");
+
+    for (patch, model) in [
+        (
+            json!({"model":" namespace/offline-model "}),
+            Some("namespace/offline-model"),
+        ),
+        (json!({"provider":"codex"}), Some("namespace/offline-model")),
+        (json!({"model":null}), None),
+    ] {
+        let mut arguments = patch;
+        arguments["id"] = json!(id);
+        structured(&scoped.call(&bot, None, "update_schedule", arguments).await);
+        if let Some(model) = model {
+            expected_config["model"] = json!(model);
+        } else {
+            expected_config.as_object_mut().unwrap().remove("model");
+        }
+        let stored = scoped.stored(&id).await;
+        assert_eq!(stored["target"]["config"], expected_config, "{stored}");
+        assert_eq!(stored["botScope"], before["botScope"]);
+    }
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn schedule_provider_switch_requires_host_mode_and_caps_bot_mode() {
+    let scoped = Scoped::start().await;
+    scoped
+        .setup(json!({"groups":["observe","schedules"],
+            "modes":{"codex":["auto"],"claude":["plan"]}}))
+        .await;
+    let bot = scoped.bot_credential();
+
+    for credential in [TOKEN, &bot] {
+        let created = scoped
+            .call(
+                credential,
+                None,
+                "create_schedule",
+                json!({"workspaceId":scoped.workspace,"provider":"codex/original-model",
+                    "prompt":"report","cron":CRON}),
+            )
+            .await;
+        let id = schedule_id(&created);
+        structured(
+            &scoped
+                .call(
+                    credential,
+                    None,
+                    "update_schedule",
+                    json!({"id":id,"provider":" codex/original-model "}),
+                )
+                .await,
+        );
+        structured(
+            &scoped
+                .call(
+                    credential,
+                    None,
+                    "update_schedule",
+                    json!({"id":id,"mode":"auto"}),
+                )
+                .await,
+        );
+        assert_eq!(
+            scoped.stored(&id).await["target"]["config"]["model"],
+            "original-model"
+        );
+        assert_eq!(
+            scoped.stored(&id).await["target"]["config"]["modeId"],
+            "auto"
+        );
+
+        let mut patch = json!({"id":id,"provider":"claude"});
+        if credential == TOKEN {
+            let before = scoped.stored(&id).await;
+            for provider in ["claude", " claude/namespace/model "] {
+                let rejected = scoped
+                    .call(
+                        credential,
+                        None,
+                        "update_schedule",
+                        json!({"id":id,"provider":provider}),
+                    )
+                    .await;
+                assert_eq!(rejected["result"]["isError"], true, "{rejected}");
+                let text = rejected["result"]["content"][0]["text"].as_str().unwrap();
+                assert!(text.contains("explicit mode"), "{rejected}");
+                assert!(text.contains("mode: null"), "{rejected}");
+                assert_eq!(scoped.stored(&id).await, before);
+            }
+            patch["mode"] = Value::Null;
+        }
+        let updated = scoped
+            .call(credential, None, "update_schedule", patch)
+            .await;
+        let result = structured(&updated);
+        let stored = scoped.stored(&id).await;
+        assert_eq!(result["schedule"]["target"], stored["target"]);
+        assert_eq!(stored["status"], "active", "{stored}");
+        let config = &stored["target"]["config"];
+        assert_eq!(config["provider"], "claude", "{stored}");
+        assert!(config.get("model").is_none(), "{stored}");
+        if credential == bot {
+            assert_eq!(config["modeId"], "plan", "{stored}");
+            assert_eq!(stored["botScope"], scoped.workspace.as_str(), "{stored}");
+        } else {
+            assert!(config.get("modeId").is_none(), "{stored}");
+        }
+    }
     scoped.stop().await;
 }
 

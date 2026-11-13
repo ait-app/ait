@@ -2,12 +2,18 @@
   {
     "name": "create_agent",
     "methods": ["agent.create.request"],
-    "description": "Create and start an agent using a provider/model pair. Supply cwd or workspaceId for an external caller. X-Ait-Agent-Id inherits the caller workspace and records parentage. Returns after initial prompt admission. Reuse idempotencyKey on retries.",
+    "description": "Create and start an agent using separate provider and model fields (preferred), or a legacy provider/model pair. Supply cwd or workspaceId for an external caller. X-Ait-Agent-Id inherits the caller workspace and records parentage. Returns after initial prompt admission. Reuse idempotencyKey on retries.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "provider": {
           "type": "string",
+          "description": "Bare provider identifier when model is supplied. For compatibility, accepts provider/model when model is omitted or null. Do not combine both formats; no default model is inferred.",
+          "minLength": 1
+        },
+        "model": {
+          "type": ["string", "null"],
+          "description": "Selected model id returned by list_models, copied verbatim including any namespace or slash characters. Required with a bare provider; omit or set to null when using the legacy combined provider/model format.",
           "minLength": 1
         },
         "title": {
@@ -675,7 +681,7 @@
   {
     "name": "create_schedule",
     "methods": ["schedule.create.request"],
-    "description": "Create a Workspace-owned cron schedule launching a new agent for each run. workspaceId defaults to the X-Ait-Agent-Id caller workspace. Timezone defaults to UTC.",
+    "description": "Create a Workspace-owned cron schedule launching a new agent for each run. To select a model, use the combined provider/model form; this tool has no separate model field. workspaceId defaults to the X-Ait-Agent-Id caller workspace. Timezone defaults to UTC.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -685,7 +691,8 @@
         },
         "provider": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Provider ID, optionally followed by / and the model ID, e.g. codex/gpt-5 or omp/openai/gpt-5. A bare provider uses its default model."
         },
         "cwd": {
           "type": "string",
@@ -846,7 +853,7 @@
   {
     "name": "update_schedule",
     "methods": ["schedule.update.request"],
-    "description": "Change new-agent schedule settings. every/cron are mutually exclusive; expiresIn/clearExpires are mutually exclusive. Workspace ownership stays fixed.",
+    "description": "Patch new-agent schedule settings. every/cron and expiresIn/clearExpires are mutually exclusive. Workspace ownership stays fixed.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -879,13 +886,17 @@
         },
         "provider": {
           "type": "string",
+          "description": "Bare provider or provider/model. Combined and separate models must match after trimming; null conflicts with a combined model.",
           "minLength": 1
         },
         "model": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Omit to keep the model when the provider is unchanged. Changing provider without a model uses the new provider default; provider/model supplies a model. A trimmed nonblank string replaces it; null uses the provider default and conflicts with a combined provider/model. Use list_models to choose; availability is checked at runtime."
         },
         "mode": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "description": "Host callers must explicitly supply mode when switching provider; null selects the native default. Bot callers default to a mode allowed by their permission cap."
         },
         "cwd": {
           "type": "string",
@@ -985,12 +996,13 @@
   {
     "name": "list_models",
     "methods": ["provider.models.list.request"],
-    "description": "Discover models for one provider, optionally scoped to cwd.",
+    "description": "Discover models for one bare provider, optionally scoped to cwd. For create_agent, pass this provider and the selected model id verbatim in the separate provider and model fields.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "provider": {
           "type": "string",
+          "description": "Bare provider id, such as codex or claude. Do not include a model or use the combined provider/model format.",
           "minLength": 1
         },
         "cwd": {
@@ -1006,13 +1018,14 @@
   {
     "name": "inspect_provider",
     "methods": ["provider.modes.list.request", "provider.features.list.request"],
-    "description": "Inspect provider modes and draft features. cwd defaults to the X-Ait-Agent-Id caller directory.",
+    "description": "Inspect provider modes and draft features. Select a model with the combined provider/model form or settings.model; otherwise features use the provider's default model. cwd defaults to the X-Ait-Agent-Id caller directory.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "provider": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Provider ID or combined provider/model, e.g. omp/openai/gpt-5. settings.model overrides the model in this value."
         },
         "cwd": {
           "type": "string",

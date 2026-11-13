@@ -142,6 +142,15 @@
   只是调用上下文，权限边界是作用域凭据（[ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)、
   [ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、[MCP 手册](../operations/mcp.md)）。
+- MCP `create_agent` 优先接受独立的 `provider`、`model`；两种格式均去除首尾空白，保留模型 ID 内部内容。旧 `provider/model`
+  在省略 `model` 或设为 `null` 时接受，混用或缺少模型返回可操作的参数错误。创建与 Bot 模式上限使用同一解析，
+  RPC 与持久配置仍分别保存 Provider、模型
+  （[ADR-250](../decisions/daemon/adr-250-mcp-agent-model-selection.md)）。
+- MCP `update_schedule` 的独立 `model` 使用补丁语义：省略且 Provider 不变时保留已存模型；切换 Provider 且未指定模型时使用新 Provider 默认值（合并的 `provider/model` 可更新模型）。
+  切换 Provider 时必须显式选择模式（`null` 表示原生默认模式），否则拒绝保存；Bot 作用域调用写入权限上限允许的新 Provider 默认模式。Provider 补丁先去除首尾空白；任何 `newAgentConfig` 补丁都会先拆分历史合并值，即使未提供 `provider`。已有独立模型优先于内嵌模型，再应用显式模型补丁；拆分本身不算 Provider 切换，模型变化及 thinking 选项清除按拆分后的模型判断。仅修改提示词、周期等配置外字段时保留历史合并值。
+  非空字符串去除首尾空白后替换，`null` 清除并使用 Provider 默认值。合并与独立模型同时传入时须在去除首尾空白后相同，
+  合并模型与 `null` 冲突并拒绝；模型可用性由运行时 Provider 判断。`create_schedule` 继续使用合并格式，
+  不接受独立 `model`（[ADR-250](../decisions/daemon/adr-250-mcp-agent-model-selection.md)）。
 - 可选 MCP Unix socket 只暴露 `/mcp/agents`，HTTP authority 固定为 `localhost`，鉴权与 TCP 的 MCP
   路由相同。父目录须为当前用户所有的 0700 非符号链接目录，socket 为 0600；只回收无监听者的旧
   socket，停止时只删除本次绑定的 device/inode

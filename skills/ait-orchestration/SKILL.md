@@ -35,7 +35,9 @@ operate as an external caller and provide explicit placement where needed.
 2. Reuse the requested workspace. For separate checkouts, create a workspace with
    `create_workspace`, then pass its returned ID to `create_agent`. An external caller supplies
    `workspaceId` or an absolute `cwd`; an Agent-scoped call can inherit its caller's workspace.
-3. Call `create_agent` with a discovered `provider/model`, a short title, and `initialPrompt`.
+3. Call `create_agent` with separate `provider` and `model` fields, a short title, and `initialPrompt`.
+   Copy the discovered model ID verbatim, including any namespace or slashes. When the live schema
+   lacks `model`, use the legacy `provider/model` value; never send both formats.
    State the concrete task, allowed scope, shared-file ownership when workers run concurrently,
    expected deliverable, and relevant validation. Request further delegation only when the user's
    assignment includes it. Read [operation details](references/operations.md) for profile mapping

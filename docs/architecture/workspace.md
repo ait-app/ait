@@ -126,6 +126,12 @@
 
 ## 定时任务归属
 
+- 新建或整体替换新 Agent 任务配置时使用裸 Provider ID，模型单独保存；历史合并值继续读取，任意
+  `newAgentConfig` 补丁会先拆分历史值，已有独立模型优先，提示词或周期补丁不迁移配置。
+  切换 Provider 须显式提供 `modeId`，`null` 选择原生默认模式；未显式提供的模型和 thinking 选项清除。
+  Provider 不变时保留省略的模型，模型实际改变时清除未显式提供的 thinking 选项；
+  Bot 的 MCP 调用仍由权限上限补全模式
+  （[ADR-250](../decisions/daemon/adr-250-mcp-agent-model-selection.md)、[任务手册](../operations/schedules.md)）。
 - 新建任务必须提供 `workspaceId`，已绑定的 `workspaceId` 不能改成另一个。目标变更由宿主的
   `schedule::ports::Runner::resolve` 校验归属，运行期间修改目标返回 `schedule_running`
   （[ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)、

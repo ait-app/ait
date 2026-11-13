@@ -1,6 +1,163 @@
 use super::*;
 
 #[test]
+fn agent_creation_requires_a_model_and_explains_how_to_select_one() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "create_agent")
+        .unwrap();
+    let mut arguments = json!({"provider":"provider", "cwd":"/repo", "title":"Shell test",
+        "initialPrompt":"Run printf hello"});
+    for provider in [
+        json!("provider"),
+        json!("provider/"),
+        json!("/model"),
+        json!("provider/ "),
+        Value::Null,
+    ] {
+        arguments["provider"] = provider;
+        let error = validation::arguments(tool, None, &arguments).unwrap_err();
+        assert!(error.contains("provider/model"));
+        assert!(error.contains("list_models"));
+        assert!(error.contains("returned model id verbatim"));
+    }
+    for provider in [
+        "provider/namespace/model",
+        "provider/namespace/other-model",
+        "provider/model",
+    ] {
+        arguments["provider"] = json!(provider);
+        assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+    }
+    arguments["model"] = Value::Null;
+    assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+    arguments["provider"] = json!("provider");
+    arguments["model"] = json!("namespace/model");
+    assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+    for model in [Value::Null, json!(""), json!(" "), json!(false)] {
+        arguments["model"] = model;
+        assert!(validation::arguments(tool, None, &arguments).is_err());
+    }
+    arguments["model"] = json!("namespace/model");
+    arguments["provider"] = json!("provider/namespace/model");
+    assert!(validation::arguments(tool, None, &arguments).is_err());
+    arguments["provider"] = json!("provider");
+    arguments["unexpected"] = json!(true);
+    assert_eq!(
+        validation::arguments(tool, None, &arguments),
+        Err("Arguments do not match the tool input schema")
+    );
+    let list = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "list_models")
+        .unwrap();
+    assert_eq!(
+        validation::arguments(list, None, &json!({"provider":"provider"})),
+        Ok(())
+    );
+}
+
+#[test]
+fn model_discovery_rejects_combined_selections_with_guidance() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "list_models")
+        .unwrap();
+    for provider in ["codex/gpt-5", "codex/namespace/model", "codex/"] {
+        let error = validation::arguments(tool, None, &json!({"provider":provider})).unwrap_err();
+        assert!(error.contains("bare provider id"));
+        assert!(error.contains("Do not include a model"));
+    }
+    assert_eq!(
+        validation::arguments(tool, None, &json!({"provider":"codex"})),
+        Ok(())
+    );
+}
+
+#[test]
+fn agent_creation_rejects_a_model_inside_settings() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "create_agent")
+        .unwrap();
+    let mut arguments = json!({"provider":"provider","model":"model","cwd":"/repo",
+        "title":"Task","initialPrompt":"Run printf hello"});
+    assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+
+    arguments["settings"] = json!({"model":"other-model"});
+
+    assert_eq!(
+        validation::arguments(tool, None, &arguments),
+        Err("Arguments do not match the tool input schema")
+    );
+}
+
+#[test]
+fn schedule_model_updates_reject_blank_strings_with_clear_guidance() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "update_schedule")
+        .unwrap();
+    for model in ["", " ", " \t\n"] {
+        assert_eq!(
+            validation::arguments(tool, None, &json!({"id":"schedule","model":model})),
+            Err("update_schedule model must be a nonblank string or null. \
+                 Send null to clear the model and use the provider default.")
+        );
+    }
+    for arguments in [
+        json!({"id":"schedule"}),
+        json!({"id":"schedule","model":null}),
+        json!({"id":"schedule","model":" namespace/model "}),
+    ] {
+        assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+    }
+}
+
+#[test]
+fn schedule_model_conflicts_provide_corrective_guidance() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "update_schedule")
+        .unwrap();
+    for model in [Value::Null, json!("other")] {
+        let arguments = json!({"id":"x","provider":"codex/gpt","model":model});
+        let message = validation::arguments(tool, None, &arguments).unwrap_err();
+        assert!(message.contains("conflicts"));
+        assert!(message.contains("bare provider id"));
+        assert!(message.contains("model: null"));
+    }
+    for arguments in [
+        json!({"id":"x","provider":"codex/gpt"}),
+        json!({"id":"x","provider":" codex/namespace/gpt ","model":" namespace/gpt "}),
+        json!({"id":"x","provider":"codex","model":null}),
+    ] {
+        assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+    }
+}
+
+#[test]
+fn schedule_creation_accepts_combined_selection_and_rejects_a_separate_model() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "create_schedule")
+        .unwrap();
+    for provider in ["codex", "codex/namespace/model"] {
+        let mut arguments = json!({"workspaceId":"workspace","cwd":"/repo",
+            "provider":provider,"prompt":"Report status","cron":"0 * * * *"});
+        assert_eq!(validation::arguments(tool, None, &arguments), Ok(()));
+
+        for model in [json!("namespace/model"), Value::Null] {
+            arguments["model"] = model;
+            assert_eq!(
+                validation::arguments(tool, None, &arguments),
+                Err("Arguments do not match the tool input schema")
+            );
+        }
+    }
+}
+
+#[test]
 fn catalog_has_unique_registered_methods_and_closed_schemas() {
     let mut names = std::collections::BTreeSet::new();
     let methods: Vec<_> = crate::capabilities::implemented_methods()
@@ -41,6 +198,12 @@ fn negotiates_supported_versions_and_latest_for_unknown_clients() {
         );
         assert_eq!(result["serverInfo"]["name"], "ait-daemon");
         assert_eq!(result["capabilities"], json!({"tools":{}}));
+        assert!(
+            result["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("separate provider and model fields")
+        );
     }
     assert!(initialize(&json!({})).is_err());
     assert!(initialize(&json!({"protocolVersion":"2025-03-26"})).is_err());
@@ -254,4 +417,22 @@ async fn a_detached_call_finishes_its_work_after_the_wait_times_out() {
         attached_finished.await.is_err(),
         "attached work outlived its wait"
     );
+}
+
+#[test]
+fn schedule_model_type_errors_are_reported_before_conflicts() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "update_schedule")
+        .unwrap();
+    for model in [json!(42), json!(false), json!([]), json!({})] {
+        assert_eq!(
+            validation::arguments(
+                tool,
+                None,
+                &json!({"id":"x","provider":"codex/gpt","model":model})
+            ),
+            Err("Arguments do not match the tool input schema")
+        );
+    }
 }
