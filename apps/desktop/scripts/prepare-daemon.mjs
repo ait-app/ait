@@ -26,8 +26,10 @@ function main() {
   if (process.platform !== "darwin" && process.platform !== "linux") {
     throw new Error("Ait desktop releases support macOS and Linux only.");
   }
-  const binary = process.env.AIT_SERVER_BIN || path.join(root, "target/release/daemon");
-  if (!process.env.AIT_SERVER_BIN) {
+  // COMPAT(daemonBinEnv): AIT_SERVER_BIN renamed to AITD_BIN in v0.2.12; remove after 2027-05-14.
+  const override = process.env.AITD_BIN || process.env.AIT_SERVER_BIN;
+  const binary = override || path.join(root, "target/release/daemon");
+  if (!override) {
     execFileSync(
       "cargo",
       [

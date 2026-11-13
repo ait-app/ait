@@ -46,10 +46,7 @@ test("dev Linux desktop builds its daemon on the release glibc baseline", () => 
   const toolchain = steps.find((step) => step.uses?.startsWith("dtolnay/rust-toolchain@"));
   assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
   const build = steps.find((step) => step.name === "Build desktop");
-  assert.match(
-    build.env.AIT_SERVER_BIN,
-    /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/,
-  );
+  assert.match(build.env.AITD_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
 });
 
 test("dev builds package both standalone daemons and explain the macOS quarantine", () => {

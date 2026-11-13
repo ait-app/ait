@@ -2,7 +2,7 @@
  * Validate the repository SDK and desktop transports against a real Rust server.
  * Dependencies: esbuild, vitest, zod ^4.4.3, tweetnacl, base64-js, semver and ws (or Playwright).
  * PASEO_TEST_DEPS: test node_modules directory.
- * AIT_SERVER_BIN: compiled Rust server; PASEO_VALIDATION_REPORT: optional JSON output.
+ * AITD_BIN: compiled Rust server; PASEO_VALIDATION_REPORT: optional JSON output.
  * --terminal: test the imported SDK and desktop terminal lifecycle only (no upstream checkout needed).
  * --files: test real file lookup, reads and the desktop live-file model using the imported SDK.
  * No npm install, credentials, real projects or provider sessions are used by this script.
@@ -20,7 +20,7 @@ const filesOnly = process.argv.includes("--files");
 const focused = terminalOnly || filesOnly;
 const upstream = repo;
 const deps = process.env.PASEO_TEST_DEPS || path.join(repo, "node_modules");
-const serverBinary = process.env.AIT_SERVER_BIN || path.join(repo, "target/debug/daemon");
+const serverBinary = process.env.AITD_BIN || path.join(repo, "target/debug/daemon");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "ait-paseo-validation-"));
 const resolve = (name) => require.resolve(name, { paths: [deps, repo] });
 const esbuild = require(resolve("esbuild"));
@@ -577,7 +577,7 @@ vi.mock('@/desktop/daemon/local-daemon-transport-rpc', () => ({ defaultLocalDaem
 
 (async () => {
   try {
-    assert(fs.existsSync(serverBinary), "Build daemon or set AIT_SERVER_BIN");
+    assert(fs.existsSync(serverBinary), "Build daemon or set AITD_BIN");
     fs.writeFileSync(
       path.join(work, "ws.cjs"),
       `const mod=require(${JSON.stringify(wsPath)});exports.WebSocket=mod.WebSocket||mod.ws||mod;`,

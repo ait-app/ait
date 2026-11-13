@@ -23,12 +23,12 @@ const packagedApp = process.env.AIT_PACKAGED_APP;
 const env = {
   ...process.env,
   AIT_SERVER_DATA_DIR: path.join(temporary, "server"),
-  AIT_SERVER_BIN:
-    process.env.AIT_SERVER_BIN ||
+  AITD_BIN:
+    process.env.AITD_BIN ||
     path.join(root, "target/debug", process.platform === "win32" ? "daemon.exe" : "daemon"),
   AIT_ELECTRON_USER_DATA_DIR: path.join(temporary, "electron"),
 };
-if (packagedApp) delete env.AIT_SERVER_BIN;
+if (packagedApp) delete env.AITD_BIN;
 delete env.ELECTRON_RUN_AS_NODE;
 let app;
 let page;

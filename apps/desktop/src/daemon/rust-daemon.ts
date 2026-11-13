@@ -564,7 +564,9 @@ export class RustDaemonManager {
     this.token = process.env.AIT_SERVER_TOKEN ?? null;
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
-        ([key]) => !key.startsWith("AIT_SERVER_") || PROVIDER_ENVIRONMENT_KEYS[key] === true,
+        ([key]) =>
+          key !== "AITD_BIN" &&
+          (!key.startsWith("AIT_SERVER_") || PROVIDER_ENVIRONMENT_KEYS[key] === true),
       ),
     );
     // Mobile registrations arrive through the account's separate Hub access link.

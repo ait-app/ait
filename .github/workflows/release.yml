@@ -212,13 +212,19 @@ jobs:
       - name: Package Linux desktop
         if: matrix.platform == 'linux'
         env:
+          AITD_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # Old immutable tags rebuilt from this workflow still read the former name.
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
         run: npm run package:linux
 
       - name: Package, sign, and notarize macOS desktop
         if: matrix.platform == 'mac'
         env:
+          AITD_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # Old immutable tags rebuilt from this workflow still read the former name.
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # The web bundle peaks near 2.7 GB; Node's default heap on the 7 GB macOS runner is too small.
+          NODE_OPTIONS: --max-old-space-size=4096
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

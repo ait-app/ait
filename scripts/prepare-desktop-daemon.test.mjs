@@ -41,7 +41,7 @@ test("staging removes stale sidecars and copies only the matching daemon", (t) =
   assert.deepEqual(readFileSync(staged), readFileSync(input.binary));
 });
 
-test("staging rejects an old daemon even when AIT_SERVER_BIN points to it", (t) => {
+test("staging rejects an old daemon even when AITD_BIN points to it", (t) => {
   const input = fixture(t, "0.0.6");
   assert.throws(() => stageDaemon(input), /Expected aitd 0\.0\.7/);
   assert(!existsSync(input.directory));

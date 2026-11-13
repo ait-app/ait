@@ -40,6 +40,8 @@ let manager: RustDaemonManager | null = null;
 function getRustDaemon(): RustDaemonManager {
   manager ??= new RustDaemonManager({
     binary:
+      process.env.AITD_BIN ||
+      // COMPAT(daemonBinEnv): AIT_SERVER_BIN renamed to AITD_BIN in v0.2.12; remove after 2027-05-14.
       process.env.AIT_SERVER_BIN ||
       (app.isPackaged
         ? path.join(

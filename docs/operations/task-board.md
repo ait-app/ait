@@ -35,4 +35,4 @@ npm run test --workspace=@ait/mobile -- src/task-board/model.test.ts src/task-bo
 npm run test:e2e --workspace=@ait/mobile -- e2e/browser/task-board.spec.ts
 ```
 
-浏览器测试使用独立临时主机和仓库内的离线 Codex fixture，不调用已登录的真实模型 CLI。可通过 `E2E_AIT_SERVER_BIN` 指定现有 daemon 构建。
+浏览器测试使用独立临时主机和仓库内的离线 Codex fixture，不调用已登录的真实模型 CLI。可通过 `E2E_AITD_BIN` 指定现有 daemon 构建。
