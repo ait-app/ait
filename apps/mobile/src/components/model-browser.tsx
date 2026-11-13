@@ -61,7 +61,10 @@ import {
   resolveModelBrowserAllView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
-import { presetSectionIsVisible } from "@/components/model-preset-sections";
+import {
+  presetSectionIsVisible,
+  resolveModelCardSections,
+} from "@/components/model-preset-sections";
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
@@ -1305,11 +1308,16 @@ function ProviderModelBrowserContent({
       />
     );
   }
-  const modelRowsHeading = (
+  const sections = resolveModelCardSections({
+    modelCount: visibleRows.length,
+    presetCount: providerProfileRows.length,
+    modelError: Boolean(selection.error),
+  });
+  const modelRowsHeading = sections.defaultModel ? (
     <View style={styles.sectionHeading}>
       <Text style={styles.sectionHeadingText}>{t("modelSelector.defaultModelHeading")}</Text>
     </View>
-  );
+  ) : null;
   const header = selection.error ? (
     <>
       <ProviderErrorEmptyState
@@ -1323,7 +1331,7 @@ function ProviderModelBrowserContent({
   ) : (
     <>
       {profileHeader}
-      {visibleRows.length > 0 ? modelRowsHeading : null}
+      {modelRowsHeading}
     </>
   );
   if (visibleRows.length === 0) {
