@@ -139,6 +139,14 @@ export function serverInfo(
       importSessionSearch: has("provider.sessions.recent.list.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
+      providerPresets:
+        !scopedGuest &&
+        [
+          "provider.presets.describe.request",
+          "provider.presets.list.request",
+          "provider.presets.save.request",
+          "provider.presets.delete.request",
+        ].every(has),
       sideQuestions: ["ask", "cancel", "history", "transfer"].every((operation) =>
         has(`agent.side_question.${operation}.request`),
       ),

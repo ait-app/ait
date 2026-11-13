@@ -11,6 +11,13 @@ const SIDE_QUESTION_METHODS: [&str; 4] = [
     "agent.side_question.transfer.request",
 ];
 
+const PROVIDER_PRESET_METHODS: [&str; 4] = [
+    "provider.presets.describe.request",
+    "provider.presets.list.request",
+    "provider.presets.save.request",
+    "provider.presets.delete.request",
+];
+
 #[test]
 fn empty_host_keeps_only_builtin_api_methods() {
     assert_eq!(
@@ -44,7 +51,10 @@ fn empty_host_keeps_only_builtin_api_methods() {
     );
     let registered = crate::registered_capabilities();
     assert!(methods.iter().all(|method| registered.contains(method)));
-    for method in SIDE_QUESTION_METHODS {
+    for method in SIDE_QUESTION_METHODS
+        .into_iter()
+        .chain(PROVIDER_PRESET_METHODS)
+    {
         assert!(registered.iter().any(|name| name == method), "{method}");
         assert!(!methods.iter().any(|name| name == method), "{method}");
     }
@@ -81,6 +91,7 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     assert_eq!(names.len(), unique.len());
     assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
+    assert!(unique.contains("provider.presets.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
     let registered_names: BTreeSet<_> = registered.iter().map(String::as_str).collect();
@@ -99,6 +110,14 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
         })
         .collect::<BTreeSet<_>>();
     assert_eq!(side_questions, BTreeSet::from(SIDE_QUESTION_METHODS));
+    let presets = ::provider::capabilities::implemented_methods()
+        .filter(|spec| spec.name.starts_with("provider.presets."))
+        .map(|spec| {
+            assert_eq!(spec.kind, InboundKind::Request, "{}", spec.name);
+            spec.name
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(presets, BTreeSet::from(PROVIDER_PRESET_METHODS));
     assert!(unique.contains("bot.message.send.request"));
     for name in [
         "browser.tunnel.open.request",

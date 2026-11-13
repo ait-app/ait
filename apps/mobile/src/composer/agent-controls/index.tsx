@@ -103,6 +103,11 @@ import {
   type AgentProfileSeed,
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
+import {
+  withModelPresetRoleDefaults,
+  type ModelPresetControls,
+  type ModelPresetConfiguration,
+} from "@/agent-controls/model-presets";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
 interface AgentControlOption {
@@ -131,6 +136,7 @@ interface ControlledAgentControlsProps {
   modelSelectorProviders?: ProviderSelectorProvider[];
   agentProfiles?: AgentProfilePicker | null;
   onApplyAgentProfile?: (profileId: string) => void;
+  modelPresets?: ModelPresetControls;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
   onEditAgentProfile?: (profileId: string) => void;
@@ -162,6 +168,8 @@ export interface DraftAgentControlsProps {
   selectedThinkingOptionId: string;
   onSelectThinkingOption: (thinkingOptionId: string) => void;
   onApplyAgentProfile: DraftAgentProfileControls["applyProfile"];
+  onApplyModelPreset?: (provider: string, configuration: ModelPresetConfiguration) => void;
+  modelSelectorCwd?: string | null;
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onDropdownClose?: () => void;
@@ -503,6 +511,7 @@ function ControlledAgentControls({
   modelSelectorProviders,
   agentProfiles = null,
   onApplyAgentProfile,
+  modelPresets,
   onEditAgentProfiles,
   onCreateAgentProfile,
   onEditAgentProfile,
@@ -770,6 +779,7 @@ function ControlledAgentControls({
             features={features}
             onSetFeature={onSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
+            modelPresets={modelPresets}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
             onEditAgentProfile={onEditAgentProfile}
@@ -819,6 +829,7 @@ function ControlledAgentControls({
             features={features}
             onSetFeature={onSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
+            modelPresets={modelPresets}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
             onEditAgentProfile={onEditAgentProfile}
@@ -865,6 +876,7 @@ interface DesktopAgentControlsContentProps {
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
+  modelPresets?: ModelPresetControls;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
   onEditAgentProfile?: (profileId: string) => void;
@@ -927,6 +939,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     features,
     onSetFeature,
     onApplyAgentProfile,
+    modelPresets,
     onEditAgentProfiles,
     onCreateAgentProfile,
     onEditAgentProfile,
@@ -1017,6 +1030,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 onSelect={handleDesktopModelSelect}
                 profiles={agentProfiles}
                 onApplyProfile={onApplyAgentProfile}
+                modelPresets={modelPresets}
                 onEditProfiles={onEditAgentProfiles}
                 onCreateProfile={onCreateAgentProfile}
                 onEditProfile={onEditAgentProfile}
@@ -1137,6 +1151,7 @@ interface SheetAgentControlsContentProps {
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
+  modelPresets?: ModelPresetControls;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
   onEditAgentProfile?: (profileId: string) => void;
@@ -1181,6 +1196,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     features,
     onSetFeature,
     onApplyAgentProfile,
+    modelPresets,
     onEditAgentProfiles,
     onCreateAgentProfile,
     onEditAgentProfile,
@@ -1284,6 +1300,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       onSelect={handleSheetModelSelect}
       profiles={agentProfiles}
       onApplyProfile={onApplyAgentProfile}
+      modelPresets={modelPresets}
       onEditProfiles={onEditAgentProfiles}
       onCreateProfile={onCreateAgentProfile}
       onEditProfile={onEditAgentProfile}
@@ -1743,6 +1760,36 @@ export const AgentControls = memo(function AgentControls({
   const profileEditor = useAgentProfileEditor(serverId);
   const profileActions = resolveAgentProfileEditorActions(agentProfiles !== null, profileEditor);
 
+  const modelPresets = useMemo<ModelPresetControls>(
+    () => ({
+      cwd: agent?.cwd,
+      apply: (provider, configuration) => {
+        if (!client || provider !== agentProvider) return;
+        const complete = withModelPresetRoleDefaults(configuration, agent?.features ?? []);
+        void client
+          .applyAgentConfig(agentId, complete)
+          .then(async (notice) => {
+            showProviderNoticeToast(toast, notice);
+            await updatePreferences((current) =>
+              mergeProviderPreferences({
+                preferences: current,
+                provider,
+                updates: {
+                  model: configuration.modelId,
+                  thinkingByModel: {
+                    [configuration.modelId]: configuration.thinkingOptionId ?? "",
+                  },
+                  featureValues: complete.featureValues,
+                },
+              }),
+            );
+          })
+          .catch((error) => toast.error(toErrorMessage(error)));
+      },
+    }),
+    [agent?.cwd, agent?.features, agentId, agentProvider, client, toast, updatePreferences],
+  );
+
   const handleSelectThinkingOption = useCallback(
     (thinkingOptionId: string) => {
       if (!client || !agentProvider) {
@@ -1873,6 +1920,7 @@ export const AgentControls = memo(function AgentControls({
         modelSelectorProviders={agentModelSelectorProviders}
         modelOptions={modelOptions}
         selectedModelId={modelSelection.activeModelId ?? undefined}
+        modelPresets={modelPresets}
         onSelectModel={handleSelectModel}
         agentProfiles={agentProfiles}
         onApplyAgentProfile={agentProfiles?.applyProfile}
@@ -1915,6 +1963,8 @@ export function DraftAgentControls({
   selectedThinkingOptionId,
   onSelectThinkingOption,
   onApplyAgentProfile,
+  onApplyModelPreset,
+  modelSelectorCwd,
   features,
   onSetFeature,
   onDropdownClose,
@@ -1969,6 +2019,11 @@ export function DraftAgentControls({
   const profileEditor = useAgentProfileEditor(modelSelectorServerId);
   const profileActions = resolveAgentProfileEditorActions(agentProfiles !== null, profileEditor);
 
+  const modelPresets = useMemo<ModelPresetControls | undefined>(
+    () => (onApplyModelPreset ? { cwd: modelSelectorCwd, apply: onApplyModelPreset } : undefined),
+    [modelSelectorCwd, onApplyModelPreset],
+  );
+
   const modeControl = useMemo<AgentModeControlValue | null>(
     () =>
       selectedProvider && modeOptions.length > 0
@@ -1996,6 +2051,7 @@ export function DraftAgentControls({
         onSelectProviderAndModel={onSelectProviderAndModel}
         isModelLoading={isAllModelsLoading}
         agentProfiles={agentProfiles}
+        modelPresets={modelPresets}
         onApplyAgentProfile={agentProfiles?.applyProfile}
         onEditAgentProfiles={handleEditAgentProfiles}
         onCreateAgentProfile={profileActions.create}

@@ -8,7 +8,9 @@ Rust/Cargo and Python 3 are required. Global setup builds the frontend dependenc
 npm run test:e2e --workspace=@ait/mobile -- e2e/browser/ait-daemon.spec.ts e2e/browser/workspace-model-restart.spec.ts e2e/browser/daemon-lifecycle.spec.ts
 ```
 
-CI runs one browser path, composer prompt to provider reply, in the `web-client-e2e` job:
+CI runs the composer prompt/reply path and Provider model-preset journeys in the `web-client-e2e`
+job. The preset checks use the offline OMP peer: settings create a native preset, desktop and mobile
+model cards apply it, and a draft's first message preserves its saved role assignments.
 
 ```sh
 npm run test:e2e:smoke --workspace=@ait/mobile

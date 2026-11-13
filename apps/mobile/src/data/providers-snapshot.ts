@@ -1,4 +1,4 @@
-import { CancelledError, type QueryClient } from "@tanstack/react-query";
+import { CancelledError, type Query, type QueryClient } from "@tanstack/react-query";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { GetProvidersSnapshotResponseMessage } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
@@ -51,9 +51,73 @@ type Snapshot = GetProvidersSnapshotResponseMessage["payload"];
 type SnapshotClient = Pick<DaemonClient, "getProvidersSnapshot">;
 
 function withSnapshotBody(snapshot: Snapshot): Snapshot {
+  // Full legacy responses put fetch times in entries, outside the content hash. Keep them as
+  // scope metadata when materialization reuses an unchanged compact body from the hash cache.
+  if (snapshot.fetchedAt === undefined) {
+    const fetchedAt = Object.fromEntries(
+      snapshot.entries.flatMap((entry) =>
+        entry.fetchedAt ? [[entry.provider, entry.fetchedAt]] : [],
+      ),
+    );
+    if (Object.keys(fetchedAt).length > 0) snapshot = { ...snapshot, fetchedAt };
+  }
   if (!snapshot.snapshotHash || snapshot.compactSnapshot || snapshot.notModified) return snapshot;
   // A full Rust daemon response carries entries and a hash without a compact body.
   return { ...snapshot, compactSnapshot: compactProviderSnapshot(snapshot.entries) };
+}
+
+/** A completed catalog refresh also retires role reads taken against its previous identity. */
+function invalidateReadyPresetFeatures(input: {
+  queryClient: QueryClient;
+  serverId: string;
+  cwd: string | null;
+  previous: Snapshot | undefined;
+  next: Snapshot;
+}): void {
+  // A legacy conditional GET may omit both the unchanged body and fetch-time metadata.
+  // A newer revision still proves discovery progressed; its exact provider is unknowable,
+  // so refresh only the ready role queries in this host/directory once for that revision.
+  const legacyCompletion =
+    input.next.notModified === true &&
+    input.next.fetchedAt === undefined &&
+    input.previous?.generation !== undefined &&
+    input.previous.generation === input.next.generation &&
+    input.previous.revision !== undefined &&
+    input.next.revision !== undefined &&
+    input.next.revision > input.previous.revision;
+  const ready = new Set(
+    input.next.entries
+      .filter((entry) => {
+        if (entry.status !== "ready" || input.next.refreshing?.includes(entry.provider))
+          return false;
+        const previous = input.previous?.entries.find(
+          (candidate) => candidate.provider === entry.provider,
+        );
+        return (
+          !previous ||
+          previous.status !== "ready" ||
+          input.previous?.refreshing?.includes(entry.provider) ||
+          input.previous?.generation !== input.next.generation ||
+          previous.fetchedAt !== entry.fetchedAt ||
+          legacyCompletion
+        );
+      })
+      .map((entry) => entry.provider),
+  );
+  if (!ready.size) return;
+  const filters = {
+    predicate: (query: Query) =>
+      query.queryKey[0] === "providerPresetFeatures" &&
+      query.queryKey[1] === input.serverId &&
+      ready.has(String(query.queryKey[2])) &&
+      normalizeProvidersSnapshotCwd(query.queryKey[3] as string | null | undefined) ===
+        normalizeProvidersSnapshotCwd(input.cwd),
+  };
+  // Invalidation alone can join a first read that still has no data. Retire that read first:
+  // its native identity may have changed during discovery, yielding a misleading empty list.
+  void input.queryClient
+    .cancelQueries(filters)
+    .then(() => input.queryClient.invalidateQueries(filters));
 }
 
 export async function fetchProvidersSnapshot(input: {
@@ -157,7 +221,15 @@ export async function fetchProvidersSnapshot(input: {
   const latest = queryClient.getQueryData<Snapshot>(queryKey);
   if (isNewerSnapshot(latest, snapshot)) return latest;
   replaceProviderSnapshotIcons(input.serverId, entries);
-  return retained ? { ...snapshot, entries } : snapshot;
+  const result = retained ? { ...snapshot, entries } : snapshot;
+  invalidateReadyPresetFeatures({
+    queryClient,
+    serverId: input.serverId,
+    cwd: input.cwd,
+    previous: latest,
+    next: result,
+  });
+  return result;
 }
 
 export async function refreshAndApplyProvidersSnapshot(input: {

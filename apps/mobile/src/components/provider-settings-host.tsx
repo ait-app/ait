@@ -6,6 +6,7 @@ import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 export function ProviderSettingsHost() {
   const serverId = useProviderSettingsStore((state) => state.serverId);
   const provider = useProviderSettingsStore((state) => state.provider);
+  const cwd = useProviderSettingsStore((state) => state.cwd);
   const visible = useProviderSettingsStore((state) => state.visible);
   const overlayParentLayer = useProviderSettingsStore((state) => state.overlayParentLayer);
   const close = useProviderSettingsStore((state) => state.close);
@@ -21,9 +22,10 @@ export function ProviderSettingsHost() {
   return (
     <OverlayLayerProvider layer={overlayParentLayer}>
       <ProviderDiagnosticSheet
-        key={`${serverId}:${provider}`}
+        key={JSON.stringify([serverId, provider, cwd ?? null])}
         provider={provider}
         serverId={serverId}
+        cwd={cwd}
         visible={visible}
         onClose={handleClose}
       />

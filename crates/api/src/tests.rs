@@ -221,6 +221,10 @@ fn assert_default_capabilities(info: &ServerInfo) {
         "agent.side_question.cancel.request",
         "agent.side_question.history.request",
         "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
     ] {
         assert!(advertised.contains(method), "{method}");
         assert!(

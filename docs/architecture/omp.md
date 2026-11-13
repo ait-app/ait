@@ -48,6 +48,16 @@ flowchart LR
   默认 profile 另保护两个根目录下的 `profiles`；命名 profile 的会话不保护 `profiles`
   （ADR-248 第 11 条）。缺少 `config.yml` 时的 `settings.json` 迁移在受限会话中被拒绝，OMP 记录警告后照常运行。
 
+## 模型角色与预设
+
+- 角色目录来自现有的公开配置与模型元数据；预设库由 `provider-omp` 实现
+  `provider-core` 的预设端口，读取原生全局与项目 `modelPresets`，项目同名条目优先且只读。
+- 管理界面经统一预设 RPC 保存或删除全局记录；使用 OMP 的公开 `config` 命令，不直接编辑
+  用户配置文件，不为元数据启动 RPC 探针。原生库读取失败时显示原因，不回退到 Ait 存储。
+- 预设切换复用现有角色 `modelRole.*` 和 `--config` overlay：遗漏角色回继承 `native`，
+  显式 `unset` 保持清空，默认模型与思考等级随预设一起应用；会话仍用 `rpc-ui`
+  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
+
 ## 会话与恢复
 
 - 持久句柄：`session_id` 为 OMP 的 `sessionId`，不写 `native_handle`；metadata 含 `cwd`、

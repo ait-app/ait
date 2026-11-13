@@ -100,6 +100,10 @@ impl ExecutionState {
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
+            Operation::PresetDescribe
+            | Operation::PresetList
+            | Operation::PresetSave
+            | Operation::PresetDelete => self.presets(method.as_str(), &params).await,
             Operation::Usage => self.usage(params).await,
             Operation::UsageLedger => self.usage_ledger(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,

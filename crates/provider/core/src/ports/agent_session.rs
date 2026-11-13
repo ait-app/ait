@@ -444,6 +444,54 @@ pub trait AgentClient: Debug + Send + Sync {
     /// Default no-op; adapters with a discovery cache (e.g. the OMP role catalog) override it.
     fn refresh_discovery_cache(&self, _cwd: &str) {}
 
+    /// Report this provider's preset store and the operations it supports.
+    ///
+    /// Ait-managed presets are served by the caller, so adapters answer only for a native store.
+    /// The default reports no native store, which leaves the unified editor on the Ait backend.
+    async fn preset_descriptor(&self, _cwd: &str) -> super::preset::PresetDescriptor {
+        super::preset::PresetDescriptor::managed(super::preset::PresetBackend::Ait)
+    }
+
+    /// List this provider's **native** presets, when the harness owns them.
+    ///
+    /// Adapters without a native store return an empty list; the caller then reads its own.
+    /// # Errors
+    /// Returns a client-readable reason when the native store cannot be read.
+    async fn native_presets(
+        &self,
+        _cwd: &str,
+    ) -> Result<Vec<super::preset::PresetEntry>, super::preset::PresetError> {
+        Ok(Vec::new())
+    }
+
+    /// Create or replace one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn save_native_preset(
+        &self,
+        _cwd: &str,
+        _preset: &super::preset::Preset,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
+    /// Remove one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn delete_native_preset(
+        &self,
+        _cwd: &str,
+        _name: &str,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
     /// Restore durable session-scoped questions without opening a native writer.
     /// Native tool approvals are deliberately excluded because their transport has expired.
     fn persisted_permissions(&self, _handle: &AgentPersistenceHandle) -> Vec<serde_json::Value> {

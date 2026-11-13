@@ -13,6 +13,10 @@ fn catalog_and_implemented_methods_keep_their_envelope_metadata() {
         "agent.side_question.cancel.request",
         "agent.side_question.history.request",
         "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
     ] {
         assert!(names.contains(method), "{method}");
         assert_eq!(

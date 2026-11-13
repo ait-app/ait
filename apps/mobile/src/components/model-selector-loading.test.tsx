@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
-import React, { type ComponentProps } from "react";
+import React, { type ComponentProps, type ReactNode } from "react";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
@@ -73,7 +74,14 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
       );
     }
 
-    const view = render(<Selector />);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const view = render(<Selector />, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
     const trigger = view.getByTestId("combined-model-selector");
     // The remembered selection stays visible while its provider loads.
     expect(trigger.textContent).toBe("remembered-model");

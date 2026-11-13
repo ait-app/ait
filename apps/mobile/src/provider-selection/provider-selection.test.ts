@@ -49,6 +49,7 @@ describe("combined model selector data", () => {
       {
         id: "codex",
         label: "Codex",
+        modelDefinitions: [codexModel],
         modelSelection: {
           kind: "models",
           rows: [
@@ -98,6 +99,7 @@ describe("combined model selector data", () => {
       {
         id: "codewhale",
         label: "CodeWhale",
+        modelDefinitions: [],
         modelSelection: {
           kind: "models",
           rows: [
@@ -150,11 +152,13 @@ describe("combined model selector data", () => {
       {
         id: "loading-provider",
         label: "loading-provider",
+        modelDefinitions: [],
         modelSelection: { kind: "loading" },
       },
       {
         id: "error-provider",
         label: "error-provider",
+        modelDefinitions: [],
         modelSelection: { kind: "error", message: "boom" },
       },
     ]);
@@ -207,6 +211,7 @@ describe("combined model selector data", () => {
       {
         id: "codex",
         label: "Codex",
+        modelDefinitions: [codexModel],
         modelSelection: {
           kind: "models",
           rows: [

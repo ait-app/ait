@@ -20,7 +20,7 @@ use provider_core::protocol::provider::Details;
 
 mod draft;
 mod loading;
-mod scope;
+pub(super) mod scope;
 
 #[derive(Debug, Clone)]
 struct Entry {

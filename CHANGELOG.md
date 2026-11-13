@@ -11,6 +11,7 @@
 - Oh My Pi model roles come from the installed OMP's live profile, and only assignments that the live catalog resolves are accepted.
 - Test feature: Workspace Bots can connect to international Lark through manual setup in Bot settings, separately from China's Feishu.
 
+- Manage named model presets in Provider settings and select them below the default models in the model picker when the Provider supports model roles. A preset applies its model, thinking level and complete role assignments together, preserving permissions and tools. Oh My Pi uses its native preset library, with project overrides kept read-only; other Providers store presets in Ait. Unavailable models remain editable in settings and cannot be applied by mistake. The Host daemon must be upgraded.
 - `/btw` opens an independent floating conversation above the main input with streamed answers, continued follow-ups, saved history and separate cancellation. The window follows the input's height and stays clear of it. Expand a settled side conversation into a full session draft with its frozen parent context and question/answer history, then continue working there. Main and side conversations run independently through a shared provider interface; support depends on the installed provider adapter and runtime. The Host daemon must be upgraded.
 - Mathematical formulas render in the shared Markdown engine, including BTW windows and expanded conversations. Web and desktop use local MathML with Ait theme sizing and colors; native apps need a new build to enable the math module.
 

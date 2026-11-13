@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import { QueryClient, CancelledError } from "@tanstack/react-query";
-import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
+import { QueryClient, QueryObserver, CancelledError } from "@tanstack/react-query";
+import type { AgentFeature, ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { GetProvidersSnapshotResponseMessage } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { applyProvidersSnapshotUpdate } from "./push-router";
@@ -251,6 +251,207 @@ const snapshot = {
   snapshotHash: "test-hash",
   compactSnapshot: compactProviderSnapshot(entries),
 } satisfies GetProvidersSnapshotResponseMessage["payload"];
+
+describe("role discovery follows completed model catalogs", () => {
+  const roles: AgentFeature[] = [
+    { type: "select", id: "modelRole.task", label: "Task", value: "native", options: [] },
+  ];
+
+  it.each(["first-ready", "bootstrap", "refresh"] as const)(
+    "repairs a cached empty role list after %s without touching other scopes",
+    async (transition) => {
+      const queryClient = new QueryClient();
+      const cache = createProviderSnapshotCache(createStorage());
+      const serverId = `role-catalog-${transition}`;
+      const provider = entries[0]!.provider;
+      const key = providersSnapshotQueryKey(serverId, snapshot.cwd);
+      const entry = { ...entries[0]!, fetchedAt: "2026-09-07T00:00:01.000Z" };
+      const ready = {
+        ...snapshot,
+        entries: [entry],
+        compactSnapshot: compactProviderSnapshot([entry]),
+        snapshotHash: "role-catalog-ready",
+        generation: "daemon",
+        revision: 2,
+        refreshing: [],
+      };
+      if (transition !== "first-ready")
+        queryClient.setQueryData(key, {
+          ...ready,
+          entries: [
+            {
+              ...entry,
+              status: transition === "bootstrap" ? "loading" : "ready",
+              fetchedAt: "2026-09-07T00:00:00.000Z",
+            },
+          ],
+          revision: 1,
+        });
+      const roleKey = ["providerPresetFeatures", serverId, provider, snapshot.cwd];
+      const untouched = [
+        ["providerPresetFeatures", "another-host", provider, snapshot.cwd],
+        ["providerPresetFeatures", serverId, "another-provider", snapshot.cwd],
+        ["providerPresetFeatures", serverId, provider, "/another-repo"],
+        ["provider-presets", serverId, provider, snapshot.cwd],
+      ];
+      for (const other of untouched) queryClient.setQueryData(other, []);
+      const readRoles = vi.fn(async () => roles);
+      const observer = new QueryObserver(queryClient, {
+        queryKey: roleKey,
+        queryFn: readRoles,
+        initialData: [] as AgentFeature[],
+        staleTime: 60_000,
+      });
+      let markRepaired = () => {};
+      const repaired = new Promise<void>((resolve) => {
+        markRepaired = resolve;
+      });
+      const unsubscribe = observer.subscribe((result) => {
+        if (result.data?.length && !result.isFetching) markRepaired();
+      });
+      const client = {
+        getProvidersSnapshot: async () => ready,
+        refreshProvidersSnapshot: async () => ({
+          requestId: "refresh",
+          acknowledged: true,
+          generation: "daemon",
+          revision: 1,
+        }),
+      };
+      try {
+        expect(queryClient.getQueryData(roleKey)).toEqual([]);
+        if (transition === "refresh")
+          await refreshAndApplyProvidersSnapshot({
+            client,
+            serverId,
+            cwd: snapshot.cwd,
+            providers: [provider],
+            queryClient,
+            cache,
+          });
+        else if (transition === "first-ready")
+          await queryClient.fetchQuery({
+            queryKey: key,
+            queryFn: () =>
+              fetchProvidersSnapshot({ client, serverId, cwd: snapshot.cwd, queryClient, cache }),
+          });
+        else
+          await applyProvidersSnapshotUpdate({
+            client,
+            serverId,
+            queryClient,
+            cache,
+            message: { type: "provider.snapshot.update", payload: ready },
+          });
+        await repaired;
+        expect(queryClient.getQueryData(roleKey)).toEqual(roles);
+        expect(readRoles).toHaveBeenCalledTimes(1);
+        for (const other of untouched)
+          expect(queryClient.getQueryState(other)?.isInvalidated).toBe(false);
+        await applyProvidersSnapshotUpdate({
+          client,
+          serverId,
+          queryClient,
+          cache,
+          message: { type: "provider.snapshot.update", payload: ready },
+        });
+        expect(readRoles).toHaveBeenCalledTimes(1);
+      } finally {
+        unsubscribe();
+        queryClient.clear();
+      }
+    },
+  );
+
+  it("retires an unfinished first role read so a late empty response cannot replace the ready catalog", async () => {
+    const queryClient = new QueryClient();
+    const cache = createProviderSnapshotCache(createStorage());
+    const serverId = "roles-in-flight";
+    const provider = entries[0]!.provider;
+    const roleKey = ["providerPresetFeatures", serverId, provider, snapshot.cwd];
+    let releaseOld!: (value: AgentFeature[]) => void;
+    const oldRead = new Promise<AgentFeature[]>((resolve) => {
+      releaseOld = resolve;
+    });
+    const readRoles = vi.fn().mockReturnValueOnce(oldRead).mockResolvedValue(roles);
+    const observer = new QueryObserver<AgentFeature[]>(queryClient, {
+      queryKey: roleKey,
+      queryFn: readRoles,
+      staleTime: 60_000,
+    });
+    let markRepaired = () => {};
+    const repaired = new Promise<void>((resolve) => {
+      markRepaired = resolve;
+    });
+    const unsubscribe = observer.subscribe((result) => {
+      if (result.data?.length && !result.isFetching) markRepaired();
+    });
+    try {
+      expect(readRoles).toHaveBeenCalledTimes(1);
+      await applyProvidersSnapshotUpdate({
+        client: { getProvidersSnapshot: async () => snapshot },
+        serverId,
+        queryClient,
+        cache,
+        message: {
+          type: "provider.snapshot.update",
+          payload: { ...snapshot, entries, generation: "daemon", revision: 2, refreshing: [] },
+        },
+      });
+      await repaired;
+      releaseOld([]);
+      await oldRead;
+      expect(queryClient.getQueryData(roleKey)).toEqual(roles);
+      expect(readRoles).toHaveBeenCalledTimes(2);
+    } finally {
+      releaseOld([]);
+      unsubscribe();
+      queryClient.clear();
+    }
+  });
+
+  it("keeps a genuine no-role result stable across repeated unchanged ready snapshots", async () => {
+    const queryClient = new QueryClient();
+    const cache = createProviderSnapshotCache(createStorage());
+    const serverId = "roles-unsupported";
+    const provider = entries[0]!.provider;
+    const readRoles = vi.fn(async (): Promise<AgentFeature[]> => []);
+    const observer = new QueryObserver(queryClient, {
+      queryKey: ["providerPresetFeatures", serverId, provider, snapshot.cwd],
+      queryFn: readRoles,
+      initialData: [] as AgentFeature[],
+      staleTime: 60_000,
+    });
+    let markRead = () => {};
+    const read = new Promise<void>((resolve) => {
+      markRead = resolve;
+    });
+    const unsubscribe = observer.subscribe((result) => {
+      if (result.isFetchedAfterMount && !result.isFetching) markRead();
+    });
+    const input = {
+      client: { getProvidersSnapshot: async () => snapshot },
+      serverId,
+      queryClient,
+      cache,
+      message: {
+        type: "provider.snapshot.update" as const,
+        payload: { ...snapshot, entries, generation: "daemon", revision: 2, refreshing: [] },
+      },
+    };
+    try {
+      await applyProvidersSnapshotUpdate(input);
+      await read;
+      await applyProvidersSnapshotUpdate(input);
+      await applyProvidersSnapshotUpdate(input);
+      expect(readRoles).toHaveBeenCalledTimes(1);
+      expect(observer.getCurrentResult().data).toEqual([]);
+    } finally {
+      unsubscribe();
+      queryClient.clear();
+    }
+  });
+});
 
 describe("model catalog access", () => {
   it("retains the last good choices on discovery failure and replaces them after retry", async () => {
@@ -680,6 +881,203 @@ describe("provider snapshot publication identity", () => {
         expect(published.entries[0]!.models).toBe(canonical.entries[0]!.models);
       }
     } finally {
+      queryClient.clear();
+    }
+  });
+});
+
+describe("same-hash provider discovery completion", () => {
+  it.each([false, true])(
+    "refreshes role discovery with unchanged model content and explicit metadata = %s",
+    async (explicitMetadata) => {
+      const queryClient = new QueryClient();
+      const cache = createProviderSnapshotCache(createStorage());
+      const serverId = `same-hash-roles-${explicitMetadata}`;
+      const provider = entries[0]!.provider;
+      const oldTime = "2026-09-07T00:00:00.000Z";
+      const newTime = "2026-09-07T00:01:00.000Z";
+      const oldEntry = { ...entries[0]!, fetchedAt: oldTime };
+      const compact = compactProviderSnapshot([oldEntry]);
+      const previous = {
+        ...snapshot,
+        snapshotHash: "same-model-body",
+        compactSnapshot: compact,
+        entries: [oldEntry],
+        generation: "daemon",
+        revision: 1,
+        refreshing: [],
+      };
+      await cache.write({
+        serverId,
+        cwd: snapshot.cwd,
+        hash: previous.snapshotHash,
+        generatedAt: snapshot.generatedAt,
+        compactSnapshot: compact,
+        fetchedAt: { [provider]: oldTime },
+      });
+      queryClient.setQueryData(providersSnapshotQueryKey(serverId, snapshot.cwd), previous);
+      const roles: AgentFeature[] = [
+        { type: "select", id: "modelRole.task", label: "Task", value: "native", options: [] },
+      ];
+      const roleKey = ["providerPresetFeatures", serverId, provider, snapshot.cwd];
+      const readRoles = vi.fn(async () => roles);
+      const observer = new QueryObserver(queryClient, {
+        queryKey: roleKey,
+        queryFn: readRoles,
+        initialData: [] as AgentFeature[],
+        staleTime: 60_000,
+      });
+      let markRepaired = () => {};
+      const repaired = new Promise<void>((resolve) => {
+        markRepaired = resolve;
+      });
+      const unsubscribe = observer.subscribe((result) => {
+        if (result.data?.length && !result.isFetching) markRepaired();
+      });
+      // No intermediate loading event was delivered. Native legacy full pushes carry fresh
+      // entry timestamps even when the directory's model body and content hash are unchanged.
+      const terminal = {
+        requestId: "same-hash-terminal",
+        cwd: snapshot.cwd,
+        generatedAt: snapshot.generatedAt,
+        snapshotHash: previous.snapshotHash,
+        entries: [{ ...oldEntry, fetchedAt: explicitMetadata ? oldTime : newTime }],
+        generation: "daemon",
+        revision: 2,
+        refreshing: [],
+        ...(explicitMetadata ? { fetchedAt: { [provider]: newTime } } : {}),
+      };
+      const input = {
+        client: { getProvidersSnapshot: async () => terminal },
+        serverId,
+        queryClient,
+        cache,
+        message: { type: "provider.snapshot.update" as const, payload: terminal },
+      };
+      try {
+        await applyProvidersSnapshotUpdate(input);
+        await repaired;
+        expect(readRoles).toHaveBeenCalledTimes(1);
+        expect(queryClient.getQueryData(roleKey)).toEqual(roles);
+        expect(
+          queryClient.getQueryData<GetProvidersSnapshotResponseMessage["payload"]>(
+            providersSnapshotQueryKey(serverId, snapshot.cwd),
+          )?.entries[0]?.fetchedAt,
+        ).toBe(newTime);
+        // Only the directory association's timestamp changes; shared content and its hash stay.
+        expect((await cache.readHash(serverId, previous.snapshotHash))?.compactSnapshot).toEqual(
+          compact,
+        );
+        expect((await cache.read(serverId, snapshot.cwd))?.entries[0]?.fetchedAt).toBe(newTime);
+        await applyProvidersSnapshotUpdate(input);
+        expect(readRoles).toHaveBeenCalledTimes(1);
+      } finally {
+        unsubscribe();
+        queryClient.clear();
+      }
+    },
+  );
+});
+
+describe("legacy conditional catalog completion", () => {
+  it("repairs ready role queries when only the same-generation revision advances, once per revision and directory", async () => {
+    const queryClient = new QueryClient();
+    const cache = createProviderSnapshotCache(createStorage());
+    const serverId = "legacy-conditional-roles";
+    const otherProvider = "second-ready-provider";
+    const entry = { ...entries[0]!, fetchedAt: "2026-09-07T00:00:00.000Z" };
+    const readyEntries = [entry, { ...entry, provider: otherProvider }];
+    const compact = compactProviderSnapshot(readyEntries);
+    const previous = {
+      ...snapshot,
+      entries: readyEntries,
+      compactSnapshot: compact,
+      snapshotHash: "conditional-same-body",
+      generation: "daemon",
+      revision: 1,
+      refreshing: [],
+    };
+    await cache.write({
+      serverId,
+      cwd: snapshot.cwd,
+      hash: previous.snapshotHash,
+      generatedAt: snapshot.generatedAt,
+      compactSnapshot: compact,
+    });
+    const snapshotKey = providersSnapshotQueryKey(serverId, snapshot.cwd);
+    queryClient.setQueryData(snapshotKey, previous);
+    const untouched = [
+      ["providerPresetFeatures", "another-host", entry.provider, snapshot.cwd],
+      ["providerPresetFeatures", serverId, entry.provider, "/another-repo"],
+      ["provider-presets", serverId, entry.provider, snapshot.cwd],
+    ];
+    for (const key of untouched) queryClient.setQueryData(key, []);
+    const subscriptions = readyEntries.map((candidate) => {
+      const roles: AgentFeature[] = [
+        { type: "select", id: "modelRole.task", label: "Task", value: "native", options: [] },
+      ];
+      const readRoles = vi.fn(async () => roles);
+      const observer = new QueryObserver(queryClient, {
+        queryKey: ["providerPresetFeatures", serverId, candidate.provider, snapshot.cwd],
+        queryFn: readRoles,
+        initialData: [] as AgentFeature[],
+        staleTime: 60_000,
+      });
+      let markRepaired = () => {};
+      const repaired = new Promise<void>((resolve) => {
+        markRepaired = resolve;
+      });
+      const unsubscribe = observer.subscribe((result) => {
+        if (result.data?.length && !result.isFetching) markRepaired();
+      });
+      return { readRoles, repaired, unsubscribe };
+    });
+    // This is the native conditional GET: unchanged content, no entries, no timestamp map,
+    // no intervening loading push, but a newer discovery revision in the same daemon.
+    const terminal = {
+      requestId: "conditional-terminal",
+      cwd: snapshot.cwd,
+      generatedAt: snapshot.generatedAt,
+      snapshotHash: previous.snapshotHash,
+      notModified: true,
+      entries: [],
+      generation: "daemon",
+      revision: 2,
+      refreshing: [],
+    };
+    const getProvidersSnapshot = vi.fn(async () => terminal);
+    const read = () =>
+      queryClient.fetchQuery({
+        queryKey: snapshotKey,
+        queryFn: () =>
+          fetchProvidersSnapshot({
+            client: { getProvidersSnapshot },
+            serverId,
+            cwd: snapshot.cwd,
+            queryClient,
+            cache,
+          }),
+      });
+    try {
+      await read();
+      await Promise.all(subscriptions.map((subscription) => subscription.repaired));
+      for (const subscription of subscriptions)
+        expect(subscription.readRoles).toHaveBeenCalledTimes(1);
+      for (const key of untouched)
+        expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+      expect(getProvidersSnapshot).toHaveBeenLastCalledWith({
+        cwd: snapshot.cwd,
+        ifNoneMatch: previous.snapshotHash,
+      });
+      await read();
+      await read();
+      for (const subscription of subscriptions)
+        expect(subscription.readRoles).toHaveBeenCalledTimes(1);
+      expect((await cache.readHash(serverId, previous.snapshotHash))?.compactSnapshot).toEqual(
+        compact,
+      );
+    } finally {
+      for (const subscription of subscriptions) subscription.unsubscribe();
       queryClient.clear();
     }
   });

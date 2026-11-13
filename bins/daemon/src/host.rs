@@ -356,16 +356,14 @@ fn compose_services(
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let skills = compose_skills(&config.data_dir)?;
-    let agents = Agents::new(Box::new(catalog::OwnedCatalog {
-        catalog: SqliteCatalog::open(&config.data_dir)?,
-        _instance: instance.clone(),
-    }));
+    let agents = compose_agents(&config.data_dir, instance)?;
     let server_id = instance.server_id.to_string();
     let providers = compose_providers(&config.data_dir, usage_ledger);
     let MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets: provider_presets,
     } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
@@ -410,6 +408,7 @@ fn compose_services(
             summary_generator.clone(),
             workspace_names.clone(),
             workspace_automation.clone(),
+            provider_presets,
         ),
     )?;
     let (schedules, bots) = compose_background(
@@ -452,6 +451,15 @@ fn compose_services(
         },
         publication_sources,
     ))
+}
+
+/// Open the Agent catalog while retaining the host's instance lease for its consumers.
+/// Returns SQLite open failures without releasing the host's lease.
+fn compose_agents(data: &std::path::Path, instance: &Arc<InstanceLease>) -> anyhow::Result<Agents> {
+    Ok(Agents::new(Box::new(catalog::OwnedCatalog {
+        catalog: SqliteCatalog::open(data)?,
+        _instance: instance.clone(),
+    })))
 }
 
 /// Compose the injected Agent MCP and the scoped-credential registry it issues from.
@@ -633,6 +641,7 @@ struct MetadataServices {
     config: FileDaemonConfigStore,
     generator: Arc<dyn SummaryGenerator>,
     names: WorkspaceNames,
+    presets: provider::service::presets::PresetService,
 }
 
 fn compose_metadata(
@@ -649,10 +658,12 @@ fn compose_metadata(
         api::summary_source(summary_generator.clone()),
         Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
+    let presets = provider::service::presets::PresetService::new(Arc::new(config_store.clone()));
     MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets,
     }
 }
 
@@ -792,9 +803,10 @@ fn compose_provider(
         Arc<dyn SummaryGenerator>,
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
+        provider::service::presets::PresetService,
     ),
 ) -> anyhow::Result<AgentExecution> {
-    let (directory, generator, names, workspace_automation) = metadata;
+    let (directory, generator, names, workspace_automation, presets) = metadata;
     let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
     let (workspace_registry, project_registry, data_dir) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
@@ -804,7 +816,8 @@ fn compose_provider(
         .with_creations(directory.creations())
         .with_summary_generation(generator)
         .with_workspace_names(Arc::new(names))
-        .with_workspaces(Arc::new(workspace_registry.clone()));
+        .with_workspaces(Arc::new(workspace_registry.clone()))
+        .with_presets(presets);
     if let Some(ledger) = usage_ledger {
         manager = manager.with_usage_ledger(ledger.clone());
     }

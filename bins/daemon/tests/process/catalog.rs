@@ -74,6 +74,10 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         "agent.side_question.cancel.request",
         "agent.side_question.history.request",
         "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
     ] {
         assert!(implemented.contains(name));
         assert_eq!(

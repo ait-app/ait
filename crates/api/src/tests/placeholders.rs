@@ -36,6 +36,10 @@ async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_erro
         "agent.side_question.cancel.request",
         "agent.side_question.history.request",
         "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
     ] {
         assert!(
             placeholders.contains(&(method, InboundKind::Request)),

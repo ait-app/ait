@@ -50,6 +50,8 @@ pub struct OmpClient {
     /// Role catalogs by cwd and environment identity; the client is already host-scoped.
     role_catalogs:
         std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, RoleSnapshot>>>,
+    /// Serializes native global preset read-modify-write operations across directory scopes.
+    preset_writes: std::sync::Arc<tokio::sync::Mutex<()>>,
 }
 
 /// One cached role catalog plus the per-key read serialization gate.
@@ -76,6 +78,7 @@ impl OmpClient {
             role_catalogs: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::BTreeMap::new(),
             )),
+            preset_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -183,6 +186,16 @@ impl OmpClient {
             snapshot.fresh = false;
         }
     }
+
+    /// Global preset mutations can introduce or remove roles in every directory's catalog.
+    fn invalidate_all_role_catalogs(&self) {
+        if let Ok(mut catalogs) = self.role_catalogs.lock() {
+            for snapshot in catalogs.values_mut() {
+                snapshot.identity = std::sync::Arc::new(());
+                snapshot.fresh = false;
+            }
+        }
+    }
 }
 
 /// Resolve the installed OMP executable through `environment`.
@@ -226,6 +239,36 @@ impl AgentClient for OmpClient {
 
     fn supports_session_import(&self) -> bool {
         true
+    }
+
+    async fn preset_descriptor(&self, cwd: &str) -> provider_core::ports::preset::PresetDescriptor {
+        roles::presets::describe(self, cwd).await
+    }
+
+    async fn native_presets(
+        &self,
+        cwd: &str,
+    ) -> Result<
+        Vec<provider_core::ports::preset::PresetEntry>,
+        provider_core::ports::preset::PresetError,
+    > {
+        roles::presets::list(self, cwd).await
+    }
+
+    async fn save_native_preset(
+        &self,
+        cwd: &str,
+        preset: &provider_core::ports::preset::Preset,
+    ) -> Result<(), provider_core::ports::preset::PresetError> {
+        roles::presets::save(self, cwd, preset).await
+    }
+
+    async fn delete_native_preset(
+        &self,
+        cwd: &str,
+        name: &str,
+    ) -> Result<(), provider_core::ports::preset::PresetError> {
+        roles::presets::delete(self, cwd, name).await
     }
 
     fn handles_out_of_band(&self, text: &str) -> bool {

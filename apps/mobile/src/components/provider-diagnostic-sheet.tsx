@@ -3,6 +3,7 @@ import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-re
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
@@ -19,6 +20,7 @@ import { useToast } from "@/contexts/toast-context";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { refreshProviderPresetSettings } from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
@@ -31,12 +33,14 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import { ProviderPresetsSection } from "./provider-presets-section";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
   visible: boolean;
   onClose: () => void;
   serverId: string;
+  cwd?: string;
 }
 
 function rankModels<T>(items: T[], query: string, fields: (item: T) => string[]): T[] {
@@ -576,6 +580,7 @@ export function ProviderDiagnosticSheet({
   visible,
   onClose,
   serverId,
+  cwd,
 }: ProviderDiagnosticSheetProps) {
   const canConfigure = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.providerConfiguration !== false,
@@ -583,13 +588,19 @@ export function ProviderDiagnosticSheet({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const isCompact = useIsCompactFormFactor();
-  const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
+  const {
+    entries: snapshotEntries,
+    refresh,
+    isRefreshing,
+  } = useProvidersSnapshot(serverId, { cwd });
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [presetRefreshing, setPresetRefreshing] = useState(false);
 
   const providerLabel = resolveProviderLabel(provider, snapshotEntries);
   const providerEntry = useMemo(
@@ -605,9 +616,14 @@ export function ProviderDiagnosticSheet({
     providerEntry?.status === "error"
       ? (providerEntry.error ?? t("settings.providers.diagnostic.unknownError"))
       : null;
-  const modelsRefreshing = isRefreshing || providerSnapshotRefreshing;
+  const modelsRefreshing = isRefreshing || providerSnapshotRefreshing || presetRefreshing;
 
   const stableDiscoveredRef = useRef<ProviderDiscoveredModelsCache | null>(null);
+  const previousCwd = useRef(cwd);
+  if (previousCwd.current !== cwd) {
+    stableDiscoveredRef.current = null;
+    previousCwd.current = cwd;
+  }
   const currentModels = providerEntry?.models;
   const { models: discoveredModels, cache: nextDiscoveredCache } = resolveProviderDiscoveredModels({
     serverId,
@@ -649,8 +665,19 @@ export function ProviderDiagnosticSheet({
   );
 
   const handleRefreshModels = useCallback(() => {
-    void refresh([provider]);
-  }, [provider, refresh]);
+    setPresetRefreshing(true);
+    void refreshProviderPresetSettings(
+      queryClient,
+      { serverId, provider, cwd },
+      refresh([provider]),
+    )
+      .catch((cause: unknown) => {
+        toast.error(
+          cause instanceof Error ? cause.message : t("settings.providers.diagnostic.unknownError"),
+        );
+      })
+      .finally(() => setPresetRefreshing(false));
+  }, [cwd, provider, queryClient, refresh, serverId, t, toast]);
 
   const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
@@ -724,6 +751,12 @@ export function ProviderDiagnosticSheet({
           onRefresh={handleRefreshModels}
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
+        />
+        <ProviderPresetsSection
+          provider={provider}
+          serverId={serverId}
+          cwd={cwd}
+          models={discoveredModels}
         />
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet

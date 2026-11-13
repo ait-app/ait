@@ -153,6 +153,45 @@ describe("translation resources", () => {
     expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
   });
 
+  it("resolves every fixed provider preset UI key from real resources in each supported language", () => {
+    const keys = new Set(
+      [
+        "provider-preset-editor.tsx",
+        "provider-preset-form.ts",
+        "provider-presets-section.tsx",
+      ].flatMap((file) =>
+        [
+          ...readFileSync(join(appSourceRoot, "components", file), "utf8").matchAll(
+            /"((?:settings\.providers\.presets|providerControl)\.[A-Za-z0-9_.]+)"/g,
+          ),
+        ].map((match) => match[1]!),
+      ),
+    );
+    expect(keys.has("settings.providers.presets.title")).toBe(true);
+    expect(keys.has("providerControl.roleNative")).toBe(true);
+    for (const [locale, resource] of Object.entries({
+      en,
+      ar,
+      es,
+      fr,
+      ja,
+      ko,
+      "pt-BR": ptBR,
+      ru,
+      "zh-CN": zhCN,
+    })) {
+      const strings = flattenStrings(resource);
+      const translate = i18n.getFixedT(locale);
+      for (const key of keys) {
+        expect(strings[key], `${locale}: ${key}`).toBeTypeOf("string");
+        expect(strings[key], `${locale}: ${key}`).not.toBe(key);
+        const translated = translate(key, { name: "Review", provider: "OMP", model: "Model" });
+        expect(translated, `${locale}: ${key}`).not.toBe(key);
+        expect(translated, `${locale}: ${key}`).not.toMatch(/\{\{/);
+      }
+    }
+  });
+
   it("keeps non-English supported languages translated beyond fallback labels", () => {
     const totalStrings = Object.keys(flattenStrings(en)).length;
     const maxFallbackStrings = Math.floor(totalStrings * 0.25);

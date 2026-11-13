@@ -105,6 +105,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)
 - [ADR-278：共享 BTW 侧会话与完整会话交接](providers/adr-278-shared-btw-sessions.md)
 - [ADR-277：Provider 原生 TODO 统一为完整快照](providers/adr-277-provider-todo-snapshots.md)
 - [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)

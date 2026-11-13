@@ -61,6 +61,7 @@ impl AgentManager {
             usage_cache: self.usage_cache.clone(),
             usage_ledger: self.usage_ledger.clone(),
             auto_archives: super::auto_archive::AutoArchives::default(),
+            presets: self.presets.clone(),
         }
     }
 

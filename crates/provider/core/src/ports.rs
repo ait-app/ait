@@ -8,6 +8,7 @@ pub mod diagnostics;
 pub mod environment;
 /// Native history discovery and inspection facts.
 pub mod native_history;
+pub mod preset;
 /// Request usage that adapters report to the harness usage ledger.
 pub mod usage_ledger;
 

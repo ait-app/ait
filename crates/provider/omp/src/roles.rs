@@ -5,6 +5,8 @@
 //! role id. Role assignments persist as opaque `modelRole.<id>` feature values and apply through a
 //! private AIT-owned `--config` overlay on the next turn, never by writing user native config.
 
+pub(super) mod presets;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 
@@ -62,8 +64,31 @@ impl Catalog {
         let settings = read(client, cwd, &["config", "list", "--json"]).await?;
         let models = read(client, cwd, &["models", "--kind", "all", "--json"]).await?;
         let entry = |key: &str| json!({"key":key,"value":settings[key]["value"]});
-        let catalog = Self::parse(&entry("modelRoles"), &entry("modelTags"), &entry("cycleOrder"), &models)
+        let mut catalog = Self::parse(&entry("modelRoles"), &entry("modelTags"), &entry("cycleOrder"), &models)
             .inspect_err(|error| tracing::warn!(phase="role_catalog",error=?error,"OMP native metadata validation failed"))?;
+        // A preset may introduce a custom role before it is assigned in the layered settings.
+        // Include those native ids so an applied snapshot uses the same validation and overlay.
+        if let Some(presets) = settings["modelPresets"]["value"].as_object() {
+            for role in presets
+                .values()
+                .filter_map(|preset| preset["modelRoles"].as_object())
+                .flat_map(serde_json::Map::keys)
+            {
+                if !valid_role(role) {
+                    return Err(AgentSessionError::Failed);
+                }
+                if !catalog.roles.iter().any(|known| known.id == *role) {
+                    if catalog.roles.len() >= MAX_ROLES {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    catalog.roles.push(Role {
+                        id: role.clone(),
+                        name: role.clone(),
+                    });
+                }
+            }
+            catalog.roles.sort_by(|left, right| left.id.cmp(&right.id));
+        }
         catalog.check_size()?;
         Ok(catalog)
     }
@@ -207,14 +232,7 @@ impl Catalog {
                 let mut options = vec![json!({"id":INHERIT,"label":inherited,"isDefault":true,
                     "metadata":{"nativeSelector":self.inherited.get(&role.id),
                         "resolvedSelector":resolved}})];
-                if config
-                    .feature_values
-                    .as_ref()
-                    .and_then(|values| values.get(&format!("{PREFIX}{}", role.id)))
-                    == Some(&json!(UNSET))
-                {
-                    options.push(json!({"id":UNSET,"label":"Unassigned"}));
-                }
+                options.push(json!({"id":UNSET,"label":"Unassigned"}));
                 options.extend(
                     self.models
                         .iter()

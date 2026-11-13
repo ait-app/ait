@@ -36,6 +36,7 @@ import {
   type FormState,
   type ProviderModelsByProvider,
 } from "@/provider-selection/resolve-agent-form";
+import type { ModelPresetConfiguration } from "@/agent-controls/model-presets";
 import type { MaterializedAgentProfile } from "@/agent-profiles";
 
 export type { FormInitialValues } from "@/provider-selection/resolve-agent-form";
@@ -75,6 +76,10 @@ export interface UseAgentFormStateResult {
   refetchProviderModelsIfStale: () => void;
   setProviderAndModelFromUser: (provider: AgentProvider, modelId: string) => void;
   applyProfileFromUser: (profile: MaterializedAgentProfile) => void;
+  applyModelPresetFromUser: (
+    provider: AgentProvider,
+    configuration: ModelPresetConfiguration,
+  ) => void;
   clearProviderSelectionFromUser: () => void;
   workingDirIsEmpty: boolean;
   persistFormPreferences: () => Promise<void>;
@@ -307,6 +312,41 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     [allProviderModels, selectableProviderDefinitionMap, updateCurrentPreferences],
   );
 
+  const applyModelPresetFromUser = useCallback(
+    (provider: AgentProvider, configuration: ModelPresetConfiguration) => {
+      if (!selectableProviderDefinitionMap.has(provider)) return;
+      const action = {
+        type: "APPLY_MODEL_PRESET_FROM_USER" as const,
+        provider,
+        modelId: configuration.modelId,
+        thinkingOptionId: configuration.thinkingOptionId,
+        providerDef: selectableProviderDefinitionMap.get(provider),
+        providerModels: allProviderModels.get(provider) ?? null,
+      };
+      const next = resolveAgentForm({ form: formState, userModified, resolution }, action);
+      dispatch(action);
+      void updateCurrentPreferences((current) =>
+        mergeProviderPreferences({
+          preferences: current,
+          provider,
+          updates: {
+            model: next.form.model,
+            thinkingByModel: { [next.form.model]: next.form.thinkingOptionId },
+            featureValues: configuration.featureValues,
+          },
+        }),
+      ).catch((error) => console.warn("[useAgentFormState] persist model preset failed", error));
+    },
+    [
+      allProviderModels,
+      formState,
+      resolution,
+      selectableProviderDefinitionMap,
+      updateCurrentPreferences,
+      userModified,
+    ],
+  );
+
   const clearProviderSelectionFromUser = useCallback(() => {
     dispatch({ type: "CLEAR_PROVIDER_SELECTION_FROM_USER" });
   }, []);
@@ -499,6 +539,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       refetchProviderModelsIfStale,
       setProviderAndModelFromUser,
       applyProfileFromUser,
+      applyModelPresetFromUser,
       clearProviderSelectionFromUser,
       workingDirIsEmpty,
       persistFormPreferences,
@@ -530,6 +571,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       refetchProviderModelsIfStale,
       setProviderAndModelFromUser,
       applyProfileFromUser,
+      applyModelPresetFromUser,
       clearProviderSelectionFromUser,
       workingDirIsEmpty,
       persistFormPreferences,
