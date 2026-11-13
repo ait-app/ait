@@ -980,6 +980,32 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "terminal.capture.response",
   },
+  // Keep split-connection hellos within the daemon capability budget.
+  // BTW uses the background socket; daemon execution has its own independent side lane.
+  "agent.side_question.ask.request": {
+    method: "agent.side_question.ask.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.ask.response",
+  },
+  "agent.side_question.cancel.request": {
+    method: "agent.side_question.cancel.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.cancel.response",
+  },
+  "agent.side_question.history.request": {
+    method: "agent.side_question.history.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.history.response",
+  },
+  "agent.side_question.transfer.request": {
+    method: "agent.side_question.transfer.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.transfer.response",
+  },
   "schedule.create.request": {
     method: "schedule.create.request",
     kind: "request",

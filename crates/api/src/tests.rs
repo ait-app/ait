@@ -205,7 +205,36 @@ fn assert_default_capabilities(info: &ServerInfo) {
         .chain(shares::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 252);
+    let advertised = info
+        .capabilities
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(info.capabilities.len(), advertised.len());
+    let registered = capabilities::implemented_methods()
+        .map(|method| method.name)
+        .chain(std::iter::once(model::server::single::CAPABILITY))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(advertised, registered);
+    for method in [
+        "agent.side_question.ask.request",
+        "agent.side_question.cancel.request",
+        "agent.side_question.history.request",
+        "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
+    ] {
+        assert!(advertised.contains(method), "{method}");
+        assert!(
+            !info
+                .implemented_capabilities
+                .iter()
+                .any(|name| name == method),
+            "{method}"
+        );
+    }
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())

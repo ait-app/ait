@@ -15,6 +15,7 @@ pub(crate) enum Access {
     Mutation,
     Timeline,
     Session,
+    Side,
 }
 
 /// A validated identity location; parent and plugin identities cannot fall through as free reads.
@@ -95,6 +96,10 @@ pub(crate) enum Operation {
     Realtime,
     AppendTimeline,
     Wake,
+    SideAsk,
+    SideCancel,
+    SideHistory,
+    SideTransfer,
 }
 
 impl Operation {
@@ -148,6 +153,10 @@ impl Operation {
             "agent.timeline.get.request" => Ok(Self::Timeline),
             "agent.timeline.search.request" => Ok(Self::SearchTimeline),
             "agent.timeline.list_prompts.request" => Ok(Self::Prompts),
+            "agent.side_question.ask.request" => Ok(Self::SideAsk),
+            "agent.side_question.cancel.request" => Ok(Self::SideCancel),
+            "agent.side_question.history.request" => Ok(Self::SideHistory),
+            "agent.side_question.transfer.request" => Ok(Self::SideTransfer),
             "internal.bot" => Ok(Self::Bot),
             "internal.workspace.agent.create" => Ok(Self::WorkspaceCreate),
             "internal.workspace.retire" => Ok(Self::RetireWorkspaces),
@@ -211,6 +220,10 @@ impl Operation {
             Self::Timeline => "agent.timeline.get.request",
             Self::SearchTimeline => "agent.timeline.search.request",
             Self::Prompts => "agent.timeline.list_prompts.request",
+            Self::SideAsk => "agent.side_question.ask.request",
+            Self::SideCancel => "agent.side_question.cancel.request",
+            Self::SideHistory => "agent.side_question.history.request",
+            Self::SideTransfer => "agent.side_question.transfer.request",
             Self::Bot => "internal.bot",
             Self::WorkspaceCreate => "internal.workspace.agent.create",
             Self::RetireWorkspaces => "internal.workspace.retire",
@@ -228,6 +241,9 @@ impl Operation {
     /// Classify the ownership requirement exhaustively; adding an operation requires a decision.
     pub(crate) const fn access(self) -> Access {
         match self {
+            Self::SideAsk | Self::SideCancel | Self::SideHistory | Self::SideTransfer => {
+                Access::Side
+            }
             Self::Create => Access::Create,
             Self::Resume | Self::Import => Access::Native,
             Self::Send
@@ -321,6 +337,10 @@ impl Operation {
             | Self::VoiceStatus
             | Self::VoiceCancel
             | Self::Realtime
+            | Self::SideAsk
+            | Self::SideCancel
+            | Self::SideHistory
+            | Self::SideTransfer
             | Self::Wake => Some(Target::Agent),
             Self::Subagents | Self::UnifiedSubagents | Self::ChildTimeline => Some(Target::Parent),
             Self::AppendTimeline => Some(Target::AppendedAgent),

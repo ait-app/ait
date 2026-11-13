@@ -153,6 +153,10 @@ pub(crate) struct AgentSnapshotPayload {
     pub(crate) archived_at: Option<String>,
     /// Whether the referenced provider is unavailable.
     pub(crate) provider_unavailable: bool,
+    /// Optional provider-UI state (task09 introduces the surface; additive,
+    /// old clients ignore it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_ui: Option<provider_core::protocol::side_questions::ProviderUiState>,
 }
 
 /// Agent directory filters.

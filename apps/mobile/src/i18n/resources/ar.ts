@@ -685,6 +685,7 @@ export const ar: TranslationResources = {
       title_mr: "إرفاق المشكلة أو MR",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "مزود",

@@ -6,6 +6,7 @@ mod native_sessions;
 mod placement;
 mod resume;
 mod scheduling;
+mod side_questions;
 mod voice;
 /// Initial Agent validation and placement for the composite Workspace creation operation.
 pub mod workspace_creation;
@@ -109,6 +110,10 @@ impl ExecutionState {
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,
             Operation::ForkContext => self.fork_context(params).await,
+            Operation::SideAsk
+            | Operation::SideCancel
+            | Operation::SideHistory
+            | Operation::SideTransfer => self.side_operation(method, params).await,
             Operation::Create => self.create(params).await,
             Operation::Available
             | Operation::Models
@@ -170,19 +175,6 @@ impl ExecutionState {
         }
     }
 
-    async fn retire_workspaces(&mut self, params: Value) -> Result<Value, ErrorCode> {
-        let workspaces: Vec<String> = decode(params)?;
-        let archived = self
-            .manager
-            .archive_workspace_agents(&workspaces)
-            .map_err(|error| map_manager(&error))?;
-        self.manager
-            .reconcile()
-            .await
-            .map_err(|error| map_manager(&error))?;
-        Ok(json!(archived))
-    }
-
     fn resolve_identities(&self, params: &Value) -> Result<Value, ErrorCode> {
         only(params, &["agentIds"])?;
         let ids: Vec<String> = decode(params["agentIds"].clone())?;
@@ -194,6 +186,19 @@ impl ExecutionState {
             .map(|id| self.resolve_for(Operation::Timeline, id))
             .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
         Ok(json!(ids))
+    }
+
+    async fn retire_workspaces(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let workspaces: Vec<String> = decode(params)?;
+        let archived = self
+            .manager
+            .archive_workspace_agents(&workspaces)
+            .map_err(|error| map_manager(&error))?;
+        self.manager
+            .reconcile()
+            .await
+            .map_err(|error| map_manager(&error))?;
+        Ok(json!(archived))
     }
 
     fn prepare_agent_directory(&self, params: Value) -> Result<Value, ErrorCode> {
@@ -680,6 +685,8 @@ impl ExecutionState {
                 }
             }
         }
+        self.manager
+            .side_control_snapshot(&record.id, &mut snapshot);
         Ok(snapshot)
     }
 

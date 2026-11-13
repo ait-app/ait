@@ -2,6 +2,19 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{TOKEN, ready, start};
 
+const API_CONTROL_METHODS: [&str; 10] = [
+    "relay.status.request",
+    "relay.start.request",
+    "relay.stop.request",
+    "publication.status.request",
+    "publication.authorize.request",
+    "publication.stop.request",
+    "share.list.request",
+    "share.set.request",
+    "share.remove.request",
+    "share.groups.list.request",
+];
+
 #[tokio::test]
 async fn production_installs_every_in_scope_method_without_placeholders() {
     let root = tempfile::tempdir().unwrap();
@@ -25,8 +38,15 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 252);
-    assert_eq!(implemented.len(), 251);
+    let catalog = component_catalog();
+    let expected = catalog
+        .keys()
+        .copied()
+        .chain(metadata::capabilities::connection_methods().map(|method| method.name))
+        .chain(API_CONTROL_METHODS)
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(implemented, expected);
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
@@ -44,23 +64,20 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         assert!(!published.contains(retired));
         assert!(!implemented.contains(retired));
     }
-    let catalog = schedule::capabilities::implemented_methods()
-        .chain(bot::capabilities::implemented_methods())
-        .chain(browser::capabilities::implemented_methods())
-        .chain(voice::capabilities::implemented_methods())
-        .chain(metadata::capabilities::implemented_methods())
-        .chain(filesystem::capabilities::implemented_methods())
-        .chain(provider::capabilities::implemented_methods())
-        .chain(terminal::capabilities::implemented_methods())
-        .map(|spec| (spec.name, spec.kind))
-        .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 232);
     for name in [
         "browser.tunnel.open.request",
         "browser.tunnel.read.request",
         "browser.tunnel.write.request",
         "workspace.setup.summary.request",
         "workspace.setup.subscribe.request",
+        "agent.side_question.ask.request",
+        "agent.side_question.cancel.request",
+        "agent.side_question.history.request",
+        "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
     ] {
         assert!(implemented.contains(name));
         assert_eq!(
@@ -98,4 +115,22 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
             .collect::<Vec<_>>(),
         ["connection.single.v1"]
     );
+}
+
+fn component_catalog() -> BTreeMap<&'static str, model::methods::InboundKind> {
+    let declared = schedule::capabilities::implemented_methods()
+        .chain(bot::capabilities::implemented_methods())
+        .chain(browser::capabilities::implemented_methods())
+        .chain(voice::capabilities::implemented_methods())
+        .chain(metadata::capabilities::implemented_methods())
+        .chain(filesystem::capabilities::implemented_methods())
+        .chain(provider::capabilities::implemented_methods())
+        .chain(terminal::capabilities::implemented_methods())
+        .collect::<Vec<_>>();
+    let catalog = declared
+        .iter()
+        .map(|spec| (spec.name, spec.kind))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(catalog.len(), declared.len(), "methods have unique owners");
+    catalog
 }

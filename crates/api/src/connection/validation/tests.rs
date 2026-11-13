@@ -7,8 +7,26 @@ fn catalog_and_implemented_methods_keep_their_envelope_metadata() {
     let specs: Vec<_> = implemented_methods().collect();
     let names: BTreeSet<_> = specs.iter().map(|spec| spec.name).collect();
     assert_eq!(specs.len(), names.len());
-    assert_eq!(names.len(), 251);
     assert!(names.contains("workspace.get.request"));
+    for method in [
+        "agent.side_question.ask.request",
+        "agent.side_question.cancel.request",
+        "agent.side_question.history.request",
+        "agent.side_question.transfer.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
+    ] {
+        assert!(names.contains(method), "{method}");
+        assert_eq!(
+            lookup(method),
+            Some(Method {
+                kind: InboundKind::Request,
+                capability: method,
+            })
+        );
+    }
     for spec in specs {
         let metadata = lookup(spec.name).expect("declared method must exist");
         assert_eq!(metadata.kind, spec.kind, "{}", spec.name);

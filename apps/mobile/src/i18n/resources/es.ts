@@ -670,6 +670,7 @@ export const es: TranslationResources = {
       title_mr: "Adjuntar problema o MR",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "Proveedor",

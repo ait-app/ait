@@ -206,6 +206,12 @@ fn classify_resource(method: &str) -> Rule {
         | "agent.timeline.get.request"
         | "agent.timeline.search.request"
         | "agent.timeline.list_prompts.request" => Rule::Agent("agentId"),
+        "agent.side_question.history.request" | "agent.side_question.transfer.request" => {
+            Rule::Agent("agentId")
+        }
+        "agent.side_question.ask.request" | "agent.side_question.cancel.request" => {
+            Rule::AgentDrive("agentId")
+        }
         "agent.archive.request"
         | "agent.attention.clear.request"
         | "agent.message.send.request"

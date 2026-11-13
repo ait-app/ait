@@ -27,6 +27,10 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("provider.presets.save.request"),
     MethodSpec::request("provider.presets.delete.request"),
     MethodSpec::request("provider.usage.ledger.request"),
+    MethodSpec::request("agent.side_question.ask.request"),
+    MethodSpec::request("agent.side_question.cancel.request"),
+    MethodSpec::request("agent.side_question.history.request"),
+    MethodSpec::request("agent.side_question.transfer.request"),
 ];
 
 use model::ErrorCode;

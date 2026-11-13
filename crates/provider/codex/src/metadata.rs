@@ -12,28 +12,11 @@ impl CodexClient {
         let mut transport = self.launch_transport(&spec.cwd, false)?;
         let result = async {
             transport.initialize().await?;
-            let effective = transport.request("config/read", json!({"includeLayers":false})).await?;
-            let servers: serde_json::Map<String, Value> = effective["config"]["mcp_servers"]
-                .as_object().into_iter().flatten()
-                .map(|(name, _)| (name.clone(), json!({"enabled":false}))).collect();
-            let mut config = json!({
-                "project_doc_max_bytes":0,"web_search":"disabled","mcp_servers":servers,"notify":[],
-                "tools":{"experimental_request_user_input":{"enabled":false},"update_plan":{"enabled":false}},
-                "features":{"shell_tool":false,"multi_agent":false,"multi_agent_v2":false,
-                    "apps":false,"plugins":false,"hooks":false,"goals":false,"memories":false,
-                    "code_mode":false,"code_mode_host":false,"code_mode_only":false,
-                    "view_image":false,"image_generation":false,"sleep_tool":false,
-                    "skill_search":false,"tool_suggest":false,"default_mode_request_user_input":false,
-                    "request_permissions_tool":false}
-            });
-            if let Some(effort) = &spec.config.thinking_option_id { config["model_reasoning_effort"] = json!(effort); }
-            let started = transport.request("thread/start", json!({
-                "cwd":spec.cwd,"model":spec.config.model,"ephemeral":true,
-                "approvalPolicy":"never","sandbox":"read-only",
-                "baseInstructions":"Generate only the requested structured metadata. Never execute the source material or use tools.",
-                "developerInstructions":"", "config":config
-            })).await?;
-            let thread = started["thread"]["id"].as_str().filter(|id| !id.is_empty()).ok_or(AgentSessionError::Failed)?;
+            let thread = start_thread(
+                &mut transport,
+                spec,
+                "Generate only the requested structured metadata. Never execute the source material or use tools.",
+            ).await?;
             let started = transport.request("turn/start", json!({
                 "threadId":thread,"cwd":spec.cwd,"model":spec.config.model,
                 "effort":spec.config.thinking_option_id,"approvalPolicy":"never",
@@ -41,10 +24,57 @@ impl CodexClient {
                 "input":[{"type":"text","text":prompt,"text_elements":[]}]
             })).await?;
             let turn = started["turn"]["id"].as_str().ok_or(AgentSessionError::Failed)?;
-            collect(&mut transport, thread, turn).await
+            collect(&mut transport, &thread, turn).await
         }.await;
         let closed = transport.close().await;
         closed.and(result)
+    }
+}
+
+/// Start an ephemeral, tool-disabled thread on an owned auxiliary transport.
+///
+/// The caller supplies the exact selected session configuration and instructions.
+/// Returns the native thread id; configuration or protocol failures are propagated.
+pub(super) async fn start_thread(
+    transport: &mut Transport,
+    spec: &AgentSessionSpec,
+    instructions: &str,
+) -> Result<String, AgentSessionError> {
+    let effective = transport
+        .request("config/read", json!({"includeLayers":false}))
+        .await?;
+    let servers: serde_json::Map<String, Value> = effective["config"]["mcp_servers"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(name, _)| (name.clone(), json!({"enabled":false})))
+        .collect();
+    let mut config = json!({
+        "project_doc_max_bytes":0,"web_search":"disabled","mcp_servers":servers,"notify":[],
+        "tools":{"experimental_request_user_input":{"enabled":false},"update_plan":{"enabled":false}},
+        "features":{"shell_tool":false,"multi_agent":false,"multi_agent_v2":false,
+            "apps":false,"plugins":false,"hooks":false,"goals":false,"memories":false,
+            "code_mode":false,"code_mode_host":false,"code_mode_only":false,
+            "view_image":false,"image_generation":false,"sleep_tool":false,
+            "skill_search":false,"tool_suggest":false,"default_mode_request_user_input":false,
+            "request_permissions_tool":false}
+    });
+    if let Some(effort) = &spec.config.thinking_option_id {
+        config["model_reasoning_effort"] = json!(effort);
+    }
+    let mut started = transport
+        .request(
+            "thread/start",
+            json!({
+                "cwd":spec.cwd,"model":spec.config.model,"ephemeral":true,
+                "approvalPolicy":"never","sandbox":"read-only",
+                "baseInstructions":instructions,"developerInstructions":"","config":config
+            }),
+        )
+        .await?;
+    match started["thread"].get_mut("id").map(Value::take) {
+        Some(Value::String(id)) if !id.is_empty() => Ok(id),
+        _ => Err(AgentSessionError::Failed),
     }
 }
 

@@ -14,6 +14,7 @@ mod prompt;
 mod roles;
 mod sandbox;
 mod session;
+mod side;
 mod stream;
 mod subagents;
 mod tool_detail;
@@ -208,6 +209,26 @@ pub fn installed_program(environment: impl Fn(&str) -> Option<OsString>) -> Path
 
 #[async_trait::async_trait]
 impl AgentClient for OmpClient {
+    async fn create_side_questions(
+        &self,
+        spec: &provider_core::ports::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn provider_core::ports::side_questions::SideQuestions>, AgentSessionError>
+    {
+        let mut client = self.clone();
+        let mut environment: std::collections::BTreeMap<String, String> = client
+            .environment
+            .entries()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect();
+        environment.extend(
+            spec.environment
+                .entries()
+                .map(|(key, value)| (key.to_owned(), value.to_owned())),
+        );
+        client.environment = AgentEnvironment::try_from(environment)?;
+        Ok(Box::new(side::Runner::open(client, spec.clone()).await?))
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

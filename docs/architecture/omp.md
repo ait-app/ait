@@ -56,7 +56,7 @@ flowchart LR
   用户配置文件，不为元数据启动 RPC 探针。原生库读取失败时显示原因，不回退到 Ait 存储。
 - 预设切换复用现有角色 `modelRole.*` 和 `--config` overlay：遗漏角色回继承 `native`，
   显式 `unset` 保持清空，默认模型与思考等级随预设一起应用；会话仍用 `rpc-ui`
-  （[ADR-278](../decisions/providers/adr-278-provider-model-presets.md)）。
+  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
 
 ## 会话与恢复
 

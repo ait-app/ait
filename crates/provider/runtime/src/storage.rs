@@ -112,4 +112,6 @@ fn parse<T: std::str::FromStr>(row: &rusqlite::Row<'_>, index: usize) -> rusqlit
 #[cfg(test)]
 mod tests;
 
+/// Durable BTW side-question store construction (task09).
+pub mod side;
 pub mod timeline;

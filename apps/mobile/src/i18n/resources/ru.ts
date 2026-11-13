@@ -694,6 +694,7 @@ export const ru: TranslationResources = {
       title_mr: "Прикрепить задачу или MR",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "Провайдер",

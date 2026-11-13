@@ -1022,7 +1022,7 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(237);
+    expect(Object.keys(METHODS)).toHaveLength(241);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
     expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(
       Object.keys(METHODS).length,

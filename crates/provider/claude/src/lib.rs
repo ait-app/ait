@@ -8,6 +8,7 @@ mod metadata;
 mod permissions;
 mod rewind;
 mod session;
+mod side;
 mod streaming;
 mod subagents;
 mod synthetic;
@@ -95,6 +96,34 @@ impl ClaudeClient {
         Ok(())
     }
 
+    fn with_environment(
+        &self,
+        environment: &provider_core::ports::environment::AgentEnvironment,
+    ) -> Self {
+        let mut client = self.clone();
+        client.environment = environment.clone();
+        client.resolved_models = std::sync::Arc::default();
+        if let Some((_, directory)) = environment
+            .entries()
+            .find(|(key, _)| *key == "CLAUDE_CONFIG_DIR")
+        {
+            client.config_dir = Some(PathBuf::from(directory));
+            #[cfg(target_os = "linux")]
+            {
+                client.config_dir_from_home = false;
+            }
+        } else if client.config_dir.is_none()
+            && let Some((_, home)) = environment.entries().find(|(key, _)| *key == "HOME")
+        {
+            client.config_dir = Some(PathBuf::from(home).join(".claude"));
+            #[cfg(target_os = "linux")]
+            {
+                client.config_dir_from_home = true;
+            }
+        }
+        client
+    }
+
     fn resolved_config(&self, config: &StoredAgentConfig) -> StoredAgentConfig {
         let mut resolved = config.clone();
         if let Some(model) = self.resolved_models.read().ok().and_then(|models| {
@@ -110,6 +139,16 @@ impl ClaudeClient {
 
 #[async_trait::async_trait]
 impl AgentClient for ClaudeClient {
+    async fn create_side_questions(
+        &self,
+        spec: &provider_core::ports::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn provider_core::ports::side_questions::SideQuestions>, AgentSessionError>
+    {
+        Ok(Box::new(
+            side::Runner::open(self.with_environment(&spec.environment), spec.clone()).await?,
+        ))
+    }
+
     fn supports_agent_mcp(&self) -> bool {
         true
     }
@@ -145,27 +184,7 @@ impl AgentClient for ClaudeClient {
         spec: &AgentSessionSpec,
         environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        let mut client = self.clone();
-        client.environment = environment.clone();
-        client.resolved_models = std::sync::Arc::default();
-        if let Some((_, directory)) = environment
-            .entries()
-            .find(|(key, _)| *key == "CLAUDE_CONFIG_DIR")
-        {
-            client.config_dir = Some(PathBuf::from(directory));
-            #[cfg(target_os = "linux")]
-            {
-                client.config_dir_from_home = false;
-            }
-        } else if client.config_dir.is_none()
-            && let Some((_, home)) = environment.entries().find(|(key, _)| *key == "HOME")
-        {
-            client.config_dir = Some(PathBuf::from(home).join(".claude"));
-            #[cfg(target_os = "linux")]
-            {
-                client.config_dir_from_home = true;
-            }
-        }
+        let client = self.with_environment(environment);
         session::open(&client, spec, None).await
     }
 

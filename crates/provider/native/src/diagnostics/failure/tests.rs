@@ -78,7 +78,7 @@ fn response_credentials_are_redacted_while_the_error_and_service_origin_remain_v
         "upstream request id: safe-request-id"
     );
 
-    let sanitized = sanitize(message).unwrap();
+    let sanitized = redact_text(message).unwrap();
 
     assert!(sanitized.contains("upstream rejected request"));
     assert!(sanitized.contains("https://example.invalid"));

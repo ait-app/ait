@@ -4,6 +4,20 @@ use model::methods::InboundKind;
 
 use super::*;
 
+const SIDE_QUESTION_METHODS: [&str; 4] = [
+    "agent.side_question.ask.request",
+    "agent.side_question.cancel.request",
+    "agent.side_question.history.request",
+    "agent.side_question.transfer.request",
+];
+
+const PROVIDER_PRESET_METHODS: [&str; 4] = [
+    "provider.presets.describe.request",
+    "provider.presets.list.request",
+    "provider.presets.save.request",
+    "provider.presets.delete.request",
+];
+
 #[test]
 fn empty_host_keeps_only_builtin_api_methods() {
     assert_eq!(
@@ -36,7 +50,14 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 252);
+    assert!(methods.iter().all(|method| registered.contains(method)));
+    for method in SIDE_QUESTION_METHODS
+        .into_iter()
+        .chain(PROVIDER_PRESET_METHODS)
+    {
+        assert!(registered.iter().any(|name| name == method), "{method}");
+        assert!(!methods.iter().any(|name| name == method), "{method}");
+    }
     assert!(
         !registered
             .iter()
@@ -68,13 +89,35 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let names: Vec<_> = specs.iter().map(|spec| spec.name).collect();
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
-    assert_eq!(names.len(), 251);
     assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(unique.contains("provider.presets.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 252);
+    let registered_names: BTreeSet<_> = registered.iter().map(String::as_str).collect();
+    assert_eq!(registered.len(), registered_names.len());
+    let expected_registered = unique
+        .iter()
+        .copied()
+        .chain(std::iter::once(model::server::single::CAPABILITY))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(registered_names, expected_registered);
+    let side_questions = ::provider::capabilities::implemented_methods()
+        .filter(|spec| spec.name.starts_with("agent.side_question."))
+        .map(|spec| {
+            assert_eq!(spec.kind, InboundKind::Request, "{}", spec.name);
+            spec.name
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(side_questions, BTreeSet::from(SIDE_QUESTION_METHODS));
+    let presets = ::provider::capabilities::implemented_methods()
+        .filter(|spec| spec.name.starts_with("provider.presets."))
+        .map(|spec| {
+            assert_eq!(spec.kind, InboundKind::Request, "{}", spec.name);
+            spec.name
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(presets, BTreeSet::from(PROVIDER_PRESET_METHODS));
     assert!(unique.contains("bot.message.send.request"));
     for name in [
         "browser.tunnel.open.request",

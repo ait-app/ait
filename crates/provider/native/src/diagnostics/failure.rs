@@ -96,7 +96,7 @@ impl Failure {
             return;
         }
         self.stopped_retrying |= diagnostic.will_retry == Some(false);
-        let reason = native_message(error).and_then(|message| sanitize(&message));
+        let reason = native_message(error).and_then(|message| redact_text(&message));
         if reason.is_none() && self.message.is_some() {
             return;
         }
@@ -142,7 +142,11 @@ pub(super) fn native_message(error: &Value) -> Option<Cow<'_, str>> {
     Some(Cow::Borrowed(message))
 }
 
-fn sanitize(message: &str) -> Option<String> {
+/// Remove credentials, URL paths and control characters from an auxiliary failure.
+///
+/// Input and output are bounded on UTF-8 boundaries. Empty explanations return `None`.
+#[must_use]
+pub fn redact_text(message: &str) -> Option<String> {
     let end = message.floor_char_boundary(message.len().min(MAX_NATIVE_BYTES));
     let origins = URLS.replace_all(&message[..end], |captures: &regex::Captures<'_>| {
         url::Url::parse(&captures[0]).map_or_else(

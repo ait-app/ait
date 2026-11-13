@@ -7557,6 +7557,250 @@ test.each(["retry", "close", "reject"])(
   },
 );
 
+test("side-question calls refuse an old host that does not advertise the feature", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-absent",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  expect(client.supportsSideQuestions()).toBe(false);
+  await expect(client.askSideQuestion({ agentId: "agent", question: "why?" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  await expect(client.cancelSideQuestion({ agentId: "agent" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  await expect(client.listSideQuestions({ agentId: "agent" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  // No half-sent RPC may leak to a host that cannot serve it.
+  expect(mock.sent).toHaveLength(0);
+});
+
+test("side-question ask correlates the receipt and forwards the idempotency key", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-ask",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+  expect(client.supportsSideQuestions()).toBe(true);
+
+  const pending = client.askSideQuestion({
+    agentId: "agent",
+    question: "why?",
+    recordId: "topic-1",
+    requestId: "ask-1",
+  });
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "agent.side_question.ask.request",
+    agentId: "agent",
+    question: "why?",
+    recordId: "topic-1",
+    requestId: "ask-1",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: {
+        requestId: "ask-1",
+        receipt: "accepted",
+        recordId: "topic-1",
+        strategy: "native",
+      },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({
+    receipt: "accepted",
+    recordId: "topic-1",
+    strategy: "native",
+  });
+});
+
+test("side-question ask surfaces rejection reasons and the durable uncertain receipt", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-receipts",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+
+  const rejected = client.askSideQuestion({ agentId: "agent", question: "q", requestId: "ask-1" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: { requestId: "ask-1", receipt: "rejected", reason: "busy" },
+    }),
+  );
+  await expect(rejected).resolves.toMatchObject({ receipt: "rejected", reason: "busy" });
+
+  // Acceptance could not be confirmed: the receipt is returned as a durable
+  // state so the caller reconciles instead of retrying or reporting success.
+  const uncertain = client.askSideQuestion({
+    agentId: "agent",
+    question: "q",
+    requestId: "ask-2",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: { requestId: "ask-2", receipt: "uncertain" },
+    }),
+  );
+  await expect(uncertain).resolves.toMatchObject({ receipt: "uncertain" });
+});
+
+test("side-question cancel reports only a confirmed cancellation and history stays bounded", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-cancel",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+
+  const cancelled = client.cancelSideQuestion({ agentId: "agent", recordId: "topic-1" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.side_question.cancel.request",
+    recordId: "topic-1",
+  });
+  const cancelRequest = parseSentFrame(mock.sent.at(-1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.cancel.response",
+      payload: { requestId: cancelRequest.requestId, cancelled: false },
+    }),
+  );
+  await expect(cancelled).resolves.toBe(false);
+
+  const history = client.listSideQuestions({ agentId: "agent" });
+  const historyRequest = parseSentFrame(mock.sent.at(-1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.history.response",
+      payload: {
+        requestId: historyRequest.requestId,
+        records: [
+          {
+            id: "topic-1",
+            question: "why?",
+            answer: "",
+            status: "running",
+            createdAt: 1,
+            updatedAt: 1,
+            leafId: null,
+            strategy: "native",
+            truncated: false,
+          },
+        ],
+        omitted: 2,
+        runningId: "topic-1",
+      },
+    }),
+  );
+  await expect(history).resolves.toMatchObject({
+    omitted: 2,
+    runningId: "topic-1",
+    records: [{ id: "topic-1", status: "running" }],
+  });
+});
+
+test("side-question transfer correlates the full frozen bundle without asking a model", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-question-transfer",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+  const pending = client.transferSideQuestion({
+    agentId: "agent",
+    recordId: "topic-1",
+    requestId: "transfer-1",
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.side_question.transfer.request",
+    agentId: "agent",
+    recordId: "topic-1",
+    requestId: "transfer-1",
+  });
+  const topic = {
+    id: "topic-1",
+    question: "first",
+    answer: "answer",
+    status: "complete",
+    createdAt: 1,
+    updatedAt: 2,
+    leafId: null,
+    strategy: "isolated",
+    truncated: false,
+    followUps: Array.from({ length: 12 }, (_, index) => ({
+      question: `q${index}`,
+      answer: `a${index}`,
+      status: "complete",
+      createdAt: index + 10,
+      updatedAt: index + 11,
+    })),
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.transfer.response",
+      payload: {
+        requestId: "transfer-1",
+        topic,
+        snapshot: {
+          v: 1,
+          agentId: "agent",
+          provider: "pi",
+          model: "selected/model",
+          capturedAt: 1,
+          entries: [{ role: "user", text: "frozen parent" }],
+          truncated: false,
+        },
+      },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({
+    topic: {
+      followUps: expect.arrayContaining([
+        { question: "q11", answer: "a11", status: "complete", createdAt: 21, updatedAt: 22 },
+      ]),
+    },
+  });
+  expect(mock.sent).toHaveLength(1);
+});
+
 // These tests cover SDK business behavior; protocol tests use real Rust wire frames.
 vi.mock("./protocol/connection.js", async () => {
   const { createProtocolStub } = await import("./test-support/protocol-stub.js");

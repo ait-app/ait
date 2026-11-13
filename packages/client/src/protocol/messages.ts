@@ -147,6 +147,9 @@ export function serverInfo(
           "provider.presets.save.request",
           "provider.presets.delete.request",
         ].every(has),
+      sideQuestions: ["ask", "cancel", "history", "transfer"].every((operation) =>
+        has(`agent.side_question.${operation}.request`),
+      ),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
       hostStats: !scopedGuest && has("daemon.host_stats.request"),

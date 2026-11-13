@@ -188,6 +188,7 @@ interface BuildAutocompleteOptionsInput {
   mode: AutocompleteMode;
   commands: AgentSlashCommand[];
   isDraftContext: boolean;
+  includeSideQuestions: boolean;
   commandFilterQuery: string;
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
@@ -201,7 +202,15 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   }
 
   if (input.mode === "command") {
-    const providerCommands = input.commands.map((command) => ({
+    const sideCommand: AgentSlashCommand = {
+      name: "btw",
+      description: input.t("btw.commandDescription"),
+      argumentHint: "[question]",
+    };
+    const commands = input.includeSideQuestions
+      ? [sideCommand, ...input.commands.filter((command) => command.name !== "btw")]
+      : input.commands;
+    const providerCommands = commands.map((command) => ({
       source: "provider" as const,
       command,
     }));
@@ -382,6 +391,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const includeSideQuestions = !isDraftContext && client?.supportsSideQuestions() === true;
 
   const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
   const canShowAutocomplete = resolveAutocompleteIsVisible({
@@ -450,6 +460,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         activeSlashCommand,
         fileSuggestions: fileSuggestionsQuery.data ?? [],
         isDraftContext,
+        includeSideQuestions,
         isVisible,
         mode,
         t,
@@ -461,6 +472,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       commands,
       fileSuggestionsQuery.data,
       isDraftContext,
+      includeSideQuestions,
       isVisible,
       mode,
       t,

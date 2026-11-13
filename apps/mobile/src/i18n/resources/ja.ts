@@ -650,6 +650,7 @@ export const ja: TranslationResources = {
       title_mr: "イシューまたはMRを添付",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "プロバイダー",

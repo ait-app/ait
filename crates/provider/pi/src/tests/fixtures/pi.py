@@ -349,6 +349,33 @@ for line in stdin_lines:
         response(command)
     elif kind == 'prompt':
         text = command['message']
+        if text.startswith('[BTW context snapshot v1 - frozen]'):
+            if 'SIDE-DIE' in text and 'SIDE-DIE-AFTER' not in text:
+                sys.exit(2)
+            if 'SIDE-NEVER-ADMIT' in text:
+                continue
+            if 'SIDE-HANDLED' in text:
+                response(command, {'disposition': 'handled'})
+                continue
+            running = 'SIDE-BLOCK' in text
+            response(command, {'disposition': 'started'})
+            if 'SIDE-DIE-AFTER' in text:
+                sys.exit(2)
+            if running:
+                continue
+            emit({'type': 'message_start', 'message': {'role': 'assistant'}})
+            answer = f'SIDE-ANSWER::{text}'
+            emit({'type': 'message_update',
+                  'assistantMessageEvent': {'type': 'text_delta', 'contentIndex': 0, 'delta': answer}})
+            if 'SIDE-ERROR' in text:
+                emit({'type': 'message_end', 'message': {'role': 'assistant',
+                     'content': [{'type': 'text', 'text': answer}], 'stopReason': 'error',
+                     'errorMessage': 'quota exhausted: token=secret-value'}})
+            else:
+                emit({'type': 'message_end', 'message': {'role': 'assistant',
+                     'content': [{'type': 'text', 'text': answer}], 'stopReason': 'stop'}})
+            emit({'type': 'agent_settled', 'aborted': False})
+            continue
         if text in ['thinking-before', 'thinking-after', 'thinking-handled', 'thinking-invalid']:
             if text == 'thinking-after':
                 response(command, {'disposition': 'started'})

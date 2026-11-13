@@ -122,6 +122,9 @@ import type {
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
+  SideAskResponseMessage,
+  SideHistoryResponseMessage,
+  SideTransferResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
   SubscribeTerminalResponse,
@@ -3634,6 +3637,139 @@ export class DaemonClient {
     }
   }
 
+  /** Whether the host advertises the typed BTW surface (`sideQuestions`). */
+  supportsSideQuestions(): boolean {
+    return this.lastServerInfoMessage?.features?.sideQuestions === true;
+  }
+
+  /**
+   * Ask a side question, or follow up an existing topic via `recordId`.
+   *
+   * The returned receipt is durable: replaying the same `requestId` returns the
+   * stored receipt instead of executing again, `rejected` carries a stable
+   * `reason`, and `uncertain` means acceptance could not be confirmed. Callers
+   * reconcile an uncertain receipt; it must never be retried automatically.
+   */
+  async askSideQuestion(options: {
+    agentId: string;
+    question: string;
+    recordId?: string;
+    requestId?: string;
+  }): Promise<SideAskResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.ask.request",
+      agentId: options.agentId,
+      question: options.question,
+      ...(options.recordId === undefined ? {} : { recordId: options.recordId }),
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.ask.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+  }
+
+  /**
+   * Cancel one topic, or the running topic when `recordId` is absent.
+   *
+   * Returns `true` only when the daemon confirmed a cancellation; a failed
+   * cancel never reports success.
+   */
+  async cancelSideQuestion(options: {
+    agentId: string;
+    recordId?: string;
+    requestId?: string;
+  }): Promise<boolean> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.cancel.request",
+      agentId: options.agentId,
+      ...(options.recordId === undefined ? {} : { recordId: options.recordId }),
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.cancel.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+    return payload.cancelled;
+  }
+
+  /** Return fixed context and every BTW turn for a new editable session; never runs inference. */
+  async transferSideQuestion(options: {
+    agentId: string;
+    recordId: string;
+    requestId?: string;
+  }): Promise<SideTransferResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.transfer.request",
+      agentId: options.agentId,
+      recordId: options.recordId,
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) =>
+        msg.type === "agent.side_question.transfer.response" && msg.payload.requestId === requestId
+          ? msg.payload
+          : null,
+    });
+  }
+
+  /** Read the bounded side-question projection without starting inference. */
+  async listSideQuestions(options: {
+    agentId: string;
+    requestId?: string;
+  }): Promise<SideHistoryResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.history.request",
+      agentId: options.agentId,
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.history.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+  }
+
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
@@ -6200,6 +6336,15 @@ export class DaemonClient {
     // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
     if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
       throw new Error("Update the host to reload daemon configuration.");
+    }
+  }
+
+  private requireSideQuestionsSupport(): void {
+    // COMPAT(sideQuestions): added in v0.2.11, remove gate after 2027-11-11.
+    // A new client talking to an older host must say the host lacks the feature
+    // rather than surfacing a generic "method not implemented" failure.
+    if (this.lastServerInfoMessage?.features?.sideQuestions !== true) {
+      throw new Error("This host does not support side questions. Update the host and retry.");
     }
   }
 

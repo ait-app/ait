@@ -21,6 +21,7 @@ mod paseo;
 mod presets;
 mod recovery;
 mod resume;
+mod side_questions;
 mod titles;
 mod usage;
 

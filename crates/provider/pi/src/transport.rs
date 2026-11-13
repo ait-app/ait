@@ -223,6 +223,11 @@ pub(super) struct Transport {
 }
 
 impl Transport {
+    /// Return the owned native group for a payload-free auxiliary recovery marker.
+    pub(super) fn group_id(&self) -> Option<u32> {
+        self.group
+    }
+
     /// Start the configured executable in `cwd` with additional native `args`, under
     /// `confinement` for an Agent in a sandboxed Workspace.
     /// Returns unavailable on launch failure or failed for missing process pipes.

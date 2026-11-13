@@ -41,6 +41,14 @@ impl AgentManager {
             live: BTreeMap::new(),
             events: self.events.clone(),
             timeline: self.timeline.clone(),
+            side_store: self.side_store.clone(),
+            side_runners: BTreeMap::new(),
+            side_dirty: BTreeSet::new(),
+            side_specs: BTreeMap::new(),
+            side_budget: self.side_budget.clone(),
+            side_permits: BTreeMap::new(),
+            side_activity: BTreeMap::new(),
+            launch_environments: self.launch_environments.clone(),
             catalog: self.catalog.clone(),
             creations: self.creations.clone(),
             loaded_timelines: self.loaded_timelines.clone(),
@@ -114,6 +122,13 @@ impl AgentManager {
         if let Some(timeline) = &self.timeline {
             timeline.forget(id)?;
         }
+        if let Some(store) = &self.side_store {
+            store.forget(id)?;
+        }
+        self.launch_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(id);
         self.invalidate_history(id);
         Ok(())
     }
@@ -173,11 +188,14 @@ impl AgentManager {
 
     /// Whether the lane retains native resources that must be polled or reaped.
     pub(crate) fn has_sessions(&self) -> bool {
-        !self.live.is_empty()
+        !self.live.is_empty() || !self.side_runners.is_empty()
     }
 
     /// Whether a live session has accepted native work whose events need low-latency draining.
     pub(crate) fn has_active_turns(&self) -> bool {
+        if !self.side_permits.is_empty() {
+            return true;
+        }
         self.live.values().any(|agent| {
             agent.turn.is_some()
                 || agent.pending.is_some()

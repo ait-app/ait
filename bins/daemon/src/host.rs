@@ -400,7 +400,7 @@ fn compose_services(
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
         (storage.agents.clone(), timeline, agent_mcp, usage_ledger),
-        (&storage.workspaces, &storage.projects),
+        (&storage.workspaces, &storage.projects, &config.data_dir),
         instance,
         providers,
         (
@@ -751,6 +751,14 @@ fn open_timeline(
         .map_err(|_| anyhow::anyhow!("initialize Agent timeline"))
 }
 
+/// Open the independent BTW store under `data_dir`, preserving side-question receipts.
+fn open_side_store(
+    data_dir: &std::path::Path,
+) -> anyhow::Result<provider::storage::side::SideStore> {
+    provider::storage::side::SideStore::open(&data_dir.join("agents/side-questions.sqlite3"))
+        .map_err(|_| anyhow::anyhow!("initialize Agent side-question store"))
+}
+
 /// Open `agents/usage.sqlite3` under `data_dir`, queueing recovery of calls left running.
 ///
 /// Returns `None` after logging the failure, so the host starts without recording calls.
@@ -783,7 +791,11 @@ fn compose_provider(
         AgentMcp,
         Option<&Arc<SqliteUsageLedger>>,
     ),
-    registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
+    registries: (
+        &FileBackedWorkspaceRegistry,
+        &FileBackedProjectRegistry,
+        &std::path::Path,
+    ),
     instance: &Arc<InstanceLease>,
     providers: Providers,
     metadata: (
@@ -796,9 +808,10 @@ fn compose_provider(
 ) -> anyhow::Result<AgentExecution> {
     let (directory, generator, names, workspace_automation, presets) = metadata;
     let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
-    let (workspace_registry, project_registry) = registries;
+    let (workspace_registry, project_registry, data_dir) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)
+        .with_side_store(open_side_store(data_dir)?)
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)

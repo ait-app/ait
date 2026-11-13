@@ -1,5 +1,5 @@
 ---
-id: ADR-278
+id: ADR-279
 status: accepted
 date: 2026-11-13
 paths:
@@ -16,7 +16,7 @@ paths:
   - apps/mobile/src/composer
 ---
 
-# ADR-278：Provider 模型预设的存储归属与整套角色应用
+# ADR-279：Provider 模型预设的存储归属与整套角色应用
 
 ## 背景
 

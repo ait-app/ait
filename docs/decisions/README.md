@@ -105,7 +105,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
-- [ADR-278：Provider 模型预设的存储归属与整套角色应用](providers/adr-278-provider-model-presets.md)
+- [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)
+- [ADR-278：共享 BTW 侧会话与完整会话交接](providers/adr-278-shared-btw-sessions.md)
 - [ADR-277：Provider 原生 TODO 统一为完整快照](providers/adr-277-provider-todo-snapshots.md)
 - [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
@@ -148,7 +149,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](providers/adr-162-codex-error-details.md)
 - [ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测](providers/adr-159-opencode-acp-native-observation.md)（经 [ADR-178](providers/adr-178-opencode-startup-probe-and-restoration.md) 修订）
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](providers/adr-157-codex-user-image-projection.md)（经 [ADR-176](providers/adr-176-pi-user-image-projection.md) 修订）
-- [ADR-156: Pi native RPC provider](providers/adr-156-pi-native-rpc-provider.md)（经 [ADR-174](providers/adr-174-pi-session-import.md)、[ADR-185](providers/adr-185-native-provider-failure-details.md)、[ADR-189](providers/adr-189-pi-without-host-mode.md)、[ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md)、[ADR-219](providers/adr-219-pi-slash-command-discovery.md)、[ADR-220](providers/adr-220-pi-extension-notifications.md) 修订）
+- [ADR-156: Pi native RPC provider](providers/adr-156-pi-native-rpc-provider.md)（经 [ADR-174](providers/adr-174-pi-session-import.md)、[ADR-185](providers/adr-185-native-provider-failure-details.md)、[ADR-189](providers/adr-189-pi-without-host-mode.md)、[ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md)、[ADR-219](providers/adr-219-pi-slash-command-discovery.md)、[ADR-220](providers/adr-220-pi-extension-notifications.md)、[ADR-278](providers/adr-278-shared-btw-sessions.md) 修订）
 - [ADR-153：OpenCode ACP 冷启动预算](providers/adr-153-opencode-acp-cold-start-budget.md)（经 [ADR-178](providers/adr-178-opencode-startup-probe-and-restoration.md) 修订）
 - [ADR-150：所有 Provider 的上下文压缩生命周期提示](providers/adr-150-provider-compaction-lifecycle.md)
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](providers/adr-149-codex-computer-use-access-auto-approval.md)
@@ -168,7 +169,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)（经 [ADR-105](daemon/adr-105-file-tools-and-startup-config.md)、[ADR-106](daemon/adr-106-concrete-file-persistence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md) 修订）
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)（经 [ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-118](daemon/adr-118-summary-contracts-and-persistence-configuration.md) 修订）
 - [ADR-099：Provider 自选辅助小模型](providers/adr-099-provider-owned-auxiliary-models.md)
-- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
+- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)（经 [ADR-278](providers/adr-278-shared-btw-sessions.md) 修订）
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md)、[ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）

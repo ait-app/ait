@@ -10,7 +10,7 @@
   运行时 `PresetService` 经 daemon 注入的配置端口管理 Ait 库，adapter 管理原生库。
   `provider.presets.describe/list/save/delete.request` 是统一管理入口，SDK 仅在四个方法齐全时暴露
   `server_info.features.providerPresets`，旧 Host 不显示新增功能
-  （[ADR-278](../decisions/providers/adr-278-provider-model-presets.md)）。
+  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
 - Ait 库位于 `providers.<id>.modelPresets`，每个 Provider 至多 64 项；名字与思考选项最多
   256 字节，模型路由最多 16 KiB，每项特性至多 128 个且序列化后不超过 64 KiB。写入前校验，重复名字拒绝；
   同一 daemon 的读改写共用串行锁。列表中的 `source`、`editable` 仅是读取投影，不写回预设内容。
@@ -126,6 +126,18 @@
   [ADR-099](../decisions/providers/adr-099-provider-owned-auxiliary-models.md)）。
 
 ## 执行与会话所有权
+
+- BTW 使用 `provider-core::ports::side_questions::SideQuestions`，由 adapter 的
+  `AgentClient::create_side_questions` 提供独立 runner，未接入的 adapter 返回 unavailable。
+  运行时统一管理 `agent.side_question.ask/cancel/history/transfer`、持久收据、单活跃轮次与重启收尾。
+  新话题冻结已保存的可读主上下文、provider 与模型，后续追问复用原快照及问答，不写主 Timeline
+  或输入 FIFO。投影限额不删除持久话题；只读 transfer 将完整问答交给新会话草稿，不触发推理或
+  重绑原生 session。关闭浮窗只取消辅助轮次，历史可显式重开
+  （[ADR-278](../decisions/providers/adr-278-shared-btw-sessions.md)、[操作说明](../operations/btw.md)）。
+- BTW 使用独立的 `side:{agentId}` 执行 lane；等待辅助探测或接受确认不阻塞主 writer 的轮询、取消
+  与下一条输入。归档和删除以稳定 Agent 身份同时覆盖两条 lane。侧执行和探测共享单独的 8 个许可，
+  闲置 60 秒后回收 runner，持久历史仍可读取；接受确认超过 10 秒时保留未确认收据并核对事实，
+  不重发问题。临时启动环境仅在内存中按 Agent 共享，不写入侧话题或收据。
 
 - 执行器在准入时把 wire 方法转换为封闭的 `Operation` 枚举；`access()` 与 `target()` 对每个操作
   穷举分类，新增操作不能按名称前缀获得读权限。子会话列表与子时间线以 `parentAgentId` 定位，
