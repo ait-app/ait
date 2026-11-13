@@ -9,7 +9,9 @@
 - Resuming an ACP session that answers with another session id is rejected instead of addressing a session the agent does not have.
 - Reading the DeepSeek Harness environment skips a variable that is not valid Unicode instead of aborting the session, and its summary commands now end with the client's deadline instead of waiting for a wedged native process.
 
-## 0.2.11 - 2026-11-13
+## 0.2.12 - 2026-11-14
+
+0.2.11 was tagged but never released, so its changes ship in 0.2.12.
 
 - The Task overview keeps its search box visible, and the task count heading opens the filters. It shows the active Host and project scope, such as "mba.local / ait 12 tasks", and the filter icon is highlighted while any filter or sort is set.
 - Usage history shows reported tokens and costs without the "≥" lower-bound marker, and large numbers use K, M and B in every language, such as `12.3K` or `2.5B`.
@@ -27,6 +29,8 @@
 - Test feature: the Workspace Bot keeps a list of tasks. Every agent the Bot starts belongs to a task, and agents report progress, report when they are blocked on you, and report when they are done or give up. The Bot no longer waits inside a turn for long-running work: it hands the work to an agent, tells you it has started and ends its turn, then wakes in the same conversation when an agent finishes, fails, needs permission or reports, and closes the task after telling you the result. In the Bot tab, a Tasks button above the message box shows how many tasks are open and how many are waiting on you. It lists them with tasks waiting on you first, why each one waits, its agents and the latest report, and shows recently closed tasks on request. Opening a task shows the request, the full report history and the outcome; the Host owner can mark it done, cancel it or reopen it, and guests can only read it. Workspace updates that belong to a task link to it. A Bot keeps at most 32 open tasks and the 64 most recently closed; at the limit, tasks whose agents are all archived are closed automatically before a new one opens. Giving an agent more work reopens its task, and an agent that reports its result and then ends its turn wakes the Bot once, not twice. Claude agents send their reports without asking for approval; a Codex agent in a mode that asks before using tools, and agents on other providers, may ask you to approve the report first. Closing a task does not stop its agents. The Host daemon must be upgraded; once an agent has reported on a task, downgrading to 0.2.10 or earlier means removing the Bot data.
 
 - Opening a model picker, the profile editor, a schedule form or provider settings now refreshes that Host's model catalog in the background, sharing one refresh across every open picker instead of re-querying per picker. Providers already being discovered are not refreshed again. If discovery fails, the last usable models stay selectable with a visible error and retry, and remembered model/mode/thinking choices are kept instead of being silently replaced. Host changes, same-client reconnects and working-directory changes fence late refresh results. This changes internal UI refresh/open callbacks and their consumers; public SDK, daemon protocol, saved configuration and native provider interfaces are unchanged.
+
+- Building the desktop app from source: the daemon binary override is now `AITD_BIN`. `AIT_SERVER_BIN` is still read until 2027-05-14; "Ait server" now names the separate server project.
 
 ## 0.2.10 - 2026-11-12
 
