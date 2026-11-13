@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
       - id: plan
         env:
           VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
       - name: Check docs and formatting
         run: node scripts/verify.mjs --only docs,format --scope all
 
@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
       # Match rust-toolchain.toml so new stable lints cannot silently break this job.
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
@@ -96,7 +96,7 @@ jobs:
       - &setup-node
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci

@@ -66,7 +66,7 @@ cargo build --locked --release -p daemon --bin daemon
 
 ## 本地开发
 
-准备 Git、Node.js 24、npm、CMake、系统 C/C++ 构建工具，以及 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链。
+准备 Git、Node.js 26、npm、CMake、系统 C/C++ 构建工具，以及 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链。
 仓库提供可选的 Nix 开发环境，运行 `nix develop` 可进入包含 Rust、Node.js 和构建工具的环境。
 
 在仓库根目录运行：

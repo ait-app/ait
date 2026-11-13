@@ -50,6 +50,9 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "node",
+          // Node 26 exposes localStorage without a backing file; let jsdom provide browser
+          // storage rather than inheriting the Node getter that returns undefined.
+          execArgv: ["--no-experimental-webstorage"],
           include: [
             "src/**/*.{test,spec}.{ts,tsx}",
             "maestro/**/*.test.ts",
