@@ -126,24 +126,18 @@ impl Transport {
                     .take(MAX_FRAME as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                let complete = matches!(read, Ok(1..)) && bytes.last() == Some(&b'\n');
-                if !complete {
-                    // A provider that exits right after its last frame leaves the trailing
-                    // newline out; that frame is complete and is delivered before the end.
-                    let trailing = (bytes.last() != Some(&b'\n'))
-                        .then(|| serde_json::from_slice::<Value>(&bytes).ok())
-                        .flatten();
-                    let Some(message) = trailing else {
-                        let category = if matches!(read, Ok(0)) {
-                            Category::Closed
-                        } else {
-                            Category::Protocol
-                        };
-                        reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
-                        break;
+                // A short successful read without a newline proves EOF. A frame that fills
+                // `take` must fail rather than deliver a prefix and silently discard the rest.
+                let trailing = matches!(read, Ok(1..))
+                    && bytes.len() < MAX_FRAME
+                    && bytes.last() != Some(&b'\n');
+                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
+                    let category = if matches!(read, Ok(0)) {
+                        Category::Closed
+                    } else {
+                        Category::Protocol
                     };
-                    let _ = send_record(&sender, &budget, &bytes, message).await;
-                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
                     break;
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
@@ -163,6 +157,10 @@ impl Transport {
                     break;
                 }
                 if !send_record(&sender, &budget, &bytes, message).await {
+                    break;
+                }
+                if trailing {
+                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
                     break;
                 }
             }

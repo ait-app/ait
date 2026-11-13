@@ -70,7 +70,7 @@ impl ProjectConfigStore for LocalProjectConfigStore {
         if current_revision != expected_revision {
             return Ok(ProjectConfigWrite::Stale { current_revision });
         }
-        install_mode(&staged, &path).map_err(|_| ProjectConfigStoreError::Write)?;
+        install_mode(&staged, &current_path).map_err(|_| ProjectConfigStoreError::Write)?;
         staged
             .persist(&path)
             .map_err(|_| ProjectConfigStoreError::Write)?;
@@ -93,9 +93,14 @@ impl ProjectConfigStore for LocalProjectConfigStore {
 #[cfg(unix)]
 fn install_mode(staged: &tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    let mode =
-        std::fs::metadata(path).map_or(0o644, |metadata| metadata.permissions().mode() & 0o777);
-    std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(mode))
+    let mode = match std::fs::metadata(path) {
+        Ok(metadata) => metadata.permissions().mode() & 0o777,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0o644,
+        Err(error) => return Err(error),
+    };
+    staged
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(mode))
 }
 
 #[cfg(not(unix))]

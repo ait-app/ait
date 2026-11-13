@@ -343,9 +343,12 @@ async fn serve(
             command=receiver.recv()=>match command {
                 Some(Command::Request(method,params,reply))=>{
                     if method=="schedule.run_once.request" {
-                        if !pending.is_empty() { let _ = reply.send(Err(Error::Storage)); continue; }
                         let id=only(&params,&["scheduleId"]).and_then(|()|params["scheduleId"].as_str().map(str::to_owned).ok_or(Error::Invalid));
-                        match id {Ok(id)=>launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,true,Some(reply))),Err(error)=>{let _=reply.send(Err(error));}}
+                        match id {
+                            Ok(id) if pending.iter().any(|finished: &Finished| finished.id == id) => { let _ = reply.send(Err(Error::Storage)); },
+                            Ok(id)=>launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,true,Some(reply))),
+                            Err(error)=>{let _=reply.send(Err(error));}
+                        }
                     } else {
                         accept_request(&mut engine, &runner, &mut validations, (method, params, reply));
                     }

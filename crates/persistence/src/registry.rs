@@ -219,6 +219,9 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
             let records: Vec<&R> = staged.values().collect();
             let bytes =
                 serde_json::to_vec_pretty(&records).map_err(|_| E::from(Error::InvalidRecord))?;
+            if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_REGISTRY_BYTES) {
+                return Err(E::from(Error::InvalidRecord));
+            }
             // Validate programmatically constructed records too (e.g. positive request numbers).
             serde_json::from_slice::<Vec<R>>(&bytes).map_err(|_| E::from(Error::InvalidRecord))?;
             // Journal before-images must come from the same locked state as the write.

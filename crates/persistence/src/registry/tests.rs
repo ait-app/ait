@@ -132,6 +132,43 @@ fn invalid_files_records_and_failed_writers_preserve_committed_state() {
 }
 
 #[test]
+fn oversized_mutations_leave_committed_state_and_hooks_untouched() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("records.json");
+    let store = registry(path.clone());
+    insert(&store, record("one", 1.0)).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let snapshot = store.snapshot().unwrap();
+    let oversized = record(
+        &"x".repeat(usize::try_from(MAX_REGISTRY_BYTES).unwrap()),
+        2.0,
+    );
+    let result = store.mutate_with(
+        |records| {
+            records.insert(oversized.id.clone(), oversized);
+            Ok(((), true))
+        },
+        |_| panic!("oversized records must not create a journal"),
+        || panic!("oversized records must not be committed"),
+    );
+    assert_eq!(result, Err(Error::InvalidRecord));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(Arc::ptr_eq(&snapshot, &store.snapshot().unwrap()));
+    assert_eq!(registry(path).list().unwrap(), [record("one", 1.0)]);
+}
+
+#[test]
+fn oversized_existing_registries_are_rejected() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("records.json");
+    std::fs::File::create(&path)
+        .unwrap()
+        .set_len(MAX_REGISTRY_BYTES + 1)
+        .unwrap();
+    assert_eq!(registry(path).initialize(), Err(Error::InvalidFile));
+}
+
+#[test]
 fn hooks_capture_locked_before_image_and_failed_post_commit_requires_owner_recovery() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("records.json");

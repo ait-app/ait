@@ -6,6 +6,44 @@ mod parity;
 mod worker;
 
 #[tokio::test]
+async fn a_final_frame_without_a_newline_is_delivered_before_closed() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("final-frame", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(finish(session.as_mut()).await, "Final frame");
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_frame_at_the_read_limit_is_not_treated_as_eof() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn(
+            &format!("frame-at-limit:{}", transport::MAX_FRAME),
+            &spec.config,
+        )
+        .await
+        .unwrap();
+    loop {
+        match next(session.as_mut()).await {
+            Err(AgentSessionError::Failed) | Ok(AgentTurnEvent::Failed) => break,
+            Ok(AgentTurnEvent::Completed(_)) => panic!("oversized frame was accepted"),
+            Ok(_) => {}
+            Err(error) => panic!("unexpected error: {error:?}"),
+        }
+    }
+    assert_eq!(
+        session.failure_diagnostic().unwrap().category,
+        provider_core::ports::diagnostics::Category::Protocol
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn native_authentication_failures_expose_sanitized_reasons_and_classified_diagnostics() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();

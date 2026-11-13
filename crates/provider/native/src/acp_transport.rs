@@ -72,19 +72,12 @@ impl Transport {
                     .take(MAX_FRAME as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
-                    // A provider that exits right after its last frame leaves the trailing
-                    // newline out; that frame is complete and is delivered before the end.
-                    let trailing = (bytes.last() != Some(&b'\n'))
-                        .then(|| serde_json::from_slice::<Value>(&bytes).ok())
-                        .flatten()
-                        .filter(|message| message["jsonrpc"] == "2.0");
-                    if let Some(message) = trailing {
-                        let _ = sender.send(message).await;
-                        reader_diagnostics
-                            .observe(Diagnostic::new(Category::Closed, "stdout"), "read");
-                        break;
-                    }
+                // Without a newline, only a short successful read proves EOF. Reaching the
+                // `take` limit may leave unread bytes and must remain a protocol failure.
+                let trailing = matches!(read, Ok(1..))
+                    && bytes.len() < MAX_FRAME
+                    && bytes.last() != Some(&b'\n');
+                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
                     let category = if matches!(read, Ok(0)) {
                         Category::Closed
                     } else {
@@ -107,6 +100,10 @@ impl Transport {
                     break;
                 }
                 if sender.send(message).await.is_err() {
+                    break;
+                }
+                if trailing {
+                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
                     break;
                 }
             }
@@ -361,3 +358,6 @@ pub fn response(message: &Value) -> Result<Value, AgentSessionError> {
     }
     Err(AgentSessionError::Failed)
 }
+
+#[cfg(all(test, unix))]
+mod tests;

@@ -116,14 +116,50 @@ fn oversized_documents_are_rejected_without_parsing() {
 #[test]
 fn a_written_project_config_keeps_the_mode_of_the_file_it_replaces() {
     use std::os::unix::fs::PermissionsExt;
+    for file_name in [PROJECT_CONFIG_FILE_NAME, LEGACY_PROJECT_CONFIG_FILE_NAME] {
+        for expected_mode in [0o600, 0o640, 0o644] {
+            let fixture = tempfile::tempdir().unwrap();
+            let root = fixture.path().to_str().unwrap();
+            let store = LocalProjectConfigStore;
+            let original = fixture.path().join(file_name);
+            std::fs::write(&original, "{}").unwrap();
+            std::fs::set_permissions(&original, std::fs::Permissions::from_mode(expected_mode))
+                .unwrap();
+            let revision = store.read(root).unwrap().revision;
+            assert!(matches!(
+                store
+                    .write(root, &json!({"future":true}), revision)
+                    .unwrap(),
+                ProjectConfigWrite::Written { .. }
+            ));
+            let path = fixture.path().join(PROJECT_CONFIG_FILE_NAME);
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, expected_mode, "migrating {file_name}");
+            assert_eq!(
+                store.read(root).unwrap().config,
+                Some(json!({"future":true}))
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_new_project_config_is_readable_by_the_shared_checkout() {
+    use std::os::unix::fs::PermissionsExt;
     let fixture = tempfile::tempdir().unwrap();
     let root = fixture.path().to_str().unwrap();
-    let store = LocalProjectConfigStore;
-    let path = fixture.path().join(PROJECT_CONFIG_FILE_NAME);
-    std::fs::write(&path, "{}").unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-    store.write(root, &json!({"future":true}), None).unwrap();
-    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert!(matches!(
+        LocalProjectConfigStore
+            .write(root, &json!({}), None)
+            .unwrap(),
+        ProjectConfigWrite::Written { .. }
+    ));
+    let mode = std::fs::metadata(fixture.path().join(PROJECT_CONFIG_FILE_NAME))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
     assert_eq!(mode, 0o644);
 }
 

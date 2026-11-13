@@ -13,6 +13,7 @@ use crate::engine::tests::input;
 struct Flaky {
     records: Arc<Mutex<Vec<Schedule>>>,
     failing: Arc<Mutex<String>>,
+    failed: Arc<tokio::sync::Notify>,
 }
 
 impl Store for Flaky {
@@ -30,11 +31,53 @@ impl Store for Flaky {
                     .any(|run| run.status != RunStatus::Running)
         });
         if refused {
+            self.failed.notify_one();
             return Err(Error::Storage);
         }
         *self.records.lock().unwrap() = records.to_vec();
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn an_unsettled_occurrence_does_not_block_another_manual_run() {
+    use super::controlled::*;
+
+    let store = Flaky::default();
+    let (runner, mut receive) = Controlled::new();
+    let service = Schedules::spawn(Box::new(store.clone()), runner).unwrap();
+    let blocked = create(&service).await;
+    let other = create(&service).await;
+    *store.failing.lock().unwrap() = blocked.as_str().unwrap().to_owned();
+    let pending = run(&service, &blocked);
+    started(&mut receive)
+        .await
+        .complete
+        .send(Outcome::default())
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), store.failed.notified())
+        .await
+        .unwrap();
+    assert!(!pending.is_finished());
+
+    let other_run = run(&service, &other);
+    tokio::task::yield_now().await;
+    assert!(
+        !other_run.is_finished(),
+        "another schedule must be admitted"
+    );
+    let accepted = started(&mut receive).await;
+    assert_eq!(accepted.schedule.id, other.as_str().unwrap());
+    accepted.complete.send(Outcome::default()).unwrap();
+    settled(other_run).await.unwrap();
+    assert_eq!(
+        settled(run(&service, &blocked)).await.unwrap_err(),
+        Error::Storage
+    );
+
+    store.failing.lock().unwrap().clear();
+    settled(pending).await.unwrap();
+    service.shutdown().await.unwrap();
 }
 
 /// A runner that counts its invocations.
