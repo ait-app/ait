@@ -61,6 +61,7 @@ import {
   resolveModelBrowserAllView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
+import { presetSectionIsVisible } from "@/components/model-preset-sections";
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
@@ -907,9 +908,7 @@ function AgentProfilesPickerContent({
   onApplyProfile?: (profileId: string) => void;
   onEditProfiles?: () => void;
 }) {
-  // A provider with no presets configured shows no preset section at all; the editor lives in
-  // the provider's own settings rather than being advertised on every provider's model picker.
-  if (rows.length === 0) {
+  if (!presetSectionIsVisible(rows)) {
     return null;
   }
   return (
