@@ -884,7 +884,7 @@ function AgentProfilesPickerSection({
   return (
     <View style={styles.profilesContainer}>
       <View style={styles.sectionHeading}>
-        <Text style={styles.sectionHeadingText}>{t("modelSelector.profiles")}</Text>
+        <Text style={styles.sectionHeadingText}>{t("modelSelector.modelPresets")}</Text>
         {onEditProfiles ? (
           <View style={styles.sectionHeadingAction}>
             <AgentProfilesEditAction onPress={onEditProfiles} />
@@ -898,27 +898,6 @@ function AgentProfilesPickerSection({
   );
 }
 
-function CreateAgentProfileRow({ onPress }: { onPress: () => void }) {
-  const { t } = useTranslation();
-  const leadingSlot = useMemo(
-    () => (
-      <View testID="model-profiles-create-icon">
-        <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
-      </View>
-    ),
-    [],
-  );
-  return (
-    <ModelBrowserRow
-      label={t("modelSelector.createProfile")}
-      labelMuted
-      leadingSlot={leadingSlot}
-      onPress={onPress}
-      testID="model-profiles-empty"
-    />
-  );
-}
-
 function AgentProfilesPickerContent({
   rows,
   onApplyProfile,
@@ -928,8 +907,10 @@ function AgentProfilesPickerContent({
   onApplyProfile?: (profileId: string) => void;
   onEditProfiles?: () => void;
 }) {
+  // A provider with no presets configured shows no preset section at all; the editor lives in
+  // the provider's own settings rather than being advertised on every provider's model picker.
   if (rows.length === 0) {
-    return onEditProfiles ? <CreateAgentProfileRow onPress={onEditProfiles} /> : null;
+    return null;
   }
   return (
     <AgentProfilesPickerSection
@@ -1325,6 +1306,11 @@ function ProviderModelBrowserContent({
       />
     );
   }
+  const modelRowsHeading = (
+    <View style={styles.sectionHeading}>
+      <Text style={styles.sectionHeadingText}>{t("modelSelector.defaultModelHeading")}</Text>
+    </View>
+  );
   const header = selection.error ? (
     <>
       <ProviderErrorEmptyState
@@ -1336,7 +1322,10 @@ function ProviderModelBrowserContent({
       {profileHeader}
     </>
   ) : (
-    profileHeader
+    <>
+      {profileHeader}
+      {visibleRows.length > 0 ? modelRowsHeading : null}
+    </>
   );
   if (visibleRows.length === 0) {
     return header ?? <ModelSearchEmptyState />;

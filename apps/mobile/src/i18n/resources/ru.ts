@@ -2379,6 +2379,8 @@ export const ru: TranslationResources = {
     loadingSelector: "Загрузка выбора модели...",
     error: "Ошибка",
     defaultModel: "По умолчанию",
+    defaultModelHeading: "Модель по умолчанию",
+    modelPresets: "Предустановки модели",
     profiles: "Профили",
     providers: "Провайдеры",
     model: "Модель",

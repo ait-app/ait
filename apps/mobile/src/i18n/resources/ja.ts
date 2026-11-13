@@ -2386,6 +2386,8 @@ export const ja: TranslationResources = {
     loadingSelector: "モデルセレクターを読み込み中...",
     error: "エラー",
     defaultModel: "デフォルト",
+    defaultModelHeading: "既定のモデル",
+    modelPresets: "モデルプリセット",
     profiles: "プロファイル",
     providers: "プロバイダー",
     model: "モデル",

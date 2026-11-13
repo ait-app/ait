@@ -31,6 +31,7 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import { ProviderPresetsSection } from "./provider-presets-section";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -725,6 +726,7 @@ export function ProviderDiagnosticSheet({
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
         />
+        <ProviderPresetsSection provider={provider} serverId={serverId} models={discoveredModels} />
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet
         provider={provider}
