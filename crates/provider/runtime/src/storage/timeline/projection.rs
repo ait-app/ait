@@ -18,14 +18,15 @@ impl Timeline {
     /// Read one display page in a consistent generation, with an envelope-derived byte budget.
     /// Legacy databases build their derived index once; subsequent reads and reopenings reuse it.
     /// `scope` selects an Agent or child timeline; `request` sets display limits and cursors.
-    /// `budget` receives the consistent header and returns the remaining response bytes.
+    /// `budget` receives the consistent header and latest task snapshot, returning the remaining
+    /// response bytes. A null snapshot means this generation has no canonical task list.
     /// # Errors
     /// Returns storage, malformed derived-data or response-budget errors.
     pub(crate) fn page(
         &self,
         request: &FetchRequest,
         scope: &str,
-        budget: impl FnOnce(&Header) -> Result<usize, ErrorCode>,
+        budget: impl FnOnce(&Header, serde_json::Value) -> Result<usize, ErrorCode>,
     ) -> Result<Page, ErrorCode> {
         let mut database = self.database.lock().map_err(io)?;
         let transaction = database.transaction().map_err(io)?;
@@ -35,7 +36,8 @@ impl Timeline {
             epoch(&transaction, scope)?,
             query::bounds(&transaction, scope)?,
         );
-        let bytes = budget(&header)?;
+        let tasks = query::tasks(&transaction, scope, &header.epoch)?;
+        let bytes = budget(&header, tasks)?;
         let page = query::read(&transaction, scope, request, &header, bytes)?;
         transaction.commit().map_err(io)?;
         Ok(page)

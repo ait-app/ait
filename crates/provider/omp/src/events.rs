@@ -458,28 +458,62 @@ fn delay_text(milliseconds: u64) -> String {
 /// A todo list from OMP todo phases (`[{name, tasks:[…]}]`), as the todo tool's
 /// `details.phases` and `get_state.todoPhases` report them.
 pub(super) fn todo_phases(phases: &Value) -> Option<Value> {
-    let mut tasks = Vec::new();
-    for phase in phases.as_array()? {
-        phase["name"].as_str()?;
-        tasks.extend(phase["tasks"].as_array()?);
+    let phases = phases.as_array().filter(|phases| phases.len() <= 1024)?;
+    let mut items = Vec::new();
+    let mut total_tasks = 0_usize;
+    let mut source_bytes = 0_usize;
+    for (index, phase) in phases.iter().enumerate() {
+        let title = phase["name"].as_str().filter(|title| title.len() <= 8192)?;
+        let tasks = phase["tasks"].as_array()?;
+        total_tasks = total_tasks.saturating_add(tasks.len());
+        source_bytes = source_bytes.saturating_add(title.len().saturating_mul(tasks.len()));
+        if total_tasks > 1024 || source_bytes > 128 * 1024 {
+            return None;
+        }
+        for task in tasks {
+            source_bytes = source_bytes.saturating_add(task["content"].as_str()?.len());
+            source_bytes =
+                source_bytes.saturating_add(task["blocker"].as_str().map_or(0, str::len));
+        }
+        if total_tasks > 1024 || source_bytes > 128 * 1024 {
+            return None;
+        }
+        let mut projected = todo_items(tasks.iter().collect())?;
+        let tasks = projected["items"].as_array_mut()?;
+        for task in tasks.iter_mut() {
+            task["group"] = json!({"id":format!("phase:{index}"),"title":title});
+        }
+        items.append(tasks);
     }
-    todo_items(tasks)
+    let item = json!({"type":"todo","items":items});
+    (serde_json::to_vec(&item).ok()?.len() <= 128 * 1024).then_some(item)
 }
 
 /// A todo list from a `todo_reminder` event's open `todos`.
 pub(super) fn todo_reminder(event: &Value) -> Option<Value> {
-    todo_items(event["todos"].as_array()?.iter().collect())
+    let todos = event["todos"]
+        .as_array()
+        .filter(|items| items.len() <= 1024)?;
+    todo_items(todos.iter().collect())
 }
 
 /// Paseo's `mapOmpTodoItems`: abandoned items are dropped and blocked items name their
-/// blocker. Returns none for an empty or malformed list.
+/// blocker. An empty list clears earlier tasks; malformed lists are ignored.
 fn todo_items(tasks: Vec<&Value>) -> Option<Value> {
-    if tasks.is_empty() {
+    if tasks.len() > 1024 {
         return None;
     }
     let mut items = Vec::with_capacity(tasks.len());
+    let mut source_bytes = 0_usize;
     for task in tasks {
-        let content = task["content"].as_str()?;
+        let content = task["content"].as_str().filter(|text| text.len() <= 8192)?;
+        let blocker = task["blocker"].as_str().unwrap_or_default();
+        source_bytes = source_bytes
+            .saturating_add(content.len())
+            .saturating_add(blocker.len());
+        if blocker.len() > 8192 || source_bytes > 128 * 1024 {
+            return None;
+        }
         let status = task["status"].as_str()?;
         let (text, status) = match status {
             "abandoned" => continue,
@@ -498,7 +532,8 @@ fn todo_items(tasks: Vec<&Value>) -> Option<Value> {
         };
         items.push(json!({"text":text,"status":status,"completed":status == "completed"}));
     }
-    Some(json!({"type":"todo","items":items}))
+    let item = json!({"type":"todo","items":items});
+    (serde_json::to_vec(&item).ok()?.len() <= 128 * 1024).then_some(item)
 }
 
 /// A short stable hexadecimal digest of `parts`, for call ids without a native identity.

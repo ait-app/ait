@@ -26,7 +26,7 @@ import {
   processTimelineResponse,
 } from "./session-stream-reducers";
 import { isTimelineResumeSnapshotAuthoritative } from "./timeline-sync-plan";
-import { replaceWithCanonicalStream, type StreamItem } from "@/types/stream";
+import { replaceWithCanonicalStream, type StreamItem, type TodoEntry } from "@/types/stream";
 
 export interface TimelineReplicaStorage {
   readTimeline(serverId: string, agentId: string): Promise<CachedTimeline | undefined>;
@@ -206,6 +206,22 @@ function clearAgentInitializingFlag(serverId: string, agentId: string): void {
   });
 }
 
+function currentTaskSnapshotItems(payload: TimelineResponsePayload): TodoEntry[] | undefined {
+  const snapshot = payload.taskSnapshot;
+  if (snapshot === undefined) return undefined;
+  if (snapshot === null) return [];
+  if (snapshot.epoch !== payload.epoch) return undefined;
+  if ("items" in snapshot) return snapshot.items;
+  const entry = payload.entries.find(
+    (candidate) =>
+      candidate.seqStart === snapshot.entrySeq &&
+      candidate.seqStart <= snapshot.seq &&
+      candidate.seqEnd >= snapshot.seq &&
+      candidate.item.type === "todo",
+  );
+  return entry?.item.type === "todo" ? entry.item.items : undefined;
+}
+
 function commitProcessedTimeline(input: {
   serverId: string;
   payload: TimelineResponsePayload;
@@ -217,6 +233,28 @@ function commitProcessedTimeline(input: {
   const { serverId, payload, result, timeline, currentCursor, synchronized } = input;
   const agentId = payload.agentId;
   const store = useSessionStore.getState();
+  const acceptsTaskEpoch = result.cursorChanged
+    ? result.cursor
+      ? result.cursor.epoch === payload.epoch
+      : result.commit === "apply" && payload.direction === "tail"
+    : !currentCursor || currentCursor.epoch === payload.epoch;
+  const snapshotItems = acceptsTaskEpoch ? currentTaskSnapshotItems(payload) : undefined;
+  const taskPatch =
+    payload.taskSnapshot === undefined
+      ? {}
+      : snapshotItems === undefined
+        ? {
+            // An unresolved reference says nothing about the current checklist. Do not let
+            // legacy history inference turn a missing payload row into an explicit clear.
+            taskSnapshot: store.sessions[serverId]?.agentTasks.get(agentId) ?? [],
+          }
+        : {
+            taskSnapshot: snapshotItems,
+            taskSnapshotCursor: {
+              epoch: payload.taskSnapshot?.epoch ?? payload.epoch,
+              seq: Math.max(payload.taskSnapshot?.seq ?? 0, payload.window.maxSeq),
+            },
+          };
   if (result.commit !== "discard") {
     store.applyAgentTimelineResponseState(serverId, agentId, {
       items: result.tail,
@@ -229,8 +267,12 @@ function commitProcessedTimeline(input: {
           : payload.hasNewer,
       synchronized,
       acknowledgedClientMessageIds: result.acknowledgedClientMessageIds,
+      ...taskPatch,
     });
     return;
+  }
+  if (payload.taskSnapshot !== undefined && acceptsTaskEpoch) {
+    store.setAgentStreamState(serverId, agentId, taskPatch);
   }
   if (result.acknowledgedClientMessageIds.length > 0) {
     store.setAgentStreamState(serverId, agentId, {

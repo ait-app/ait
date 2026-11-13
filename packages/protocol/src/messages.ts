@@ -689,6 +689,15 @@ export const VoiceTimelineItemSchema = z.intersection(
   ]),
 );
 
+const AgentTaskItemPayloadSchema = z.object({
+  text: z.string(),
+  completed: z.boolean(),
+  id: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed"]).optional(),
+  activeForm: z.string().optional(),
+  group: z.object({ id: z.string(), title: z.string() }).optional(),
+});
+
 // zod-aot 0.20.4 miscompiles this as a nested discriminated union by omitting
 // the inner tool_call branch from the generated outer dispatch.
 export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknown> = z.union([
@@ -714,15 +723,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
   ToolCallTimelineItemPayloadSchema,
   z.object({
     type: z.literal("todo"),
-    items: z.array(
-      z.object({
-        text: z.string(),
-        completed: z.boolean(),
-        id: z.string().optional(),
-        status: z.enum(["pending", "in_progress", "completed"]).optional(),
-        activeForm: z.string().optional(),
-      }),
-    ),
+    items: z.array(AgentTaskItemPayloadSchema),
   }),
   z.object({
     type: z.literal("error"),
@@ -4642,6 +4643,21 @@ export const FetchAgentTimelineResponseMessageSchema = z.object({
     hasNewer: z.boolean(),
     mergeWindow: z.boolean().optional(),
     historyNeedsRefresh: z.boolean().optional(),
+    taskSnapshot: z
+      .union([
+        z.object({
+          epoch: z.string(),
+          seq: z.number().int().nonnegative(),
+          items: z.array(AgentTaskItemPayloadSchema),
+        }),
+        z.object({
+          epoch: z.string(),
+          seq: z.number().int().nonnegative(),
+          entrySeq: z.number().int().nonnegative(),
+        }),
+      ])
+      .nullable()
+      .optional(),
     entries: z.array(AgentTimelineEntryPayloadSchema),
     error: z.string().nullable(),
   }),

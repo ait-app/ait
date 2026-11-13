@@ -25,16 +25,28 @@ function TaskStatusIcon({ isCompleted, isRunning }: { isCompleted: boolean; isRu
   return <ThemedCircle size={16} uniProps={extraMutedIcon} />;
 }
 
-export const TaskListRow = memo(function TaskListRow({ task }: { task: TodoEntry }) {
+export const TaskListRow = memo(function TaskListRow({
+  task,
+  numberOfLines = 1,
+  number,
+}: {
+  task: TodoEntry;
+  numberOfLines?: number;
+  number?: string;
+}) {
   const isCompleted = task.completed || task.status === "completed";
   const isRunning = !isCompleted && task.status === "in_progress";
   const text = isRunning && task.activeForm ? task.activeForm : task.text;
 
   return (
-    <View style={styles.row} accessibilityLabel={text}>
+    <View
+      style={[styles.row, numberOfLines !== 1 && styles.multilineRow]}
+      accessibilityLabel={number ? `${number} ${text}` : text}
+    >
+      {number ? <Text style={styles.number}>{number}</Text> : null}
       <TaskStatusIcon isCompleted={isCompleted} isRunning={isRunning} />
       <Text
-        numberOfLines={1}
+        numberOfLines={numberOfLines}
         style={[styles.text, isRunning && styles.runningText, isCompleted && styles.completedText]}
       >
         {text}
@@ -48,6 +60,16 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  multilineRow: {
+    alignItems: "flex-start",
+  },
+  number: {
+    minWidth: 24,
+    textAlign: "right",
+    color: theme.colors.foregroundExtraMuted,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
   },
   // Grows and shrinks, but keeps an `auto` basis: a zero-basis label reports no intrinsic width,
   // and a container that sizes itself to its content — the composer track panel — measures the

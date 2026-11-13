@@ -18,6 +18,7 @@ pub mod prompt_blocks;
 pub mod sandbox;
 pub mod session_preview;
 pub mod summary_model;
+pub mod todo;
 pub mod tool_detail;
 /// Native usage parsing shared by adapters, including per-request ledger segments.
 pub mod usage;

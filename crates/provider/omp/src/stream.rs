@@ -104,10 +104,11 @@ impl Tool {
 /// The todo lists shown so far, so a consecutive duplicate is not shown again (M4).
 #[derive(Debug, Default)]
 struct Todos {
+    /// Full native phases outrank open-task reminders, including after an explicit clear.
+    authoritative: bool,
     /// The last list any source showed.
     shown: Option<Value>,
-    /// The last list a todo tool result showed. History replays only tool results, so these
-    /// are compared only with each other and replay shows the same rows as live output.
+    /// Last durable tool snapshot; a duplicate is skipped only while it remains displayed.
     recorded: Option<Value>,
 }
 
@@ -584,6 +585,10 @@ impl Stream {
         let Some(item) = events::todo_phases(&state["todoPhases"]) else {
             return;
         };
+        self.todos.authoritative = true;
+        if self.todos.shown.is_none() && item["items"].as_array().is_some_and(Vec::is_empty) {
+            return;
+        }
         if self.todos.shown.as_ref() == Some(&item) {
             return;
         }
@@ -912,10 +917,14 @@ impl Stream {
 
     /// Show the todo list a todo tool result records, keyed by its call for replay.
     fn recorded_todo(&mut self, id: &str, message: &Value) -> Result<(), Error> {
+        if message["isError"] == true {
+            return Ok(());
+        }
         let Some(item) = events::todo_phases(&message["details"]["phases"]) else {
             return Ok(());
         };
-        if self.todos.recorded.as_ref() == Some(&item) {
+        self.todos.authoritative = true;
+        if self.todos.recorded.as_ref() == Some(&item) && self.todos.shown.as_ref() == Some(&item) {
             return Ok(());
         }
         self.todos.recorded = Some(item.clone());
@@ -928,6 +937,9 @@ impl Stream {
 
     /// Show the open todos a `todo_reminder` lists, unless the last list showed them.
     fn todo_reminder(&mut self, event: &Value) {
+        if self.todos.authoritative {
+            return;
+        }
         let Some(item) = events::todo_reminder(event) else {
             return;
         };

@@ -33,6 +33,8 @@ pub struct Stream {
     turn: String,
     sequence: usize,
     observation: usize,
+    has_todos: bool,
+    native_todos: bool,
     /// Most recently completed assistant text in the current turn.
     pub last_message: Option<String>,
     images: crate::images::ImageStore,
@@ -100,6 +102,7 @@ impl Stream {
         self.completed_tools.clear();
         self.compactions = crate::compaction::Compactions::default();
         self.native_compaction = None;
+        self.native_todos = false;
     }
 
     /// Queue events from one native `update`; malformed or oversized content fails.
@@ -112,6 +115,7 @@ impl Stream {
             Some("agent_message_chunk") => self.chunk("assistant_message", update),
             Some("agent_thought_chunk") => self.chunk("reasoning", update),
             Some("tool_call" | "tool_call_update") => self.tool(update),
+            Some("plan") => self.todos(&update["entries"]),
             Some("compaction_update") => {
                 let status = match update["status"].as_str() {
                     Some("in_progress") => "loading",
@@ -141,6 +145,44 @@ impl Stream {
             // have no authority over the host's lifecycle or execution policy.
             _ => Ok(()),
         }
+    }
+
+    /// Queue a complete native task list, retaining empty snapshots as explicit clears.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] for malformed or oversized entries, or too many
+    /// display items in the current turn. Entries use the native `content`/`status` shape.
+    pub fn todos(&mut self, entries: &Value) -> Result<(), AgentSessionError> {
+        let item = crate::todo::snapshot(entries)?;
+        self.native_todos = true;
+        self.todo_snapshot(item)
+    }
+
+    fn todo_snapshot(&mut self, item: Value) -> Result<(), AgentSessionError> {
+        self.flush();
+        self.sequence += 1;
+        if self.sequence > MAX_ITEMS {
+            return Err(AgentSessionError::Failed);
+        }
+        self.has_todos = item["items"]
+            .as_array()
+            .is_some_and(|items| !items.is_empty());
+        let entry = self.entry(format!("native:{}:plan:{}", self.turn, self.sequence), item);
+        self.events.push_back(AgentTurnEvent::Timeline(entry));
+        Ok(())
+    }
+
+    /// Clear a preceding native task list when its provider resets task ownership.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentSessionError::Failed`] if the current turn's display item limit is hit.
+    pub fn clear_todos(&mut self) -> Result<(), AgentSessionError> {
+        if self.has_todos {
+            self.todos(&json!([]))?;
+        }
+        Ok(())
     }
 
     /// Publish one bounded, deduplicated native compaction lifecycle marker.
@@ -288,6 +330,9 @@ impl Stream {
                 "output":snapshot.get("rawOutput").unwrap_or(&snapshot["content"])},
             "metadata":{"kind":snapshot["kind"],"title":snapshot["title"]},
             "error":if status == "failed" { json!({"message":"Provider tool failed"}) } else { Value::Null }});
+        let todo = (status == "completed" && !self.native_todos)
+            .then(|| crate::todo::tool_input(snapshot["title"].as_str()?, &snapshot["rawInput"]))
+            .flatten();
         let entry = self.entry(format!("native:{}:tool:{id}", self.turn), item);
         if status == "running" {
             self.observation += 1;
@@ -299,6 +344,9 @@ impl Stream {
             self.events.push_back(AgentTurnEvent::Timeline(entry));
             self.tools.remove(id);
             self.completed_tools.insert(id.to_owned());
+        }
+        if let Some(item) = todo {
+            self.todo_snapshot(item)?;
         }
         Ok(())
     }

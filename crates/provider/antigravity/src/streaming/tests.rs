@@ -3,6 +3,43 @@ use super::*;
 mod native;
 
 #[test]
+fn successful_compatible_native_todo_tools_emit_provider_independent_snapshots() {
+    for (state, output, expected) in [
+        ("DONE", json!("Saved"), 1),
+        ("ERROR", json!("Failed"), 0),
+        ("ACTIVE", Value::Null, 0),
+    ] {
+        let mut stream = stream();
+        let mut update = step(1, state, "tool");
+        update["tool_name"] = json!("TodoWrite");
+        update["tool_info"] = json!({"parameters":{"todos":[{"content":"2.1 Build","status":"in_progress"}]},"output":output});
+        stream.update(&update).unwrap();
+        let snapshots = stream
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo" => Some(entry),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(snapshots.len(), expected);
+        if let Some(snapshot) = snapshots.first() {
+            assert_eq!(snapshot.item["items"][0]["text"], "2.1 Build");
+        }
+    }
+    let mut stream = stream();
+    let mut update = step(1, "DONE", "tool");
+    update["tool_name"] = json!("todo_write");
+    update["tool_info"] = json!({"parameters":{"todos":[]}});
+    stream.update(&update).unwrap();
+    assert!(stream.events.iter().all(
+        |event| !matches!(event, AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo")
+    ));
+    stream.finish(&result("SUCCESS")).unwrap();
+    assert!(stream.events.iter().any(|event| matches!(event, AgentTurnEvent::Timeline(entry) if entry.item == json!({"type":"todo","items":[]}))));
+}
+
+#[test]
 fn submitted_text_is_bounded_lossless_and_reconciles_the_client_only_once() {
     let mut stream = stream();
     let text = format!("{}{}", "\u{0001}".repeat(96 * 1024 - 1), "界".repeat(1024));
