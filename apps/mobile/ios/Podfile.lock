@@ -278,7 +278,7 @@ PODS:
     - ExpoModulesCore
   - ExpoSystemUI (6.0.9):
     - ExpoModulesCore
-  - ExpoTwoWayAudio (0.2.10):
+  - ExpoTwoWayAudio (0.2.11):
     - ExpoModulesCore
   - ExpoWebBrowser (15.0.11):
     - ExpoModulesCore
@@ -2905,7 +2905,7 @@ SPEC CHECKSUMS:
   ExpoSplashScreen: bc3cffefca2716e5f22350ca109badd7e50ec14d
   ExpoSQLite: 7eedbe476870a5f18d6b89c817c4ac6f299830ad
   ExpoSystemUI: 2ad325f361a2fcd96a464e8574e19935c461c9cc
-  ExpoTwoWayAudio: eabe1414b1e6108ac8af7e8839b6f8accd7f2db4
+  ExpoTwoWayAudio: ef6d478a52807450cae1c73f18b95a51dc718b50
   ExpoWebBrowser: 970dd4c64c29c955c3af664c8058ba768a4c9187
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
@@ -2984,7 +2984,7 @@ SPEC CHECKSUMS:
   ReactCodegen: c1acc47016bcb83d3c70e6094d13a79ac7ebe270
   ReactCommon: 08810150b1206cc44aecf5f6ae19af32f29151a8
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
-  ReactNativeEnrichedMarkdown: eb1abef4f78962d5c2957239bae3aed6d09e0525
+  ReactNativeEnrichedMarkdown: 31a8ca3fc8bd65500e34abf12edb567ba6772d57
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
   RNCMaskedView: d2578d41c59b936db122b2798ba37e4722d21035
   RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3

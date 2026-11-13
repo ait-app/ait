@@ -1,6 +1,15 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.11 - 2026-11-13
+
+- The Task overview keeps its search box visible, and the task count heading opens the filters. It shows the active Host and project scope, such as "mba.local / ait 12 tasks", and the filter icon is highlighted while any filter or sort is set.
+- Usage history shows reported tokens and costs without the "≥" lower-bound marker, and large numbers use K, M and B in every language, such as `12.3K` or `2.5B`.
+- When an Agent turn finishes or fails, the Host refreshes that checkout's status, at most once a minute per directory, so the Changes panel switches between uncommitted changes and the base comparison without a manual refresh.
+- Provider task lists appear as a `TODO 1/3` capsule above the input, opening a shared task card with phases, numbering and status. Claude, Codex, OMP, Pi, DeepSeek Harness, OpenCode and ACP agents use the same view, and the current list survives reloads and scrolling back through history.
+- Messages Ait sends on your behalf, such as schedule and heartbeat runs and Bot instructions or wake notifications, show their origin instead of raw tags, and schedule prompts can no longer break out of their envelope.
+- The workspace sidebar no longer spins forever because of child agents left marked as running by a closed session.
+- Oh My Pi model roles come from the installed OMP's live profile, and only assignments that the live catalog resolves are accepted.
+- Test feature: Workspace Bots can connect to international Lark through manual setup in Bot settings, separately from China's Feishu.
 
 - `/btw` opens an independent floating conversation above the main input with streamed answers, continued follow-ups, saved history and separate cancellation. The window follows the input's height and stays clear of it. Expand a settled side conversation into a full session draft with its frozen parent context and question/answer history, then continue working there. Main and side conversations run independently through a shared provider interface; support depends on the installed provider adapter and runtime. The Host daemon must be upgraded.
 - Mathematical formulas render in the shared Markdown engine, including BTW windows and expanded conversations. Web and desktop use local MathML with Ait theme sizing and colors; native apps need a new build to enable the math module.
