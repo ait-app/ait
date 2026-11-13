@@ -1,10 +1,14 @@
-import { useCallback, useMemo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { CancelledError, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider, ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useRetainedPanelActive } from "@/components/retained-panel";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+} from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useReplicaQuery } from "@/data/query";
 import { queryClient as singletonQueryClient } from "@/data/query-client";
@@ -14,6 +18,7 @@ import {
   providersSnapshotQueryRoot,
   fetchProvidersSnapshot,
   refreshAndApplyProvidersSnapshot,
+  refreshProvidersOnAccess,
 } from "@/data/providers-snapshot";
 
 export {
@@ -77,6 +82,15 @@ export function useProvidersSnapshot(
 
   const queryKey = useMemo(() => providersSnapshotQueryKey(serverId, cwd), [cwd, serverId]);
 
+  // A refresh started for one directory must stop publishing once this consumer
+  // moves to another; the host-runtime subscription alone cannot see cwd changes.
+  const scopeCwdRef = useRef(cwd);
+  const scopeListenersRef = useRef(new Set<() => void>());
+  useEffect(() => {
+    scopeCwdRef.current = cwd;
+    for (const notify of scopeListenersRef.current) notify();
+  }, [cwd]);
+
   const snapshotQuery = useReplicaQuery<Awaited<ReturnType<typeof fetchProvidersSnapshot>>>({
     queryKey,
     // The content-hash cache already owns catalog and model identity.
@@ -99,16 +113,41 @@ export function useProvidersSnapshot(
 
   const refreshMutation = useMutation({
     mutationFn: async (providers?: AgentProvider[]) => {
-      if (!client || !serverId) {
+      if (!client || !serverId || !enabled || !isConnected || !supportsSnapshot) {
         return;
       }
-      await refreshAndApplyProvidersSnapshot({
-        client,
-        queryClient,
-        serverId,
-        cwd,
-        providers,
-      });
+      try {
+        const scopeListeners = scopeListenersRef.current;
+        const runtime = getHostRuntimeStore();
+        const owner = runtime.getSnapshot(serverId);
+        await refreshProvidersOnAccess({
+          client,
+          queryClient,
+          serverId,
+          cwd,
+          providers,
+          isCurrent: () => {
+            const current = runtime.getSnapshot(serverId);
+            return (
+              current?.client === client &&
+              current.connectionStatus === "online" &&
+              current.connectionEpoch === owner?.connectionEpoch &&
+              current.clientGeneration === owner?.clientGeneration
+            );
+          },
+          isScopeCurrent: () => scopeCwdRef.current === cwd,
+          subscribe: (notify) => {
+            scopeListeners.add(notify);
+            const unsubscribeHost = runtime.subscribe(serverId, notify);
+            return () => {
+              scopeListeners.delete(notify);
+              unsubscribeHost();
+            };
+          },
+        });
+      } catch (error) {
+        if (!(error instanceof CancelledError)) throw error;
+      }
     },
   });
   const { mutateAsync: refreshSnapshot, isPending: isRefreshing } = refreshMutation;
@@ -122,6 +161,12 @@ export function useProvidersSnapshot(
 
   const refetchIfStale = useCallback(
     (selectedProvider?: AgentProvider | null) => {
+      if (enabled && supportsSnapshot && client && serverId && isConnected) {
+        void refresh(selectedProvider ? [selectedProvider] : undefined).catch(() => {
+          // The shared snapshot retains candidates and projects the failure.
+        });
+        return;
+      }
       const decision = selectorOpenRefetchDecision({
         entries: snapshotQuery.data?.entries,
         selectedProvider,
@@ -132,7 +177,17 @@ export function useProvidersSnapshot(
       }
       void queryClient.refetchQueries({ queryKey, type: "active", stale: true });
     },
-    [queryClient, queryKey, snapshotQuery.data?.entries],
+    [
+      client,
+      enabled,
+      isConnected,
+      queryClient,
+      queryKey,
+      refresh,
+      serverId,
+      snapshotQuery.data?.entries,
+      supportsSnapshot,
+    ],
   );
 
   return {
@@ -140,7 +195,12 @@ export function useProvidersSnapshot(
     isLoading: snapshotQuery.isLoading,
     isFetching: snapshotQuery.isFetching,
     isRefreshing,
-    error: snapshotQuery.error instanceof Error ? snapshotQuery.error.message : null,
+    error:
+      snapshotQuery.error instanceof Error
+        ? snapshotQuery.error.message
+        : refreshMutation.error instanceof Error
+          ? refreshMutation.error.message
+          : null,
     supportsSnapshot,
     refresh,
     refetchIfStale,

@@ -68,12 +68,14 @@ export async function fetchProvidersSnapshot(input: {
   const cache = input.cache ?? providerSnapshotCache;
   const queryClient = input.queryClient ?? singletonQueryClient;
   const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
-  const cached = input.snapshot ? null : await cache.read(input.serverId, input.cwd);
+  const cached = await cache.read(input.serverId, input.cwd);
+  if (input.signal?.aborted) throw new CancelledError();
   const response =
     input.snapshot ??
     (await input.client.getProvidersSnapshot(
       providersSnapshotRequestOptions({ cwd: input.cwd, ifNoneMatch: cached?.hash }),
     ));
+  if (input.signal?.aborted) throw new CancelledError();
   // Empty push entries may announce a body reference; an unconditional GET is a full body,
   // including when the host has no providers. A not-modified GET still requires its cached body.
   let snapshot =
@@ -99,7 +101,8 @@ export async function fetchProvidersSnapshot(input: {
           );
           // Materialize before settling so simultaneous directory announcements share
           // both the transfer and decoded body through the existing query deduplication.
-          return cache.materialize(input.serverId, withSnapshotBody(response));
+          if (input.signal?.aborted) throw new CancelledError();
+          return cache.materialize(input.serverId, withSnapshotBody(response), input.signal);
         },
       });
       if (body.snapshotHash === hash) {
@@ -116,10 +119,30 @@ export async function fetchProvidersSnapshot(input: {
     }
   }
   if (input.signal?.aborted) throw new CancelledError();
-  snapshot = await cache.materialize(input.serverId, snapshot);
+  snapshot = await cache.materialize(input.serverId, snapshot, input.signal);
+  if (input.signal?.aborted) throw new CancelledError();
   const current = queryClient.getQueryData<Snapshot>(queryKey);
   if (isNewerSnapshot(current, snapshot)) return current;
-  if (snapshot.compactSnapshot && snapshot.snapshotHash) {
+  const previous = (current as Snapshot | undefined)?.entries ?? [];
+  let retained = false;
+  const entries = snapshot.entries.map((entry) => {
+    if ((entry.status !== "error" && entry.status !== "unavailable") || entry.models?.length) {
+      return entry;
+    }
+    const lastGood =
+      previous.find(
+        (candidate) => candidate.provider === entry.provider && candidate.models?.length,
+      ) ??
+      cached?.entries.find(
+        (candidate) => candidate.provider === entry.provider && candidate.models?.length,
+      );
+    if (!lastGood) return entry;
+    retained = true;
+    return { ...entry, models: lastGood.models, modes: lastGood.modes };
+  });
+  // Do not associate a synthesized body with a host content hash or replace
+  // the last successful disk body with a failed discovery.
+  if (!retained && snapshot.compactSnapshot && snapshot.snapshotHash) {
     await cache.write({
       serverId: input.serverId,
       cwd: input.cwd,
@@ -133,8 +156,8 @@ export async function fetchProvidersSnapshot(input: {
   if (input.signal?.aborted) throw new CancelledError();
   const latest = queryClient.getQueryData<Snapshot>(queryKey);
   if (isNewerSnapshot(latest, snapshot)) return latest;
-  replaceProviderSnapshotIcons(input.serverId, snapshot.entries);
-  return snapshot;
+  replaceProviderSnapshotIcons(input.serverId, entries);
+  return retained ? { ...snapshot, entries } : snapshot;
 }
 
 export async function refreshAndApplyProvidersSnapshot(input: {
@@ -144,23 +167,28 @@ export async function refreshAndApplyProvidersSnapshot(input: {
   cwd: string | null;
   providers?: AgentProvider[];
   cache?: ProviderSnapshotCache;
+  signal?: AbortSignal;
 }) {
+  if (input.signal?.aborted) throw new CancelledError();
   const result = await input.client.refreshProvidersSnapshot(
     providersSnapshotRequestOptions(input),
   );
+  if (input.signal?.aborted) throw new CancelledError();
   const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
   await input.queryClient.cancelQueries({ queryKey, exact: true });
-  const controller = new AbortController();
+  const signal = input.signal ?? new AbortController().signal;
+  if (signal.aborted) throw new CancelledError();
   const deadline = Date.now() + 120_000;
   while (true) {
-    const snapshot = await fetchProvidersSnapshot({ ...input, signal: controller.signal });
+    const snapshot = await fetchProvidersSnapshot({ ...input, signal });
+    if (signal.aborted) throw new CancelledError();
     const pending = snapshot.refreshing?.some(
       (provider) => !input.providers || input.providers.includes(provider),
     );
     input.queryClient.setQueryData(queryKey, snapshot);
     if (!pending) break;
     if (Date.now() >= deadline) throw new Error("Provider refresh timed out");
-    await waitForRefresh(controller.signal);
+    await waitForRefresh(signal);
   }
   void input.queryClient.invalidateQueries({
     queryKey: agentCommandsQueryRoot(input.serverId),
@@ -173,6 +201,95 @@ export async function refreshAndApplyProvidersSnapshot(input: {
     });
   }
   return result;
+}
+
+/**
+ * Selector access joins discovery already in progress and shares each native
+ * refresh with other selectors for the same host and directory.
+ */
+export async function refreshProvidersOnAccess(input: {
+  client: SnapshotClient & Pick<DaemonClient, "refreshProvidersSnapshot">;
+  queryClient: QueryClient;
+  serverId: string;
+  cwd: string | null;
+  providers?: AgentProvider[];
+  isCurrent?: () => boolean;
+  isScopeCurrent?: () => boolean;
+  subscribe?: (callback: () => void) => () => void;
+}) {
+  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
+  const snapshot = input.queryClient.getQueryData<Snapshot>(queryKey);
+  if (!snapshot) {
+    await input.queryClient.refetchQueries({ queryKey, exact: true, type: "active" });
+    return;
+  }
+  const requested = new Set(
+    input.providers ??
+      snapshot.entries.filter((entry) => entry.enabled).map((entry) => entry.provider),
+  );
+  const refreshKey = ["providersSnapshotRefresh", input.serverId, input.cwd] as const;
+  while (requested.size) {
+    const current = input.queryClient.getQueryData<Snapshot>(queryKey);
+    const batch = [...requested].filter((provider) => {
+      const entry = current?.entries.find((candidate) => candidate.provider === provider);
+      return entry && entry.status !== "loading" && !current?.refreshing?.includes(provider);
+    });
+    if (!batch.length) return;
+    const completed = await input.queryClient.fetchQuery({
+      queryKey: refreshKey,
+      gcTime: 0,
+      retry: false,
+      queryFn: async ({ signal }) => {
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        signal.addEventListener("abort", abort, { once: true });
+        let unsubscribe = () => {};
+        const checkOwner = () => {
+          // The caller's host identity or its active directory may change while
+          // the native refresh is in flight; a stale scope must not publish.
+          if (
+            (input.isCurrent && !input.isCurrent()) ||
+            (input.isScopeCurrent && !input.isScopeCurrent())
+          ) {
+            controller.abort();
+            unsubscribe();
+            void input.queryClient.cancelQueries({ queryKey: refreshKey, exact: true });
+          }
+        };
+        unsubscribe = input.subscribe?.(checkOwner) ?? unsubscribe;
+        checkOwner();
+        if (signal.aborted) controller.abort();
+        try {
+          await refreshAndApplyProvidersSnapshot({
+            ...input,
+            providers: batch,
+            signal: controller.signal,
+          });
+          return batch;
+        } catch (error) {
+          if (!controller.signal.aborted && !(error instanceof CancelledError)) {
+            input.queryClient.setQueryData<Snapshot>(queryKey, (latest) => {
+              if (!latest) return latest;
+              const message = error instanceof Error ? error.message : String(error);
+              return {
+                ...latest,
+                entries: latest.entries.map((entry) =>
+                  batch.includes(entry.provider)
+                    ? { ...entry, status: "error", error: message }
+                    : entry,
+                ),
+              };
+            });
+          }
+          throw error;
+        } finally {
+          unsubscribe();
+          signal.removeEventListener("abort", abort);
+        }
+      },
+    });
+    for (const provider of completed) requested.delete(provider);
+  }
 }
 
 function isNewerSnapshot(current: Snapshot | undefined, incoming: Snapshot): current is Snapshot {

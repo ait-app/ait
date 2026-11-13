@@ -236,17 +236,17 @@ describe("resolveThinkingOptionId", () => {
     ).toBe("low");
   });
 
-  it("falls back to defaultThinkingOptionId when requested option is invalid", () => {
+  it("preserves a requested option absent from the current catalog", () => {
     expect(
       resolveThinkingOptionId({
         availableModels: CODEX_MODELS,
         modelId: "gpt-5.3-codex",
         requestedThinkingOptionId: "invalid",
       }),
-    ).toBe("xhigh");
+    ).toBe("invalid");
   });
 
-  it("falls back to first option when no default and requested is invalid", () => {
+  it("falls back to the first option when no preference or default exists", () => {
     const modelsNoDefault: AgentModelDefinition[] = [
       {
         provider: "codex",
@@ -441,7 +441,7 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("xhigh");
   });
 
-  it("falls back to the OpenCode default when the saved model is no longer available", () => {
+  it("preserves the saved OpenCode model when it is no longer available", () => {
     const models = [{ ...CODEX_MODELS[0], provider: "opencode" }];
     const resolved = resolveFormState(
       undefined,
@@ -456,8 +456,8 @@ describe("resolveFormState", () => {
       makeProviderMap(TEST_OPENCODE_DEFINITION),
     );
 
-    expect(resolved.model).toBe("gpt-5.3-codex");
-    expect(resolved.thinkingOptionId).toBe("xhigh");
+    expect(resolved.model).toBe("retired-model");
+    expect(resolved.thinkingOptionId).toBe("");
   });
 
   it.each([null, []])(

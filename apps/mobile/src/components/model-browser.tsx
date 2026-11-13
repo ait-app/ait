@@ -956,6 +956,14 @@ function GroupProviderButton({
   }, [onDrillDown, provider.id, provider.label]);
 
   const stateNode = useMemo(() => {
+    if (selection.kind === "models" && selection.error) {
+      return (
+        <View style={styles.rowStateInline}>
+          <ThemedAlertTriangle size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+          <Text style={styles.drillDownCount}>{t("modelSelector.error")}</Text>
+        </View>
+      );
+    }
     if (selection.kind === "models") {
       const count = selection.rows.length;
       return (
@@ -1317,8 +1325,21 @@ function ProviderModelBrowserContent({
       />
     );
   }
+  const header = selection.error ? (
+    <>
+      <ProviderErrorEmptyState
+        providerId={view.providerId}
+        message={selection.error}
+        onRetryProvider={onRetryProvider}
+        isRetryingProvider={isRetryingProvider}
+      />
+      {profileHeader}
+    </>
+  ) : (
+    profileHeader
+  );
   if (visibleRows.length === 0) {
-    return profileHeader ?? <ModelSearchEmptyState />;
+    return header ?? <ModelSearchEmptyState />;
   }
   return (
     <ModelRowList
@@ -1327,7 +1348,7 @@ function ProviderModelBrowserContent({
       selectedProvider={selectedProvider}
       selectedModel={selectedModel}
       onSelect={onSelect}
-      header={profileHeader}
+      header={header}
       scrolling={scrolling}
       profiledLookup={profiledLookup}
       onCreateProfile={onCreateProfile}
@@ -1497,6 +1518,13 @@ export function ModelBrowser({
   rootBrowseContent,
   showProfilesSection,
 }: ModelBrowserProps) {
+  const handleDrillDown = useCallback(
+    (providerId: string, providerLabel: string) => {
+      state.drillDown(providerId, providerLabel);
+      onRetryProvider?.(providerId);
+    },
+    [onRetryProvider, state.drillDown],
+  );
   return (
     <ModelBrowserContent
       serverId={state.serverId}
@@ -1512,7 +1540,7 @@ export function ModelBrowser({
       onEditProfiles={onEditProfiles}
       onCreateProfile={onCreateProfile}
       onEditProfile={onEditProfile}
-      onDrillDown={state.drillDown}
+      onDrillDown={handleDrillDown}
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
       scrolling={scrolling}
