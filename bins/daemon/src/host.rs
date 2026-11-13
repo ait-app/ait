@@ -356,10 +356,7 @@ fn compose_services(
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let skills = compose_skills(&config.data_dir)?;
-    let agents = Agents::new(Box::new(catalog::OwnedCatalog {
-        catalog: SqliteCatalog::open(&config.data_dir)?,
-        _instance: instance.clone(),
-    }));
+    let agents = compose_agents(&config.data_dir, instance)?;
     let server_id = instance.server_id.to_string();
     let providers = compose_providers(&config.data_dir, usage_ledger);
     let MetadataServices {
@@ -454,6 +451,15 @@ fn compose_services(
         },
         publication_sources,
     ))
+}
+
+/// Open the Agent catalog while retaining the host's instance lease for its consumers.
+/// Returns SQLite open failures without releasing the host's lease.
+fn compose_agents(data: &std::path::Path, instance: &Arc<InstanceLease>) -> anyhow::Result<Agents> {
+    Ok(Agents::new(Box::new(catalog::OwnedCatalog {
+        catalog: SqliteCatalog::open(data)?,
+        _instance: instance.clone(),
+    })))
 }
 
 /// Compose the injected Agent MCP and the scoped-credential registry it issues from.
