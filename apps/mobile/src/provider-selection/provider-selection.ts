@@ -37,6 +37,8 @@ export type ProviderModelSelection =
 export interface ProviderSelectorProvider {
   id: string;
   label: string;
+  /** The original catalog retains aliases and thinking choices needed to validate presets. */
+  modelDefinitions?: AgentModelDefinition[];
   modelSelection: ProviderModelSelection;
 }
 
@@ -140,6 +142,7 @@ export function buildProviderSelectorProviders(input: {
   return input.providerDefinitions.map((definition) => ({
     id: definition.id,
     label: definition.label,
+    modelDefinitions: input.modelsByProvider.get(definition.id) ?? [],
     modelSelection: buildModelSelection(
       definition.id,
       definition.label,
@@ -160,6 +163,7 @@ export function buildSelectableProviderSelectorProviders(
       return {
         id: entry.provider,
         label,
+        modelDefinitions: entry.models ?? [],
         modelSelection: buildEntryModelSelection(entry, label),
       };
     });

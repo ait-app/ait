@@ -106,6 +106,14 @@ export type AgentFormAction =
       providerModels: AgentModelDefinition[] | null;
       providerPrefs?: ProviderPrefs | undefined;
     }
+  | {
+      type: "APPLY_MODEL_PRESET_FROM_USER";
+      provider: AgentProvider;
+      modelId: string;
+      thinkingOptionId: string | null;
+      providerDef: AgentProviderDefinition | undefined;
+      providerModels: AgentModelDefinition[] | null;
+    }
   | { type: "SET_MODE_FROM_USER"; modeId: string }
   | {
       type: "SET_MODEL_FROM_USER";
@@ -658,6 +666,31 @@ export function resolveAgentForm(
     case "APPLY_PROFILE_FROM_USER": {
       return applyProfile(state, action);
     }
+
+    case "APPLY_MODEL_PRESET_FROM_USER":
+      return {
+        ...state,
+        form: {
+          ...state.form,
+          provider: action.provider,
+          model: action.modelId,
+          thinkingOptionId: resolveThinkingOptionId({
+            availableModels: action.providerModels,
+            modelId: action.modelId,
+            requestedThinkingOptionId: action.thinkingOptionId ?? "",
+          }),
+          modeId:
+            state.form.provider === action.provider
+              ? state.form.modeId
+              : (action.providerDef?.defaultModeId ?? action.providerDef?.modes[0]?.id ?? ""),
+        },
+        userModified: {
+          ...state.userModified,
+          provider: true,
+          model: true,
+          thinkingOptionId: true,
+        },
+      };
 
     case "SET_MODE_FROM_USER":
       return {

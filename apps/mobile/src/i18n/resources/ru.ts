@@ -40,6 +40,42 @@ const scheduleCadencePluralForms = {
 };
 
 export const ru: TranslationResources = {
+  providerControl: {
+    addRole: "Добавить роль",
+    defaultThinking: "Настройка провайдера",
+    deletePreset: "Удалить",
+    deletePresetScope: "Провайдер: {{provider}} · Глобальная область",
+    deletePresetTitle: "Удалить пресет {{name}}?",
+    deletePresetWarning:
+      "Сочетание модели, рассуждения и ролей будет удалено навсегда. Отменить нельзя.",
+    deletingPreset: "Удаление…",
+    modelRoles: "Роли моделей",
+    newRole: "+ Добавить роль…",
+    noModels: "Нет доступных моделей. Обновите провайдер.",
+    presetChecking: "Проверка прав…",
+    presetDeleted: "Пресет {{name}} удалён.",
+    presetLoadFailed: "Не удалось прочитать пресеты. Обновите.",
+    presetOwnershipUnknown: "Источник не подтверждён. Обновите перед изменением.",
+    presetReadOnly:
+      "Источник пресета не подтверждён или доступен только для чтения. Обновите перед редактированием.",
+    projectPresetReadOnly: "Пресетами проекта управляет OMP. Здесь доступен просмотр.",
+    removeRole: "Удалить настройку роли",
+    role: "Роль",
+    roleChoicesFailed: "Не удалось загрузить роли. Обновите.",
+    roleDefaultShort: "По умолчанию",
+    roleDefaultThinking: "Не переопределять рассуждение",
+    roleInheritedModel: "По умолчанию → {{model}}",
+    roleNames: {
+      default: "Основной диалог",
+    },
+    roleNative: "Настройка провайдера",
+    roleThinking: "Размышление",
+    roleUnset: "Не назначать",
+    sourceGlobal: "Глобальный",
+    sourceProject: "Проект · только чтение",
+    sourceUnknown: "Источник неизвестен",
+    viewPreset: "Просмотр {{name}}",
+  },
   hostMonitor: hostMonitorEn,
   taskBoard: {
     ...en.taskBoard,
@@ -3537,6 +3573,25 @@ export const ru: TranslationResources = {
       },
     },
     providers: {
+      presets: {
+        create: "Новый пресет",
+        createTitle: "Новый пресет модели",
+        edit: "Изменить {{name}}",
+        editTitle: "Изменить пресет {{name}}",
+        empty: "Пресетов моделей пока нет",
+        loading: "Загрузка пресетов...",
+        model: "Модель",
+        name: "Название пресета",
+        namePlaceholder: "напр. Командный по умолчанию",
+        nameTaken: "Пресет с именем «{{name}}» уже существует; откройте его для редактирования",
+        nativeNameInvalid:
+          "Начните с латинской буквы; используйте только латинские буквы, цифры, - или _.",
+        noRename: "Этот провайдер не поддерживает переименование пресетов.",
+        remove: "Удалить {{name}}",
+        saving: "Сохранение...",
+        thinking: "Уровень рассуждений (необязательно)",
+        title: "Пресеты моделей",
+      },
       title: "Провайдеры",
       addProvider: "Добавить провайдера",
       providerDetails: "Сведения о провайдере {{name}}",

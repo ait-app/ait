@@ -129,7 +129,10 @@ export const ProviderPresetDescriptorSchema = z.object({
 /** One preset as the unified editor shows it. */
 export const ProviderPresetSchema = z.object({
   name: z.string().min(1).max(256),
-  model: z.string().min(1).max(256),
+  model: z
+    .string()
+    .min(1)
+    .max(16 * 1024),
   thinkingOptionId: z.string().max(256).optional(),
   featureValues: z.record(z.string(), z.unknown()).optional(),
 });
@@ -148,7 +151,10 @@ export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
 const MutableDaemonProviderPresetSchema = z
   .object({
     name: z.string().min(1).max(256),
-    model: z.string().min(1).max(256),
+    model: z
+      .string()
+      .min(1)
+      .max(16 * 1024),
     thinkingOptionId: z.string().min(1).max(256).optional(),
     featureValues: z.record(z.string(), z.unknown()).optional(),
   })
@@ -3741,6 +3747,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: z.boolean().optional(),
+        // Preset management requires all four provider.presets RPCs on the host.
+        providerPresets: z.boolean().optional(),
       })
       .optional(),
   })
@@ -6313,16 +6321,22 @@ export const ProviderPresetsListResponseMessageSchema = z.object({
   }),
 });
 
-/** Save and delete share one acknowledgement: the stored name or a readable reason. */
-export const ProviderPresetsMutationResponseMessageSchema = z.object({
-  type: z.literal(["provider.presets.save.response", "provider.presets.delete.response"]),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    saved: z.string().nullable().optional(),
-    deleted: z.string().nullable().optional(),
-    error: z.string().nullable().optional(),
-    requestId: z.string(),
-  }),
+const ProviderPresetsMutationPayloadSchema = z.object({
+  provider: AgentProviderSchema,
+  saved: z.string().nullable().optional(),
+  deleted: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsSaveResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.save.response"),
+  payload: ProviderPresetsMutationPayloadSchema,
+});
+
+export const ProviderPresetsDeleteResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.delete.response"),
+  payload: ProviderPresetsMutationPayloadSchema,
 });
 
 export const ProviderUsageToneSchema = z.enum(["default", "ok", "warning", "danger"]);
@@ -6895,7 +6909,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticResponseMessageSchema,
   ProviderPresetsDescribeResponseMessageSchema,
   ProviderPresetsListResponseMessageSchema,
-  ProviderPresetsMutationResponseMessageSchema,
+  ProviderPresetsSaveResponseMessageSchema,
+  ProviderPresetsDeleteResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ProviderUsageLedgerResponseMessageSchema,
   ListCommandsResponseSchema,
@@ -7078,9 +7093,9 @@ export type ProviderPresetsDescribeResponseMessage = z.infer<
 export type ProviderPresetsListResponseMessage = z.infer<
   typeof ProviderPresetsListResponseMessageSchema
 >;
-export type ProviderPresetsMutationResponseMessage = z.infer<
-  typeof ProviderPresetsMutationResponseMessageSchema
->;
+export type ProviderPresetsMutationResponseMessage =
+  | z.infer<typeof ProviderPresetsSaveResponseMessageSchema>
+  | z.infer<typeof ProviderPresetsDeleteResponseMessageSchema>;
 export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
 >;

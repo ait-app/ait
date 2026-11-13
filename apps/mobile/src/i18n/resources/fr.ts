@@ -18,6 +18,43 @@ const schedulePluralForms = {
 };
 
 export const fr: TranslationResources = {
+  providerControl: {
+    addRole: "Ajouter un rôle",
+    defaultThinking: "Utiliser le réglage du fournisseur",
+    deletePreset: "Supprimer",
+    deletePresetScope: "Fournisseur : {{provider}} · Portée globale",
+    deletePresetTitle: "Supprimer le préréglage {{name}} ?",
+    deletePresetWarning:
+      "Cette combinaison de modèle, raisonnement et rôles sera supprimée définitivement. Cette action est irréversible.",
+    deletingPreset: "Suppression…",
+    modelRoles: "Rôles des modèles",
+    newRole: "+ Ajouter un rôle…",
+    noModels: "Aucun modèle disponible. Actualisez le fournisseur.",
+    presetChecking: "Vérification des droits…",
+    presetDeleted: "Préréglage {{name}} supprimé.",
+    presetLoadFailed: "Lecture impossible. Actualisez pour réessayer.",
+    presetOwnershipUnknown: "Source non confirmée. Actualisez avant de modifier.",
+    presetReadOnly:
+      "L’origine du préréglage est inconnue ou en lecture seule. Actualisez avant de modifier.",
+    projectPresetReadOnly:
+      "Les préréglages du projet sont gérés par OMP. Consultation possible ici.",
+    removeRole: "Retirer ce rôle",
+    role: "Rôle",
+    roleChoicesFailed: "Chargement des rôles impossible. Actualisez.",
+    roleDefaultShort: "Par défaut",
+    roleDefaultThinking: "Ne pas remplacer le raisonnement",
+    roleInheritedModel: "Par défaut → {{model}}",
+    roleNames: {
+      default: "Conversation principale",
+    },
+    roleNative: "Utiliser le réglage du fournisseur",
+    roleThinking: "Réflexion",
+    roleUnset: "Ne pas attribuer",
+    sourceGlobal: "Global",
+    sourceProject: "Projet · lecture seule",
+    sourceUnknown: "Source inconnue",
+    viewPreset: "Voir {{name}}",
+  },
   hostMonitor: hostMonitorEn,
   taskBoard: {
     ...en.taskBoard,
@@ -3539,6 +3576,25 @@ export const fr: TranslationResources = {
       },
     },
     providers: {
+      presets: {
+        create: "Nouveau préréglage",
+        createTitle: "Nouveau préréglage de modèle",
+        edit: "Modifier {{name}}",
+        editTitle: "Modifier le préréglage {{name}}",
+        empty: "Aucun préréglage de modèle",
+        loading: "Chargement des préréglages...",
+        model: "Modèle",
+        name: "Nom du préréglage",
+        namePlaceholder: "ex. Par défaut de l'équipe",
+        nameTaken: "Un préréglage nommé « {{name}} » existe déjà ; ouvrez-le pour le modifier",
+        nativeNameInvalid:
+          "Commencez par une lettre ; utilisez uniquement des lettres, chiffres, - ou _.",
+        noRename: "Ce fournisseur ne prend pas en charge le renommage des préréglages.",
+        remove: "Supprimer {{name}}",
+        saving: "Enregistrement...",
+        thinking: "Niveau de raisonnement (facultatif)",
+        title: "Préréglages de modèle",
+      },
       title: "Fournisseurs",
       addProvider: "Ajouter un fournisseur",
       providerDetails: "Détails du fournisseur{{name}}",

@@ -2,9 +2,15 @@
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
+import {
+  providerPresetFeaturesKey,
+  providerPresetsQueryKey,
+  refreshProviderPresetSettings,
+  useProviderPresets,
+} from "@/data/provider-presets";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
@@ -46,6 +52,16 @@ const client = {
   deleteProviderPreset: vi.fn(),
   listProviderFeatures: vi.fn(),
 };
+
+const host = vi.hoisted(() => ({ supportsPresets: true }));
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: (select: (state: unknown) => unknown) =>
+    select({
+      sessions: {
+        "host-a": { serverInfo: { features: { providerPresets: host.supportsPresets } } },
+      },
+    }),
+}));
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => client,
@@ -173,6 +189,7 @@ beforeEach(() => {
   for (const fn of Object.values(client)) fn.mockReset();
   // The store is cached per host and provider, so each case starts from an empty cache.
   queryClient.clear();
+  host.supportsPresets = true;
   client.listProviderFeatures.mockResolvedValue({ features: [] });
 });
 afterEach(() => {
@@ -432,6 +449,10 @@ it("shows project scope and prevents global writes to an overriding project pres
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.getByTestId("provider-presets-scope").textContent).toBe("/repo/project");
   expect(client.listProviderPresets).toHaveBeenCalledWith("omp", "/repo/project");
+  expect(client.listProviderFeatures).toHaveBeenCalledWith({
+    provider: "omp",
+    cwd: "/repo/project",
+  });
   expect(
     (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
   ).toBe(true);
@@ -667,6 +688,9 @@ it("creates and reopens a native preset using only model, role and effort choice
   expect((screen.getByTestId(/^preset-role-thinking-/) as HTMLSelectElement).value).toBe("high");
   fireEvent.click(screen.getByTestId(/^preset-role-remove-/));
   expect(screen.queryByTestId(/^preset-role-model-/)).toBeNull();
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() => expect(rows).toHaveLength(2));
+  expect(rows[1]?.featureValues).toEqual({});
 });
 
 it("starts native presets with a fixed roster of configured roles and resolved default previews", async () => {
@@ -743,4 +767,164 @@ it("validates native names before saving and offers an OMP-compatible example", 
   fireEvent.change(name, { target: { value: "Team_Default-2" } });
   expect(screen.queryByTestId("provider-preset-invalid-name")).toBeNull();
   expect(client.saveProviderPreset).not.toHaveBeenCalled();
+});
+
+it("withholds preset controls and requests on hosts without the advertised capability", async () => {
+  host.supportsPresets = false;
+  await ready(descriptor(), [preset("team")]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  expect(screen.queryByTestId("provider-presets-section")).toBeNull();
+  expect(client.describeProviderPresets).not.toHaveBeenCalled();
+  expect(client.listProviderPresets).not.toHaveBeenCalled();
+  expect(client.listProviderFeatures).not.toHaveBeenCalled();
+});
+
+it("keeps editing disabled after role discovery fails, preserving the stored snapshot", async () => {
+  await ready(descriptor(), [preset("team")]);
+  client.listProviderFeatures.mockRejectedValue(new Error("Catalog unavailable"));
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await screen.findByText("providerControl.roleChoicesFailed");
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  expect((screen.getByTestId("provider-preset-save") as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+});
+
+it("retains explicit unassigned roles and unresolved values when saving an existing preset", async () => {
+  const stored = {
+    ...preset("team"),
+    model: "retired-model",
+    thinkingOptionId: "future-effort",
+    featureValues: {
+      "modelRole.advisor": "unset",
+      "modelRole.future": "unknown/model:turbo",
+      "modelRole.opaque": { model: "future-model" },
+      futureFeature: { enabled: true },
+    },
+  };
+  await ready(descriptor(), [stored]);
+  client.saveProviderPreset.mockResolvedValue({ saved: "team" });
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  fireEvent.click(await screen.findByLabelText("settings.providers.presets.edit"));
+  expect(screen.getAllByTestId(/^preset-role-model-/)).toHaveLength(2);
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() =>
+    expect(client.saveProviderPreset).toHaveBeenCalledWith(
+      "omp",
+      {
+        name: "team",
+        model: stored.model,
+        thinkingOptionId: stored.thinkingOptionId,
+        featureValues: stored.featureValues,
+      },
+      undefined,
+      { original: "team" },
+    ),
+  );
+});
+
+it("rejects renaming a preset to another stored name before sending a mutation", async () => {
+  await ready(descriptor(), [preset("team"), preset("other")]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await screen.findByText("team");
+  fireEvent.click(screen.getAllByLabelText("settings.providers.presets.edit")[0]);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "other" } });
+  expect(screen.getByTestId("provider-preset-name-taken")).toBeTruthy();
+  expect((screen.getByTestId("provider-preset-save") as HTMLButtonElement).disabled).toBe(true);
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+});
+
+it("refreshes other readers of the provider preset list after create and delete", async () => {
+  const rows: ProviderPresetEntry[] = [];
+  await ready(descriptor(), []);
+  client.listProviderPresets.mockImplementation(async () => ({ presets: [...rows] }));
+  client.saveProviderPreset.mockImplementation(async (_provider, stored) => {
+    rows.push({ ...stored, source: "ait", editable: true });
+    return { saved: stored.name };
+  });
+  client.deleteProviderPreset.mockImplementation(async (_provider, name) => {
+    rows.splice(
+      rows.findIndex((row) => row.name === name),
+      1,
+    );
+    return { deleted: name };
+  });
+  function Reader() {
+    const { snapshot } = useProviderPresets({ serverId: "host-a", provider: "omp", cwd: null });
+    return (
+      <output data-testid="preset-reader">
+        {snapshot?.presets.map((row) => row.name).join(",")}
+      </output>
+    );
+  }
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ProviderPresetsSection
+        provider="omp"
+        serverId="host-a"
+        models={[{ provider: "omp", id: "claude-opus-5", label: "Opus" }]}
+      />
+      <Reader />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByTestId("provider-presets-empty-create"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "shared" } });
+  fireEvent.change(screen.getByTestId("provider-preset-model-options"), {
+    target: { value: "claude-opus-5" },
+  });
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() => expect(screen.getByTestId("preset-reader").textContent).toBe("shared"));
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
+  await waitFor(() => expect(screen.getByTestId("preset-reader").textContent).toBe(""));
+});
+
+it("waits for the refreshed model catalog before retrying native role discovery", async () => {
+  let modelReady = false;
+  let finishModels!: () => void;
+  const models = new Promise<void>((resolve) => {
+    finishModels = () => {
+      modelReady = true;
+      resolve();
+    };
+  });
+  const featuresKey = providerPresetFeaturesKey("host-a", "omp");
+  queryClient.setQueryData(featuresKey, []);
+  const reads: boolean[] = [];
+  const observer = new QueryObserver(queryClient, {
+    queryKey: featuresKey,
+    staleTime: Infinity,
+    queryFn: async () => {
+      reads.push(modelReady);
+      return [];
+    },
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  const refreshing = refreshProviderPresetSettings(
+    queryClient,
+    { serverId: "host-a", provider: "omp" },
+    models,
+  );
+  expect(reads).toEqual([]);
+  finishModels();
+  await refreshing;
+  expect(reads).toEqual([true]);
+  unsubscribe();
+});
+
+it("reports catalog and native store failures during an explicit settings refresh", async () => {
+  await expect(
+    refreshProviderPresetSettings(
+      queryClient,
+      { serverId: "host-a", provider: "omp" },
+      Promise.reject(new Error("Catalog unavailable")),
+    ),
+  ).rejects.toThrow("Catalog unavailable");
+  queryClient.setQueryData(providerPresetsQueryKey("host-a", "omp", null), {
+    snapshot: { descriptor: descriptor(), presets: [] },
+    error: "Native store unavailable",
+  });
+  await expect(
+    refreshProviderPresetSettings(queryClient, { serverId: "host-a", provider: "omp" }),
+  ).rejects.toThrow("Native store unavailable");
 });

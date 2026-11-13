@@ -49,6 +49,16 @@ const UI_TESTED_PACKAGES = ["protocol", "client", "highlight"];
 // Only these mobile suites are held green in CI; move additions here deliberately.
 const MOBILE_SUITES = [
   "src/components/question-form-card-core.test.ts",
+  "src/agent-controls/model-presets.test.ts",
+  "src/components/model-browser.presets.test.tsx",
+  "src/components/model-selector-loading.test.tsx",
+  "src/components/provider-model-presets.test.tsx",
+  "src/components/provider-preset-form.test.ts",
+  "src/components/provider-presets-section.test.tsx",
+  "src/components/provider-diagnostic-models.test.ts",
+  "src/hooks/use-draft-agent-features.presets.test.tsx",
+  "src/provider-selection/resolve-agent-form.test.ts",
+  "src/provider-selection/provider-selection.test.ts",
   "src/runtime/host-runtime.test.ts",
   "src/i18n/resources.test.ts",
   "src/runtime/daemon-transport",

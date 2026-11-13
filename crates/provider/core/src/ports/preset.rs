@@ -6,9 +6,6 @@
 
 use domain::preset::ProviderPreset;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
-pub use domain::preset::valid_text;
 
 /// Where a provider's presets actually live.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +47,7 @@ impl PresetDescriptor {
     /// that atomically and rejects a name already in use, so the editor may offer it. A native
     /// harness only exposes save and delete, where a rename would be a non-atomic save-then-
     /// delete, so the descriptor reports it closed and carries the reason instead.
+    #[must_use]
     pub fn managed(backend: PresetBackend) -> Self {
         Self {
             backend,
@@ -62,6 +60,7 @@ impl PresetDescriptor {
     }
 
     /// A store that cannot do anything, with the reason a client should display.
+    #[must_use]
     pub fn unavailable(backend: PresetBackend, reason: &str) -> Self {
         Self {
             backend,
@@ -102,16 +101,19 @@ pub struct PresetEntry {
 }
 
 /// A preset failure carried to the client as a readable reason.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PresetError {
     /// The request violates a structural rule; nothing was written.
+    #[error("{0}")]
     Rejected(String),
     /// The store cannot answer now; nothing was written.
+    #[error("{0}")]
     Unavailable(String),
 }
 
 impl PresetError {
     /// Client-readable reason.
+    #[must_use]
     pub fn message(&self) -> &str {
         match self {
             Self::Rejected(reason) | Self::Unavailable(reason) => reason,
@@ -121,109 +123,26 @@ impl PresetError {
 
 /// Feature keys that describe a provider's own preset patch, never a user-editable selection.
 ///
-/// OMP writes these into its private overlay (`modelPreset` is a null marker, the thinking and
-/// roles keys mirror the native preset entry). They must not travel back to the editor as
-/// editable feature values, and a preset built from them must not be validated against the
-/// user-facing rule that forbids nulls.
+/// Earlier unreleased implementations used these private patch markers. They must not travel
+/// back to the editor or into saved records as user-editable role selections.
 const INTERNAL_FEATURE_KEYS: &[&str] = &["modelPreset", "modelPresetThinking", "modelPresetRoles"];
 
 /// Whether `key` is provider bookkeeping rather than an editable feature value.
-pub fn is_internal_feature(key: &str) -> bool {
+#[must_use]
+fn is_internal_feature(key: &str) -> bool {
     INTERNAL_FEATURE_KEYS.contains(&key)
 }
 
-/// Strip internal patch markers and null placeholders from a preset before it is stored.
+/// Strip legacy internal patch markers from a preset before it is stored.
 ///
-/// A native store returns its private overlay as feature values; a client editing that record
-/// echoes it back. Only the user-editable remainder is meaningful, so the conversion happens
-/// once here instead of in every backend.
+/// Editable values, including invalid nulls, remain intact so the domain validator can reject
+/// them without silently dropping the user's configuration.
+#[must_use]
 pub fn editable(mut preset: Preset) -> Preset {
     preset
         .feature_values
-        .retain(|key, value| !is_internal_feature(key) && !value.is_null());
+        .retain(|key, _| !is_internal_feature(key));
     preset
-}
-
-/// Render stored presets into the `modelPreset` select every client already understands.
-///
-/// `native` is the provider's own preset feature, when it has one. A provider with a native
-/// store keeps it untouched and never receives Ait presets on top, so the two stores can never
-/// disagree; only a provider without native presets and with stored ones is synthesized.
-pub fn synthesize(
-    native: Option<Value>,
-    stored: &[Preset],
-    current_model: Option<&str>,
-    current_thinking: Option<&str>,
-    current_features: Option<&std::collections::BTreeMap<String, Value>>,
-) -> Option<Value> {
-    if native.is_some() {
-        return native;
-    }
-    if stored.is_empty() {
-        return None;
-    }
-    let mut options = vec![serde_json::json!({"id":"__custom__","label":"Custom configuration"})];
-    let mut selected = "__custom__";
-    for preset in stored {
-        let mut configuration = serde_json::Map::new();
-        configuration.insert("modelId".to_owned(), Value::String(preset.model.clone()));
-        // A preset that names no thinking level must still say so: the bundle treats an omitted
-        // field as "keep the current value" and only an explicit null as "clear it", so leaving
-        // the key out would carry a previous session level into the preset.
-        configuration.insert(
-            "thinkingOptionId".to_owned(),
-            preset
-                .thinking_option_id
-                .as_ref()
-                .map_or(Value::Null, |thinking| Value::String(thinking.clone())),
-        );
-        if !preset.feature_values.is_empty() {
-            configuration.insert(
-                "featureValues".to_owned(),
-                Value::Object(preset.feature_values.clone().into_iter().collect()),
-            );
-        }
-        if selected == "__custom__"
-            && matches_configuration(preset, current_model, current_thinking, current_features)
-        {
-            selected = preset.name.as_str();
-        }
-        options.push(serde_json::json!({"id":preset.name,"label":preset.name,
-            "metadata":{"source":"ait","configuration":Value::Object(configuration)}}));
-    }
-    Some(
-        serde_json::json!({"type":"select","id":"modelPreset","label":"Model preset",
-        "value":selected,"options":options}),
-    )
-}
-
-/// Whether a stored preset describes exactly the current selection.
-///
-/// Mirrors the client's `withModelPresetSelection`, including how a preset expands into the roles
-/// it does not name: applying one clears them, so a role the preset omits only matches while the
-/// current selection has it cleared. Comparing just the stored map would keep a preset selected
-/// after the user manually enabled a role the preset never carried.
-fn matches_configuration(
-    preset: &Preset,
-    model: Option<&str>,
-    thinking: Option<&str>,
-    features: Option<&std::collections::BTreeMap<String, Value>>,
-) -> bool {
-    let cleared = |key: &str, value: &Value| {
-        key.starts_with("modelRole.") && value != &Value::String("unset".to_owned())
-    };
-    model == Some(preset.model.as_str())
-        && thinking == preset.thinking_option_id.as_deref()
-        && preset.feature_values.iter().all(|(key, value)| {
-            is_internal_feature(key)
-                || features.and_then(|features| features.get(key)) == Some(value)
-        })
-        && features.is_none_or(|features| {
-            features
-                .iter()
-                .filter(|(key, _)| !preset.feature_values.contains_key(key.as_str()))
-                .all(|(key, value)| !cleared(key, value))
-        })
 }
 
 #[cfg(test)]

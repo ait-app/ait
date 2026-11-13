@@ -358,6 +358,7 @@ describe("Ait host capabilities", () => {
       projectGithubClone: true,
       workspaceGithubRepositorySearch: true,
       agentProfiles: true,
+      providerPresets: true,
       providerRemoval: true,
       projectCustomIcon: true,
       importSessionWorkspaceTarget: true,
@@ -382,11 +383,32 @@ describe("Ait host capabilities", () => {
       projectAdd: false,
       stableProjectIdentity: false,
       agentProfiles: false,
+      providerPresets: false,
       providerRemoval: false,
       projectCustomIcon: false,
       importSessionWorkspaceTarget: false,
       importSessionSearch: false,
     });
+  });
+  it("exposes preset management only with every required provider method", () => {
+    const methods = [
+      "provider.presets.describe.request",
+      "provider.presets.list.request",
+      "provider.presets.save.request",
+      "provider.presets.delete.request",
+    ];
+    expect(info(methods)?.features?.providerPresets).toBe(true);
+    for (const missing of methods) {
+      expect(info(methods.filter((method) => method !== missing))?.features?.providerPresets).toBe(
+        false,
+      );
+    }
+    for (const scope of ["workspace", "project"] as const) {
+      const status = serverInfo({ server_id: "shared-host" }, new Set(methods), scope);
+      expect(parseServerInfoStatusPayload(object(status).payload)?.features?.providerPresets).toBe(
+        false,
+      );
+    }
   });
 });
 it("adapts post-fetch checkout status events into the SDK schema", () => {

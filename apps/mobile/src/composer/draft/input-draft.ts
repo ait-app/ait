@@ -8,6 +8,10 @@ import {
   type CreateAgentInitialValues,
   type UseAgentFormStateResult,
 } from "@/hooks/use-agent-form-state";
+import {
+  mergeModelPresetFeatureValues,
+  type ModelPresetConfiguration,
+} from "@/agent-controls/model-presets";
 import { useDraftAgentFeatures } from "@/hooks/use-draft-agent-features";
 import {
   buildDraftAgentControls,
@@ -306,6 +310,20 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     [applyProfileFeatureValues, formState],
   );
 
+  const applyDraftModelPreset = useCallback(
+    (provider: string, configuration: ModelPresetConfiguration) => {
+      formState.applyModelPresetFromUser(provider, configuration);
+      applyProfileFeatureValues(
+        mergeModelPresetFeatureValues(
+          provider === formState.selectedProvider ? draftFeatureValues : undefined,
+          configuration,
+        ),
+        provider,
+      );
+    },
+    [applyProfileFeatureValues, draftFeatureValues, formState],
+  );
+
   const commandDraftConfig = useMemo(
     () =>
       composerOptions
@@ -343,6 +361,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         features: draftFeatures,
         onSetFeature: setDraftFeatureValue,
         onApplyAgentProfile: applyDraftAgentProfile,
+        onApplyModelPreset: applyDraftModelPreset,
       }),
       commandDraftConfig,
     };
@@ -354,6 +373,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     draftFeatures,
     draftFeatureValues,
     applyDraftAgentProfile,
+    applyDraftModelPreset,
     formState,
     setDraftFeatureValue,
     workingDir,

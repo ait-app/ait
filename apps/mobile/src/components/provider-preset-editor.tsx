@@ -80,7 +80,7 @@ export function ProviderPresetEditor({
         })),
     );
   }, [isNew, roleFeatures]);
-  const takenName = isNew && existingNames.includes(name.trim());
+  const takenName = name.trim() !== preset.name && existingNames.includes(name.trim());
   const invalidNativeName =
     native && !!name.trim() && !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name.trim());
   const selectedModel = models.find((entry) => entry.id === model);
@@ -116,20 +116,7 @@ export function ProviderPresetEditor({
         name: name.trim(),
         model,
         ...(thinking ? { thinkingOptionId: thinking } : {}),
-        featureValues: encodePresetRoles(
-          preset,
-          roles,
-          native
-            ? [
-                ...new Set([
-                  ...roleFeatures.map((feature) => feature.id),
-                  ...Object.keys(preset.featureValues ?? {}).filter((key) =>
-                    key.startsWith("modelRole."),
-                  ),
-                ]),
-              ]
-            : [],
-        ),
+        featureValues: encodePresetRoles(preset, roles),
       });
       onClose();
     } catch (cause) {
@@ -213,6 +200,8 @@ export function ProviderPresetEditor({
           maxLength={native ? 128 : undefined}
           autoCapitalize="none"
           autoCorrect={false}
+          accessibilityLabel={t("settings.providers.presets.name")}
+          testID="provider-preset-name"
           placeholder={native ? "TeamDefault" : t("settings.providers.presets.namePlaceholder")}
           placeholderTextColor={theme.colors.foregroundMuted}
           style={styles.input}

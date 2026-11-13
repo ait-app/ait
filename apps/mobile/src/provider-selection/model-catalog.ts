@@ -1,7 +1,7 @@
 import type { AgentModelDefinition } from "@ait/protocol/agent-types";
 
 export function findModelByReference(
-  models: AgentModelDefinition[] | null,
+  models: readonly AgentModelDefinition[] | null,
   modelId: string,
 ): AgentModelDefinition | null {
   if (!models || models.length === 0) return null;

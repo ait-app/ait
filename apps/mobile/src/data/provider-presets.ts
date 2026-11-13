@@ -2,6 +2,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { AgentFeature, AgentProvider } from "@ait/protocol/agent-types";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 
 /** One provider's preset store, as the settings section reads it. */
 export interface ProviderPresetsSnapshot {
@@ -20,6 +21,8 @@ interface PresetStoreAnswer {
 export interface ProviderPresetsState {
   /** `null` until the host answers, or on a host that predates the preset RPCs. */
   snapshot: ProviderPresetsSnapshot | null;
+  /** False on hosts that predate the preset requests, or while disconnected. */
+  isSupported: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -38,12 +41,17 @@ export function providerPresetFeaturesKey(serverId: string, provider: string, cw
 }
 
 /** Role candidates belong to the same provider and directory as the records being edited. */
-export function useProviderPresetFeatures(serverId: string, provider: string, cwd?: string) {
+export function useProviderPresetFeatures(
+  serverId: string,
+  provider: string,
+  cwd?: string,
+  enabled = true,
+) {
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
   return useQuery({
     queryKey: providerPresetFeaturesKey(serverId, provider, cwd),
-    enabled: Boolean(client && connected),
+    enabled: Boolean(enabled && client && connected),
     staleTime: 60_000,
     retry: false,
     queryFn: async (): Promise<AgentFeature[]> => {
@@ -66,10 +74,11 @@ export async function refreshProviderPresetSettings(
 ) {
   const { serverId, provider, cwd } = target;
   const key = providerPresetsQueryKey(serverId, provider, cwd);
-  const [store] = await Promise.allSettled([
+  const [store, models] = await Promise.allSettled([
     queryClient.invalidateQueries({ queryKey: key, exact: true }, { throwOnError: true }),
     modelsRefreshed,
   ]);
+  if (models.status === "rejected") throw models.reason;
   // Feature discovery must observe the acknowledged new model catalog, not race its push.
   const results = await Promise.allSettled([
     queryClient.invalidateQueries(
@@ -86,10 +95,7 @@ export async function refreshProviderPresetSettings(
     ),
     queryClient.invalidateQueries(
       {
-        predicate: (query) =>
-          query.queryKey[0] === "agentProfileFeatures" &&
-          query.queryKey[1] === serverId &&
-          String(query.queryKey[2]).startsWith(`${provider}|`),
+        queryKey: ["agentProfileFeatures", serverId],
       },
       { throwOnError: true },
     ),
@@ -129,8 +135,8 @@ export async function invalidatePresetCaches(
  *
  * The settings list and its empty state share this entry, so opening the page never repeats the
  * request and a write's invalidation reaches both. A provider whose host predates the preset
- * RPCs, or whose store cannot be read, yields `null` and callers render nothing rather than a
- * control that cannot work.
+ * RPCs yields `null`. A failed store read keeps the descriptor and reports its error so the
+ * settings can explain why mutations are unavailable.
  */
 export function useProviderPresets(input: {
   serverId: string | null | undefined;
@@ -141,7 +147,11 @@ export function useProviderPresets(input: {
   const { serverId, provider, cwd, enabled = true } = input;
   const client = useHostRuntimeClient(serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
-  const available = Boolean(enabled && serverId && provider && client && isConnected);
+  const advertised = useSessionStore(
+    (state) => state.sessions[serverId ?? ""]?.serverInfo?.features?.providerPresets === true,
+  );
+  const isSupported = Boolean(client && isConnected && advertised);
+  const available = Boolean(enabled && serverId && provider && isSupported);
 
   const query = useQuery({
     queryKey: providerPresetsQueryKey(serverId, provider, cwd),
@@ -165,10 +175,15 @@ export function useProviderPresets(input: {
   return {
     // The descriptor survives a store that refused to list, so the editor can still explain the
     // store and withhold writes instead of showing an empty list with no reason.
-    snapshot: query.data?.snapshot ?? null,
+    snapshot: available ? (query.data?.snapshot ?? null) : null,
+    isSupported,
     isLoading: available && query.isFetching,
     // A store reason is part of a successful answer; a transport failure replaces it.
-    error: query.error instanceof Error ? query.error.message : (query.data?.error ?? null),
+    error: available
+      ? query.error instanceof Error
+        ? query.error.message
+        : (query.data?.error ?? null)
+      : null,
   };
 }
 

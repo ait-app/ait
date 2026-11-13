@@ -93,20 +93,6 @@ impl AgentManager {
                 snapshot["availableModes"] = controls["availableModes"].clone();
                 snapshot["features"] = controls["features"].clone();
             }
-            // The unified preset editor owns the non-native stores, so a provider without a
-            // native `modelPreset` gains one here and a provider with one keeps it untouched.
-            if let (Some(presets), Some(features)) =
-                (self.presets.as_ref(), snapshot["features"].as_array_mut())
-            {
-                let mut merged = std::mem::take(features);
-                presets.apply(
-                    &record.provider,
-                    client.owns_native_presets(),
-                    &mut merged,
-                    &record.config.clone().unwrap_or_default(),
-                );
-                *features = merged;
-            }
             if let (Some(target), Some(flags)) = (
                 snapshot["capabilities"].as_object_mut(),
                 settings["capabilities"].as_object(),
@@ -154,13 +140,14 @@ impl AgentManager {
             .as_ref()
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let client = self.clients.get(provider);
-        // Discovery validation already owns the cwd rule; an absent cwd simply means the
-        // daemon process directory, which is what a provider's own settings read uses.
-        let cwd = params
+        // Match ProviderCatalog exactly: the default scope is home, '~' expands, relative
+        // directories canonicalize, and nonexistent or non-directory targets are rejected.
+        let requested_cwd = params
             .get("cwd")
-            .and_then(Value::as_str)
-            .filter(|cwd| !cwd.is_empty())
-            .map_or_else(|| ".".to_owned(), str::to_owned);
+            .map(|cwd| cwd.as_str().ok_or(ErrorCode::InvalidMessage))
+            .transpose()?;
+        let scope = crate::service::provider_catalog::scope::key(requested_cwd)?;
+        let cwd = crate::service::provider_catalog::scope::discovery_cwd(scope.as_deref())?;
         match method {
             "provider.presets.describe.request" => {
                 crate::rpc::agent_execution::only(params, &["provider", "cwd"])?;

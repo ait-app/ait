@@ -139,6 +139,14 @@ export function serverInfo(
       importSessionSearch: has("provider.sessions.recent.list.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
+      providerPresets:
+        !scopedGuest &&
+        [
+          "provider.presets.describe.request",
+          "provider.presets.list.request",
+          "provider.presets.save.request",
+          "provider.presets.delete.request",
+        ].every(has),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
       hostStats: !scopedGuest && has("daemon.host_stats.request"),

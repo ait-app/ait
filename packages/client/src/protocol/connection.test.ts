@@ -157,6 +157,90 @@ describe("Rust v1 connection", () => {
     }
   });
 
+  it("negotiates provider preset CRUD and preserves role snapshots across Rust frames", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "provider-presets",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    const preset = {
+      name: "Review",
+      model: "test-model",
+      thinkingOptionId: "high",
+      featureValues: { "modelRole.advisor": "native", "modelRole.worker": "unset" },
+    };
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      expect(client.getLastServerInfoMessage()?.features?.providerPresets).toBe(true);
+
+      const descriptor = {
+        backend: "ait",
+        canCreate: true,
+        canEdit: true,
+        canDelete: true,
+        canRename: true,
+      };
+      const described = client.describeProviderPresets("omp", "/project", {
+        requestId: "describe",
+      });
+      expect(h.last(0)).toMatchObject({
+        type: "request",
+        method: "provider.presets.describe.request",
+        params: { provider: "omp", cwd: "/project" },
+        request_id: "describe",
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "describe",
+        result: { provider: "omp", descriptor },
+      });
+      expect((await described).descriptor).toEqual(descriptor);
+
+      const saved = client.saveProviderPreset("omp", preset, "/project", { requestId: "save" });
+      expect(h.last(0)).toMatchObject({
+        method: "provider.presets.save.request",
+        params: { provider: "omp", preset, cwd: "/project" },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "save",
+        result: { provider: "omp", saved: "Review" },
+      });
+      expect((await saved).saved).toBe("Review");
+
+      const listed = client.listProviderPresets("omp", "/project", { requestId: "list" });
+      expect(h.last(0)).toMatchObject({ method: "provider.presets.list.request" });
+      const entry = { ...preset, source: "ait", editable: true };
+      h.sockets[0].message({
+        type: "response",
+        request_id: "list",
+        result: { provider: "omp", presets: [entry] },
+      });
+      expect((await listed).presets).toEqual([entry]);
+
+      const deleted = client.deleteProviderPreset("omp", "Review", "/project", {
+        requestId: "delete",
+      });
+      expect(h.last(0)).toMatchObject({
+        method: "provider.presets.delete.request",
+        params: { provider: "omp", name: "Review", cwd: "/project" },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "delete",
+        result: { provider: "omp", deleted: "Review" },
+      });
+      expect((await deleted).deleted).toBe("Review");
+    } finally {
+      await client.close();
+    }
+  });
+
   it("clears correlation and admission retries at the SDK request deadline", async () => {
     vi.useFakeTimers();
     const h = harness();
@@ -938,9 +1022,11 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(233);
+    expect(Object.keys(METHODS)).toHaveLength(237);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(233);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(
+      Object.keys(METHODS).length,
+    );
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

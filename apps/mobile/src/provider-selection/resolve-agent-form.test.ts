@@ -1337,3 +1337,50 @@ it("owns input readiness, reopening and user edits in the reducer", () => {
   state = resolveAgentForm(state, { ...inputs, isPreferencesLoading: false, hasSnapshot: true });
   expect(state.form).toMatchObject({ provider: "codex", model: "astra" });
 });
+
+describe("APPLY_MODEL_PRESET_FROM_USER", () => {
+  it("replaces model and thinking atomically while preserving the running draft permission mode", () => {
+    const next = resolveAgentForm(
+      makeState({
+        provider: "codex",
+        model: "old",
+        thinkingOptionId: "low",
+        modeId: "full-access",
+      }),
+      {
+        type: "APPLY_MODEL_PRESET_FROM_USER",
+        provider: "codex",
+        modelId: "gpt-5.3-codex",
+        thinkingOptionId: null,
+        providerDef: TEST_CODEX_DEFINITION,
+        providerModels: CODEX_MODELS,
+      },
+    );
+    expect(next.form).toEqual({
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      thinkingOptionId: "xhigh",
+      modeId: "full-access",
+    });
+  });
+
+  it("uses the target provider's own mode when the draft changes provider", () => {
+    const next = resolveAgentForm(
+      makeState({ provider: "claude", modeId: "bypassPermissions", thinkingOptionId: "old" }),
+      {
+        type: "APPLY_MODEL_PRESET_FROM_USER",
+        provider: "codex",
+        modelId: "gpt-5.3-codex",
+        thinkingOptionId: "low",
+        providerDef: TEST_CODEX_DEFINITION,
+        providerModels: CODEX_MODELS,
+      },
+    );
+    expect(next.form).toEqual({
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      thinkingOptionId: "low",
+      modeId: "auto",
+    });
+  });
+});

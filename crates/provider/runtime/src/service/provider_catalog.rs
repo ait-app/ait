@@ -20,7 +20,7 @@ use provider_core::protocol::provider::Details;
 
 mod draft;
 mod loading;
-mod scope;
+pub(super) mod scope;
 
 #[derive(Debug, Clone)]
 struct Entry {
@@ -68,8 +68,6 @@ pub(crate) struct Catalog {
     pending: Arc<Semaphore>,
     cancellation: CancellationToken,
     tasks: TaskTracker,
-    /// Installed by the manager so draft feature lists carry the unified preset select.
-    presets: Option<super::presets::PresetService>,
 }
 
 impl Default for Catalog {
@@ -79,18 +77,12 @@ impl Default for Catalog {
             budget: Arc::new(Semaphore::new(16)),
             pending: Arc::new(Semaphore::new(64)),
             cancellation: CancellationToken::new(),
-            presets: None,
             tasks: TaskTracker::new(),
         }
     }
 }
 
 impl Catalog {
-    /// Install the preset service so draft feature lists carry the unified preset select.
-    pub(crate) fn set_presets(&mut self, presets: super::presets::PresetService) {
-        self.presets = Some(presets);
-    }
-
     /// Run a catalog request and wait for discovery when the method requires a snapshot.
     /// # Errors
     /// Rejects invalid scopes, unsupported providers, shutdown and unavailable storage.
@@ -130,7 +122,7 @@ impl Catalog {
             return Err(ErrorCode::ServerDraining);
         }
         if method == "provider.features.list.request" && params.get("draftConfig").is_some() {
-            return draft::features(clients, decode(params)?, self.presets.as_ref()).await;
+            return draft::features(clients, decode(params)?).await;
         }
         let scope = parse(clients, method, params)?;
         let cwd = scope::discovery_cwd(scope.key.as_deref())?;

@@ -7,6 +7,60 @@ use persistence::storage::daemon_config::FileDaemonConfigStore;
 use serde_json::json;
 
 use super::*;
+use provider_core::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+};
+use provider_core::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetError};
+
+#[derive(Debug, Clone, Default)]
+struct NativePresetClient {
+    writes: Arc<Mutex<usize>>,
+}
+
+#[async_trait::async_trait]
+impl AgentClient for NativePresetClient {
+    fn provider(&self) -> &'static str {
+        "omp"
+    }
+
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(true)
+    }
+
+    async fn discover(
+        &self,
+        _cwd: &str,
+    ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    async fn create_session(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _spec: &AgentSessionSpec,
+        _purpose: AgentResumePurpose,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    async fn preset_descriptor(&self, cwd: &str) -> PresetDescriptor {
+        let mut descriptor = PresetDescriptor::managed(PresetBackend::Native);
+        descriptor.reason = Some(cwd.to_owned());
+        descriptor
+    }
+
+    async fn save_native_preset(&self, _cwd: &str, _preset: &Preset) -> Result<(), PresetError> {
+        *self.writes.lock().unwrap() += 1;
+        Ok(())
+    }
+}
 
 /// A manager wired to a real file-backed config store, so a save is observable after a restart.
 fn manager_with_presets(root: &tempfile::TempDir) -> AgentManager {
@@ -154,4 +208,76 @@ async fn a_manager_without_the_service_reports_unsupported_capability() {
         )
         .await;
     assert_eq!(result.unwrap_err(), ErrorCode::UnsupportedCapability);
+}
+
+#[tokio::test]
+async fn preset_requests_share_the_catalog_home_and_tilde_scope() {
+    let root = tempfile::tempdir().unwrap();
+    let mut manager = manager_with_presets(&root);
+    manager
+        .register_client(Box::<NativePresetClient>::default())
+        .unwrap();
+    let home = crate::service::provider_catalog::scope::discovery_cwd(None).unwrap();
+    for params in [
+        json!({"provider":"omp"}),
+        json!({"provider":"omp","cwd":"~"}),
+    ] {
+        let answer = manager
+            .presets("provider.presets.describe.request", "omp", &params)
+            .await
+            .unwrap();
+        assert_eq!(answer["descriptor"]["reason"], home.as_ref());
+    }
+}
+
+#[tokio::test]
+async fn preset_requests_reject_missing_directories_and_file_scopes() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = manager_with_presets(&root);
+    let file = root.path().join("file");
+    std::fs::write(&file, "data").unwrap();
+    for cwd in [file, root.path().join("missing")] {
+        let result = manager
+            .presets(
+                "provider.presets.list.request",
+                "omp",
+                &json!({"provider":"omp","cwd":cwd}),
+            )
+            .await;
+        assert_eq!(result.unwrap_err(), ErrorCode::InvalidMessage);
+    }
+    for cwd in [json!(42), json!(null)] {
+        let result = manager
+            .presets(
+                "provider.presets.list.request",
+                "omp",
+                &json!({"provider":"omp","cwd":cwd}),
+            )
+            .await;
+        assert_eq!(result.unwrap_err(), ErrorCode::InvalidMessage);
+    }
+}
+
+#[tokio::test]
+async fn a_native_store_refuses_rename_before_calling_its_write_port() {
+    let root = tempfile::tempdir().unwrap();
+    let mut manager = manager_with_presets(&root);
+    let client = NativePresetClient::default();
+    let writes = client.writes.clone();
+    manager.register_client(Box::new(client)).unwrap();
+
+    let answer = manager
+        .presets(
+            "provider.presets.save.request",
+            "omp",
+            &json!({
+                "provider":"omp","original":"Previous","preset":{"name":"Renamed","model":"model"}
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(answer["saved"].is_null());
+    assert!(answer["error"].as_str().unwrap().contains("rename"));
+    assert_eq!(*writes.lock().unwrap(), 0);
 }

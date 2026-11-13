@@ -20,6 +20,59 @@ fn new_daemon_enables_injection_and_preserves_explicit_opt_out() {
 }
 
 #[test]
+fn provider_model_presets_reject_invalid_direct_patches_without_touching_current_config() {
+    let root = tempfile::tempdir().unwrap();
+    let store = store(&root);
+    let before = store
+        .patch(&json!({"providers":{"codex":{"modelPresets":[{"name":"Stable","model":"model"}]}}}))
+        .unwrap();
+    let file = root.path().join("config.json");
+    let original = fs::read(&file).unwrap();
+    for presets in [
+        json!({"wrong":"shape"}),
+        json!([{"name":"MissingModel"}]),
+        json!([{"name":"Duplicate","model":"one"},{"name":"Duplicate","model":"two"}]),
+        json!([{"name":"NullRole","model":"model","featureValues":{"modelRole.task":null}}]),
+        json!([{"name":"BadRole","model":"model","featureValues":{"modelRole.":"unset"}}]),
+    ] {
+        let result = store.patch(&json!({"providers":{"codex":{"modelPresets":presets}}}));
+        assert_eq!(result, Err(DaemonConfigStoreError::Invalid));
+        assert_eq!(store.get().unwrap(), before);
+        assert_eq!(fs::read(&file).unwrap(), original);
+    }
+}
+
+#[test]
+fn provider_model_presets_preserve_dynamic_role_snapshots_after_direct_patch_and_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let store = store(&root);
+    let roles: Map<String, Value> = (0..128)
+        .map(|index| {
+            (
+                format!("modelRole.{index:03}{}", "r".repeat(125)),
+                json!(if index % 2 == 0 { "native" } else { "unset" }),
+            )
+        })
+        .collect();
+    let preset = json!({
+        "name":"Dynamic","model":json!(["provider", "model".repeat(100)]).to_string(),
+        "thinkingOptionId":"high","featureValues":roles,
+    });
+
+    store
+        .patch(&json!({"providers":{"codex":{"modelPresets":[preset.clone()]}}}))
+        .unwrap();
+
+    let reopened = FileDaemonConfigStore::with_defaults(root.path().join("config.json"));
+    let config = reopened.get().unwrap();
+    assert_eq!(
+        config["providers"]["codex"]["modelPresets"],
+        json!([preset])
+    );
+    assert_eq!(config["providers"]["codex"]["enabled"], true);
+}
+
+#[test]
 fn invalid_known_fields_do_not_change_the_persisted_config() {
     let root = tempfile::tempdir().unwrap();
     let store = store(&root);

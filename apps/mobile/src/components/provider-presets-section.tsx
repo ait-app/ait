@@ -46,7 +46,7 @@ export function ProviderPresetsSection({
   const client = useHostRuntimeClient(serverId);
   // The editor reads the same cache entry as every picker, so a write invalidates one entry and
   // all readers refetch. Mutation preflights publish fresh ownership back to this same cache.
-  const { snapshot, isLoading, error } = useProviderPresets({
+  const { snapshot, isSupported, isLoading, error } = useProviderPresets({
     serverId,
     provider,
     cwd,
@@ -54,7 +54,7 @@ export function ProviderPresetsSection({
   const descriptor = snapshot?.descriptor ?? null;
   const presets = snapshot?.presets ?? [];
   const [editing, setEditing] = useState<ProviderPresetEntry | null>(null);
-  const roleFeatures = useProviderPresetFeatures(serverId, provider, cwd);
+  const roleFeatures = useProviderPresetFeatures(serverId, provider, cwd, isSupported);
   const [deleteTarget, setDeleteTarget] = useState<ProviderPresetEntry | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -177,6 +177,8 @@ export function ProviderPresetsSection({
       t,
     ],
   );
+
+  if (!isSupported) return null;
 
   return (
     <View style={styles.section} testID="provider-presets-section">

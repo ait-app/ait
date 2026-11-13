@@ -5,12 +5,10 @@ pub(crate) mod ait;
 use std::sync::Arc;
 
 use model::storage::daemon_config::DaemonConfigStore;
-use serde_json::Value;
 
 use provider_core::ports::agent_session::AgentClient;
 use provider_core::ports::preset::{
     Preset, PresetBackend, PresetDescriptor, PresetEntry, PresetError, PresetSource, editable,
-    synthesize,
 };
 
 /// Largest accepted provider identifier on a preset request.
@@ -120,6 +118,11 @@ impl PresetService {
         preset.validate().map_err(PresetError::Rejected)?;
         let descriptor = self.describe(cwd, client).await;
         if descriptor.backend == PresetBackend::Native {
+            if original.is_some_and(|original| original != preset.name) {
+                return Err(PresetError::Rejected(
+                    "This native preset store does not support rename".to_owned(),
+                ));
+            }
             if !descriptor.can_edit && !descriptor.can_create {
                 return Err(PresetError::Unavailable(reason(&descriptor)));
             }
@@ -151,7 +154,7 @@ impl PresetService {
         client: Option<&Arc<dyn AgentClient>>,
         name: &str,
     ) -> Result<(), PresetError> {
-        if !provider_core::ports::preset::valid_text(name) {
+        if !domain::preset::valid_text(name) {
             return Err(PresetError::Rejected(
                 "Preset name must be 1-256 characters without control bytes".to_owned(),
             ));
@@ -174,45 +177,6 @@ impl PresetService {
         self.ait()
             .delete(provider, name)
             .map_err(PresetError::Rejected)
-    }
-
-    /// Merge the unified preset select into one provider's feature list.
-    ///
-    /// A native `modelPreset` already in `features` wins untouched, so OMP keeps its exact
-    /// behavior. A provider that owns a native store never receives Ait entries on top, so the
-    /// two stores can never disagree. Only an Ait-backed provider gains the synthesized select;
-    /// with no stored presets the list is unchanged and the client keeps its empty state.
-    ///
-    /// `native_store` is the adapter's static capability, not the result of a probe, so this
-    /// stays cheap enough for the draft/features path.
-    pub(crate) fn apply(
-        &self,
-        provider: &str,
-        native_store: bool,
-        features: &mut Vec<Value>,
-        current: &domain::agent_runtime::StoredAgentConfig,
-    ) {
-        // A feature the adapter already reports is left exactly where it is: the native store
-        // owns that control, and moving it would reorder the caller's list for no gain.
-        if features
-            .iter()
-            .any(|feature| feature["id"] == "modelPreset")
-        {
-            return;
-        }
-        if native_store {
-            return;
-        }
-        let stored = self.ait().list(provider).unwrap_or_default();
-        if let Some(feature) = synthesize(
-            None,
-            &stored,
-            current.model.as_deref(),
-            current.thinking_option_id.as_deref(),
-            current.feature_values.as_ref(),
-        ) {
-            features.insert(0, feature);
-        }
     }
 }
 

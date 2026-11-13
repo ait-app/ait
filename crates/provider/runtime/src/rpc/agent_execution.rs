@@ -86,18 +86,7 @@ impl ExecutionState {
             Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
             Operation::PrepareDirectory => self.prepare_agent_directory(params),
-            Operation::ResolveIdentities => {
-                only(&params, &["agentIds"])?;
-                let ids: Vec<String> = decode(params["agentIds"].clone())?;
-                if ids.len() > 32 {
-                    return Err(ErrorCode::InvalidMessage);
-                }
-                let ids = ids
-                    .iter()
-                    .map(|id| self.resolve_for(Operation::Timeline, id))
-                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
-                Ok(json!(ids))
-            }
+            Operation::ResolveIdentities => self.resolve_identities(&params),
             Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
@@ -192,6 +181,19 @@ impl ExecutionState {
             .await
             .map_err(|error| map_manager(&error))?;
         Ok(json!(archived))
+    }
+
+    fn resolve_identities(&self, params: &Value) -> Result<Value, ErrorCode> {
+        only(params, &["agentIds"])?;
+        let ids: Vec<String> = decode(params["agentIds"].clone())?;
+        if ids.len() > 32 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let ids = ids
+            .iter()
+            .map(|id| self.resolve_for(Operation::Timeline, id))
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        Ok(json!(ids))
     }
 
     fn prepare_agent_directory(&self, params: Value) -> Result<Value, ErrorCode> {

@@ -98,15 +98,12 @@ export function roleModelChoices(
   return [...choices.values()];
 }
 
-/** Missing rows mean no assignment on apply; native/unset are explicit, separate choices. */
+/** Missing rows inherit on apply; native/unset are explicit, separate choices. */
 export function decodePresetRoles(preset: ProviderPreset): PresetRoleRow[] {
   return Object.entries(preset.featureValues ?? {})
     .filter(
       ([key, value]) =>
-        key.startsWith(ROLE_PREFIX) &&
-        key !== "modelRole.default" &&
-        typeof value === "string" &&
-        value !== "unset",
+        key.startsWith(ROLE_PREFIX) && key !== "modelRole.default" && typeof value === "string",
     )
     .map(([role, value], index) => ({
       id: `stored-${index}`,
@@ -115,16 +112,15 @@ export function decodePresetRoles(preset: ProviderPreset): PresetRoleRow[] {
     }));
 }
 
-/** Preserve unrelated provider features while rebuilding role records from structured controls. */
+/** Preserve unrelated and opaque values while rebuilding editable role records. */
 export function encodePresetRoles(
   original: ProviderPreset,
   rows: readonly PresetRoleRow[],
-  clearRoles: readonly string[] = [],
 ): Record<string, unknown> {
+  const editableRoles = new Set(decodePresetRoles(original).map((row) => row.role));
   const values = Object.fromEntries(
-    Object.entries(original.featureValues ?? {}).filter(([key]) => !key.startsWith(ROLE_PREFIX)),
+    Object.entries(original.featureValues ?? {}).filter(([key]) => !editableRoles.has(key)),
   );
-  for (const role of clearRoles) values[role] = "unset";
   const seen = new Set<string>();
   for (const row of rows) {
     if (!row.role.startsWith(ROLE_PREFIX) || !row.model || seen.has(row.role)) {

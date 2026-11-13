@@ -27,17 +27,40 @@ with log.open('a') as output:
     output.write(json.dumps({'args': args}) + '\n')
 # Read-only metadata reads OMP exposes outside a conversation. Ait's role catalog calls these
 # before any process starts, so they must answer with real JSON rather than RPC frames.
-if args == ['config', 'list', '--json']:
+if args[:2] == ['config', 'set'] and len(args) == 5 and args[2] == 'modelPresets':
+    if os.environ.get('OMP_FIXTURE_PRESET_WRITE_FAILS'):
+        sys.stderr.write('Error: config write unavailable\n')
+        sys.exit(1)
+    value = json.loads(args[3])
+    if not os.environ.get('OMP_FIXTURE_PRESET_WRITE_IGNORED'):
+        staging = root / 'native-presets.tmp'
+        staging.write_text(json.dumps(value))
+        staging.replace(root / 'native-presets.json')
+    print(json.dumps({'key': 'modelPresets', 'value': value}))
+    sys.exit(0)
+if args[:2] in (['config', 'list'], ['config', 'get']):
     if os.environ.get('OMP_FIXTURE_METADATA_FAILS'):
         sys.stderr.write('Error: config unavailable\n')
         sys.exit(1)
     overrides = json.loads(os.environ.get('OMP_FIXTURE_CONFIG_OVERRIDES', '{}'))
+    native_file = root / 'native-presets.json'
+    global_presets = json.loads(native_file.read_text()) if native_file.exists() else \
+        json.loads(os.environ.get('OMP_FIXTURE_PRESETS', '{}'))
+    project_presets = json.loads(os.environ.get('OMP_FIXTURE_PROJECT_PRESETS', '{}'))
+    if args[:2] == ['config', 'get']:
+        print(json.dumps({'key': args[2], 'value': {**global_presets, **project_presets}}))
+        sys.exit(0)
+    if '--scope' in args:
+        scope = args[args.index('--scope') + 1]
+        print(json.dumps({'modelPresets': {'value': global_presets if scope == 'global' else project_presets}}))
+        sys.exit(0)
     settings = {
         'modelRoles': {'value': overrides.get('modelRoles',
             {'default': 'test/model', 'task': 'test/model:high'})},
         'modelTags': {'value': overrides.get('modelTags',
             {'default': {'name': 'Director'}, 'task': {'name': 'Worker'}})},
         'cycleOrder': {'value': overrides.get('cycleOrder', ['default', 'task'])},
+        'modelPresets': {'value': {**global_presets, **project_presets}},
     }
     print(json.dumps(settings))
     sys.exit(0)

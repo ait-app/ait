@@ -5,19 +5,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Largest accepted preset name or model identifier.
+/// Largest accepted preset name or thinking identifier.
 pub const MAX_PRESET_TEXT: usize = 256;
+/// Largest model route, including a JSON-encoded native provider/model pair.
+const MAX_PRESET_MODEL: usize = 16 * 1024;
 /// Largest accepted number of presets per provider.
 pub const MAX_PRESETS: usize = 64;
 /// Largest accepted serialized feature map per preset.
 pub const MAX_PRESET_BYTES: usize = 64 * 1024;
 /// Largest accepted number of feature values in one preset.
-const MAX_PRESET_FEATURES: usize = 64;
+const MAX_PRESET_FEATURES: usize = 128;
 
 /// One named model selection, shaped like the client bundle so applying it is a copy.
 ///
-/// A provider with its own preset store (OMP) never uses this record; it exists for the
-/// adapters whose harness has no such concept, and is persisted in daemon configuration.
+/// Native adapters project their own definitions into this value. Adapters without a native
+/// store persist it directly in daemon configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderPreset {
@@ -43,6 +45,9 @@ pub fn valid_text(value: &str) -> bool {
 
 /// Whether `key` is a bounded feature name: a letter followed by up to 64 name bytes.
 fn valid_feature_key(key: &str) -> bool {
+    if let Some(role) = key.strip_prefix("modelRole.") {
+        return !role.is_empty() && role.len() <= 128 && !role.chars().any(char::is_control);
+    }
     let mut characters = key.chars();
     characters
         .next()
@@ -60,8 +65,11 @@ impl ProviderPreset {
         if !valid_text(&self.name) {
             return Err("Preset name must be 1-256 characters without control bytes".to_owned());
         }
-        if !valid_text(&self.model) {
-            return Err("Preset model must be 1-256 characters without control bytes".to_owned());
+        if self.model.trim().is_empty()
+            || self.model.len() > MAX_PRESET_MODEL
+            || self.model.chars().any(char::is_control)
+        {
+            return Err("Preset model must be bounded text without control bytes".to_owned());
         }
         if let Some(thinking) = &self.thinking_option_id
             && !valid_text(thinking)
@@ -111,3 +119,6 @@ pub fn validate_presets(presets: &[ProviderPreset]) -> Result<(), String> {
 pub fn presets_are_valid(presets: &[ProviderPreset]) -> bool {
     validate_presets(presets).is_ok()
 }
+
+#[cfg(test)]
+mod tests;

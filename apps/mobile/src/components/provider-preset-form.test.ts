@@ -31,17 +31,33 @@ it("round trips explicit models, role aliases, defaults and unrelated features",
   };
   expect(encodePresetRoles(preset, decodePresetRoles(preset))).toEqual(preset.featureValues);
 });
-it("removed roles clear native defaults while Ait records omit them", () => {
+it("preserves explicit unassigned roles and omits removed roles for inheritance", () => {
   const original = {
     name: "work",
     model: "sonnet",
     featureValues: { "modelRole.advisor": "opus", "modelRole.task": "unset" },
   };
-  expect(decodePresetRoles(original)).toHaveLength(1);
+  expect(decodePresetRoles(original)).toHaveLength(2);
+  expect(encodePresetRoles(original, decodePresetRoles(original))).toEqual(original.featureValues);
   expect(encodePresetRoles(original, [])).toEqual({});
-  expect(encodePresetRoles(original, [], ["modelRole.advisor", "modelRole.task"])).toEqual({
-    "modelRole.advisor": "unset",
-    "modelRole.task": "unset",
+});
+
+it("retains unresolved selectors, opaque roles and default-role data while editing other fields", () => {
+  const original = {
+    name: "work",
+    model: "unknown-model",
+    featureValues: {
+      "modelRole.future": "unknown:model:turbo",
+      "modelRole.structured": { model: "future-model" },
+      "modelRole.default": "old-default",
+      fastMode: true,
+    },
+  };
+  expect(encodePresetRoles(original, decodePresetRoles(original))).toEqual(original.featureValues);
+  expect(encodePresetRoles(original, [])).toEqual({
+    "modelRole.structured": { model: "future-model" },
+    "modelRole.default": "old-default",
+    fastMode: true,
   });
 });
 it("does not attach thinking to default or unassigned sentinel values", () => {

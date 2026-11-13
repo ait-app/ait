@@ -105,6 +105,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-277：Provider 模型预设的存储归属与整套角色应用](providers/adr-277-provider-model-presets.md)
 - [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)

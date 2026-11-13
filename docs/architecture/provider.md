@@ -4,6 +4,24 @@
 供修改 Provider 代码前核对。每条规则只陈述现状；决策背景、被修订的旧规则和验证记录见所引 ADR。
 组件总览见[当前架构](README.md)。
 
+## 模型预设
+
+- `domain::preset` 定义内容与存储限额，`provider-core::ports::preset` 定义存储能力、来源与错误；
+  运行时 `PresetService` 经 daemon 注入的配置端口管理 Ait 库，adapter 管理原生库。
+  `provider.presets.describe/list/save/delete.request` 是统一管理入口，SDK 仅在四个方法齐全时暴露
+  `server_info.features.providerPresets`，旧 Host 不显示新增功能
+  （[ADR-277](../decisions/providers/adr-277-provider-model-presets.md)）。
+- Ait 库位于 `providers.<id>.modelPresets`，每个 Provider 至多 64 项；名字与思考选项最多
+  256 字节，模型路由最多 16 KiB，每项特性至多 128 个且序列化后不超过 64 KiB。写入前校验，重复名字拒绝；
+  同一 daemon 的读改写共用串行锁。列表中的 `source`、`editable` 仅是读取投影，不写回预设内容。
+- 设置与模型卡片共享按 Host、Provider、cwd 分隔的查询，写入后失效。模型卡片先显示默认模型，
+  再为支持角色配置且已有预设的 Provider 显示预设；AgentProfile 继续独立提供启动配置。
+- 失效模型或不支持的思考等级在模型卡片中标为不可用并禁止应用；记录仍能在设置中查看、修复或删除，
+  不因一条旧记录阻断整个预设库。
+- 预设点击一次提交默认模型、思考等级和整套角色分配。未指定的角色恢复继承，显式清空保留清空；
+  非模型的模式、权限、工具等配置保持原值。草稿先更新待创建配置，已运行 Agent 经现有
+  `agent.config.apply.request` 提交；失败遵循该入口的原子校验与错误返回。
+
 ## 边界与装配
 
 - provider 家族的 12 个 crate 都在 `crates/provider/<目录>`，包名等于 `crates/` 之下的路径以连字符连接

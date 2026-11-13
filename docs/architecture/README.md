@@ -63,6 +63,9 @@ daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。
   连接 envelope、协议版本、错误码和预算归 `model::server`，方法元数据归 `model::methods`。
 - `persistence` 实现 Registry、配置、创建回执、push token、Agent runtime、Bot 和 schedule 的文件存储。
   功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
+- Provider 模型预设由 `provider-core` 定义端口、`provider` 协调：OMP 的原生库由 adapter 管理，
+  其余 Provider 的 Ait 预设存于 daemon 配置。设置页与模型卡片读取同一查询；应用时一次替换模型、
+  思考等级和整套角色分配（[ADR-277](../decisions/providers/adr-277-provider-model-presets.md)）。
 - `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
   本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
 - `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；沙箱 Workspace 的写入
