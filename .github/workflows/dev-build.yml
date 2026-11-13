@@ -110,6 +110,8 @@ jobs:
       - name: Build desktop
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
+          # The web bundle peaks near 2.7 GB; Node's default heap on the 7 GB macOS runner is too small.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           npm run build:desktop-assets
           (cd apps/desktop && node scripts/prepare-daemon.mjs && npm run build:main)

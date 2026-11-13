@@ -3232,3 +3232,16 @@ diff --git a/node_modules/react-native-enriched-markdown/lib/module/web/katex.js
    }
    return katexLoadPromise;
  }
+diff --git a/node_modules/react-native-enriched-markdown/android/src/math/java/com/swmansion/enriched/markdown/renderer/MathInlineRenderer.kt b/node_modules/react-native-enriched-markdown/android/src/math/java/com/swmansion/enriched/markdown/renderer/MathInlineRenderer.kt
+index 430ccf9..6c583f3 100644
+--- a/node_modules/react-native-enriched-markdown/android/src/math/java/com/swmansion/enriched/markdown/renderer/MathInlineRenderer.kt
++++ b/node_modules/react-native-enriched-markdown/android/src/math/java/com/swmansion/enriched/markdown/renderer/MathInlineRenderer.kt
+@@ -14,7 +14,7 @@
+   override fun render(
+     node: MarkdownASTNode,
+     builder: SpannableStringBuilder,
+-    onLinkPress: ((String) -> Unit)?,
++    onLinkPress: ((String, String) -> Unit)?,
+     onLinkLongPress: ((String) -> Unit)?,
+     factory: RendererFactory,
+   ) {
