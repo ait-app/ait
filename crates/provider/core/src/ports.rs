@@ -10,3 +10,6 @@ pub mod environment;
 pub mod native_history;
 /// Request usage that adapters report to the harness usage ledger.
 pub mod usage_ledger;
+
+/// Provider-independent auxiliary side conversations.
+pub mod side_questions;

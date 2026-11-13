@@ -94,6 +94,22 @@ impl OpenCodeClient {
 
 #[async_trait::async_trait]
 impl AgentClient for OpenCodeClient {
+    async fn create_side_questions(
+        &self,
+        spec: &provider_core::ports::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn provider_core::ports::side_questions::SideQuestions>, AgentSessionError>
+    {
+        let mut client = self.clone();
+        client.environment.extend(
+            spec.environment
+                .entries()
+                .map(|(key, value)| (key.to_owned(), value.to_owned())),
+        );
+        Ok(Box::new(
+            super::side::Runner::open(client, spec.clone()).await?,
+        ))
+    }
+
     fn supports_write_confinement(&self) -> bool {
         true
     }

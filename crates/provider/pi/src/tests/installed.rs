@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use tokio_util::task::AbortOnDropHandle;
 
 mod commands;
+mod side_questions;
 mod thinking_clamping;
 mod thinking_delivery;
 

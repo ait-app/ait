@@ -479,6 +479,13 @@ impl Owners {
 }
 
 impl Owner {
+    /// Wake directory readers after independent side-conversation state is committed.
+    pub(super) fn side_changed(&self) {
+        if let Some(changes) = &self.shared.changes {
+            changes.notify();
+        }
+    }
+
     /// Queue automatic retirement without closing another owner's native resources.
     pub(super) fn retire(&self, action: Retirement) -> Result<(), ErrorCode> {
         self.shared

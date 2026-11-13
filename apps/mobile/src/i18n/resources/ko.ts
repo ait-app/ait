@@ -605,6 +605,7 @@ export const ko: TranslationResources = {
       title_mr: "이슈 또는 MR 첨부",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "프로바이더",

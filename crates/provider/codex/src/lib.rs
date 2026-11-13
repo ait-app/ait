@@ -15,6 +15,7 @@ mod realtime_history;
 mod realtime_timeline;
 mod rewind;
 mod sandbox;
+mod side_questions;
 mod speed;
 mod streaming;
 mod subagents;
@@ -253,6 +254,18 @@ impl CodexClient {
 
 #[async_trait::async_trait]
 impl AgentClient for CodexClient {
+    async fn create_side_questions(
+        &self,
+        spec: &provider_core::ports::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn provider_core::ports::side_questions::SideQuestions>, AgentSessionError>
+    {
+        let mut client = self.clone();
+        client.environment = spec.environment.clone();
+        Ok(Box::new(
+            side_questions::Runner::open(client, spec.clone()).await?,
+        ))
+    }
+
     fn supports_agent_mcp(&self) -> bool {
         true
     }

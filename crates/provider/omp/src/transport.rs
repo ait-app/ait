@@ -391,6 +391,11 @@ impl Transport {
         self.timeouts
     }
 
+    /// Owned process group identifier for a durable auxiliary execution marker.
+    pub(super) const fn process_id(&self) -> Option<u32> {
+        self.group
+    }
+
     /// Wait for OMP's `ready` frame, ignoring earlier frames, then negotiate protocol v2
     /// when OMP advertises it with the expected frame sizes; otherwise stay on v1.
     ///

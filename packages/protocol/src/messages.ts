@@ -61,6 +61,17 @@ import {
 } from "./browser-automation/rpc-schemas.js";
 import { BrowserAutomationHostCapabilitySchema } from "./browser-automation/capabilities.js";
 import {
+  ProviderUiStateSchema,
+  SideAskRequestSchema,
+  SideAskResponseMessageSchema,
+  SideCancelRequestSchema,
+  SideCancelResponseMessageSchema,
+  SideHistoryRequestSchema,
+  SideHistoryResponseMessageSchema,
+  SideTransferRequestSchema,
+  SideTransferResponseMessageSchema,
+} from "./side-questions.js";
+import {
   PaseoConfigRawSchema,
   PaseoLifecycleCommandRawSchema,
   PaseoMetadataGenerationEntrySchema,
@@ -908,9 +919,68 @@ export const AgentSnapshotPayloadSchema = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
   providerUnavailable: z.boolean().optional(),
+  /**
+   * COMPAT(providerUi): added in v0.2.11, remove the optional parse once the
+   * supported daemon floor projects it. Additive: older daemons never send it
+   * and older clients ignore it; later provider-UI features extend this object.
+   */
+  providerUi: ProviderUiStateSchema.optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
+
+// BTW side-question contract (task09). Consumers import it alongside the other
+// snapshot payloads; the schemas live in `side-questions.ts`.
+export {
+  BtwHistoryRecordSchema,
+  BtwHistoryTurnSchema,
+  ProviderUiStateSchema,
+  SIDE_QUESTION_LIMITS,
+  SIDE_QUESTION_REASONS,
+  SideAskRequestSchema,
+  SideAskResponseMessageSchema,
+  SideAskResponseSchema,
+  SideCancelRequestSchema,
+  SideCancelResponseMessageSchema,
+  SideCancelResponseSchema,
+  SideContextEntrySchema,
+  SideContextSnapshotSchema,
+  SideHistoryRequestSchema,
+  SideHistoryResponseMessageSchema,
+  SideTransferRequestSchema,
+  SideTransferResponseMessageSchema,
+  SideQuestionsStateSchema,
+  SideReceiptStateSchema,
+  SideStrategySchema,
+  SideTopicSchema,
+  SideTurnStatusSchema,
+  BtwImageSchema,
+  canFollowUp,
+  latestSideTurn,
+} from "./side-questions.js";
+export type {
+  BtwHistoryRecord,
+  BtwHistoryTurn,
+  BtwImage,
+  ProviderUiState,
+  SideAskRequest,
+  SideAskResponse,
+  SideAskResponseMessage,
+  SideCancelRequest,
+  SideCancelResponse,
+  SideCancelResponseMessage,
+  SideContextEntry,
+  SideContextSnapshot,
+  SideHistoryRequest,
+  SideHistoryResponseMessage,
+  SideTransferRequest,
+  SideTransferResponseMessage,
+  SideQuestionsState,
+  SideReceiptState,
+  SideStrategy,
+  SideTopic,
+  SideTurnStatus,
+} from "./side-questions.js";
 
 export const AgentListItemPayloadSchema = z.object({
   id: z.string(),
@@ -3218,6 +3288,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
   AgentRewindRequestMessageSchema,
+  SideAskRequestSchema,
+  SideCancelRequestSchema,
+  SideHistoryRequestSchema,
+  SideTransferRequestSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
   CheckoutDiffGetRequestSchema,
@@ -3666,6 +3740,9 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: z.boolean().optional(),
+        // COMPAT(sideQuestions): added in v0.2.11, remove gate after 2027-11-11 once
+        // the supported daemon floor advertises the typed BTW methods.
+        sideQuestions: z.boolean().optional(),
       })
       .optional(),
   })
@@ -4683,7 +4760,7 @@ export const AgentTimelineSearchResponseMessageSchema = z.object({
         seq: z.number().int().nonnegative(),
         role: z.enum(["user", "assistant"]),
         // Estimated occurrences in the message; the client verifies against rendered text.
-        // COMPAT(timelineSearchCount): added in v0.9.0, remove optional after 2027-09-22.
+        // COMPAT(timelineSearchCount): added in v0.2.11, remove optional after 2027-09-22.
         count: z.number().int().positive().optional(),
       }),
     ),
@@ -6732,6 +6809,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
   AgentRewindResponseMessageSchema,
+  SideAskResponseMessageSchema,
+  SideCancelResponseMessageSchema,
+  SideHistoryResponseMessageSchema,
+  SideTransferResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
   ProjectIconSetResponseSchema,

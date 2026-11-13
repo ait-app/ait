@@ -93,6 +93,10 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
+
+BTW 侧会话的共享端口和 DTO 归 `provider-core`，辅助执行归 adapter，冻结显示上下文、
+持久话题、收据与恢复归 `provider`。客户端浮窗调用同一协议，展开时将话题交给新会话草稿，
+不复用或切换原主 writer，见 [ADR-278](../decisions/providers/adr-278-shared-btw-sessions.md)。
 Provider 运行时行为测试归 `crates/provider/runtime`（执行与管理器测试驱动 `provider-codex` 的 Codex 假程序），共享工具的归 `crates/provider/native`，Antigravity 的归 `crates/provider/antigravity`，Claude Code 的归 `crates/provider/claude`，Codex 的归 `crates/provider/codex`，DeepSeek Harness 的归 `crates/provider/deepseek-harness`，MiniMax Code 的归 `crates/provider/minimax`，OMP 的归 `crates/provider/omp`，OpenCode 的归 `crates/provider/opencode`，Pi 的归 `crates/provider/pi`，
 需要多个真实 adapter 的装配测试归 `crates/provider/builtin`；daemon 测试覆盖宿主、
 传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、

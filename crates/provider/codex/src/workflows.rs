@@ -147,7 +147,8 @@ pub(super) async fn collaboration(
         "developer_instructions":preset["developer_instructions"]}})))
 }
 
-fn version(agent: &str) -> Option<(u64, u64, u64)> {
+/// Parse the native semantic version from an initialization user-agent, or return `None`.
+pub(super) fn version(agent: &str) -> Option<(u64, u64, u64)> {
     agent
         .split(|character: char| !character.is_ascii_digit() && character != '.')
         .find_map(|part| {

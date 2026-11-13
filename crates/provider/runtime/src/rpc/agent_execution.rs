@@ -6,6 +6,7 @@ mod native_sessions;
 mod placement;
 mod resume;
 mod scheduling;
+mod side_questions;
 mod voice;
 /// Initial Agent validation and placement for the composite Workspace creation operation.
 pub mod workspace_creation;
@@ -86,18 +87,7 @@ impl ExecutionState {
             Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
             Operation::PrepareDirectory => self.prepare_agent_directory(params),
-            Operation::ResolveIdentities => {
-                only(&params, &["agentIds"])?;
-                let ids: Vec<String> = decode(params["agentIds"].clone())?;
-                if ids.len() > 32 {
-                    return Err(ErrorCode::InvalidMessage);
-                }
-                let ids = ids
-                    .iter()
-                    .map(|id| self.resolve_for(Operation::Timeline, id))
-                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
-                Ok(json!(ids))
-            }
+            Operation::ResolveIdentities => self.resolve_identities(&params),
             Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
@@ -116,6 +106,10 @@ impl ExecutionState {
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,
             Operation::ForkContext => self.fork_context(params).await,
+            Operation::SideAsk
+            | Operation::SideCancel
+            | Operation::SideHistory
+            | Operation::SideTransfer => self.side_operation(method, params).await,
             Operation::Create => self.create(params).await,
             Operation::Available
             | Operation::Models
@@ -175,6 +169,19 @@ impl ExecutionState {
                 Ok(value)
             }
         }
+    }
+
+    fn resolve_identities(&self, params: &Value) -> Result<Value, ErrorCode> {
+        only(params, &["agentIds"])?;
+        let ids: Vec<String> = decode(params["agentIds"].clone())?;
+        if ids.len() > 32 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let ids = ids
+            .iter()
+            .map(|id| self.resolve_for(Operation::Timeline, id))
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        Ok(json!(ids))
     }
 
     async fn retire_workspaces(&mut self, params: Value) -> Result<Value, ErrorCode> {
@@ -674,6 +681,8 @@ impl ExecutionState {
                 }
             }
         }
+        self.manager
+            .side_control_snapshot(&record.id, &mut snapshot);
         Ok(snapshot)
     }
 

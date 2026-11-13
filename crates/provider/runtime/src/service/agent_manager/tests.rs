@@ -20,6 +20,7 @@ mod observed;
 mod paseo;
 mod recovery;
 mod resume;
+mod side_questions;
 mod titles;
 mod usage;
 

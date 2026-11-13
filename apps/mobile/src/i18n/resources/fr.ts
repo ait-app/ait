@@ -639,6 +639,7 @@ export const fr: TranslationResources = {
       title_mr: "Joindre le problème ou MR",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "Fournisseur",

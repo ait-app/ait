@@ -8,6 +8,7 @@ mod interactions;
 mod launcher;
 mod observation;
 mod session;
+mod side;
 mod streaming;
 mod subagents;
 mod summary;

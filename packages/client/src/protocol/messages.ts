@@ -139,6 +139,9 @@ export function serverInfo(
       importSessionSearch: has("provider.sessions.recent.list.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
+      sideQuestions: ["ask", "cancel", "history", "transfer"].every((operation) =>
+        has(`agent.side_question.${operation}.request`),
+      ),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
       hostStats: !scopedGuest && has("daemon.host_stats.request"),

@@ -68,6 +68,7 @@ pub(super) fn scopes(
         if !seen.insert(id.clone()) {
             continue;
         }
+        scopes.insert(format!("agent:{id}"));
         scopes.insert(format!("lane:{}", state.owners.agent(&id)?));
         if cascade {
             scopes.insert(format!("parent:{id}"));
