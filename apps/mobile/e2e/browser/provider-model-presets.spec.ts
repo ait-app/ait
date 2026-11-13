@@ -129,9 +129,14 @@ for (const mobile of [false, true]) {
         .toBe("idle");
       await openAgentRoute(page, { workspaceId: workspace.workspaceId, agentId: agent.id });
       await expectComposerVisible(page);
-      await openProviderModelCard(page, mobile);
-      await expect(page.getByTestId("provider-model-presets-omp")).toHaveCount(0);
-      await page.getByTestId("selector-header-settings-omp").click();
+      if (mobile) {
+        await page.getByRole("button", { name: "Open menu", exact: true }).first().click();
+      }
+      await page.locator('[data-testid="sidebar-settings"]:visible').first().click();
+      await expect(page.getByTestId("settings-sidebar")).toBeVisible();
+      await page.getByTestId("settings-host-section-providers").click();
+      await expect(page.getByTestId("host-page-providers-card")).toBeVisible();
+      await page.getByRole("button", { name: "Oh My Pi provider details", exact: true }).click();
       const settings = page.getByTestId("provider-settings-sheet");
       await expect(settings).toBeVisible();
       await expect(page.getByText("No model presets yet", { exact: true })).toBeVisible();
@@ -150,8 +155,23 @@ for (const mobile of [false, true]) {
       expect(stored.presets).toContainEqual(
         expect.objectContaining({ name: presetName, thinkingOptionId: "low", source: "global" }),
       );
+      // Reopen the saved form before leaving settings: this verifies native readback through
+      // the same editor a user returns to, rather than relying only on the SDK list response.
+      await page.getByTestId(`provider-preset-${presetName}`).getByRole("button").first().click();
+      await expect(editor).toBeVisible();
+      await expect(page.getByTestId("provider-preset-name")).toHaveValue(presetName);
+      await expect(page.getByTestId("provider-preset-model-options")).toContainText(
+        "Fixture model",
+      );
+      await expect(page.getByTestId("provider-preset-thinking-options")).toContainText("Low");
+      await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
+      await expect(editor).not.toBeVisible();
       await page.getByLabel("Close", { exact: true }).filter({ visible: true }).last().click();
       await expect(settings).not.toBeVisible();
+      // A cold agent route starts fresh model and role discovery together. Presets saved from
+      // global settings must still appear when that discovery refresh finishes.
+      await openAgentRoute(page, { workspaceId: workspace.workspaceId, agentId: agent.id });
+      await expectComposerVisible(page);
       await openProviderModelCard(page, mobile);
       const group = page.getByTestId("provider-model-presets-omp");
       await expect(group).toBeVisible();

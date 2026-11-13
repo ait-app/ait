@@ -56,6 +56,7 @@ const MOBILE_SUITES = [
   "src/components/provider-preset-form.test.ts",
   "src/components/provider-presets-section.test.tsx",
   "src/components/provider-diagnostic-models.test.ts",
+  "src/data/providers-snapshot.test.ts",
   "src/hooks/use-draft-agent-features.presets.test.tsx",
   "src/provider-selection/resolve-agent-form.test.ts",
   "src/provider-selection/provider-selection.test.ts",
