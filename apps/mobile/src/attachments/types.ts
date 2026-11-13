@@ -2,6 +2,7 @@ import type {
   AgentAttachment,
   ForgeSearchItem,
   UploadedFileAttachment,
+  SideTopic,
 } from "@ait/protocol/messages";
 
 export type AttachmentStorageType = "web-indexeddb" | "desktop-file" | "native-file";
@@ -80,6 +81,8 @@ export type PullRequestContextAttachment =
 export interface ChatHistoryContextAttachment {
   kind: "chat_history";
   id: string;
+  /** Display the conversation while its frozen context remains attached to the draft. */
+  sideConversation?: { topic: SideTopic };
   attachment: Extract<AgentAttachment, { type: "text" }>;
   source: {
     serverId: string;

@@ -36,6 +36,23 @@ function createSnapshot(
 }
 
 describe("normalizeAgentSnapshot", () => {
+  it("preserves independent side-question state across client snapshot caching", () => {
+    const snapshot = {
+      ...createSnapshot(),
+      providerUi: {
+        sideQuestions: {
+          records: [],
+          omitted: 0,
+          available: false,
+          unavailableReason: "Native BTW is unavailable",
+        },
+      },
+    };
+    expect(projectAgentSnapshot(normalizeAgentSnapshot(snapshot, "server"))).toMatchObject({
+      providerUi: snapshot.providerUi,
+    });
+  });
+
   it("preserves read-only native identity and verified parentage across cache serialization", () => {
     const snapshot: AgentSnapshotPayload = {
       ...createSnapshot({

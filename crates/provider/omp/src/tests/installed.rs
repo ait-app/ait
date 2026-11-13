@@ -6,6 +6,7 @@ mod confinement;
 mod images;
 mod interactions;
 mod settlement;
+mod side_questions;
 mod subagents;
 mod timeline;
 

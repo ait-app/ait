@@ -130,32 +130,9 @@ pub(super) async fn execution(
     state: &State,
 ) -> Result<(), DispatchError> {
     let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "agent.create.request"
-                | "agent.resume.request"
-                | "agent.message.send.request"
-                | "agent.cancel.request"
-                | "agent.finish.wait.request"
-                | "agent.model.set.request"
-                | "agent.thinking.set.request"
-                | "agent.config.apply.request"
-                | "provider.sessions.recent.list.request"
-                | "agent.import.request"
-                | "agent.refresh.request"
-                | "agent.fork_context.request"
-                | "agent.context.compact.request"
-                | "agent.rewind.request"
-                | "agent.commands.list.request"
-                | "agent.mode.set.request"
-                | "agent.feature.set.request"
-                | "agent.permission.resolve.request"
-                | "agent.provider_subagents.list.request"
-                | "agent.subagents.list.request"
-                | "agent.provider_subagents.timeline.get.request"
-                | "provider.diagnostic.request"
-                | "provider.usage.ledger.request"
-        )
+        super::agent_execution::METHODS
+            .iter()
+            .any(|method| method.name == context.request.method)
     }) else {
         return Err(DispatchError::NotImplemented);
     };

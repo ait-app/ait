@@ -237,6 +237,8 @@ fn plan(
                 .place(&lane, format!("workspace:{workspace}"))?;
         }
         Some(lane)
+    } else if method.access() == Access::Side {
+        side_lane(&state, method, params)?
     } else if method == Operation::Create {
         if let Some(id) = params["agentId"].as_str() {
             Some(state.owners.agent(id)?)
@@ -421,4 +423,37 @@ fn reject(command: Command, error: ErrorCode) {
     if let Command::Request { reply, .. } = command {
         let _ = reply.send(Err(error));
     }
+}
+
+fn side_lane(
+    state: &ExecutionState,
+    method: Operation,
+    params: &Value,
+) -> Result<Option<String>, ErrorCode> {
+    let id = state.resolve_for(
+        method,
+        params["agentId"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?,
+    )?;
+    let record = state
+        .registry
+        .get(&id)
+        .map_err(|_| ErrorCode::AgentIo)?
+        .ok_or(ErrorCode::AgentNotFound)?;
+    let lane = format!("side:{id}");
+    state.owners.place(&lane, format!("agent:{id}"))?;
+    // A side runner never claims the main native writer. Lifecycle fences still cover both.
+    state
+        .owners
+        .place(&lane, format!("lane:{}", state.owners.agent(&id)?))?;
+    if let Some(workspace) = &record.workspace_id {
+        state
+            .owners
+            .place(&lane, format!("workspace:{workspace}"))?;
+    }
+    if let Some(parent) = record.labels.get("paseo.parent-agent-id") {
+        state.owners.place(&lane, format!("parent:{parent}"))?;
+    }
+    Ok(Some(lane))
 }

@@ -6,6 +6,7 @@ mod history;
 mod mcp;
 mod probe;
 mod session;
+mod side;
 mod streaming;
 mod transport;
 
@@ -106,6 +107,21 @@ impl PiClient {
 
 #[async_trait::async_trait]
 impl AgentClient for PiClient {
+    async fn create_side_questions(
+        &self,
+        spec: &provider_core::ports::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn provider_core::ports::side_questions::SideQuestions>, AgentSessionError>
+    {
+        let client = if spec.environment.entries().next().is_none() {
+            self.clone()
+        } else {
+            self.with_environment(&spec.environment)
+        };
+        let mut runner = side::Runner::new(client, spec)?;
+        runner.probe().await?;
+        Ok(Box::new(runner))
+    }
+
     fn supports_session_import(&self) -> bool {
         true
     }

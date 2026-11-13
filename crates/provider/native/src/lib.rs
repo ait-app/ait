@@ -6,6 +6,7 @@ pub mod acp_permissions;
 pub mod acp_streaming;
 /// Owned, bounded JSON-RPC stdio connection to a native ACP process.
 pub mod acp_transport;
+pub mod auxiliary;
 pub mod compaction;
 pub mod configuration;
 pub mod diagnostics;

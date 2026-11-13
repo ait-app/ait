@@ -48,6 +48,10 @@ const UI_RELEASE =
 const UI_TESTED_PACKAGES = ["protocol", "client", "highlight"];
 // Only these mobile suites are held green in CI; move additions here deliberately.
 const MOBILE_SUITES = [
+  "src/btw",
+  "src/components/provider-side-questions.test.tsx",
+  "src/components/markdown/math.test.ts",
+  "src/stores/btw-visibility-store.test.ts",
   "src/components/question-form-card-core.test.ts",
   "src/runtime/host-runtime.test.ts",
   "src/i18n/resources.test.ts",

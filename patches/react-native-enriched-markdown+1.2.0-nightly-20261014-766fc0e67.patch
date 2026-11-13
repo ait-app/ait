@@ -1133,7 +1133,6 @@ index 0000000..c04179d
 +//# sourceMappingURL=MarkdownRenderers.js.map
 \ No newline at end of file
 diff --git a/node_modules/react-native-enriched-markdown/lib/module/web/EnrichedMarkdownText.js b/node_modules/react-native-enriched-markdown/lib/module/web/EnrichedMarkdownText.js
-index 2cf2708..8581623 100644
 --- a/node_modules/react-native-enriched-markdown/lib/module/web/EnrichedMarkdownText.js
 +++ b/node_modules/react-native-enriched-markdown/lib/module/web/EnrichedMarkdownText.js
 @@ -3,7 +3,7 @@
@@ -1145,7 +1144,7 @@ index 2cf2708..8581623 100644
  import { recognizeTextLinks } from "./recognizeTextLinks.js";
  import { RenderNode } from "./renderers/index.js";
  import { indexTaskItems, markInlineImages } from "./utils.js";
-@@ -16,6 +16,7 @@ export const EnrichedMarkdownText = ({
+@@ -16,6 +16,7 @@
    markdownStyle = {},
    md4cFlags = {},
    linkRecognition,
@@ -1153,16 +1152,18 @@ index 2cf2708..8581623 100644
    onLinkPress,
    onLinkLongPress,
    onImagePress,
-@@ -31,7 +32,7 @@ export const EnrichedMarkdownText = ({
+@@ -31,8 +32,9 @@
    ...rest
  }) => {
    const normalizedStyle = useMemo(() => normalizeMarkdownStyle(markdownStyle), [markdownStyle]);
 -  const [ast, setAst] = useState(null);
 +  const [parsed, setParsed] = useState(null);
    const [katex, setKatex] = useState(null);
++  const katexInitialized = useRef(false);
    const [parseError, setParseError] = useState(false);
    const {
-@@ -50,7 +51,39 @@ export const EnrichedMarkdownText = ({
+     underline = false,
+@@ -50,7 +52,39 @@
    linkRecognitionRef.current = linkRecognition;
    const textLinkKey = linkRecognition?.text?.toString() ?? null;
    const inlineCodeLinkKey = linkRecognition?.inlineCode?.toString() ?? null;
@@ -1198,11 +1199,16 @@ index 2cf2708..8581623 100644
 +    // eslint-disable-next-line react-hooks/exhaustive-deps
 +  }, [markdown, underline, latexMath, superscript, subscript, highlight, hardSoftBreaks, preserveBlankLines, admonitions, textLinkKey, inlineCodeLinkKey, parsed]);
    useEffect(() => {
-+    if (immediate && (!latexMath || katex)) return;
++    if (immediate && (!latexMath || katexInitialized.current)) return;
      let cancelled = false;
      const katexPromise = latexMath ? loadKaTeX() : Promise.resolve(null);
      Promise.all([parseMarkdown(markdown, {
-@@ -68,7 +101,10 @@ export const EnrichedMarkdownText = ({
+@@ -64,26 +98,31 @@
+       admonitions
+     }), katexPromise]).then(([result, katexInstance]) => {
+       if (!cancelled) {
++        katexInitialized.current = latexMath;
+         indexTaskItems(result);
          markInlineImages(result);
          setParseError(false);
          setKatex(katexInstance);
@@ -1214,7 +1220,8 @@ index 2cf2708..8581623 100644
        }
      }).catch(error => {
        if (!cancelled) {
-@@ -76,14 +112,14 @@ export const EnrichedMarkdownText = ({
++        katexInitialized.current = false;
+         if (__DEV__) {
            console.error('[EnrichedMarkdownText] Parse failed:', error);
          }
          setParseError(true);
@@ -1231,7 +1238,7 @@ index 2cf2708..8581623 100644
    const callbacks = useMemo(() => ({
      onLinkPress,
      onLinkLongPress,
-@@ -93,8 +129,9 @@ export const EnrichedMarkdownText = ({
+@@ -93,8 +132,9 @@
    }), [onLinkPress, onLinkLongPress, onImagePress, onTaskListItemPress, onCodeBlockPress]);
    const capabilities = useMemo(() => ({
      katex,
@@ -1243,7 +1250,7 @@ index 2cf2708..8581623 100644
    const lastChildStyle = useMemo(() => allowTrailingMargin ? normalizedStyle : zeroTrailingMargins(normalizedStyle), [normalizedStyle, allowTrailingMargin]);
    const styles = useMemo(() => buildStyles(normalizedStyle), [normalizedStyle]);
    const lastChildStyles = useMemo(() => buildStyles(lastChildStyle), [lastChildStyle]);
-@@ -110,7 +147,8 @@ export const EnrichedMarkdownText = ({
+@@ -110,7 +150,8 @@
      } : null)
    }), [containerStyle, selectable, selectionColor]);
    const domProps = filterNativeOnlyProps(rest);
@@ -1253,7 +1260,7 @@ index 2cf2708..8581623 100644
      return /*#__PURE__*/_jsx("div", {
        className: ENRM_TEXT_CLASS,
        style: wrapperStyle,
-@@ -123,10 +161,10 @@ export const EnrichedMarkdownText = ({
+@@ -123,10 +164,10 @@
        })
      });
    }
@@ -2145,10 +2152,9 @@ index 9df94ed..c726533 100644
  
  export interface LinkLongPressEvent {
 diff --git a/node_modules/react-native-enriched-markdown/src/web/EnrichedMarkdownText.tsx b/node_modules/react-native-enriched-markdown/src/web/EnrichedMarkdownText.tsx
-index 08dc7df..11fbd16 100644
 --- a/node_modules/react-native-enriched-markdown/src/web/EnrichedMarkdownText.tsx
 +++ b/node_modules/react-native-enriched-markdown/src/web/EnrichedMarkdownText.tsx
-@@ -12,7 +12,7 @@ import {
+@@ -12,7 +12,7 @@
    parseErrorFallbackStyle,
    buildStyles,
  } from './styles';
@@ -2157,7 +2163,7 @@ index 08dc7df..11fbd16 100644
  import { recognizeTextLinks } from './recognizeTextLinks';
  import { RenderNode } from './renderers';
  import type { ASTNode, RendererCallbacks, RenderCapabilities } from './types';
-@@ -27,6 +27,7 @@ export const EnrichedMarkdownText = ({
+@@ -27,6 +27,7 @@
    markdownStyle = {},
    md4cFlags = {},
    linkRecognition,
@@ -2165,7 +2171,7 @@ index 08dc7df..11fbd16 100644
    onLinkPress,
    onLinkLongPress,
    onImagePress,
-@@ -46,7 +47,10 @@ export const EnrichedMarkdownText = ({
+@@ -46,8 +47,12 @@
      [markdownStyle]
    );
  
@@ -2175,9 +2181,11 @@ index 08dc7df..11fbd16 100644
 +    markdown: string;
 +  } | null>(null);
    const [katex, setKatex] = useState<KaTeXInstance | null>(null);
++  const katexInitialized = useRef(false);
    const [parseError, setParseError] = useState<boolean>(false);
  
-@@ -67,7 +71,53 @@ export const EnrichedMarkdownText = ({
+   const {
+@@ -67,7 +72,53 @@
    const textLinkKey = linkRecognition?.text?.toString() ?? null;
    const inlineCodeLinkKey = linkRecognition?.inlineCode?.toString() ?? null;
  
@@ -2227,11 +2235,17 @@ index 08dc7df..11fbd16 100644
 +  ]);
 +
    useEffect(() => {
-+    if (immediate && (!latexMath || katex)) return;
++    if (immediate && (!latexMath || katexInitialized.current)) return;
      let cancelled = false;
  
      const katexPromise = latexMath ? loadKaTeX() : Promise.resolve(null);
-@@ -92,13 +142,14 @@ export const EnrichedMarkdownText = ({
+@@ -87,28 +138,31 @@
+     ])
+       .then(([result, katexInstance]) => {
+         if (!cancelled) {
++          katexInitialized.current = latexMath;
+           indexTaskItems(result);
+           markInlineImages(result);
  
            setParseError(false);
            setKatex(katexInstance);
@@ -2250,7 +2264,10 @@ index 08dc7df..11fbd16 100644
          }
        })
        .catch((error) => {
-@@ -108,7 +159,7 @@ export const EnrichedMarkdownText = ({
+         if (!cancelled) {
++          katexInitialized.current = false;
+           if (__DEV__) {
+             console.error('[EnrichedMarkdownText] Parse failed:', error);
            }
  
            setParseError(true);
@@ -2259,7 +2276,7 @@ index 08dc7df..11fbd16 100644
            setKatex(null);
          }
        });
-@@ -128,6 +179,8 @@ export const EnrichedMarkdownText = ({
+@@ -128,6 +182,8 @@
      admonitions,
      textLinkKey,
      inlineCodeLinkKey,
@@ -2268,7 +2285,7 @@ index 08dc7df..11fbd16 100644
    ]);
  
    const callbacks = useMemo<RendererCallbacks>(
-@@ -148,8 +201,8 @@ export const EnrichedMarkdownText = ({
+@@ -148,8 +204,8 @@
    );
  
    const capabilities = useMemo<RenderCapabilities>(
@@ -2279,7 +2296,7 @@ index 08dc7df..11fbd16 100644
    );
  
    const lastChildStyle = useMemo(
-@@ -182,7 +235,8 @@ export const EnrichedMarkdownText = ({
+@@ -182,7 +238,8 @@
  
    const domProps = filterNativeOnlyProps(rest);
  
@@ -2289,7 +2306,7 @@ index 08dc7df..11fbd16 100644
      return (
        <div
          className={ENRM_TEXT_CLASS}
-@@ -196,13 +250,12 @@ export const EnrichedMarkdownText = ({
+@@ -196,13 +253,12 @@
      );
    }
  
@@ -3164,3 +3181,54 @@ diff --git a/node_modules/react-native-enriched-markdown/src/web/renderers/Block
    const label = language ? `Code block: ${language}` : 'Code block';
  
    if (callbacks.onCodeBlockPress == null) {
+diff --git a/node_modules/react-native-enriched-markdown/src/web/katex.ts b/node_modules/react-native-enriched-markdown/src/web/katex.ts
+--- a/node_modules/react-native-enriched-markdown/src/web/katex.ts
++++ b/node_modules/react-native-enriched-markdown/src/web/katex.ts
+@@ -15,17 +15,12 @@
+ /** Lazily loads KaTeX. Resolves to null if not installed. */
+ export function loadKaTeX(): Promise<KaTeXInstance | null> {
+   if (!katexLoadPromise) {
+-    let instance: KaTeXInstance | null = null;
+-    try {
+-      const mod = require('katex');
+-      const candidate = (mod?.default ?? mod) as KaTeXInstance | null;
+-      if (typeof candidate?.renderToString === 'function') {
+-        instance = candidate;
+-      }
+-    } catch {
+-      // katex not installed — math rendering will be skipped
+-    }
+-    katexLoadPromise = Promise.resolve(instance);
++    katexLoadPromise = import('katex')
++      .then((mod) => {
++        const candidate = (mod?.default ?? mod) as KaTeXInstance | null;
++        return typeof candidate?.renderToString === 'function' ? candidate : null;
++      })
++      .catch(() => null);
+   }
+   return katexLoadPromise;
+ }
+diff --git a/node_modules/react-native-enriched-markdown/lib/module/web/katex.js b/node_modules/react-native-enriched-markdown/lib/module/web/katex.js
+--- a/node_modules/react-native-enriched-markdown/lib/module/web/katex.js
++++ b/node_modules/react-native-enriched-markdown/lib/module/web/katex.js
+@@ -5,17 +5,10 @@
+ /** Lazily loads KaTeX. Resolves to null if not installed. */
+ export function loadKaTeX() {
+   if (!katexLoadPromise) {
+-    let instance = null;
+-    try {
+-      const mod = require('katex');
++    katexLoadPromise = import('katex').then(mod => {
+       const candidate = mod?.default ?? mod;
+-      if (typeof candidate?.renderToString === 'function') {
+-        instance = candidate;
+-      }
+-    } catch {
+-      // katex not installed — math rendering will be skipped
+-    }
+-    katexLoadPromise = Promise.resolve(instance);
++      return typeof candidate?.renderToString === 'function' ? candidate : null;
++    }).catch(() => null);
+   }
+   return katexLoadPromise;
+ }

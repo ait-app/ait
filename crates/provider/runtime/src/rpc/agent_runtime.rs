@@ -517,6 +517,9 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
             .filter(|_| !record.internal),
         archived_at: record.archived_at.clone(),
         provider_unavailable: true,
+        // Persisted records have no live side-question runner; the projection
+        // is attached only by the live manager snapshot path.
+        provider_ui: None,
     }
 }
 

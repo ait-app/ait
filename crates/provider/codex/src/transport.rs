@@ -47,7 +47,34 @@ impl Transport {
         deadline: Duration,
         environment: &provider_core::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
+        Self::start(process(program, &launch, environment)?, deadline)
+    }
+
+    /// Launch an auxiliary server with bootstrap integrations disabled before initialization.
+    /// Returns an owned transport, or a configuration/spawn error before any inference.
+    pub(super) fn spawn_auxiliary(
+        program: &Path,
+        launch: Launch<'_>,
+        deadline: Duration,
+        environment: &provider_core::ports::environment::AgentEnvironment,
+    ) -> Result<Self, AgentSessionError> {
         let mut command = process(program, &launch, environment)?;
+        command.args([
+            "-c",
+            "features.plugins=false",
+            "-c",
+            "features.remote_control=false",
+            "-c",
+            "features.hooks=false",
+            "-c",
+            "skills.bundled.enabled=false",
+            "-c",
+            "skills.include_instructions=false",
+        ]);
+        Self::start(command, deadline)
+    }
+
+    fn start(mut command: Command, deadline: Duration) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new("codex");
         let mut child = command
             .spawn()
@@ -141,6 +168,11 @@ impl Transport {
             closed: false,
             user_agent: None,
         })
+    }
+
+    /// Owned process group identifier for a durable, payload-free auxiliary execution locator.
+    pub(super) fn process_id(&self) -> Option<u32> {
+        self.child.id()
     }
 
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {

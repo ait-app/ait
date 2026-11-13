@@ -321,6 +321,18 @@ pub trait AgentSession: Debug + Send + Sync {
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
 pub trait AgentClient: Debug + Send + Sync {
+    /// Construct an isolated BTW runner without creating or resuming a main writer.
+    ///
+    /// `spec` supplies the selected model, sandbox policy and auxiliary directory.
+    /// # Errors
+    /// Returns unavailable when runtime isolation cannot be verified without inference.
+    async fn create_side_questions(
+        &self,
+        _spec: &super::side_questions::SideRunnerSpec,
+    ) -> Result<Box<dyn super::side_questions::SideQuestions>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false

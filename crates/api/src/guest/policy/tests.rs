@@ -6,6 +6,7 @@ use super::*;
 use crate::guest::admit;
 use crate::test_support::{Workspaces, address};
 
+mod btw;
 mod node;
 mod regressions;
 mod scopes;

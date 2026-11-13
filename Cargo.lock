@@ -2473,6 +2473,7 @@ dependencies = [
  "nix 0.31.3",
  "provider-core",
  "regex",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",

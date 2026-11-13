@@ -511,7 +511,10 @@ impl AgentManager {
         Ok(())
     }
 
-    fn control_record(&self, id: &str) -> Result<PersistedAgentRuntimeRecord, ErrorCode> {
+    pub(super) fn control_record(
+        &self,
+        id: &str,
+    ) -> Result<PersistedAgentRuntimeRecord, ErrorCode> {
         self.registry
             .get(id)
             .map_err(|_| ErrorCode::AgentIo)?

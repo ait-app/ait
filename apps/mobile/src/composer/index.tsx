@@ -1,3 +1,6 @@
+import { resolveBtwCommand, type BtwCommand } from "@/btw";
+import { BtwPanel } from "@/components/provider-side-questions";
+import { useBtwPanelState } from "@/btw/use-panel";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import {
   useComposerEditingSession,
@@ -1387,6 +1390,16 @@ function ComposerContentImpl({
   const [isGithubPickerOpen, setIsGithubPickerOpen] = useState(false);
   const [githubSearchQuery, setGithubSearchQuery] = useState("");
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
+  const {
+    opened: btwOpened,
+    request: btwRequest,
+    open: openBtwPanel,
+    consume: consumeBtwRequest,
+    onOpenedChange: setBtwOpened,
+  } = useBtwPanelState({ serverId, agentId });
+  const hasBtwSource = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.has(agentId) ?? false,
+  );
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
   const isComposerLocked = resolveIsComposerLocked(submitBehavior, isSubmitLoading);
@@ -1696,9 +1709,34 @@ function ComposerContentImpl({
     ],
   );
 
+  const openBtw = useCallback(
+    (command: BtwCommand) => {
+      if (command.attachmentsUnsupported) {
+        setSendError(t("btw.attachmentsUnsupported"));
+        return;
+      }
+      if (!hasBtwSource) {
+        setSendError(t("btw.requiresConversation"));
+        return;
+      }
+      openBtwPanel(command.question);
+      replaceUserInput("");
+      clearDraft("sent");
+    },
+    [clearDraft, hasBtwSource, openBtwPanel, replaceUserInput, t],
+  );
+
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const btw = resolveBtwCommand({
+        text: payload.text,
+        hasAttachments: outgoingAttachments.length > 0,
+      });
+      if (btw && inputMode === "chat") {
+        openBtw(btw);
+        return;
+      }
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
@@ -1716,6 +1754,8 @@ function ComposerContentImpl({
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
+      inputMode,
+      openBtw,
       runClientSlashCommand,
 
       sendMessageWithContent,
@@ -2004,6 +2044,14 @@ function ComposerContentImpl({
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const btw = resolveBtwCommand({
+        text: payload.text,
+        hasAttachments: outgoingAttachments.length > 0,
+      });
+      if (btw && inputMode === "chat") {
+        openBtw(btw);
+        return;
+      }
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
@@ -2016,6 +2064,8 @@ function ComposerContentImpl({
     [
       attachments,
       buildOutgoingAttachments,
+      inputMode,
+      openBtw,
 
       queueMessage,
       runClientSlashCommand,
@@ -2473,6 +2523,19 @@ function ComposerContentImpl({
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
+            {!isFullscreen && inputMode === "chat" && !readOnly && hasBtwSource ? (
+              <BtwPanel
+                key={`${serverId}:${agentId}`}
+                serverId={serverId}
+                agentId={agentId}
+                workspaceId={workspaceId}
+                disabled={readOnly || !isConnected}
+                opened={btwOpened}
+                request={btwRequest}
+                onRequestConsumed={consumeBtwRequest}
+                onOpenedChange={setBtwOpened}
+              />
+            ) : null}
 
             <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
               <ComposerAutocompleteBinding

@@ -14,6 +14,8 @@ pub(crate) mod ownership;
 mod realtime;
 mod recovery;
 mod resume;
+mod side_flow;
+mod side_recovery;
 mod streaming;
 mod titles;
 mod usage;
@@ -169,6 +171,16 @@ pub struct AgentManager {
     live: BTreeMap<String, LiveAgent>,
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
+    side_store: Option<crate::storage::side::SideStore>,
+    side_runners: BTreeMap<String, Box<dyn provider_core::ports::side_questions::SideQuestions>>,
+    side_dirty: std::collections::BTreeSet<String>,
+    side_specs: BTreeMap<String, (AgentSessionSpec, [u8; 32])>,
+    side_budget: Arc<tokio::sync::Semaphore>,
+    side_permits: BTreeMap<String, tokio::sync::OwnedSemaphorePermit>,
+    side_activity: BTreeMap<String, std::time::Instant>,
+    launch_environments: Arc<
+        std::sync::Mutex<BTreeMap<String, provider_core::ports::environment::AgentEnvironment>>,
+    >,
     catalog: super::provider_catalog::Catalog,
     creations: model::creation::Creations,
     loaded_timelines: Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
@@ -203,6 +215,14 @@ impl AgentManager {
             live: BTreeMap::new(),
             events: SessionEvents::default(),
             timeline: None,
+            side_store: None,
+            side_runners: BTreeMap::new(),
+            side_dirty: std::collections::BTreeSet::new(),
+            side_specs: BTreeMap::new(),
+            side_budget: Arc::new(tokio::sync::Semaphore::new(8)),
+            side_permits: BTreeMap::new(),
+            side_activity: BTreeMap::new(),
+            launch_environments: Arc::default(),
             catalog: super::provider_catalog::Catalog::default(),
             creations: model::creation::Creations::default(),
             loaded_timelines: Arc::default(),
@@ -260,6 +280,13 @@ impl AgentManager {
     #[must_use]
     pub fn with_timeline(mut self, timeline: crate::storage::timeline::Timeline) -> Self {
         self.timeline = Some(timeline);
+        self
+    }
+
+    /// Install the durable BTW side-question store (task09).
+    #[must_use]
+    pub fn with_side_store(mut self, store: crate::storage::side::SideStore) -> Self {
+        self.side_store = Some(store);
         self
     }
 
@@ -614,7 +641,7 @@ impl AgentManager {
 
     /// Create a native session with private per-process environment overrides.
     ///
-    /// Environment values remain in the native adapter's memory and are never put in the registry.
+    /// Environment values remain in memory for native and auxiliary launches; never in the registry.
     /// # Errors
     /// Returns identity, admission, native launch or registration failures with cleanup.
     pub(crate) async fn create_with_environment(
@@ -689,6 +716,10 @@ impl AgentManager {
             .register_session(agent_id, session, record, Registration::Create, permit)
             .await;
         let record = self.retain_mcp(agent_id, opened, binding)?;
+        self.launch_environments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(agent_id.to_owned(), environment.clone());
         self.mark_history_loaded(agent_id);
         Ok(record)
     }
@@ -794,8 +825,9 @@ impl AgentManager {
     /// # Errors
     /// Returns provider or registry failure.
     pub(crate) async fn close(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
+        let side_result = self.close_side_runner(agent_id).await;
         let Some(agent) = self.live.get_mut(agent_id) else {
-            return Ok(());
+            return side_result;
         };
         // An unrecordable handle must not keep the native process open forever.
         if agent.registered {
@@ -819,7 +851,7 @@ impl AgentManager {
         }
         if !agent.registered {
             self.drop_live(agent_id);
-            return Ok(());
+            return side_result;
         }
         // Metadata and attention may have changed through other narrow ports. Never replace
         // their latest record with the manager's creation-time snapshot or resurrect a deletion.
@@ -844,7 +876,7 @@ impl AgentManager {
             })
             .map_err(map_registry)?;
         self.drop_live(agent_id);
-        Ok(())
+        side_result
     }
 
     /// Start one native text turn. Busy Agents reject additional work explicitly.
@@ -1004,6 +1036,7 @@ impl AgentManager {
     /// # Errors
     /// Returns the first storage or close failure; later calls retry pending work.
     pub(crate) async fn poll(&mut self) -> Result<(), AgentManagerError> {
+        self.poll_side_runners().await?;
         let ids = self.live.keys().cloned().collect::<Vec<_>>();
         for id in ids {
             let Some(agent) = self.live.get_mut(&id) else {
@@ -1117,6 +1150,20 @@ impl AgentManager {
                 close.push(id.clone());
             }
         }
+        for id in self
+            .side_runners
+            .keys()
+            .filter(|id| !self.live.contains_key(*id))
+        {
+            if self
+                .registry
+                .get_shared(id)
+                .map_err(map_registry)?
+                .is_none_or(|record| record.archived_at.is_some())
+            {
+                close.push(id.clone());
+            }
+        }
         for id in close {
             self.close(&id).await?;
         }
@@ -1129,7 +1176,12 @@ impl AgentManager {
     /// Returns the first provider or registry failure after attempting every close.
     pub(crate) async fn close_all(&mut self) -> Result<(), AgentManagerError> {
         self.generated_titles.close().await;
-        let ids = self.live.keys().cloned().collect::<Vec<_>>();
+        let ids = self
+            .live
+            .keys()
+            .chain(self.side_runners.keys())
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
         let mut first_error = None;
         for id in ids {
             if let Err(error) = self.close(&id).await {

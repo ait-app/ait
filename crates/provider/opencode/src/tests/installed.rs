@@ -20,6 +20,7 @@ use provider::testing::Lanes;
 mod compaction;
 mod robustness;
 mod settlement;
+mod side_questions;
 mod subagents;
 mod usage;
 mod v2;
@@ -203,6 +204,9 @@ async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> R
 }
 
 async fn workflow_response(request: &Value, state: &Model) -> Option<Response> {
+    if let Some(response) = side_questions::model_response(request) {
+        return Some(response);
+    }
     if let Some(response) = subagents::model_response(request) {
         return Some(response);
     }

@@ -33,6 +33,7 @@ import type {
   AgentPersistenceHandle,
 } from "@ait/protocol/agent-types";
 import type {
+  ProviderUiState,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
@@ -84,6 +85,8 @@ export interface Agent {
   pendingPermissions: AgentPermissionRequest[];
   persistence: AgentPersistenceHandle | null;
   runtimeInfo?: AgentRuntimeInfo;
+  /** Provider capabilities project side conversations independently of the main turn. */
+  providerUi?: ProviderUiState | null;
   lastUsage?: AgentUsage;
   lastError?: string | null;
   title: string | null;

@@ -633,6 +633,7 @@ export const ptBR: TranslationResources = {
       title_mr: "Anexar issue ou MR",
     },
   },
+  btw: en.btw,
   agentControls: {
     provider: {
       fallback: "Provedor",

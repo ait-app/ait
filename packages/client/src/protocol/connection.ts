@@ -459,6 +459,8 @@ export function createDaemonConnection(
     const { type: _type, requestId: _requestId, ...params } = message;
     // This requestId identifies a provider permission, not just the UI RPC waiter.
     if (name === "agent.permission.resolve.request") params.requestId = message.requestId;
+    // The side-question ask idempotency key is the client-generated request id.
+    if (name === "agent.side_question.ask.request") params.requestId = message.requestId;
     if (name === "session.events.set_subscription.request" && Array.isArray(params.events)) {
       params.events = strings(params.events).map(sessionEventKind);
     }

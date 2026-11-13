@@ -3,6 +3,7 @@
 pub(crate) mod inbox;
 mod progress;
 mod projection;
+mod side_context;
 mod subagents;
 
 use std::path::Path;
