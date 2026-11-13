@@ -1,4 +1,5 @@
-import React, { act, useState } from "react";
+import React, { act, useRef, useState } from "react";
+import { View, useWindowDimensions } from "react-native";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const hasThemeRuntime = typeof UnistylesRuntime.setAdaptiveThemes === "function";
+vi.mock("@/keyboard/shift", () => ({ useSettledKeyboardShift: () => 0 }));
 
 beforeEach(async () => {
   if (!hasThemeRuntime) return;
@@ -48,6 +50,12 @@ function Harness({ behind }: { behind: () => void }) {
   const [topic, setTopic] = useState<SideTopic | null>(mocks.state!.records[0] ?? null);
   const [draft, setDraft] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const anchorRef = useRef<View>(null);
+  const { width } = useWindowDimensions();
+  const [mainDraft, setMainDraft] = useState("");
+  const [attached, setAttached] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const composerWidth = Math.min(narrow ? 320 : 720, width - theme.spacing[4] * 2);
   const submit = () => {
     if (!draft.trim()) return;
     mocks.ask({ agentId: "agent", question: draft, recordId: topic?.id });
@@ -58,6 +66,7 @@ function Harness({ behind }: { behind: () => void }) {
       <div
         style={{
           minHeight: "100vh",
+          position: "relative",
           background: theme.colors.surface0,
           fontFamily: theme.fontFamily.ui,
           color: theme.colors.foreground,
@@ -126,7 +135,46 @@ function Harness({ behind }: { behind: () => void }) {
             </>
           )}
         </main>
-        <BtwFloatingSurface visible={open} onClose={() => setOpen(false)} onSubmit={submit}>
+        <View
+          ref={anchorRef}
+          testID="main-composer-anchor"
+          style={{
+            position: "absolute",
+            bottom: theme.spacing[6],
+            right: theme.spacing[4],
+            width: composerWidth,
+            padding: theme.spacing[3],
+            borderWidth: theme.borderWidth[1],
+            borderColor: theme.colors.border,
+            borderRadius: theme.borderRadius["2xl"],
+            backgroundColor: theme.colors.surface1,
+          }}
+        >
+          {attached ? <div style={{ height: 80 }}>Attached project context</div> : null}
+          <textarea
+            aria-label="Main conversation input"
+            value={mainDraft}
+            onChange={(event) => setMainDraft(event.target.value)}
+            rows={Math.min(8, Math.max(2, mainDraft.split("\n").length))}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              resize: "none",
+              fontFamily: theme.fontFamily.ui,
+              fontSize: theme.fontSize.content,
+            }}
+          />
+          <div>
+            <button onClick={() => setAttached((value) => !value)}>Toggle main attachment</button>
+            <button onClick={() => setNarrow((value) => !value)}>Toggle narrow pane</button>
+          </div>
+        </View>
+        <BtwFloatingSurface
+          anchorRef={anchorRef}
+          visible={open}
+          onClose={() => setOpen(false)}
+          onSubmit={submit}
+        >
           <BtwWindow
             sourceTitle="Review provider lifecycle"
             state={mocks.state!}
@@ -224,7 +272,9 @@ it("leaves the main conversation interactive and follows up in a desktop floatin
   const window = document.querySelector('[data-testid="btw-window"]')!.getBoundingClientRect();
   expect(window.width).toBe(448);
   expect(window.right).toBeLessThanOrEqual(1440);
-  expect(getComputedStyle(document.querySelector("textarea")!).outlineStyle).toBe("none");
+  expect(getComputedStyle(page.getByTestId("side-question-input").element()).outlineStyle).toBe(
+    "none",
+  );
   await page.screenshot({ path: "../../.vitest-screenshots/btw-desktop.png" });
   await page.getByRole("button", { name: "Continue main conversation" }).click();
   expect(behind).toHaveBeenCalledTimes(1);
@@ -315,7 +365,7 @@ it.skipIf(!hasThemeRuntime)(
     expect(darkClaudeTheme.colors.accent).not.toBe(lightTheme.colors.accent);
     await switchTheme("light");
     await expect.poll(colors).toEqual(palette(lightTheme));
-    expect(document.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe(
+    expect((page.getByTestId("side-question-input").element() as HTMLTextAreaElement).value).toBe(
       "How does the branch keep context?",
     );
     await page.getByRole("button", { name: "Continue main conversation" }).click();
@@ -329,6 +379,58 @@ it.skipIf(!hasThemeRuntime)(
     await expect.poll(() => getComputedStyle(compose).outlineWidth).toBe("2px");
   },
 );
+
+async function expectWindowAboveComposer() {
+  await expect
+    .poll(() => {
+      const panel = page.getByTestId("btw-window").element().getBoundingClientRect();
+      const composer = page.getByTestId("main-composer-anchor").element().getBoundingClientRect();
+      return (
+        panel.bottom <= composer.top - lightTheme.spacing[3] + 1 &&
+        panel.top >= lightTheme.spacing[2] - 1 &&
+        panel.left >= composer.left - 1 &&
+        panel.right <= composer.right + 1 &&
+        panel.width <= composer.width + 1
+      );
+    })
+    .toBe(true);
+}
+
+it("follows growing input and attachments above the main composer, including a short split pane", async () => {
+  await mount(1440, 900);
+  await expectWindowAboveComposer();
+  const originalBottom = page.getByTestId("btw-window").element().getBoundingClientRect().bottom;
+  await page
+    .getByRole("textbox", { name: "Main conversation input" })
+    .fill("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight");
+  await expectWindowAboveComposer();
+  await expect
+    .poll(() => page.getByTestId("btw-window").element().getBoundingClientRect().bottom)
+    .toBeLessThan(originalBottom);
+  await page.getByRole("button", { name: "Toggle main attachment" }).click();
+  await expectWindowAboveComposer();
+  await page.getByRole("button", { name: "Toggle narrow pane" }).click();
+  await expectWindowAboveComposer();
+  expect(page.getByTestId("btw-window").element().getBoundingClientRect().width).toBe(320);
+  await page.viewport(1100, 480);
+  await expectWindowAboveComposer();
+  expect(page.getByTestId("btw-window").element().getBoundingClientRect().height).toBeLessThan(220);
+  await page.screenshot({ path: "../../.vitest-screenshots/btw-above-short-composer.png" });
+});
+
+it("keeps the complete main input accessible in a compact viewport", async () => {
+  await mount(390, 844);
+  await expectWindowAboveComposer();
+  await page
+    .getByRole("textbox", { name: "Main conversation input" })
+    .fill("I can still use the main input");
+  await page.getByRole("button", { name: "Toggle main attachment" }).click();
+  await expectWindowAboveComposer();
+  await expect
+    .element(page.getByRole("textbox", { name: "Main conversation input" }))
+    .toHaveValue("I can still use the main input");
+  await page.screenshot({ path: "../../.vitest-screenshots/btw-above-main-mobile.png" });
+});
 
 it.skipIf(!hasThemeRuntime)(
   "uses live app typography for the question, answer, input and expanded preview",

@@ -1,9 +1,9 @@
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { KeyboardAvoidingView, Modal, Platform, View, useWindowDimensions } from "react-native";
+import { Modal, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SPACING } from "@/styles/theme";
+import { useBtwFloatingLayout } from "@/btw/use-floating-layout";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { isWeb } from "@/constants/platform";
 import {
   getOverlayRoot,
@@ -18,14 +18,17 @@ export function BtwFloatingSurface({
   onClose,
   onSubmit,
   children,
+  anchorRef,
+  anchorLayoutVersion = 0,
 }: {
   visible: boolean;
   onClose: () => void;
   onSubmit: () => void;
   children: ReactNode;
+  anchorRef: RefObject<View | null>;
+  anchorLayoutVersion?: number;
 }) {
-  const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const frame = useBtwFloatingLayout(visible, anchorRef, anchorLayoutVersion);
   const layer = useOverlayLayer("floating");
   const elementRef = useRef<HTMLElement | null>(null);
   const setScope = useWebOverlayRegistration({
@@ -59,29 +62,14 @@ export function BtwFloatingSurface({
     },
     [setScope],
   );
-  if (!visible) return null;
-  const compact = width < 640;
+  if (!visible || !frame || frame.height <= 0 || frame.width <= 0) return null;
   const surface = (
     <OverlayLayerProvider layer={layer}>
-      <KeyboardAvoidingView
-        pointerEvents="box-none"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={[styles.overlay, { zIndex: layer }]}
-      >
-        <View
-          ref={assignScope}
-          style={[
-            styles.position,
-            {
-              width: compact ? Math.max(0, width - SPACING[2] * 2) : 448,
-              marginRight: compact ? SPACING[2] : SPACING[6],
-              marginBottom: compact ? Math.max(insets.bottom, SPACING[2]) : SPACING[6],
-            },
-          ]}
-        >
+      <View pointerEvents="box-none" style={[styles.overlay, { zIndex: layer }]}>
+        <View ref={assignScope} style={[styles.position, inlineUnistylesStyle(frame)]}>
           {children}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </OverlayLayerProvider>
   );
   if (isWeb && typeof document !== "undefined") return createPortal(surface, getOverlayRoot());
@@ -99,8 +87,6 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     right: 0,
-    alignItems: "flex-end",
-    justifyContent: "flex-end",
   },
-  position: { pointerEvents: "auto" },
+  position: { position: "absolute", pointerEvents: "auto" },
 });

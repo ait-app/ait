@@ -2466,6 +2466,11 @@ function ComposerContentImpl({
     ],
   );
   const messageInputContainerRef = useRef<View>(null);
+  const [btwAnchorLayoutVersion, setBtwAnchorLayoutVersion] = useState(0);
+  const handleBtwAnchorLayout = useCallback(
+    () => setBtwAnchorLayoutVersion((version) => version + 1),
+    [],
+  );
 
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isStartingVoice || isUploadingFile || pendingImagePastes > 0;
@@ -2525,6 +2530,8 @@ function ComposerContentImpl({
             {!isFullscreen && sendErrorNode}
             {!isFullscreen && inputMode === "chat" && !readOnly && hasBtwSource ? (
               <BtwPanel
+                anchorRef={messageInputContainerRef}
+                anchorLayoutVersion={btwAnchorLayoutVersion}
                 key={`${serverId}:${agentId}`}
                 serverId={serverId}
                 agentId={agentId}
@@ -2537,7 +2544,11 @@ function ComposerContentImpl({
               />
             ) : null}
 
-            <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
+            <View
+              ref={messageInputContainerRef}
+              onLayout={handleBtwAnchorLayout}
+              style={messageInputContainerStyle}
+            >
               <ComposerAutocompleteBinding
                 text={textSource}
                 cursor={cursor}

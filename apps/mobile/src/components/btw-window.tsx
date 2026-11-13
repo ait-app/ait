@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Keyboard,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { ArrowUp, GitBranch, History, Maximize2, Plus, Square, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -15,7 +7,7 @@ import type { SideQuestionsState, SideTopic } from "@ait/protocol/messages";
 import { isWeb } from "@/constants/platform";
 import { Button } from "@/components/ui/button";
 import { createControlGeometry } from "@/components/ui/control-geometry";
-import { ICON_SIZE, ICON_STROKE_WIDTH, SPACING } from "@/styles/theme";
+import { ICON_SIZE, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BtwConversation } from "@/components/btw-conversation";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
@@ -71,11 +63,10 @@ export function BtwWindow({
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
-  const { height, width } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const controlSize = width < 640 ? "md" : "sm";
   const [inputFocused, setInputFocused] = useState(false);
   const [inputHovered, setInputHovered] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const running = Boolean(state.runningId);
   const hasTurns = Boolean(topic);
 
@@ -90,31 +81,12 @@ export function BtwWindow({
   }, [topic?.id]);
 
   useEffect(() => {
-    if (isWeb || Platform.OS !== "ios") return;
-    const shown = Keyboard.addListener("keyboardWillChangeFrame", (event) =>
-      setKeyboardHeight(event.endCoordinates.height),
-    );
-    const hidden = Keyboard.addListener("keyboardWillHide", () => setKeyboardHeight(0));
-    return () => {
-      shown.remove();
-      hidden.remove();
-    };
-  }, []);
-
-  useEffect(() => {
     nearBottom.current = true;
     scrollRef.current?.scrollToEnd({ animated: false });
   }, [topic?.id]);
 
   return (
-    <View
-      style={[
-        styles.window,
-        { height: Math.max(220, Math.min(560, height - keyboardHeight - SPACING[24])) },
-      ]}
-      testID="btw-window"
-      accessibilityLabel={t("btw.title")}
-    >
+    <View style={styles.window} testID="btw-window" accessibilityLabel={t("btw.title")}>
       <View style={styles.header}>
         <View style={styles.heading}>
           <Text style={styles.title}>{t("btw.title")}</Text>
@@ -307,6 +279,8 @@ const styles = StyleSheet.create((theme) => {
   };
   return {
     window: {
+      flex: 1,
+      minHeight: 0,
       backgroundColor: theme.colors.surface1,
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.borderAccent,

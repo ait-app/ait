@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import type { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { SideQuestionsState } from "@ait/protocol/messages";
 import { describeBtwRejection } from "@/btw";
@@ -42,6 +43,8 @@ export function BtwPanel({
   request,
   onRequestConsumed,
   onOpenedChange,
+  anchorRef,
+  anchorLayoutVersion,
 }: {
   serverId: string;
   agentId: string;
@@ -51,6 +54,8 @@ export function BtwPanel({
   request: BtwPanelRequest | null;
   onRequestConsumed: (key: number) => void;
   onOpenedChange: (opened: boolean) => void;
+  anchorRef: RefObject<View | null>;
+  anchorLayoutVersion?: number;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -267,6 +272,8 @@ export function BtwPanel({
 
   return (
     <BtwFloatingSurface
+      anchorRef={anchorRef}
+      anchorLayoutVersion={anchorLayoutVersion}
       visible={visible}
       onClose={() => void cancel(true)}
       onSubmit={() => void ask(draft, topicId ?? undefined)}

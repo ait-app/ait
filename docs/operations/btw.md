@@ -8,7 +8,8 @@
 
 ## 对话与窗口
 
-- 桌面与 Web 使用浮动聊天窗口，仍可操作背后的主会话；窄屏自动适配。
+- 浮窗默认位于主输入框上方，与输入区右沿对齐并留出间距；多行输入或附件增高时跟随上移。
+  窄屏及较矮窗口自动调整宽高，保留完整主输入区，仍可操作背后的主会话。
 - 第一次提问冻结当时已保存的可读主上下文和所选 provider、模型。
   在同一话题继续输入就是追问，沿用这份上下文与已有问答；主会话后来的变化不会混入。
 - 停止只取消当前 BTW 回答。关闭运行中的窗口会先确认取消，再关闭；失败保留窗口供重试。
@@ -66,12 +67,15 @@ OMP 18.17.0 的 `tai/deepseek-v4.1-flash`，推理连接本机已配置的真实
 [真实追问](../assets/btw/tai-btw-followup.png) ·
 [真实深色浮窗](../assets/btw/tai-btw-dark.png) ·
 [真实窄屏 Web](../assets/btw/tai-btw-mobile.png) ·
+[多行主输入](../assets/btw/tai-btw-multiline.png) ·
+[矮窗口](../assets/btw/tai-btw-short.png) ·
 [关闭后的主任务](../assets/btw/tai-btw-closed.png) ·
 [展开为完整会话草稿](../assets/btw/tai-btw-expanded.png) ·
 [完整新会话继续工作](../assets/btw/tai-btw-session.png)。
 
 追问中的 p95 公式已从同一份保存的真实回答重新验证，行内与独立公式均排成 MathML；
 浅色、深色与 390px 窄屏检查通过，未改写回答或重新调用模型。
+浮窗在桌面、多行主输入、矮窗口及窄屏中均位于主输入区上方，实测间距为 12px。
 
 验收发现并修复了 RPC 声明与实际入口的漏接；入口现在与能力宣告共用 `METHODS`，
 并由完整 API request chain 回归覆盖四个侧会话方法。

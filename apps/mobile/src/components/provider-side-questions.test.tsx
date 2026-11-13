@@ -31,6 +31,9 @@ vi.mock("@/runtime/host-runtime", () => ({
       : null,
 }));
 vi.mock("@/btw/use-transfer", () => ({ useTransferSideQuestion: () => mocks.transfer }));
+vi.mock("@/btw/use-floating-layout", () => ({
+  useBtwFloatingLayout: () => ({ left: 400, bottom: 144, width: 448, height: 560 }),
+}));
 vi.mock("@/composer/keyboard-scope", () => ({
   useComposerKeyboardScope: () => ({ isPaneFocused: mocks.focused }),
 }));
@@ -71,8 +74,10 @@ const topic: SideTopic = {
 };
 const onOpenedChange = vi.fn();
 const onRequestConsumed = vi.fn();
+const anchorRef = { current: null };
 const panel = (request: { question: string; key: number } | null = null, opened = true) => (
   <BtwPanel
+    anchorRef={anchorRef}
     serverId="server"
     agentId="agent"
     workspaceId="workspace"
@@ -100,6 +105,7 @@ function ComposerPanelHarness({
       <button onClick={() => controls.open(question)}>Open BTW</button>
       {mounted ? (
         <BtwPanel
+          anchorRef={anchorRef}
           key={agentId}
           serverId="server"
           agentId={agentId}
