@@ -1,6 +1,55 @@
 use super::*;
 
 #[test]
+fn task_order_follows_native_lists_and_creation_instead_of_lexical_ids() {
+    let mut tasks = Tasks::default();
+    let todos: Vec<Value> = (1..=12)
+        .map(|number| json!({"content":format!("{number}. Step"),"status":"pending"}))
+        .collect();
+    tasks
+        .observe(&call("legacy", "TodoWrite", json!({"todos":todos})))
+        .unwrap();
+    let snapshot = tasks.snapshot();
+    assert_eq!(snapshot["items"][1]["text"], "2. Step");
+    assert_eq!(snapshot["items"][11]["text"], "12. Step");
+
+    tasks.observe(&call("list", "TaskList", json!({}))).unwrap();
+    tasks
+        .observe(&result(
+            "list",
+            json!({"tasks":[
+                {"id":"2","subject":"Second"},
+                {"id":"10","subject":"Tenth"},
+                {"id":"1","subject":"First"}
+            ]}),
+        ))
+        .unwrap();
+    tasks
+        .observe(&call("create", "TaskCreate", json!({"subject":"Later"})))
+        .unwrap();
+    tasks
+        .observe(&result("create", json!({"taskId":"3"})))
+        .unwrap();
+    tasks
+        .observe(&call(
+            "delete",
+            "TaskUpdate",
+            json!({"taskId":"10","status":"deleted"}),
+        ))
+        .unwrap();
+    tasks.observe(&result("delete", json!({}))).unwrap();
+    assert_eq!(
+        tasks.snapshot()["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["2", "1", "3"]
+    );
+}
+
+#[test]
 fn task_snapshots_filter_malformed_rows_and_keep_earlier_snapshots_immutable() {
     let mut tasks = Tasks::default();
     tasks.observe(&call("list", "TaskList", json!({}))).unwrap();

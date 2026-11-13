@@ -26,6 +26,13 @@ mod text_search;
 
 const MAX_RESPONSE_BYTES: usize = 900 * 1024;
 
+#[derive(Clone, Copy)]
+enum TaskEncoding {
+    Full,
+    Reference,
+    Omit,
+}
+
 /// Fetch `request` from the indexed `timeline` scope with `agent` metadata in the wire envelope.
 /// Optional `history_needs_refresh` is reserved in the response byte budget before selecting rows.
 /// Returns a projected response or storage, cursor validation and response-budget errors.
@@ -36,8 +43,27 @@ pub(crate) fn fetch_stored(
     agent: &Value,
     history_needs_refresh: Option<bool>,
 ) -> Result<Value, ErrorCode> {
+    with_task_budget(|encoding| {
+        fetch_stored_with_tasks(
+            request,
+            timeline,
+            scope,
+            (agent, history_needs_refresh),
+            encoding,
+        )
+    })
+}
+
+fn fetch_stored_with_tasks(
+    request: &FetchRequest,
+    timeline: &Timeline,
+    scope: &str,
+    metadata: (&Value, Option<bool>),
+    encoding: TaskEncoding,
+) -> Result<Value, ErrorCode> {
+    let (agent, history_needs_refresh) = metadata;
     let mut value = Value::Null;
-    let page = timeline.page(request, scope, |header| {
+    let page = timeline.page(request, scope, |header, task_snapshot| {
         let reset = header.stale || header.gap;
         value = json!({"agentId":request.agent_id,"agent":agent,"direction":header.direction,
             "projection":"projected","epoch":header.epoch,"reset":reset,
@@ -47,6 +73,9 @@ pub(crate) fn fetch_stored(
             "startCursor":{"epoch":header.epoch,"seq":header.max_seq},
             "endCursor":{"epoch":header.epoch,"seq":header.max_seq},
             "hasOlder":false,"hasNewer":false,"entries":[],"error":null});
+        if let Some(snapshot) = encoded_tasks(task_snapshot, encoding) {
+            value["taskSnapshot"] = snapshot;
+        }
         if request.merge_window == Some(true) {
             value["mergeWindow"] = json!(true);
         }
@@ -68,7 +97,7 @@ pub(crate) fn fetch_stored(
         .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
     value["hasOlder"] = json!(page.has_older);
     value["hasNewer"] = json!(page.has_newer);
-    bounded(value)
+    bounded_task_page(value)
 }
 
 #[cfg(test)]
@@ -77,6 +106,17 @@ pub(crate) fn fetch(
     epoch: &str,
     rows: &[Row],
     agent: &Value,
+) -> Result<Value, ErrorCode> {
+    with_task_budget(|encoding| fetch_with_tasks(request, epoch, rows, agent, encoding))
+}
+
+#[cfg(test)]
+fn fetch_with_tasks(
+    request: &FetchRequest,
+    epoch: &str,
+    rows: &[Row],
+    agent: &Value,
+    encoding: TaskEncoding,
 ) -> Result<Value, ErrorCode> {
     let direction = request.direction.unwrap_or(if request.cursor.is_some() {
         Direction::After
@@ -115,6 +155,17 @@ pub(crate) fn fetch(
         "endCursor":page.end_seq.map(|seq|json!({"epoch":epoch,"seq":seq})),
         "hasOlder":page.has_older,"hasNewer":page.has_newer,
         "entries":[],"error":null});
+    let task_snapshot = rows
+        .iter()
+        .rev()
+        .find(|row| row.entry.item["type"] == "todo")
+        .map_or(
+            Value::Null,
+            |row| json!({"epoch":epoch,"seq":row.seq,"items":row.entry.item["items"]}),
+        );
+    if let Some(snapshot) = encoded_tasks(task_snapshot, encoding) {
+        value["taskSnapshot"] = snapshot;
+    }
     if request.merge_window == Some(true) {
         value["mergeWindow"] = json!(true);
     }
@@ -133,6 +184,50 @@ pub(crate) fn fetch(
         .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
     value["hasOlder"] = json!(page.has_older);
     value["hasNewer"] = json!(page.has_newer);
+    bounded_task_page(value)
+}
+
+// Large legacy task lists must not be duplicated past the existing page budget. A reference
+// carries the latest list only when that exact canonical row is in the returned page. If the
+// list and an unrelated large row cannot fit together, preserve ordinary history pagination.
+fn with_task_budget(
+    mut fetch: impl FnMut(TaskEncoding) -> Result<Value, ErrorCode>,
+) -> Result<Value, ErrorCode> {
+    for encoding in [
+        TaskEncoding::Full,
+        TaskEncoding::Reference,
+        TaskEncoding::Omit,
+    ] {
+        match fetch(encoding) {
+            Ok(value) => return Ok(value),
+            Err(ErrorCode::ResourceExhausted) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Err(ErrorCode::ResourceExhausted)
+}
+
+fn encoded_tasks(snapshot: Value, encoding: TaskEncoding) -> Option<Value> {
+    match encoding {
+        TaskEncoding::Full => Some(snapshot),
+        TaskEncoding::Reference if snapshot.is_null() => Some(Value::Null),
+        TaskEncoding::Reference => Some(json!({
+            "epoch":snapshot["epoch"],"seq":snapshot["seq"],"entrySeq":snapshot["seq"]
+        })),
+        TaskEncoding::Omit => None,
+    }
+}
+
+fn bounded_task_page(value: Value) -> Result<Value, ErrorCode> {
+    if let Some(seq) = value["taskSnapshot"]["entrySeq"].as_u64()
+        && !value["entries"].as_array().is_some_and(|entries| {
+            entries
+                .iter()
+                .any(|entry| entry["seqStart"] == seq && entry["item"]["type"] == "todo")
+        })
+    {
+        return Err(ErrorCode::ResourceExhausted);
+    }
     bounded(value)
 }
 

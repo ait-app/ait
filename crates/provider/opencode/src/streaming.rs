@@ -41,6 +41,8 @@ pub(super) struct Stream {
     turn: Option<String>,
     foreground_turn: Option<String>,
     observation: u64,
+    plan_sequence: u64,
+    native_plan: bool,
     images: ImageStore,
     compactions: provider_native::compaction::Compactions,
 }
@@ -108,6 +110,23 @@ impl Stream {
                 &update["content"],
             ),
             Some("tool_call" | "tool_call_update") => self.tool(update),
+            Some("plan") => {
+                let item = provider_native::todo::snapshot(&update["entries"])?;
+                self.native_plan = true;
+                self.flush();
+                self.plan_sequence += 1;
+                let turn = self.foreground_turn.as_ref().or(self.turn.as_ref());
+                let entry = self.entry(
+                    &format!(
+                        "plan:{}:{}",
+                        turn.map_or("session", String::as_str),
+                        self.plan_sequence
+                    ),
+                    item,
+                );
+                self.events.push_back(AgentTurnEvent::Timeline(entry));
+                Ok(())
+            }
             Some("session_info_update")
                 if update
                     .pointer("/_meta/opencode~1compaction")
@@ -203,6 +222,8 @@ impl Stream {
                 self.turn = Some(id.to_owned());
                 if self.users.last().is_none_or(|previous| previous != id) {
                     self.users.push(id.to_owned());
+                    self.plan_sequence = 0;
+                    self.native_plan = false;
                     self.last_message = None;
                     self.last_source = None;
                 }
@@ -327,6 +348,14 @@ impl Stream {
                     .or_else(|| snapshot["rawOutput"]["error"].as_str().map(str::to_owned))
                     .unwrap_or_else(|| "OpenCode tool failed".into()))
             } else { Value::Null }});
+        let todo = (status == "completed" && !self.native_plan)
+            .then(|| {
+                provider_native::todo::tool_input(
+                    snapshot["title"].as_str()?,
+                    &snapshot["rawInput"],
+                )
+            })
+            .flatten();
         let entry = self.entry(&format!("tool:{id}"), item);
         if status == "running" {
             self.observation += 1;
@@ -341,6 +370,10 @@ impl Stream {
                 observation: format!("{}:{}", entry.key, self.observation),
                 entry: entry.clone(),
             });
+            self.events.push_back(AgentTurnEvent::Timeline(entry));
+        }
+        if let Some(item) = todo {
+            let entry = self.entry(&format!("tool:{id}:todo"), item);
             self.events.push_back(AgentTurnEvent::Timeline(entry));
         }
         Ok(())

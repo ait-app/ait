@@ -11,7 +11,7 @@ import {
   type Agent,
   type WorkspaceDescriptor,
 } from "./session-store";
-import type { StreamItem } from "../types/stream";
+import { hydrateStreamState, type StreamItem } from "../types/stream";
 import { reduceTurnLiveness, type TurnLivenessTransition } from "@/timeline/turn-liveness";
 
 function createTestAgent(agentId: string): Agent {
@@ -205,13 +205,14 @@ describe("agent task state", () => {
       epoch: string;
       older: "available" | "none" | "unchanged";
       items?: StreamItem[];
+      newer?: boolean;
     }): void {
       useSessionStore.getState().applyAgentTimelineResponseState("test-server", "agent-1", {
         items: input.items ?? [],
         head: [],
         range: { epoch: input.epoch, startSeq: 51, endSeq: 90 },
         older: input.older,
-        newer: false,
+        newer: input.newer ?? false,
         synchronized: true,
         acknowledgedClientMessageIds: [],
       });
@@ -249,6 +250,80 @@ describe("agent task state", () => {
         items: [],
       };
       applyWindow({ epoch: "epoch-1", older: "available", items: [emptyTodo] });
+      expect(currentTasks()).toBeUndefined();
+    });
+
+    it("clears tasks from an empty canonical snapshot hydrated in a partial latest page", () => {
+      seedTasks();
+      const items = hydrateStreamState(
+        [
+          {
+            event: { type: "timeline", provider: "codex", item: { type: "todo", items: [] } },
+            timestamp: new Date("2026-08-11T10:00:00.000Z"),
+            timelineCursor: { epoch: "epoch-1", seq: 90 },
+          },
+        ],
+        { source: "canonical" },
+      );
+
+      applyWindow({ epoch: "epoch-1", older: "available", items });
+
+      expect(currentTasks()).toBeUndefined();
+    });
+
+    it.each([false, true])(
+      "keeps live tasks while browsing an older snapshot (empty: %s)",
+      (empty) => {
+        seedTasks();
+        const items = hydrateStreamState(
+          [
+            {
+              event: {
+                type: "timeline",
+                provider: "codex",
+                item: {
+                  type: "todo",
+                  items: empty ? [] : [{ text: "Old task", completed: false }],
+                },
+              },
+              timestamp: new Date("2026-08-10T10:00:00.000Z"),
+            },
+          ],
+          { source: "canonical" },
+        );
+
+        applyWindow({ epoch: "epoch-1", older: "none", newer: true, items });
+
+        expect(currentTasks()).toEqual(tasks);
+      },
+    );
+
+    it("does not infer current tasks from an older window without a known snapshot", () => {
+      initializeTestSession();
+      const items = hydrateStreamState(
+        [
+          {
+            event: {
+              type: "timeline",
+              provider: "codex",
+              item: { type: "todo", items: [{ text: "Old task", completed: false }] },
+            },
+            timestamp: new Date("2026-08-10T10:00:00.000Z"),
+          },
+        ],
+        { source: "canonical" },
+      );
+
+      applyWindow({ epoch: "epoch-1", older: "none", newer: true, items });
+
+      expect(currentTasks()).toBeUndefined();
+    });
+
+    it("invalidates live tasks when an older window belongs to a replacement epoch", () => {
+      seedTasks();
+
+      applyWindow({ epoch: "epoch-2", older: "available", newer: true });
+
       expect(currentTasks()).toBeUndefined();
     });
   });

@@ -10,7 +10,7 @@
   运行时 `PresetService` 经 daemon 注入的配置端口管理 Ait 库，adapter 管理原生库。
   `provider.presets.describe/list/save/delete.request` 是统一管理入口，SDK 仅在四个方法齐全时暴露
   `server_info.features.providerPresets`，旧 Host 不显示新增功能
-  （[ADR-277](../decisions/providers/adr-277-provider-model-presets.md)）。
+  （[ADR-278](../decisions/providers/adr-278-provider-model-presets.md)）。
 - Ait 库位于 `providers.<id>.modelPresets`，每个 Provider 至多 64 项；名字与思考选项最多
   256 字节，模型路由最多 16 KiB，每项特性至多 128 个且序列化后不超过 64 KiB。写入前校验，重复名字拒绝；
   同一 daemon 的读改写共用串行锁。列表中的 `source`、`editable` 仅是读取投影，不写回预设内容。
@@ -210,6 +210,50 @@
   （[ADR-185](../decisions/providers/adr-185-native-provider-failure-details.md)，延续
   [ADR-162](../decisions/providers/adr-162-codex-error-details.md)；Pi thinking 拒绝的专用说明见
   [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)）。
+
+## 原生 TODO
+
+- 所有 Provider 使用同一 Timeline `todo` 完整快照：`items` 中保留文本、完成标记、可选原生 ID、
+  `pending` / `in_progress` / `completed` 状态与 active form。空列表明确清空；没有快照不改变状态。
+  原生程序拥有任务与写入行为，Ait 只投影和展示，不创建通用 TODO 工具或另建任务数据库
+  （[ADR-277](../decisions/providers/adr-277-provider-todo-snapshots.md)）。
+- 原生接入：Claude 的 TodoWrite 与 TaskCreate/TaskUpdate/TaskList、Codex 的原生 plan、
+  OMP 的 phases、DSH Host 的 `todo/write`、Pi 官方 TODO 扩展的成功 `todo` 结果
+  `details.todos`（保留 ID，失败不更新）；OpenCode、MiniMax 与 DSH ACP 的标准
+  `sessionUpdate:"plan"` 复用 `provider-native::todo::snapshot`。共享转换和 OMP 映射上限为 1024 项、
+  单项文本 8192 字节、序列化后 128 KiB；超限或无效状态按原生协议错误处理。
+- 客户端兼容原生工具 `TodoWrite` / `todo_write` / `update_plan`，保留进行中状态与 active form；
+  不对 Provider 名称设展示白名单。新私有协议需要 adapter 明确映射，不能把任意扩展或普通文本
+  当成规范任务事件。未安装任务扩展的 Pi、未上报任务的 Antigravity 不显示 TODO。
+- composer 的共享胶囊轨道在非空快照后显示 `TODO 已完成/总数`，点击打开任务卡片；
+  宽屏为 popover，紧凑屏为 sheet。卡片只读、完整换行显示任务文字，清空后移除胶囊。
+  已加载的旧历史窗口不回写当前任务；切换 Timeline epoch 会清除失效任务。
+- Timeline 页响应的可选 `taskSnapshot` 独立携带当前任务与 epoch、源序号，从同一持久投影读取；
+  `null` 表示该代尚无 TODO，省略字段表示旧 daemon。任务早于当前聊天页时仍可恢复，旧响应不覆盖
+  已接收的更新快照，不增加独立数据库或原生会话读操作。
+- 大型旧 TODO 与其所在聊天页重复后可能超出既有 900 KiB 响应预算：优先返回完整快照；必要时
+  使用 `{epoch,seq,entrySeq}` 引用同页的规范 TODO，客户端验证后读取该行。若超大 TODO 与另一条
+  独立大记录无法同时装入响应，仅省略可选快照，继续允许读取历史页，不把省略误报为无任务。
+
+### 原生结构与卡片呈现
+
+| 原生来源                                          | 实际任务结构                                     | Ait 卡片                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Claude TodoWrite、Codex plan、ACP、DSH todo/write | 有序的文本和状态列表；任务文本可以含编号或多行   | 保留源顺序、编号和多行正文，状态图标独立展示                                                                     |
+| Claude TaskCreate/TaskList                        | 有原生 ID 的列表；依赖不是父子树                 | 保留原生列表和创建顺序，不按字符串 ID 排序或生成依赖树                                                           |
+| OMP phases                                        | `phase.name → phase.tasks[]`，不是递归任务树     | `group:{id,title}` 保留阶段，阶段标题显示进度，任务缩进并使用阶段序号；完整 phases 优先于只含未完成项的 reminder |
+| Pi 官方 TODO 扩展                                 | `details.todos:[{id,text,done}]`                 | 保留 ID 身份与完成状态，界面按任务顺序编号，复用同一卡片                                                         |
+| 兼容工具                                          | 成功的 TodoWrite/todo_write/update_plan 完整输入 | AGY、Pi、ACP、OpenCode 转成同一规范快照；未知或失败工具不更改任务                                                |
+
+文本中显式的 `1.`、`1.1`、`1.1.1` 编号进入对齐的序号栏；只有对应父编号同在列表中才缩进。
+不把日期、任意 ID 或一段多行文字猜成可独立完成的子任务。原生字符串保留在快照中，展示处理不改写存储。
+无显式文本编号时从 1 开始编号；ID 可能是 adapter 的零基内部身份，不能直接解释成展示序号。
+界面使用 Ait 的 muted/foreground 字体、等宽序号栏、共享状态图标和间距，不给每行增加独立卡片边框。
+
+原生格式依据：[ACP v1 plan](https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v1/agent-plan.mdx)、
+[OMP TODO 工具](https://github.com/can1357/oh-my-pi/blob/main/packages/coding-agent/src/tools/todo.ts)、
+[Pi 官方扩展示例](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/examples/extensions/todo.ts)。
+DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为准。
 
 ## 技能与 MCP 注入
 

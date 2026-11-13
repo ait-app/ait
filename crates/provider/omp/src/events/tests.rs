@@ -225,10 +225,10 @@ fn todo_lists_drop_abandoned_items_and_name_blockers() {
     assert_eq!(
         todo_phases(&phases),
         Some(json!({"type":"todo","items":[
-            {"text":"x","status":"in_progress","completed":false},
-            {"text":"w","status":"completed","completed":true},
-            {"text":"z (blocked: waiting on api)","status":"pending","completed":false},
-            {"text":"v (blocked)","status":"pending","completed":false}]}))
+            {"text":"x","status":"in_progress","completed":false,"group":{"id":"phase:0","title":"A"}},
+            {"text":"w","status":"completed","completed":true,"group":{"id":"phase:0","title":"A"}},
+            {"text":"z (blocked: waiting on api)","status":"pending","completed":false,"group":{"id":"phase:1","title":"B"}},
+            {"text":"v (blocked)","status":"pending","completed":false,"group":{"id":"phase:1","title":"B"}}]}))
     );
     assert_eq!(
         todo_reminder(&json!({"type":"todo_reminder","todos":[{"content":"two",
@@ -242,7 +242,6 @@ fn todo_lists_drop_abandoned_items_and_name_blockers() {
         Some(json!({"type":"todo","items":[]}))
     );
     for malformed in [
-        json!([]),
         json!(null),
         json!([{"tasks":[]}]),
         json!([{"name":"A","tasks":[{"content":"x","status":"unknown"}]}]),
@@ -250,4 +249,43 @@ fn todo_lists_drop_abandoned_items_and_name_blockers() {
         assert!(todo_phases(&malformed).is_none(), "{malformed}");
     }
     assert!(todo_reminder(&json!({"type":"todo_reminder"})).is_none());
+    assert_eq!(
+        todo_phases(&json!([])),
+        Some(json!({"type":"todo","items":[]}))
+    );
+    assert_eq!(
+        todo_phases(&json!([{"name":"Empty","tasks":[]}])),
+        Some(json!({"type":"todo","items":[]}))
+    );
+}
+
+#[test]
+fn native_todo_phase_groups_keep_duplicate_names_separate_and_preserve_numbered_content() {
+    let projected = todo_phases(&json!([
+        {"name":"Build","tasks":[{"content":"1.2 Implement","status":"pending"}]},
+        {"name":"Build","tasks":[{"content":"2. Verify","status":"completed"}]}
+    ]))
+    .unwrap();
+    assert_eq!(projected["items"][0]["text"], "1.2 Implement");
+    assert_eq!(projected["items"][1]["text"], "2. Verify");
+    assert_eq!(
+        projected["items"][0]["group"],
+        json!({"id":"phase:0","title":"Build"})
+    );
+    assert_eq!(
+        projected["items"][1]["group"],
+        json!({"id":"phase:1","title":"Build"})
+    );
+}
+
+#[test]
+fn todo_group_replication_is_bounded_before_cloning_native_strings() {
+    for phases in [
+        json!([{"name":"x".repeat(8193),"tasks":[{"content":"One","status":"pending"}]}]),
+        json!([{"name":"Phase","tasks":vec![json!({"content":"One","status":"pending"});1025]}]),
+        json!([{"name":"x".repeat(8192),"tasks":vec![json!({"content":"One","status":"pending"});17]}]),
+        json!([{"name":"\n".repeat(8192),"tasks":vec![json!({"content":"One","status":"pending"});9]}]),
+    ] {
+        assert!(todo_phases(&phases).is_none());
+    }
 }

@@ -413,12 +413,13 @@ async fn native_tools_custom_messages_telemetry_and_todos_follow_paseo_and_repla
         .iter()
         .filter(|entry| entry.item["type"] == "todo")
         .collect();
-    assert_eq!(todos.len(), 2);
+    assert_eq!(todos.len(), 1);
     assert_eq!(
         todos[0].item["items"][1]["text"],
         "two (blocked: waiting on api)"
     );
-    assert_eq!(todos[1].item["items"].as_array().unwrap().len(), 1);
+    assert_eq!(todos[0].item["items"].as_array().unwrap().len(), 2);
+    assert_eq!(todos[0].item["items"][0]["group"]["title"], "Build");
     assert!(
         row(&|item: &Value| item["type"] == "notification" && item["level"] == "warning")
             ["message"]

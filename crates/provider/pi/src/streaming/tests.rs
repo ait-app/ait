@@ -1,6 +1,68 @@
 use super::*;
 
 #[test]
+fn successful_native_todo_extension_results_emit_snapshots_but_failures_do_not() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    for (id, todos, failed) in [
+        ("add", json!([{"id":1,"text":"Build","done":false}]), false),
+        ("failed", json!([]), true),
+        ("clear", json!([]), false),
+    ] {
+        stream
+            .consume(&json!({"type":"tool_execution_start","toolCallId":id,
+            "toolName":"todo","args":{"action":"list"}}))
+            .unwrap();
+        stream
+            .consume(&json!({"type":"tool_execution_end","toolCallId":id,
+            "toolName":"todo","isError":failed,"result":{"content":[],"details":{"todos":todos}}}))
+            .unwrap();
+    }
+    let snapshots = stream
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo" => Some(entry),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(snapshots.len(), 2);
+    assert_eq!(snapshots[0].item["items"][0]["id"], "1");
+    assert_eq!(snapshots[0].key, "native:pi:turn:todo:add");
+    assert_eq!(snapshots[1].item, json!({"type":"todo","items":[]}));
+}
+
+#[test]
+fn compatible_native_todo_tool_extensions_emit_canonical_snapshots_only_after_success() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    for (id, failed) in [("ok", false), ("failed", true)] {
+        stream
+            .consume(
+                &json!({"type":"tool_execution_start","toolCallId":id,"toolName":"TodoWrite",
+            "args":{"todos":[{"content":"1. Build","status":"pending"}]}}),
+            )
+            .unwrap();
+        stream
+            .consume(
+                &json!({"type":"tool_execution_end","toolCallId":id,"toolName":"TodoWrite",
+            "isError":failed,"result":{"content":[]}}),
+            )
+            .unwrap();
+    }
+    let snapshots = stream
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo" => Some(entry),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].item["items"][0]["text"], "1. Build");
+}
+
+#[test]
 fn submitted_batch_preserves_cleanup_capacity_and_rejects_atomically() {
     for admission in [false, true] {
         let mut stream = Stream::default();

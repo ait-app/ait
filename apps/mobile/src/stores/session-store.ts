@@ -9,6 +9,7 @@ import {
   removeSubmittedUserMessage,
   type StreamItem,
   type TodoEntry,
+  type TimelinePosition,
   type UserMessageItem,
 } from "@/types/stream";
 import {
@@ -338,14 +339,6 @@ export function selectAgentTurnPresentation(
   );
 }
 
-function latestTasksFromStream(items: readonly StreamItem[]): TodoEntry[] | undefined {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index];
-    if (item?.kind === "todo_list") return item.items;
-  }
-  return undefined;
-}
-
 function updateAgentTasks(
   current: Map<string, TodoEntry[]>,
   agentId: string,
@@ -356,6 +349,27 @@ function updateAgentTasks(
   if (taskSnapshot.length > 0) next.set(agentId, taskSnapshot);
   else next.delete(agentId);
   return next;
+}
+
+function updateAgentTaskSnapshot(
+  session: SessionState,
+  agentId: string,
+  taskSnapshot: TodoEntry[] | undefined,
+  cursor: TimelinePosition | undefined,
+): Pick<SessionState, "agentTasks" | "agentTaskCursor"> {
+  const currentCursor = session.agentTaskCursor.get(agentId);
+  if (
+    taskSnapshot === undefined ||
+    (cursor && currentCursor?.epoch === cursor.epoch && currentCursor.seq > cursor.seq)
+  ) {
+    return { agentTasks: session.agentTasks, agentTaskCursor: session.agentTaskCursor };
+  }
+  const agentTasks = updateAgentTasks(session.agentTasks, agentId, taskSnapshot);
+  const agentTaskCursor =
+    cursor && !equal(cursor, currentCursor)
+      ? new Map(session.agentTaskCursor).set(agentId, cursor)
+      : session.agentTaskCursor;
+  return { agentTasks, agentTaskCursor };
 }
 
 export type WorkspaceRestoreStatus = "restoring" | "failed" | "needs-host-upgrade";
@@ -388,6 +402,8 @@ export interface SessionState {
   agentStreamTail: Map<string, StreamItem[]>;
   agentStreamHead: Map<string, StreamItem[]>;
   agentTasks: Map<string, TodoEntry[]>;
+  // Current checklist coverage is independent of the transcript window being browsed.
+  agentTaskCursor: Map<string, TimelinePosition>;
   messageSubmissions: Map<string, MessageSubmissionRecord[]>;
   agentTimelineCursor: Map<string, AgentTimelineCursorState>;
   agentTimelineHasOlder: Map<string, boolean>;
@@ -474,6 +490,7 @@ interface SessionStoreActions {
       head?: StreamItem[];
       acknowledgedClientMessageIds?: readonly string[];
       taskSnapshot?: TodoEntry[];
+      taskSnapshotCursor?: TimelinePosition;
     },
   ) => void;
   beginAgentMessageSubmission: (
@@ -533,6 +550,8 @@ interface SessionStoreActions {
       newer: boolean;
       synchronized: boolean;
       acknowledgedClientMessageIds: string[];
+      taskSnapshot?: TodoEntry[];
+      taskSnapshotCursor?: TimelinePosition;
     },
   ) => void;
 
@@ -633,6 +652,7 @@ function createInitialSessionState(
     agentStreamTail: new Map(),
     agentStreamHead: new Map(),
     agentTasks: new Map(),
+    agentTaskCursor: new Map(),
     messageSubmissions: new Map(),
     agentTimelineCursor: new Map(),
     agentTimelineHasOlder: new Map(),
@@ -1012,10 +1032,22 @@ export const useSessionStore = create<SessionStore>()(
             state.acknowledgedClientMessageIds ?? [],
           );
           const changedSubmissions = observedSubmissions !== currentSubmissions;
-          const agentTasks = updateAgentTasks(session.agentTasks, agentId, state.taskSnapshot);
+          const { agentTasks, agentTaskCursor } = updateAgentTaskSnapshot(
+            session,
+            agentId,
+            state.taskSnapshot,
+            state.taskSnapshotCursor,
+          );
           const changedTasks = agentTasks !== session.agentTasks;
+          const changedTaskCursor = agentTaskCursor !== session.agentTaskCursor;
 
-          if (!changedTail && !changedHead && !changedSubmissions && !changedTasks) {
+          if (
+            !changedTail &&
+            !changedHead &&
+            !changedSubmissions &&
+            !changedTasks &&
+            !changedTaskCursor
+          ) {
             return prev;
           }
 
@@ -1038,6 +1070,7 @@ export const useSessionStore = create<SessionStore>()(
                 agentStreamTail: nextTail,
                 agentStreamHead: nextHead,
                 agentTasks,
+                agentTaskCursor,
                 messageSubmissions,
               },
             },
@@ -1416,16 +1449,36 @@ export const useSessionStore = create<SessionStore>()(
             nextAuthoritative.set(agentId, true);
             nextSyncGeneration.set(agentId, session.historySyncGeneration);
           }
-          // A window that starts after the last todo row says nothing about the current tasks.
-          const isWholeHistory =
-            state.older === "none" ||
+          const epochChanged =
             state.range?.epoch !== session.agentTimelineCursor.get(agentId)?.epoch;
-          const tasks =
-            latestTasksFromStream([...state.items, ...state.head]) ??
-            (isWholeHistory ? [] : (session.agentTasks.get(agentId) ?? []));
-          const agentTasks = new Map(session.agentTasks);
-          if (tasks.length > 0) agentTasks.set(agentId, tasks);
-          else agentTasks.delete(agentId);
+          // Historical windows cannot establish the current checklist. A new epoch still
+          // invalidates the prior snapshot, even when its latest history is not loaded yet.
+          const latestTask = [...state.items, ...state.head].findLast(
+            (item) => item.kind === "todo_list",
+          );
+          const inferredTaskSnapshot = state.newer
+            ? epochChanged
+              ? []
+              : undefined
+            : latestTask?.kind === "todo_list"
+              ? latestTask.items
+              : state.older === "none" || epochChanged
+                ? []
+                : undefined;
+          const taskSnapshot = state.taskSnapshot ?? inferredTaskSnapshot;
+          const taskSnapshotCursor =
+            state.taskSnapshot !== undefined
+              ? state.taskSnapshotCursor
+              : ((latestTask?.kind === "todo_list" ? latestTask.timelineCursor : undefined) ??
+                (state.range && inferredTaskSnapshot !== undefined
+                  ? { epoch: state.range.epoch, seq: state.range.endSeq }
+                  : undefined));
+          const { agentTasks, agentTaskCursor } = updateAgentTaskSnapshot(
+            session,
+            agentId,
+            taskSnapshot,
+            taskSnapshotCursor,
+          );
 
           return {
             ...prev,
@@ -1436,6 +1489,7 @@ export const useSessionStore = create<SessionStore>()(
                 agentStreamTail: nextTail,
                 agentStreamHead: nextHead,
                 agentTasks,
+                agentTaskCursor,
                 agentTimelineCursor: nextCursor,
                 agentTimelineHasOlder: nextHasOlder,
                 agentTimelineHasNewer: nextHasNewer,

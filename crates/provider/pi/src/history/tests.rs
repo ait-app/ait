@@ -1200,6 +1200,58 @@ fn tools_and_incomplete_turns_are_projected() {
 }
 
 #[test]
+fn native_todo_extension_results_replay_the_same_tasks_as_live_events() {
+    let (_directory, client, file, cwd) = fixture();
+    let todos = json!([{"id":1,"text":"Build","done":true}]);
+    let result = json!({"role":"toolResult","toolCallId":"call","toolName":"todo",
+        "isError":false,"content":[],"details":{"todos":todos,"action":"toggle","nextId":2}});
+    write(
+        &file,
+        &cwd,
+        vec![
+            user("u", Value::Null, "Work"),
+            assistant(
+                "a",
+                "u",
+                json!([
+                    {"type":"toolCall","id":"call","name":"todo","arguments":{"action":"toggle","id":1}}
+                ]),
+            ),
+            json!({"type":"message","id":"t","parentId":"a","message":result}),
+        ],
+    );
+    let history = inspect(&client, &handle(), &cwd).unwrap();
+    let historical = history
+        .entries
+        .iter()
+        .find(|entry| entry.item["type"] == "todo")
+        .unwrap();
+    let mut live = Stream::default();
+    live.begin("u".into());
+    live.consume(
+        &json!({"type":"tool_execution_start","toolCallId":"call","toolName":"todo",
+        "args":{"action":"toggle","id":1}}),
+    )
+    .unwrap();
+    live.consume(
+        &json!({"type":"tool_execution_end","toolCallId":"call","toolName":"todo",
+        "isError":false,"result":result}),
+    )
+    .unwrap();
+    let shown = live
+        .events()
+        .iter()
+        .find_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "todo" => Some(entry),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(historical.key, shown.key);
+    assert_eq!(historical.item, shown.item);
+    assert_eq!(historical.item["items"][0]["completed"], true);
+}
+
+#[test]
 fn null_or_missing_message_content_is_normalized_like_pi() {
     let (_directory, client, file, cwd) = fixture();
     for remove_content in [false, true] {

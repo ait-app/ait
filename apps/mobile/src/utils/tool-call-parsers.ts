@@ -308,6 +308,7 @@ export interface TaskEntry {
   text: string;
   status: TaskStatus;
   completed: boolean;
+  activeForm?: string;
 }
 
 const TaskStatusSchema = z.enum(["pending", "in_progress", "completed"]);
@@ -356,11 +357,13 @@ export function extractTaskEntriesFromToolCall(
     }
     return parsed.data.todos.map((todo) => {
       const status = todo.status;
-      const text = todo.activeForm?.trim() || todo.content.trim();
+      const text = todo.content.trim();
+      const activeForm = todo.activeForm?.trim();
       return {
         text: text.length ? text : todo.content,
         status,
         completed: status === "completed",
+        ...(activeForm ? { activeForm } : {}),
       };
     });
   }
