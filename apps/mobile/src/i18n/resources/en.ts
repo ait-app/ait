@@ -2608,6 +2608,8 @@ export const en = {
     loadingSelector: "Loading model selector...",
     error: "Error",
     defaultModel: "Default",
+    defaultModelHeading: "Default model",
+    modelPresets: "Model presets",
     profiles: "Profiles",
     providers: "Providers",
     model: "Model",

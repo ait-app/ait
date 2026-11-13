@@ -154,6 +154,10 @@ pub(super) async fn execution(
                 | "agent.subagents.list.request"
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
+                | "provider.presets.describe.request"
+                | "provider.presets.list.request"
+                | "provider.presets.save.request"
+                | "provider.presets.delete.request"
                 | "provider.usage.ledger.request"
         )
     }) else {

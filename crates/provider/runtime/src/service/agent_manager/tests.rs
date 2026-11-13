@@ -18,6 +18,7 @@ mod ledger;
 mod mcp;
 mod observed;
 mod paseo;
+mod presets;
 mod recovery;
 mod resume;
 mod titles;

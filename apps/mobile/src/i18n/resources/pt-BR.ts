@@ -2363,6 +2363,8 @@ export const ptBR: TranslationResources = {
     loadingSelector: "Carregando seletor de modelos...",
     error: "Erro",
     defaultModel: "Padrão",
+    defaultModelHeading: "Modelo padrão",
+    modelPresets: "Predefinições de modelo",
     profiles: "Perfis",
     providers: "Provedores",
     model: "Modelo",

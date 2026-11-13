@@ -2524,6 +2524,8 @@ export const zhCN: TranslationResources = {
     loadingSelector: "正在加载模型选择器...",
     error: "错误",
     defaultModel: "默认",
+    defaultModelHeading: "默认模型",
+    modelPresets: "模型预设",
     profiles: "配置文件",
     providers: "提供方",
     model: "模型",

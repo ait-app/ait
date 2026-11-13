@@ -61,6 +61,10 @@ import {
   resolveModelBrowserAllView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
+import {
+  presetSectionIsVisible,
+  resolveModelCardSections,
+} from "@/components/model-preset-sections";
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
@@ -884,7 +888,7 @@ function AgentProfilesPickerSection({
   return (
     <View style={styles.profilesContainer}>
       <View style={styles.sectionHeading}>
-        <Text style={styles.sectionHeadingText}>{t("modelSelector.profiles")}</Text>
+        <Text style={styles.sectionHeadingText}>{t("modelSelector.modelPresets")}</Text>
         {onEditProfiles ? (
           <View style={styles.sectionHeadingAction}>
             <AgentProfilesEditAction onPress={onEditProfiles} />
@@ -898,27 +902,6 @@ function AgentProfilesPickerSection({
   );
 }
 
-function CreateAgentProfileRow({ onPress }: { onPress: () => void }) {
-  const { t } = useTranslation();
-  const leadingSlot = useMemo(
-    () => (
-      <View testID="model-profiles-create-icon">
-        <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
-      </View>
-    ),
-    [],
-  );
-  return (
-    <ModelBrowserRow
-      label={t("modelSelector.createProfile")}
-      labelMuted
-      leadingSlot={leadingSlot}
-      onPress={onPress}
-      testID="model-profiles-empty"
-    />
-  );
-}
-
 function AgentProfilesPickerContent({
   rows,
   onApplyProfile,
@@ -928,8 +911,8 @@ function AgentProfilesPickerContent({
   onApplyProfile?: (profileId: string) => void;
   onEditProfiles?: () => void;
 }) {
-  if (rows.length === 0) {
-    return onEditProfiles ? <CreateAgentProfileRow onPress={onEditProfiles} /> : null;
+  if (!presetSectionIsVisible(rows)) {
+    return null;
   }
   return (
     <AgentProfilesPickerSection
@@ -1325,6 +1308,16 @@ function ProviderModelBrowserContent({
       />
     );
   }
+  const sections = resolveModelCardSections({
+    modelCount: visibleRows.length,
+    presetCount: providerProfileRows.length,
+    modelError: Boolean(selection.error),
+  });
+  const modelRowsHeading = sections.defaultModel ? (
+    <View style={styles.sectionHeading}>
+      <Text style={styles.sectionHeadingText}>{t("modelSelector.defaultModelHeading")}</Text>
+    </View>
+  ) : null;
   const header = selection.error ? (
     <>
       <ProviderErrorEmptyState
@@ -1336,7 +1329,10 @@ function ProviderModelBrowserContent({
       {profileHeader}
     </>
   ) : (
-    profileHeader
+    <>
+      {profileHeader}
+      {modelRowsHeading}
+    </>
   );
   if (visibleRows.length === 0) {
     return header ?? <ModelSearchEmptyState />;

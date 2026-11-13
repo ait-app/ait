@@ -6,6 +6,7 @@ pub mod agent_mcp;
 pub mod agent_runtime;
 pub mod agents;
 pub mod bot_execution;
+pub mod presets;
 pub(crate) mod summary_generation;
 pub mod workspace_attention;
 

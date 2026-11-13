@@ -182,6 +182,8 @@ pub struct AgentManager {
     usage_cache: usage::UsageCache,
     /// Host usage ledger that every live session records its provider calls in.
     usage_ledger: Arc<dyn UsageLedger>,
+    /// Unified preset editor; installed by the daemon so Ait and native stores share one path.
+    presets: Option<super::presets::PresetService>,
 }
 
 impl AgentManager {
@@ -215,6 +217,7 @@ impl AgentManager {
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
             usage_ledger: Arc::new(NoopUsageLedger),
+            presets: None,
         }
     }
 
@@ -222,6 +225,14 @@ impl AgentManager {
     #[must_use]
     pub fn with_agent_mcp(mut self, mcp: super::agent_mcp::AgentMcp) -> Self {
         self.mcp = Some(mcp);
+        self
+    }
+
+    /// Install the unified preset editor, which routes each provider to its owning store.
+    #[must_use]
+    pub fn with_presets(mut self, presets: super::presets::PresetService) -> Self {
+        self.catalog.set_presets(presets.clone());
+        self.presets = Some(presets);
         self
     }
 

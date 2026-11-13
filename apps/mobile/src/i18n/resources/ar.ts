@@ -2347,6 +2347,8 @@ export const ar: TranslationResources = {
     loadingSelector: "جارٍ تحميل محدد النموذج...",
     error: "خطأ",
     defaultModel: "تقصير",
+    defaultModelHeading: "النموذج الافتراضي",
+    modelPresets: "إعدادات النموذج المسبقة",
     profiles: "الملفات الشخصية",
     providers: "المزودون",
     model: "النموذج",

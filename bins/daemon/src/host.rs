@@ -366,6 +366,7 @@ fn compose_services(
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets: provider_presets,
     } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
@@ -410,6 +411,7 @@ fn compose_services(
             summary_generator.clone(),
             workspace_names.clone(),
             workspace_automation.clone(),
+            provider_presets,
         ),
     )?;
     let (schedules, bots) = compose_background(
@@ -633,6 +635,7 @@ struct MetadataServices {
     config: FileDaemonConfigStore,
     generator: Arc<dyn SummaryGenerator>,
     names: WorkspaceNames,
+    presets: provider::service::presets::PresetService,
 }
 
 fn compose_metadata(
@@ -649,10 +652,12 @@ fn compose_metadata(
         api::summary_source(summary_generator.clone()),
         Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
+    let presets = provider::service::presets::PresetService::new(Arc::new(config_store.clone()));
     MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets,
     }
 }
 
@@ -780,9 +785,10 @@ fn compose_provider(
         Arc<dyn SummaryGenerator>,
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
+        provider::service::presets::PresetService,
     ),
 ) -> anyhow::Result<AgentExecution> {
-    let (directory, generator, names, workspace_automation) = metadata;
+    let (directory, generator, names, workspace_automation, presets) = metadata;
     let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
     let (workspace_registry, project_registry) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
@@ -791,7 +797,8 @@ fn compose_provider(
         .with_creations(directory.creations())
         .with_summary_generation(generator)
         .with_workspace_names(Arc::new(names))
-        .with_workspaces(Arc::new(workspace_registry.clone()));
+        .with_workspaces(Arc::new(workspace_registry.clone()))
+        .with_presets(presets);
     if let Some(ledger) = usage_ledger {
         manager = manager.with_usage_ledger(ledger.clone());
     }

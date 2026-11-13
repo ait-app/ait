@@ -2378,6 +2378,8 @@ export const ko: TranslationResources = {
     loadingSelector: "모델 선택기 불러오는 중...",
     error: "오류",
     defaultModel: "기본값",
+    defaultModelHeading: "기본 모델",
+    modelPresets: "모델 프리셋",
     profiles: "프로필",
     providers: "제공자",
     model: "모델",
