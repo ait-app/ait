@@ -7,13 +7,8 @@
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-task02-model-refresh",
   "inherited_implementation_commit": "bdff56dea198e74b8a3268ea1a3d476b1a4b8987",
   "updated_at": "2026-11-11",
-  "depends_on": [
-    "00"
-  ],
-  "donor_sections": [
-    6,
-    23
-  ],
+  "depends_on": ["00"],
+  "donor_sections": [6, 23],
   "donor_paths": [
     "apps/mobile/src/bots/bot-select.tsx",
     "apps/mobile/src/bots/bot-settings.tsx",
