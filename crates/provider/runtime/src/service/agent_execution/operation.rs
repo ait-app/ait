@@ -60,6 +60,10 @@ pub(crate) enum Operation {
     UnifiedSubagents,
     ChildTimeline,
     Diagnostic,
+    PresetDescribe,
+    PresetList,
+    PresetSave,
+    PresetDelete,
     Usage,
     UsageLedger,
     Available,
@@ -120,6 +124,10 @@ impl Operation {
             "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
+            "provider.presets.describe.request" => Ok(Self::PresetDescribe),
+            "provider.presets.list.request" => Ok(Self::PresetList),
+            "provider.presets.save.request" => Ok(Self::PresetSave),
+            "provider.presets.delete.request" => Ok(Self::PresetDelete),
             "provider.usage.list.request" => Ok(Self::Usage),
             "provider.usage.ledger.request" => Ok(Self::UsageLedger),
             "provider.available.list.request" => Ok(Self::Available),
@@ -179,6 +187,10 @@ impl Operation {
             Self::UnifiedSubagents => "agent.subagents.list.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
+            Self::PresetDescribe => "provider.presets.describe.request",
+            Self::PresetList => "provider.presets.list.request",
+            Self::PresetSave => "provider.presets.save.request",
+            Self::PresetDelete => "provider.presets.delete.request",
             Self::Usage => "provider.usage.list.request",
             Self::UsageLedger => "provider.usage.ledger.request",
             Self::Available => "provider.available.list.request",
@@ -248,9 +260,14 @@ impl Operation {
             | Self::UsageLedger
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
-            Self::RecentSessions | Self::Commands | Self::Diagnostic | Self::Usage => {
-                Access::Discovery
-            }
+            Self::RecentSessions
+            | Self::Commands
+            | Self::Diagnostic
+            | Self::PresetDescribe
+            | Self::PresetList
+            | Self::PresetSave
+            | Self::PresetDelete
+            | Self::Usage => Access::Discovery,
             Self::Available
             | Self::Models
             | Self::Modes
@@ -312,6 +329,10 @@ impl Operation {
             | Self::RecentSessions
             | Self::Import
             | Self::Diagnostic
+            | Self::PresetDescribe
+            | Self::PresetList
+            | Self::PresetSave
+            | Self::PresetDelete
             | Self::UsageLedger
             | Self::Available
             | Self::Models

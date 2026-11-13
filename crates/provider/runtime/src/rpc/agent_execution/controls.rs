@@ -99,6 +99,17 @@ impl ExecutionState {
         self.manager.diagnostic(provider).await.map_err(Into::into)
     }
 
+    /// One editor over two stores: route each preset request to its owning backend.
+    pub(super) async fn presets(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
+        let provider = params["provider"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        self.manager
+            .presets(method, provider, params)
+            .await
+            .map_err(Into::into)
+    }
+
     pub(super) async fn usage(&mut self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["agentId", "providerId", "forceRefresh"])?;
         let agent = match params.get("agentId") {
