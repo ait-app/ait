@@ -218,6 +218,73 @@ async fn permission_callbacks_require_explicit_choices_and_resolve_once() {
 }
 
 #[tokio::test]
+async fn questionnaire_forms_render_and_return_native_values() {
+    let (root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("questionnaire", &spec.config)
+        .await
+        .unwrap();
+    let request = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(AgentTurnEvent::PermissionRequested(request)) = session.poll_turn().unwrap()
+            {
+                break request;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(request["kind"], "question");
+    assert_eq!(request["title"], "Choose languages");
+    assert_eq!(request["input"]["questions"][0]["answerFormat"], "array");
+    assert_eq!(
+        request["input"]["questions"][0]["options"],
+        json!([{"label":"Rust, stable"}, {"label":"Go"}])
+    );
+    assert_eq!(request["input"]["questions"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        request["input"]["questions"][1]["question"],
+        "Other language"
+    );
+    assert_eq!(request["input"]["questions"][1]["allowOther"], true);
+    assert_eq!(session.pending_permissions().len(), 1);
+
+    let id = request["id"].as_str().unwrap();
+    session
+        .respond_permission(
+            id,
+            &json!({"behavior":"allow","updatedInput":{"answers":{
+                "language":["Rust, stable","Go"],"language_custom":"C++"}}}),
+        )
+        .await
+        .unwrap();
+    assert!(session.pending_permissions().is_empty());
+    assert_eq!(
+        finish(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Completed(Some("rust, go, C++".into())))
+    );
+
+    let requests: Vec<Value> = std::fs::read_to_string(root.path().join("requests.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let replies = requests
+        .iter()
+        .filter(|message| message["id"] == "question" && message.get("method").is_none())
+        .collect::<Vec<_>>();
+    assert_eq!(replies.len(), 1);
+    assert_eq!(
+        replies[0]["result"],
+        json!({"action":"accept","content":{"language":["rust","go"],"language_custom":"C++"}})
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn cancellation_withdraws_pending_permissions_before_cancelling_the_prompt() {
     let (root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
