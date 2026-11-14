@@ -1,6 +1,12 @@
-import { hostMonitorEn } from "./host-monitor";
+import { hostMonitorAr } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import { onlineServiceAr } from "./online-service";
+import { sharingAr } from "./sharing";
+import { btwAr } from "./btw";
+import { addProjectFlowAr } from "./add-project-flow";
+import { settingsLayoutAr } from "./settings-layout";
+import { scheduleTemplatePromptsAr } from "./schedule-template-prompts";
 
 // Arabic plural categories English lacks; i18next selects them from the count. Kept
 // outside the literal because TranslationResources only declares the English categories.
@@ -88,9 +94,19 @@ export const ar: TranslationResources = {
     sourceUnknown: "مصدر غير معروف",
     viewPreset: "عرض {{name}}",
   },
-  hostMonitor: hostMonitorEn,
+  hostMonitor: hostMonitorAr,
   taskBoard: {
-    ...en.taskBoard,
+    totalTaskCount: "إجمالي {{count}} من المهام",
+    scopedTaskCount: "{{scope}} {{count}} من المهام",
+    filters: "عوامل التصفية",
+    resetFilters: "إعادة ضبط عوامل التصفية",
+    showTasks: "عرض {{count}} من المهام",
+    showSubtasks: "عرض المهام الفرعية",
+    collapseLane: "طي {{lane}}",
+    expandLane: "توسيع {{lane}}",
+    open: "فتح",
+    answer: "إجابة",
+    readOnly: "للقراءة فقط",
     runCommand: "تشغيل أمر",
     loadFailed: "تعذر تحميل المهام",
     title: "نظرة عامة على المهام",
@@ -144,7 +160,7 @@ export const ar: TranslationResources = {
     },
   },
   sharing: {
-    ...en.sharing,
+    ...sharingAr,
     title: "المشاركة",
     offline: "هذا المورد المشترك غير متصل حاليًا.",
     emptyResources: "لا توجد مساحات عمل في هذا المورد المشترك.",
@@ -155,7 +171,7 @@ export const ar: TranslationResources = {
     ended: "انتهت المحادثة الصوتية",
     failed: "انقطعت المحادثة الصوتية",
   },
-  onlineService: en.onlineService,
+  onlineService: onlineServiceAr,
   bots: {
     modeCapWarning:
       "الأوضاع التي تتيح للوكلاء تشغيل الأوامر تتيح لهم أيضًا قراءة بيانات اعتماد Ait على هذا الكمبيوتر وتجاوز حدود Ait الخاصة بـ Bot. اسمح بها فقط للعمل الذي تقبل أن ينجزه وكيل دون إشراف.",
@@ -685,7 +701,7 @@ export const ar: TranslationResources = {
       title_mr: "إرفاق المشكلة أو MR",
     },
   },
-  btw: en.btw,
+  btw: btwAr,
   agentControls: {
     provider: {
       fallback: "مزود",
@@ -905,7 +921,7 @@ export const ar: TranslationResources = {
     turnFooter: { workedFor: "عمل لمدة {{duration}}" },
   },
   importSession: {
-    chooseHostTitle: en.importSession.chooseHostTitle,
+    chooseHostTitle: "الاستيراد من المضيف",
     title: "جلسة الاستيراد",
     searchPlaceholder: "البحث في الجلسات...",
     scope: {
@@ -922,7 +938,8 @@ export const ar: TranslationResources = {
       loading: "جارٍ تحميل الجلسات الأخيرة...",
       failedProvider: "تعذر تحميل جلسات {{provider}}",
       failedImport: "تعذر استيراد الجلسة المحددة.",
-      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
+      workingDirectoryUnavailable:
+        "مجلد العمل للجلسة غير متاح على هذا المضيف: {{path}}. استعد المجلد وحاول الاستيراد مرة أخرى.",
     },
     actions: {
       refresh: "تحديث الجلسات",
@@ -1829,7 +1846,14 @@ export const ar: TranslationResources = {
       detail: "إيقاف البرنامج الخفي المحلي.",
     },
     daemon: {
-      listen: en.desktop.daemon.listen,
+      listen: {
+        host: "عنوان الاستماع",
+        port: "المنفذ",
+        savedHint: "أعد تشغيل الخدمة الخلفية لتطبيق التغييرات.",
+        override:
+          "يتجاوز AIT_SERVER_LISTEN هذا الإعداد: {{address}}. أزل متغير البيئة لاستخدام العنوان المحفوظ.",
+        invalid: "أدخل عنوان IPv4 أو IPv6 (أو localhost) ومنفذًا بين 0 و65535.",
+      },
       lifecycle: {
         owned: "بدأته جلسة سطح المكتب هذه",
         attached: "متصل بخدمة خلفية موجودة",
@@ -2025,9 +2049,83 @@ export const ar: TranslationResources = {
       },
     },
   },
-  hostPicker: en.hostPicker,
+  hostPicker: {
+    filter: "تصفية حسب المضيف",
+    filterLabel: "التصفية: {{host}}",
+    host: "المضيف",
+    all: "كل المضيفين",
+    add: "إضافة مضيف",
+    enableBuiltInDaemon: "تفعيل الخدمة الخلفية المدمجة",
+    local: "محلي",
+    search: "البحث عن مضيفين",
+    settings: "فتح إعدادات {{host}}",
+  },
   schedules: {
-    templates: en.schedules.templates,
+    templates: {
+      ...en.schedules.templates,
+      heading: "خطّط للمهمة التالية لمساحة عملك",
+      description: "اختر نقطة بداية واضبط المهمة وتوقيتها ودع Ait ينفذها وفق الجدول.",
+      blank: "البدء من الصفر",
+      browse: "اختيار قالب آخر",
+      back: "العودة إلى القوالب",
+      configure: "تعديل المهمة",
+      applied: "الإعدادات المقترحة من {{name}}",
+      timezone: "تستخدم الأوقات المجدولة {{timezone}}",
+      customize: "اختيار موضوع الإحاطة",
+      customizeHint: "سمِّ منتجًا أو تقنية أو مجالًا بحثيًا تريد متابعته.",
+      content: "المحتوى والتوقيت",
+      execution: "التنفيذ والحدود",
+      categories: {
+        development: "البرمجة والتعاون",
+        research: "تحديثات الموضوع",
+        writing: "صيانة المشروع",
+      },
+      capabilities: {
+        code: "تعديلات الكود",
+        pr: "الوصول إلى PR",
+        web: "البحث على الويب",
+        params: "يتطلب إدخالًا",
+      },
+      apply: "ملء المهمة",
+      items: {
+        "nightly-test-heal": {
+          ...en.schedules.templates.items["nightly-test-heal"],
+          ...scheduleTemplatePromptsAr["nightly-test-heal"],
+          cadence: "يوميًا · 02:00",
+          name: "تشغيل الاختبارات وإصلاحها",
+          description: "تحقق من اختبارات مساحة العمل، وابحث في الإخفاقات وتحقق من إصلاح مركز.",
+        },
+        "pr-gatekeeper": {
+          ...en.schedules.templates.items["pr-gatekeeper"],
+          ...scheduleTemplatePromptsAr["pr-gatekeeper"],
+          cadence: "أيام العمل · 10:00",
+          name: "مراجعة مخاطر PR",
+          description: "راجع طلبات السحب النشطة بحثًا عن عيوب قد تؤثر في الدمج، مع دليل لكل نتيجة.",
+        },
+        "domain-radar": {
+          ...en.schedules.templates.items["domain-radar"],
+          ...scheduleTemplatePromptsAr["domain-radar"],
+          cadence: "أيام العمل · 09:00",
+          name: "إحاطة بالموضوع",
+          description: "اقرأ أحدث المصادر حول موضوعك واختر حتى خمسة مستجدات تستحق انتباهك.",
+        },
+        "weekly-work-draft": {
+          ...en.schedules.templates.items["weekly-work-draft"],
+          ...scheduleTemplatePromptsAr["weekly-work-draft"],
+          cadence: "الجمعة · 16:00",
+          name: "ملخص أسبوعي لمساحة العمل",
+          description:
+            "حوّل عمليات الالتزام وطلبات السحب والملاحظات في الأسبوع الماضي إلى ملخص قابل للمراجعة.",
+        },
+        "docs-freshness": {
+          ...en.schedules.templates.items["docs-freshness"],
+          ...scheduleTemplatePromptsAr["docs-freshness"],
+          cadence: "شهريًا في اليوم 1 · 10:00",
+          name: "فحص الوثائق",
+          description: "قارن التعليمات الموثقة بالكود وسجّل التصحيحات العملية التي يحتاجها القارئ.",
+        },
+      },
+    },
     workspaceUnavailable: "مساحة العمل المالكة غير متاحة. استعدها قبل تعديل هذا الجدول.",
     browse: "جداول مساحة العمل",
     timeline: {
@@ -2302,7 +2400,7 @@ export const ar: TranslationResources = {
       },
     },
   },
-  addProjectFlow: en.addProjectFlow,
+  addProjectFlow: addProjectFlowAr,
   projectPicker: {
     placeholder: "اكتب للبحث...",
     browse: "استعراض…",
@@ -2884,7 +2982,7 @@ export const ar: TranslationResources = {
     sections: {
       general: "عام",
       appearance: "مظهر",
-      layout: en.settings.sections.layout,
+      layout: "التخطيط",
       editor: "المحرر",
       shortcuts: "الاختصارات",
       integrations: "التكامل",
@@ -2893,7 +2991,7 @@ export const ar: TranslationResources = {
       diagnostics: "التشخيص",
       about: "عن",
     },
-    layout: en.settings.layout,
+    layout: settingsLayoutAr,
     editor: {
       title: "المحرر",
       vimKeybindings: "اختصارات Vim",
@@ -3052,7 +3150,10 @@ export const ar: TranslationResources = {
       connectedHosts: "المضيفين المتصلين",
       offline: "غير متصل",
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
-      experimentalFeatures: en.settings.about.experimentalFeatures,
+      experimentalFeatures: {
+        label: "الميزات التجريبية",
+        description: "فعّل الميزات قيد الاختبار، بما فيها Bot.",
+      },
       releaseChannel: {
         label: "الافراج عن القناة",
         description: "قم بالتبديل إلى Beta للحصول على التحديثات عاجلاً والمساعدة في تشكيلها",
@@ -3296,7 +3397,10 @@ export const ar: TranslationResources = {
         rowHint: "امسح رمز QR ضوئيًا أو انسخ رابطًا لتوصيل هاتفك بهذا المضيف",
       },
       skills: {
-        ...en.settings.host.skills,
+        docs: "المهارات",
+        openDocs: "فتح وثائق المهارات",
+        unavailable: "اتصل بهذا المضيف لإدارة مهارات التنسيق",
+        unsupported: "حدّث هذا المضيف لإدارة مهارات التنسيق",
         sectionTitle: "مهارات التنسيق",
         title: "مهارات التنسيق",
         description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
@@ -3457,7 +3561,8 @@ export const ar: TranslationResources = {
           confirmTitle: "أعد تشغيل{{name}}",
           confirmMessage:
             "سيؤدي هذا إلى إعادة تشغيل البرنامج الخفي. سيستمر العملاء الذين يعملون عليه؛ سيتم إعادة الاتصال بالتطبيق تلقائيًا.",
-          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
+          confirmDesktopMessage:
+            "إعادة تشغيل الخدمة الخلفية المدمجة بالإعدادات المحفوظة؟ ستتم مقاطعة المهام والجلسات الطرفية قيد التشغيل.",
           restarting: "جارٍ إعادة التشغيل...",
           unableToReconnectTitle: "غير قادر على إعادة الاتصال",
           unableToReconnectMessage: "لم يعد{{name}}متصلاً بالإنترنت. يرجى التحقق من إعادة تشغيله.",

@@ -1,5 +1,5 @@
 import { hostMonitorZh } from "./host-monitor";
-import { en, type TranslationResources } from "./en";
+import { type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
@@ -739,7 +739,7 @@ export const zhCN: TranslationResources = {
     requiresConversation: "请先开始会话，再打开旁支问题。",
     expandedTitle: "旁支会话",
     unsupportedProvider: "此 Provider 在当前主机上未提供旁支会话能力。",
-    title: "BTW",
+    title: "旁支问答",
     source: "来自 {{title}}",
     sourceFallback: "当前会话",
     newConversation: "新建旁支会话",
@@ -3533,7 +3533,6 @@ export const zhCN: TranslationResources = {
         rowHint: "扫描二维码或复制链接，将手机连接到这个主机",
       },
       skills: {
-        ...en.settings.host.skills,
         sectionTitle: "编排技能",
         title: "编排技能",
         description: "教会智能体通过 CLI 编排任务",

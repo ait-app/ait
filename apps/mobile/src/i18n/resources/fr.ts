@@ -1,6 +1,12 @@
-import { hostMonitorEn } from "./host-monitor";
+import { hostMonitorFr } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import { onlineServiceFr } from "./online-service";
+import { sharingFr } from "./sharing";
+import { btwFr } from "./btw";
+import { addProjectFlowFr } from "./add-project-flow";
+import { settingsLayoutFr } from "./settings-layout";
+import { scheduleTemplatePromptsFr } from "./schedule-template-prompts";
 
 // French CLDR "many" category (e.g. 1000000) English lacks; i18next selects it from the count.
 // Kept outside the literal because TranslationResources only declares the English categories.
@@ -55,9 +61,19 @@ export const fr: TranslationResources = {
     sourceUnknown: "Source inconnue",
     viewPreset: "Voir {{name}}",
   },
-  hostMonitor: hostMonitorEn,
+  hostMonitor: hostMonitorFr,
   taskBoard: {
-    ...en.taskBoard,
+    totalTaskCount: "{{count}} tâches au total",
+    scopedTaskCount: "{{scope}} · {{count}} tâches",
+    filters: "Filtres",
+    resetFilters: "Réinitialiser les filtres",
+    showTasks: "Afficher {{count}} tâches",
+    showSubtasks: "Afficher les sous-tâches",
+    collapseLane: "Réduire {{lane}}",
+    expandLane: "Développer {{lane}}",
+    open: "Ouvrir",
+    answer: "Répondre",
+    readOnly: "Lecture seule",
     runCommand: "Exécuter une commande",
     loadFailed: "Impossible de charger les tâches",
     title: "Vue des tâches",
@@ -112,7 +128,7 @@ export const fr: TranslationResources = {
     },
   },
   sharing: {
-    ...en.sharing,
+    ...sharingFr,
     title: "Partage",
     offline: "Cette ressource partagée est hors ligne.",
     emptyResources: "Cette ressource partagée ne contient aucun espace de travail.",
@@ -123,7 +139,7 @@ export const fr: TranslationResources = {
     ended: "Conversation vocale terminée",
     failed: "Conversation vocale interrompue",
   },
-  onlineService: en.onlineService,
+  onlineService: onlineServiceFr,
   bots: {
     modeCapWarning:
       "Les modes qui permettent aux agents d'exécuter des commandes leur permettent aussi de lire les identifiants Ait de cet ordinateur et de contourner les limites Ait du Bot. N'autorisez-les que pour un travail que vous laisseriez un agent faire sans surveillance.",
@@ -676,7 +692,7 @@ export const fr: TranslationResources = {
       title_mr: "Joindre le problème ou MR",
     },
   },
-  btw: en.btw,
+  btw: btwFr,
   agentControls: {
     provider: {
       fallback: "Fournisseur",
@@ -898,7 +914,7 @@ export const fr: TranslationResources = {
     turnFooter: { workedFor: "A travaillé pendant {{duration}}" },
   },
   importSession: {
-    chooseHostTitle: en.importSession.chooseHostTitle,
+    chooseHostTitle: "Importer depuis l’hôte",
     title: "Session d'importation",
     searchPlaceholder: "Rechercher des sessions...",
     scope: {
@@ -915,7 +931,8 @@ export const fr: TranslationResources = {
       loading: "Chargement des sessions récentes...",
       failedProvider: "Impossible de charger les sessions {{provider}}",
       failedImport: "Impossible d'importer la session sélectionnée.",
-      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
+      workingDirectoryUnavailable:
+        "Le dossier de travail de la session est indisponible sur cet hôte : {{path}}. Restaurez-le puis réessayez l’importation.",
     },
     actions: {
       refresh: "Sessions de rafraîchissement",
@@ -1854,7 +1871,15 @@ export const fr: TranslationResources = {
       detail: "Arrêt du démon local.",
     },
     daemon: {
-      listen: en.desktop.daemon.listen,
+      listen: {
+        host: "Adresse d’écoute",
+        port: "Port",
+        savedHint: "Redémarrez le daemon pour appliquer les modifications.",
+        override:
+          "AIT_SERVER_LISTEN remplace ce réglage : {{address}}. Supprimez la variable d’environnement pour utiliser l’adresse enregistrée.",
+        invalid:
+          "Saisissez une adresse IPv4 ou IPv6 (ou localhost) et un port compris entre 0 et 65535.",
+      },
       lifecycle: {
         owned: "Lancé par cette session de bureau",
         attached: "Connecté à un daemon existant",
@@ -2062,9 +2087,88 @@ export const fr: TranslationResources = {
       },
     },
   },
-  hostPicker: en.hostPicker,
+  hostPicker: {
+    filter: "Filtrer par hôte",
+    filterLabel: "Filtre : {{host}}",
+    host: "Hôte",
+    all: "Tous les hôtes",
+    add: "Ajouter un hôte",
+    enableBuiltInDaemon: "Activer le daemon intégré",
+    local: "Local",
+    search: "Rechercher des hôtes",
+    settings: "Ouvrir les paramètres de {{host}}",
+  },
   schedules: {
-    templates: en.schedules.templates,
+    templates: {
+      ...en.schedules.templates,
+      heading: "Planifier la prochaine tâche de votre espace de travail",
+      description:
+        "Choisissez un point de départ, ajustez la tâche et l’horaire, puis laissez Ait l’exécuter.",
+      blank: "Partir de zéro",
+      browse: "Choisir un autre modèle",
+      back: "Retour aux modèles",
+      configure: "Modifier la tâche",
+      applied: "Paramètres suggérés par {{name}}",
+      timezone: "Les horaires utilisent {{timezone}}",
+      customize: "Choisir un sujet de briefing",
+      customizeHint: "Nommez un produit, une technologie ou un domaine de recherche à suivre.",
+      content: "Contenu et horaire",
+      execution: "Exécution et limites",
+      categories: {
+        development: "Code et collaboration",
+        research: "Actualités du sujet",
+        writing: "Maintenance du projet",
+      },
+      capabilities: {
+        code: "Modifications du code",
+        pr: "Accès aux PR",
+        web: "Recherche web",
+        params: "Nécessite une saisie",
+      },
+      apply: "Remplir la tâche",
+      items: {
+        "nightly-test-heal": {
+          ...en.schedules.templates.items["nightly-test-heal"],
+          ...scheduleTemplatePromptsFr["nightly-test-heal"],
+          cadence: "Chaque jour · 02:00",
+          name: "Tests et réparation",
+          description:
+            "Vérifiez les tests de l’espace, recherchez les échecs et validez une correction ciblée.",
+        },
+        "pr-gatekeeper": {
+          ...en.schedules.templates.items["pr-gatekeeper"],
+          ...scheduleTemplatePromptsFr["pr-gatekeeper"],
+          cadence: "Jours ouvrés · 10:00",
+          name: "Revue des risques de PR",
+          description:
+            "Examinez les pull requests actives pour repérer les défauts susceptibles d’affecter la fusion.",
+        },
+        "domain-radar": {
+          ...en.schedules.templates.items["domain-radar"],
+          ...scheduleTemplatePromptsFr["domain-radar"],
+          cadence: "Jours ouvrés · 09:00",
+          name: "Briefing thématique",
+          description:
+            "Lisez les sources récentes sur votre sujet et sélectionnez jusqu’à cinq nouveautés utiles.",
+        },
+        "weekly-work-draft": {
+          ...en.schedules.templates.items["weekly-work-draft"],
+          ...scheduleTemplatePromptsFr["weekly-work-draft"],
+          cadence: "Vendredi · 16:00",
+          name: "Bilan hebdomadaire",
+          description:
+            "Transformez les commits, PR et notes de la semaine en un compte rendu révisable.",
+        },
+        "docs-freshness": {
+          ...en.schedules.templates.items["docs-freshness"],
+          ...scheduleTemplatePromptsFr["docs-freshness"],
+          cadence: "Le 1er du mois · 10:00",
+          name: "Contrôle de la documentation",
+          description:
+            "Comparez les instructions documentées au code et listez les corrections concrètes nécessaires.",
+        },
+      },
+    },
     workspaceUnavailable:
       "L’espace de travail propriétaire n’est pas disponible. Restaurez-le avant de modifier cette planification.",
     browse: "Planifications de l’espace de travail",
@@ -2343,7 +2447,7 @@ export const fr: TranslationResources = {
       },
     },
   },
-  addProjectFlow: en.addProjectFlow,
+  addProjectFlow: addProjectFlowFr,
   projectPicker: {
     placeholder: "Tapez pour rechercher...",
     browse: "Parcourir…",
@@ -2933,7 +3037,7 @@ export const fr: TranslationResources = {
     sections: {
       general: "Général",
       appearance: "Apparence",
-      layout: en.settings.sections.layout,
+      layout: "Mise en page",
       editor: "Éditeur",
       shortcuts: "Raccourcis",
       integrations: "Intégrations",
@@ -2942,7 +3046,7 @@ export const fr: TranslationResources = {
       diagnostics: "Diagnostic",
       about: "À propos",
     },
-    layout: en.settings.layout,
+    layout: settingsLayoutFr,
     editor: {
       title: "Éditeur",
       vimKeybindings: "Raccourcis Vim",
@@ -3103,7 +3207,10 @@ export const fr: TranslationResources = {
       connectedHosts: "Hôtes connectés",
       offline: "Hors ligne",
       versionDiffers: "La version diffère de cet appareil",
-      experimentalFeatures: en.settings.about.experimentalFeatures,
+      experimentalFeatures: {
+        label: "Fonctionnalités expérimentales",
+        description: "Activez les fonctionnalités en test, notamment Bot.",
+      },
       releaseChannel: {
         label: "Canal de sortie",
         description:
@@ -3350,7 +3457,10 @@ export const fr: TranslationResources = {
         rowHint: "Scannez un codeQRou copiez un lien pour connecter votre téléphone à cet hôte",
       },
       skills: {
-        ...en.settings.host.skills,
+        docs: "Compétences",
+        openDocs: "Ouvrir la documentation des compétences",
+        unavailable: "Connectez-vous à cet hôte pour gérer les compétences d’orchestration",
+        unsupported: "Mettez cet hôte à jour pour gérer les compétences d’orchestration",
         sectionTitle: "Compétences en orchestration",
         title: "Compétences en orchestration",
         description: "Apprenez à vos agents à orchestrer via leCLI",
@@ -3517,7 +3627,8 @@ export const fr: TranslationResources = {
           confirmTitle: "Redémarrer{{name}}",
           confirmMessage:
             "Cela redémarrera le démon. Les agents qui s'y exécutent continueront à fonctionner; l'application se reconnectera automatiquement.",
-          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
+          confirmDesktopMessage:
+            "Redémarrer le daemon intégré avec les paramètres enregistrés ? Les tâches et sessions de terminal en cours seront interrompues.",
           restarting: "Redémarrage...",
           unableToReconnectTitle: "Impossible de se reconnecter",
           unableToReconnectMessage:

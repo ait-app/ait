@@ -1,6 +1,11 @@
-import { hostMonitorEn } from "./host-monitor";
-import { en, type TranslationResources } from "./en";
+import { hostMonitorKo } from "./host-monitor";
+import { type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import { onlineServiceKo } from "./online-service";
+import { sharingKo } from "./sharing";
+import { btwKo } from "./btw";
+import { addProjectFlowKo } from "./add-project-flow";
+import { settingsLayoutKo } from "./settings-layout";
 
 export const ko: TranslationResources = {
   providerControl: {
@@ -37,9 +42,19 @@ export const ko: TranslationResources = {
     sourceUnknown: "알 수 없는 출처",
     viewPreset: "{{name}} 보기",
   },
-  hostMonitor: hostMonitorEn,
+  hostMonitor: hostMonitorKo,
   taskBoard: {
-    ...en.taskBoard,
+    totalTaskCount: "총 {{count}}개 작업",
+    scopedTaskCount: "{{scope}} {{count}}개 작업",
+    filters: "필터",
+    resetFilters: "필터 초기화",
+    showTasks: "{{count}}개 작업 표시",
+    showSubtasks: "하위 작업 표시",
+    collapseLane: "{{lane}} 접기",
+    expandLane: "{{lane}} 펼치기",
+    open: "열기",
+    answer: "답변",
+    readOnly: "읽기 전용",
     runCommand: "명령 실행",
     loadFailed: "작업을 불러오지 못했습니다",
     title: "작업 개요",
@@ -93,7 +108,7 @@ export const ko: TranslationResources = {
     },
   },
   sharing: {
-    ...en.sharing,
+    ...sharingKo,
     title: "공유",
     offline: "이 공유 리소스는 오프라인 상태입니다.",
     emptyResources: "이 공유 리소스에는 워크스페이스가 없습니다.",
@@ -104,7 +119,7 @@ export const ko: TranslationResources = {
     ended: "음성 대화가 종료되었습니다",
     failed: "음성 대화가 중단되었습니다",
   },
-  onlineService: en.onlineService,
+  onlineService: onlineServiceKo,
   bots: {
     modeCapWarning:
       "에이전트가 명령을 실행할 수 있는 모드는 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회하는 것도 허용합니다. 에이전트가 무인으로 처리해도 되는 작업에만 허용하세요.",
@@ -639,7 +654,7 @@ export const ko: TranslationResources = {
       title_mr: "이슈 또는 MR 첨부",
     },
   },
-  btw: en.btw,
+  btw: btwKo,
   agentControls: {
     provider: {
       fallback: "프로바이더",
@@ -860,7 +875,7 @@ export const ko: TranslationResources = {
     turnFooter: { workedFor: "작업 시간 {{duration}}" },
   },
   importSession: {
-    chooseHostTitle: en.importSession.chooseHostTitle,
+    chooseHostTitle: "호스트에서 가져오기",
     title: "세션 가져오기",
     searchPlaceholder: "세션 검색...",
     scope: {
@@ -877,7 +892,8 @@ export const ko: TranslationResources = {
       loading: "최근 세션을 불러오는 중...",
       failedProvider: "{{provider}} 세션을 불러올 수 없습니다",
       failedImport: "선택한 세션을 가져올 수 없습니다.",
-      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
+      workingDirectoryUnavailable:
+        "이 호스트에서 세션의 작업 디렉터리를 사용할 수 없습니다: {{path}}. 디렉터리를 복원한 후 다시 가져오세요.",
     },
     actions: {
       refresh: "세션 새로고침",
@@ -1790,7 +1806,14 @@ export const ko: TranslationResources = {
       detail: "로컬 데몬을 중지하는 중입니다.",
     },
     daemon: {
-      listen: en.desktop.daemon.listen,
+      listen: {
+        host: "수신 주소",
+        port: "포트",
+        savedHint: "변경 사항을 적용하려면 데몬을 다시 시작하세요.",
+        override:
+          "AIT_SERVER_LISTEN이 이 설정을 재정의합니다: {{address}}. 저장된 주소를 사용하려면 환경 변수를 제거하세요.",
+        invalid: "IPv4 또는 IPv6 주소(localhost 포함)와 0~65535 사이의 포트를 입력하세요.",
+      },
       lifecycle: {
         owned: "이 데스크톱 세션에서 시작됨",
         attached: "기존 데몬에 연결됨",
@@ -1987,7 +2010,17 @@ export const ko: TranslationResources = {
       },
     },
   },
-  hostPicker: en.hostPicker,
+  hostPicker: {
+    filter: "호스트로 필터링",
+    filterLabel: "필터: {{host}}",
+    host: "호스트",
+    all: "모든 호스트",
+    add: "호스트 추가",
+    enableBuiltInDaemon: "내장 데몬 활성화",
+    local: "로컬",
+    search: "호스트 검색",
+    settings: "{{host}} 설정 열기",
+  },
   schedules: {
     templates: {
       heading: "워크스페이스의 다음 작업 예약",
@@ -2332,7 +2365,7 @@ export const ko: TranslationResources = {
       },
     },
   },
-  addProjectFlow: en.addProjectFlow,
+  addProjectFlow: addProjectFlowKo,
   projectPicker: {
     placeholder: "검색할 내용을 입력하세요...",
     browse: "찾아보기…",
@@ -2915,7 +2948,7 @@ export const ko: TranslationResources = {
     sections: {
       general: "일반",
       appearance: "모양",
-      layout: en.settings.sections.layout,
+      layout: "레이아웃",
       editor: "편집기",
       shortcuts: "단축키",
       integrations: "통합",
@@ -2924,7 +2957,7 @@ export const ko: TranslationResources = {
       diagnostics: "진단",
       about: "정보",
     },
-    layout: en.settings.layout,
+    layout: settingsLayoutKo,
     editor: {
       title: "편집기",
       vimKeybindings: "Vim 키 바인딩",
@@ -3084,7 +3117,10 @@ export const ko: TranslationResources = {
       connectedHosts: "연결된 호스트",
       offline: "오프라인",
       versionDiffers: "이 기기와 버전이 다릅니다",
-      experimentalFeatures: en.settings.about.experimentalFeatures,
+      experimentalFeatures: {
+        label: "실험적 기능",
+        description: "Bot을 포함한 테스트 중인 기능을 활성화합니다.",
+      },
       releaseChannel: {
         label: "릴리스 채널",
         description: "Beta로 전환하면 업데이트를 더 빨리 받고 개선에 참여할 수 있습니다",
@@ -3327,7 +3363,10 @@ export const ko: TranslationResources = {
         rowHint: "QR 코드를 스캔하거나 링크를 복사하여 휴대폰을 이 호스트에 연결하세요",
       },
       skills: {
-        ...en.settings.host.skills,
+        docs: "스킬",
+        openDocs: "스킬 문서 열기",
+        unavailable: "오케스트레이션 스킬을 관리하려면 이 호스트에 연결하세요",
+        unsupported: "오케스트레이션 스킬을 관리하려면 이 호스트를 업데이트하세요",
         sectionTitle: "오케스트레이션 스킬",
         title: "오케스트레이션 스킬",
         description: "CLI를 통해 에이전트가 오케스트레이션하도록 가르칩니다",
@@ -3490,7 +3529,8 @@ export const ko: TranslationResources = {
           confirmTitle: "{{name}} 재시작",
           confirmMessage:
             "데몬을 재시작합니다. 데몬에서 실행 중인 에이전트는 계속 동작하며 앱이 자동으로 다시 연결됩니다.",
-          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
+          confirmDesktopMessage:
+            "저장된 설정으로 내장 데몬을 다시 시작할까요? 실행 중인 작업과 터미널 세션이 중단됩니다.",
           restarting: "재시작 중...",
           unableToReconnectTitle: "다시 연결할 수 없습니다",
           unableToReconnectMessage:

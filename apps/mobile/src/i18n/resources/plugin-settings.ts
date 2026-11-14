@@ -1,18 +1,97 @@
-const shared = {
-  logs: {
-    action: "Logs",
-    title: "Logs: {{id}}",
-    loading: "Loading logs…",
-    refresh: "Refresh",
-    refreshing: "Refreshing…",
-    errorTitle: "Unable to load plugin logs",
-    empty: "No plugin output yet",
+const sharedByLocale = {
+  ar: {
+    logs: {
+      action: "السجلات",
+      title: "السجلات: {{id}}",
+      loading: "جارٍ تحميل السجلات…",
+      refresh: "تحديث",
+      refreshing: "جارٍ التحديث…",
+      errorTitle: "تعذّر تحميل سجلات الإضافة",
+      empty: "لا يوجد ناتج للإضافة بعد",
+    },
+  },
+  es: {
+    logs: {
+      action: "Registros",
+      title: "Registros: {{id}}",
+      loading: "Cargando registros…",
+      refresh: "Actualizar",
+      refreshing: "Actualizando…",
+      errorTitle: "No se pudieron cargar los registros del plugin",
+      empty: "Aún no hay salida del plugin",
+    },
+  },
+  fr: {
+    logs: {
+      action: "Journaux",
+      title: "Journaux : {{id}}",
+      loading: "Chargement des journaux…",
+      refresh: "Actualiser",
+      refreshing: "Actualisation…",
+      errorTitle: "Impossible de charger les journaux du plugin",
+      empty: "Aucune sortie du plugin pour le moment",
+    },
+  },
+  ja: {
+    logs: {
+      action: "ログ",
+      title: "ログ: {{id}}",
+      loading: "ログを読み込み中…",
+      refresh: "更新",
+      refreshing: "更新中…",
+      errorTitle: "プラグインのログを読み込めません",
+      empty: "プラグインの出力はまだありません",
+    },
+  },
+  ko: {
+    logs: {
+      action: "로그",
+      title: "로그: {{id}}",
+      loading: "로그를 불러오는 중…",
+      refresh: "새로 고침",
+      refreshing: "새로 고치는 중…",
+      errorTitle: "플러그인 로그를 불러오지 못했습니다",
+      empty: "아직 플러그인 출력이 없습니다",
+    },
+  },
+  "pt-BR": {
+    logs: {
+      action: "Registros",
+      title: "Logs: {{id}}",
+      loading: "Carregando logs…",
+      refresh: "Atualizar",
+      refreshing: "Atualizando…",
+      errorTitle: "Não foi possível carregar os logs do plugin",
+      empty: "Ainda não há saída do plugin",
+    },
+  },
+  ru: {
+    logs: {
+      action: "Журналы",
+      title: "Журналы: {{id}}",
+      loading: "Загрузка журналов…",
+      refresh: "Обновить",
+      refreshing: "Обновление…",
+      errorTitle: "Не удалось загрузить журналы плагина",
+      empty: "Вывода плагина пока нет",
+    },
+  },
+  "zh-CN": {
+    logs: {
+      action: "日志",
+      title: "日志：{{id}}",
+      loading: "正在加载日志…",
+      refresh: "刷新",
+      refreshing: "正在刷新…",
+      errorTitle: "无法加载插件日志",
+      empty: "暂无插件输出",
+    },
   },
 } as const;
 
 export const pluginSettings = {
   ar: {
-    ...shared,
+    ...sharedByLocale.ar,
     screens: {
       open: "فتح",
       offline: "اتصل بهذا المضيف لفتح إعدادات الإضافة.",
@@ -66,7 +145,7 @@ export const pluginSettings = {
     },
   },
   es: {
-    ...shared,
+    ...sharedByLocale.es,
     screens: {
       open: "Abrir",
       offline: "Conéctate a este host para abrir los ajustes del plugin.",
@@ -120,7 +199,7 @@ export const pluginSettings = {
     },
   },
   fr: {
-    ...shared,
+    ...sharedByLocale.fr,
     screens: {
       open: "Ouvrir",
       offline: "Connectez-vous à cet hôte pour ouvrir les paramètres du plugin.",
@@ -174,7 +253,7 @@ export const pluginSettings = {
     },
   },
   ja: {
-    ...shared,
+    ...sharedByLocale.ja,
     screens: {
       open: "開く",
       offline: "このホストに接続してプラグイン設定を開いてください。",
@@ -228,7 +307,7 @@ export const pluginSettings = {
     },
   },
   ko: {
-    ...shared,
+    ...sharedByLocale.ko,
     screens: {
       open: "열기",
       offline: "플러그인 설정을 열려면 이 호스트에 연결하세요.",
@@ -281,7 +360,7 @@ export const pluginSettings = {
     },
   },
   "pt-BR": {
-    ...shared,
+    ...sharedByLocale["pt-BR"],
     screens: {
       open: "Abrir",
       offline: "Conecte-se a este host para abrir as configurações do plugin.",
@@ -335,7 +414,7 @@ export const pluginSettings = {
     },
   },
   ru: {
-    ...shared,
+    ...sharedByLocale.ru,
     screens: {
       open: "Открыть",
       offline: "Подключитесь к этому хосту, чтобы открыть настройки плагина.",
@@ -389,7 +468,7 @@ export const pluginSettings = {
     },
   },
   "zh-CN": {
-    ...shared,
+    ...sharedByLocale["zh-CN"],
     logs: {
       action: "日志",
       title: "日志：{{id}}",

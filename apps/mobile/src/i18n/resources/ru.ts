@@ -1,6 +1,12 @@
-import { hostMonitorEn } from "./host-monitor";
+import { hostMonitorRu } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import { onlineServiceRu } from "./online-service";
+import { sharingRu } from "./sharing";
+import { btwRu } from "./btw";
+import { addProjectFlowRu } from "./add-project-flow";
+import { settingsLayoutRu } from "./settings-layout";
+import { scheduleTemplatePromptsRu } from "./schedule-template-prompts";
 
 // Russian plural categories English lacks; i18next selects them from the count. Kept
 // outside the literal because TranslationResources only declares the English categories.
@@ -76,9 +82,19 @@ export const ru: TranslationResources = {
     sourceUnknown: "Источник неизвестен",
     viewPreset: "Просмотр {{name}}",
   },
-  hostMonitor: hostMonitorEn,
+  hostMonitor: hostMonitorRu,
   taskBoard: {
-    ...en.taskBoard,
+    totalTaskCount: "Всего задач: {{count}}",
+    scopedTaskCount: "{{scope}} · {{count}} задач",
+    filters: "Фильтры",
+    resetFilters: "Сбросить фильтры",
+    showTasks: "Показать задач: {{count}}",
+    showSubtasks: "Показать подзадачи",
+    collapseLane: "Свернуть: {{lane}}",
+    expandLane: "Развернуть: {{lane}}",
+    open: "Открыть",
+    answer: "Ответить",
+    readOnly: "Только чтение",
     runCommand: "Выполнение команды",
     loadFailed: "Не удалось загрузить задачи",
     title: "Обзор задач",
@@ -132,7 +148,7 @@ export const ru: TranslationResources = {
     },
   },
   sharing: {
-    ...en.sharing,
+    ...sharingRu,
     title: "Общий доступ",
     offline: "Этот общий ресурс не в сети.",
     emptyResources: "В этом общем ресурсе нет рабочих пространств.",
@@ -143,7 +159,7 @@ export const ru: TranslationResources = {
     ended: "Голосовой разговор завершён",
     failed: "Голосовой разговор прерван",
   },
-  onlineService: en.onlineService,
+  onlineService: onlineServiceRu,
   bots: {
     modeCapWarning:
       "Режимы, позволяющие агентам выполнять команды, также позволяют им читать учётные данные Ait на этом компьютере и обходить ограничения Ait для Bot. Разрешайте их только для работы, которую вы готовы доверить агенту без присмотра.",
@@ -694,7 +710,7 @@ export const ru: TranslationResources = {
       title_mr: "Прикрепить задачу или MR",
     },
   },
-  btw: en.btw,
+  btw: btwRu,
   agentControls: {
     provider: {
       fallback: "Провайдер",
@@ -916,7 +932,7 @@ export const ru: TranslationResources = {
     turnFooter: { workedFor: "Время работы: {{duration}}" },
   },
   importSession: {
-    chooseHostTitle: en.importSession.chooseHostTitle,
+    chooseHostTitle: "Импорт с хоста",
     title: "Импортировать сессию",
     searchPlaceholder: "Поиск сессий...",
     scope: {
@@ -933,7 +949,8 @@ export const ru: TranslationResources = {
       loading: "Загрузка недавних сессий...",
       failedProvider: "Не удалось загрузить сессии провайдера {{provider}}",
       failedImport: "Не удалось импортировать выбранную сессию.",
-      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
+      workingDirectoryUnavailable:
+        "Рабочая папка сессии недоступна на этом хосте: {{path}}. Восстановите папку и повторите импорт.",
     },
     actions: {
       refresh: "Обновить список сессий",
@@ -1856,7 +1873,14 @@ export const ru: TranslationResources = {
       detail: "Остановка локального демона.",
     },
     daemon: {
-      listen: en.desktop.daemon.listen,
+      listen: {
+        host: "Адрес прослушивания",
+        port: "Порт",
+        savedHint: "Перезапустите демон, чтобы применить изменения.",
+        override:
+          "AIT_SERVER_LISTEN переопределяет эту настройку: {{address}}. Удалите переменную окружения, чтобы использовать сохранённый адрес.",
+        invalid: "Введите адрес IPv4 или IPv6 (или localhost) и порт от 0 до 65535.",
+      },
       lifecycle: {
         owned: "Запущен этим сеансом Desktop",
         attached: "Подключён к существующему демону",
@@ -2060,9 +2084,85 @@ export const ru: TranslationResources = {
       },
     },
   },
-  hostPicker: en.hostPicker,
+  hostPicker: {
+    filter: "Фильтр по хосту",
+    filterLabel: "Фильтр: {{host}}",
+    host: "Хост",
+    all: "Все хосты",
+    add: "Добавить хост",
+    enableBuiltInDaemon: "Включить встроенный демон",
+    local: "Локальный",
+    search: "Поиск хостов",
+    settings: "Открыть настройки {{host}}",
+  },
   schedules: {
-    templates: en.schedules.templates,
+    templates: {
+      ...en.schedules.templates,
+      heading: "План следующей задачи рабочего пространства",
+      description: "Выберите начало, настройте задачу и время, а Ait выполнит её по расписанию.",
+      blank: "Начать с нуля",
+      browse: "Выбрать другой шаблон",
+      back: "Назад к шаблонам",
+      configure: "Изменить задачу",
+      applied: "Рекомендуемые настройки от {{name}}",
+      timezone: "Для расписания используется {{timezone}}",
+      customize: "Выбрать тему сводки",
+      customizeHint:
+        "Укажите продукт, технологию или область исследований, за которыми нужно следить.",
+      content: "Содержание и время",
+      execution: "Выполнение и ограничения",
+      categories: {
+        development: "Код и совместная работа",
+        research: "Обновления темы",
+        writing: "Обслуживание проекта",
+      },
+      capabilities: {
+        code: "Изменение кода",
+        pr: "Доступ к PR",
+        web: "Поиск в интернете",
+        params: "Требуется ввод",
+      },
+      apply: "Заполнить задачу",
+      items: {
+        "nightly-test-heal": {
+          ...en.schedules.templates.items["nightly-test-heal"],
+          ...scheduleTemplatePromptsRu["nightly-test-heal"],
+          cadence: "Ежедневно · 02:00",
+          name: "Запуск и исправление тестов",
+          description:
+            "Проверьте тесты рабочего пространства, исследуйте сбои и подтвердите точечное исправление.",
+        },
+        "pr-gatekeeper": {
+          ...en.schedules.templates.items["pr-gatekeeper"],
+          ...scheduleTemplatePromptsRu["pr-gatekeeper"],
+          cadence: "По будням · 10:00",
+          name: "Проверка рисков PR",
+          description: "Проверьте активные pull request на дефекты, способные повлиять на слияние.",
+        },
+        "domain-radar": {
+          ...en.schedules.templates.items["domain-radar"],
+          ...scheduleTemplatePromptsRu["domain-radar"],
+          cadence: "По будням · 09:00",
+          name: "Сводка по теме",
+          description: "Изучите свежие источники по теме и выберите до пяти важных событий.",
+        },
+        "weekly-work-draft": {
+          ...en.schedules.templates.items["weekly-work-draft"],
+          ...scheduleTemplatePromptsRu["weekly-work-draft"],
+          cadence: "Пятница · 16:00",
+          name: "Еженедельный итог рабочего пространства",
+          description: "Соберите коммиты, PR и заметки недели в проверяемый отчёт о прогрессе.",
+        },
+        "docs-freshness": {
+          ...en.schedules.templates.items["docs-freshness"],
+          ...scheduleTemplatePromptsRu["docs-freshness"],
+          cadence: "1-е число месяца · 10:00",
+          name: "Проверка документации",
+          description:
+            "Сравните инструкции в документации с кодом и перечислите конкретные исправления.",
+        },
+      },
+    },
     workspaceUnavailable:
       "Рабочее пространство этого расписания недоступно. Восстановите его, прежде чем изменять расписание.",
     browse: "Расписания рабочего пространства",
@@ -2340,7 +2440,7 @@ export const ru: TranslationResources = {
       },
     },
   },
-  addProjectFlow: en.addProjectFlow,
+  addProjectFlow: addProjectFlowRu,
   projectPicker: {
     placeholder: "Введите текст для поиска...",
     browse: "Обзор…",
@@ -2928,7 +3028,7 @@ export const ru: TranslationResources = {
     sections: {
       general: "Основные",
       appearance: "Оформление",
-      layout: en.settings.sections.layout,
+      layout: "Макет",
       editor: "Редактор",
       shortcuts: "Сочетания клавиш",
       integrations: "Интеграции",
@@ -2937,7 +3037,7 @@ export const ru: TranslationResources = {
       diagnostics: "Диагностика",
       about: "О приложении",
     },
-    layout: en.settings.layout,
+    layout: settingsLayoutRu,
     editor: {
       title: "Редактор",
       vimKeybindings: "Сочетания клавиш Vim",
@@ -3100,7 +3200,10 @@ export const ru: TranslationResources = {
       connectedHosts: "Подключенные хосты",
       offline: "Оффлайн",
       versionDiffers: "Версия отличается от версии на этом устройстве",
-      experimentalFeatures: en.settings.about.experimentalFeatures,
+      experimentalFeatures: {
+        label: "Экспериментальные функции",
+        description: "Включите тестируемые функции, включая Bot.",
+      },
       releaseChannel: {
         label: "Канал выпуска",
         description:
@@ -3515,7 +3618,8 @@ export const ru: TranslationResources = {
           confirmTitle: "Перезапустить {{name}}",
           confirmMessage:
             "Это перезапустит демон. Агенты, работающие на нём, продолжат работу, а приложение автоматически переподключится.",
-          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
+          confirmDesktopMessage:
+            "Перезапустить встроенный демон с сохранёнными настройками? Запущенные задачи и сеансы терминала будут прерваны.",
           restarting: "Перезапуск...",
           unableToReconnectTitle: "Не удалось переподключиться",
           unableToReconnectMessage:

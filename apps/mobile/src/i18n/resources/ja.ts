@@ -1,6 +1,11 @@
-import { hostMonitorEn } from "./host-monitor";
-import { en, type TranslationResources } from "./en";
+import { hostMonitorJa } from "./host-monitor";
+import { type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import { onlineServiceJa } from "./online-service";
+import { sharingJa } from "./sharing";
+import { btwJa } from "./btw";
+import { addProjectFlowJa } from "./add-project-flow";
+import { settingsLayoutJa } from "./settings-layout";
 
 export const ja: TranslationResources = {
   providerControl: {
@@ -39,9 +44,19 @@ export const ja: TranslationResources = {
     sourceUnknown: "不明なソース",
     viewPreset: "{{name}} を表示",
   },
-  hostMonitor: hostMonitorEn,
+  hostMonitor: hostMonitorJa,
   taskBoard: {
-    ...en.taskBoard,
+    totalTaskCount: "合計 {{count}} 件のタスク",
+    scopedTaskCount: "{{scope}} {{count}} 件のタスク",
+    filters: "フィルター",
+    resetFilters: "フィルターをリセット",
+    showTasks: "{{count}} 件のタスクを表示",
+    showSubtasks: "サブタスクを表示",
+    collapseLane: "{{lane}} を折りたたむ",
+    expandLane: "{{lane}} を展開",
+    open: "開く",
+    answer: "回答",
+    readOnly: "読み取り専用",
     runCommand: "コマンドを実行",
     loadFailed: "タスクを読み込めませんでした",
     title: "タスク一覧",
@@ -95,7 +110,7 @@ export const ja: TranslationResources = {
     },
   },
   sharing: {
-    ...en.sharing,
+    ...sharingJa,
     title: "共有",
     offline: "この共有リソースはオフラインです。",
     emptyResources: "この共有リソースにはワークスペースがありません。",
@@ -106,7 +121,7 @@ export const ja: TranslationResources = {
     ended: "音声会話が終了しました",
     failed: "音声会話が中断されました",
   },
-  onlineService: en.onlineService,
+  onlineService: onlineServiceJa,
   bots: {
     modeCapWarning:
       "エージェントがコマンドを実行できるモードでは、このコンピューターの Ait 認証情報を読み取り、Bot の Ait 制限を回避することもできます。エージェントに無人で任せてよい作業にのみ許可してください。",
@@ -650,7 +665,7 @@ export const ja: TranslationResources = {
       title_mr: "イシューまたはMRを添付",
     },
   },
-  btw: en.btw,
+  btw: btwJa,
   agentControls: {
     provider: {
       fallback: "プロバイダー",
@@ -873,7 +888,7 @@ export const ja: TranslationResources = {
     turnFooter: { workedFor: "作業時間 {{duration}}" },
   },
   importSession: {
-    chooseHostTitle: en.importSession.chooseHostTitle,
+    chooseHostTitle: "ホストからインポート",
     title: "セッションをインポート",
     searchPlaceholder: "セッションを検索...",
     scope: {
@@ -890,7 +905,8 @@ export const ja: TranslationResources = {
       loading: "最近のセッションを読み込み中...",
       failedProvider: "{{provider}} のセッションを読み込めませんでした",
       failedImport: "選択したセッションをインポートできませんでした。",
-      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
+      workingDirectoryUnavailable:
+        "セッションの作業ディレクトリがこのホストにありません: {{path}}。ディレクトリを復元して、もう一度インポートしてください。",
     },
     actions: {
       refresh: "セッションを更新",
@@ -1806,7 +1822,15 @@ export const ja: TranslationResources = {
       detail: "ローカルデーモンを停止中。",
     },
     daemon: {
-      listen: en.desktop.daemon.listen,
+      listen: {
+        host: "待ち受けアドレス",
+        port: "ポート",
+        savedHint: "変更を適用するにはデーモンを再起動してください。",
+        override:
+          "AIT_SERVER_LISTEN がこの設定を上書きします: {{address}}。保存したアドレスを使うには環境変数を削除してください。",
+        invalid:
+          "IPv4 または IPv6 アドレス（localhost を含む）と 0～65535 のポートを入力してください。",
+      },
       lifecycle: {
         owned: "このデスクトップセッションが起動",
         attached: "既存のデーモンに接続中",
@@ -2003,7 +2027,17 @@ export const ja: TranslationResources = {
       },
     },
   },
-  hostPicker: en.hostPicker,
+  hostPicker: {
+    filter: "ホストで絞り込む",
+    filterLabel: "フィルター: {{host}}",
+    host: "ホスト",
+    all: "すべてのホスト",
+    add: "ホストを追加",
+    enableBuiltInDaemon: "組み込みデーモンを有効化",
+    local: "ローカル",
+    search: "ホストを検索",
+    settings: "{{host}} の設定を開く",
+  },
   schedules: {
     templates: {
       heading: "ワークスペースの次のタスクを予約",
@@ -2348,7 +2382,7 @@ export const ja: TranslationResources = {
       },
     },
   },
-  addProjectFlow: en.addProjectFlow,
+  addProjectFlow: addProjectFlowJa,
   projectPicker: {
     placeholder: "入力して検索...",
     browse: "参照…",
@@ -2935,7 +2969,7 @@ export const ja: TranslationResources = {
     sections: {
       general: "一般",
       appearance: "外観",
-      layout: en.settings.sections.layout,
+      layout: "レイアウト",
       editor: "エディター",
       shortcuts: "ショートカット",
       integrations: "連携",
@@ -2944,7 +2978,7 @@ export const ja: TranslationResources = {
       diagnostics: "診断",
       about: "アプリ情報",
     },
-    layout: en.settings.layout,
+    layout: settingsLayoutJa,
     editor: {
       title: "エディター",
       vimKeybindings: "Vim キーバインド",
@@ -3102,7 +3136,10 @@ export const ja: TranslationResources = {
       connectedHosts: "接続されているホスト",
       offline: "オフライン",
       versionDiffers: "このデバイスとバージョンが異なります",
-      experimentalFeatures: en.settings.about.experimentalFeatures,
+      experimentalFeatures: {
+        label: "実験的な機能",
+        description: "Bot を含むテスト中の機能を有効にします。",
+      },
       releaseChannel: {
         label: "リリースチャンネル",
         description: "ベータに切り替えると早期に更新を取得してフィードバックを提供できます",
@@ -3348,7 +3385,10 @@ export const ja: TranslationResources = {
         rowHint: "QRコードをスキャンするかリンクをコピーしてスマートフォンをこのホストに接続",
       },
       skills: {
-        ...en.settings.host.skills,
+        docs: "スキル",
+        openDocs: "スキルのドキュメントを開く",
+        unavailable: "オーケストレーションスキルを管理するにはこのホストに接続してください",
+        unsupported: "オーケストレーションスキルを管理するにはこのホストを更新してください",
         sectionTitle: "オーケストレーションスキル",
         title: "オーケストレーションスキル",
         description: "エージェントがCLI経由でオーケストレーションできるようにします。",
@@ -3513,7 +3553,8 @@ export const ja: TranslationResources = {
           confirmTitle: "{{name}}を再起動",
           confirmMessage:
             "これによりデーモンが再起動されます。実行中のエージェントは継続し、アプリは自動的に再接続します。",
-          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
+          confirmDesktopMessage:
+            "保存した設定で組み込みデーモンを再起動しますか？実行中のタスクとターミナルセッションは中断されます。",
           restarting: "再起動中...",
           unableToReconnectTitle: "再接続できません",
           unableToReconnectMessage:

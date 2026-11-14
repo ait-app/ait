@@ -214,6 +214,45 @@ describe("translation resources", () => {
     }
   });
 
+  it("keeps the native high-traffic surfaces out of the English resource", () => {
+    const nativeResources = [ar, es, fr, ja, ko, ptBR, ru, zhCN];
+    for (const resource of nativeResources) {
+      expect(resource.hostMonitor.title).not.toBe(en.hostMonitor.title);
+      expect(resource.onlineService.title).not.toBe(en.onlineService.title);
+      expect(resource.sharing.title).not.toBe(en.sharing.title);
+      expect(resource.btw.title).not.toBe(en.btw.title);
+      expect(resource.addProjectFlow.titles.host).not.toBe(en.addProjectFlow.titles.host);
+      expect(resource.settings.layout.openInSidePane.title).not.toBe(
+        en.settings.layout.openInSidePane.title,
+      );
+      expect(resource.settings.plugins.logs.action).not.toBe(en.settings.plugins.logs.action);
+    }
+  });
+
+  it("keeps schedule template prompts and topic fields native", () => {
+    const nativeResources = [ar, es, fr, ja, ko, ptBR, ru, zhCN];
+    const templateKeys = [
+      "nightly-test-heal",
+      "pr-gatekeeper",
+      "domain-radar",
+      "weekly-work-draft",
+      "docs-freshness",
+    ] as const;
+    for (const resource of nativeResources) {
+      for (const key of templateKeys) {
+        expect(resource.schedules.templates.items[key].prompt).not.toBe(
+          en.schedules.templates.items[key].prompt,
+        );
+      }
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.label).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.label,
+      );
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.placeholder).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.placeholder,
+      );
+    }
+  });
+
   it("provides every CLDR plural form for translated plural keys", () => {
     expect(findMissingTranslatedPluralForms(ru, "ru")).toEqual([]);
     expect(findMissingTranslatedPluralForms(ar, "ar")).toEqual([]);
