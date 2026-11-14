@@ -15,6 +15,43 @@ mod tickets;
 use support::{BOT_SESSION, Scoped, codex_modes, rejected, structured, succeeded};
 
 #[tokio::test]
+async fn creation_model_hints_reach_shared_and_scoped_mcp_clients() {
+    let scoped = Scoped::start().await;
+    scoped.setup(codex_modes(&["auto"])).await;
+    let credential = scoped.bot_credential();
+    for bearer in [TOKEN, credential.as_str()] {
+        for (fields, hint) in [
+            (
+                json!({"settings":{"model":"namespace/model"}}),
+                "settings.model",
+            ),
+            (json!({"settings":{"model":null}}), "settings.model"),
+            (json!({"model":"namespace/model"}), "top-level model field"),
+            (json!({"model":null}), "top-level model field"),
+        ] {
+            let mut arguments = json!({"provider":"codex/namespace/model","title":"Task",
+                "initialPrompt":"work"});
+            arguments
+                .as_object_mut()
+                .unwrap()
+                .extend(fields.as_object().unwrap().clone());
+            let response = scoped.call(bearer, None, "create_agent", arguments).await;
+            assert_eq!(response["error"]["code"], -32602, "{response}");
+            let message = response["error"]["message"].as_str().unwrap();
+            assert!(message.contains(hint), "{response}");
+            assert!(message.contains("<provider-id>/<model-id>"), "{response}");
+            assert!(message.contains("list_models"), "{response}");
+            assert!(
+                message.contains("preserve its namespace and slashes"),
+                "{response}"
+            );
+            assert!(response.get("result").is_none(), "{response}");
+        }
+    }
+    scoped.stop().await;
+}
+
+#[tokio::test]
 async fn scoped_credential_lists_only_granted_tools() {
     let scoped = Scoped::start().await;
     scoped.setup(Value::Null).await;
