@@ -5,12 +5,13 @@ export const openProject = {
       description: "Ouvrez un dossier sur votre machine",
     },
     importSession: {
-      title: "Session d'importation",
-      description: "Apportez des sessionsCLIexternes récentes",
+      title: "Importer une session",
+      description:
+        "Ouvrez une session Claude Code, Codex ou autre que vous avez lancée dans un terminal",
     },
     setupProviders: {
-      title: "Fournisseurs d'installation",
-      description: "ConfigurezClaude Code,Codexet plus",
+      title: "Configurer les fournisseurs",
+      description: "Configurez Claude Code, Codex et d'autres",
     },
     signIn: {
       title: "Se connecter",

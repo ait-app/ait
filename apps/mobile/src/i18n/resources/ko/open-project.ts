@@ -6,7 +6,7 @@ export const openProject = {
     },
     importSession: {
       title: "세션 가져오기",
-      description: "최근 외부 CLI 세션을 가져옵니다",
+      description: "터미널에서 시작한 Claude Code, Codex 등의 세션을 엽니다",
     },
     setupProviders: {
       title: "프로바이더 설정",

@@ -9,11 +9,11 @@ export const agentList = {
   },
   badges: {
     archived: "مؤرشف",
-    pending: "{{count}}معلق",
+    pending: "{{count}} معلق",
   },
   archiveSheet: {
-    hostOffline: "Host غير متصل",
+    hostOffline: "المضيف غير متصل",
     runningAgent: "هذا الوكيل لا يزال قيد التشغيل. ستؤدي أرشفته إلى إيقاف الوكيل.",
-    archive: "أرشيف",
+    archive: "أرشفة",
   },
 };

@@ -1,7 +1,7 @@
 export const providerUsage = {
-  lastUpdated: "Last updated {{time}}",
-  noSuccessfulUpdate: "No successful update",
-  resetTimePassed: "Reset time passed",
+  lastUpdated: "Última atualização {{time}}",
+  noSuccessfulUpdate: "Nenhuma atualização bem-sucedida",
+  resetTimePassed: "O horário de redefinição já passou",
   summaryUsed: "{{source}} {{amount}} usado",
   summaryRemaining: "{{source}} {{amount}} restante",
   options: "Configurações",

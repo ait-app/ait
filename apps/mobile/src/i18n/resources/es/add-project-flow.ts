@@ -34,7 +34,7 @@ export const addProjectFlow = {
       compressing: "Comprimiendo objetos…",
       receiving: "Recibiendo objetos…",
       resolving: "Resolviendo diferencias…",
-      checkout: "Comprobando archivos…",
+      checkout: "Extrayendo archivos…",
       registering: "Registrando proyecto…",
     },
     percent: "{{percent}} %",
@@ -48,7 +48,11 @@ export const addProjectFlow = {
     noMatchingHosts: "No hay hosts coincidentes",
     hostUpgrade: "Actualiza el host para usar Añadir proyecto.",
   },
-  actions: { openPath: "Abrir esta ruta", useParent: "Usar este padre", navigate: "Navegar" },
+  actions: {
+    openPath: "Abrir esta ruta",
+    useParent: "Usar este directorio padre",
+    navigate: "Navegar",
+  },
   repository: {
     cloneUrl: "Clonar esta URL de repositorio",
     cloneVia: "Clonar owner/repo mediante {{protocol}}",

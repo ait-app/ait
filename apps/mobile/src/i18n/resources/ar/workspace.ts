@@ -79,7 +79,7 @@ export const workspace = {
       loading: "جارٍ تحميل الملفات...",
     },
     errors: {
-      failedToListDirectory: "فشل في سرد ​​الدليل",
+      failedToListDirectory: "فشل في سرد الدليل",
       createFailed: "فشل إنشاء العنصر",
       renameFailed: "فشل إعادة تسمية العنصر",
       duplicateFailed: "فشل تكرار العنصر",
@@ -174,7 +174,7 @@ export const workspace = {
     bottom: "إلى الأسفل",
   },
   tabs: {
-    loading: "تحميل...",
+    loading: "جارٍ التحميل...",
     modified: "تغييرات غير محفوظة",
     empty: {
       missingDirectory:
@@ -299,7 +299,7 @@ export const workspace = {
     toasts: {
       workspacePathUnavailable: "مسار مساحة العمل غير متاح بعد",
       branchNameUnavailable: "اسم الفرع غير متوفر",
-      terminalQueued: "تحضير مساحة العمل، وفتح الوحدة الطرفية عندما تكون جاهزة...",
+      terminalQueued: "جارٍ تحضير مساحة العمل، وستُفتح الطرفية عندما تصبح جاهزة...",
       workspacePathCopiedLabel: "مسار مساحة العمل",
       branchNameCopiedLabel: "اسم الفرع",
     },
@@ -312,7 +312,7 @@ export const workspace = {
       restart: "إعادة التشغيل",
       run: "تشغيل",
       stop: "إيقاف",
-      view: "عرض الوحدة الطرفية",
+      view: "عرض الطرفية",
     },
     accessibility: {
       trigger: "البرامج النصية لمساحة العمل",
@@ -377,7 +377,7 @@ export const workspace = {
       },
       mergeBranch: {
         label: "دمج محليا",
-        pending: "جار الدمج...",
+        pending: "جارٍ الدمج...",
         success: "تم الدمج",
       },
       resetWorkspace: {
@@ -391,7 +391,7 @@ export const workspace = {
       },
       archive: {
         label: "أرشفة مساحة العمل",
-        pending: "أرشفة...",
+        pending: "جارٍ الأرشفة...",
         success: "مؤرشف",
       },
       mergePr: {
@@ -412,8 +412,8 @@ export const workspace = {
         enableMerge: "دمج تلقائي (merge)",
         enableRebase: "دمج تلقائي (rebase)",
         enabled: "تم تمكين الدمج التلقائي",
-        enabling: "تمكين الدمج التلقائي...",
-        disabling: "تعطيل الدمج التلقائي...",
+        enabling: "جارٍ تمكين الدمج التلقائي...",
+        disabling: "جارٍ تعطيل الدمج التلقائي...",
         disabled: "تم تعطيل الدمج التلقائي",
       },
       unavailable: {
@@ -421,21 +421,21 @@ export const workspace = {
         resetNoRemote: "تعذرت إعادة الضبط: لم يُضبط origin",
         viewPrNoForge: "عرض {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
         pullNoRemote: "السحب غير متاح هنا لأن هذا الفرع غير متصل بمستودع بعيد بعد",
-        pullDirty: "السحب غير متاح أثناء وجود تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
+        pullDirty: "السحب غير متاح أثناء وجود تغييرات محلية، لذا التزم بها أو خبّئها أولًا",
         pullUpToDate: "السحب غير متاح لأن هذا الفرع محدث بالفعل",
         pushNoRemote: "الدفع غير متاح هنا لأن هذا الفرع غير متصل بمستودع بعيد بعد",
         pushBehind: "الدفع غير متاح حتى الآن نظرًا لوجود تغييرات أحدث يجب إدخالها أولاً",
         pushNothing: "الدفع غير متاح لأنه لا يوجد شيء جديد لإرساله",
         pullAndPushNoRemote: "السحب والدفع غير متاح هنا لأن هذا الفرع غير متصل بمستودع بعيد بعد",
         pullAndPushDirty:
-          "لا يتوفر السحب والدفع أثناء وجود تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
+          "لا يتوفر السحب والدفع أثناء وجود تغييرات محلية، لذا التزم بها أو خبّئها أولًا",
         pullAndPushNoIncoming: "السحب والدفع غير متاحين لأنه لا توجد تغييرات واردة للسحب أولاً",
         pullAndPushInSync: "السحب والدفع غير متاح لأن هذا الفرع متزامن بالفعل",
         pullAndPushNothingToPush: "السحب والدفع غير متاحين لأنه لا يوجد شيء جديد لإرساله بعد السحب",
         createPrNoForge: "إنشاء {{noun}} غير متاح حاليًا لأن {{brand}} غير متصل",
         createPrNoCommits: "إنشاء PR غير متاح لأن هذا الفرع ليس لديه أي التزامات جديدة حتى الآن",
         mergeNoBase: "الدمج غير متاح لأننا لم نتمكن من تحديد الفرع الأساسي",
-        mergeDirty: "الدمج غير متاح عندما تكون لديك تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
+        mergeDirty: "الدمج غير متاح عندما تكون لديك تغييرات محلية، لذا التزم بها أو خبّئها أولًا",
         mergeNothing: "الدمج غير متاح لأن هذا الفرع لا يحتوي على أي شيء جديد لدمجه حتى الآن",
         mergePrNoForge: "دمج {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
         mergePrMissing: "دمج PR غير متاح لأنه لا يوجد طلب سحب حتى الآن",
@@ -501,11 +501,11 @@ export const workspace = {
       failedRefresh: "فشل تحديث حالة git.",
       seeUncommittedChanges: "عرض التغييرات غير الملتزم بها",
       seeCommittedChanges: "عرض التغييرات الملتزم بها",
-      checkingRepository: "فحص المستودع...",
+      checkingRepository: "جارٍ فحص المستودع...",
       notRepository: "ليس مستودع جيت",
       diffMode: "وضع الفرق",
-      uncommitted: "غير ملتزم",
-      committed: "ملتزم",
+      uncommitted: "غير ملتزم بها",
+      committed: "ملتزم بها",
       branchUnknown: "مجهول",
       base: "قاعدة",
       newFile: "جديد",

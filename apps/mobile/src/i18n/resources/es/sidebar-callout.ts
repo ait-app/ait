@@ -1,3 +1,3 @@
 export const sidebarCallout = {
-  dismiss: "Despedir",
+  dismiss: "Descartar",
 };

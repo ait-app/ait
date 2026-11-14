@@ -23,5 +23,5 @@ export const modelSelector = {
   noMatchesForQuery: "Aucun modèle ne correspond à « {{query}} »",
   searchAllPlaceholder: "Rechercher dans tous les modèles...",
   searchPlaceholder: "Rechercher des modèles...",
-  openProviderSettings: "Ouvrir les paramètres{{provider}}",
+  openProviderSettings: "Ouvrir les paramètres de {{provider}}",
 };

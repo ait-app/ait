@@ -3,11 +3,11 @@ export const composer = {
     desktop: "에이전트에게 메시지를 보내거나 @files 태그, /commands, /skills를 사용하세요",
     mobile: "메시지, @files, /commands",
     fallback: "메시지...",
-    terminal: "Prompt",
+    terminal: "프롬프트",
   },
   input: {
     accessibilityLabel: "에이전트에게 메시지...",
-    terminalAccessibilityLabel: "Terminal prompt",
+    terminalAccessibilityLabel: "터미널 프롬프트",
     fullscreen: "전체 화면",
     exitFullscreen: "전체 화면 종료",
     focusHint: "{{shortcut}}로 포커스",

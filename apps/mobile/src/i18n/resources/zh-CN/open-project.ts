@@ -6,7 +6,7 @@ export const openProject = {
     },
     importSession: {
       title: "导入会话",
-      description: "导入最近的外部 CLI 会话",
+      description: "打开你在终端中启动的 Claude Code、Codex 或其他会话",
     },
     setupProviders: {
       title: "设置提供方",

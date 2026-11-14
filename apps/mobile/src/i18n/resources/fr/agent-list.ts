@@ -1,19 +1,19 @@
 export const agentList = {
-  fallbackTitle: "Nouvelle séance",
+  fallbackTitle: "Nouvelle session",
   dateSections: {
     today: "Aujourd'hui",
     yesterday: "Hier",
     thisWeek: "Cette semaine",
     thisMonth: "Ce mois-ci",
-    older: "Plus vieux",
+    older: "Plus anciens",
   },
   badges: {
     archived: "Archivé",
-    pending: "{{count}}en attente",
+    pending: "{{count}} en attente",
   },
   archiveSheet: {
-    hostOffline: "Hosthors ligne",
+    hostOffline: "Hôte hors ligne",
     runningAgent: "Cet agent est toujours en cours d'exécution. L’archiver arrêtera l’agent.",
-    archive: "Archive",
+    archive: "Archiver",
   },
 };

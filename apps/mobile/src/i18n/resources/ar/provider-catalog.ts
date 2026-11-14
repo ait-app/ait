@@ -1,10 +1,10 @@
 export const providerCatalog = {
-  search: "مقدمي البحث",
+  search: "البحث عن مقدمي الخدمات",
   noProviders: "لم يتم العثور على مقدمي الخدمات",
   actions: {
-    add: "يضيف",
-    adding: "إضافة",
+    add: "إضافة",
+    adding: "جارٍ الإضافة",
     installInstructions: "تعليمات التثبيت",
-    installInstructionsFor: "تعليمات تثبيت{{provider}}",
+    installInstructionsFor: "تعليمات تثبيت {{provider}}",
   },
 };

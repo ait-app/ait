@@ -13,7 +13,7 @@ export const agentStream = {
     deny: "Refuser",
     accept: "Accepter",
     implement: "Mettre en œuvre",
-    question: "Comment souhaitez-vous procéder?",
+    question: "Comment souhaitez-vous procéder ?",
     proposedPlan: "Plan proposé",
   },
 };

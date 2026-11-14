@@ -13,13 +13,13 @@ export const review = {
   },
   comment: {
     add: "Ajouter un commentaire",
-    edit: "Modifier le commentaire de l'avis",
-    delete: "Supprimer le commentaire de l'avis",
-    label: "Revoir le commentaire",
+    edit: "Modifier le commentaire de revue",
+    delete: "Supprimer le commentaire de revue",
+    label: "Commentaire de revue",
     placeholder: "Laisser un commentaire",
     cancel: "Annuler",
     cancelAccessibility: "Annuler le commentaire de révision",
-    save: "Commentaire",
-    saveAccessibility: "Enregistrer le commentaire de l'avis",
+    save: "Commenter",
+    saveAccessibility: "Enregistrer le commentaire de revue",
   },
 };

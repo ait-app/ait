@@ -4,16 +4,16 @@ export const agentList = {
     today: "Hoy",
     yesterday: "Ayer",
     thisWeek: "Esta semana",
-    thisMonth: "este mes",
-    older: "Más viejo",
+    thisMonth: "Este mes",
+    older: "Más antiguos",
   },
   badges: {
     archived: "Archivado",
-    pending: "{{count}}pendiente",
+    pending: "{{count}} en espera",
   },
   archiveSheet: {
-    hostOffline: "Hostfuera de línea",
+    hostOffline: "Host fuera de línea",
     runningAgent: "Este agente todavía está ejecutándose. Archivarlo detendrá al agente.",
-    archive: "Archivo",
+    archive: "Archivar",
   },
 };

@@ -4,5 +4,5 @@ export const downloads = {
   cancelled: "تم إلغاء التنزيل.",
   failed: "فشل تنزيل الملف.",
   shareFile: "مشاركة الملف",
-  shareFileNamed: "مشاركة{{fileName}}",
+  shareFileNamed: "مشاركة {{fileName}}",
 };

@@ -257,21 +257,21 @@ export const workspace = {
       unsavedMessage:
         "Cet onglet contient des modifications non enregistrées. Le fermer supprimera le brouillon.",
       closeWithoutSaving: "Fermer sans enregistrer",
-      closePaneTitle: "Fermer le volet?",
+      closePaneTitle: "Fermer le volet ?",
       bulkUnsaved:
         "{{count}} onglet(s) contiennent des modifications non enregistrées. Les fermer supprimera ces brouillons.",
       close: "Fermer",
       cancel: "Annuler",
       archive: "Archiver",
-      closeTerminalTitle: "Fermer le terminal?",
+      closeTerminalTitle: "Fermer le terminal ?",
       closeTerminalMessage:
         "Tout processus en cours d’exécution dans ce terminal sera immédiatement arrêté.",
-      archiveRunningAgentTitle: "Archiver l'agent en cours d'exécution?",
+      archiveRunningAgentTitle: "Archiver l'agent en cours d'exécution ?",
       archiveRunningAgentMessage:
         "Cet agent est toujours en cours d'exécution. L'archiver arrêtera l'agent et fermera l'onglet.",
-      closeTabsLeftTitle: "Fermer les onglets à gauche?",
-      closeTabsRightTitle: "Fermer les onglets à droite?",
-      closeOtherTabsTitle: "Fermer les autres onglets?",
+      closeTabsLeftTitle: "Fermer les onglets à gauche ?",
+      closeTabsRightTitle: "Fermer les onglets à droite ?",
+      closeOtherTabsTitle: "Fermer les autres onglets ?",
       bulk: {
         all: "Cela archivera {{agents}} agent(s), fermera {{terminals}} terminal(s) et fermera {{tabs}} onglet(s). Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
         agentsAndTerminals:
@@ -487,7 +487,7 @@ export const workspace = {
         failedResetWorkspace: "Échec de la réinitialisation",
       },
       archiveWarning: {
-        title: "Archiver «{{workspaceName}}»?",
+        title: "Archiver « {{workspaceName}} » ?",
         confirm: "Archiver",
         cancel: "Annuler",
         uncommittedChanges: "Modifications non validées",
@@ -496,8 +496,8 @@ export const workspace = {
         addedLines: "{{count}} lignes ajoutées",
         deletedLine: "{{count}} ligne supprimée",
         deletedLines: "{{count}} lignes supprimées",
-        unpushedCommit: "{{count}} validation non poussée",
-        unpushedCommits: "{{count}} validations non poussées",
+        unpushedCommit: "{{count}} commit non envoyé",
+        unpushedCommits: "{{count}} commits non envoyés",
       },
     },
     diff: {

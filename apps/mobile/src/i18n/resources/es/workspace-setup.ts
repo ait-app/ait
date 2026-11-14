@@ -1,6 +1,6 @@
 export const workspaceSetup = {
   errors: {
     selectModel: "Selecciona un modelo",
-    hostDisconnected: "Hostno está conectado",
+    hostDisconnected: "El host no está conectado",
   },
 };

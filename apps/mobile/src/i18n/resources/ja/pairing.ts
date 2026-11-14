@@ -12,12 +12,12 @@ export const pairing = {
   },
   direct: {
     title: "直接接続",
-    helper: "Aitサーバーのアドレスを入力してください。",
+    helper: "サーバーのアドレスとアクセストークンを入力してください。",
     fields: {
       host: "ホスト",
       port: "ポート",
-      password: "パスワード",
-      optional: "任意",
+      password: "サーバートークン",
+      optional: "必須",
       useSsl: "SSLを使用",
       connectionUri: "接続URI",
     },
@@ -53,7 +53,7 @@ export const pairing = {
   },
   remoteSsh: {
     title: "リモート SSH",
-    helper: "リモートホストで動作する Ait デーモンに接続します。",
+    helper: "SSH 経由でリモートの Ait サーバーに接続します（既定のサーバーポート: 7316）。",
     fields: {
       target: "SSH ホスト",
     },

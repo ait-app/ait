@@ -21,11 +21,11 @@ export const bots = {
   groupSchedules: "Planifications : créer et gérer des planifications",
   groupScripts: "Scripts : exécuter les scripts de l'espace de travail",
   groupTerminals: "Terminaux : créer des terminaux et y saisir du texte",
-  permissionRiskHint: "Can run commands.",
-  modeCap: "Default agent mode",
-  modeNotAllowed: "Not allowed",
+  permissionRiskHint: "Peut exécuter des commandes.",
+  modeCap: "Mode d'agent par défaut",
+  modeNotAllowed: "Non autorisé",
   modeCapHint:
-    "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
+    "Choisissez le mode des agents que le Bot lance pour chaque fournisseur. Le Bot ne peut utiliser que ce mode ; choisissez Non autorisé pour l'empêcher d'utiliser un fournisseur.",
   providerUnavailable: "{{provider}} (indisponible)",
   readOnlyHint:
     "Le Bot s'exécute dans le mode le plus strict de son fournisseur (pour Claude, le mode par défaut, où vos propres règles d'autorisation s'appliquent toujours) et laisse les modifications aux agents qu'il lance.",
@@ -52,7 +52,7 @@ export const bots = {
   message: "Message",
   cancel: "Annuler le tour",
   emptyChat: "Envoyez un message pour démarrer une conversation.",
-  session: "Bot session",
+  session: "Session du Bot",
   reset: "Nouvelle conversation",
   resetConfirm:
     "Démarrer une nouvelle conversation ? Les messages existants sont conservés et les derniers réglages du Bot seront appliqués.",

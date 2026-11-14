@@ -20,11 +20,11 @@ export const bots = {
   groupSchedules: "スケジュール：スケジュールの作成と管理",
   groupScripts: "スクリプト：ワークスペースのスクリプトの実行",
   groupTerminals: "ターミナル：ターミナルの作成と入力",
-  permissionRiskHint: "Can run commands.",
-  modeCap: "Default agent mode",
-  modeNotAllowed: "Not allowed",
+  permissionRiskHint: "コマンドを実行できます。",
+  modeCap: "デフォルトのエージェントモード",
+  modeNotAllowed: "許可しない",
   modeCapHint:
-    "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
+    "Bot が各プロバイダーで起動するエージェントのモードを選択します。Bot はこのモードしか使用できません。プロバイダーを使わせない場合は「許可しない」を選択してください。",
   providerUnavailable: "{{provider}}（利用不可）",
   readOnlyHint:
     "Bot はプロバイダーが提供する最も厳格なモードで実行され（Claude ではデフォルトモードで、あなた自身の許可ルールは引き続き適用されます）、変更は Bot が起動するエージェントに任せます。",
@@ -49,7 +49,7 @@ export const bots = {
   message: "メッセージ",
   cancel: "ターンをキャンセル",
   emptyChat: "メッセージを送信して会話を始めましょう。",
-  session: "Bot session",
+  session: "Bot セッション",
   reset: "新しい会話",
   resetConfirm:
     "新しい会話を始めますか？既存のメッセージは保持され、最新の Bot 設定が適用されます。",

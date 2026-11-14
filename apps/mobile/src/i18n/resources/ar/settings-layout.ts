@@ -1,6 +1,6 @@
 export const settingsLayout = {
   openInSidePane: {
-    title: "فتح الموضع",
+    title: "موضع الفتح",
     destinations: {
       main: "اللوحة الرئيسية",
       side: "على الجانب",

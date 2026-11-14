@@ -1,6 +1,6 @@
 export const contextWindow = {
-  noData: "No context usage yet",
-  accessibilityNoData: "View account usage",
+  noData: "Контекст пока не использовался",
+  accessibilityNoData: "Показать использование аккаунта",
   title: "Контекстное окно",
   used: "Использовано: {{percentage}}%",
   tokens: "Токены: {{used}} / {{max}}",

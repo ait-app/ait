@@ -1,6 +1,6 @@
 export const agentControls = {
   thinking: {
-    title: "Pensée",
+    title: "Réflexion",
     unknown: "Inconnu",
     selectWithValue: "Sélectionnez l'option de réflexion ({{value}})",
   },
@@ -18,16 +18,16 @@ export const agentControls = {
     autoRetry: "Nouvelle tentative automatique",
     fastMode: "Niveau de service rapide",
     slowMode: "Niveau de service lent",
-    title: "Caractéristiques",
-    open: "Fonctionnalités de l'agent ouvert",
-    on: "Sur",
+    title: "Fonctionnalités",
+    open: "Ouvrir les fonctionnalités de l'agent",
+    on: "Activé",
     off: "Désactivé",
   },
   mode: {
     allowFileWrites: "Autoriser l’écriture de fichiers",
     askAndRemember: "Demander et mémoriser",
     title: "Mode",
-    searchPlaceholder: "Modes de recherche...",
+    searchPlaceholder: "Rechercher des modes...",
     selectWithValue: "Sélectionnez le mode agent ({{value}})",
   },
   hints: {

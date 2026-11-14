@@ -12,12 +12,12 @@ export const pairing = {
   },
   direct: {
     title: "Прямое подключение",
-    helper: "Введите адрес сервера Ait.",
+    helper: "Введите адрес сервера и токен доступа.",
     fields: {
       host: "Хост",
       port: "Порт",
-      password: "Пароль",
-      optional: "Необязательно",
+      password: "Токен сервера",
+      optional: "Обязательно",
       useSsl: "Использовать SSL",
       connectionUri: "URI подключения",
     },
@@ -55,7 +55,7 @@ export const pairing = {
   },
   remoteSsh: {
     title: "Удалённый SSH",
-    helper: "Подключитесь к демону Ait на удалённом хосте.",
+    helper: "Подключитесь к удалённому серверу Ait по SSH (порт сервера по умолчанию: 7316).",
     fields: {
       target: "Хост SSH",
     },

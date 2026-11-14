@@ -49,11 +49,11 @@ export const message = {
     retry: "Reintentar el dictado",
     insert: "Insertar transcripción",
     insertAndSend: "Insertar transcripción y enviar",
-    failed: "Fallo en el dictado:{{error}}",
+    failed: "Fallo en el dictado: {{error}}",
     failedRetry: "El dictado falló. Toca reintentar.",
   },
   question: {
-    submit: "Entregar",
+    submit: "Enviar",
     next: "Siguiente",
     answerPlaceholder: "Escribe tu respuesta...",
     otherPlaceholder: "Otro...",
@@ -75,7 +75,7 @@ export const message = {
     loading: "Compactando...",
     auto: "Contexto compactado automáticamente",
     manual: "Contexto compactado manualmente",
-    withTokens: "Contexto compactado (tokens{{tokens}}K)",
+    withTokens: "Contexto compactado ({{tokens}}K tokens)",
     completed: "Contexto compactado",
   },
 

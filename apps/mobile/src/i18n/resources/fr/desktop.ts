@@ -6,7 +6,7 @@ export const desktop = {
     close: "Fermer la fenêtre",
   },
   quitting: {
-    title: "Quitter Ait...",
+    title: "Fermeture d'Ait...",
     detail: "Arrêt du démon local.",
   },
   daemon: {
@@ -42,8 +42,8 @@ export const desktop = {
       title: "Statut",
       builtInOnly: "Seul le démon de bureau intégré est affiché ici",
       running: "en cours d'exécution",
-      notRunning: "ne fonctionne pas",
-      pid: "PID{{pid}}",
+      notRunning: "arrêté",
+      pid: "PID {{pid}}",
     },
     management: {
       title: "Gérer le démon intégré",
@@ -51,11 +51,11 @@ export const desktop = {
       pauseTitle: "Suspendre le démon intégré",
       pauseMessage:
         "Cela arrêtera immédiatement le démon intégré. Les agents en cours d'exécution et les terminaux connectés au démon intégré seront arrêtés.",
-      pauseAndStop: "Pause et arrêt",
+      pauseAndStop: "Suspendre et arrêter",
       registrationFailed:
-        "Built-in daemon started, but Ait could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+        "Le démon intégré a démarré, mais Ait n'a pas pu enregistrer la connexion localhost. Désactivez puis réactivez la gestion du démon, ou ajoutez localhost manuellement.",
       pausedStopFailed:
-        "La gestion du démon intégré a été suspendue, mais Ait n'a ​​pas pu arrêter le démon.",
+        "La gestion du démon intégré a été suspendue, mais Ait n'a pas pu arrêter le démon.",
       updateFailed: "Impossible de mettre à jour la gestion des démons intégrés.",
     },
     keepRunning: {
@@ -64,20 +64,20 @@ export const desktop = {
     },
     logs: {
       title: "Fichier journal",
-      modalTitle: "JournauxDaemon",
+      modalTitle: "Journaux du démon",
       unavailable: "Chemin du journal indisponible",
       empty: "(le fichier journal est vide)",
       copied: "Chemin du journal copié.",
       copyFailed: "Impossible de copier le chemin du journal.",
-      open: "Journaux ouverts",
+      open: "Ouvrir les journaux",
       copyPath: "Copier le chemin",
     },
     fullStatus: {
       title: "Statut complet",
-      modalTitle: "StatutDaemon",
+      modalTitle: "État du démon",
       view: "Afficher l'état",
       copied: "Statut copié dans le presse-papiers.",
-      fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
+      fetchFailed: "Échec de la récupération de l'état du démon : {{message}}",
     },
     versionMismatch:
       "Les versions de l'application et du démon ne correspondent pas. Mettez à jour les deux vers la même version pour une meilleure expérience.",
@@ -88,16 +88,16 @@ export const desktop = {
       checking: "Vérification des mises à jour de l'application...",
       installing: "Installation de la mise à jour de l'application...",
       upToDate: "L'application est à jour.",
-      upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
+      upToDateWithLastChecked: "À jour. Dernière vérification à {{time}}.",
       pending: "Nous vous informerons lorsque la mise à jour sera prête.",
       pendingWithLastChecked:
         "Nous vous informerons lorsque la mise à jour sera prête. Dernière vérification à {{time}}.",
       pendingWithVersion: "Mise à jour trouvée : {{version}}. Téléchargement...",
       pendingWithVersionAndLastChecked:
         "Mise à jour trouvée : {{version}}. Téléchargement... Dernière vérification à {{time}}.",
-      availableWithVersion: "Mise à jour prête:{{version}}",
+      availableWithVersion: "Mise à jour prête : {{version}}",
       availableWithVersionAndLastChecked:
-        "Mise à jour prête:{{version}}. Dernière vérification à {{time}}.",
+        "Mise à jour prête : {{version}}. Dernière vérification à {{time}}.",
       available: "Une mise à jour de l'application est prête à être installée.",
       availableWithLastChecked:
         "Une mise à jour de l'application est prête à être installée. Dernière vérification à {{time}}.",
@@ -115,7 +115,7 @@ export const desktop = {
       installingAction: "Installation...",
       installAndRestart: "Installer et redémarrer",
       installingDescription: "Installation et redémarrage...",
-      versionReady: "{{version}}est prêt à être installé.",
+      versionReady: "{{version}} est prête à être installée.",
       newVersionReady: "Une nouvelle version est prête à être installée.",
       restartWarning:
         "La mise à niveau de l'application arrêtera l'exécution des agents et fermera les sessions de terminal.",
@@ -126,10 +126,10 @@ export const desktop = {
     saveFailed: "Impossible d'enregistrer les paramètres du bureau.",
   },
   rosetta: {
-    title: "Téléchargez la versionApple Silicon",
-    runningIntel: "Vous exécutez la versionIntelde Ait sousRosettasurApple Silicon.",
+    title: "Téléchargez la version Apple Silicon",
+    runningIntel: "Vous exécutez la version Intel d'Ait sous Rosetta sur Apple Silicon.",
     highCpu:
-      "Cela entraîne une utilisation élevée du processeur. Téléchargez la versionApple Siliconpour le réparer.",
+      "Cela entraîne une utilisation élevée du processeur. Téléchargez la version Apple Silicon pour y remédier.",
     download: "Télécharger",
   },
   permissions: {
@@ -138,15 +138,15 @@ export const desktop = {
       denied: "Les notifications sont refusées dans les paramètres système.",
       notGranted: "Les notifications n'ont pas encore été accordées.",
       webOnly:
-        "L’état des notifications sur le bureau est uniquement disponible sur l’exécution Web.",
+        "L’état des notifications sur le bureau est uniquement disponible dans l’environnement d’exécution Web.",
       supported: "Les notifications de bureau sont prises en charge.",
       unsupported: "Les notifications de bureau ne sont pas prises en charge sur cette plateforme.",
       apiUnavailable: "L'API de notification Web n'est pas disponible dans cet environnement.",
       requestsWebOnly:
-        "Les demandes de notification sur le bureau sont uniquement disponibles sur l'exécution Web.",
+        "Les demandes de notification sur le bureau sont uniquement disponibles dans l'environnement d'exécution Web.",
       requestUnavailable: "L'API de notification Web requestPermission() n'est pas disponible.",
-      requestFailed: "Échec de la demande d'autorisation de notification:{{message}}",
-      unexpectedState: "État d'autorisation de notification inattendu:{{state}}",
+      requestFailed: "Échec de la demande d'autorisation de notification : {{message}}",
+      unexpectedState: "État d'autorisation de notification inattendu : {{state}}",
     },
     microphone: {
       webOnly:
@@ -155,20 +155,20 @@ export const desktop = {
       granted: "L’accès au microphone est accordé.",
       denied: "L'accès au microphone est refusé dans les paramètres système.",
       notGranted: "L'autorisation du microphone n'a pas encore été accordée.",
-      unexpectedState: "État d'autorisation inattendu du microphone:{{state}}",
+      unexpectedState: "État d'autorisation inattendu du microphone : {{state}}",
       statusApiUnavailable:
-        "L’API d’état du microphone n’est pas disponible dans ce runtime. Utilisez Request pour vérifier l’accès.",
-      queryFailed: "Échec de l'interrogation de l'état du microphone:{{message}}",
+        "L’API d’état du microphone n’est pas disponible dans ce runtime. Utilisez Demander pour vérifier l’accès.",
+      queryFailed: "Échec de l'interrogation de l'état du microphone : {{message}}",
       captureUnavailable: "La capture du microphone n'est pas disponible dans cet environnement.",
       permissionApiUnavailable:
-        "L'API d'état des autorisations n'est pas disponible. Utilisez Request pour vérifier l’accès.",
+        "L'API d'état des autorisations n'est pas disponible. Utilisez Demander pour vérifier l’accès.",
       requestsWebOnly:
         "Les demandes de microphone de bureau sont uniquement disponibles sur le runtime Web.",
       captureApiUnavailable:
         "L'API de capture de microphone n'est pas disponible dans cet environnement.",
       requestDenied: "L'autorisation du microphone a été refusée par l'utilisateur ou le système.",
       noDevice: "Aucun microphone n'a été trouvé.",
-      requestFailed: "Échec de la demande d'autorisation du microphone:{{message}}",
+      requestFailed: "Échec de la demande d'autorisation du microphone : {{message}}",
     },
     empty: {
       notifications: "L'état de la notification n'a pas encore été vérifié.",

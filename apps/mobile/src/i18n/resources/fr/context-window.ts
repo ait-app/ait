@@ -1,9 +1,9 @@
 export const contextWindow = {
-  noData: "No context usage yet",
-  accessibilityNoData: "View account usage",
-  title: "Fenêtre contextuelle",
+  noData: "Aucune utilisation du contexte pour l'instant",
+  accessibilityNoData: "Voir l'utilisation du compte",
+  title: "Fenêtre de contexte",
   used: "{{percentage}}% utilisé",
-  tokens: "Jetons{{used}}/{{max}}",
-  sessionCost: "Coût de la séance{{cost}}",
-  accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
+  tokens: "{{used}} / {{max}} jetons",
+  sessionCost: "Coût de la session {{cost}}",
+  accessibility: "Fenêtre de contexte {{percentage}}% utilisée",
 };

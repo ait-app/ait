@@ -1,7 +1,7 @@
 export const shell = {
   menu: {
     toggleSidebar: "Alternar barra lateral",
-    open: "abrir menú",
+    open: "Abrir menú",
     close: "Cerrar menú",
   },
   commandCenter: {
@@ -9,7 +9,7 @@ export const shell = {
     filePlaceholder: "Buscar archivos...",
     searchingFiles: "Buscando archivos...",
     noMatches: "No hay coincidencias",
-    actions: "Comportamiento",
+    actions: "Acciones",
     files: "Archivos",
     workspaces: "Espacios de trabajo",
     agents: "Agentes",
@@ -18,7 +18,7 @@ export const shell = {
     openInSidePane: "Abrir {{name}} en el panel lateral",
     openInFocusedPane: "Abrir {{name}} en el panel enfocado",
     addProject: "Agregar proyecto",
-    home: "Hogar",
+    home: "Inicio",
     groupByProject: "Agrupar por proyecto",
     groupByStatus: "Agrupar por estado",
     modelGroupLabel: "Modelo",

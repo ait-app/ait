@@ -21,11 +21,11 @@ export const bots = {
   groupSchedules: "Расписания: создание расписаний и управление ими",
   groupScripts: "Скрипты: запуск скриптов рабочего пространства",
   groupTerminals: "Терминалы: создание терминалов и ввод в них",
-  permissionRiskHint: "Can run commands.",
-  modeCap: "Default agent mode",
-  modeNotAllowed: "Not allowed",
+  permissionRiskHint: "Может выполнять команды.",
+  modeCap: "Режим агента по умолчанию",
+  modeNotAllowed: "Не разрешено",
   modeCapHint:
-    "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
+    "Выберите режим агентов, которых Бот запускает для каждого провайдера. Бот может использовать только этот режим; выберите «Не разрешено», чтобы запретить ему использовать провайдера.",
   providerUnavailable: "{{provider}} (недоступен)",
   readOnlyHint:
     "Bot работает в самом строгом режиме, который предлагает его провайдер (для Claude это режим по умолчанию, где ваши собственные правила разрешений по-прежнему действуют), а изменения оставляет запускаемым им агентам.",
@@ -52,7 +52,7 @@ export const bots = {
   message: "Сообщение",
   cancel: "Отменить ход",
   emptyChat: "Отправьте сообщение, чтобы начать разговор.",
-  session: "Bot session",
+  session: "Сессия бота",
   reset: "Новый разговор",
   resetConfirm:
     "Начать новый разговор? Существующие сообщения сохранятся, будут применены последние настройки Бота.",

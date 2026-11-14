@@ -3,11 +3,11 @@ export const composer = {
     desktop: "Напишите агенту сообщение, отметьте @files или используйте /commands и /skills.",
     mobile: "Сообщение,@files,/commands",
     fallback: "Сообщение...",
-    terminal: "Prompt",
+    terminal: "Промпт",
   },
   input: {
     accessibilityLabel: "Написать агенту...",
-    terminalAccessibilityLabel: "Terminal prompt",
+    terminalAccessibilityLabel: "Промпт терминала",
     fullscreen: "Полный экран",
     exitFullscreen: "Выйти из полноэкранного режима",
     focusHint: "{{shortcut}}, для фокуса",

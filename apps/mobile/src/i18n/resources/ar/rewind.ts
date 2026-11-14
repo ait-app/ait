@@ -7,6 +7,6 @@ export const rewind = {
     both: "ترجيع المحادثة والملفات",
   },
   errors: {
-    failed: "فشل في إرجاع الوكيل",
+    failed: "فشل ترجيع الوكيل",
   },
 };

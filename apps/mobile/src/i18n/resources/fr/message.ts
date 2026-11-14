@@ -42,14 +42,14 @@ export const message = {
     file: "Fichier",
   },
   speak: {
-    header: "Rayon",
+    header: "A parlé",
   },
   dictation: {
     cancel: "Annuler la dictée",
     retry: "Réessayer la dictée",
     insert: "Insérer la transcription",
     insertAndSend: "Insérer la transcription et envoyer",
-    failed: "Échec de la dictée:{{error}}",
+    failed: "Échec de la dictée : {{error}}",
     failedRetry: "La dictée a échoué. Appuyez sur réessayer.",
   },
   question: {
@@ -75,7 +75,7 @@ export const message = {
     loading: "Compactage...",
     auto: "Contexte automatiquement compacté",
     manual: "Contexte compacté manuellement",
-    withTokens: "Contexte compacté (jetons{{tokens}}K)",
+    withTokens: "Contexte compacté ({{tokens}}K jetons)",
     completed: "Contexte compacté",
   },
 

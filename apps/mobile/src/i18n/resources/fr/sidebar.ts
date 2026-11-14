@@ -86,9 +86,9 @@ export const sidebar = {
       removing: "Suppression...",
     },
     confirmations: {
-      removeTitle: "Supprimer le projet?",
+      removeTitle: "Supprimer le projet ?",
       removeMessage:
-        "Supprimer «{{projectName}}» de la barre latérale?\n\nLes fichiers sur le disque ne seront pas modifiés.",
+        "Supprimer « {{projectName}} » de la barre latérale ?\n\nLes fichiers sur le disque ne seront pas modifiés.",
       removeConfirm: "Retirer",
       cancel: "Annuler",
     },

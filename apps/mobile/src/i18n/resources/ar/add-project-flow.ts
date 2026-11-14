@@ -42,7 +42,7 @@ export const addProjectFlow = {
     elapsed: "{{seconds}} ث",
   },
   empty: {
-    hosts: "لا توجد مضيفون متصلون",
+    hosts: "لا يوجد مضيفون متصلون",
     repository: "أدخل عنوان GitHub أو owner/repo",
     options: "لا توجد خيارات مطابقة",
     noMatchingHosts: "لا يوجد مضيفون مطابقون",

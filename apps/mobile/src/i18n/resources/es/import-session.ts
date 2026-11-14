@@ -28,15 +28,15 @@ export const importSession = {
   },
   preview: {
     untitledSession: "Sesión sin título",
-    noPrompt: "Sin vista previa inmediata",
+    noPrompt: "Sin vista previa del prompt",
   },
   empty: {
     noRecent: "No hay sesiones recientes para importar.",
     noMatches: "Ninguna sesión coincide con tu búsqueda.",
     alreadyImported: "Todas las sesiones recientes ya están importadas.",
-    noProviderSessions: "No se encontraron sesiones{{provider}}.",
+    noProviderSessions: "No se encontraron sesiones de {{provider}}.",
   },
   row: {
-    importing: "Importador...",
+    importing: "Importando...",
   },
 };
