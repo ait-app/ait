@@ -8,6 +8,7 @@ import {
   type TargetedEvent,
 } from "react-native";
 import { ChevronDown } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
@@ -188,6 +189,7 @@ export function SelectField<TValue>({
   testID,
   triggerTestID,
 }: SelectFieldProps<TValue>): ReactElement {
+  const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
   const [open, setOpen] = useState(false);
   const [triggerFocused, setTriggerFocused] = useState(false);
@@ -305,7 +307,7 @@ export function SelectField<TValue>({
         onSelect={handleSelect}
         searchable={searchable}
         searchPlaceholder={searchPlaceholder}
-        emptyText={loading && visibleOptions.length === 0 ? "Loading..." : emptyText}
+        emptyText={loading && visibleOptions.length === 0 ? t("common.states.loading") : emptyText}
         title={title ?? label}
         open={open}
         onOpenChange={setOpen}

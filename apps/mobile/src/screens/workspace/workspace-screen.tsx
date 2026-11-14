@@ -187,6 +187,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -475,6 +476,7 @@ function parsePaneDirection(actionId: string): PaneDirection | null {
 }
 
 interface RenderWorkspaceContentInput {
+  t: TFunction;
   isMissingWorkspaceDirectory: boolean;
   activeTabDescriptor: WorkspaceTabDescriptor | null;
   hasHydratedAgents: boolean;
@@ -493,6 +495,7 @@ interface RenderWorkspaceContentInput {
 
 function renderWorkspaceContent(input: RenderWorkspaceContentInput): React.ReactNode {
   const {
+    t,
     isMissingWorkspaceDirectory,
     activeTabDescriptor,
     hasHydratedAgents,
@@ -509,9 +512,7 @@ function renderWorkspaceContent(input: RenderWorkspaceContentInput): React.React
   if (isMissingWorkspaceDirectory) {
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>
-          Workspace directory is missing. Reload workspace data before opening tabs.
-        </Text>
+        <Text style={styles.emptyStateText}>{t("workspace.tabs.empty.missingDirectory")}</Text>
       </View>
     );
   }
@@ -525,9 +526,7 @@ function renderWorkspaceContent(input: RenderWorkspaceContentInput): React.React
   if (!activeTabDescriptor) {
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>
-          No tabs are available yet. Use New tab to create an agent or terminal.
-        </Text>
+        <Text style={styles.emptyStateText}>{t("workspace.tabs.empty.noTabs")}</Text>
       </View>
     );
   }
@@ -2862,8 +2861,8 @@ function WorkspaceScreenContent({
     if (!isRouteFocused || isNative || typeof document === "undefined" || activeTabDescriptor) {
       return;
     }
-    document.title = "Workspace";
-  }, [activeTabDescriptor, isRouteFocused]);
+    document.title = t("workspace.tabs.fallback.workspace");
+  }, [activeTabDescriptor, isRouteFocused, t]);
   const buildPaneContentModel = useCallback(
     (input: {
       tab: WorkspaceTabDescriptor;
@@ -3019,6 +3018,7 @@ function WorkspaceScreenContent({
     focusWorkspacePane(persistenceKey, paneId);
   });
   const content = renderWorkspaceContent({
+    t,
     isMissingWorkspaceDirectory,
     activeTabDescriptor,
     hasHydratedAgents: hasHydratedAgents || workspaceAgentsQuery.data === true,

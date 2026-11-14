@@ -11,6 +11,7 @@ import type {
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
+import { i18n } from "@/i18n/i18next";
 
 const { theme } = vi.hoisted(() => ({
   theme: {
@@ -93,16 +94,18 @@ vi.mock("@/components/ui/combobox", () => ({
     value,
     onSelect,
     open,
+    title,
   }: {
     options: ReadonlyArray<{ id: string; label: string }>;
     value: string;
     onSelect: (id: string) => void;
     open?: boolean;
+    title?: string;
   }) => {
     if (!open) return null;
     return React.createElement(
       "div",
-      { "data-testid": "import-session-combobox" },
+      { "data-testid": "import-session-combobox", "aria-label": title },
       options.map((option) =>
         React.createElement(
           "button",
@@ -805,6 +808,40 @@ describe("ImportSessionSheet", () => {
 
     screen.getByText("Session claude");
     screen.getByText("Session codex");
+  });
+
+  it("labels the provider filter in the app language", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const fetchRecentProviderSessions = vi.fn(async () => ({
+        requestId: "recent",
+        entries: [createProviderSessionEntry({ providerId: "codex", providerLabel: "Codex" })],
+      }));
+      renderSheet(
+        { fetchRecentProviderSessions, importAgent: vi.fn() } as Pick<
+          DaemonClient,
+          "fetchRecentProviderSessions" | "importAgent"
+        >,
+        {
+          snapshot: {
+            supportsSnapshot: true,
+            entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
+          },
+        },
+      );
+
+      const trigger = await screen.findByTestId("import-session-filter-trigger");
+      const all = i18n.t("importSession.filters.all", { lng: "zh-CN" });
+      expect(trigger.getAttribute("aria-label")).toBe(
+        i18n.t("importSession.filters.label", { provider: all, lng: "zh-CN" }),
+      );
+      fireEvent.click(trigger);
+      expect(screen.getByTestId("import-session-combobox").getAttribute("aria-label")).toBe(
+        i18n.t("importSession.filters.title", { lng: "zh-CN" }),
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("does not render filter badges when only one importable provider is enabled", async () => {

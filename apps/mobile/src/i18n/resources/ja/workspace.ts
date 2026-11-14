@@ -169,10 +169,20 @@ export const workspace = {
     hostDisconnected: "ホストが接続されていません",
     updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
     unableToSubscribe: "ターミナルに接続できません",
+    hideKeyboard: "キーボードを隠す",
+    showKeyboard: "キーボードを表示",
+    paste: "貼り付け",
+    bottom: "最下部へ",
   },
   tabs: {
     loading: "読み込み中...",
     modified: "未保存の変更",
+    empty: {
+      missingDirectory:
+        "ワークスペースのディレクトリが見つかりません。タブを開く前にワークスペースのデータを再読み込みしてください。",
+      noTabs:
+        "まだ利用できるタブはありません。「新しいタブ」からエージェントまたはターミナルを作成してください。",
+    },
     fallback: {
       newAgent: "新しいエージェント",
       setup: "セットアップ",
@@ -529,6 +539,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "表示",
         openOn: "{{brand}}で開く",
+        addAllToChat: "すべてチャットに追加",
       },
       checksSummary: {
         passedLabel: "成功",
@@ -541,17 +552,21 @@ export const workspace = {
       sections: {
         checks: "チェック",
         pipeline: "パイプライン",
+        activity: "アクティビティ",
       },
       empty: {
         noJobs: "ジョブなし",
         loadingPipeline: "パイプラインを読み込み中...",
         pipelineJobsLoadFailed: "パイプラインのジョブを読み込めませんでした",
         allowedToFail: "失敗を許可",
+        noActivity: "アクティビティはまだありません",
       },
       approvals: "{{given}} / {{required}} 承認",
       accessibility: {
         pullRequest: "プルリクエスト#{{number}}",
         pullRequest_mr: "マージリクエスト !{{number}}",
+        commentActions: "コメントアクション",
+        threadActions: "スレッドアクション",
       },
       states: {
         merged: "マージ済み",
@@ -559,6 +574,8 @@ export const workspace = {
       },
       thread: {
         discussion: "ディスカッションスレッド",
+        resolved: "解決済み",
+        outdated: "古い",
       },
       errors: {
         statusLoadFailed: "プルリクエストのステータスを読み込めません",

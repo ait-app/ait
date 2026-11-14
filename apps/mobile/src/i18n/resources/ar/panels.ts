@@ -1,10 +1,17 @@
 export const panels = {
   draft: {
     newAgent: "وكيل جديد",
-    creatingAgent: "وكيل الخلق",
+    creatingAgent: "جارٍ إنشاء الوكيل",
+  },
+  agent: {
+    subtitle: "وكيل {{provider}}",
+  },
+  providerSubagent: {
+    label: "وكيل فرعي",
+    subtitle: "وكيل فرعي من {{provider}}",
   },
   file: {
-    directoryMissing: "لم يتم العثور على دليل Workspace.",
+    directoryMissing: "لم يتم العثور على دليل مساحة العمل.",
     loading: "جارٍ تحميل الملف...",
     noPreview: "لا تتوفر معاينة",
     openWithSystem: "فتح باستخدام تطبيق النظام",
@@ -52,7 +59,7 @@ export const panels = {
     diffLabel: "الفرق",
     changesSubtitle: "فروقات شجرة العمل",
     commitSubtitle: "فروقات الالتزام",
-    directoryMissing: "لم يتم العثور على دليل Workspace.",
+    directoryMissing: "لم يتم العثور على دليل مساحة العمل.",
     empty: "لا توجد تغييرات",
     loadError: "فشل تحميل الفروقات",
     capabilityMissing: "حدّث المضيف لعرض فروقات الالتزامات.",

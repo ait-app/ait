@@ -31,6 +31,7 @@ export const common = {
   },
   errors: {
     error: "오류",
+    withMessage: "오류: {{message}}",
     unableToSave: "저장할 수 없습니다",
     unableToCopy: "복사할 수 없습니다",
     nameRequired: "이름을 입력하세요",

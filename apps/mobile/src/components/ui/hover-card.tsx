@@ -48,7 +48,7 @@ const HoverCardContext = createContext<HoverCardContextValue | null>(null);
 /**
  * A card that opens while the pointer is on its trigger and stays open while the pointer crosses
  * onto it, so its content can be pressed. Hover only exists on web; elsewhere the trigger renders
- * alone and the content never mounts. See docs/hover.md.
+ * alone and the content never mounts.
  *
  * ```tsx
  * <HoverCard>

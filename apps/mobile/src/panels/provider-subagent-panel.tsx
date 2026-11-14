@@ -16,6 +16,7 @@ import {
 import { ComposerTrackBar } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
+import { formatProviderSubagentSubtitle } from "@/panels/agent-panel-subtitle";
 import { usePaneContext } from "@/panels/pane-context";
 import { PaneSubtitle } from "@/panels/pane-subtitle";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
@@ -75,18 +76,11 @@ function ProviderSubagentChildTrack({
   );
 }
 
-function formatProviderLabel(provider: string): string {
-  return provider
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function useProviderSubagentDescriptor(
   target: { kind: "provider_subagent"; parentAgentId: string; subagentId: string },
   context: { serverId: string },
 ): PanelDescriptor {
+  const { t } = useTranslation();
   const descriptor = useProviderSubagentStore((state) =>
     state.descriptors.get(
       providerSubagentKey(context.serverId, target.parentAgentId, target.subagentId),
@@ -98,8 +92,9 @@ function useProviderSubagentDescriptor(
   const provider = descriptor?.provider ?? parentProvider ?? "agent";
   // The task names the tab; the subagent type is supporting detail beside the provider.
   const subagentType = descriptor?.title?.trim();
-  const label = descriptor?.description?.trim() || subagentType || "Subagent";
-  const providerLabel = `${formatProviderLabel(provider)} subagent`;
+  const label =
+    descriptor?.description?.trim() || subagentType || t("panels.providerSubagent.label");
+  const providerLabel = formatProviderSubagentSubtitle(provider);
   return {
     label,
     subtitle:

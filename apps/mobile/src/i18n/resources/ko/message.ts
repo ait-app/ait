@@ -57,6 +57,7 @@ export const message = {
     next: "다음",
     answerPlaceholder: "답변을 입력하세요...",
     otherPlaceholder: "기타...",
+    navLabel: "질문 {{current}} / {{total}}",
   },
   todo: {
     title: "작업",
@@ -78,5 +79,8 @@ export const message = {
     completed: "컨텍스트가 압축되었습니다",
   },
 
-  turnFooter: { workedFor: "작업 시간 {{duration}}" },
+  turnFooter: {
+    workedFor: "작업 시간 {{duration}}",
+    endedAt: "{{duration}}, 종료: {{timestamp}}",
+  },
 };

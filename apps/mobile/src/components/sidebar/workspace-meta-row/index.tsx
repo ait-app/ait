@@ -177,10 +177,10 @@ function LabelsItem({
  * pointer: it brightens to full foreground and its icon becomes an external-link arrow,
  * saying where the click goes before you spend it.
  *
- * `onHoverIn`/`onHoverOut` with local state is safe here despite the usual rule in
- * docs/hover.md — the state never leaves this Pressable, and nothing pressable is nested
- * inside it, so there is no second hover state machine to fight. Both icons are the same
- * size, so the swap can't move the target out from under the cursor.
+ * `onHoverIn`/`onHoverOut` with local state is safe here despite the usual rule (hover on a
+ * plain View, press on an inner Pressable) — the state never leaves this Pressable, and nothing
+ * pressable is nested inside it, so there is no second hover state machine to fight. Both icons
+ * are the same size, so the swap can't move the target out from under the cursor.
  */
 function PullRequestItem({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
@@ -414,7 +414,7 @@ const styles = StyleSheet.create((theme) => ({
 
 // Read inside render, never into a module-scope table: touching `styles.x` at module load
 // materializes the Unistyles proxy before the persisted theme has resolved, and the style
-// freezes on whatever theme happened to be active first. See docs/unistyles.md.
+// freezes on whatever theme happened to be active first.
 function checksTextStyle(state: CheckSummaryState) {
   if (state === "failed") return styles.checksTextFailed;
   if (state === "running") return styles.checksTextRunning;

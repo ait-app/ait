@@ -6,7 +6,6 @@ import {
 import { isSyntaxThemeId, type SyntaxThemeId } from "@ait/highlight";
 import type { ActiveTurnBehavior } from "@ait/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
-import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import type { AppLanguage } from "@/i18n/locales";
 import type { SidebarNavPreference } from "@/sidebar-nav/model";
 import {
@@ -333,18 +332,8 @@ export interface KeyValueStorage {
   removeItem(key: string): Promise<void>;
 }
 
-export interface DesktopSettingsBridge {
-  isElectron(): boolean;
-  loadDesktopSettings(): Promise<DesktopSettings>;
-  migrateLegacyDesktopSettings(input: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  }): Promise<void>;
-}
-
 export interface SettingsDeps {
   storage: KeyValueStorage;
-  desktop: DesktopSettingsBridge;
 }
 
 export async function saveAppSettings(input: {
@@ -412,32 +401,6 @@ async function readAppSettings(
 
   const defaultStored = StoredAppSettingsSchema.parse({});
   return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: true, stored: defaultStored };
-}
-
-export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
-  const legacyDesktopSettings = deps.desktop.isElectron()
-    ? await loadLegacyDesktopSettingsFromStorage(deps.storage)
-    : null;
-  const appSettings = await loadAppSettingsFromStorage(deps);
-
-  if (!deps.desktop.isElectron()) {
-    return {
-      ...DEFAULT_APP_SETTINGS,
-      ...appSettings,
-    };
-  }
-
-  if (legacyDesktopSettings) {
-    await deps.desktop.migrateLegacyDesktopSettings(legacyDesktopSettings);
-  }
-
-  const desktopSettings = await deps.desktop.loadDesktopSettings();
-  return {
-    ...DEFAULT_APP_SETTINGS,
-    ...appSettings,
-    manageBuiltInDaemon: desktopSettings.daemon.manageBuiltInDaemon,
-    releaseChannel: desktopSettings.releaseChannel,
-  };
 }
 
 export function normalizeAppSettings(value: unknown): AppSettings {
@@ -511,41 +474,6 @@ export function sanitizeFontFamily(value: unknown): string | null {
     return null; // control chars would corrupt the font-family string
   }
   return trimmed; // quotes/commas are legit in stacks
-}
-
-async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{
-  manageBuiltInDaemon?: boolean;
-  releaseChannel?: ReleaseChannel;
-} | null> {
-  const stored = await loadRendererSettingsPayload(storage);
-  if (!stored) {
-    return null;
-  }
-
-  const result: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  } = {};
-
-  if (stored.manageBuiltInDaemon !== undefined) {
-    result.manageBuiltInDaemon = stored.manageBuiltInDaemon;
-  }
-  if (stored.releaseChannel !== undefined) {
-    result.releaseChannel = stored.releaseChannel;
-  }
-
-  return Object.keys(result).length > 0 ? result : null;
-}
-
-async function loadRendererSettingsPayload(
-  storage: KeyValueStorage,
-): Promise<StoredAppSettings | null> {
-  const current = await readSettingsObject(storage, APP_SETTINGS_KEY);
-  if (current) {
-    return current;
-  }
-
-  return readSettingsObject(storage, LEGACY_SETTINGS_KEY);
 }
 
 async function readSettingsObject(

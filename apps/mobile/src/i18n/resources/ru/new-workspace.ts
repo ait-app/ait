@@ -6,12 +6,15 @@ export const newWorkspace = {
     worktree: "Новый worktree",
     sandboxedWorktree: "Изолированный worktree",
     label: "Изоляция",
+    accessibilityLabel: "Изоляция рабочего пространства",
   },
   errors: {
     hostDisconnected: "Хост не подключён",
     createWorktreeFailed: "Не удалось создать worktree.",
     composerStateRequired: "Редактор сообщения ещё не готов.",
     selectModel: "Выберите модель",
+    chooseProject: "Выберите проект",
+    chooseHost: "Выберите хост для этого проекта",
   },
   tooltips: {
     project: "Выберите проект",
@@ -19,6 +22,12 @@ export const newWorkspace = {
     isolation: "Выберите уровень изоляции",
     startingRef: "Выберите, с чего начать",
     launch: "Выберите, что запустить",
+  },
+  projectPicker: {
+    title: "Проект",
+    searchPlaceholder: "Поиск проектов",
+    empty: "Нет доступных проектов.",
+    accessibilityLabel: "Проект рабочего пространства",
   },
   refPicker: {
     startingRef: "Исходная точка",

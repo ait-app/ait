@@ -57,6 +57,7 @@ export const message = {
     next: "التالي",
     answerPlaceholder: "اكتب إجابتك...",
     otherPlaceholder: "آخر...",
+    navLabel: "السؤال {{current}} من {{total}}",
   },
   todo: {
     title: "المهام",
@@ -78,5 +79,8 @@ export const message = {
     completed: "تم ضغط السياق",
   },
 
-  turnFooter: { workedFor: "عمل لمدة {{duration}}" },
+  turnFooter: {
+    workedFor: "عمل لمدة {{duration}}",
+    endedAt: "{{duration}}، انتهى: {{timestamp}}",
+  },
 };

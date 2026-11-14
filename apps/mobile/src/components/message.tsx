@@ -87,7 +87,10 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { getTurnDurationLabel } from "./assistant-turn-footer-label";
+import {
+  getTurnDurationLabel,
+  getTurnFooterAccessibilityLabel,
+} from "./assistant-turn-footer-label";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { PlanCard } from "./plan-card";
@@ -714,7 +717,11 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           onHoverIn={handleHoverIn}
           onHoverOut={handleHoverOut}
           accessibilityRole={canSwap ? "button" : undefined}
-          accessibilityLabel={canSwap ? `${durationLabel}, ended ${timestampLabel}` : primaryLabel}
+          accessibilityLabel={
+            canSwap
+              ? getTurnFooterAccessibilityLabel(durationLabel, timestampLabel, t)
+              : primaryLabel
+          }
         >
           <View style={assistantTurnFooterStylesheet.labelWrapper}>
             {/* Invisible sizers reserve the width of both labels so the

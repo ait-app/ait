@@ -168,10 +168,18 @@ export const workspace = {
     hostDisconnected: "Host 未连接",
     updateHost: "请更新主机以使用原生终端渲染器。",
     unableToSubscribe: "无法订阅终端",
+    hideKeyboard: "隐藏键盘",
+    showKeyboard: "显示键盘",
+    paste: "粘贴",
+    bottom: "回到底部",
   },
   tabs: {
     loading: "正在加载...",
     modified: "未保存的更改",
+    empty: {
+      missingDirectory: "工作区目录缺失。请先重新加载工作区数据，再打开标签页。",
+      noTabs: "还没有可用的标签页。使用“新建标签页”创建 Agent 或终端。",
+    },
     fallback: {
       newAgent: "新建 Agent",
       setup: "初始化",
@@ -515,6 +523,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "查看",
         openOn: "在 {{brand}} 上打开",
+        addAllToChat: "全部添加到聊天",
       },
       checksSummary: {
         passedLabel: "通过",
@@ -527,17 +536,21 @@ export const workspace = {
       sections: {
         checks: "检查",
         pipeline: "流水线",
+        activity: "活动",
       },
       empty: {
         noJobs: "无作业",
         loadingPipeline: "正在加载流水线...",
         pipelineJobsLoadFailed: "无法加载流水线作业",
         allowedToFail: "允许失败",
+        noActivity: "暂无活动",
       },
       approvals: "{{given}} / {{required}} 批准",
       accessibility: {
         pullRequest: "拉取请求 #{{number}}",
         pullRequest_mr: "合并请求 !{{number}}",
+        commentActions: "评论操作",
+        threadActions: "讨论主题操作",
       },
       states: {
         merged: "已合并",
@@ -545,6 +558,8 @@ export const workspace = {
       },
       thread: {
         discussion: "讨论主题",
+        resolved: "已解决",
+        outdated: "已过时",
       },
       errors: {
         statusLoadFailed: "无法加载拉取请求状态",

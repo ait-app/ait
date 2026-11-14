@@ -57,6 +57,7 @@ export const message = {
     next: "Далее",
     answerPlaceholder: "Введите ответ...",
     otherPlaceholder: "Другой ответ...",
+    navLabel: "Вопрос {{current}} из {{total}}",
   },
   todo: {
     title: "Задачи",
@@ -78,5 +79,8 @@ export const message = {
     completed: "Контекст сжат",
   },
 
-  turnFooter: { workedFor: "Время работы: {{duration}}" },
+  turnFooter: {
+    workedFor: "Время работы: {{duration}}",
+    endedAt: "{{duration}}, завершено: {{timestamp}}",
+  },
 };

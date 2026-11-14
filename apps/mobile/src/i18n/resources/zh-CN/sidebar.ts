@@ -46,6 +46,9 @@ export const sidebar = {
   pinned: {
     title: "已置顶",
   },
+  statusGroup: {
+    accessibilityLabel: "{{label}} 分组",
+  },
   actions: {
     addProject: "添加项目",
     newWorkspace: "新建工作区",
@@ -121,6 +124,8 @@ export const sidebar = {
       rename: "重命名工作区",
       pin: "置顶",
       unpin: "取消置顶",
+      markAsRead: "标记为已读",
+      markAsUnread: "标记为未读",
       archive: "归档",
       archiving: "正在归档...",
     },
@@ -134,6 +139,8 @@ export const sidebar = {
       branchNameCopied: "分支名称已复制",
       hostDisconnected: "Host 未连接",
       archiveFailed: "归档工作区失败",
+      markAsReadFailed: "将工作区标记为已读失败",
+      markAsUnreadFailed: "将工作区标记为未读失败",
     },
   },
 };

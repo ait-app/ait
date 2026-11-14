@@ -146,7 +146,7 @@ export function WorkspaceLabelManagerModal({
       isEditing ? (
         <View style={styles.footer}>
           <Button
-            // Red belongs to the confirm dialog, not to the surface that opens it — docs/design.md.
+            // Red belongs to the confirm dialog, not to the surface that opens it.
             variant="outline"
             size="md"
             disabled={disabled}
@@ -237,7 +237,7 @@ const managerHostOptionTestID = (serverId: string) => `workspace-label-manager-h
  * One label: its colour, its name, and the pencil that opens it.
  *
  * Hover lives on the plain outer `View` and press on the inner `Pressable`, which is the one
- * shape that survives a pressable inside a hover target (docs/hover.md). The pencil fades rather
+ * shape that survives a pressable inside a hover target. The pencil fades rather
  * than mounts, so revealing it cannot move the row out from under the pointer.
  */
 function WorkspaceLabelManagerRow({

@@ -194,23 +194,20 @@ function updateSelectionPreferences(input: {
   model: string;
   mode: string;
   thinkingOptionId: string;
-  isolation: "local" | "worktree";
 }): FormPreferences {
   const model = input.model.trim();
   const mode = input.mode.trim();
   const thinkingOptionId = input.thinkingOptionId.trim();
-  return {
-    ...mergeProviderPreferences({
-      preferences: input.preferences,
-      provider: input.provider,
-      updates: {
-        model: model || undefined,
-        mode: mode || undefined,
-        ...(model && thinkingOptionId ? { thinkingByModel: { [model]: thinkingOptionId } } : {}),
-      },
-    }),
-    isolation: input.isolation,
-  };
+  // Isolation belongs to the new-workspace form, which this sheet has no control for.
+  return mergeProviderPreferences({
+    preferences: input.preferences,
+    provider: input.provider,
+    updates: {
+      model: model || undefined,
+      mode: mode || undefined,
+      ...(model && thinkingOptionId ? { thinkingByModel: { [model]: thinkingOptionId } } : {}),
+    },
+  });
 }
 
 export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement | null {
@@ -595,11 +592,9 @@ function ScheduleFormContent({
         model: state.selectedModel,
         mode: state.selectedMode,
         thinkingOptionId: state.selectedThinkingOptionId,
-        isolation: state.isolation,
       }),
     );
   }, [
-    state.isolation,
     state.selectedMode,
     state.selectedModel,
     state.selectedProvider,

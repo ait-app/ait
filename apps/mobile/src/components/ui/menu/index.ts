@@ -4,8 +4,6 @@
  * One state model and one item vocabulary behind two presentations — an anchored popover on
  * wide screens, a bottom sheet on compact ones — and two trigger shapes, which live in the
  * `dropdown-menu` and `context-menu` wrappers.
- *
- * See docs/menus.md.
  */
 
 export { MenuRoot, MenuTrigger, type MenuTriggerProps, type MenuTriggerState } from "./menu-root";

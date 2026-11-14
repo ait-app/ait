@@ -8,6 +8,8 @@ export const importSession = {
   },
   filters: {
     all: "すべて",
+    label: "フィルター: {{provider}}",
+    title: "プロバイダーで絞り込む",
   },
   status: {
     connectHost: "セッションをインポートするにはホストに接続してください",

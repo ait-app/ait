@@ -389,6 +389,14 @@ function CopyableInfoRow({
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copiedResetRef.current) clearTimeout(copiedResetRef.current);
+    },
+    [],
+  );
 
   const handlePressIn = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
@@ -397,7 +405,9 @@ function CopyableInfoRow({
   const handlePress = useCallback(() => {
     void copyToClipboard(copyValue);
     setCopied(true);
-    setTimeout(() => {
+    if (copiedResetRef.current) clearTimeout(copiedResetRef.current);
+    copiedResetRef.current = setTimeout(() => {
+      copiedResetRef.current = null;
       setCopied(false);
     }, 2000);
   }, [copyValue]);

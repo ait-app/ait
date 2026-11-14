@@ -45,6 +45,7 @@ export const addProjectFlow = {
     hosts: "연결된 호스트 없음",
     repository: "GitHub URL 또는 owner/repo 입력",
     options: "일치하는 옵션 없음",
+    noMatchingHosts: "일치하는 호스트 없음",
     hostUpgrade: "프로젝트 추가를 사용하려면 호스트를 업데이트하세요.",
   },
   actions: { openPath: "이 경로 열기", useParent: "이 상위 항목 사용", navigate: "이동" },

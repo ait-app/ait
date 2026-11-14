@@ -6,12 +6,15 @@ export const newWorkspace = {
     worktree: "新建工作树",
     sandboxedWorktree: "沙箱化工作树",
     label: "隔离",
+    accessibilityLabel: "工作区隔离",
   },
   errors: {
     hostDisconnected: "Host 未连接",
     createWorktreeFailed: "创建工作树失败",
     composerStateRequired: "输入状态不能为空",
     selectModel: "请选择模型",
+    chooseProject: "请选择项目",
+    chooseHost: "请为此项目选择 Host",
   },
   tooltips: {
     project: "选择项目",
@@ -19,6 +22,12 @@ export const newWorkspace = {
     isolation: "选择隔离级别",
     startingRef: "选择起始位置",
     launch: "选择启动内容",
+  },
+  projectPicker: {
+    title: "项目",
+    searchPlaceholder: "搜索项目",
+    empty: "没有可用的项目。",
+    accessibilityLabel: "工作区项目",
   },
   refPicker: {
     startingRef: "起始引用",

@@ -1,5 +1,5 @@
 import type { AgentModelDefinition } from "@ait/protocol/agent-types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -56,13 +56,18 @@ export function ProviderPresetsSection({
   const [deleteTarget, setDeleteTarget] = useState<ProviderPresetEntry | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  // Bumped on every scope change so a delete still in flight from the previous scope can neither
+  // keep this scope's buttons disabled nor report its result here.
+  const scopeGeneration = useRef(0);
   useEffect(() => {
+    scopeGeneration.current += 1;
     setEditing(null);
     setDeleteTarget(null);
     setDeleteError(null);
     setNotice(null);
+    setDeleting(null);
   }, [serverId, provider, cwd]);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
   const ready = snapshot !== null && !isLoading && error === null;
   const canSave = ready && descriptor?.canCreate === true;
@@ -145,22 +150,25 @@ export function ProviderPresetsSection({
         !writable(presets.find((preset) => preset.name === name))
       )
         return;
+      const generation = scopeGeneration.current;
+      const isStale = () => generation !== scopeGeneration.current;
       setDeleting(name);
       setDeleteError(null);
       try {
         await checkLatest(name, false);
         const result = await client.deleteProviderPreset(provider, name, cwd);
         if (result.error) {
-          setDeleteError(result.error);
+          if (!isStale()) setDeleteError(result.error);
           return;
         }
         await refreshAfterWrite();
+        if (isStale()) return;
         setDeleteTarget(null);
         setNotice(t("providerControl.presetDeleted", { name }));
       } catch (cause) {
-        setDeleteError(toErrorMessage(cause));
+        if (!isStale()) setDeleteError(toErrorMessage(cause));
       } finally {
-        setDeleting((current) => (current === name ? null : current));
+        if (!isStale()) setDeleting((current) => (current === name ? null : current));
       }
     },
     [

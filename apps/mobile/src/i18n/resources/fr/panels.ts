@@ -1,10 +1,17 @@
 export const panels = {
   draft: {
     newAgent: "Nouvel agent",
-    creatingAgent: "Agent créateur",
+    creatingAgent: "Création de l'agent",
+  },
+  agent: {
+    subtitle: "Agent {{provider}}",
+  },
+  providerSubagent: {
+    label: "Sous-agent",
+    subtitle: "Sous-agent {{provider}}",
   },
   file: {
-    directoryMissing: "Répertoire Workspace introuvable.",
+    directoryMissing: "Répertoire de l'espace de travail introuvable.",
     loading: "Chargement du fichier...",
     noPreview: "Aucun aperçu disponible",
     openWithSystem: "Ouvrir avec une application système",
@@ -53,7 +60,7 @@ export const panels = {
     diffLabel: "Diff",
     changesSubtitle: "Différences de l'arbre de travail",
     commitSubtitle: "Différences du commit",
-    directoryMissing: "Répertoire Workspace introuvable.",
+    directoryMissing: "Répertoire de l'espace de travail introuvable.",
     empty: "Aucune modification",
     loadError: "Échec du chargement des différences",
     capabilityMissing: "Mettez à jour l'hôte pour voir les différences des commits.",

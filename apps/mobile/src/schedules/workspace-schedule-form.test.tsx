@@ -361,6 +361,36 @@ describe("workspace schedule form", () => {
     );
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("leaves the new-workspace isolation preference alone when it submits", async () => {
+    // Schedules show a remembered sandboxed choice as "worktree"; the form has no isolation
+    // control, so submitting must not write that downgraded value back.
+    Object.assign(preferences, { isolation: "sandboxed-worktree" });
+    try {
+      render(
+        <WorkspaceScheduleForm
+          serverId="host-a"
+          workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+          onClose={vi.fn()}
+        />,
+      );
+      openBlankSchedule();
+      chooseModel();
+      fireEvent.change(getField("Prompt"), { target: { value: "Check this workspace" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+
+      await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
+      expect(updatePreferences).toHaveBeenCalledOnce();
+      const [update] = updatePreferences.mock.calls[0] as unknown as [
+        (current: { isolation?: string }) => { isolation?: string },
+      ];
+      expect(update({ isolation: "sandboxed-worktree" }).isolation).toBe("sandboxed-worktree");
+      expect(update({}).isolation).toBeUndefined();
+    } finally {
+      delete (preferences as { isolation?: string }).isolation;
+    }
+  });
+
   it("creates a schedule for an active agent in the owning workspace", async () => {
     render(
       <WorkspaceScheduleForm

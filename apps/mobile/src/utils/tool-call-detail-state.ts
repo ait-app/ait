@@ -1,5 +1,5 @@
 import type { ToolCallDetail } from "@ait/protocol/agent-types";
-import { buildPaseoToolDetailSections } from "@ait/protocol/paseo-tool-call-detail";
+import { buildPaseoToolDetailSections } from "@ait/protocol/paseo-tool-presentation/index";
 import { parseUnifiedDiff } from "./tool-call-parsers";
 
 function hasText(value: string | undefined): boolean {

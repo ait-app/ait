@@ -608,6 +608,50 @@ it("requires confirmation, allows cancel and shows deletion progress and complet
   expect(screen.getByTestId("provider-presets-notice")).toBeTruthy();
 });
 
+it("releases an in-flight delete when the scope changes and ignores its late result", async () => {
+  await ready(descriptor(), [preset("team")]);
+  let resolve!: (value: unknown) => void;
+  client.deleteProviderPreset.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const view = renderSection(
+    <ProviderPresetsSection provider="claude" serverId="host-a" cwd="/repo/one" />,
+  );
+  await screen.findByText("team");
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
+  await waitFor(() => expect(client.deleteProviderPreset).toHaveBeenCalledOnce());
+
+  view.rerender(
+    <QueryClientProvider client={queryClient}>
+      <ProviderPresetsSection
+        provider="claude"
+        serverId="host-a"
+        cwd="/repo/two"
+        models={[{ provider: "claude", id: "claude-opus-5", label: "Opus" }]}
+      />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("team");
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+
+  await act(async () => {
+    resolve({ error: "old scope failed" });
+  });
+  expect(screen.queryByTestId("provider-presets-notice")).toBeNull();
+  expect(screen.queryByText("old scope failed")).toBeNull();
+  expect(
+    (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
 it("creates and reopens a native preset using only model, role and effort choices", async () => {
   const rows: ProviderPresetEntry[] = [];
   await ready(descriptor({ backend: "native" }), rows);

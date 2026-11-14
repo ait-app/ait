@@ -286,8 +286,10 @@ describe("the repository's own CHANGELOG.md", () => {
     const appPackage = JSON.parse(
       readFileSync(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8"),
     );
-    expect(releases[0].version).toBe(appPackage.version);
-    for (const release of releases) {
+    // Between releases the file opens with an "Unreleased" section, which has no version or date.
+    const published = releases[0].version === "Unreleased" ? releases.slice(1) : releases;
+    expect(published[0].version).toBe(appPackage.version);
+    for (const release of published) {
       expect(release.version).toMatch(/^\d+\.\d+\.\d+/);
       expect(release.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(release.sections.length).toBeGreaterThan(0);

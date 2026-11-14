@@ -31,6 +31,7 @@ export const common = {
   },
   errors: {
     error: "Error",
+    withMessage: "Error: {{message}}",
     unableToSave: "Unable to save",
     unableToCopy: "Unable to copy",
     nameRequired: "Name is required",

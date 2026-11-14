@@ -3,6 +3,13 @@ export const panels = {
     newAgent: "Новый агент",
     creatingAgent: "Создание агента",
   },
+  agent: {
+    subtitle: "Агент {{provider}}",
+  },
+  providerSubagent: {
+    label: "Субагент",
+    subtitle: "Субагент {{provider}}",
+  },
   file: {
     directoryMissing: "Каталог рабочего пространства не найден.",
     loading: "Загрузка файла...",

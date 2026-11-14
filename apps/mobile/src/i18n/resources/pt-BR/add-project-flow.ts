@@ -45,6 +45,7 @@ export const addProjectFlow = {
     hosts: "Nenhum host conectado",
     repository: "Informe uma URL do GitHub ou owner/repo",
     options: "Nenhuma opção correspondente",
+    noMatchingHosts: "Nenhum host correspondente",
     hostUpgrade: "Atualize o host para usar Adicionar projeto.",
   },
   actions: { openPath: "Abrir este caminho", useParent: "Usar este pai", navigate: "Navegar" },

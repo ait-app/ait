@@ -3,6 +3,13 @@ export const panels = {
     newAgent: "New Agent",
     creatingAgent: "Creating agent",
   },
+  agent: {
+    subtitle: "{{provider}} agent",
+  },
+  providerSubagent: {
+    label: "Subagent",
+    subtitle: "{{provider}} subagent",
+  },
   file: {
     directoryMissing: "Workspace directory not found.",
     loading: "Loading file...",

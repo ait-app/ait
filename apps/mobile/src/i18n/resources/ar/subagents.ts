@@ -12,7 +12,7 @@ export const subagents = {
   pillLabelReadyToReview: "{{count}} جاهزة للمراجعة",
   detachAction: "فصل {{label}}",
   detachTooltip: "فصل الوكيل الفرعي",
-  archiveAction: "أرشيف{{label}}",
+  archiveAction: "أرشفة {{label}}",
   archiveTooltip: "أرشفة الوكيل الفرعي",
   archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
   archiveFinishedRetry: "إعادة المحاولة ({{failed}}/{{total}})",

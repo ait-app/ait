@@ -546,6 +546,7 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
       githubFeaturesEnabled,
       forgeBrandLabel: presentation.brandLabel,
       forgeChangeRequestNoun: presentation.changeRequestAbbrev,
+      forgeChangeRequestContext: presentation.changeRequestContext,
       githubAutoMergeActionsEnabled,
       hasPullRequest,
       pullRequestUrl: prStatus?.url ?? null,
@@ -731,76 +732,13 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
   ]);
 
   const gitActions: GitActions = useMemo(
-    () => translateGitActions(buildGitActions(gitActionsInput), { hasPullRequest, forge, t }),
-    [gitActionsInput, hasPullRequest, forge, t],
+    () => buildGitActions(gitActionsInput),
+    // `t` changes with the language; the policy translates through the shared i18n instance.
+    [gitActionsInput, t],
   );
 
   return { gitActions, branchLabel, baseRefLabel, isGit };
 }
-
-// The policy translates every label and message itself; only the change-request actions need
-// the forge's vocabulary (PR vs MR) applied on top.
-function translateGitActions(
-  actions: GitActions,
-  input: {
-    hasPullRequest: boolean;
-    forge: Forge;
-    t: (key: string, options?: Record<string, unknown>) => string;
-  },
-): GitActions {
-  return {
-    primary: actions.primary ? translateGitAction(actions.primary, input) : null,
-    secondary: actions.secondary.map((action) => translateGitAction(action, input)),
-  };
-}
-
-function translateGitAction(
-  action: GitAction,
-  {
-    hasPullRequest,
-    forge,
-    t,
-  }: {
-    hasPullRequest: boolean;
-    forge: Forge;
-    t: (key: string, options?: Record<string, unknown>) => string;
-  },
-): GitAction {
-  const vocabulary = forgeVocabulary(forge);
-  switch (action.id) {
-    case "pr":
-      return hasPullRequest
-        ? {
-            ...action,
-            label: t("workspace.git.actions.viewPr", vocabulary),
-            pendingLabel: t("workspace.git.actions.viewPr", vocabulary),
-            successLabel: t("workspace.git.actions.viewPr", vocabulary),
-          }
-        : {
-            ...action,
-            label: t("workspace.git.actions.createPr.label", vocabulary),
-            pendingLabel: t("workspace.git.actions.createPr.pending", vocabulary),
-            successLabel: t("workspace.git.actions.createPr.success", vocabulary),
-          };
-    case "merge-pr-squash":
-    case "merge-pr-merge":
-    case "merge-pr-rebase":
-      return {
-        ...action,
-        label: t(MERGE_PR_LABEL_KEYS[action.id], vocabulary),
-        pendingLabel: t("workspace.git.actions.mergePr.pending", vocabulary),
-        successLabel: t("workspace.git.actions.mergePr.success", vocabulary),
-      };
-    default:
-      return action;
-  }
-}
-
-const MERGE_PR_LABEL_KEYS = {
-  "merge-pr-squash": "workspace.git.actions.mergePr.squash",
-  "merge-pr-merge": "workspace.git.actions.mergePr.merge",
-  "merge-pr-rebase": "workspace.git.actions.mergePr.rebase",
-} as const;
 
 function getWorktreeArchiveWarningLabels(
   t: (key: string, options?: Record<string, unknown>) => string,

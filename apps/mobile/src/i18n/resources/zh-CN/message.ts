@@ -57,6 +57,7 @@ export const message = {
     next: "下一步",
     answerPlaceholder: "输入你的回答...",
     otherPlaceholder: "其他...",
+    navLabel: "第 {{current}} 个问题，共 {{total}} 个",
   },
   todo: {
     title: "任务",
@@ -78,5 +79,8 @@ export const message = {
     completed: "上下文已压缩",
   },
 
-  turnFooter: { workedFor: "工作了 {{duration}}" },
+  turnFooter: {
+    workedFor: "工作了 {{duration}}",
+    endedAt: "{{duration}}，结束于 {{timestamp}}",
+  },
 };

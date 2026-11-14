@@ -1683,7 +1683,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // rule, which ties on specificity with react-native-web's own
     // `.css-textinput-*` class and loses on source order — so a themed
     // `fontFamily` here is silently dropped while every other property lands.
-    // An inline style outranks both classes. See docs/unistyles.md.
+    // An inline style outranks both classes.
     const textInputStyle = useMemo(
       () => [
         styles.textInput,

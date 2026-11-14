@@ -46,6 +46,9 @@ export const sidebar = {
   pinned: {
     title: "Fixados",
   },
+  statusGroup: {
+    accessibilityLabel: "Grupo {{label}}",
+  },
   actions: {
     addProject: "Adicionar projeto",
     newWorkspace: "Novo workspace",
@@ -64,7 +67,7 @@ export const sidebar = {
     appName: "Ait",
   },
   sections: {
-    usage: "Usage",
+    usage: "Uso",
     workspaces: "Espaços de trabalho",
     sessions: "Histórico",
     search: "Buscar",
@@ -76,8 +79,8 @@ export const sidebar = {
       openSettings: "Abrir configurações do projeto",
       openNewWindow: "Abrir em nova janela",
       openNewWindowFailed: "Não foi possível abrir uma nova janela",
-      openFolder: "Open in file manager",
-      openFolderFailed: "Couldn't open folder",
+      openFolder: "Abrir no gerenciador de arquivos",
+      openFolderFailed: "Não foi possível abrir a pasta",
       remove: "Remover projeto",
       removing: "Removendo...",
     },
@@ -122,6 +125,8 @@ export const sidebar = {
       rename: "Renomear workspace",
       pin: "Fixar no topo",
       unpin: "Desafixar",
+      markAsRead: "Marcar como lido",
+      markAsUnread: "Marcar como não lido",
       archive: "Arquivar",
       archiving: "Arquivando...",
     },
@@ -135,6 +140,8 @@ export const sidebar = {
       branchNameCopied: "Nome da branch copiado",
       hostDisconnected: "Host não está conectado",
       archiveFailed: "Falha ao arquivar workspace",
+      markAsReadFailed: "Falha ao marcar workspace como lido",
+      markAsUnreadFailed: "Falha ao marcar workspace como não lido",
     },
   },
 };

@@ -14,7 +14,7 @@ import type { ToolCallDetail } from "@ait/protocol/agent-types";
 import {
   buildPaseoToolDetailSections,
   type PaseoToolDetailSection,
-} from "@ait/protocol/paseo-tool-call-detail";
+} from "@ait/protocol/paseo-tool-presentation/index";
 import { buildLineDiff, parseUnifiedDiff, type DiffLine } from "@/utils/tool-call-parsers";
 import { highlightDiffLines } from "@/utils/diff-highlight";
 import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";
@@ -208,12 +208,13 @@ function WorktreeSetupDetailSection({
   worktreePath,
   ds,
 }: WorktreeSetupDetailProps) {
+  const { t } = useTranslation();
   const setupLog = log.replace(/^\n+/, "");
   const hasLog = setupLog.length > 0;
   return (
     <CodeBlockSection ds={ds}>
       <Text selectable style={styles.scrollText}>
-        {hasLog ? setupLog : `Preparing worktree ${branchName} at ${worktreePath}`}
+        {hasLog ? setupLog : t("toolCallDetails.preparingWorktree", { branchName, worktreePath })}
       </Text>
     </CodeBlockSection>
   );
@@ -360,7 +361,7 @@ function SubAgentDetailSection({
     <CodeBlockSection ds={ds}>
       {childSessionId ? (
         <Text selectable style={styles.subAgentSessionText}>
-          session {childSessionId}
+          {t("toolCallDetails.subAgentSession", { sessionId: childSessionId })}
         </Text>
       ) : null}
       {hasActions ? (

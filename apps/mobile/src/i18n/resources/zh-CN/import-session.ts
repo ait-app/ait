@@ -8,6 +8,8 @@ export const importSession = {
   },
   filters: {
     all: "全部",
+    label: "筛选：{{provider}}",
+    title: "按提供方筛选",
   },
   status: {
     connectHost: "连接到 Host 以导入会话",

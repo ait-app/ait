@@ -736,6 +736,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           return (
             <ToolCall
+              serverId={resolvedServerId}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -752,6 +753,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         const data = payload.data;
         return (
           <ToolCall
+            serverId={resolvedServerId}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}
@@ -762,7 +764,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, handleToolCallOpenFile],
+      [context.cwd, handleToolCallOpenFile, resolvedServerId],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity

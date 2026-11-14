@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Workspace rows in the status-grouped sidebar offer Share and "Open in file manager", as rows grouped by project already did.
+- A project folder opened from the desktop shell that cannot be added now shows an error instead of failing silently.
+- Creating or editing a schedule no longer changes the isolation choice the new-workspace form remembers.
+- Ait agent tool calls in a conversation show the target agent's title, and their details list "Internal" next to "Notify on finish".
+- An agent tab shows "Agent not found" only when the agent is missing; other load failures show the error with Retry.
+- A desktop update that fails to download or install shows the failure with Retry instead of "Up to date".
+- A failed copy in the file explorer shows an error, and the copy buttons in the workspace hover card and Bot webhook setup return to their idle state after a moment.
+- Text that appeared in English under every language is now translated, including the workspace screen, the new-workspace form, the pull request panel, the terminal and sidebar menus. Several hundred mistranslated Arabic, Spanish and French strings are corrected.
 - Configuration that would grow past the size its own reader accepts is now refused instead of being written as a file that can no longer be loaded: a daemon `config.json` beyond 4 MiB, a project `ait.json` beyond 4 MiB, and a registry file beyond 32 MiB. Writing a project `ait.json` keeps the mode the file already had, so a shared checkout stays readable.
 - One schedule whose occurrence cannot be saved no longer holds back every other schedule; the others keep running.
 - A hub download the peer already completed is reported as done instead of as cancelled.

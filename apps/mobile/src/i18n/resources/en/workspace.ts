@@ -168,10 +168,19 @@ export const workspace = {
     hostDisconnected: "Host is not connected",
     updateHost: "Update the host to use the native terminal renderer.",
     unableToSubscribe: "Unable to subscribe to terminal",
+    hideKeyboard: "Hide keyboard",
+    showKeyboard: "Show keyboard",
+    paste: "Paste",
+    bottom: "Bottom",
   },
   tabs: {
     loading: "Loading...",
     modified: "Unsaved changes",
+    empty: {
+      missingDirectory:
+        "Workspace directory is missing. Reload workspace data before opening tabs.",
+      noTabs: "No tabs are available yet. Use New tab to create an agent or terminal.",
+    },
     fallback: {
       newAgent: "New agent",
       setup: "Setup",
@@ -531,6 +540,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "View",
         openOn: "Open on {{brand}}",
+        addAllToChat: "Add all to chat",
       },
       checksSummary: {
         passedLabel: "passed",
@@ -543,17 +553,21 @@ export const workspace = {
       sections: {
         checks: "Checks",
         pipeline: "Pipeline",
+        activity: "Activity",
       },
       empty: {
         noJobs: "No jobs",
         loadingPipeline: "Loading pipeline…",
         pipelineJobsLoadFailed: "Could not load pipeline jobs",
         allowedToFail: "allowed to fail",
+        noActivity: "No activity yet",
       },
       approvals: "{{given}} of {{required}} approvals",
       accessibility: {
         pullRequest: "Pull request #{{number}}",
         pullRequest_mr: "Merge request !{{number}}",
+        commentActions: "Comment actions",
+        threadActions: "Thread actions",
       },
       states: {
         merged: "Merged",
@@ -561,6 +575,8 @@ export const workspace = {
       },
       thread: {
         discussion: "Discussion thread",
+        resolved: "Resolved",
+        outdated: "Outdated",
       },
       errors: {
         statusLoadFailed: "Unable to load pull request status",

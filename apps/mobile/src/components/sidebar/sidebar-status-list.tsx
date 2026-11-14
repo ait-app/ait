@@ -15,6 +15,7 @@ import {
   type RefreshControlProps,
 } from "react-native";
 import { ScrollView as GestureScrollView, type GestureType } from "react-native-gesture-handler";
+import { useTranslation } from "react-i18next";
 import {
   navigateToWorkspace,
   useActiveWorkspaceSelection,
@@ -367,6 +368,7 @@ function StatusGroupHeader({
   group: SidebarWorkspaceGroup;
   collapsed: boolean;
 }) {
+  const { t } = useTranslation();
   const { isHovered, hoverHandlers } = useSidebarRowHover();
   const toggleWorkspaceGroupCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleWorkspaceGroupCollapsed,
@@ -388,7 +390,7 @@ function StatusGroupHeader({
     <View {...hoverHandlers}>
       <Pressable
         accessibilityRole={platformIsWeb ? undefined : "button"}
-        accessibilityLabel={`${group.label} group`}
+        accessibilityLabel={t("sidebar.statusGroup.accessibilityLabel", { label: group.label })}
         accessibilityState={accessibilityState}
         style={rowStyle}
         onPress={handlePress}
@@ -484,7 +486,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
     navigateToWorkspace({ serverId: workspace.serverId, workspaceId: workspace.workspaceId });
   }, [onWorkspacePress, workspace.serverId, workspace.workspaceId]);
 
-  const { isArchiving, actions, renameModal } = useSidebarWorkspaceRowActions({
+  const { isArchiving, actions, renameModal, shareSheet } = useSidebarWorkspaceRowActions({
     workspace,
     selected,
     canCopyBranchName: workspace.projectKind === "git",
@@ -547,7 +549,6 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
                 hostBadgeLabel={hostBadge?.label}
                 serviceSummary={serviceSummary}
                 workspaceKey={workspace.workspaceKey}
-                openInFileManagerPath={workspace.workspaceDirectory}
                 disabled={isArchiving}
                 accessibilityRole="button"
                 accessibilityState={accessibilityState}
@@ -587,6 +588,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
           );
         }}
       </SidebarWorkspaceRowFrame>
+      {shareSheet}
       {renameModal}
     </>
   );

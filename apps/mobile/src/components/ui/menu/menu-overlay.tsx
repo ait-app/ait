@@ -224,8 +224,8 @@ export interface AnchoredSurfaceProps {
   /** A submenu sits inside its parent's overlay and must not paint a second backdrop. */
   backdrop?: boolean;
   /**
-   * Hover tracking for the surface box, per docs/hover.md: plain View, pointer events, never
-   * a Pressable. Web-only by nature, which is all a flyout needs.
+   * Hover tracking for the surface box: plain View, pointer events, never a Pressable. Web-only
+   * by nature, which is all a flyout needs.
    */
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;

@@ -209,7 +209,7 @@ export interface ComposerTrackRowProps {
  * and the same rhythm however different their contents are — the panels are one surface family,
  * not one design per tracker.
  *
- * Hover lives on the outer plain View and press on the inner Pressable, per docs/hover.md: rows
+ * Hover lives on the outer plain View and press on the inner Pressable: rows
  * carry action buttons, and a Pressable tracking its own hover fights every Pressable inside it.
  *
  * A press is a menu selection, not a bare callback: the panel is a menu surface, so dismissal —

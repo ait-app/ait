@@ -170,10 +170,20 @@ export const workspace = {
     hostDisconnected: "Хост не подключён",
     updateHost: "Обновите хост, чтобы использовать нативный рендерер терминала.",
     unableToSubscribe: "Не удалось подключиться к терминалу",
+    hideKeyboard: "Скрыть клавиатуру",
+    showKeyboard: "Показать клавиатуру",
+    paste: "Вставить",
+    bottom: "Вниз",
   },
   tabs: {
     loading: "Загрузка...",
     modified: "Несохранённые изменения",
+    empty: {
+      missingDirectory:
+        "Каталог рабочего пространства отсутствует. Перезагрузите данные рабочего пространства, прежде чем открывать вкладки.",
+      noTabs:
+        "Пока нет доступных вкладок. Используйте «Новая вкладка», чтобы создать агента или терминал.",
+    },
     fallback: {
       newAgent: "Новый агент",
       setup: "Настройка",
@@ -533,6 +543,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "Просмотреть",
         openOn: "Открыть на {{brand}}",
+        addAllToChat: "Добавить всё в чат",
       },
       checksSummary: {
         passedLabel: "успешно",
@@ -545,17 +556,21 @@ export const workspace = {
       sections: {
         checks: "Проверки",
         pipeline: "Пайплайн",
+        activity: "Активность",
       },
       empty: {
         noJobs: "Нет заданий",
         loadingPipeline: "Загрузка пайплайна...",
         pipelineJobsLoadFailed: "Не удалось загрузить задания пайплайна",
         allowedToFail: "допускается сбой",
+        noActivity: "Активности пока нет",
       },
       approvals: "Одобрено: {{given}} из {{required}}",
       accessibility: {
         pullRequest: "PR #{{number}}",
         pullRequest_mr: "MR !{{number}}",
+        commentActions: "Действия с комментарием",
+        threadActions: "Действия с веткой обсуждения",
       },
       states: {
         merged: "Объединён",
@@ -563,6 +578,8 @@ export const workspace = {
       },
       thread: {
         discussion: "Ветка обсуждения",
+        resolved: "Решено",
+        outdated: "Устарело",
       },
       errors: {
         statusLoadFailed: "Не удалось загрузить статус PR",

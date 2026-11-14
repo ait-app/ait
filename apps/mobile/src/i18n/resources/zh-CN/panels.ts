@@ -3,6 +3,13 @@ export const panels = {
     newAgent: "新建 Agent",
     creatingAgent: "正在创建 Agent",
   },
+  agent: {
+    subtitle: "{{provider}} Agent",
+  },
+  providerSubagent: {
+    label: "子智能体",
+    subtitle: "{{provider}} 子智能体",
+  },
   file: {
     directoryMissing: "未找到工作区目录。",
     loading: "正在加载文件...",

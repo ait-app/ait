@@ -3,12 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
-import {
-  DEFAULT_DESKTOP_SETTINGS,
-  loadDesktopSettings,
-  migrateLegacyDesktopSettings,
-  useDesktopSettings,
-} from "@/desktop/settings/desktop-settings";
+import { DEFAULT_DESKTOP_SETTINGS, useDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { isElectronRuntime } from "@/desktop/host";
 import {
   APP_SETTINGS_KEY,
@@ -90,11 +85,6 @@ function pickDefinedAppSettings(updates: Partial<Settings>): Partial<AppSettings
 
 const productionDeps: SettingsDeps = {
   storage: AsyncStorage,
-  desktop: {
-    isElectron: isElectronRuntime,
-    loadDesktopSettings,
-    migrateLegacyDesktopSettings,
-  },
 };
 
 interface UseAppSettingsReturn {

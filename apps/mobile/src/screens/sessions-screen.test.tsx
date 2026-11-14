@@ -13,7 +13,6 @@ const history = vi.hoisted(() => ({
   isError: true,
   isSearchSupported: false,
   isSearchTruncated: false,
-  hostErrors: [{ serverId: "offline", serverName: "Offline Host" }],
   loadMore: vi.fn(),
   refreshAll: vi.fn(async () => {}),
 }));

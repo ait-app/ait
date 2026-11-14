@@ -45,6 +45,7 @@ export const addProjectFlow = {
     hosts: "Нет подключённых хостов",
     repository: "Введите URL GitHub или owner/repo",
     options: "Нет подходящих вариантов",
+    noMatchingHosts: "Нет подходящих хостов",
     hostUpgrade: "Обновите хост, чтобы использовать добавление проекта.",
   },
   actions: {

@@ -792,7 +792,7 @@ function WorkspaceRowWithMenu({
   canPin: boolean;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
-  const { isArchiving, actions, renameModal } = useSidebarWorkspaceRowActions({
+  const { isArchiving, actions, renameModal, shareSheet } = useSidebarWorkspaceRowActions({
     workspace,
     selected,
     canCopyBranchName,
@@ -812,19 +812,6 @@ function WorkspaceRowWithMenu({
   const trailing = useSidebarWorkspaceTrailing();
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
-  const [shareTarget, setShareTarget] = useState<ShareResourceTarget | null>(null);
-  const handleShare = useCallback(
-    () =>
-      setShareTarget({
-        serverId: workspace.serverId,
-        resourceKind: "workspace",
-        resourceKey: workspace.workspaceId,
-        displayName: workspace.name,
-        projectName: workspace.projectName,
-      }),
-    [workspace],
-  );
-  const closeShare = useCallback(() => setShareTarget(null), []);
 
   return (
     <>
@@ -866,8 +853,6 @@ function WorkspaceRowWithMenu({
                 leadingProjectName={leadingProjectName}
                 hostBadgeLabel={hostBadge?.label}
                 workspaceKey={workspace.workspaceKey}
-                onShare={handleShare}
-                openInFileManagerPath={workspace.workspaceDirectory}
                 disabled={isArchiving}
                 aria-selected={selected}
                 accessibilityRole="button"
@@ -901,10 +886,6 @@ function WorkspaceRowWithMenu({
                     showScrim={showScrim}
                     reserveSlotWidth={reserveSlotWidth}
                     actions={actions}
-                    onShare={handleShare}
-                    openInFileManagerPath={
-                      workspace.workspaceDirectory ?? workspace.projectRootPath
-                    }
                   />
                 </SidebarWorkspaceRowContent>
               </SidebarWorkspaceContextMenu>
@@ -912,7 +893,7 @@ function WorkspaceRowWithMenu({
           );
         }}
       </SidebarWorkspaceRowFrame>
-      <ShareManagerSheet visible={shareTarget !== null} target={shareTarget} onClose={closeShare} />
+      {shareSheet}
       {renameModal}
     </>
   );

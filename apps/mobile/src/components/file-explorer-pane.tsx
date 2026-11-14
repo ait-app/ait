@@ -588,21 +588,31 @@ export function FileExplorerPane({
     [setExpandedPathsForWorkspace, workspaceStateKey],
   );
 
+  // Tree rows fire these without awaiting, so a failed clipboard write is reported here: native
+  // rejects, while web resolves `false` when even its fallback copy throws.
+  const copyToClipboard = useCallback(
+    (text: string) => {
+      const reportFailure = () => toast.error(t("common.errors.unableToCopy"));
+      Clipboard.setStringAsync(text).then((copied) => {
+        if (copied === false) reportFailure();
+      }, reportFailure);
+    },
+    [t, toast],
+  );
+
   const handleCopyPath = useCallback(
-    async (path: string) => {
-      await Clipboard.setStringAsync(
+    (path: string) => {
+      copyToClipboard(
         buildAbsoluteExplorerPath({
           workspaceRoot: normalizedWorkspaceRoot,
           entryPath: path,
         }),
       );
     },
-    [normalizedWorkspaceRoot],
+    [copyToClipboard, normalizedWorkspaceRoot],
   );
 
-  const handleCopyRelativePath = useCallback(async (path: string) => {
-    await Clipboard.setStringAsync(path);
-  }, []);
+  const handleCopyRelativePath = copyToClipboard;
 
   const handleRevealEntry = useCallback(
     async (entry: ExplorerEntry) => {

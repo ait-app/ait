@@ -6,12 +6,15 @@ export const newWorkspace = {
     worktree: "New worktree",
     sandboxedWorktree: "Sandboxed worktree",
     label: "Isolation",
+    accessibilityLabel: "Workspace isolation",
   },
   errors: {
     hostDisconnected: "Host is not connected",
     createWorktreeFailed: "Failed to create worktree",
     composerStateRequired: "Composer state is required",
     selectModel: "Select a model",
+    chooseProject: "Choose a project",
+    chooseHost: "Choose a host for this project",
   },
   tooltips: {
     project: "Choose the project",
@@ -19,6 +22,12 @@ export const newWorkspace = {
     isolation: "Choose the isolation level",
     startingRef: "Choose where to start from",
     launch: "Choose what to launch",
+  },
+  projectPicker: {
+    title: "Project",
+    searchPlaceholder: "Search projects",
+    empty: "No projects available.",
+    accessibilityLabel: "Workspace project",
   },
   refPicker: {
     startingRef: "Starting ref",

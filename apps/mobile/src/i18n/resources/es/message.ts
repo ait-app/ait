@@ -57,6 +57,7 @@ export const message = {
     next: "Siguiente",
     answerPlaceholder: "Escribe tu respuesta...",
     otherPlaceholder: "Otro...",
+    navLabel: "Pregunta {{current}} de {{total}}",
   },
   todo: {
     title: "Tareas",
@@ -78,5 +79,8 @@ export const message = {
     completed: "Contexto compactado",
   },
 
-  turnFooter: { workedFor: "Trabajó durante {{duration}}" },
+  turnFooter: {
+    workedFor: "Trabajó durante {{duration}}",
+    endedAt: "{{duration}}, finalizado: {{timestamp}}",
+  },
 };

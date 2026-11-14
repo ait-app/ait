@@ -178,7 +178,7 @@ export function buildPaseoToolDetailSections(
   return buildDetailSectionsFromSpec(getPaseoToolEntry(leafName)?.detail ?? {}, input, output);
 }
 
-export function buildDetailSectionsFromSpec(
+function buildDetailSectionsFromSpec(
   spec: PaseoToolDetailSpec,
   input: unknown,
   output: unknown,

@@ -3,6 +3,13 @@ export const panels = {
     newAgent: "新しいエージェント",
     creatingAgent: "エージェントを作成中",
   },
+  agent: {
+    subtitle: "{{provider}} エージェント",
+  },
+  providerSubagent: {
+    label: "サブエージェント",
+    subtitle: "{{provider}} サブエージェント",
+  },
   file: {
     directoryMissing: "ワークスペースディレクトリが見つかりません。",
     loading: "ファイルを読み込み中...",

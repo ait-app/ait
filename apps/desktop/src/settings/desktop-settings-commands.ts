@@ -14,6 +14,5 @@ export function createDesktopSettingsCommandHandlers({
   return {
     get_desktop_settings: () => settingsStore.get(),
     patch_desktop_settings: (args) => settingsStore.patch(args),
-    migrate_legacy_desktop_settings: (args) => settingsStore.migrateLegacyRendererSettings(args),
   };
 }

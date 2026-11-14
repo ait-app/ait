@@ -46,6 +46,9 @@ export const sidebar = {
   pinned: {
     title: "고정됨",
   },
+  statusGroup: {
+    accessibilityLabel: "{{label}} 그룹",
+  },
   actions: {
     addProject: "프로젝트 추가",
     newWorkspace: "새 워크스페이스",
@@ -64,7 +67,7 @@ export const sidebar = {
     appName: "Ait",
   },
   sections: {
-    usage: "Usage",
+    usage: "사용량",
     workspaces: "워크스페이스",
     sessions: "기록",
     search: "검색",
@@ -122,6 +125,8 @@ export const sidebar = {
       rename: "워크스페이스 이름 변경",
       pin: "상단에 고정",
       unpin: "고정 해제",
+      markAsRead: "읽음으로 표시",
+      markAsUnread: "읽지 않음으로 표시",
       archive: "보관",
       archiving: "보관하는 중...",
     },
@@ -135,6 +140,8 @@ export const sidebar = {
       branchNameCopied: "브랜치 이름이 복사되었습니다",
       hostDisconnected: "호스트가 연결되어 있지 않습니다",
       archiveFailed: "워크스페이스를 보관하지 못했습니다.",
+      markAsReadFailed: "워크스페이스를 읽음으로 표시하지 못했습니다.",
+      markAsUnreadFailed: "워크스페이스를 읽지 않음으로 표시하지 못했습니다.",
     },
   },
 };

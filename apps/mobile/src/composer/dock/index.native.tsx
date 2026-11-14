@@ -222,7 +222,7 @@ export function ComposerDock({
 }
 
 // Plain React Native styles: these land on Reanimated views, which must not carry
-// theme-driven Unistyles (docs/unistyles.md). The content width arrives inline.
+// theme-driven Unistyles. The content width arrives inline.
 const dockStyles = StyleSheet.create({
   viewport: { flex: 1, overflow: "hidden" },
   surface: { flex: 1 },

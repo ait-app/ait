@@ -45,6 +45,7 @@ export const addProjectFlow = {
     hosts: "لا توجد مضيفون متصلون",
     repository: "أدخل عنوان GitHub أو owner/repo",
     options: "لا توجد خيارات مطابقة",
+    noMatchingHosts: "لا يوجد مضيفون مطابقون",
     hostUpgrade: "حدّث المضيف لاستخدام إضافة مشروع.",
   },
   actions: { openPath: "فتح هذا المسار", useParent: "استخدام هذا الأب", navigate: "انتقال" },
