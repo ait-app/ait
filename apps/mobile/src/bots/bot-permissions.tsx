@@ -1,25 +1,12 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import { BOT_TOOL_GROUPS, type BotPermissions } from "@ait/protocol/bot/types";
 import { getUnattendedModeId } from "@ait/protocol/provider-manifest";
-import { useSessionStore } from "@/stores/session-store";
-import type { Theme } from "@/styles/theme";
+import { BotCheckbox } from "./allow-groups-checkbox";
 import { BotSelect } from "./bot-select";
 import { botStyles as styles } from "./styles";
-
-const ThemedCheck = withUnistyles(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
-
-/** Whether the host implements `bot.permissions.update.request`; older hosts hide the UI. */
-export function useBotPermissionsSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotPermissions === true,
-  );
-}
 
 type GrantableGroup = (typeof BOT_TOOL_GROUPS)[number];
 
@@ -37,39 +24,6 @@ const RISKY_GROUPS: ReadonlySet<GrantableGroup> = new Set(["scripts", "terminals
 
 /** Selector value for a provider the Bot may not start Agents with. */
 const NOT_ALLOWED = "";
-
-function Checkbox({
-  checked,
-  disabled,
-  label,
-  onPress,
-  testID,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  label: string;
-  onPress: () => void;
-  testID: string;
-}) {
-  return (
-    <Pressable
-      style={[styles.row, disabled ? styles.disabled : null]}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="checkbox"
-      accessibilityLabel={label}
-      accessibilityState={{ checked, disabled }}
-      aria-checked={checked}
-      aria-disabled={disabled}
-      testID={testID}
-    >
-      <View style={[styles.checkbox, checked ? styles.checkboxChecked : null]}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
-      </View>
-      <Text style={styles.text}>{label}</Text>
-    </Pressable>
-  );
-}
 
 /** One provider's mode choices. */
 interface ProviderModeChoices {
@@ -171,7 +125,7 @@ export function BotPermissionFields({
     <View style={styles.permissionBlock} testID="bot-permissions">
       {BOT_TOOL_GROUPS.map((group) => (
         <View key={group} style={styles.permissionBlock}>
-          <Checkbox
+          <BotCheckbox
             checked={group === "observe" || value.groups.includes(group)}
             disabled={disabled || group === "observe"}
             label={t(GROUP_LABEL_KEYS[group])}

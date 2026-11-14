@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { BUILTIN_PROVIDER_IDS, getAgentProviderDefinition } from "./provider-manifest.js";
-import { ProviderOverridesSchema } from "./provider-config.js";
 
 describe("DeepSeek Harness provider", () => {
   it("has a built-in definition without invented permission modes", () => {
@@ -10,8 +9,5 @@ describe("DeepSeek Harness provider", () => {
       defaultModeId: null,
       modes: [],
     });
-    expect(
-      ProviderOverridesSchema.safeParse({ "deepseek-harness": { enabled: true } }).success,
-    ).toBe(true);
   });
 });

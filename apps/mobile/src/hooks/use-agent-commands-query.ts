@@ -71,13 +71,9 @@ export function useAgentCommandsQuery({
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 
-  // isPending is true when the query has never run yet (no cached data and not fetching)
-  // isLoading is true when fetching and no data yet
-  const isLoading = query.isPending || query.isLoading;
-
   return {
     commands: query.data ?? [],
-    isLoading,
+    isLoading: query.isPending,
     isError: query.isError,
     error: query.error,
   };

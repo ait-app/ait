@@ -338,12 +338,6 @@ export function SheetHeaderView({
   const back = header.back;
   const handleBackPress = back?.onPress;
   const search = header.search;
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      search?.onChange(value);
-    },
-    [search],
-  );
 
   return (
     <View style={styles.headerContainer} testID={testID}>
@@ -389,7 +383,7 @@ export function SheetHeaderView({
             style={[styles.searchInput, isWeb && { outlineStyle: "none" }]}
             placeholder={search.placeholder ?? t("common.actions.search")}
             resetKey={search.resetKey}
-            onChangeText={handleSearchChange}
+            onChangeText={search.onChange}
             onFocus={search.onFocus}
             onBlur={search.onBlur}
             autoCapitalize="none"

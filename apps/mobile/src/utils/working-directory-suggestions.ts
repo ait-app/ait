@@ -1,6 +1,6 @@
 import { scorePathMatch } from "@ait/protocol/search/text-match";
 
-export interface BuildWorkingDirectorySuggestionsInput {
+interface BuildWorkingDirectorySuggestionsInput {
   recommendedPaths: string[];
   serverPaths: string[];
   query: string;

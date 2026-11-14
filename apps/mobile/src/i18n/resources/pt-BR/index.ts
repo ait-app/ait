@@ -29,7 +29,6 @@ export * from "./open-project";
 export * from "./pairing";
 export * from "./pane-find";
 export * from "./panels";
-export * from "./project-picker";
 export * from "./provider-catalog";
 export * from "./provider-control";
 export * from "./provider-selection";

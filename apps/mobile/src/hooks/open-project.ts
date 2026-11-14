@@ -14,19 +14,19 @@ type OpenProjectErrorCode = NonNullable<OpenProjectPayload["errorCode"]>;
 /** Live stage and overall completion reported while a GitHub clone runs. */
 export type GithubCloneProgress = ProjectGithubCloneProgressMessage["payload"];
 
-export interface OpenProjectSuccess {
+interface OpenProjectSuccess {
   ok: true;
   project: WorkspaceProjectDescriptorPayload;
 }
 
-export interface OpenProjectFailure {
+interface OpenProjectFailure {
   ok: false;
   errorCode: OpenProjectErrorCode | null;
   error: string | null;
 }
 
 export type OpenProjectResult = OpenProjectSuccess | OpenProjectFailure;
-export type OpenProjectFailureReason = "directory_not_found" | "open_failed";
+type OpenProjectFailureReason = "directory_not_found" | "open_failed";
 export type { ProjectGithubCloneProtocol };
 
 export function getOpenProjectFailureReason(
@@ -43,7 +43,7 @@ export function getOpenProjectFailureReason(
   return "open_failed";
 }
 
-export interface OpenProjectDirectlyInput {
+interface OpenProjectDirectlyInput {
   serverId: string;
   projectPath: string;
   isConnected: boolean;
@@ -60,7 +60,7 @@ interface ProjectRegistrationCallbacks {
   setHasHydratedWorkspaces: (serverId: string, hydrated: boolean) => void;
 }
 
-export interface RegisterProjectDescriptorInput {
+interface RegisterProjectDescriptorInput {
   serverId: string;
   project: WorkspaceProjectDescriptorPayload;
   upsertProject: (serverId: string, project: ProjectDescriptor) => void;
@@ -75,7 +75,7 @@ export function registerProjectDescriptor(input: RegisterProjectDescriptorInput)
   return true;
 }
 
-export interface CloneGithubProjectDirectlyInput extends ProjectRegistrationCallbacks {
+interface CloneGithubProjectDirectlyInput extends ProjectRegistrationCallbacks {
   repo: string;
   targetDirectory: string;
   cloneProtocol?: ProjectGithubCloneProtocol;

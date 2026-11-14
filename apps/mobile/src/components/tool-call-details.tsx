@@ -147,16 +147,8 @@ function useDiffLines(detail: ToolCallDetail | undefined): DiffLine[] | undefine
   }, [detail]);
 }
 
-interface ShellDetailProps {
-  command: string;
-  output: string | null | undefined;
-  ds: DetailStyles;
-}
-
-function ShellDetailSection({ command, output, ds }: ShellDetailProps) {
-  const normalizedCommand = command.replace(/\n+$/, "");
-  const commandOutput = (output ?? "").replace(/^\n+/, "");
-  const hasOutput = commandOutput.length > 0;
+// A bordered code block that scrolls both ways inside the section.
+function CodeBlockSection({ ds, children }: { ds: DetailStyles; children: ReactNode }) {
   return (
     <View style={ds.sectionFillStyle}>
       <View style={ds.codeBlockFillStyle}>
@@ -173,16 +165,33 @@ function ShellDetailSection({ command, output, ds }: ShellDetailProps) {
             contentContainerStyle={styles.codeHorizontalContent}
           >
             <View style={styles.codeLine} dataSet={CODE_SURFACE_DATASET}>
-              <Text selectable style={styles.scrollText}>
-                <Text style={styles.shellPrompt}>$ </Text>
-                {normalizedCommand}
-                {hasOutput ? `\n\n${commandOutput}` : ""}
-              </Text>
+              {children}
             </View>
           </ScrollView>
         </ScrollView>
       </View>
     </View>
+  );
+}
+
+interface ShellDetailProps {
+  command: string;
+  output: string | null | undefined;
+  ds: DetailStyles;
+}
+
+function ShellDetailSection({ command, output, ds }: ShellDetailProps) {
+  const normalizedCommand = command.replace(/\n+$/, "");
+  const commandOutput = (output ?? "").replace(/^\n+/, "");
+  const hasOutput = commandOutput.length > 0;
+  return (
+    <CodeBlockSection ds={ds}>
+      <Text selectable style={styles.scrollText}>
+        <Text style={styles.shellPrompt}>$ </Text>
+        {normalizedCommand}
+        {hasOutput ? `\n\n${commandOutput}` : ""}
+      </Text>
+    </CodeBlockSection>
   );
 }
 
@@ -202,29 +211,11 @@ function WorktreeSetupDetailSection({
   const setupLog = log.replace(/^\n+/, "");
   const hasLog = setupLog.length > 0;
   return (
-    <View style={ds.sectionFillStyle}>
-      <View style={ds.codeBlockFillStyle}>
-        <ScrollView
-          style={ds.codeVerticalScrollStyle}
-          contentContainerStyle={styles.codeVerticalContent}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator
-        >
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator
-            contentContainerStyle={styles.codeHorizontalContent}
-          >
-            <View style={styles.codeLine} dataSet={CODE_SURFACE_DATASET}>
-              <Text selectable style={styles.scrollText}>
-                {hasLog ? setupLog : `Preparing worktree ${branchName} at ${worktreePath}`}
-              </Text>
-            </View>
-          </ScrollView>
-        </ScrollView>
-      </View>
-    </View>
+    <CodeBlockSection ds={ds}>
+      <Text selectable style={styles.scrollText}>
+        {hasLog ? setupLog : `Preparing worktree ${branchName} at ${worktreePath}`}
+      </Text>
+    </CodeBlockSection>
   );
 }
 
@@ -366,43 +357,25 @@ function SubAgentDetailSection({
   );
   const hasActions = actions.length > 0;
   return (
-    <View style={ds.sectionFillStyle}>
-      <View style={ds.codeBlockFillStyle}>
-        <ScrollView
-          style={ds.codeVerticalScrollStyle}
-          contentContainerStyle={styles.codeVerticalContent}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator
-        >
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator
-            contentContainerStyle={styles.codeHorizontalContent}
-          >
-            <View style={styles.codeLine} dataSet={CODE_SURFACE_DATASET}>
-              {childSessionId ? (
-                <Text selectable style={styles.subAgentSessionText}>
-                  session {childSessionId}
-                </Text>
-              ) : null}
-              {hasActions ? (
-                <View style={styles.subAgentActions}>
-                  {actions.map((action) => (
-                    <SubAgentActionRow key={action.index} action={action} />
-                  ))}
-                </View>
-              ) : null}
-              <SubAgentLogText
-                activityLog={remainingLog}
-                fallbackHeader={fallbackHeader}
-                hasActions={hasActions}
-              />
-            </View>
-          </ScrollView>
-        </ScrollView>
-      </View>
-    </View>
+    <CodeBlockSection ds={ds}>
+      {childSessionId ? (
+        <Text selectable style={styles.subAgentSessionText}>
+          session {childSessionId}
+        </Text>
+      ) : null}
+      {hasActions ? (
+        <View style={styles.subAgentActions}>
+          {actions.map((action) => (
+            <SubAgentActionRow key={action.index} action={action} />
+          ))}
+        </View>
+      ) : null}
+      <SubAgentLogText
+        activityLog={remainingLog}
+        fallbackHeader={fallbackHeader}
+        hasActions={hasActions}
+      />
+    </CodeBlockSection>
   );
 }
 
@@ -467,31 +440,6 @@ function ScrollableTextSection({
   );
   if (!wrapInSectionFill) return body;
   return <View style={ds.sectionFillStyle}>{body}</View>;
-}
-
-interface FetchDetailProps {
-  url: string;
-  result: string | null | undefined;
-  ds: DetailStyles;
-}
-
-function FetchDetailSection({ url, result, ds }: FetchDetailProps) {
-  return (
-    <View style={ds.sectionFillStyle}>
-      <ScrollView
-        style={ds.scrollAreaFillStyle}
-        contentContainerStyle={styles.scrollContent}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator
-      >
-        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-          <Text selectable style={styles.scrollText} dataSet={CODE_SURFACE_DATASET}>
-            {result ? `${url}\n\n${result}` : url}
-          </Text>
-        </ScrollView>
-      </ScrollView>
-    </View>
-  );
 }
 
 function ScrollablePlainTextSection({ text, ds }: { text: string; ds: DetailStyles }) {
@@ -734,7 +682,8 @@ function buildDetailSections(
     return buildSearchSections(detail, ds);
   }
   if (detail.type === "fetch") {
-    return [<FetchDetailSection key="fetch" url={detail.url} result={detail.result} ds={ds} />];
+    const content = detail.result ? `${detail.url}\n\n${detail.result}` : detail.url;
+    return [<ScrollableTextSection key="fetch" content={content} ds={ds} />];
   }
   if (detail.type === "plain_text") {
     if (!detail.text) return [];
@@ -897,10 +846,6 @@ const styles = StyleSheet.create((theme) => {
       fontWeight: theme.fontWeight.semibold,
       textTransform: "uppercase",
       letterSpacing: 0.5,
-    },
-    rangeText: {
-      color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.sm,
     },
     diffContainer: {
       borderWidth: theme.borderWidth[1],

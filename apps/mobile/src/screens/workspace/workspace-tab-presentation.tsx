@@ -293,9 +293,6 @@ const styles = StyleSheet.create((theme) => ({
   statusDotFailed: {
     color: getStatusDotColor({ theme, bucket: "failed" }) ?? undefined,
   },
-  statusDotRunning: {
-    color: getStatusDotColor({ theme, bucket: "running" }) ?? undefined,
-  },
   statusDotAttention: {
     color: getStatusDotColor({ theme, bucket: "attention" }) ?? undefined,
   },

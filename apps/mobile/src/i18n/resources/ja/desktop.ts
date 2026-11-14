@@ -173,10 +173,4 @@ export const desktop = {
       failed: "通知の送信に失敗しました。",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "CLIのインストール状態を確認できません。",
-      installFailed: "Ait CLIをインストールできません。",
-    },
-  },
 };

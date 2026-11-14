@@ -95,7 +95,6 @@ export const schedules = {
   untitledAgent: "未命名 Agent",
   product: {
     schedule: "计划",
-    heartbeat: "心跳任务",
   },
   untitled: "未命名{{product}}",
   status: {
@@ -155,7 +154,6 @@ export const schedules = {
     workspace: "工作区",
     chooseHost: "请先选择主机。",
     chooseProject: "请先选择项目。",
-    searchProjects: "搜索项目...",
     model: "模型",
     thinking: "思考强度",
     selectThinking: "选择思考强度",
@@ -166,11 +164,6 @@ export const schedules = {
     noModelModes: "此模型没有可用的模式。",
     selectMode: "选择模式",
     archive: "每次运行结束后归档新建 Agent",
-    isolation: "隔离方式",
-    local: "本地目录",
-    worktree: "Git 工作树",
-    selectIsolation: "选择隔离方式",
-    noIsolation: "没有可用的隔离方式",
     submitError: "无法保存计划：{{message}}",
     runningError: "计划正在运行，请等待本次运行结束后再修改。",
   },

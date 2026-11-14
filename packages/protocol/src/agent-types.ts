@@ -1,4 +1,4 @@
-import type { AgentAttachment, CompactionTimelineItemPayload } from "./messages.js";
+import type { CompactionTimelineItemPayload } from "./messages.js";
 
 export type AgentProvider = string;
 
@@ -186,19 +186,6 @@ export interface AgentPersistenceHandle {
   /** Provider specific handle (Codex thread id, Claude resume token, etc). */
   nativeHandle?: string;
   metadata?: AgentMetadata;
-}
-
-export type AgentPromptContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string }
-  | AgentAttachment;
-
-export type AgentPromptInput = string | AgentPromptContentBlock[];
-
-export interface AgentRunOptions {
-  outputSchema?: unknown;
-  resumeFrom?: AgentPersistenceHandle;
-  maxThinkingTokens?: number;
 }
 
 export interface AgentUsage {
@@ -435,63 +422,6 @@ export type AgentTimelineItem =
   | CompactionTimelineItem
   | PluginTimelineItem;
 
-export type AgentStreamEvent =
-  | { type: "thread_started"; sessionId: string; provider: AgentProvider }
-  | { type: "turn_started"; provider: AgentProvider; turnId?: string }
-  | { type: "turn_completed"; provider: AgentProvider; usage?: AgentUsage; turnId?: string }
-  | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
-  | {
-      type: "mode_changed";
-      provider: AgentProvider;
-      currentModeId: string | null;
-      availableModes: AgentMode[];
-    }
-  | { type: "model_changed"; provider: AgentProvider; runtimeInfo: AgentRuntimeInfo }
-  | {
-      type: "thinking_option_changed";
-      provider: AgentProvider;
-      thinkingOptionId: string | null;
-    }
-  | {
-      type: "turn_failed";
-      provider: AgentProvider;
-      error: string;
-      code?: string;
-      diagnostic?: string;
-      turnId?: string;
-    }
-  | { type: "turn_canceled"; provider: AgentProvider; reason: string; turnId?: string }
-  | {
-      type: "timeline";
-      item: AgentTimelineItem;
-      provider: AgentProvider;
-      turnId?: string;
-      timestamp?: string;
-    }
-  | {
-      type: "permission_requested";
-      provider: AgentProvider;
-      request: AgentPermissionRequest;
-      turnId?: string;
-    }
-  | {
-      type: "permission_resolved";
-      provider: AgentProvider;
-      requestId: string;
-      resolution: AgentPermissionResponse;
-      turnId?: string;
-    }
-  | {
-      type: "attention_required";
-      provider: AgentProvider;
-      reason: "finished" | "error" | "permission";
-      timestamp: string;
-    };
-
-export function getAgentStreamEventTurnId(event: AgentStreamEvent): string | undefined {
-  return "turnId" in event ? event.turnId : undefined;
-}
-
 export type AgentPermissionRequestKind = "tool" | "plan" | "question" | "mode" | "other";
 
 export type AgentPermissionUpdate = AgentMetadata;
@@ -531,14 +461,6 @@ export type AgentPermissionResponse =
       message?: string;
       interrupt?: boolean;
     };
-
-export interface AgentRunResult {
-  sessionId: string;
-  finalText: string;
-  usage?: AgentUsage;
-  timeline: AgentTimelineItem[];
-  canceled?: boolean;
-}
 
 export type JsonValue =
   | null

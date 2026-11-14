@@ -516,7 +516,7 @@ describe("git-actions-policy", () => {
   it("hides Git actions for a non-Git workspace", () => {
     const directory = buildGitActions(createInput({ isGit: false }));
 
-    expect(directory).toEqual({ primary: null, secondary: [], menu: [] });
+    expect(directory).toEqual({ primary: null, secondary: [] });
   });
 
   it("offers archive workspace for Git checkouts and worktrees", () => {
@@ -670,10 +670,8 @@ describe("git-actions-policy", () => {
       }),
     );
 
-    const createPrAction = [...createActions.secondary, ...createActions.menu].find(
-      (action) => action.id === "pr",
-    );
-    const viewPrAction = [viewActions.primary, ...viewActions.secondary, ...viewActions.menu].find(
+    const createPrAction = createActions.secondary.find((action) => action.id === "pr");
+    const viewPrAction = [viewActions.primary, ...viewActions.secondary].find(
       (action) => action?.id === "pr",
     );
 

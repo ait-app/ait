@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "ScriptsWorkspace",
     copyPath: "Copier le chemin",
     copyBranchName: "Copier le nom de la branche",
-    copied: "Copié",
   },
   fileActions: {
     openFile: "Ouvrir le fichier",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "Afficher dans {{target}}",
     download: "Télécharger",
     addToChat: "Ajouter au chat",
-    moreActions: "Plus de propositions",
     newFile: "Nouveau fichier",
     newFolder: "Nouveau dossier",
     collapseFolder: "Replier le dossier",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "Nom",
       modified: "Modifié",
       size: "Taille",
-    },
-    context: {
-      size: "Taille",
-      modified: "Modifié",
     },
     actions: {
       back: "Dos",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "Chargement...",
     modified: "Modifications non enregistrées",
-    loadingAgentTitle: "Titre d'agent de chargement",
     fallback: {
       newAgent: "Nouvel agent",
       setup: "Installation",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "Près de la gauche",
       closeRight: "Près de la droite",
       closeOthers: "Fermer les autres onglets",
-      moveToMain: "Déplacer vers le panneau principal",
       reloadAgent: "Agent de rechargement",
       reloadAgentTooltip:
         "Rechargez l'agent pour mettre à jour les compétences, les MCP ou le statut de connexion.",
@@ -218,12 +210,9 @@ export const workspace = {
       newTab: "Nouvel onglet",
       newAgent: "Nouvel agent",
       newTerminal: "Nouveau terminal",
-      preparingTerminal: "Préparation de l'onglet du terminal",
-      preparingTerminalTooltip: "Préparation du terminal...",
       newBrowser: "Nouveau navigateur",
       maximizePane: "Agrandir le volet",
       restorePane: "Restaurer le volet",
-      closePane: "Fermer le volet",
       exitFocusMode: "Quitter le mode concentration",
       splitRight: "Volet divisé à droite",
       splitDown: "Diviser le volet vers le bas",
@@ -455,16 +444,6 @@ export const workspace = {
           "La fusion n'est pas disponible tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
         mergeNothing:
           "La fusion n'est pas disponible car cette branche n'a encore rien de nouveau à fusionner",
-        updateNoBase:
-          "La mise à jour n'est pas disponible car nous n'avons pas pu déterminer la branche de base",
-        updateDirty:
-          "La mise à jour n'est pas disponible tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
-        updateCurrent:
-          "La mise à jour n'est pas disponible car cette branche est déjà à jour avec{{baseRef}}",
-        mergePrNoGithub:
-          "La fusionPRn'est pas disponible pour le moment carGitHubn'est pas connecté",
-        archiveNotWorktree:
-          "L'archive n'est pas disponible ici car cet espace de travail n'a pas été créé en tant qu'arbre de travail Ait",
         mergePrNoForge:
           "La fusion {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
         mergePrMissing:
@@ -513,7 +492,6 @@ export const workspace = {
     diff: {
       openChangesTab: "Ouvrir l'onglet Modifications",
       openDiffTab: "Ouvrir l'onglet Diff",
-      closeChangesTab: "Fermer l'onglet Modifications",
       jumpToFile: {
         title: "Aller au fichier",
       },
@@ -521,7 +499,6 @@ export const workspace = {
       tooLarge: "Diff trop grand pour être affiché",
       previewTooLargeTitle: "Ce diff est trop volumineux pour être prévisualisé",
       previewTooLargeDescription: "Réduisez la comparaison pour la prévisualiser ici",
-      unified: "Différentiel unifié",
       split: "Différent côte à côte",
       switchToUnified: "Passer au diff unifié",
       switchToSplit: "Passer au diff côte à côte",
@@ -531,8 +508,6 @@ export const workspace = {
       showWhitespace: "Afficher les espaces",
       scrollLongLines: "Faire défiler les longues lignes",
       wrapLongLines: "Enroulez les longues lignes",
-      collapseAllFolders: "Réduire tous les dossiers",
-      expandAllFolders: "Développer tous les dossiers",
       collapseAllFiles: "Réduire tous les fichiers",
       expandAllFiles: "Développer tous les fichiers",
       refreshing: "Rafraîchissant",
@@ -555,11 +530,8 @@ export const workspace = {
         title: "Commits",
         countLabel: "{{count}} commits de l’espace de travail",
         noneAhead: "Aucun commit en avance sur {{baseRef}} pour le moment",
-        fileDiffEmpty: "Aucune modification à afficher",
-        fileDiffError: "Échec du chargement du diff du fichier",
         loading: "Chargement des commits…",
         loadError: "Échec du chargement des commits",
-        empty: "Aucun commit pour le moment",
       },
     },
     openInEditor: {
@@ -585,7 +557,6 @@ export const workspace = {
       sections: {
         checks: "Chèques",
         pipeline: "Pipeline",
-        reviews: "Avis",
       },
       empty: {
         noJobs: "Aucune tâche",
@@ -597,31 +568,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "Demande de tirage #{{number}}",
         pullRequest_mr: "Demande de fusion !{{number}}",
-        checkStatus: {
-          passed: "Réussi",
-          failed: "Échec",
-          warning: "Avertissement",
-          actionRequired: "Action requise",
-          manual: "Manuel",
-          pending: "En attente",
-          skipped: "Ignoré",
-          cancelled: "Annulé",
-        },
       },
       states: {
-        draft: "Brouillon",
         merged: "Fusionné",
         closed: "Fermé",
-        open: "Ouvrir",
-      },
-      activity: {
-        commented: "Commenté",
-        approved: "Approuvé",
-        requestedChanges: "Modifications demandées",
-        reviewed: "Révisé",
-      },
-      time: {
-        justNow: "tout à l' heure",
       },
       thread: {
         discussion: "Fil de discussion",

@@ -165,10 +165,6 @@ export function normalizeAttachmentMetadata(image: AttachmentMetadata): Attachme
   };
 }
 
-export function isUserComposerAttachment(value: unknown): value is UserComposerAttachment {
-  return UserComposerAttachmentSchema.safeParse(value).success;
-}
-
 export function normalizeComposerAttachment(
   attachment: UserComposerAttachment,
 ): UserComposerAttachment {

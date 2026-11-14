@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -18,17 +18,13 @@ interface ContextWindowMeterProps {
   maxTokens: number | null;
   usedTokens: number | null;
   totalCostUsd?: number | null;
-  showPercentage?: boolean;
   /** Optional glyph envelope for icon-toolbar alignment. */
   glyphSize?: number;
 }
 
 const SVG_SIZE = 14;
 const USAGE_POPOVER_WIDTH = 300;
-const COMPACT_SVG_SIZE = 12;
-const COMPACT_RADIUS = 5;
 const STROKE_WIDTH = 2;
-const COMPACT_STROKE_WIDTH = 1.75;
 
 function isValidMaxTokens(value: number): boolean {
   return Number.isFinite(value) && value > 0;
@@ -69,15 +65,7 @@ function getProgressColor(percentage: number, theme: Theme): string {
   return theme.colors.foregroundMuted;
 }
 
-function getMeterGeometry(showPercentage: boolean, glyphSize?: number) {
-  if (showPercentage) {
-    return {
-      svgSize: COMPACT_SVG_SIZE,
-      radius: COMPACT_RADIUS,
-      strokeWidth: COMPACT_STROKE_WIDTH,
-      containerStyle: styles.containerWithLabel,
-    };
-  }
+function getMeterGeometry(glyphSize?: number) {
   const resolvedSize = glyphSize ?? SVG_SIZE;
   const resolvedStrokeWidth = glyphSize ? 2 : STROKE_WIDTH;
   return {
@@ -147,7 +135,6 @@ export function ContextWindowMeter({
   maxTokens,
   usedTokens,
   totalCostUsd,
-  showPercentage = false,
   glyphSize,
 }: ContextWindowMeterProps) {
   const { t } = useTranslation();
@@ -162,7 +149,7 @@ export function ContextWindowMeter({
   const closeSheet = useCallback(() => setIsSheetOpen(false), []);
   const percentage =
     maxTokens !== null && usedTokens !== null ? getUsagePercentage(maxTokens, usedTokens) : null;
-  const geometry = getMeterGeometry(showPercentage, glyphSize);
+  const geometry = getMeterGeometry(glyphSize);
 
   const context = useMemo(
     () =>
@@ -190,10 +177,6 @@ export function ContextWindowMeter({
       uniProps={meterColors}
     />
   );
-  const percentageLabel =
-    showPercentage && context ? (
-      <Text style={styles.percentageLabel}>{`${context.percentage}%`}</Text>
-    ) : null;
   const accessibilityLabel = context
     ? t("contextWindow.accessibility", { percentage: context.percentage })
     : t("contextWindow.accessibilityNoData");
@@ -209,7 +192,6 @@ export function ContextWindowMeter({
           onPress={openSheet}
         >
           {ring}
-          {percentageLabel}
         </Pressable>
         <ContextWindowSheet open={isSheetOpen} onClose={closeSheet}>
           <ContextWindowDetails
@@ -242,7 +224,6 @@ export function ContextWindowMeter({
             accessibilityLabel={accessibilityLabel}
           >
             {ring}
-            {percentageLabel}
           </Pressable>
         </TooltipTrigger>
         <TooltipContent
@@ -276,7 +257,6 @@ export function ContextWindowMeter({
           accessibilityLabel={accessibilityLabel}
         >
           {ring}
-          {percentageLabel}
         </View>
       </HoverCardTrigger>
       <HoverCardContent
@@ -307,19 +287,6 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
-  },
-  containerWithLabel: {
-    height: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[1],
-    borderRadius: theme.borderRadius.full,
-  },
-  percentageLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
   },
   // Plain details use a small inset; account usage cards have their own content density.
   plainPopover: { paddingVertical: theme.spacing[1], paddingHorizontal: theme.spacing[2] },

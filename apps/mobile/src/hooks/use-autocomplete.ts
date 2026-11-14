@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  getAutocompleteFallbackIndex,
-  getAutocompleteNextIndex,
-  type AutocompleteOptionsPosition,
-} from "@/components/ui/autocomplete-utils";
+import { getAutocompleteFallbackIndex } from "@/components/ui/autocomplete-utils";
+import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
 
 interface AutocompleteKeyPressEvent {
   key: string;
@@ -19,7 +16,6 @@ interface UseAutocompleteInput<
   query: string;
   onSelectOption: (option: TOption, event?: TKeyPressEvent) => void;
   onEscape?: () => void;
-  optionsPosition?: AutocompleteOptionsPosition;
 }
 
 interface UseAutocompleteResult<TKeyPressEvent extends AutocompleteKeyPressEvent> {
@@ -49,10 +45,7 @@ export function useAutocomplete<
         return -1;
       }
 
-      const fallbackIndex = getAutocompleteFallbackIndex(
-        input.options.length,
-        input.optionsPosition,
-      );
+      const fallbackIndex = getAutocompleteFallbackIndex(input.options.length);
 
       if (queryChanged) {
         return fallbackIndex;
@@ -62,7 +55,7 @@ export function useAutocomplete<
       }
       return current;
     });
-  }, [input.isVisible, input.options.length, input.query, input.optionsPosition]);
+  }, [input.isVisible, input.options.length, input.query]);
 
   const onKeyPress = useCallback(
     (event: TKeyPressEvent) => {
@@ -73,7 +66,7 @@ export function useAutocomplete<
       if (event.key === "ArrowUp") {
         event.preventDefault();
         setSelectedIndex((current) =>
-          getAutocompleteNextIndex({
+          getNextActiveIndex({
             currentIndex: current,
             itemCount: input.options.length,
             key: "ArrowUp",
@@ -85,7 +78,7 @@ export function useAutocomplete<
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setSelectedIndex((current) =>
-          getAutocompleteNextIndex({
+          getNextActiveIndex({
             currentIndex: current,
             itemCount: input.options.length,
             key: "ArrowDown",
@@ -96,10 +89,7 @@ export function useAutocomplete<
 
       if (event.key === "Tab" || event.key === "Enter") {
         event.preventDefault();
-        const fallbackIndex = getAutocompleteFallbackIndex(
-          input.options.length,
-          input.optionsPosition,
-        );
+        const fallbackIndex = getAutocompleteFallbackIndex(input.options.length);
         const resolvedIndex =
           selectedIndex >= 0 && selectedIndex < input.options.length
             ? selectedIndex

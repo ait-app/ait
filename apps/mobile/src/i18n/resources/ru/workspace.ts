@@ -25,7 +25,6 @@ export const workspace = {
     scriptsAccessibility: "Скрипты рабочего пространства",
     copyPath: "Копировать путь",
     copyBranchName: "Копировать имя ветки",
-    copied: "Скопировано",
   },
   fileActions: {
     openFile: "Открыть файл",
@@ -36,7 +35,6 @@ export const workspace = {
     revealIn: "Показать в {{target}}",
     download: "Скачать",
     addToChat: "Добавить в чат",
-    moreActions: "Дополнительные действия",
     newFile: "Новый файл",
     newFolder: "Новая папка",
     collapseFolder: "Свернуть папку",
@@ -64,10 +62,6 @@ export const workspace = {
       name: "Имя",
       modified: "Дата изменения",
       size: "Размер",
-    },
-    context: {
-      size: "Размер",
-      modified: "Дата изменения",
     },
     actions: {
       back: "Назад",
@@ -180,7 +174,6 @@ export const workspace = {
   tabs: {
     loading: "Загрузка...",
     modified: "Несохранённые изменения",
-    loadingAgentTitle: "Загрузка названия агента",
     fallback: {
       newAgent: "Новый агент",
       setup: "Настройка",
@@ -206,7 +199,6 @@ export const workspace = {
       closeLeft: "Закрыть вкладки слева",
       closeRight: "Закрыть вкладки справа",
       closeOthers: "Закрыть другие вкладки",
-      moveToMain: "Переместить на основную панель",
       reloadAgent: "Перезагрузить агента",
       reloadAgentTooltip: "Перезагрузите агента, чтобы обновить навыки, MCP или статус входа.",
       close: "Закрыть",
@@ -219,12 +211,9 @@ export const workspace = {
       newTab: "Новая вкладка",
       newAgent: "Новый агент",
       newTerminal: "Новый терминал",
-      preparingTerminal: "Подготовка вкладки терминала",
-      preparingTerminalTooltip: "Подготовка терминала...",
       newBrowser: "Новый браузер",
       maximizePane: "Развернуть панель",
       restorePane: "Восстановить панель",
-      closePane: "Закрыть панель",
       exitFocusMode: "Выйти из режима фокусировки",
       splitRight: "Разделить панель справа",
       splitDown: "Разделить панель снизу",
@@ -449,13 +438,6 @@ export const workspace = {
         mergeDirty:
           "Слияние недоступно при наличии локальных изменений. Сначала создайте коммит или сохраните изменения в stash.",
         mergeNothing: "Слияние недоступно: в этой ветке пока нет новых изменений для слияния.",
-        updateNoBase: "Обновление недоступно: не удалось определить базовую ветку.",
-        updateDirty:
-          "Обновление недоступно при наличии локальных изменений. Сначала создайте коммит или сохраните изменения в stash.",
-        updateCurrent: "Обновление недоступно: эта ветка уже синхронизирована с {{baseRef}}.",
-        mergePrNoGithub: "Слияние PR сейчас недоступно: GitHub не подключён.",
-        archiveNotWorktree:
-          "Архивирование недоступно: это рабочее пространство не было создано как worktree Ait.",
         mergePrNoForge: "Слияние {{noun}} сейчас недоступно: {{brand}} не подключён.",
         mergePrMissing: "Слияние PR недоступно: PR ещё не создан.",
         mergePrDraft: "Слияние PR недоступно: PR всё ещё является черновиком.",
@@ -498,7 +480,6 @@ export const workspace = {
     diff: {
       openChangesTab: "Открыть вкладку «Изменения»",
       openDiffTab: "Открыть вкладку «Дифф»",
-      closeChangesTab: "Закрыть вкладку «Изменения»",
       jumpToFile: {
         title: "Перейти к файлу",
       },
@@ -506,7 +487,6 @@ export const workspace = {
       tooLarge: "Дифф слишком велик для отображения",
       previewTooLargeTitle: "Этот дифф слишком велик для предварительного просмотра",
       previewTooLargeDescription: "Сузьте диапазон сравнения, чтобы просмотреть дифф здесь",
-      unified: "Унифицированный дифф",
       split: "Параллельный дифф",
       switchToUnified: "Переключиться на унифицированный дифф",
       switchToSplit: "Переключиться на параллельный дифф",
@@ -516,8 +496,6 @@ export const workspace = {
       showWhitespace: "Показать пробельные изменения",
       scrollLongLines: "Прокручивать длинные строки",
       wrapLongLines: "Перенос длинных строк",
-      collapseAllFolders: "Свернуть все папки",
-      expandAllFolders: "Развернуть все папки",
       collapseAllFiles: "Свернуть все файлы",
       expandAllFiles: "Развернуть все файлы",
       refreshing: "Обновление",
@@ -540,11 +518,8 @@ export const workspace = {
         title: "Коммиты",
         countLabel: "Коммитов в рабочем пространстве: {{count}}",
         noneAhead: "Пока нет коммитов, отсутствующих в {{baseRef}}",
-        fileDiffEmpty: "Нет изменений для отображения",
-        fileDiffError: "Не удалось загрузить дифф файла",
         loading: "Загрузка коммитов…",
         loadError: "Не удалось загрузить коммиты",
-        empty: "Коммитов пока нет",
       },
     },
     openInEditor: {
@@ -570,7 +545,6 @@ export const workspace = {
       sections: {
         checks: "Проверки",
         pipeline: "Пайплайн",
-        reviews: "Ревью",
       },
       empty: {
         noJobs: "Нет заданий",
@@ -582,31 +556,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "PR #{{number}}",
         pullRequest_mr: "MR !{{number}}",
-        checkStatus: {
-          passed: "Успешно",
-          failed: "Ошибка",
-          warning: "Предупреждение",
-          actionRequired: "Требуется действие",
-          manual: "Вручную",
-          pending: "Ожидание",
-          skipped: "Пропущено",
-          cancelled: "Отменено",
-        },
       },
       states: {
-        draft: "Черновик",
         merged: "Объединён",
         closed: "Закрыт",
-        open: "Открыт",
-      },
-      activity: {
-        commented: "Оставлен комментарий",
-        approved: "Одобрено",
-        requestedChanges: "Запрошены изменения",
-        reviewed: "Проведено ревью",
-      },
-      time: {
-        justNow: "прямо сейчас",
       },
       thread: {
         discussion: "Ветка обсуждения",

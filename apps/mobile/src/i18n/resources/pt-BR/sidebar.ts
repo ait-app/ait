@@ -6,7 +6,6 @@ export const sidebar = {
       label: "Agrupamento",
       project: "Projeto",
       status: "Status",
-      labels: "Etiquetas",
     },
     titleSource: {
       label: "Título",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "Fixados",
   },
-  host: {
-    noHost: "Nenhum host",
-    switchTitle: "Trocar host",
-    searchPlaceholder: "Buscar hosts...",
-  },
   actions: {
     addProject: "Adicionar projeto",
     newWorkspace: "Novo workspace",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "Executar diagnóstico",
     shortcuts: "Atalhos de teclado",
     reportIssue: "Relatar um problema",
-    discord: "Discord",
     github: "Criar issue no GitHub",
     whatsNew: "Novidades",
     appName: "Ait",
@@ -109,7 +102,6 @@ export const sidebar = {
     status: {
       serviceRunning: "Serviço {{name}} em execução",
       serviceUnhealthy: "Serviço {{name}} com falha",
-      creating: "Criando...",
     },
     checks: {
       passed: "Aprovados: {{count}}",
@@ -131,29 +123,17 @@ export const sidebar = {
       pin: "Fixar no topo",
       unpin: "Desafixar",
       archive: "Arquivar",
-      archiveWorkspace: "Arquivar workspace",
-      hideFromSidebar: "Ocultar da barra lateral",
       archiving: "Arquivando...",
-      hiding: "Ocultando...",
-    },
-    confirmations: {
-      hideTitle: "Ocultar workspace?",
-      hideMessage:
-        'Ocultar "{{workspaceName}}" da barra lateral?\n\nOs arquivos no disco não serão alterados.',
-      hideConfirm: "Ocultar",
-      cancel: "Cancelar",
     },
     rename: {
       title: "Renomear workspace",
       submit: "Renomear",
-      invalidBranchName: "Nome de branch inválido",
     },
     toasts: {
       workspacePathUnavailable: "Caminho do workspace indisponível",
       pathCopied: "Caminho copiado",
       branchNameCopied: "Nome da branch copiado",
       hostDisconnected: "Host não está conectado",
-      hideFailed: "Falha ao ocultar workspace",
       archiveFailed: "Falha ao arquivar workspace",
     },
   },

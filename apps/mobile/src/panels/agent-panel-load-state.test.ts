@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentScreenMissingState } from "@/hooks/use-agent-screen-state-machine";
 import {
-  clearHistorySyncErrorAfterSuccessfulSync,
   reconcileMissingAgentStateWithPresentAgent,
   shouldFetchAgentForLookup,
   shouldRetryLookupOnConnectionChange,
@@ -27,23 +26,6 @@ describe("reconcileMissingAgentStateWithPresentAgent", () => {
     };
 
     expect(reconcileMissingAgentStateWithPresentAgent(state)).toBe(state);
-  });
-});
-
-describe("clearHistorySyncErrorAfterSuccessfulSync", () => {
-  it("clears a sync error after a later successful refresh", () => {
-    expect(
-      clearHistorySyncErrorAfterSuccessfulSync({
-        kind: "error",
-        message: "Failed to get logs: session is archived",
-      }),
-    ).toEqual({ kind: "idle" });
-  });
-
-  it("leaves non-error states alone", () => {
-    const state: AgentScreenMissingState = { kind: "resolving" };
-
-    expect(clearHistorySyncErrorAfterSuccessfulSync(state)).toBe(state);
   });
 });
 

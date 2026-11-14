@@ -30,7 +30,6 @@ export function TimelineSyncStatus({
         ? {
             id: state === "reconnecting" ? 1 : 2,
             content: label,
-            nativeMessage: label,
             icon: <ThemedLoadingSpinner size={18} uniProps={spinnerColor} />,
             variant: "default",
             durationMs: null,

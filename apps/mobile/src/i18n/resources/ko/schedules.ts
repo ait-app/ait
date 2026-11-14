@@ -169,7 +169,6 @@ export const schedules = {
   untitledAgent: "제목 없는 에이전트",
   product: {
     schedule: "일정",
-    heartbeat: "하트비트",
   },
   untitled: "제목 없는 {{product}}",
   status: {
@@ -231,7 +230,6 @@ export const schedules = {
     workspace: "워크스페이스",
     chooseHost: "먼저 호스트를 선택하세요.",
     chooseProject: "먼저 프로젝트를 선택하세요.",
-    searchProjects: "프로젝트 검색...",
     model: "모델",
     thinking: "추론",
     selectThinking: "추론 수준 선택",
@@ -242,11 +240,6 @@ export const schedules = {
     noModelModes: "이 모델에서 사용할 수 있는 모드가 없습니다.",
     selectMode: "모드 선택",
     archive: "실행이 끝날 때마다 생성된 에이전트 보관",
-    isolation: "격리",
-    local: "로컬",
-    worktree: "워크트리",
-    selectIsolation: "격리 방식 선택",
-    noIsolation: "격리 옵션이 없습니다",
     submitError: "일정을 저장할 수 없습니다: {{message}}",
     runningError: "작업이 실행 중입니다. 현재 실행이 끝난 후 수정해 주세요.",
   },

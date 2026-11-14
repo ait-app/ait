@@ -126,18 +126,12 @@ function CustomModelRow({
   );
 }
 
-function SectionHeader({ title, count, hint }: { title: string; count?: number; hint?: string }) {
+function SectionHeader({ title, count }: { title: string; count: number }) {
   return (
     <View style={sheetStyles.sectionHeader}>
       <Text style={settingsStyles.sectionHeaderTitle}>{title}</Text>
       <View style={sheetStyles.sectionHeaderMeta}>
-        {count !== undefined ? (
-          <Text style={settingsStyles.sectionHeaderTitle}>{count}</Text>
-        ) : null}
-        {count !== undefined && hint ? (
-          <Text style={settingsStyles.sectionHeaderTitle}>·</Text>
-        ) : null}
-        {hint ? <Text style={settingsStyles.sectionHeaderTitle}>{hint}</Text> : null}
+        <Text style={settingsStyles.sectionHeaderTitle}>{count}</Text>
       </View>
     </View>
   );

@@ -6,19 +6,17 @@ export interface AssistantImageContext {
   workspaceRoot?: string;
 }
 
-export interface AssistantImageMetadata {
+interface AssistantImageMetadata {
   width: number;
   height: number;
   aspectRatio: number;
 }
 
 const assistantImageMetadataCache = new Map<string, AssistantImageMetadata>();
-const assistantImageParseCache = new Map<string, { sources: string[]; hasNonImageText: boolean }>();
 const ASSISTANT_IMAGE_METADATA_CACHE_LIMIT = 500;
-const ASSISTANT_IMAGE_PARSE_CACHE_LIMIT = 500;
 
 const MARKDOWN_IMAGE_PATTERN = /!\[[^\]]*]\((<[^>]+>|[^)\n]+)\)/g;
-export const ASSISTANT_IMAGE_DEFAULT_ASPECT_RATIO = 3 / 2;
+const ASSISTANT_IMAGE_DEFAULT_ASPECT_RATIO = 3 / 2;
 const ASSISTANT_IMAGE_INSET = 8;
 const ASSISTANT_IMAGE_MIN_HEIGHT = 160;
 const ASSISTANT_IMAGE_BLOCK_GAP = 24;
@@ -26,7 +24,7 @@ const ASSISTANT_MESSAGE_BASE_HEIGHT = 96;
 const ASSISTANT_MESSAGE_MIN_HEIGHT = 220;
 const ASSISTANT_MESSAGE_IMAGE_ONLY_BASE_HEIGHT = 40;
 
-function touchCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, limit: number): void {
+export function touchCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, limit: number): void {
   cache.delete(key);
   cache.set(key, value);
   if (cache.size <= limit) {
@@ -132,27 +130,7 @@ export function setAssistantImageMetadata(
   return metadata;
 }
 
-export function extractAssistantImageSources(markdown: string): string[] {
-  const shouldCacheParse = !/data:image\//i.test(markdown);
-  const cachedParse = shouldCacheParse ? assistantImageParseCache.get(markdown) : undefined;
-  if (cachedParse) {
-    touchCacheEntry(
-      assistantImageParseCache,
-      markdown,
-      cachedParse,
-      ASSISTANT_IMAGE_PARSE_CACHE_LIMIT,
-    );
-    return cachedParse.sources;
-  }
-
-  const parsed = parseAssistantImageMarkdown(markdown);
-  if (shouldCacheParse) {
-    touchCacheEntry(assistantImageParseCache, markdown, parsed, ASSISTANT_IMAGE_PARSE_CACHE_LIMIT);
-  }
-  return parsed.sources;
-}
-
-export interface AssistantMessageHeightEstimateInput {
+interface AssistantMessageHeightEstimateInput {
   markdown: string;
   contentMaxWidth: number;
   imageContext?: AssistantImageContext;
@@ -163,7 +141,7 @@ export function estimateAssistantMessageHeightFromCache({
   contentMaxWidth,
   imageContext,
 }: AssistantMessageHeightEstimateInput): number | null {
-  const parsed = assistantImageParseCache.get(markdown) ?? parseAssistantImageMarkdown(markdown);
+  const parsed = parseAssistantImageMarkdown(markdown);
   if (parsed.sources.length === 0) {
     return null;
   }
@@ -192,5 +170,4 @@ export function estimateAssistantMessageHeightFromCache({
 
 export function clearAssistantImageMetadataCache(): void {
   assistantImageMetadataCache.clear();
-  assistantImageParseCache.clear();
 }

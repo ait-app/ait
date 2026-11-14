@@ -3,12 +3,12 @@ export interface FocusClaimState {
   requestedKey: string | null;
 }
 
-export interface FocusClaimStep {
+interface FocusClaimStep {
   state: FocusClaimState;
   shouldRequest: boolean;
 }
 
-export interface FocusClaimReadiness {
+interface FocusClaimReadiness {
   isWorkspaceFocused: boolean;
   isPaneFocused: boolean;
   isAppActivelyVisible: boolean;

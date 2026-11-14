@@ -1,6 +1,6 @@
 import { Profiler, type ProfilerOnRenderCallback, type ReactNode } from "react";
 
-export interface RenderProfileSample {
+interface RenderProfileSample {
   id: string;
   phase: "mount" | "update" | "nested-update";
   actualDuration: number;

@@ -1,24 +1,20 @@
 import React, { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { BotExecution, BotPermissions, BotView, BotWakeScope } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import type { Theme } from "@/styles/theme";
-import { BotWakeScopeField, useBotNotificationsSupported } from "./bot-notifications";
-import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
+import { BotCheckbox } from "./allow-groups-checkbox";
+import { BotWakeScopeField } from "./bot-notifications";
+import { BotPermissionFields } from "./bot-permissions";
 import { BotSelect } from "./bot-select";
 import { botSessionNotes, defaultBotPermissions, type BotSessionNote } from "./permissions";
 import { botKeys, isBotConflict } from "./queries";
 import { botStyles as styles } from "./styles";
-
-const ThemedCheck = withUnistyles(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 /** Editable execution choice; an empty string stands for the provider default. */
 export interface BotExecutionDraft {
@@ -165,8 +161,8 @@ export function BotSetup({
   const [clearMemory, setClearMemory] = useState(false);
   const [permissionsDraft, setPermissionsDraft] = useState<BotPermissions | null>(null);
   const [wakeScope, setWakeScope] = useState<BotWakeScope>("own");
-  const supportsPermissions = useBotPermissionsSupported(serverId);
-  const supportsNotifications = useBotNotificationsSupported(serverId);
+  const supportsPermissions = useHostFeature(serverId, "workspaceBotPermissions");
+  const supportsNotifications = useHostFeature(serverId, "workspaceBotNotifications");
   const { providers, error } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   // Providers load after mount, so the default profile is derived until the user edits it.
@@ -220,21 +216,13 @@ export function BotSetup({
       {supportsNotifications ? (
         <BotWakeScopeField value={wakeScope} onChange={setWakeScope} disabled={disabled} />
       ) : null}
-      <Pressable
-        style={[styles.row, disabled ? styles.disabled : null]}
-        onPress={() => setClearMemory((checked) => !checked)}
+      <BotCheckbox
+        checked={clearMemory}
         disabled={disabled}
-        accessibilityRole="checkbox"
-        accessibilityLabel={t("bots.clearMemory")}
-        accessibilityState={{ checked: clearMemory, disabled }}
-        aria-checked={clearMemory}
+        label={t("bots.clearMemory")}
+        onPress={() => setClearMemory((checked) => !checked)}
         testID="bot-clear-memory"
-      >
-        <View style={[styles.checkbox, clearMemory ? styles.checkboxChecked : null]}>
-          {clearMemory ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
-        </View>
-        <Text style={styles.text}>{t("bots.clearMemory")}</Text>
-      </Pressable>
+      />
       {mutation.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {mutation.error.message}

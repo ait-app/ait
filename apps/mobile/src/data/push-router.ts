@@ -209,14 +209,13 @@ export async function applyProvidersSnapshotUpdate(input: {
 export function mountServerDataPushRouter(input: PushRouterInput): () => void {
   const activeCheckoutDiffSubscriptions = new Map<string, CheckoutDiffRegistration>();
   const activeTerminalSubscriptions = new Map<string, WorkspaceTerminalsRegistration>();
+  const active: ActiveServerDataSubscriptions = {
+    checkoutDiff: activeCheckoutDiffSubscriptions,
+    workspaceTerminals: activeTerminalSubscriptions,
+  };
   let disposed = false;
 
-  function reconcileSubscriptions(
-    fallbackActive: ActiveServerDataSubscriptions = {
-      checkoutDiff: activeCheckoutDiffSubscriptions,
-      workspaceTerminals: activeTerminalSubscriptions,
-    },
-  ): void {
+  function reconcileSubscriptions(): void {
     if (disposed) {
       return;
     }
@@ -224,10 +223,7 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     const desiredCheckoutDiffSubscriptions = new Map<string, CheckoutDiffRoute>();
     const desiredTerminalSubscriptions = new Map<string, WorkspaceTerminalsRoute>();
     for (const query of input.queryClient.getQueryCache().getAll()) {
-      const route = getActiveServerDataRoute(query, input.serverId, {
-        checkoutDiff: fallbackActive.checkoutDiff,
-        workspaceTerminals: fallbackActive.workspaceTerminals,
-      });
+      const route = getActiveServerDataRoute(query, input.serverId, active);
       if (!route) {
         continue;
       }
@@ -262,12 +258,7 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
   }
 
   const unsubscribeQueryCache = input.queryClient.getQueryCache().subscribe((event) => {
-    if (
-      !shouldReconcileSubscriptionsForCacheEvent(event, input.serverId, {
-        checkoutDiff: activeCheckoutDiffSubscriptions,
-        workspaceTerminals: activeTerminalSubscriptions,
-      })
-    ) {
+    if (!shouldReconcileSubscriptionsForCacheEvent(event, input.serverId, active)) {
       return;
     }
     reconcileSubscriptions();

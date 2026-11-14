@@ -60,10 +60,6 @@ export interface DesktopPermissions {
   }) => Promise<DesktopPermissionStatus>;
 }
 
-function status(input: DesktopPermissionStatus): DesktopPermissionStatus {
-  return input;
-}
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -85,40 +81,37 @@ function getErrorName(error: unknown): string | null {
 
 function isPermissionsQueryRuntimeUnsupported(error: unknown): boolean {
   const message = getErrorMessage(error);
-  if (
+  return (
     message.includes("Can only call Permissions.query on instances of Permissions") ||
     message.includes("Illegal invocation")
-  ) {
-    return true;
-  }
-  return false;
+  );
 }
 
 function mapNotificationPermissionString(permission: string): DesktopPermissionStatus {
   if (permission === "granted") {
-    return status({
+    return {
       state: "granted",
       detail: i18n.t("desktop.permissions.notifications.allowed"),
-    });
+    };
   }
   if (permission === "denied") {
-    return status({
+    return {
       state: "denied",
       detail: i18n.t("desktop.permissions.notifications.denied"),
-    });
+    };
   }
   if (permission === "default") {
-    return status({
+    return {
       state: "prompt",
       detail: i18n.t("desktop.permissions.notifications.notGranted"),
-    });
+    };
   }
-  return status({
+  return {
     state: "unknown",
     detail: i18n.t("desktop.permissions.notifications.unexpectedState", {
       state: permission,
     }),
-  });
+  };
 }
 
 export function createDesktopPermissions(env: DesktopPermissionEnvironment): DesktopPermissions {
@@ -128,22 +121,22 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
 
   async function getNotificationPermissionStatus(): Promise<DesktopPermissionStatus> {
     if (!env.isWeb) {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.notifications.webOnly"),
-      });
+      };
     }
 
     const desktopHost = env.getDesktopHost();
     if (desktopHost && typeof desktopHost.notification?.isSupported === "function") {
       try {
         const supported = await desktopHost.notification.isSupported();
-        return status({
+        return {
           state: supported ? "granted" : "unavailable",
           detail: supported
             ? i18n.t("desktop.permissions.notifications.supported")
             : i18n.t("desktop.permissions.notifications.unsupported"),
-        });
+        };
       } catch {
         // Fall through to web API check
       }
@@ -154,26 +147,26 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
       return mapNotificationPermissionString(NotificationConstructor.permission);
     }
 
-    return status({
+    return {
       state: "unavailable",
       detail: i18n.t("desktop.permissions.notifications.apiUnavailable"),
-    });
+    };
   }
 
   async function getMicrophonePermissionStatus(): Promise<DesktopPermissionStatus> {
     if (!env.isWeb) {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.microphone.webOnly"),
-      });
+      };
     }
 
     const webNavigator = env.getNavigator();
     if (!webNavigator) {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.microphone.navigatorUnavailable"),
-      });
+      };
     }
 
     const permissionsApi = webNavigator.permissions;
@@ -181,64 +174,64 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
       try {
         const result = await permissionsApi.query({ name: "microphone" });
         if (result?.state === "granted") {
-          return status({
+          return {
             state: "granted",
             detail: i18n.t("desktop.permissions.microphone.granted"),
-          });
+          };
         }
         if (result?.state === "denied") {
-          return status({
+          return {
             state: "denied",
             detail: i18n.t("desktop.permissions.microphone.denied"),
-          });
+          };
         }
         if (result?.state === "prompt") {
-          return status({
+          return {
             state: "prompt",
             detail: i18n.t("desktop.permissions.microphone.notGranted"),
-          });
+          };
         }
-        return status({
+        return {
           state: "unknown",
           detail: i18n.t("desktop.permissions.microphone.unexpectedState", {
             state: result?.state ?? "unknown",
           }),
-        });
+        };
       } catch (error) {
         if (isPermissionsQueryRuntimeUnsupported(error)) {
-          return status({
+          return {
             state: "unknown",
             detail: i18n.t("desktop.permissions.microphone.statusApiUnavailable"),
-          });
+          };
         }
-        return status({
+        return {
           state: "unknown",
           detail: i18n.t("desktop.permissions.microphone.queryFailed", {
             message: getErrorMessage(error),
           }),
-        });
+        };
       }
     }
 
     if (typeof webNavigator.mediaDevices?.getUserMedia !== "function") {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.microphone.captureUnavailable"),
-      });
+      };
     }
 
-    return status({
+    return {
       state: "unknown",
       detail: i18n.t("desktop.permissions.microphone.permissionApiUnavailable"),
-    });
+    };
   }
 
   async function requestNotificationPermissionStatus(): Promise<DesktopPermissionStatus> {
     if (!env.isWeb) {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.notifications.requestsWebOnly"),
-      });
+      };
     }
 
     const NotificationConstructor = env.getNotification();
@@ -250,35 +243,35 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
         const permission = await NotificationConstructor.requestPermission();
         return mapNotificationPermissionString(permission);
       } catch (error) {
-        return status({
+        return {
           state: "unknown",
           detail: i18n.t("desktop.permissions.notifications.requestFailed", {
             message: getErrorMessage(error),
           }),
-        });
+        };
       }
     }
 
-    return status({
+    return {
       state: "unavailable",
       detail: i18n.t("desktop.permissions.notifications.requestUnavailable"),
-    });
+    };
   }
 
   async function requestMicrophonePermissionStatus(): Promise<DesktopPermissionStatus> {
     if (!env.isWeb) {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.microphone.requestsWebOnly"),
-      });
+      };
     }
 
     const webNavigator = env.getNavigator();
     if (!webNavigator || typeof webNavigator.mediaDevices?.getUserMedia !== "function") {
-      return status({
+      return {
         state: "unavailable",
         detail: i18n.t("desktop.permissions.microphone.captureApiUnavailable"),
-      });
+      };
     }
 
     try {
@@ -293,23 +286,23 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     } catch (error) {
       const errorName = getErrorName(error);
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
-        return status({
+        return {
           state: "denied",
           detail: i18n.t("desktop.permissions.microphone.requestDenied"),
-        });
+        };
       }
       if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
-        return status({
+        return {
           state: "unavailable",
           detail: i18n.t("desktop.permissions.microphone.noDevice"),
-        });
+        };
       }
-      return status({
+      return {
         state: "unknown",
         detail: i18n.t("desktop.permissions.microphone.requestFailed", {
           message: getErrorMessage(error),
         }),
-      });
+      };
     }
   }
 

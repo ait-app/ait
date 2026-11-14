@@ -1,7 +1,7 @@
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import { normalizeWorkspacePath } from "@/utils/workspace-identity";
 
-export const AGENT_COMMANDS_QUERY_ROOT = "agentCommands";
+const AGENT_COMMANDS_QUERY_ROOT = "agentCommands";
 
 export interface AgentCommandsDraftConfig {
   provider: AgentProvider;

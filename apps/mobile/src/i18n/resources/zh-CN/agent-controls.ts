@@ -1,13 +1,7 @@
 export const agentControls = {
-  provider: {
-    fallback: "提供方",
-    select: "选择智能体提供方",
-  },
   thinking: {
     title: "推理强度",
     unknown: "未知",
-    extraHigh: "极高",
-    select: "选择推理强度",
     selectWithValue: "选择推理强度（{{value}}）",
   },
   speed: {

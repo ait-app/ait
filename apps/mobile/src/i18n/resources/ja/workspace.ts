@@ -25,7 +25,6 @@ export const workspace = {
     scriptsAccessibility: "ワークスペーススクリプト",
     copyPath: "パスをコピー",
     copyBranchName: "ブランチ名をコピー",
-    copied: "コピーしました",
   },
   fileActions: {
     openFile: "ファイルを開く",
@@ -36,7 +35,6 @@ export const workspace = {
     revealIn: "{{target}}で表示",
     download: "ダウンロード",
     addToChat: "チャットに追加",
-    moreActions: "その他のアクション",
     newFile: "新規ファイル",
     newFolder: "新規フォルダ",
     collapseFolder: "フォルダを折りたたむ",
@@ -64,10 +62,6 @@ export const workspace = {
       name: "名前",
       modified: "更新日時",
       size: "サイズ",
-    },
-    context: {
-      size: "サイズ",
-      modified: "更新日時",
     },
     actions: {
       back: "戻る",
@@ -179,7 +173,6 @@ export const workspace = {
   tabs: {
     loading: "読み込み中...",
     modified: "未保存の変更",
-    loadingAgentTitle: "エージェントタイトルを読み込み中",
     fallback: {
       newAgent: "新しいエージェント",
       setup: "セットアップ",
@@ -205,7 +198,6 @@ export const workspace = {
       closeLeft: "左のタブを閉じる",
       closeRight: "右のタブを閉じる",
       closeOthers: "他のタブを閉じる",
-      moveToMain: "メインパネルへ移動",
       reloadAgent: "エージェントを再読み込み",
       reloadAgentTooltip:
         "スキル、MCP、ログイン状態を更新するためにエージェントを再読み込みします。",
@@ -219,12 +211,9 @@ export const workspace = {
       newTab: "新しいタブ",
       newAgent: "新しいエージェント",
       newTerminal: "新しいターミナル",
-      preparingTerminal: "ターミナルタブを準備中",
-      preparingTerminalTooltip: "ターミナルを準備中...",
       newBrowser: "新しいブラウザ",
       maximizePane: "ペインを最大化",
       restorePane: "ペインを元に戻す",
-      closePane: "ペインを閉じる",
       exitFocusMode: "フォーカスモードを終了",
       splitRight: "右にペインを分割",
       splitDown: "下にペインを分割",
@@ -444,13 +433,6 @@ export const workspace = {
         mergeDirty:
           "ローカルに変更があるためマージは利用できません。先にコミットまたはスタッシュしてください",
         mergeNothing: "このブランチにまだマージするものがないため、マージは利用できません",
-        updateNoBase: "ベースブランチを特定できなかったため、更新は利用できません",
-        updateDirty:
-          "ローカルに変更があるため更新は利用できません。先にコミットまたはスタッシュしてください",
-        updateCurrent: "このブランチはすでに{{baseRef}}と最新の状態のため、更新は利用できません",
-        mergePrNoGithub: "GitHubが接続されていないため、PRのマージは現在利用できません",
-        archiveNotWorktree:
-          "このワークスペースはAitワークツリーとして作成されていないため、アーカイブはここでは利用できません",
         mergePrNoForge: "{{brand}}が接続されていないため、{{noun}}のマージは現在利用できません",
         mergePrMissing: "プルリクエストがまだないため、PRのマージは利用できません",
         mergePrDraft: "プルリクエストがまだドラフトのため、PRのマージは利用できません",
@@ -494,7 +476,6 @@ export const workspace = {
     diff: {
       openChangesTab: "変更タブを開く",
       openDiffTab: "差分タブを開く",
-      closeChangesTab: "変更タブを閉じる",
       jumpToFile: {
         title: "ファイルへ移動",
       },
@@ -502,7 +483,6 @@ export const workspace = {
       tooLarge: "差分が大きすぎて表示できません",
       previewTooLargeTitle: "この差分は大きすぎるためプレビューできません",
       previewTooLargeDescription: "比較範囲を狭めると、ここでプレビューできます",
-      unified: "ユニファイド差分",
       split: "左右比較",
       switchToUnified: "ユニファイド差分に切り替え",
       switchToSplit: "左右比較差分に切り替え",
@@ -512,8 +492,6 @@ export const workspace = {
       showWhitespace: "空白を表示",
       scrollLongLines: "長い行をスクロール",
       wrapLongLines: "長い行を折り返す",
-      collapseAllFolders: "すべてのフォルダを折りたたむ",
-      expandAllFolders: "すべてのフォルダを展開",
       collapseAllFiles: "すべてのファイルを折りたたむ",
       expandAllFiles: "すべてのファイルを展開",
       refreshing: "更新中",
@@ -536,11 +514,8 @@ export const workspace = {
         title: "コミット",
         countLabel: "ワークスペースのコミット数: {{count}}",
         noneAhead: "{{baseRef}} より先のコミットはまだありません",
-        fileDiffEmpty: "表示する変更はありません",
-        fileDiffError: "ファイル差分の読み込みに失敗しました",
         loading: "コミットを読み込み中…",
         loadError: "コミットの読み込みに失敗しました",
-        empty: "コミットはまだありません",
       },
     },
     openInEditor: {
@@ -566,7 +541,6 @@ export const workspace = {
       sections: {
         checks: "チェック",
         pipeline: "パイプライン",
-        reviews: "レビュー",
       },
       empty: {
         noJobs: "ジョブなし",
@@ -578,31 +552,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "プルリクエスト#{{number}}",
         pullRequest_mr: "マージリクエスト !{{number}}",
-        checkStatus: {
-          passed: "成功",
-          failed: "失敗",
-          warning: "警告",
-          actionRequired: "操作が必要",
-          manual: "手動",
-          pending: "保留中",
-          skipped: "スキップ済み",
-          cancelled: "キャンセル済み",
-        },
       },
       states: {
-        draft: "ドラフト",
         merged: "マージ済み",
         closed: "クローズ済み",
-        open: "オープン",
-      },
-      activity: {
-        commented: "コメント済み",
-        approved: "承認済み",
-        requestedChanges: "変更をリクエスト",
-        reviewed: "レビュー済み",
-      },
-      time: {
-        justNow: "たった今",
       },
       thread: {
         discussion: "ディスカッションスレッド",

@@ -9,6 +9,7 @@ import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { i18n } from "@/i18n/i18next";
 import { compareMatchScores, scoreTextFields } from "@ait/protocol/search/text-match";
 import { filterSelectableModels } from "./model-catalog";
+import { resolveDefaultModelId } from "./resolve-agent-form";
 
 export interface ProviderSelectionModelRow {
   /**
@@ -221,10 +222,6 @@ export function resolveSelectedModelLabel(input: {
   );
 }
 
-export function buildSelectedTriggerLabel(modelLabel: string): string {
-  return modelLabel;
-}
-
 /**
  * Cross-provider result rows need the provider named up front: the same model
  * label ships on several providers at once.
@@ -233,18 +230,11 @@ export function buildProviderQualifiedDescription(row: ProviderSelectionModelRow
   return row.description ? `${row.providerLabel} · ${row.description}` : row.providerLabel;
 }
 
-export function matchesModelSearch(
-  row: ProviderSelectionModelRow,
-  normalizedQuery: string,
-): boolean {
-  return scoreModelRow(row, normalizedQuery) !== null;
-}
-
 function getModelRowSearchFields(row: ProviderSelectionModelRow): string[] {
   return [row.modelLabel, row.modelId, row.providerLabel, row.description ?? ""];
 }
 
-export function scoreModelRow(row: ProviderSelectionModelRow, normalizedQuery: string) {
+function scoreModelRow(row: ProviderSelectionModelRow, normalizedQuery: string) {
   return scoreTextFields(normalizedQuery, getModelRowSearchFields(row));
 }
 
@@ -272,15 +262,7 @@ export function filterAndRankModelRows(
 }
 
 export function resolveEffectiveComposerModelId(selection: ProviderSelectionState): string {
-  const selectedModelId = selection.modelId.trim();
-  if (selectedModelId) {
-    return selectedModelId;
-  }
-  return (
-    selection.availableModels.find((model) => model.isDefault)?.id ??
-    selection.availableModels[0]?.id ??
-    ""
-  );
+  return selection.modelId.trim() || resolveDefaultModelId(selection.availableModels);
 }
 
 export function resolveEffectiveComposerThinkingOptionId(

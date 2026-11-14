@@ -6,7 +6,6 @@ export const sidebar = {
       label: "Группировка",
       project: "Проект",
       status: "Статус",
-      labels: "Метки",
     },
     titleSource: {
       label: "Заголовок",
@@ -48,11 +47,6 @@ export const sidebar = {
   pinned: {
     title: "Закреплённые",
   },
-  host: {
-    noHost: "Нет хоста",
-    switchTitle: "Сменить хост",
-    searchPlaceholder: "Поиск хостов...",
-  },
   actions: {
     addProject: "Добавить проект",
     newWorkspace: "Новое рабочее пространство",
@@ -66,7 +60,6 @@ export const sidebar = {
     diagnostics: "Запустить диагностику",
     shortcuts: "Сочетания клавиш",
     reportIssue: "Сообщить о проблеме",
-    discord: "Discord",
     github: "Создать issue на GitHub",
     whatsNew: "Что нового",
     appName: "Ait",
@@ -110,7 +103,6 @@ export const sidebar = {
     status: {
       serviceRunning: "Сервис {{name}} запущен",
       serviceUnhealthy: "Сервис {{name}} работает некорректно",
-      creating: "Создание...",
     },
     checks: {
       passed: "Успешные: {{count}}",
@@ -132,29 +124,17 @@ export const sidebar = {
       pin: "Закрепить вверху",
       unpin: "Открепить",
       archive: "Архивировать",
-      archiveWorkspace: "Архивировать рабочее пространство",
-      hideFromSidebar: "Скрыть на боковой панели",
       archiving: "Архивирование...",
-      hiding: "Скрытие...",
-    },
-    confirmations: {
-      hideTitle: "Скрыть рабочее пространство?",
-      hideMessage:
-        "Скрыть «{{workspaceName}}» на боковой панели?\n\nФайлы на диске не будут изменены.",
-      hideConfirm: "Скрыть",
-      cancel: "Отмена",
     },
     rename: {
       title: "Переименовать рабочее пространство",
       submit: "Переименовать",
-      invalidBranchName: "Недопустимое имя ветки",
     },
     toasts: {
       workspacePathUnavailable: "Путь к рабочему пространству недоступен",
       pathCopied: "Путь скопирован",
       branchNameCopied: "Имя ветки скопировано",
       hostDisconnected: "Хост не подключён",
-      hideFailed: "Не удалось скрыть рабочее пространство",
       archiveFailed: "Не удалось архивировать рабочее пространство",
     },
   },

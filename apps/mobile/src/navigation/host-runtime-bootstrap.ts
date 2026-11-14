@@ -102,8 +102,6 @@ export interface HostStartupRouteTarget {
   serverId: string | null;
 }
 
-export type StartupRouteTarget = IndexStartupRouteTarget | HostStartupRouteTarget;
-
 interface ResolveStartupRouteBaseInput {
   startupBlocker: StartupBlocker;
   hostRegistryStatus: StartupRegistryStatus;

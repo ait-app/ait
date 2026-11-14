@@ -23,8 +23,7 @@ interface SegmentedControlProps<T extends string> {
   options: SegmentedControlOption<T>[];
   value: T;
   onValueChange: (value: T) => void;
-  size?: SegmentedControlSize;
-  hideLabels?: boolean;
+  size: SegmentedControlSize;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -48,15 +47,13 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onValueChange,
-  size = "md",
-  hideLabels = false,
+  size,
   style,
   testID,
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
     xs: { container: styles.containerXs, segment: styles.segmentXs, label: styles.labelXs },
     sm: { container: styles.containerSm, segment: styles.segmentSm, label: styles.labelSm },
-    md: { container: styles.containerMd, segment: styles.segmentMd, label: styles.labelMd },
   }[size];
   const containerSizeStyle = sizeStyles.container;
   const segmentSizeStyle = sizeStyles.segment;
@@ -79,7 +76,6 @@ export function SegmentedControl<T extends string>({
             option={option}
             isSelected={isSelected}
             iconSize={iconSize}
-            hideLabels={hideLabels}
             segmentSizeStyle={segmentSizeStyle}
             labelSizeStyle={labelSizeStyle}
             currentValue={value}
@@ -95,7 +91,6 @@ function SegmentItem<T extends string>({
   option,
   isSelected,
   iconSize,
-  hideLabels,
   segmentSizeStyle,
   labelSizeStyle,
   currentValue,
@@ -104,7 +99,6 @@ function SegmentItem<T extends string>({
   option: SegmentedControlOption<T>;
   isSelected: boolean;
   iconSize: number;
-  hideLabels: boolean;
   segmentSizeStyle: StyleProp<ViewStyle>;
   labelSizeStyle: StyleProp<TextStyle>;
   currentValue: T;
@@ -151,11 +145,9 @@ function SegmentItem<T extends string>({
           uniProps={isSelected ? selectedIconMapping : mutedIconMapping}
         />
       ) : null}
-      {hideLabels ? null : (
-        <Text style={labelStyle} numberOfLines={1}>
-          {option.label}
-        </Text>
-      )}
+      <Text style={labelStyle} numberOfLines={1}>
+        {option.label}
+      </Text>
     </Pressable>
   );
 }
@@ -176,9 +168,6 @@ const styles = StyleSheet.create((theme) => {
     containerSm: {
       ...geometry.segmentedContainerSm,
     },
-    containerMd: {
-      ...geometry.segmentedContainerMd,
-    },
     segment: {
       flexDirection: "row",
       alignItems: "center",
@@ -191,9 +180,6 @@ const styles = StyleSheet.create((theme) => {
     },
     segmentSm: {
       ...geometry.segmentedSegmentSm,
-    },
-    segmentMd: {
-      ...geometry.segmentedSegmentMd,
     },
     segmentSelected: {
       backgroundColor: theme.colors.surface3,
@@ -220,9 +206,6 @@ const styles = StyleSheet.create((theme) => {
     },
     labelSm: {
       ...geometry.segmentedLabelSm,
-    },
-    labelMd: {
-      ...geometry.segmentedLabelMd,
     },
     labelSelected: {
       color: theme.colors.foreground,

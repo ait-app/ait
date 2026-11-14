@@ -43,12 +43,7 @@ export function RealtimeVoiceOverlay({
   return (
     <View style={styles.container}>
       <View style={styles.meterContainer}>
-        <VolumeMeter
-          volume={volume}
-          isMuted={isMuted}
-          isSpeaking={isSpeaking}
-          orientation="horizontal"
-        />
+        <VolumeMeter volume={volume} isMuted={isMuted} isSpeaking={isSpeaking} />
       </View>
 
       <View style={styles.actionsContainer}>

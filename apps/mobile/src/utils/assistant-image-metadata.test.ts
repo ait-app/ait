@@ -3,7 +3,6 @@ import { DEFAULT_CONTENT_MAX_WIDTH } from "@/styles/theme";
 import {
   clearAssistantImageMetadataCache,
   estimateAssistantMessageHeightFromCache,
-  extractAssistantImageSources,
   getAssistantImageMetadata,
   setAssistantImageMetadata,
 } from "./assistant-image-metadata";
@@ -11,14 +10,6 @@ import {
 describe("assistant image metadata", () => {
   beforeEach(() => {
     clearAssistantImageMetadataCache();
-  });
-
-  it("extracts markdown image sources", () => {
-    expect(
-      extractAssistantImageSources(
-        'Before\n\n![local](/tmp/paseo.png)\n\n![remote](https://example.com/test.png "Remote")',
-      ),
-    ).toEqual(["/tmp/paseo.png", "https://example.com/test.png"]);
   });
 
   it("keeps local image metadata scoped to its server and workspace", () => {

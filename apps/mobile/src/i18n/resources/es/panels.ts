@@ -14,7 +14,6 @@ export const panels = {
     binaryPreviewDescription:
       "No se puede obtener una vista previa de este tipo de archivo en Ait.",
     tooLargeToDisplay: "Este archivo es demasiado grande para mostrarlo",
-    failedToLoad: "No se pudo cargar el archivo",
     failedToLoadPreview: "No se pudo cargar la vista previa del archivo",
     editor: {
       fileSize: "Tamaño {{size}}",
@@ -42,7 +41,6 @@ export const panels = {
     label: "Archivos",
     subtitle: "Archivos del espacio de trabajo",
     tooltip: "Explorar archivos del espacio de trabajo",
-    chooseFile: "Elige un archivo",
   },
   pullRequest: {
     label: "Solicitud de extracción",
@@ -55,8 +53,6 @@ export const panels = {
     diffLabel: "Diferencia",
     changesSubtitle: "Diferencias del árbol de trabajo",
     commitSubtitle: "Diferencias del commit",
-    uncommittedSubtitle: "Cambios sin confirmar",
-    baseSubtitle: "Comparado con {{baseRef}}",
     directoryMissing: "No se encontró el directorio de Workspace.",
     empty: "Sin cambios",
     loadError: "No se pudieron cargar las diferencias",

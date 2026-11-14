@@ -375,8 +375,6 @@ function updateAgentTaskSnapshot(
   return { agentTasks, agentTaskCursor };
 }
 
-export type WorkspaceRestoreStatus = "restoring" | "failed" | "needs-host-upgrade";
-
 // Per-session state
 export interface SessionState {
   serverId: string;
@@ -393,9 +391,6 @@ export interface SessionState {
   hasHydratedAgents: boolean;
   hasHydratedWorkspaces: boolean;
   hasWorkspaceDirectorySnapshot: boolean;
-
-  // Audio state
-  isPlayingAudio: boolean;
 
   // Focus
   focusedAgentId: string | null;
@@ -426,9 +421,6 @@ export interface SessionState {
   workspaces: Map<string, WorkspaceDescriptor>;
   // All active project descriptors, keyed by host-local projectId.
   projects: Map<string, ProjectDescriptor>;
-  // Transient restore state for archived workspaces, keyed by normalized
-  // workspaceId. Cleared in mergeWorkspaces when the descriptor lands.
-  restoringWorkspaces: Map<string, WorkspaceRestoreStatus>;
 
   // Permissions
   pendingPermissions: Map<string, PendingPermission>;
@@ -465,26 +457,12 @@ interface SessionStoreActions {
   setViewedTimelineSync: (serverId: string, sync: ViewedTimelineOwner | null) => void;
   updateSessionServerInfo: (serverId: string, info: DaemonServerInfo) => void;
 
-  // Audio state
-  setIsPlayingAudio: (serverId: string, playing: boolean) => void;
-
   // Focus
   setFocusedAgentId: (serverId: string, agentId: string | null) => void;
   setFocusedTerminalId: (serverId: string, terminalId: string | null) => void;
 
   // Stream state (head/tail model)
-  setAgentStreamTail: (
-    serverId: string,
-    state:
-      | Map<string, StreamItem[]>
-      | ((prev: Map<string, StreamItem[]>) => Map<string, StreamItem[]>),
-  ) => void;
-  setAgentStreamHead: (
-    serverId: string,
-    state:
-      | Map<string, StreamItem[]>
-      | ((prev: Map<string, StreamItem[]>) => Map<string, StreamItem[]>),
-  ) => void;
+  setAgentStreamTail: (serverId: string, state: SessionFieldUpdate<"agentStreamTail">) => void;
   setAgentStreamState: (
     serverId: string,
     agentId: string,
@@ -519,21 +497,15 @@ interface SessionStoreActions {
   clearAgentStreamHead: (serverId: string, agentId: string) => void;
   setAgentTimelineCursor: (
     serverId: string,
-    state:
-      | Map<string, AgentTimelineCursorState>
-      | ((prev: Map<string, AgentTimelineCursorState>) => Map<string, AgentTimelineCursorState>),
-  ) => void;
-  setAgentTimelineHasOlder: (
-    serverId: string,
-    state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
+    state: SessionFieldUpdate<"agentTimelineCursor">,
   ) => void;
   setAgentTimelineHasNewer: (
     serverId: string,
-    state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
+    state: SessionFieldUpdate<"agentTimelineHasNewer">,
   ) => void;
   setAgentTimelineOlderFetchInFlight: (
     serverId: string,
-    state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
+    state: SessionFieldUpdate<"agentTimelineOlderFetchInFlight">,
   ) => void;
   bumpHistorySyncGeneration: (serverId: string) => void;
   markAgentHistorySynchronized: (serverId: string, agentId: string) => void;
@@ -561,35 +533,18 @@ interface SessionStoreActions {
   // Initializing agents
   setInitializingAgents: (
     serverId: string,
-    state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
+    state: SessionFieldUpdate<"initializingAgents">,
   ) => void;
 
   // Agents
-  setAgents: (
-    serverId: string,
-    agents: Map<string, Agent> | ((prev: Map<string, Agent>) => Map<string, Agent>),
-  ) => void;
-  setAgentDetails: (
-    serverId: string,
-    agents: Map<string, Agent> | ((prev: Map<string, Agent>) => Map<string, Agent>),
-  ) => void;
-  setWorkspaces: (
-    serverId: string,
-    workspaces:
-      | Map<string, WorkspaceDescriptor>
-      | ((prev: Map<string, WorkspaceDescriptor>) => Map<string, WorkspaceDescriptor>),
-  ) => void;
+  setAgents: (serverId: string, agents: SessionFieldUpdate<"agents">) => void;
+  setAgentDetails: (serverId: string, agents: SessionFieldUpdate<"agentDetails">) => void;
+  setWorkspaces: (serverId: string, workspaces: SessionFieldUpdate<"workspaces">) => void;
   mergeWorkspaces: (serverId: string, workspaces: Iterable<WorkspaceDescriptor>) => void;
   removeWorkspace: (serverId: string, workspaceId: string) => void;
   setProjects: (serverId: string, projects: Iterable<ProjectDescriptor>) => void;
   upsertProject: (serverId: string, project: ProjectDescriptor) => void;
   removeProject: (serverId: string, projectId: string) => void;
-  setWorkspaceRestoreStatus: (
-    serverId: string,
-    workspaceId: string,
-    status: WorkspaceRestoreStatus,
-  ) => void;
-  clearWorkspaceRestoreStatus: (serverId: string, workspaceId: string) => void;
 
   // Agent activity timestamps
   setAgentLastActivity: (agentId: string, timestamp: Date) => void;
@@ -601,28 +556,14 @@ interface SessionStoreActions {
   // Permissions
   setPendingPermissions: (
     serverId: string,
-    perms:
-      | Map<string, PendingPermission>
-      | ((prev: Map<string, PendingPermission>) => Map<string, PendingPermission>),
+    perms: SessionFieldUpdate<"pendingPermissions">,
   ) => void;
 
   // File explorer
-  setFileExplorer: (
-    serverId: string,
-    state:
-      | Map<string, AgentFileExplorerState>
-      | ((prev: Map<string, AgentFileExplorerState>) => Map<string, AgentFileExplorerState>),
-  ) => void;
+  setFileExplorer: (serverId: string, state: SessionFieldUpdate<"fileExplorer">) => void;
 
   // Queued messages
-  setQueuedMessages: (
-    serverId: string,
-    value:
-      | Map<string, Array<{ id: string; text: string; attachments: ComposerAttachment[] }>>
-      | ((
-          prev: Map<string, Array<{ id: string; text: string; attachments: ComposerAttachment[] }>>,
-        ) => Map<string, Array<{ id: string; text: string; attachments: ComposerAttachment[] }>>),
-  ) => void;
+  setQueuedMessages: (serverId: string, value: SessionFieldUpdate<"queuedMessages">) => void;
 
   // Hydration
   setHasHydratedAgents: (serverId: string, hydrated: boolean) => void;
@@ -649,7 +590,6 @@ function createInitialSessionState(
     hasHydratedAgents: false,
     hasHydratedWorkspaces: false,
     hasWorkspaceDirectorySnapshot: false,
-    isPlayingAudio: false,
     focusedAgentId: null,
     focusedTerminalId: null,
     agentStreamTail: new Map(),
@@ -670,24 +610,41 @@ function createInitialSessionState(
     agentDetails: new Map(),
     workspaces: new Map(),
     projects: new Map(),
-    restoringWorkspaces: new Map(),
     pendingPermissions: new Map(),
     fileExplorer: new Map(),
     queuedMessages: new Map(),
   };
 }
 
-function areServerCapabilitiesEqual(
-  current: ServerCapabilities | undefined,
-  next: ServerCapabilities | undefined,
-): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+type SessionFieldUpdate<K extends keyof SessionState> =
+  | SessionState[K]
+  | ((current: SessionState[K]) => SessionState[K]);
+
+// Replaces one field of one session, keeping the store identity when the value is unchanged.
+function updateSessionField<K extends keyof SessionState>(
+  prev: SessionStore,
+  serverId: string,
+  key: K,
+  update: SessionFieldUpdate<K>,
+): SessionStore {
+  const session = prev.sessions[serverId];
+  if (!session) {
+    return prev;
+  }
+  const next =
+    typeof update === "function"
+      ? (update as (current: SessionState[K]) => SessionState[K])(session[key])
+      : update;
+  if (session[key] === next) {
+    return prev;
+  }
+  return {
+    ...prev,
+    sessions: { ...prev.sessions, [serverId]: { ...session, [key]: next } },
+  };
 }
 
-function areServerInfoFeaturesEqual(
-  current: ServerInfoStatusPayload["features"] | undefined,
-  next: ServerInfoStatusPayload["features"] | undefined,
-): boolean {
+function areJsonEqual(current: unknown, next: unknown): boolean {
   return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
 }
 
@@ -715,8 +672,8 @@ function isSessionServerInfoUnchanged(input: {
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
     currentServerInfo?.desktopManaged === nextDesktopManaged &&
-    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
-    areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
+    areJsonEqual(currentServerInfo?.capabilities, nextCapabilities) &&
+    areJsonEqual(currentServerInfo?.features, nextFeatures)
   );
 }
 
@@ -827,19 +784,7 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       setViewedTimelineSync: (serverId, viewedTimelineSync) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.viewedTimelineSync === viewedTimelineSync) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, viewedTimelineSync },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "viewedTimelineSync", viewedTimelineSync));
       },
 
       updateSessionServerInfo: (serverId, info) => {
@@ -895,101 +840,18 @@ export const useSessionStore = create<SessionStore>()(
         return get().sessions[serverId];
       },
 
-      // Audio state
-      setIsPlayingAudio: (serverId, playing) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.isPlayingAudio === playing) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, isPlayingAudio: playing },
-            },
-          };
-        });
-      },
-
       // Focus
       setFocusedAgentId: (serverId, agentId) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.focusedAgentId === agentId) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: {
-                ...session,
-                focusedAgentId: agentId,
-              },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "focusedAgentId", agentId));
       },
 
       setFocusedTerminalId: (serverId, terminalId) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.focusedTerminalId === terminalId) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: {
-                ...session,
-                focusedTerminalId: terminalId,
-              },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "focusedTerminalId", terminalId));
       },
 
       // Stream state (head/tail model)
       setAgentStreamTail: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState = typeof state === "function" ? state(session.agentStreamTail) : state;
-          if (session.agentStreamTail === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentStreamTail: nextState },
-            },
-          };
-        });
-      },
-
-      setAgentStreamHead: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState = typeof state === "function" ? state(session.agentStreamHead) : state;
-          if (session.agentStreamHead === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentStreamHead: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "agentStreamTail", state));
       },
 
       setAgentStreamState: (serverId, agentId, state) => {
@@ -1256,83 +1118,15 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       setAgentTimelineCursor: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState =
-            typeof state === "function" ? state(session.agentTimelineCursor) : state;
-          if (session.agentTimelineCursor === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentTimelineCursor: nextState },
-            },
-          };
-        });
-      },
-
-      setAgentTimelineHasOlder: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState =
-            typeof state === "function" ? state(session.agentTimelineHasOlder) : state;
-          if (session.agentTimelineHasOlder === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentTimelineHasOlder: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "agentTimelineCursor", state));
       },
 
       setAgentTimelineHasNewer: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) return prev;
-          const nextState =
-            typeof state === "function" ? state(session.agentTimelineHasNewer) : state;
-          if (session.agentTimelineHasNewer === nextState) return prev;
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentTimelineHasNewer: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "agentTimelineHasNewer", state));
       },
 
       setAgentTimelineOlderFetchInFlight: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState =
-            typeof state === "function" ? state(session.agentTimelineOlderFetchInFlight) : state;
-          if (session.agentTimelineOlderFetchInFlight === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentTimelineOlderFetchInFlight: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "agentTimelineOlderFetchInFlight", state));
       },
 
       bumpHistorySyncGeneration: (serverId) => {
@@ -1507,23 +1301,7 @@ export const useSessionStore = create<SessionStore>()(
 
       // Initializing agents
       setInitializingAgents: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState = typeof state === "function" ? state(session.initializingAgents) : state;
-          if (session.initializingAgents === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, initializingAgents: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "initializingAgents", state));
       },
 
       // Agents
@@ -1555,23 +1333,7 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       setAgentDetails: (serverId, agents) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextAgents = typeof agents === "function" ? agents(session.agentDetails) : agents;
-          if (session.agentDetails === nextAgents) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, agentDetails: nextAgents },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "agentDetails", agents));
       },
 
       setWorkspaces: (serverId, workspaces) => {
@@ -1640,54 +1402,6 @@ export const useSessionStore = create<SessionStore>()(
         });
       },
 
-      setWorkspaceRestoreStatus: (serverId, workspaceId, status) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          if (session.restoringWorkspaces.get(workspaceId) === status) {
-            return prev;
-          }
-          // A late dir-gone timeout must not override a successful restore:
-          // only mark failed while still restoring and the descriptor is absent.
-          if (
-            status === "failed" &&
-            (session.restoringWorkspaces.get(workspaceId) !== "restoring" ||
-              session.workspaces.has(workspaceId))
-          ) {
-            return prev;
-          }
-          const next = new Map(session.restoringWorkspaces);
-          next.set(workspaceId, status);
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, restoringWorkspaces: next },
-            },
-          };
-        });
-      },
-
-      clearWorkspaceRestoreStatus: (serverId, workspaceId) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || !session.restoringWorkspaces.has(workspaceId)) {
-            return prev;
-          }
-          const next = new Map(session.restoringWorkspaces);
-          next.delete(workspaceId);
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, restoringWorkspaces: next },
-            },
-          };
-        });
-      },
-
       mergeWorkspaces: (serverId, workspaces) => {
         const nextEntries = Array.from(workspaces);
         set((prev) => {
@@ -1697,15 +1411,7 @@ export const useSessionStore = create<SessionStore>()(
           }
           const next = new Map(session.workspaces);
           let changed = false;
-          // A descriptor arriving is the success signal for a pending restore:
-          // clear it at the source so every entry point converges to "ready".
-          let nextRestoring: Map<string, WorkspaceRestoreStatus> | null = null;
           for (const workspace of nextEntries) {
-            if (session.restoringWorkspaces.has(workspace.id)) {
-              nextRestoring ??= new Map(session.restoringWorkspaces);
-              nextRestoring.delete(workspace.id);
-              changed = true;
-            }
             const existing = next.get(workspace.id);
             const nextWorkspace = preserveWorkspaceDescriptorIdentity(workspace, existing);
             if (existing === nextWorkspace) {
@@ -1721,11 +1427,7 @@ export const useSessionStore = create<SessionStore>()(
             ...prev,
             sessions: {
               ...prev.sessions,
-              [serverId]: {
-                ...session,
-                workspaces: next,
-                restoringWorkspaces: nextRestoring ?? session.restoringWorkspaces,
-              },
+              [serverId]: { ...session, workspaces: next },
             },
           };
         });
@@ -1798,112 +1500,32 @@ export const useSessionStore = create<SessionStore>()(
 
       // Permissions
       setPendingPermissions: (serverId, perms) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextPerms = typeof perms === "function" ? perms(session.pendingPermissions) : perms;
-          if (session.pendingPermissions === nextPerms) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, pendingPermissions: nextPerms },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "pendingPermissions", perms));
       },
 
       // File explorer
       setFileExplorer: (serverId, state) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextState = typeof state === "function" ? state(session.fileExplorer) : state;
-          if (session.fileExplorer === nextState) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, fileExplorer: nextState },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "fileExplorer", state));
       },
 
       // Queued messages
       setQueuedMessages: (serverId, value) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session) {
-            return prev;
-          }
-          const nextValue = typeof value === "function" ? value(session.queuedMessages) : value;
-          if (session.queuedMessages === nextValue) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, queuedMessages: nextValue },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "queuedMessages", value));
       },
 
       // Hydration
       setHasHydratedAgents: (serverId, hydrated) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.hasHydratedAgents === hydrated) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, hasHydratedAgents: hydrated },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "hasHydratedAgents", hydrated));
       },
 
       setHasHydratedWorkspaces: (serverId, hydrated) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.hasHydratedWorkspaces === hydrated) {
-            return prev;
-          }
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, hasHydratedWorkspaces: hydrated },
-            },
-          };
-        });
+        set((prev) => updateSessionField(prev, serverId, "hasHydratedWorkspaces", hydrated));
       },
 
       setHasWorkspaceDirectorySnapshot: (serverId, available) => {
-        set((prev) => {
-          const session = prev.sessions[serverId];
-          if (!session || session.hasWorkspaceDirectorySnapshot === available) return prev;
-          return {
-            ...prev,
-            sessions: {
-              ...prev.sessions,
-              [serverId]: { ...session, hasWorkspaceDirectorySnapshot: available },
-            },
-          };
-        });
+        set((prev) =>
+          updateSessionField(prev, serverId, "hasWorkspaceDirectorySnapshot", available),
+        );
       },
     };
   }),

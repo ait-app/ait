@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "Paramètres",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "Mise en page",
     editor: "Éditeur",
     shortcuts: "Raccourcis",
-    integrations: "Intégrations",
     notifications: "Notifications",
     permissions: "Autorisations",
     diagnostics: "Diagnostic",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "Fournisseurs",
     usage: "Utilisation",
     terminals: "Terminals",
-    plugins: "Plugins",
     host: "Aperçu",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "Génération de métadonnées",
     description:
@@ -313,7 +309,6 @@ export const settings = {
     help: {
       openProject: "Projet ouvert",
       newWorkspace: "Nouvel espace de travail",
-      newWorktree: "Nouvel arbre de travail",
       archiveWorkspace: "Archiver l’espace de travail",
       newTab: "Nouvel onglet",
       closeCurrentTab: "Fermer l'onglet actuel",
@@ -349,30 +344,11 @@ export const settings = {
       toggleVoiceMode: "Changer le mode vocal",
       startStopDictation: "Démarrer la dictée/stop",
       interruptAgent: "Agent d'interruption",
-      sendMessage: "Envoyer un message",
-      queueMessage: "Message de file d'attente",
       muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
-      switchProject: "Changer de projet",
     },
     helpNotes: {
       showKeyboardShortcuts:
         "Disponible lorsque le focus n’est pas dans un champ de texte ou un terminal.",
-    },
-  },
-  integrations: {
-    title: "Intégrations",
-    docs: {
-      cli: "DocumentsCLI",
-      openCli: "Ouvrir la documentationCLI",
-    },
-    commandLine: {
-      title: "Ligne de commande",
-      description: "Agents de contrôle et de script depuis votre terminal",
-    },
-    actions: {
-      install: "Installer",
-      installing: "Installation...",
-      installed: "Installé",
     },
   },
   permissions: {
@@ -438,14 +414,7 @@ export const settings = {
       removeErrorMessage: "Impossible de supprimer la connexion",
       timeout: "Temps mort",
     },
-    pairDevices: {
-      title: "Associer des appareils",
-      rowTitle: "Associer un appareil",
-      rowHint: "Scannez un codeQRou copiez un lien pour connecter votre téléphone à cet hôte",
-    },
     skills: {
-      docs: "Compétences",
-      openDocs: "Ouvrir la documentation des compétences",
       unavailable: "Connectez-vous à cet hôte pour gérer les compétences d’orchestration",
       unsupported: "Mettez cet hôte à jour pour gérer les compétences d’orchestration",
       sectionTitle: "Compétences en orchestration",
@@ -481,7 +450,6 @@ export const settings = {
         uninstall: "Désinstaller",
         save: "Enregistrer",
         saving: "Enregistrement...",
-        cancel: "Annuler",
       },
       operations: {
         add: "Ajouter une compétence",
@@ -490,8 +458,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "Orchestration",
-      unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
       enableTools: {
         title: "Activer les outils Ait",
         hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
@@ -574,7 +540,6 @@ export const settings = {
       nameLabel: "Nom",
       namePlaceholder: "Travail sur l'UI",
       iconLabel: "Icône",
-      noIcon: "Aucune",
       providerLabel: "Fournisseur",
       providerPlaceholder: "Sélectionner un fournisseur",
       noProviders: "Aucun fournisseur n'est disponible sur cet hôte",
@@ -616,9 +581,6 @@ export const settings = {
         confirmDesktopMessage:
           "Redémarrer le daemon intégré avec les paramètres enregistrés ? Les tâches et sessions de terminal en cours seront interrompues.",
         restarting: "Redémarrage...",
-        unableToReconnectTitle: "Impossible de se reconnecter",
-        unableToReconnectMessage:
-          "{{name}}n'est pas revenu en ligne. Veuillez vérifier qu'il a redémarré.",
         unavailableTitle: "Hostindisponible",
         unavailableMessage:
           "Cet hôte n'est pas connecté. Attendez qu'il soit en ligne avant de redémarrer.",
@@ -626,8 +588,6 @@ export const settings = {
         offlineMessage:
           "Cet hôte est hors ligne.Ait se reconnecte automatiquement: attendez qu'il soit de nouveau en ligne avant de redémarrer.",
         requestFailedTitle: "Erreur",
-        requestFailedMessage:
-          "Échec de l'envoi de la demande de redémarrage.Ait se reconnecte automatiquement - réessayez une fois que l'hôte apparaît comme en ligne.",
         dialogFailedMessage:
           "Impossible d'ouvrir la boîte de dialogue de confirmation de redémarrage.",
       },
@@ -640,14 +600,10 @@ export const settings = {
         confirmTitle: "Update {{name}}",
         confirmMessage:
           "This will update the daemon to the latest version and restart it. Running agents will be briefly interrupted.",
-        updating: "Updating...",
         phaseStarting: "Preparing update...",
         phaseDownloading: "Downloading packages...",
         phaseInstalling: "Installing...",
         phaseComplete: "Update complete, restarting...",
-        unableToReconnectTitle: "Unable to reconnect",
-        unableToReconnectMessage:
-          "{{name}} did not come back online after updating. Please verify the daemon restarted.",
         unavailableTitle: "Host unavailable",
         unavailableMessage:
           "This host is not connected. Wait for it to come online before updating.",
@@ -783,9 +739,6 @@ export const settings = {
     worktree: {
       title: "Crochets de cycle de vie Worktree",
       info: "Commandes exécutées lorsqu'un arbre de travail est créé ou supprimé pour ce projet",
-      docs: "Documents",
-      docsTooltip:
-        "Voir la documentation pour plus de détails et les variables d'environnement disponibles pour ces commandes",
       setup: "Installation",
       setupAccessibility: "Commandes de configuration de Worktree",
       uncommittedTitle: "Validez les modifications de ait.json",

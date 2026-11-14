@@ -136,28 +136,13 @@ function formatActiveConnectionBadge(
   t: TFunction,
 ): { icon: React.ReactNode; text: string } | null {
   if (!activeConnection) return null;
-  if (activeConnection.type === "directSocket" || activeConnection.type === "directPipe") {
-    return {
-      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: t("settings.host.badges.local"),
-    };
-  }
-  if (activeConnection.type === "remoteSsh") {
-    return {
-      icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: t("settings.host.badges.remoteSsh"),
-    };
-  }
-  if (activeConnection.type === "accountRelay") {
-    return {
-      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: t("settings.host.badges.relay"),
-    };
-  }
-  return {
-    icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    text: activeConnection.display,
-  };
+  const { type } = activeConnection;
+  const Icon = type === "remoteSsh" ? Globe : Monitor;
+  let text = activeConnection.display;
+  if (type === "directSocket" || type === "directPipe") text = t("settings.host.badges.local");
+  else if (type === "remoteSsh") text = t("settings.host.badges.remoteSsh");
+  else if (type === "accountRelay") text = t("settings.host.badges.relay");
+  return { icon: <Icon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />, text };
 }
 
 function formatDaemonVersionBadge(version: string | null): string | null {
@@ -1005,83 +990,86 @@ function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
   );
 }
 
-function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
+/** A daemon-config boolean that defaults off; a failed save is reported in an alert. */
+function DaemonConfigSwitchCard({
+  serverId,
+  configKey,
+  labels,
+  logLabel,
+  testID,
+}: {
+  serverId: string;
+  configKey: "autoArchiveAfterMerge" | "enableTerminalAgentHooks";
+  labels: { title: string; hint: string; accessibilityLabel: string; updateFailed: string };
+  logLabel: string;
+  testID: string;
+}) {
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
 
   const handleValueChange = useCallback(
     (next: boolean) => {
-      void patchConfig({ autoArchiveAfterMerge: next }).catch((error) => {
-        console.error("[HostPage] Failed to update auto-archive after merge", error);
-        Alert.alert(
-          t("settings.host.workspaces.archiveMergedPr.updateFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+      void patchConfig({ [configKey]: next }).catch((error) => {
+        console.error(`[HostPage] Failed to update ${logLabel}`, error);
+        Alert.alert(labels.updateFailed, error instanceof Error ? error.message : String(error));
       });
     },
-    [patchConfig, t],
+    [configKey, labels.updateFailed, logLabel, patchConfig],
   );
 
   if (!isConnected) return null;
 
   return (
-    <View style={settingsStyles.card} testID="host-page-auto-archive-merged-workspaces-card">
+    <View style={settingsStyles.card} testID={`${testID}-card`}>
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>
-            {t("settings.host.workspaces.archiveMergedPr.title")}
-          </Text>
-          <Text style={settingsStyles.rowHint}>
-            {t("settings.host.workspaces.archiveMergedPr.hint")}
-          </Text>
+          <Text style={settingsStyles.rowTitle}>{labels.title}</Text>
+          <Text style={settingsStyles.rowHint}>{labels.hint}</Text>
         </View>
         <Switch
-          value={config?.autoArchiveAfterMerge === true}
+          value={config?.[configKey] === true}
           onValueChange={handleValueChange}
-          accessibilityLabel={t("settings.host.workspaces.archiveMergedPr.accessibilityLabel")}
-          testID="host-page-auto-archive-merged-workspaces-switch"
+          accessibilityLabel={labels.accessibilityLabel}
+          testID={`${testID}-switch`}
         />
       </View>
     </View>
   );
 }
 
+function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  return (
+    <DaemonConfigSwitchCard
+      serverId={serverId}
+      configKey="autoArchiveAfterMerge"
+      labels={{
+        title: t("settings.host.workspaces.archiveMergedPr.title"),
+        hint: t("settings.host.workspaces.archiveMergedPr.hint"),
+        accessibilityLabel: t("settings.host.workspaces.archiveMergedPr.accessibilityLabel"),
+        updateFailed: t("settings.host.workspaces.archiveMergedPr.updateFailed"),
+      }}
+      logLabel="auto-archive after merge"
+      testID="host-page-auto-archive-merged-workspaces"
+    />
+  );
+}
+
 function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const { config, patchConfig } = useDaemonConfig(serverId);
-
-  const handleValueChange = useCallback(
-    (next: boolean) => {
-      void patchConfig({ enableTerminalAgentHooks: next }).catch((error) => {
-        console.error("[HostPage] Failed to update terminal agent hooks", error);
-        Alert.alert(
-          t("settings.host.terminalAgentHooks.updateFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
-      });
-    },
-    [patchConfig, t],
-  );
-
-  if (!isConnected) return null;
-
   return (
-    <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">
-      <View style={settingsStyles.row}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{t("settings.host.terminalAgentHooks.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("settings.host.terminalAgentHooks.hint")}</Text>
-        </View>
-        <Switch
-          value={config?.enableTerminalAgentHooks === true}
-          onValueChange={handleValueChange}
-          accessibilityLabel={t("settings.host.terminalAgentHooks.accessibilityLabel")}
-          testID="host-page-terminal-agent-hooks-switch"
-        />
-      </View>
-    </View>
+    <DaemonConfigSwitchCard
+      serverId={serverId}
+      configKey="enableTerminalAgentHooks"
+      labels={{
+        title: t("settings.host.terminalAgentHooks.title"),
+        hint: t("settings.host.terminalAgentHooks.hint"),
+        accessibilityLabel: t("settings.host.terminalAgentHooks.accessibilityLabel"),
+        updateFailed: t("settings.host.terminalAgentHooks.updateFailed"),
+      }}
+      logLabel="terminal agent hooks"
+      testID="host-page-terminal-agent-hooks"
+    />
   );
 }
 
@@ -1614,14 +1602,15 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
     [profiles, saveProfiles, t],
   );
 
-  const handleMoveUp = useCallback(
-    async (id: string) => {
+  const moveProfile = useCallback(
+    async (id: string, delta: -1 | 1) => {
       if (!profiles) return;
       const index = profiles.findIndex((p) => p.id === id);
-      if (index <= 0) return;
+      const target = index + delta;
+      if (index < 0 || target < 0 || target >= profiles.length) return;
       const next = [...profiles];
       const [item] = next.splice(index, 1);
-      next.splice(index - 1, 0, item);
+      next.splice(target, 0, item);
       try {
         await saveProfiles(next);
       } catch (error) {
@@ -1633,26 +1622,8 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
     },
     [profiles, saveProfiles, t],
   );
-
-  const handleMoveDown = useCallback(
-    async (id: string) => {
-      if (!profiles) return;
-      const index = profiles.findIndex((p) => p.id === id);
-      if (index < 0 || index >= profiles.length - 1) return;
-      const next = [...profiles];
-      const [item] = next.splice(index, 1);
-      next.splice(index + 1, 0, item);
-      try {
-        await saveProfiles(next);
-      } catch (error) {
-        Alert.alert(
-          t("common.errors.unableToSave"),
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    },
-    [profiles, saveProfiles, t],
-  );
+  const handleMoveUp = useCallback((id: string) => moveProfile(id, -1), [moveProfile]);
+  const handleMoveDown = useCallback((id: string) => moveProfile(id, 1), [moveProfile]);
 
   const addButton = useMemo(
     () => (

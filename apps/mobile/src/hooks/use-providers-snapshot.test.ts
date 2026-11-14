@@ -15,6 +15,8 @@ import {
   fetchProvidersSnapshot,
   providersSnapshotQueryKey,
   refreshAndApplyProvidersSnapshot,
+} from "@/data/providers-snapshot";
+import {
   selectorOpenRefetchDecision,
   type ProvidersSnapshotClient,
 } from "./use-providers-snapshot";

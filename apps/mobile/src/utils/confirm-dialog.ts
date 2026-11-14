@@ -49,13 +49,6 @@ async function showNativeConfirmDialog(input: ConfirmDialogInput): Promise<boole
   });
 }
 
-function getDesktopApi() {
-  if (isNative) {
-    return null;
-  }
-  return getDesktopHost();
-}
-
 function buildDesktopAskOptions(input: ConfirmDialogInput): DesktopDialogAskOptions {
   const labels = resolveButtonLabels(input);
 
@@ -68,15 +61,12 @@ function buildDesktopAskOptions(input: ConfirmDialogInput): DesktopDialogAskOpti
 }
 
 function blurActiveWebElement(): void {
-  if (isNative) {
-    return;
-  }
   const activeElement = (globalThis as { document?: Document }).document?.activeElement;
   (activeElement as HTMLElement | null)?.blur?.();
 }
 
 async function showDesktopConfirmDialog(input: ConfirmDialogInput): Promise<boolean | null> {
-  const desktopApi = getDesktopApi();
+  const desktopApi = getDesktopHost();
   if (!desktopApi) {
     return null;
   }
@@ -115,8 +105,3 @@ export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean>
 
   return showWebConfirmDialog(input);
 }
-
-export const __private__ = {
-  blurActiveWebElement,
-  buildDesktopAskOptions,
-};

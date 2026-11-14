@@ -26,7 +26,6 @@ import {
 } from "@ait/protocol/agent-attention-notification";
 
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import type { AgentPermissionResponse } from "@ait/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useVoiceAudioEngineOptional, useVoiceRuntimeOptional } from "@/contexts/voice-context";
 import type { AudioPlaybackSource } from "@/voice/audio-engine-types";
@@ -47,22 +46,9 @@ import {
 } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
-import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { readSyncedTimelineCursor } from "@/contexts/session-timeline-cursor";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
-
-// Re-export types from session-store and draft-store for backward compatibility
-export type { DraftInput } from "@/stores/draft-store";
-export type {
-  Agent,
-  ExplorerEntry,
-  ExplorerFile,
-  ExplorerEntryKind,
-  ExplorerFileKind,
-  ExplorerEncoding,
-  AgentFileExplorerState,
-} from "@/stores/session-store";
 
 type AudioOutputPayload = Extract<
   SessionOutboundMessage,
@@ -185,31 +171,14 @@ function notifyVoiceAbortFailure(
   }
 }
 
-interface SessionProviderSharedProps {
+interface SessionProviderProps {
   children: ReactNode;
   serverId: string;
-}
-
-interface SessionProviderClientProps extends SessionProviderSharedProps {
   client: DaemonClient;
 }
 
-export type SessionProviderProps = SessionProviderClientProps;
-
-function SessionProviderWithClient({ children, serverId, client }: SessionProviderClientProps) {
-  return (
-    <SessionProviderInternal serverId={serverId} client={client}>
-      {children}
-    </SessionProviderInternal>
-  );
-}
-
 // SessionProvider: Daemon client message handler that updates Zustand store
-export function SessionProvider(props: SessionProviderProps) {
-  return <SessionProviderWithClient {...props} />;
-}
-
-function SessionProviderInternal({ children, serverId, client }: SessionProviderClientProps) {
+export function SessionProvider({ children, serverId, client }: SessionProviderProps) {
   const { t } = useTranslation();
   const voiceRuntime = useVoiceRuntimeOptional();
   const voiceAudioEngine = useVoiceAudioEngineOptional();
@@ -218,12 +187,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const toast = useToast();
 
   // Zustand store actions
-  const setIsPlayingAudio = useSessionStore((state) => state.setIsPlayingAudio);
-  const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
-  const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
-  const clearAgentStreamHead = useSessionStore((state) => state.clearAgentStreamHead);
   const setInitializingAgents = useSessionStore((state) => state.setInitializingAgents);
-  const setAgents = useSessionStore((state) => state.setAgents);
   const flushAgentLastActivity = useSessionStore((state) => state.flushAgentLastActivity);
   const setPendingPermissions = useSessionStore((state) => state.setPendingPermissions);
   const updateSessionServerInfo = useSessionStore((state) => state.updateSessionServerInfo);
@@ -237,12 +201,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const focusedTerminalId = useSessionStore(
     (state) => state.sessions[serverId]?.focusedTerminalId ?? null,
   );
-  const _sessionStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attentionNotifiedRef = useRef<Map<string, number>>(new Map());
   const appStateRef = useRef(AppState.currentState);
   const viewedTimelineSyncRef = useRef<ViewedTimelineOwner | null>(null);
   const audioOutputBuffersRef = useRef<Map<string, BufferedAudioChunk[]>>(new Map());
-  const activeAudioGroupsRef = useRef<Set<string>>(new Set());
   const isAppVisible = useAppVisible();
 
   useEffect(() => {
@@ -373,12 +335,9 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         }
         await client.abortRequest();
       },
-      setAssistantAudioPlaying: (isPlaying) => {
-        setIsPlayingAudio(serverId, isPlaying);
-      },
     });
     return () => unregister?.();
-  }, [client, serverId, setIsPlayingAudio, t, voiceRuntime]);
+  }, [client, serverId, t, voiceRuntime]);
 
   useEffect(() => {
     voiceRuntime?.updateSessionConnection(serverId, isConnected);
@@ -455,15 +414,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         });
         return observation;
       },
-      readCursor: (agentId) => {
-        const timeline = selectAgentTimelineState(
-          useSessionStore.getState().sessions[serverId],
-          agentId,
-        );
-        return timeline.status === "synced" && timeline.range
-          ? { epoch: timeline.range.epoch, endSeq: timeline.range.endSeq }
-          : undefined;
-      },
+      readCursor: (agentId) =>
+        readSyncedTimelineCursor(useSessionStore.getState().sessions[serverId], agentId),
       fetchPage: async (agentId, request) => {
         const session = useSessionStore.getState().sessions[serverId];
         const initKey = getInitKey(serverId, agentId);
@@ -687,9 +639,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         id: payload.id,
       });
 
-      activeAudioGroupsRef.current.add(playbackGroupId);
-      setIsPlayingAudio(serverId, true);
-
       if (!isFinalChunk) {
         return;
       }
@@ -723,8 +672,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         await confirmAudioPlayed();
       } finally {
         audioOutputBuffersRef.current.delete(playbackGroupId);
-        activeAudioGroupsRef.current.delete(playbackGroupId);
-        setIsPlayingAudio(serverId, activeAudioGroupsRef.current.size > 0);
 
         if (startedVoicePlayback) {
           voiceRuntime?.onAssistantAudioFinished(serverId);
@@ -826,12 +773,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     client,
     queryClient,
     serverId,
-    setIsPlayingAudio,
-    setAgentStreamTail,
-    setAgentStreamHead,
-    clearAgentStreamHead,
-    setInitializingAgents,
-    setAgents,
     setPendingPermissions,
     notifyAgentAttention,
     applyWorkspaceSetupProgress,
@@ -840,119 +781,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     voiceRuntime,
     voiceAudioEngine,
   ]);
-
-  const _cancelAgentRun = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] cancelAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.cancelAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to cancel agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _deleteAgent = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] deleteAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.deleteAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to delete agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _archiveAgent = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] archiveAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.archiveAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to archive agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _restartServer = useCallback(
-    (reason?: string) => {
-      if (!client) {
-        console.warn("[Session] restartServer skipped: daemon unavailable");
-        return;
-      }
-      void client.restartServer(reason).catch((error) => {
-        console.error("[Session] Failed to restart server:", error);
-      });
-    },
-    [client],
-  );
-
-  const _setAgentMode = useCallback(
-    (agentId: string, modeId: string) => {
-      if (!client) {
-        console.warn("[Session] setAgentMode skipped: daemon unavailable");
-        return;
-      }
-      void client
-        .setAgentMode(agentId, modeId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.error("[Session] Failed to set agent mode:", error);
-          toast.error(toErrorMessage(error));
-        });
-    },
-    [client, toast],
-  );
-
-  const _setAgentModel = useCallback(
-    (agentId: string, modelId: string | null) => {
-      if (!client) {
-        console.warn("[Session] setAgentModel skipped: daemon unavailable");
-        return;
-      }
-      void client.setAgentModel(agentId, modelId).catch((error) => {
-        console.error("[Session] Failed to set agent model:", error);
-        toast.error(toErrorMessage(error));
-      });
-    },
-    [client, toast],
-  );
-
-  const _setAgentThinkingOption = useCallback(
-    (agentId: string, thinkingOptionId: string | null) => {
-      if (!client) {
-        console.warn("[Session] setAgentThinkingOption skipped: daemon unavailable");
-        return;
-      }
-      void client
-        .setAgentThinkingOption(agentId, thinkingOptionId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.error("[Session] Failed to set agent thinking option:", error);
-          toast.error(toErrorMessage(error));
-        });
-    },
-    [client, toast],
-  );
-
-  const _respondToPermission = useCallback(
-    (agentId: string, requestId: string, response: AgentPermissionResponse) => {
-      if (!client) {
-        console.warn("[Session] respondToPermission skipped: daemon unavailable");
-        return;
-      }
-      void client.respondToPermission(agentId, requestId, response).catch((error) => {
-        console.error("[Session] Failed to respond to permission:", error);
-      });
-    },
-    [client],
-  );
 
   return children;
 }

@@ -1,5 +1,4 @@
 import { GitActionsSplitButton } from "@/git/actions-split-button";
-import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { useGitActions } from "@/git/use-actions";
 
 interface WorkspaceActionsProps {
@@ -8,11 +7,7 @@ interface WorkspaceActionsProps {
 }
 
 export function WorkspaceActions({ serverId, cwd }: WorkspaceActionsProps) {
-  const { gitActions } = useGitActions({
-    serverId,
-    cwd,
-    icons: GIT_ACTION_ICONS,
-  });
+  const { gitActions } = useGitActions({ serverId, cwd });
 
   return <GitActionsSplitButton gitActions={gitActions} />;
 }

@@ -94,9 +94,7 @@ export interface SidebarWorkspaceMenuProps {
   onMarkAsRead?: () => void;
   onMarkAsUnread?: () => void;
   onArchive: () => void;
-  archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
-  archivePendingLabel?: string;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -143,9 +141,7 @@ function SidebarWorkspaceMenuItems({
   onMarkAsRead,
   onMarkAsUnread,
   onArchive,
-  archiveLabel,
   archiveStatus,
-  archivePendingLabel,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -261,10 +257,10 @@ function SidebarWorkspaceMenuItems({
           leading={archiveLeadingIcon}
           trailing={archiveTrailing}
           status={archiveStatus}
-          pendingLabel={archivePendingLabel}
+          pendingLabel={t("sidebar.workspace.actions.archiving")}
           onSelect={onArchive}
         >
-          {archiveLabel ?? t("sidebar.workspace.actions.archive")}
+          {t("sidebar.workspace.actions.archive")}
         </WorkspaceMenuItem>
       ) : null}
     </>
@@ -282,9 +278,7 @@ export function SidebarWorkspaceMenu({
   onMarkAsRead,
   onMarkAsUnread,
   onArchive,
-  archiveLabel,
   archiveStatus,
-  archivePendingLabel,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -329,9 +323,7 @@ export function SidebarWorkspaceMenu({
           onMarkAsRead={onMarkAsRead}
           onMarkAsUnread={onMarkAsUnread}
           onArchive={onArchive}
-          archiveLabel={archiveLabel}
           archiveStatus={archiveStatus}
-          archivePendingLabel={archivePendingLabel}
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
@@ -363,9 +355,7 @@ export function SidebarWorkspaceContextMenu({
   onMarkAsRead,
   onMarkAsUnread,
   onArchive,
-  archiveLabel,
   archiveStatus,
-  archivePendingLabel,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -444,9 +434,7 @@ export function SidebarWorkspaceContextMenu({
           onMarkAsRead={onMarkAsRead}
           onMarkAsUnread={onMarkAsUnread}
           onArchive={onArchive}
-          archiveLabel={archiveLabel}
           archiveStatus={archiveStatus}
-          archivePendingLabel={archivePendingLabel}
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}

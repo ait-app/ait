@@ -9,14 +9,6 @@ export const pairing = {
       title: "SSH remoto",
       description: "Conecte-se pelo cliente SSH do desktop.",
     },
-    scanQr: {
-      title: "Escanear QR code",
-      description: "Conexão relay criptografada.",
-    },
-    pasteLink: {
-      title: "Colar link de pareamento",
-      description: "Conexão relay criptografada.",
-    },
   },
   direct: {
     title: "Conexão direta",
@@ -78,64 +70,5 @@ export const pairing = {
       invalidTarget: "Insira um host ssh:// válido",
       failedToConnect: "Não foi possível conectar por SSH. {{detail}}",
     },
-  },
-  link: {
-    title: "Colar link de pareamento",
-    helper: "Cole o link de pareamento do seu servidor.",
-    label: "Link de pareamento",
-    errors: {
-      required: "Cole um link de pareamento (.../#offer=...)",
-      missingOffer: "O link deve incluir #offer=...",
-      emptyOffer: "O payload da oferta está vazio",
-      invalid: "Link de pareamento inválido",
-      unableToPair: "Não foi possível parear host",
-    },
-    alert: {
-      failedTitle: "Falha no pareamento",
-    },
-    actions: {
-      cancel: "Cancelar",
-      pair: "Parear",
-      pairing: "Pareando...",
-    },
-  },
-  scan: {
-    title: "Escanear QR",
-    webUnavailableTitle: "Indisponível na web",
-    webUnavailableBody:
-      'Escanear QR não é compatível com a build web. Use "Colar link" em vez disso.',
-    backToSettings: "Voltar para Configurações",
-    cameraPermissionTitle: "Permissão da câmera",
-    cameraPermissionBody:
-      "Permita acesso à câmera para escanear o QR code de pareamento do daemon.",
-    grantPermission: "Conceder permissão",
-    pairing: "Pareando...",
-    unableToPair: "Não foi possível parear host",
-    errorTitle: "Erro",
-  },
-  device: {
-    loadingOffer: "Carregando oferta de pareamento...",
-    failedToLoadOffer: "Falha ao carregar oferta de pareamento.",
-    relayDisabled: "Relay não está ativado. Ative o relay para parear um dispositivo.",
-    enableTitle: "Ativar o relay?",
-    enableDescription:
-      "O relay permite conectar este dispositivo de qualquer lugar. O tráfego de pareamento é criptografado de ponta a ponta.",
-    relayDocs: "Como o relay funciona",
-    relayDocsAccessibility: "Leia como o relay do Ait funciona",
-    enableRelay: "Ativar relay",
-    enablingRelay: "Ativando...",
-    notNow: "Agora não",
-    directConnectionHint:
-      "Sem relay, conecte diretamente por TCP, Tailscale ou outra VPN. Nenhum código QR é criado.",
-    updateRequired: "Atualize o host para ativar o relay pelo Ait Desktop.",
-    unavailable: "Oferta de pareamento indisponível.",
-    hint: "Escaneie este QR code com o Ait no seu celular ou copie o link abaixo.",
-    securityWarning:
-      "Trate este link de pareamento como uma senha. Qualquer pessoa com o link pode acessar este daemon.",
-    qrUnavailable: "QR code indisponível.",
-    qrAccessibility: "Código QR de pareamento",
-    retry: "Tentar novamente",
-    copy: "Copiar",
-    copied: "Copiado",
   },
 };

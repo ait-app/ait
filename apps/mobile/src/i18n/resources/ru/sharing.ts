@@ -3,17 +3,13 @@ const sharedSharing = {
   incomingHostHint:
     "В списках появятся включённые хосты и их общие проекты и рабочие пространства.",
   showHostInHosts: "Показать {{host}} среди хостов",
-  sharedByMe: "Я поделился",
   sharedByMeCount: "Я поделился ({{count}})",
-  section: "Общий доступ",
   action: "Поделиться с группами",
   manage: "Управление",
   refresh: "Обновить",
   stop: "Прекратить общий доступ",
   active: "Активно",
   loading: "Загрузка общих ресурсов…",
-  offline: "Этот общий ресурс не в сети.",
-  emptyResources: "В этом общем ресурсе нет рабочих пространств.",
   hostSection: "Общий доступ",
   hostTitle: "Поделиться этой нодой",
   hostHint: "Дайте группе доступ ко всем проектам и рабочим пространствам на этом хосте.",
@@ -56,7 +52,5 @@ const sharedSharing = {
 export const sharing = {
   ...sharedSharing,
   title: "Общий доступ",
-  offline: "Этот общий ресурс не в сети.",
-  emptyResources: "В этом общем ресурсе нет рабочих пространств.",
   listError: "Не удалось загрузить общие ресурсы.",
 };

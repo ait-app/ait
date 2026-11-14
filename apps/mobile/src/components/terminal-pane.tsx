@@ -101,10 +101,6 @@ const MODIFIER_LABELS = {
   alt: "Alt",
 } as const;
 
-const EMPTY_MODIFIERS = EMPTY_TERMINAL_KEY_MODIFIERS;
-
-type ModifierState = TerminalKeyModifierState;
-
 type PendingTerminalInput =
   | {
       type: "data";
@@ -120,9 +116,9 @@ function terminalScopeKey(input: { serverId: string; cwd: string }): string {
 }
 
 interface ModifierButtonProps {
-  modifier: keyof ModifierState;
+  modifier: keyof TerminalKeyModifierState;
   active: boolean;
-  onToggle: (modifier: keyof ModifierState) => void;
+  onToggle: (modifier: keyof TerminalKeyModifierState) => void;
 }
 
 function ModifierButton({ modifier, active, onToggle }: ModifierButtonProps) {
@@ -265,7 +261,9 @@ export function TerminalPane({
   const [isAttaching, setIsAttaching] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [rendererReadyStreamKey, setRendererReadyStreamKey] = useState<string | null>(null);
-  const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
+  const [modifiers, setModifiers] = useState<TerminalKeyModifierState>(
+    EMPTY_TERMINAL_KEY_MODIFIERS,
+  );
   const [hasSelection, setHasSelection] = useState(false);
   const [hasClipboardText, setHasClipboardText] = useState(false);
   const [isKeyboardToggleVisible, setIsKeyboardToggleVisible] = useState(false);
@@ -322,10 +320,6 @@ export function TerminalPane({
   useEffect(() => {
     setIsKeyboardToggleVisible(isKeyboardVisible);
   }, [isKeyboardVisible]);
-
-  const handleSelectionChange = useCallback((nextHasSelection: boolean) => {
-    setHasSelection(nextHasSelection);
-  }, []);
 
   const requestTerminalFocus = useCallback(() => {
     if (!hostReady) return;
@@ -477,7 +471,7 @@ export function TerminalPane({
   const handleStreamExit = useStableEvent((exitedTerminalId: string) => {
     workspaceTerminalSession.snapshots.clear({ terminalId: exitedTerminalId });
     if (terminalIdRef.current === exitedTerminalId) emulatorRef.current?.clear();
-    setModifiers({ ...EMPTY_MODIFIERS });
+    setModifiers({ ...EMPTY_TERMINAL_KEY_MODIFIERS });
   });
 
   useEffect(() => {
@@ -490,21 +484,20 @@ export function TerminalPane({
     setStreamError(status.error);
   }, []);
 
-  const getPreferredStreamSize = useStableEvent(() => {
-    if (
-      !canRequestFocusClaim({
-        isWorkspaceFocused: terminalPresentedRef.current,
-        isPaneFocused,
-        isAppActivelyVisible,
-        isClientReady: client !== null,
-        isConnected,
-        isRendererReady: rendererReadyStreamKey === terminalStreamKey,
-      })
-    ) {
-      return null;
-    }
-    return measuredTerminalSizeRef.current;
-  });
+  const canClaimPresentedTerminalSize = useStableEvent(() =>
+    canRequestFocusClaim({
+      isWorkspaceFocused: terminalPresentedRef.current,
+      isPaneFocused,
+      isAppActivelyVisible,
+      isClientReady: client !== null,
+      isConnected,
+      isRendererReady: rendererReadyStreamKey === terminalStreamKey,
+    }),
+  );
+
+  const getPreferredStreamSize = useStableEvent(() =>
+    canClaimPresentedTerminalSize() ? measuredTerminalSizeRef.current : null,
+  );
 
   const handleStreamOutput = useStableEvent(
     ({ terminalId: outputTerminalId, data }: { terminalId: string; data: Uint8Array }) => {
@@ -538,14 +531,7 @@ export function TerminalPane({
   const getStreamRestoreOptions = useStableEvent(() =>
     resolveTerminalRestoreOptions({
       supportsTerminalRestoreModes,
-      canClaimSize: canRequestFocusClaim({
-        isWorkspaceFocused: terminalPresentedRef.current,
-        isPaneFocused,
-        isAppActivelyVisible,
-        isClientReady: client !== null,
-        isConnected,
-        isRendererReady: rendererReadyStreamKey === terminalStreamKey,
-      }),
+      canClaimSize: canClaimPresentedTerminalSize(),
       size: measuredTerminalSizeRef.current,
     }),
   );
@@ -682,7 +668,7 @@ export function TerminalPane({
   }, [flushPendingTerminalInput, isAttaching, streamError]);
 
   const clearPendingModifiers = useCallback(() => {
-    setModifiers({ ...EMPTY_MODIFIERS });
+    setModifiers({ ...EMPTY_TERMINAL_KEY_MODIFIERS });
   }, []);
 
   const sendTerminalKey = useCallback(
@@ -694,24 +680,6 @@ export function TerminalPane({
       meta?: boolean;
     }): boolean => {
       if (!hostReady) return false;
-      if (!client || !terminalIdRef.current) {
-        enqueuePendingTerminalInput({
-          type: "key",
-          input: {
-            ...createTerminalKeyInput({
-              key: input.key,
-              modifiers: {
-                ctrl: input.ctrl,
-                shift: input.shift,
-                alt: input.alt,
-              },
-              meta: input.meta,
-            }),
-          },
-        });
-        return true;
-      }
-
       const pendingEntry: PendingTerminalInput = {
         type: "key",
         input: createTerminalKeyInput({
@@ -729,7 +697,7 @@ export function TerminalPane({
       }
       return true;
     },
-    [client, dispatchTerminalInputEntry, enqueuePendingTerminalInput, hostReady],
+    [dispatchTerminalInputEntry, enqueuePendingTerminalInput, hostReady],
   );
 
   const handleTerminalData = useCallback(
@@ -763,13 +731,6 @@ export function TerminalPane({
         }
       }
 
-      if (!client || !terminalIdRef.current) {
-        enqueuePendingTerminalInput({
-          type: "data",
-          data,
-        });
-        return;
-      }
       const pendingEntry: PendingTerminalInput = {
         type: "data",
         data,
@@ -780,7 +741,6 @@ export function TerminalPane({
     },
     [
       clearPendingModifiers,
-      client,
       dispatchTerminalInputEntry,
       modifiers,
       sendTerminalKey,
@@ -860,10 +820,6 @@ export function TerminalPane({
     [sendTerminalKey],
   );
 
-  const handlePendingModifiersConsumed = useCallback(() => {
-    clearPendingModifiers();
-  }, [clearPendingModifiers]);
-
   const handleTerminalPaste = useCallback(() => {
     requestTerminalReflow();
     void pasteTerminalClipboard({
@@ -936,7 +892,7 @@ export function TerminalPane({
   );
 
   const toggleModifier = useCallback(
-    (modifier: keyof ModifierState) => {
+    (modifier: keyof TerminalKeyModifierState) => {
       setModifiers((current) => ({ ...current, [modifier]: !current[modifier] }));
       requestTerminalFocus();
       requestTerminalReflow();
@@ -1055,7 +1011,6 @@ export function TerminalPane({
         <View style={styles.terminalGestureContainer} pointerEvents={hostReady ? "auto" : "none"}>
           <TerminalEmulator
             ref={emulatorRef}
-            dom={TERMINAL_EMULATOR_DOM_PROPS}
             streamKey={terminalStreamKey}
             supportsTerminalInputModeReplay={supportsTerminalInputModeReplay}
             testId="terminal-surface"
@@ -1077,10 +1032,10 @@ export function TerminalPane({
             onResize={handleTerminalResize}
             onTerminalKey={handleTerminalKey}
             onInputModeChange={handleInputModeChange}
-            onSelectionChange={handleSelectionChange}
+            onSelectionChange={setHasSelection}
             onResolveLocalFileLink={handleResolveLocalFileLink}
             onOpenLocalFileLink={handleOpenLocalFileLink}
-            onPendingModifiersConsumed={handlePendingModifiersConsumed}
+            onPendingModifiersConsumed={clearPendingModifiers}
             pendingModifiers={modifiers}
             focusRequestToken={focusRequestToken}
             resizeRequestToken={resizeRequestToken}
@@ -1235,14 +1190,3 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
-
-const TERMINAL_EMULATOR_DOM_PROPS = {
-  style: { flex: 1 },
-  matchContents: false,
-  scrollEnabled: true,
-  nestedScrollEnabled: true,
-  overScrollMode: "never" as const,
-  bounces: false,
-  automaticallyAdjustContentInsets: false,
-  contentInsetAdjustmentBehavior: "never" as const,
-};

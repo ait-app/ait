@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { mergeProviderPreferences } from "@/hooks/use-form-preferences";
 import {
   resolveAgentForm,
   resolveFormState,
   resolveEffectiveModel,
   resolveThinkingOptionId,
-  mergeSelectedComposerPreferences,
   buildProviderDefinitionMap,
   buildProviderDefinitionMapForStatuses,
   resolveDefaultModel,
@@ -269,10 +269,10 @@ describe("resolveThinkingOptionId", () => {
   });
 });
 
-describe("mergeSelectedComposerPreferences", () => {
+describe("mergeProviderPreferences", () => {
   it("stores the selected model for the selected provider", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {},
         provider: "codex",
         updates: { model: "gpt-5.4" },
@@ -285,7 +285,7 @@ describe("mergeSelectedComposerPreferences", () => {
 
   it("preserves existing provider preferences when the selected model changes", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {
           provider: "claude",
           providerPreferences: {
@@ -316,7 +316,7 @@ describe("mergeSelectedComposerPreferences", () => {
 
   it("stores mode and thinking preferences without dropping the selected model", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {
           provider: "codex",
           providerPreferences: {

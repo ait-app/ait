@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-export interface TrackedRefresh {
+interface TrackedRefresh {
   isRefreshing: boolean;
   onRefresh: () => void;
 }

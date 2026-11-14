@@ -1,4 +1,4 @@
-export interface DeferredInit {
+interface DeferredInit {
   promise: Promise<void>;
   resolve: () => void;
   reject: (error: Error) => void;
@@ -37,12 +37,8 @@ export function createInitDeferred(key: string, requestDirection: "tail" | "afte
   return deferred;
 }
 
-export function refreshInitTimeout(input: {
-  key: string;
-  onTimeout: () => void;
-  timeoutMs?: number;
-}): void {
-  const timeoutId = setTimeout(input.onTimeout, input.timeoutMs ?? INIT_TIMEOUT_MS);
+export function refreshInitTimeout(input: { key: string; onTimeout: () => void }): void {
+  const timeoutId = setTimeout(input.onTimeout, INIT_TIMEOUT_MS);
   const deferred = initPromises.get(input.key);
   if (!deferred) {
     clearTimeout(timeoutId);

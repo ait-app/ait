@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Agent } from "@/contexts/session-context";
+import type { Agent } from "@/stores/session-store";
 import {
   deriveAgentScreenViewState,
   type AgentScreenMachineInput,

@@ -44,7 +44,6 @@ export const composer = {
     addFile: "上传文件",
     addIssueOrPr: "添加议题或 PR",
     addIssueOrPr_mr: "添加议题或 MR",
-    dropImagesHere: "将图片拖放到这里",
     dropFilesHere: "将文件拖放到这里",
     editQueuedMessage: "编辑排队消息",
     sendQueuedMessageNow: "立即发送排队消息",

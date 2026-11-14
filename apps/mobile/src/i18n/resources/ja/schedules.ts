@@ -168,7 +168,6 @@ export const schedules = {
   untitledAgent: "無題のエージェント",
   product: {
     schedule: "スケジュール",
-    heartbeat: "ハートビート",
   },
   untitled: "無題の{{product}}",
   status: {
@@ -230,7 +229,6 @@ export const schedules = {
     workspace: "ワークスペース",
     chooseHost: "先にホストを選択してください。",
     chooseProject: "先にプロジェクトを選択してください。",
-    searchProjects: "プロジェクトを検索...",
     model: "モデル",
     thinking: "思考",
     selectThinking: "思考レベルを選択",
@@ -241,11 +239,6 @@ export const schedules = {
     noModelModes: "このモデルで利用できるモードはありません。",
     selectMode: "モードを選択",
     archive: "実行のたびに作成したエージェントをアーカイブ",
-    isolation: "分離",
-    local: "ローカル",
-    worktree: "ワークツリー",
-    selectIsolation: "分離方法を選択",
-    noIsolation: "分離オプションが見つかりません",
     submitError: "スケジュールを保存できません: {{message}}",
     runningError: "タスクは実行中です。今回の実行が終了してから変更してください。",
   },

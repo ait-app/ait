@@ -7,12 +7,6 @@ export const newWorkspace = {
     sandboxedWorktree: "Worktree isolado",
     label: "Isolamento",
   },
-  fields: {
-    project: "Projeto",
-    base: "Base",
-    baseNotApplicable: "Não aplicável",
-  },
-  titlePlaceholder: "Título (opcional)",
   errors: {
     hostDisconnected: "Host não está conectado",
     createWorktreeFailed: "Falha ao criar worktree",

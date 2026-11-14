@@ -24,7 +24,6 @@ export const settings = {
     layout: "Layout",
     editor: "Editor",
     shortcuts: "Shortcuts",
-    integrations: "Integrations",
     notifications: "Notifications",
     permissions: "Permissions",
     diagnostics: "Diagnostics",
@@ -97,70 +96,7 @@ export const settings = {
     providers: "Providers",
     usage: "Usage",
     terminals: "Terminals",
-    plugins: "Plugins",
     host: "Overview",
-  },
-  plugins: {
-    title: "Plugins",
-    screens: {
-      open: "Open",
-      offline: "Connect to this host to open plugin settings.",
-      update: "Update this host to use plugin settings.",
-      unavailable: "This plugin settings screen is unavailable.",
-    },
-    trustedTitle: "Plugins are trusted code",
-    trustedDescription:
-      "They run on this host and inside the app without sandboxing. Install only code you trust.",
-    globalTitle: "Enable plugins",
-    globalHint: "Global switch for every configured plugin",
-    sourceLabel: "Plugin source",
-    sourcePlaceholder: "Directory, Git URL, or npm package",
-    docs: "Docs",
-    install: "Install plugin",
-    installing: "Installing…",
-    logs: {
-      action: "Logs",
-      title: "Logs: {{id}}",
-      loading: "Loading logs…",
-      refresh: "Refresh",
-      refreshing: "Refreshing…",
-      errorTitle: "Unable to load plugin logs",
-      empty: "No plugin output yet",
-    },
-    status: { running: "running", disabled: "disabled", failed: "failed" },
-    actions: {
-      menu: "Actions for {{id}}",
-      reload: "Reload",
-      reloading: "Reloading…",
-      enable: "Enable",
-      enabling: "Enabling…",
-      disable: "Disable",
-      disabling: "Disabling…",
-      remove: "Remove",
-      removing: "Removing…",
-    },
-    feedback: {
-      installed: "Installed {{id}}",
-      reload: "Reloaded {{id}}",
-      enable: "Enabled {{id}}",
-      disable: "Disabled {{id}}",
-      remove: "Removed {{id}}",
-      kept: "Kept {{id}}",
-      globalEnabled: "Plugins enabled",
-      globalDisabled: "Plugins disabled",
-    },
-    removeConfirmTitle: "Remove {{id}}?",
-    removeConfirmMessage: "This removes the configuration. The source directory is not deleted.",
-    states: {
-      offlineTitle: "Plugin host is offline",
-      offlineDescription: "Reconnect to this host to manage its plugins.",
-      updateTitle: "Update this host to manage plugins",
-      sourceUpdateTitle: "Update this host to install plugins",
-      loading: "Loading plugins…",
-      errorTitle: "Unable to load plugins",
-      retry: "Retry",
-      empty: "No plugins configured",
-    },
   },
   metadataGeneration: {
     title: "Metadata generation",
@@ -400,7 +336,6 @@ export const settings = {
     help: {
       openProject: "Open project",
       newWorkspace: "New workspace",
-      newWorktree: "New worktree",
       archiveWorkspace: "Archive workspace",
       newTab: "New tab",
       closeCurrentTab: "Close current tab",
@@ -436,29 +371,10 @@ export const settings = {
       toggleVoiceMode: "Toggle voice mode",
       startStopDictation: "Start/stop dictation",
       interruptAgent: "Interrupt agent",
-      sendMessage: "Send message",
-      queueMessage: "Queue message",
       muteUnmuteVoiceMode: "Mute/unmute voice mode",
-      switchProject: "Switch project",
     },
     helpNotes: {
       showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
-    },
-  },
-  integrations: {
-    title: "Integrations",
-    docs: {
-      cli: "CLI docs",
-      openCli: "Open CLI documentation",
-    },
-    commandLine: {
-      title: "Command line",
-      description: "Control and script agents from your terminal",
-    },
-    actions: {
-      install: "Install",
-      installing: "Installing...",
-      installed: "Installed",
     },
   },
   permissions: {
@@ -524,17 +440,10 @@ export const settings = {
       removeErrorMessage: "Unable to remove connection",
       timeout: "Timeout",
     },
-    pairDevices: {
-      title: "Pair devices",
-      rowTitle: "Pair a device",
-      rowHint: "Scan a QR code or copy a link to connect your phone to this host",
-    },
     skills: {
       sectionTitle: "Orchestration skills",
       title: "Orchestration skills",
       description: "Teach your agents to orchestrate through the CLI",
-      docs: "Skills",
-      openDocs: "Open skills documentation",
       unavailable: "Connect to this host to manage orchestration skills",
       unsupported: "Update this host to manage orchestration skills",
       statusFailed: "Unable to check orchestration skills status.",
@@ -566,7 +475,6 @@ export const settings = {
         uninstall: "Uninstall",
         save: "Save",
         saving: "Saving...",
-        cancel: "Cancel",
       },
       operations: {
         add: "Add skill",
@@ -575,8 +483,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "Orchestration",
-      unavailable: "Connect to this host to manage orchestration",
       enableTools: {
         title: "Enable Ait tools",
         hint: "Agents will be able to manage worktrees, agents and schedules",
@@ -657,7 +563,6 @@ export const settings = {
       nameLabel: "Name",
       namePlaceholder: "UI work",
       iconLabel: "Icon",
-      noIcon: "None",
       providerLabel: "Provider",
       providerPlaceholder: "Select a provider",
       noProviders: "No providers are available on this host",
@@ -698,8 +603,6 @@ export const settings = {
         confirmDesktopMessage:
           "Restart the built-in daemon with the saved settings? Running tasks and terminal sessions will be interrupted.",
         restarting: "Restarting...",
-        unableToReconnectTitle: "Unable to reconnect",
-        unableToReconnectMessage: "{{name}} did not come back online. Please verify it restarted.",
         unavailableTitle: "Host unavailable",
         unavailableMessage:
           "This host is not connected. Wait for it to come online before restarting.",
@@ -707,8 +610,6 @@ export const settings = {
         offlineMessage:
           "This host is offline. Ait reconnects automatically-wait until it's back online before restarting.",
         requestFailedTitle: "Error",
-        requestFailedMessage:
-          "Failed to send the restart request. Ait reconnects automatically-try again once the host shows as online.",
         dialogFailedMessage: "Unable to open the restart confirmation dialog.",
       },
       update: {
@@ -720,14 +621,10 @@ export const settings = {
         confirmTitle: "Update {{name}}",
         confirmMessage:
           "This will update the daemon to the latest version and restart it. Running agents will be briefly interrupted.",
-        updating: "Updating...",
         phaseStarting: "Preparing update...",
         phaseDownloading: "Downloading packages...",
         phaseInstalling: "Installing...",
         phaseComplete: "Update complete, restarting...",
-        unableToReconnectTitle: "Unable to reconnect",
-        unableToReconnectMessage:
-          "{{name}} did not come back online after updating. Please verify the daemon restarted.",
         unavailableTitle: "Host unavailable",
         unavailableMessage:
           "This host is not connected. Wait for it to come online before updating.",
@@ -862,9 +759,6 @@ export const settings = {
     worktree: {
       title: "Worktree lifecycle hooks",
       info: "Commands that run when a worktree is created or torn down for this project",
-      docs: "Docs",
-      docsTooltip:
-        "See docs for more details and the environment variables available to these commands",
       setup: "Setup",
       setupAccessibility: "Worktree setup commands",
       uncommittedTitle: "Commit ait.json changes",

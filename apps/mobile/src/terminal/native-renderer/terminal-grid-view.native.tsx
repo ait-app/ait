@@ -67,7 +67,7 @@ interface TerminalGridRunProps {
   textStyle: StyleProp<TextStyle>;
 }
 
-export interface TerminalGridViewProps {
+interface TerminalGridViewProps {
   state: TerminalViewportState;
   xtermTheme?: ITheme;
   fontFamily?: string;

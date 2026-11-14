@@ -170,10 +170,4 @@ export const desktop = {
       failed: "فشل في إرسال الإخطار.",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-      installFailed: "غير قادر على تثبيت Ait CLI.",
-    },
-  },
 };

@@ -11,7 +11,6 @@ export function TerminalPasteAction({ hasClipboardText, onPaste }: TerminalPaste
   return (
     <TerminalActionButton
       label="Paste"
-      accessibilityLabel="Paste"
       testID="terminal-paste"
       disabled={!hasClipboardText}
       onPress={onPaste}
@@ -34,19 +33,12 @@ export function TerminalFloatingCopyAction({
   }
 
   return (
-    <TerminalActionButton
-      label="Copy"
-      accessibilityLabel="Copy"
-      testID="terminal-copy"
-      onPress={onCopy}
-      variant="floating"
-    />
+    <TerminalActionButton label="Copy" testID="terminal-copy" onPress={onCopy} variant="floating" />
   );
 }
 
 interface TerminalActionButtonProps {
   label: string;
-  accessibilityLabel: string;
   testID: string;
   disabled?: boolean;
   onPress: () => void;
@@ -55,7 +47,6 @@ interface TerminalActionButtonProps {
 
 function TerminalActionButton({
   label,
-  accessibilityLabel,
   testID,
   disabled = false,
   onPress,
@@ -85,7 +76,7 @@ function TerminalActionButton({
 
   return (
     <Pressable
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       disabled={disabled}

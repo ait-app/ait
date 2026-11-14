@@ -21,6 +21,7 @@ import { trimNonEmpty } from "@/utils/string";
 export {
   createFixedBrowserViewport,
   DEFAULT_BROWSER_URL,
+  normalizeBrowserUrl,
   RESPONSIVE_BROWSER_VIEWPORT,
   type BrowserRecord,
   type BrowserViewport,
@@ -108,8 +109,4 @@ export function createWorkspaceBrowser(input?: { initialUrl?: string }): {
     browserId,
     url: record?.url ?? normalizeBrowserUrl(input?.initialUrl),
   };
-}
-
-export function normalizeWorkspaceBrowserUrl(value: string | null | undefined): string {
-  return normalizeBrowserUrl(value);
 }

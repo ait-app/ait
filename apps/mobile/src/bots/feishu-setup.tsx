@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { TextLink, useLiveSetup } from "./channel-setup";
@@ -25,20 +24,6 @@ const MANUAL_STEP_KEYS = [
   "bots.feishuManualStep4",
   "bots.feishuManualStep5",
 ] as const;
-
-/** Whether the host can run Feishu scan setup and store pasted secrets. */
-export function useFeishuSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotFeishuSetup === true,
-  );
-}
-
-/** Whether the host can verify and store credentials for Lark international. */
-export function useLarkSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotLarkSetup === true,
-  );
-}
 
 export function FeishuScanSetup({
   serverId,

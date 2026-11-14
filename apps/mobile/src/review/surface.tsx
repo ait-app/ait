@@ -6,7 +6,6 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
@@ -71,14 +70,6 @@ const accentForegroundIconColorMapping = (theme: Theme) => ({
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);
-
-function InlineReviewAddIcon({ style, testID }: { style?: StyleProp<ViewStyle>; testID?: string }) {
-  return (
-    <View style={[styles.gutterActionVisual, style]} testID={testID}>
-      <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundIconColorMapping} />
-    </View>
-  );
-}
 
 export function InlineReviewAddButton({
   onPress,
@@ -148,114 +139,6 @@ export function useInlineReviewController(input: {
       onDeleteComment: model.delete,
     }),
     [commentsByTarget, editor, isCompact, model],
-  );
-}
-
-export function InlineReviewGutterCell({
-  children,
-  reviewTarget,
-  comments,
-  isLineHovered = false,
-  lineHeight,
-  onStartComment,
-  style,
-  actionTestID,
-}: {
-  children: ReactNode;
-  reviewTarget: ReviewableDiffTarget | null | undefined;
-  comments: readonly ReviewDraftComment[];
-  isEditorOpen: boolean;
-  isLineHovered?: boolean;
-  lineHeight?: number;
-  onStartComment: (target: ReviewableDiffTarget) => void;
-  style?: StyleProp<ViewStyle>;
-  actionTestID?: string;
-}) {
-  const { t } = useTranslation();
-  const canComment = Boolean(reviewTarget);
-  const hasComments = comments.length > 0;
-  const [isGutterHovered, setIsGutterHovered] = useState(false);
-  const [isPressed, setIsPressed] = useState(false);
-  const [isDismissedAfterPress, setIsDismissedAfterPress] = useState(false);
-  const isInteractionActive = isGutterHovered || isLineHovered || isPressed;
-  const showAction = canComment && isInteractionActive && !isDismissedAfterPress;
-
-  const handlePress = useCallback(() => {
-    if (reviewTarget) {
-      setIsDismissedAfterPress(true);
-      onStartComment(reviewTarget);
-    }
-  }, [reviewTarget, onStartComment]);
-
-  const handleHoverIn = useCallback(() => {
-    setIsGutterHovered(true);
-  }, []);
-
-  const handleHoverOut = useCallback(() => {
-    setIsGutterHovered(false);
-  }, []);
-
-  const handlePressIn = useCallback(() => {
-    setIsPressed(true);
-  }, []);
-
-  const handlePressOut = useCallback(() => {
-    setIsPressed(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isInteractionActive) {
-      setIsDismissedAfterPress(false);
-    }
-  }, [isInteractionActive]);
-
-  const pressableStyle = useCallback((): StyleProp<ViewStyle> => style, [style]);
-  const lineHeightStyle = useMemo<StyleProp<ViewStyle>>(
-    () =>
-      lineHeight !== undefined
-        ? inlineUnistylesStyle({ height: lineHeight, minHeight: lineHeight })
-        : null,
-    [lineHeight],
-  );
-
-  const labelStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.gutterLabel, lineHeightStyle, hasComments && styles.gutterLabelActive],
-    [hasComments, lineHeightStyle],
-  );
-  const innerStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.gutterInner, lineHeightStyle],
-    [lineHeightStyle],
-  );
-  const actionIconStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [
-      styles.gutterActionIcon,
-      lineHeight !== undefined && inlineUnistylesStyle({ top: Math.floor((lineHeight - 22) / 2) }),
-    ],
-    [lineHeight],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole={canComment ? "button" : undefined}
-      accessibilityLabel={canComment ? t("review.comment.add") : undefined}
-      hitSlop={canComment ? SMALL_ACTION_HIT_SLOP : undefined}
-      disabled={!canComment}
-      onPress={handlePress}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={pressableStyle}
-    >
-      <View style={innerStyle}>
-        <View style={labelStyle}>
-          {children}
-          {showAction ? (
-            <InlineReviewAddIcon style={actionIconStyle} testID={actionTestID} />
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
   );
 }
 
@@ -505,29 +388,6 @@ export function InlineReviewEditor({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  gutterInner: {
-    minHeight: theme.lineHeight.diff,
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    overflow: "visible",
-  },
-  gutterLabel: {
-    width: "100%",
-    minWidth: 0,
-    height: theme.lineHeight.diff,
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    position: "relative",
-    overflow: "visible",
-  },
-  gutterLabelActive: {
-    backgroundColor: theme.colors.surface2,
-  },
-  gutterActionIcon: {
-    position: "absolute",
-    right: -10,
-    top: Math.floor((theme.lineHeight.diff - 22) / 2),
-  },
   gutterActionVisual: {
     width: 22,
     height: 22,

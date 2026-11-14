@@ -336,14 +336,13 @@ export const DEV_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
   },
 ];
 
-export function getAgentProviderDefinition(
-  provider: string,
-  definitions: AgentProviderDefinition[] = [
-    ...AGENT_PROVIDER_DEFINITIONS,
-    ...DEV_AGENT_PROVIDER_DEFINITIONS,
-  ],
-): AgentProviderDefinition {
-  const definition = definitions.find((entry) => entry.id === provider);
+const ALL_AGENT_PROVIDER_DEFINITIONS = [
+  ...AGENT_PROVIDER_DEFINITIONS,
+  ...DEV_AGENT_PROVIDER_DEFINITIONS,
+];
+
+export function getAgentProviderDefinition(provider: string): AgentProviderDefinition {
+  const definition = ALL_AGENT_PROVIDER_DEFINITIONS.find((entry) => entry.id === provider);
   if (!definition) {
     throw new Error(`Unknown agent provider: ${provider}`);
   }
@@ -351,25 +350,11 @@ export function getAgentProviderDefinition(
 }
 
 export const BUILTIN_PROVIDER_IDS = AGENT_PROVIDER_DEFINITIONS.map((d) => d.id);
-export const AGENT_PROVIDER_IDS = BUILTIN_PROVIDER_IDS;
 
 export const AgentProviderSchema = z.string();
 
-export function isValidAgentProvider(
-  value: string,
-  validIds: Iterable<string> = BUILTIN_PROVIDER_IDS,
-): boolean {
-  return Array.isArray(validIds) ? validIds.includes(value) : new Set(validIds).has(value);
-}
-
-export function getUnattendedModeId(
-  provider: string,
-  definitions: AgentProviderDefinition[] = [
-    ...AGENT_PROVIDER_DEFINITIONS,
-    ...DEV_AGENT_PROVIDER_DEFINITIONS,
-  ],
-): string | undefined {
-  const definition = definitions.find((entry) => entry.id === provider);
+export function getUnattendedModeId(provider: string): string | undefined {
+  const definition = ALL_AGENT_PROVIDER_DEFINITIONS.find((entry) => entry.id === provider);
   return definition?.modes.find((mode) => mode.isUnattended)?.id;
 }
 

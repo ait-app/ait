@@ -1,4 +1,4 @@
-export type ProviderCommandId = "resume";
+type ProviderCommandId = "resume";
 
 /**
  * Declarative command templates for provider-native CLIs.
@@ -7,10 +7,7 @@ export type ProviderCommandId = "resume";
  * Example placeholders:
  * - {sessionId}
  */
-export const PROVIDER_COMMAND_TEMPLATES: Record<
-  string,
-  Partial<Record<ProviderCommandId, string>>
-> = {
+const PROVIDER_COMMAND_TEMPLATES: Record<string, Partial<Record<ProviderCommandId, string>>> = {
   antigravity: {
     resume: "agy --conversation {sessionId}",
   },

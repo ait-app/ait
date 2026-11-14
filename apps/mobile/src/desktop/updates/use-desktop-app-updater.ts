@@ -5,7 +5,6 @@ import {
   installDesktopAppUpdate,
   shouldShowDesktopUpdateSection,
   type DesktopAppUpdateCheckResult,
-  type DesktopAppUpdateCheckIntent,
   type DesktopAppUpdateInstallResult,
 } from "@/desktop/updates/desktop-updates";
 import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
@@ -30,10 +29,7 @@ export interface UseDesktopAppUpdaterReturn {
   lastCheckedAt: number | null;
   isChecking: boolean;
   isInstalling: boolean;
-  checkForUpdates: (options?: {
-    intent?: DesktopAppUpdateCheckIntent;
-    silent?: boolean;
-  }) => Promise<DesktopAppUpdateCheckResult | null>;
+  checkForUpdates: () => Promise<DesktopAppUpdateCheckResult | null>;
   installUpdate: () => Promise<DesktopAppUpdateInstallResult | null>;
 }
 
@@ -71,25 +67,12 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
     updater.getSnapshot,
   );
 
-  const checkForUpdates = useCallback(
-    async (options: { intent?: DesktopAppUpdateCheckIntent; silent?: boolean } = {}) => {
-      if (!isDesktopApp) {
-        return null;
-      }
-      const intent = options.intent ?? "manual";
-      // Until settings load, releaseChannel is the "stable" default; an automatic check would
-      // query the wrong channel.
-      if (intent === "automatic" && isLoadingSettings) {
-        return null;
-      }
-      return updater.checkForUpdates({
-        releaseChannel,
-        intent,
-        silent: options.silent,
-      });
-    },
-    [isDesktopApp, isLoadingSettings, releaseChannel, updater],
-  );
+  const checkForUpdates = useCallback(async () => {
+    if (!isDesktopApp) {
+      return null;
+    }
+    return updater.checkForUpdates({ releaseChannel, intent: "manual" });
+  }, [isDesktopApp, releaseChannel, updater]);
 
   const installUpdate = useCallback(async () => {
     if (!isDesktopApp) {

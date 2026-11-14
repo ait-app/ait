@@ -1,17 +1,9 @@
 import type { Href } from "expo-router";
 import { buildHostRootRoute, buildHostWorkspaceOpenRoute } from "@/utils/host-routes";
+import { trimNonEmpty } from "@/utils/string";
 
 type NotificationData = Record<string, unknown> | null | undefined;
 type NotificationRoute = Extract<Href, string>;
-
-function readNonEmptyString(data: NotificationData, key: string): string | null {
-  const value = data?.[key];
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 export function resolveNotificationTarget(data: NotificationData): {
   serverId: string | null;
@@ -20,10 +12,10 @@ export function resolveNotificationTarget(data: NotificationData): {
   terminalId: string | null;
 } {
   return {
-    serverId: readNonEmptyString(data, "serverId"),
-    agentId: readNonEmptyString(data, "agentId"),
-    workspaceId: readNonEmptyString(data, "workspaceId"),
-    terminalId: readNonEmptyString(data, "terminalId"),
+    serverId: trimNonEmpty(data?.serverId),
+    agentId: trimNonEmpty(data?.agentId),
+    workspaceId: trimNonEmpty(data?.workspaceId),
+    terminalId: trimNonEmpty(data?.terminalId),
   };
 }
 

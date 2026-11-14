@@ -122,80 +122,57 @@ async function handleBrowserAutomationRequest(params: {
   } = params;
   const browserHost = getHost()?.browser;
   const executeAutomationCommand = browserHost?.executeAutomationCommand;
+  const send = (payload: BrowserAutomationResponsePayload) =>
+    client.sendBrowserAutomationExecuteResponse({
+      type: "browser.automation.execute.response",
+      payload,
+    });
+  const respond = async (produce: () => Promise<BrowserAutomationResponsePayload>) => {
+    try {
+      send(await produce());
+    } catch (error) {
+      send(normalizeThrownBridgeError(request.requestId, error));
+    }
+  };
 
   if (request.command.command === "new_tab") {
-    try {
-      client.sendBrowserAutomationExecuteResponse({
-        type: "browser.automation.execute.response",
-        payload: await openBrowserTabForRequest({
-          request,
-          serverId,
-          browserHost,
-          ensureResidentBrowserWebview,
-          ...(registrationWaitTimeoutMs !== undefined ? { registrationWaitTimeoutMs } : {}),
-          ...(registrationPollIntervalMs !== undefined ? { registrationPollIntervalMs } : {}),
-        }),
-      });
-    } catch (error) {
-      client.sendBrowserAutomationExecuteResponse({
-        type: "browser.automation.execute.response",
-        payload: normalizeThrownBridgeError(request.requestId, error),
-      });
-    }
+    await respond(() =>
+      openBrowserTabForRequest({
+        request,
+        serverId,
+        browserHost,
+        ensureResidentBrowserWebview,
+        ...(registrationWaitTimeoutMs !== undefined ? { registrationWaitTimeoutMs } : {}),
+        ...(registrationPollIntervalMs !== undefined ? { registrationPollIntervalMs } : {}),
+      }),
+    );
     return;
   }
 
   if (request.command.command === "resize") {
-    client.sendBrowserAutomationExecuteResponse({
-      type: "browser.automation.execute.response",
-      payload: resizeBrowserTabForRequest({ request, serverId }),
-    });
+    send(resizeBrowserTabForRequest({ request, serverId }));
     return;
   }
 
   if (request.command.command === "close_tab") {
-    try {
-      client.sendBrowserAutomationExecuteResponse({
-        type: "browser.automation.execute.response",
-        payload: await closeBrowserTabForRequest({
-          request,
-          serverId,
-          browserHost,
-        }),
-      });
-    } catch (error) {
-      client.sendBrowserAutomationExecuteResponse({
-        type: "browser.automation.execute.response",
-        payload: normalizeThrownBridgeError(request.requestId, error),
-      });
-    }
+    await respond(() => closeBrowserTabForRequest({ request, serverId, browserHost }));
     return;
   }
 
   if (!executeAutomationCommand) {
-    client.sendBrowserAutomationExecuteResponse({
-      type: "browser.automation.execute.response",
-      payload: browserAutomationFailure({
+    send(
+      browserAutomationFailure({
         requestId: request.requestId,
         code: "browser_unsupported",
         message: "Browser automation is not available in this app runtime.",
       }),
-    });
+    );
     return;
   }
 
-  try {
-    const payload = await executeAutomationCommand(request);
-    client.sendBrowserAutomationExecuteResponse({
-      type: "browser.automation.execute.response",
-      payload: normalizeBridgePayload(request.requestId, payload),
-    });
-  } catch (error) {
-    client.sendBrowserAutomationExecuteResponse({
-      type: "browser.automation.execute.response",
-      payload: normalizeThrownBridgeError(request.requestId, error),
-    });
-  }
+  await respond(async () =>
+    normalizeBridgePayload(request.requestId, await executeAutomationCommand(request)),
+  );
 }
 
 function resizeBrowserTabForRequest(params: {

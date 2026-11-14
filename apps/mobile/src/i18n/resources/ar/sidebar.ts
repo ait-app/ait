@@ -6,7 +6,6 @@ export const sidebar = {
       label: "التجميع",
       project: "المشروع",
       status: "الحالة",
-      labels: "التسميات",
     },
     titleSource: {
       label: "العنوان",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "المثبتة",
   },
-  host: {
-    noHost: "لا مضيف",
-    switchTitle: "تبديل المضيف",
-    searchPlaceholder: "بحث عن المضيفين...",
-  },
   actions: {
     addProject: "إضافة مشروع",
     newWorkspace: "مساحة عمل جديدة",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "تشغيل التشخيص",
     shortcuts: "اختصارات لوحة المفاتيح",
     reportIssue: "الإبلاغ عن مشكلة",
-    discord: "Discord",
     github: "إنشاء مشكلة على GitHub",
     whatsNew: "ما الجديد",
     appName: "Ait",
@@ -109,7 +102,6 @@ export const sidebar = {
     status: {
       serviceRunning: "الخدمة {{name}} قيد التشغيل",
       serviceUnhealthy: "الخدمة {{name}} غير سليمة",
-      creating: "جارٍ الإنشاء...",
     },
     checks: {
       passed: "ناجحة: {{count}}",
@@ -131,29 +123,17 @@ export const sidebar = {
       pin: "تثبيت في الأعلى",
       unpin: "إلغاء التثبيت",
       archive: "أرشيف",
-      archiveWorkspace: "أرشفة مساحة العمل",
-      hideFromSidebar: "إخفاء من الشريط الجانبي",
       archiving: "أرشفة...",
-      hiding: "إخفاء...",
-    },
-    confirmations: {
-      hideTitle: "إخفاء مساحة العمل؟",
-      hideMessage:
-        'إخفاء "{{workspaceName}}" من الشريط الجانبي؟\n\n لن يتم تغيير الملفات الموجودة على القرص.',
-      hideConfirm: "يخفي",
-      cancel: "يلغي",
     },
     rename: {
       title: "إعادة تسمية مساحة العمل",
       submit: "إعادة تسمية",
-      invalidBranchName: "اسم الفرع غير صالح",
     },
     toasts: {
       workspacePathUnavailable: "مسار Workspace غير متوفر",
       pathCopied: "تم نسخ المسار",
       branchNameCopied: "تم نسخ اسم الفرع",
       hostDisconnected: "Host غير متصل",
-      hideFailed: "فشل في إخفاء مساحة العمل",
       archiveFailed: "فشل في أرشفة مساحة العمل",
     },
   },

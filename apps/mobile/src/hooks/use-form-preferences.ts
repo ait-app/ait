@@ -21,7 +21,7 @@ async function loadFormPreferences(): Promise<FormPreferences> {
   return createAgentPreferencesService.load();
 }
 
-export interface UseFormPreferencesReturn {
+interface UseFormPreferencesReturn {
   preferences: FormPreferences;
   isLoading: boolean;
   updatePreferences: (updates: FormPreferenceUpdate) => Promise<FormPreferences>;

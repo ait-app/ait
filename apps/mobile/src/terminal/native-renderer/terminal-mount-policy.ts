@@ -1,4 +1,4 @@
-export type NativeTerminalMountAction = "keep" | "mount";
+type NativeTerminalMountAction = "keep" | "mount";
 
 export function resolveNativeTerminalMountAction(input: {
   mountedStreamKey: string | null;

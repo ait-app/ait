@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode, type Ref } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { View, type ViewProps } from "react-native";
 import { Maximize2, Minimize2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -33,7 +33,6 @@ export function ComposerInputPresentation({
   send,
   error,
   onExit,
-  inputWrapperRef,
   inputWrapperStyle,
   inputPointerEvents,
   attachmentSlot,
@@ -48,7 +47,6 @@ export function ComposerInputPresentation({
   send: ReactNode;
   error: ReactNode;
   onExit: () => void;
-  inputWrapperRef: Ref<View>;
   inputWrapperStyle: ViewProps["style"];
   inputPointerEvents: ViewProps["pointerEvents"];
   attachmentSlot: ReactNode;
@@ -101,7 +99,6 @@ export function ComposerInputPresentation({
       ) : null}
       <ComposerFullscreenBody fullscreen={fullscreen}>
         <View
-          ref={inputWrapperRef}
           style={fullscreen ? styles.fullscreenInputWrapper : inputWrapperStyle}
           pointerEvents={inputPointerEvents}
         >

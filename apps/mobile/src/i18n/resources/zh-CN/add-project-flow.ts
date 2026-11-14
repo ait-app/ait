@@ -26,7 +26,6 @@ export const addProjectFlow = {
     githubDescription: "搜索你的 GitHub 账号可访问的仓库",
   },
   progress: {
-    cloning: "正在克隆项目...",
     creating: "正在创建目录...",
     adding: "正在添加项目...",
     phases: {

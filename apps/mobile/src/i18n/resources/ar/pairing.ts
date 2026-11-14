@@ -9,14 +9,6 @@ export const pairing = {
       title: "SSH عن بُعد",
       description: "الاتصال عبر عميل SSH لسطح المكتب.",
     },
-    scanQr: {
-      title: "مسح رمز QR",
-      description: "اتصال التتابع المشفر.",
-    },
-    pasteLink: {
-      title: "الصق رابط الاقتران",
-      description: "اتصال التتابع المشفر.",
-    },
   },
   direct: {
     title: "اتصال مباشر",
@@ -77,62 +69,5 @@ export const pairing = {
       invalidTarget: "أدخل مضيف ssh:// صالحًا",
       failedToConnect: "تعذر الاتصال عبر SSH. {{detail}}",
     },
-  },
-  link: {
-    title: "الصق رابط الاقتران",
-    helper: "الصق رابط الاقتران من الخادم الخاص بك.",
-    label: "رابط الاقتران",
-    errors: {
-      required: "الصق رابط الاقتران (.../#offer=...)",
-      missingOffer: "يجب أن يتضمن الرابط #offer=...",
-      emptyOffer: "حمولة العرض فارغة",
-      invalid: "رابط الاقتران غير صالح",
-      unableToPair: "غير قادر على إقران المضيف",
-    },
-    alert: {
-      failedTitle: "فشل الاقتران",
-    },
-    actions: {
-      cancel: "يلغي",
-      pair: "زوج",
-      pairing: "الاقتران...",
-    },
-  },
-  scan: {
-    title: "مسح QR",
-    webUnavailableTitle: "غير متوفر على شبكة الإنترنت",
-    webUnavailableBody: 'فحص QR غير مدعوم في بناء الويب. استخدم "لصق الرابط" بدلاً من ذلك.',
-    backToSettings: "العودة إلى الإعدادات",
-    cameraPermissionTitle: "إذن الكاميرا",
-    cameraPermissionBody: "اسمح بالوصول إلى الكاميرا لمسح رمز الاقتران QR من البرنامج الخفي لديك.",
-    grantPermission: "منح الإذن",
-    pairing: "الاقتران...",
-    unableToPair: "غير قادر على إقران المضيف",
-    errorTitle: "خطأ",
-  },
-  device: {
-    loadingOffer: "جارٍ تحميل عرض الإقران...",
-    failedToLoadOffer: "فشل تحميل عرض الاقتران.",
-    relayDisabled: "لم يتم تمكين التتابع. تمكين التتابع لإقران جهاز.",
-    enableTitle: "تمكين التتابع؟",
-    enableDescription:
-      "يتيح التتابع لهذا الجهاز الاتصال من أي مكان. حركة مرور الإقران مشفرة من طرف إلى طرف.",
-    relayDocs: "كيفية عمل التتابع",
-    relayDocsAccessibility: "اقرأ كيفية عمل تتابع Ait",
-    enableRelay: "تمكين التتابع",
-    enablingRelay: "جارٍ التمكين...",
-    notNow: "ليس الآن",
-    directConnectionHint:
-      "بدون التتابع، اتصل مباشرة عبر TCP أو Tailscale أو شبكة VPN أخرى. لن يتم إنشاء رمز QR.",
-    updateRequired: "حدّث المضيف لتمكين التتابع من Ait Desktop.",
-    unavailable: "عرض الاقتران غير متاح.",
-    hint: "قم بمسح رمز QR هذا باستخدام Ait على هاتفك، أو انسخ الرابط أدناه.",
-    securityWarning:
-      "تعامل مع رابط الاقتران هذا ككلمة مرور. يمكن لأي شخص يملكه الوصول إلى هذا البرنامج الخفي.",
-    qrUnavailable: "رمز QR غير متاح.",
-    qrAccessibility: "رمز QR للإقران",
-    retry: "أعد المحاولة",
-    copy: "ينسخ",
-    copied: "منقول",
   },
 };

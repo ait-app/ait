@@ -41,7 +41,6 @@ export interface GitAction {
 export interface GitActions {
   primary: GitAction | null;
   secondary: GitAction[];
-  menu: GitAction[];
 }
 
 interface GitActionRuntimeState {
@@ -198,7 +197,7 @@ export function narrowPullRequestState(state: string | null | undefined): "open"
 
 export function buildGitActions(input: BuildGitActionsInput): GitActions {
   if (!input.isGit) {
-    return { primary: null, secondary: [], menu: [] };
+    return { primary: null, secondary: [] };
   }
 
   const allActions = new Map<GitActionId, GitAction>();
@@ -333,7 +332,6 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
     secondary: secondaryIds
       .filter((id) => id !== primaryActionId || (id !== "archive-workspace" && id !== "push"))
       .map((id) => allActions.get(id)!),
-    menu: [],
   };
 }
 

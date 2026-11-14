@@ -112,7 +112,7 @@ function SchedulesTableRow({
 
   const handleDelete = useCallback(() => {
     void (async () => {
-      const productName = scheduleProductName(schedule, t);
+      const productName = scheduleProductName(t);
       const confirmed = await confirmDialog({
         title: t("schedules.delete", { product: productName.toLowerCase() }),
         message: t("schedules.deleteConfirm", { title: resolveScheduleTitle(schedule, t) }),

@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "Aperçu indisponible",
     binaryPreviewDescription: "Ce type de fichier ne peut pas être prévisualisé dans Ait.",
     tooLargeToDisplay: "Ce fichier est trop volumineux pour être affiché",
-    failedToLoad: "Échec du chargement du fichier",
     failedToLoadPreview: "Échec du chargement de l'aperçu du fichier",
     editor: {
       fileSize: "Taille {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "Fichiers",
     subtitle: "Fichiers de l’espace de travail",
     tooltip: "Parcourir les fichiers de l’espace de travail",
-    chooseFile: "Choisissez un fichier",
   },
   pullRequest: {
     label: "Demande de fusion",
@@ -55,8 +53,6 @@ export const panels = {
     diffLabel: "Diff",
     changesSubtitle: "Différences de l'arbre de travail",
     commitSubtitle: "Différences du commit",
-    uncommittedSubtitle: "Modifications non validées",
-    baseSubtitle: "Comparé à {{baseRef}}",
     directoryMissing: "Répertoire Workspace introuvable.",
     empty: "Aucune modification",
     loadError: "Échec du chargement des différences",

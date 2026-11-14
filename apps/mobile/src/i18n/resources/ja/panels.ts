@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "プレビューできません",
     binaryPreviewDescription: "Ait ではこの種類のファイルをプレビューできません。",
     tooLargeToDisplay: "このファイルは大きすぎて表示できません",
-    failedToLoad: "ファイルの読み込みに失敗しました",
     failedToLoadPreview: "ファイルプレビューの読み込みに失敗しました",
     editor: {
       fileSize: "ファイルサイズ {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "ファイル",
     subtitle: "ワークスペースのファイル",
     tooltip: "ワークスペースのファイルを参照",
-    chooseFile: "ファイルを選択",
   },
   pullRequest: {
     label: "プルリクエスト",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "差分",
     changesSubtitle: "作業ツリーの差分",
     commitSubtitle: "コミット差分",
-    uncommittedSubtitle: "未コミットの変更",
-    baseSubtitle: "{{baseRef}} との比較",
     directoryMissing: "ワークスペースディレクトリが見つかりません。",
     empty: "変更はありません",
     loadError: "差分の読み込みに失敗しました",

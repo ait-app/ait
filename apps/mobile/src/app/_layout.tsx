@@ -35,7 +35,6 @@ import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
-import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import {
   getIsElectronRuntime,
@@ -56,7 +55,6 @@ import { getDesktopHost } from "@/desktop/host";
 import { loadDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { RosettaCalloutSource } from "@/desktop/updates/rosetta-callout-source";
 import { UpdateCalloutSource } from "@/desktop/updates/update-callout-source";
-import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
@@ -477,14 +475,13 @@ const flexStyle = { flex: 1 } as const;
 
 interface AppContainerProps {
   children: ReactNode;
-  chromeEnabled?: boolean;
+  chromeEnabled: boolean;
 }
 
 const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
-function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
+function AppContainer({ children, chromeEnabled }: AppContainerProps) {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
-  const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
   const exitFocusMode = usePanelStore((state) => state.exitFocusMode);
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
@@ -510,7 +507,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const isNativeWorkspaceActive = isNative && activeWorkspaceSelection !== null;
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
-  const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
   const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
   const toggleAgentList = useToggleAgentList(isCompactLayout);
   const toggleDesktopSidebars = useCallback(() => {
@@ -540,7 +536,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction();
   useGlobalNewWorkspaceAction();
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
@@ -637,7 +632,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <AddProjectFlowHost />
         <HostChooserModal />
         <ProviderSettingsHost />
-        <WorkspaceSetupDialog />
         <KeyboardShortcutsDialog />
         <AppDiagnosticHost />
         <ChangelogHost />
@@ -771,17 +765,10 @@ function OpenProjectListener() {
       return;
     }
     let cancelled = false;
-    void openProject(request.path).then((result) => {
-      if (cancelled) {
-        return null;
-      }
-
-      if (!result.ok) {
+    void openProject(request.path).then(() => {
+      if (!cancelled) {
         setRequest((current) => (current?.id === request.id ? null : current));
-        return null;
       }
-
-      setRequest((current) => (current?.id === request.id ? null : current));
       return null;
     });
     return () => {

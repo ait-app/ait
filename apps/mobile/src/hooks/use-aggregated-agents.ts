@@ -11,11 +11,9 @@ export interface AggregatedAgent extends AgentDirectoryEntry {
   serverLabel: string;
 }
 
-export interface AggregatedAgentsResult {
+interface AggregatedAgentsResult {
   agents: AggregatedAgent[];
-  isLoading: boolean;
   isInitialLoad: boolean;
-  isRevalidating: boolean;
   refreshAll: () => void;
 }
 
@@ -150,13 +148,10 @@ export function useAggregatedAgents(options?: {
       return status === "initial_loading" || status === "revalidating";
     });
     const isInitialLoad = isLoading && !hasAnyData;
-    const isRevalidating = isLoading && hasAnyData;
 
     return {
       agents: stableAgents,
-      isLoading,
       isInitialLoad,
-      isRevalidating,
     };
   }, [daemons, includeArchived, runtime, runtimeVersion, sessionAgents]);
 

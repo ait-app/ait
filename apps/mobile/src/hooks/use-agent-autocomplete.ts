@@ -17,7 +17,7 @@ import {
 } from "@/utils/file-mention-autocomplete";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useAgentCommandsQuery,
@@ -25,6 +25,7 @@ import {
   type DraftCommandConfig,
 } from "./use-agent-commands-query";
 import { useAutocomplete } from "./use-autocomplete";
+import { useDebouncedValue } from "./use-debounced-value";
 
 interface UseAgentAutocompleteInput {
   userInput: string;
@@ -294,16 +295,13 @@ function resolveAutocompleteIsLoading(args: {
   mode: AutocompleteMode;
   isCommandsLoading: boolean;
   fileSuggestionsIsPending: boolean;
-  fileSuggestionsIsLoading: boolean;
   optionsLength: number;
 }): boolean {
   if (args.mode === "command") {
     return args.isCommandsLoading && args.optionsLength === 0;
   }
   if (args.mode === "file") {
-    return (
-      args.fileSuggestionsIsPending || (args.fileSuggestionsIsLoading && args.optionsLength === 0)
-    );
+    return args.fileSuggestionsIsPending;
   }
   return false;
 }
@@ -363,12 +361,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   );
   const showFileAutocomplete = activeFileMention !== null;
   const fileFilterQuery = activeFileMention?.query ?? "";
-  const [debouncedFileFilterQuery, setDebouncedFileFilterQuery] = useState(fileFilterQuery);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedFileFilterQuery(fileFilterQuery), 180);
-    return () => clearTimeout(timer);
-  }, [fileFilterQuery]);
+  const debouncedFileFilterQuery = useDebouncedValue(fileFilterQuery, 180);
 
   const normalizedDraftConfig = useMemo(
     () => normalizeDraftCommandConfig(draftConfig),
@@ -376,7 +369,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   );
 
   const isDraftContext = normalizedDraftConfig !== undefined;
-  const queryDraftConfig = normalizedDraftConfig;
   const canLoadCommands = resolveCanLoadCommands({ serverId, agentId, isDraftContext });
 
   const agentCwd = useSessionStore(
@@ -384,10 +376,10 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   );
   const autocompleteCwd = useMemo(() => {
     if (isDraftContext) {
-      return queryDraftConfig?.cwd ?? "";
+      return normalizedDraftConfig?.cwd ?? "";
     }
     return agentCwd.trim();
-  }, [agentCwd, isDraftContext, queryDraftConfig]);
+  }, [agentCwd, isDraftContext, normalizedDraftConfig]);
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -410,7 +402,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     serverId,
     agentId,
     enabled: mode === "command" && canLoadCommands,
-    draftConfig: queryDraftConfig,
+    draftConfig: normalizedDraftConfig,
   });
 
   const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
@@ -561,7 +553,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     mode,
     isCommandsLoading,
     fileSuggestionsIsPending: fileSuggestionsQuery.isPending,
-    fileSuggestionsIsLoading: fileSuggestionsQuery.isLoading,
     optionsLength: options.length,
   });
   const errorMessage = resolveAutocompleteErrorMessage({

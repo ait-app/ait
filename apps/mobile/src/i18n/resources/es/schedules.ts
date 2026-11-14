@@ -171,7 +171,6 @@ export const schedules = {
   untitledAgent: "Agente sin título",
   product: {
     schedule: "Programación",
-    heartbeat: "Latido",
   },
   untitled: "{{product}} sin título",
   status: {
@@ -233,7 +232,6 @@ export const schedules = {
     workspace: "Espacio de trabajo",
     chooseHost: "Elige primero un host.",
     chooseProject: "Elige primero un proyecto.",
-    searchProjects: "Buscar proyectos...",
     model: "Modelo",
     thinking: "Razonamiento",
     selectThinking: "Seleccionar razonamiento",
@@ -244,11 +242,6 @@ export const schedules = {
     noModelModes: "No hay modos disponibles para este modelo.",
     selectMode: "Seleccionar modo",
     archive: "Archivar el agente creado después de cada ejecución",
-    isolation: "Aislamiento",
-    local: "Local",
-    worktree: "Worktree",
-    selectIsolation: "Seleccionar aislamiento",
-    noIsolation: "No se encontraron opciones de aislamiento",
     submitError: "No se pudo guardar la programación: {{message}}",
     runningError:
       "La tarea se está ejecutando. Espera a que termine la ejecución actual antes de modificarla.",

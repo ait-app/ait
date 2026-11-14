@@ -7,12 +7,6 @@ export const newWorkspace = {
     sandboxedWorktree: "沙箱化工作树",
     label: "隔离",
   },
-  fields: {
-    project: "项目",
-    base: "基线",
-    baseNotApplicable: "不适用",
-  },
-  titlePlaceholder: "标题（可选）",
   errors: {
     hostDisconnected: "Host 未连接",
     createWorktreeFailed: "创建工作树失败",

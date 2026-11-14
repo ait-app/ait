@@ -56,6 +56,12 @@ export function taskLane(bucket: WorkspaceStateBucket): TaskLane {
   return bucket === "attention" || bucket === "failed" ? "review" : "done";
 }
 
+export function laneStatusBucket(lane: TaskLane) {
+  if (lane === "needs_action") return "needs_input";
+  if (lane === "review") return "attention";
+  return lane;
+}
+
 function ownBucket(agent: Agent): WorkspaceStateBucket {
   if (agent.observation) {
     // A closed observation channel does not settle the native task's last known result.

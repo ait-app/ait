@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { createInMemoryKeyValueStorage } from "./fakes";
+import { createInMemoryKeyValueStorage } from "@/hooks/use-settings/fakes";
 import {
   CHANGES_PREFERENCES_QUERY_KEY,
   CHANGES_PREFERENCES_STORAGE_KEY,

@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "設定",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "レイアウト",
     editor: "エディター",
     shortcuts: "ショートカット",
-    integrations: "連携",
     notifications: "通知",
     permissions: "権限",
     diagnostics: "診断",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "プロバイダー",
     usage: "使用状況",
     terminals: "ターミナル",
-    plugins: "プラグイン",
     host: "概要",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "メタデータ生成",
     description:
@@ -309,7 +305,6 @@ export const settings = {
     help: {
       openProject: "プロジェクトを開く",
       newWorkspace: "新しいワークスペース",
-      newWorktree: "新しいワークツリー",
       archiveWorkspace: "ワークスペースをアーカイブ",
       newTab: "新しいタブ",
       closeCurrentTab: "現在のタブを閉じる",
@@ -345,30 +340,11 @@ export const settings = {
       toggleVoiceMode: "音声モードを切り替え",
       startStopDictation: "音声入力を開始/停止",
       interruptAgent: "エージェントを中断",
-      sendMessage: "メッセージを送信",
-      queueMessage: "メッセージをキューに追加",
       muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
-      switchProject: "プロジェクトを切り替え",
     },
     helpNotes: {
       showKeyboardShortcuts:
         "テキストフィールドまたはターミナルにフォーカスがない場合に利用できます。",
-    },
-  },
-  integrations: {
-    title: "連携",
-    docs: {
-      cli: "CLIドキュメント",
-      openCli: "CLIドキュメントを開く",
-    },
-    commandLine: {
-      title: "コマンドライン",
-      description: "ターミナルからエージェントを制御し、スクリプトで操作",
-    },
-    actions: {
-      install: "インストール",
-      installing: "インストール中...",
-      installed: "インストール済み",
     },
   },
   permissions: {
@@ -434,14 +410,7 @@ export const settings = {
       removeErrorMessage: "接続を削除できません",
       timeout: "タイムアウト",
     },
-    pairDevices: {
-      title: "デバイスをペアリング",
-      rowTitle: "デバイスをペアリング",
-      rowHint: "QRコードをスキャンするかリンクをコピーしてスマートフォンをこのホストに接続",
-    },
     skills: {
-      docs: "スキル",
-      openDocs: "スキルのドキュメントを開く",
       unavailable: "オーケストレーションスキルを管理するにはこのホストに接続してください",
       unsupported: "オーケストレーションスキルを管理するにはこのホストを更新してください",
       sectionTitle: "オーケストレーションスキル",
@@ -477,7 +446,6 @@ export const settings = {
         uninstall: "アンインストール",
         save: "保存",
         saving: "保存中...",
-        cancel: "キャンセル",
       },
       operations: {
         add: "スキルを追加",
@@ -486,8 +454,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "オーケストレーション",
-      unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
       enableTools: {
         title: "Aitツールを有効にする",
         hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
@@ -570,7 +536,6 @@ export const settings = {
       nameLabel: "名前",
       namePlaceholder: "UI作業",
       iconLabel: "アイコン",
-      noIcon: "なし",
       providerLabel: "プロバイダー",
       providerPlaceholder: "プロバイダーを選択",
       noProviders: "このホストで利用できるプロバイダーがありません",
@@ -611,9 +576,6 @@ export const settings = {
         confirmDesktopMessage:
           "保存した設定で組み込みデーモンを再起動しますか？実行中のタスクとターミナルセッションは中断されます。",
         restarting: "再起動中...",
-        unableToReconnectTitle: "再接続できません",
-        unableToReconnectMessage:
-          "{{name}}がオンラインに戻りませんでした。再起動されたことを確認してください。",
         unavailableTitle: "ホストが利用できません",
         unavailableMessage:
           "このホストは接続されていません。再起動する前にオンラインになるまでお待ちください。",
@@ -621,8 +583,6 @@ export const settings = {
         offlineMessage:
           "このホストはオフラインです。Aitが自動再接続します。再起動は、ホストがオンラインに戻ってから行ってください。",
         requestFailedTitle: "エラー",
-        requestFailedMessage:
-          "再起動リクエストの送信に失敗しました。Aitは自動的に再接続します。ホストがオンラインになったら再試行してください。",
         dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
       },
       update: {
@@ -634,14 +594,10 @@ export const settings = {
         confirmTitle: "{{name}}を更新",
         confirmMessage:
           "これによりデーモンが最新バージョンに更新され、再起動されます。実行中のエージェントは一時的に中断されます。",
-        updating: "更新中...",
         phaseStarting: "更新を準備中...",
         phaseDownloading: "パッケージをダウンロード中...",
         phaseInstalling: "インストール中...",
         phaseComplete: "更新が完了しました。再起動中...",
-        unableToReconnectTitle: "再接続できません",
-        unableToReconnectMessage:
-          "{{name}}が更新後にオンラインに戻りませんでした。デーモンが再起動されたことを確認してください。",
         unavailableTitle: "ホストが利用できません",
         unavailableMessage:
           "このホストは接続されていません。更新する前にオンラインになるまでお待ちください。",
@@ -777,9 +733,6 @@ export const settings = {
     worktree: {
       title: "ワークツリーライフサイクルフック",
       info: "このプロジェクトのワークツリーが作成または削除されたときに実行されるコマンド",
-      docs: "ドキュメント",
-      docsTooltip:
-        "これらのコマンドで使用可能な詳細と環境変数についてはドキュメントを参照してください",
       setup: "セットアップ",
       setupAccessibility: "ワークツリーセットアップコマンド",
       uncommittedTitle: "ait.json の変更をコミットしてください",

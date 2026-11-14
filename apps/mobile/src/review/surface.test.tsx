@@ -23,9 +23,7 @@ import {
   getInlineReviewThreadViewportStyle,
   groupInlineReviewCommentsByTarget,
   InlineReviewEditor,
-  InlineReviewGutterCell,
   InlineReviewThread,
-  SMALL_ACTION_HIT_SLOP,
   useInlineReviewController,
 } from "./surface";
 
@@ -112,9 +110,6 @@ function target(overrides: Partial<ReviewableDiffTarget> = {}): ReviewableDiffTa
     }),
   };
 }
-
-const EMPTY_COMMENTS: ReviewDraftComment[] = [];
-const COMMENT_LIST: ReviewDraftComment[] = [comment()];
 
 function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): InlineReviewActions {
   return {
@@ -266,89 +261,6 @@ describe("git diff inline review helpers", () => {
         pinToViewport: true,
       }),
     ).toEqual([{ position: "sticky", left: 0 }, inlineUnistylesStyle({ width: 320 })]);
-  });
-
-  it("keeps the gutter add-comment target accessible and clicking opens the editor", () => {
-    const onStartComment = vi.fn();
-    const reviewTarget = target();
-    const { getByLabelText } = render(
-      <InlineReviewGutterCell
-        reviewTarget={reviewTarget}
-        comments={EMPTY_COMMENTS}
-        isEditorOpen={false}
-        onStartComment={onStartComment}
-      >
-        <span>2</span>
-      </InlineReviewGutterCell>,
-    );
-
-    fireEvent.click(getByLabelText("Add review comment"));
-    expect(onStartComment).toHaveBeenCalledWith(reviewTarget);
-    expect(pressablePropsByLabel.get("Add review comment")?.hitSlop).toBe(SMALL_ACTION_HIT_SLOP);
-  });
-
-  it("keeps the line number visible and only floats the plus for line hover", () => {
-    const reviewTarget = target();
-    const { queryByTestId, queryByText, rerender } = render(
-      <InlineReviewGutterCell
-        actionTestID="add-comment-glyph"
-        reviewTarget={reviewTarget}
-        comments={EMPTY_COMMENTS}
-        isEditorOpen={false}
-        onStartComment={vi.fn()}
-      >
-        <span>2</span>
-      </InlineReviewGutterCell>,
-    );
-
-    expect(queryByText("2")).toBeTruthy();
-    expect(queryByTestId("add-comment-glyph")).toBeNull();
-
-    rerender(
-      <InlineReviewGutterCell
-        actionTestID="add-comment-glyph"
-        reviewTarget={reviewTarget}
-        comments={COMMENT_LIST}
-        isEditorOpen={false}
-        onStartComment={vi.fn()}
-      >
-        <span>2</span>
-      </InlineReviewGutterCell>,
-    );
-
-    expect(queryByText("2")).toBeTruthy();
-    expect(queryByTestId("add-comment-glyph")).toBeNull();
-
-    rerender(
-      <InlineReviewGutterCell
-        actionTestID="add-comment-glyph"
-        reviewTarget={reviewTarget}
-        comments={EMPTY_COMMENTS}
-        isEditorOpen
-        onStartComment={vi.fn()}
-      >
-        <span>2</span>
-      </InlineReviewGutterCell>,
-    );
-
-    expect(queryByText("2")).toBeTruthy();
-    expect(queryByTestId("add-comment-glyph")).toBeNull();
-
-    rerender(
-      <InlineReviewGutterCell
-        actionTestID="add-comment-glyph"
-        reviewTarget={reviewTarget}
-        comments={COMMENT_LIST}
-        isEditorOpen={false}
-        isLineHovered
-        onStartComment={vi.fn()}
-      >
-        <span>2</span>
-      </InlineReviewGutterCell>,
-    );
-
-    expect(queryByText("2")).toBeTruthy();
-    expect(queryByTestId("add-comment-glyph")).toBeTruthy();
   });
 });
 

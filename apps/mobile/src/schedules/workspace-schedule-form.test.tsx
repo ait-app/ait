@@ -751,9 +751,6 @@ function seedScopeProjects() {
     projects.push({
       viewKey: `${serverId}:${projectId}`,
       projectName,
-      totalWorkspaceCount: 1,
-      hostCount: 1,
-      onlineHostCount: 1,
       hosts: [
         {
           serverId,
@@ -763,7 +760,6 @@ function seedScopeProjects() {
           serverName: serverId,
           isOnline: true,
           repoRoot: "/repo/root",
-          workspaceCount: 1,
           workspaces: [],
         },
       ],

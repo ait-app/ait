@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { formatShortcut } from "@/utils/format-shortcut";
 import {
   comboStringToShortcutKeys,
-  keyComboToString,
   keyboardEventToComboString,
   parseShortcutString,
   SHORTCUT_KEY_NAMES,
@@ -89,7 +88,7 @@ describe("keyboardEventToComboString", () => {
   });
 });
 
-describe("parseShortcutString round-trips punctuation keys", () => {
+describe("parseShortcutString parses punctuation keys", () => {
   const cases: ReadonlyArray<[string, string, string, string]> = [
     ["-", "Minus", "-", "_"],
     ["=", "Equal", "=", "+"],
@@ -98,20 +97,18 @@ describe("parseShortcutString round-trips punctuation keys", () => {
   ];
 
   for (const [humanKey, code, key, shiftedKey] of cases) {
-    it(`round-trips ${humanKey}`, () => {
+    it(`parses ${humanKey}`, () => {
       const combo = parseShortcutString(humanKey);
       expect(combo.code).toBe(code);
       expect(combo.key).toBe(key);
       expect(combo.shiftedKey).toBe(shiftedKey);
-      expect(keyComboToString(combo)).toBe(humanKey);
     });
   }
 
-  it("round-trips a modifier combo with minus", () => {
+  it("parses a modifier combo with minus", () => {
     const combo = parseShortcutString("Cmd+-");
     expect(combo.meta).toBe(true);
     expect(combo.code).toBe("Minus");
-    expect(keyComboToString(combo)).toBe("Cmd+-");
   });
 });
 

@@ -26,7 +26,7 @@ export function createMarkdownClipboardContent(markdown: string): MarkdownClipbo
   };
 }
 
-export interface CodeClipboardOptions {
+interface CodeClipboardOptions {
   language?: string | null;
   /** Wrap in `pre`/`code` so the line structure survives. */
   block: boolean;

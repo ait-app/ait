@@ -7,7 +7,7 @@ export function useTimeAgo(date: Date | null): string {
   return useRelativeTimeLabel(date, describeTimeAgo);
 }
 
-function useRelativeTimeLabel(
+export function useRelativeTimeLabel(
   date: Date | null,
   describe: (date: Date) => RelativeTimeLabel,
 ): string {

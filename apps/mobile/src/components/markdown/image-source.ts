@@ -1,13 +1,6 @@
 import { localFileSourceToPath } from "@/attachments/utils";
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath, trimTrailingSeparators } from "@/utils/path";
 import { safeDecodeURIComponent } from "@/utils/string";
-
-function trimTrailingSeparators(value: string): string {
-  if (value === "/" || /^[A-Za-z]:[\\/]?$/.test(value)) {
-    return value.replace(/\\/g, "/");
-  }
-  return value.replace(/[\\/]+$/, "");
-}
 
 function normalizePathSegments(value: string): string {
   const segments: string[] = [];

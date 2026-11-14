@@ -164,10 +164,4 @@ export const desktop = {
       failed: "发送通知失败。",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "无法检查 CLI 安装状态。",
-      installFailed: "无法安装 Ait CLI。",
-    },
-  },
 };

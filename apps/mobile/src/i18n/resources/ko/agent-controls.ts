@@ -1,13 +1,7 @@
 export const agentControls = {
-  provider: {
-    fallback: "프로바이더",
-    select: "에이전트 프로바이더 선택",
-  },
   thinking: {
     title: "사고",
     unknown: "알 수 없음",
-    extraHigh: "매우 높음",
-    select: "사고 옵션 선택",
     selectWithValue: "사고 옵션 선택 ({{value}})",
   },
   speed: {

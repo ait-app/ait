@@ -1,5 +1,4 @@
 export const paneFind = {
-  searchFailed: "تعذر البحث في هذه المحادثة. تحقق من الاتصال بالمضيف وأعد المحاولة.",
   searching: "جارٍ البحث…",
   loading: "جارٍ التحميل…",
   failed: "فشل",

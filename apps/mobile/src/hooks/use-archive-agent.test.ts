@@ -6,12 +6,11 @@ import type { Agent } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import { agentHistoryQueryKey, allAgentHistoryQueryKey } from "./agent-history-query-key";
 import {
-  applyArchivedAgentCloseResults,
   isAgentArchiving,
-  removeAgentFromListPayload,
   selectPendingArchiveAgentIds,
   setAgentArchiving,
-} from "./use-archive-agent";
+} from "@/data/archive-agent-pending";
+import { applyArchivedAgentCloseResults, removeAgentFromListPayload } from "./use-archive-agent";
 
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
@@ -189,9 +188,6 @@ describe("useArchiveAgent", () => {
       ],
       pageParams: [null],
     });
-    expect(
-      queryClient.getQueryState(allAgentHistoryQueryKey(["server-a", "server-b"]))?.isInvalidated,
-    ).toBe(true);
     expect(queryClient.getQueryData(allAgentHistoryQueryKey(["server-a", "server-b"]))).toEqual({
       pages: [
         {
@@ -236,7 +232,6 @@ describe("useArchiveAgent", () => {
       queryClient,
       serverId: "server-a",
       results: [{ agentId: "agent-1", archivedAt: "2026-04-01T04:00:00.000Z" }],
-      invalidateQueries: false,
     });
 
     expect(queryClient.getQueryState(["sidebarAgentsList", "server-a"])?.isInvalidated).toBe(false);

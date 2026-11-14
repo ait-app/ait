@@ -7,9 +7,7 @@
  * CI is not here: it has three answers rather than two, so it is its own setting in
  * `checks-display.ts`.
  *
- * Pure on purpose: `hooks/use-settings/storage.ts` validates the persisted value through
- * `parseSidebarRowItems` rather than growing its own checks, so this module stays the one place
- * that knows what an item is.
+ * Pure on purpose, so `hooks/use-settings/storage.ts` can import it.
  */
 
 export const SIDEBAR_ROW_ITEMS = [
@@ -45,28 +43,4 @@ export function isChecksHiddenByLegacyRowItem(value: unknown): boolean {
     return false;
   }
   return (value as Record<string, unknown>).checks === false;
-}
-
-function isSidebarRowItem(value: string): value is SidebarRowItem {
-  return (SIDEBAR_ROW_ITEMS as readonly string[]).includes(value);
-}
-
-export function parseSidebarRowItems(value: unknown): SidebarRowItems {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return DEFAULT_SIDEBAR_ROW_ITEMS;
-  }
-
-  const stored = value as Record<string, unknown>;
-  const result = { ...DEFAULT_SIDEBAR_ROW_ITEMS };
-  // COMPAT(sidebarRowItemsScripts): the item was called "scripts" until v0.3.0, when it narrowed
-  // to services only. A stored `false` is someone who switched it off. Remove after 2027-08-05.
-  if (stored.scripts === false) {
-    result.services = false;
-  }
-  for (const [key, entry] of Object.entries(stored)) {
-    if (isSidebarRowItem(key) && typeof entry === "boolean") {
-      result[key] = entry;
-    }
-  }
-  return result;
 }

@@ -1,11 +1,9 @@
 import {
   deriveAgentStateBucket,
-  type AgentAttentionReason,
   type AgentStateBucketInput,
 } from "@ait/protocol/agent-state-bucket";
 
 export type SidebarStateBucket = "needs_input" | "failed" | "running" | "attention" | "done";
-export type SidebarAttentionReason = AgentAttentionReason;
 
 export function deriveSidebarStateBucket(input: AgentStateBucketInput): SidebarStateBucket {
   return deriveAgentStateBucket(input);

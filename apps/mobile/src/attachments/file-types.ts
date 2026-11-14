@@ -61,10 +61,6 @@ export function resolveRasterImageMimeType(input: {
   return input.path ? getRasterImageMimeTypeFromPath(input.path) : null;
 }
 
-export function isRasterImagePath(path: string): boolean {
-  return getRasterImageMimeTypeFromPath(path) !== null;
-}
-
 export function isRasterImageMimeType(mimeType: string | null | undefined): boolean {
   return resolveRasterImageMimeType({ mimeType }) !== null;
 }

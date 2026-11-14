@@ -1,18 +1,6 @@
-import { createNameId } from "mnemonic-id";
-import { generateDraftId } from "@/stores/draft-keys";
 import type { SessionOutboundMessage } from "@ait/protocol/messages";
 import { create } from "zustand";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-
-export type WorkspaceCreationMethod = "open_project" | "create_worktree";
-
-export interface PendingWorkspaceSetup {
-  serverId: string;
-  sourceDirectory: string;
-  sourceWorkspaceId?: string;
-  displayName?: string;
-  creationMethod: WorkspaceCreationMethod;
-}
 
 export type WorkspaceSetupProgressPayload = Extract<
   SessionOutboundMessage,
@@ -62,9 +50,6 @@ export function shouldSeedWorkspaceSetupTab(
 }
 
 interface WorkspaceSetupStoreState {
-  pendingWorkspaceSetup:
-    | (PendingWorkspaceSetup & { creationId: string; worktreeSlug: string })
-    | null;
   snapshots: Record<string, WorkspaceSetupSnapshot>;
   summaries: Record<string, WorkspaceSetupSummary>;
   serverGenerations: Record<string, number>;
@@ -77,8 +62,6 @@ interface WorkspaceSetupStoreState {
 
   requestedKeys: Set<string>;
   surfacedFailedSetupKeys: Set<string>;
-  beginWorkspaceSetup: (value: PendingWorkspaceSetup) => void;
-  clearWorkspaceSetup: () => void;
   upsertProgress: (input: { serverId: string; payload: WorkspaceSetupProgressPayload }) => void;
   claimFailedSetupSurface: (input: {
     serverId: string;
@@ -100,24 +83,11 @@ function buildWorkspaceSetupKey(input: { serverId: string; workspaceId: string }
 }
 
 export const useWorkspaceSetupStore = create<WorkspaceSetupStoreState>()((set, get) => ({
-  pendingWorkspaceSetup: null,
   snapshots: {},
   summaries: {},
   serverGenerations: {},
   requestedKeys: new Set(),
   surfacedFailedSetupKeys: new Set(),
-  beginWorkspaceSetup: (value) => {
-    set({
-      pendingWorkspaceSetup: {
-        ...value,
-        creationId: generateDraftId(),
-        worktreeSlug: createNameId(),
-      },
-    });
-  },
-  clearWorkspaceSetup: () => {
-    set({ pendingWorkspaceSetup: null });
-  },
   upsertSummary: ({ serverId, payload }) => {
     const key = buildWorkspaceSetupKey({ serverId, workspaceId: payload.workspaceId });
     if (!key) return;

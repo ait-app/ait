@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAgentAttentionNotificationPayload,
-  findLatestAssistantMessageFromTimeline,
-  findLatestPermissionRequest,
-} from "./agent-attention-notification.js";
+import { buildAgentAttentionNotificationPayload } from "./agent-attention-notification.js";
 
 describe("buildAgentAttentionNotificationPayload", () => {
   it("carries the workspace needed to open a cold agent destination", () => {
@@ -89,31 +85,5 @@ describe("buildAgentAttentionNotificationPayload", () => {
         reason: "error",
       },
     });
-  });
-});
-
-describe("findLatestAssistantMessageFromTimeline", () => {
-  it("joins the latest contiguous assistant chunks", () => {
-    expect(
-      findLatestAssistantMessageFromTimeline([
-        { type: "user_message", text: "start" },
-        { type: "assistant_message", text: "Part " },
-        { type: "assistant_message", text: "one" },
-        { type: "reasoning", text: "thinking..." },
-        { type: "assistant_message", text: "Done " },
-        { type: "assistant_message", text: "now" },
-      ]),
-    ).toBe("Done now");
-  });
-});
-
-describe("findLatestPermissionRequest", () => {
-  it("returns the most recently inserted request", () => {
-    const pending = new Map([
-      ["first", { id: "first", provider: "claude", name: "a", kind: "tool" } as const],
-      ["second", { id: "second", provider: "claude", name: "b", kind: "tool" } as const],
-    ]);
-
-    expect(findLatestPermissionRequest(pending)?.id).toBe("second");
   });
 });

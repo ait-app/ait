@@ -7,7 +7,7 @@ import {
 import { i18n } from "@/i18n/i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
 
-export interface OpenServiceUrlOptions {
+interface OpenServiceUrlOptions {
   openInApp?: (url: string) => void;
 }
 

@@ -28,7 +28,6 @@ import {
   Tablet,
   Wrench,
   X,
-  type LucideIcon,
 } from "lucide-react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -61,7 +60,7 @@ import {
   type BrowserViewport,
   createFixedBrowserViewport,
   DEFAULT_BROWSER_URL,
-  normalizeWorkspaceBrowserUrl,
+  normalizeBrowserUrl,
   RESPONSIVE_BROWSER_VIEWPORT,
   useBrowserStore,
 } from "@/desktop/browser/store";
@@ -76,6 +75,8 @@ import {
 } from "../resident-webviews";
 import {
   createElementSelectorController,
+  executeWebviewJavaScript,
+  ignoreWebviewJavaScriptError,
   type BrowserElementSelection,
   type ElementSelectorOutcome,
 } from "./element-selector.electron";
@@ -124,27 +125,41 @@ interface DeviceSizePreset {
   /** Fixed CSS width, or null for "fill the available area". */
   width: number | null;
   height: number | null;
-  icon: LucideIcon;
+  icon: typeof ThemedMaximize;
 }
+
+// Lucide icons themed via withUnistyles so their color stays theme-reactive
+// without a banned useUnistyles() call.
+const ThemedMaximize = withUnistyles(Maximize);
+const ThemedSmartphone = withUnistyles(Smartphone);
+const ThemedTablet = withUnistyles(Tablet);
+const ThemedMonitor = withUnistyles(Monitor);
+const ThemedChevronDown = withUnistyles(ChevronDown);
 
 // Viewport presets for the in-app browser. "responsive" fills the pane; the
 // others render a fixed-size, centered frame so the user can preview how a page
 // behaves at common device sizes. Content is centered (not left-aligned).
 const DEVICE_SIZE_PRESETS: readonly DeviceSizePreset[] = [
-  { id: "responsive", name: "Responsive", width: null, height: null, icon: Maximize },
-  { id: "iphone-se", name: "iPhone SE", width: 375, height: 667, icon: Smartphone },
-  { id: "iphone-14", name: "iPhone 14", width: 390, height: 844, icon: Smartphone },
-  { id: "iphone-14-pro-max", name: "iPhone 14 Pro Max", width: 430, height: 932, icon: Smartphone },
-  { id: "pixel-7", name: "Pixel 7", width: 412, height: 915, icon: Smartphone },
-  { id: "galaxy-s20", name: "Galaxy S20", width: 360, height: 800, icon: Smartphone },
-  { id: "ipad-mini", name: "iPad Mini", width: 768, height: 1024, icon: Tablet },
-  { id: "ipad-air", name: "iPad Air", width: 820, height: 1180, icon: Tablet },
-  { id: "ipad-pro-11", name: 'iPad Pro 11"', width: 834, height: 1194, icon: Tablet },
-  { id: "ipad-pro-12", name: 'iPad Pro 12.9"', width: 1024, height: 1366, icon: Tablet },
-  { id: "surface-pro", name: "Surface Pro", width: 912, height: 1368, icon: Tablet },
-  { id: "laptop", name: "Laptop", width: 1366, height: 768, icon: Monitor },
-  { id: "desktop-1080", name: "Desktop 1080p", width: 1920, height: 1080, icon: Monitor },
-  { id: "desktop-1440", name: "Desktop 1440p", width: 2560, height: 1440, icon: Monitor },
+  { id: "responsive", name: "Responsive", width: null, height: null, icon: ThemedMaximize },
+  { id: "iphone-se", name: "iPhone SE", width: 375, height: 667, icon: ThemedSmartphone },
+  { id: "iphone-14", name: "iPhone 14", width: 390, height: 844, icon: ThemedSmartphone },
+  {
+    id: "iphone-14-pro-max",
+    name: "iPhone 14 Pro Max",
+    width: 430,
+    height: 932,
+    icon: ThemedSmartphone,
+  },
+  { id: "pixel-7", name: "Pixel 7", width: 412, height: 915, icon: ThemedSmartphone },
+  { id: "galaxy-s20", name: "Galaxy S20", width: 360, height: 800, icon: ThemedSmartphone },
+  { id: "ipad-mini", name: "iPad Mini", width: 768, height: 1024, icon: ThemedTablet },
+  { id: "ipad-air", name: "iPad Air", width: 820, height: 1180, icon: ThemedTablet },
+  { id: "ipad-pro-11", name: 'iPad Pro 11"', width: 834, height: 1194, icon: ThemedTablet },
+  { id: "ipad-pro-12", name: 'iPad Pro 12.9"', width: 1024, height: 1366, icon: ThemedTablet },
+  { id: "surface-pro", name: "Surface Pro", width: 912, height: 1368, icon: ThemedTablet },
+  { id: "laptop", name: "Laptop", width: 1366, height: 768, icon: ThemedMonitor },
+  { id: "desktop-1080", name: "Desktop 1080p", width: 1920, height: 1080, icon: ThemedMonitor },
+  { id: "desktop-1440", name: "Desktop 1440p", width: 2560, height: 1440, icon: ThemedMonitor },
 ];
 
 const RESPONSIVE_DEVICE_LABEL_KEY = "workspace.browser.devices.responsive";
@@ -292,34 +307,6 @@ function buildBrowserElementAttachment(
     formatted: formatElementAttachment(selection, annotation),
   };
 }
-
-function buildBrowserAttachmentScopeKey(input: {
-  cwd: string | null;
-  serverId: string;
-  workspaceId: string;
-}): string | null {
-  if (!input.cwd) {
-    return null;
-  }
-  return buildWorkspaceAttachmentScopeKey({
-    serverId: input.serverId,
-    workspaceId: input.workspaceId,
-    cwd: input.cwd,
-  });
-}
-
-function executeWebviewJavaScript(webview: ElectronWebview, code: string): Promise<unknown> {
-  if (!webview.isConnected) {
-    return Promise.resolve(null);
-  }
-  try {
-    return webview.executeJavaScript?.(code) ?? Promise.resolve(null);
-  } catch (error) {
-    return Promise.reject(error);
-  }
-}
-
-function ignoreWebviewJavaScriptError() {}
 
 interface BrowserAnnotationMarker {
   index: number;
@@ -471,24 +458,6 @@ function ToolbarButton({
   );
 }
 
-// Lucide icons themed via withUnistyles so their color stays theme-reactive
-// without a banned useUnistyles() call.
-const ThemedMaximize = withUnistyles(Maximize);
-const ThemedSmartphone = withUnistyles(Smartphone);
-const ThemedTablet = withUnistyles(Tablet);
-const ThemedMonitor = withUnistyles(Monitor);
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const deviceMutedIconMapping = (theme: { colors: { foregroundMuted: string } }) => ({
-  color: theme.colors.foregroundMuted,
-});
-
-function resolveThemedDeviceIcon(icon: LucideIcon): typeof ThemedMaximize {
-  if (icon === Smartphone) return ThemedSmartphone;
-  if (icon === Tablet) return ThemedTablet;
-  if (icon === Monitor) return ThemedMonitor;
-  return ThemedMaximize;
-}
-
 function DeviceSizeMenuItem({
   preset,
   selected,
@@ -500,12 +469,12 @@ function DeviceSizeMenuItem({
   label: string;
   onSelect: (id: DeviceSizeId) => void;
 }) {
-  const ThemedIcon = resolveThemedDeviceIcon(preset.icon);
+  const ThemedIcon = preset.icon;
   const handleSelect = useCallback(() => {
     onSelect(preset.id);
   }, [onSelect, preset.id]);
   const leading = useMemo(
-    () => <ThemedIcon size={16} uniProps={deviceMutedIconMapping} />,
+    () => <ThemedIcon size={16} uniProps={iconForegroundMutedMapping} />,
     [ThemedIcon],
   );
   return (
@@ -532,7 +501,7 @@ function DeviceSizeMenu({
   const { t } = useTranslation();
   const selectedPreset =
     DEVICE_SIZE_PRESETS.find((preset) => preset.id === selectedId) ?? DEVICE_SIZE_PRESETS[0];
-  const SelectedIcon = resolveThemedDeviceIcon(selectedPreset.icon);
+  const SelectedIcon = selectedPreset.icon;
   const label = t("workspace.browser.devices.label");
   return (
     <DropdownMenu>
@@ -540,8 +509,8 @@ function DeviceSizeMenu({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger accessibilityLabel={label} style={triggerStyle}>
             <View style={styles.deviceTrigger}>
-              <SelectedIcon size={16} uniProps={deviceMutedIconMapping} />
-              <ThemedChevronDown size={12} uniProps={deviceMutedIconMapping} />
+              <SelectedIcon size={16} uniProps={iconForegroundMutedMapping} />
+              <ThemedChevronDown size={12} uniProps={iconForegroundMutedMapping} />
             </View>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -637,7 +606,7 @@ export function BrowserPane({
   const pendingScreenshotRequestRef = useRef(0);
   const [draftUrl, setDraftUrl] = useState(browser?.url ?? DEFAULT_BROWSER_URL);
   const workspaceAttachmentScopeKey = useMemo(
-    () => buildBrowserAttachmentScopeKey({ cwd, serverId, workspaceId }),
+    () => (cwd ? buildWorkspaceAttachmentScopeKey({ serverId, workspaceId, cwd }) : null),
     [cwd, serverId, workspaceId],
   );
   const workspaceAttachments = useWorkspaceAttachments(workspaceAttachmentScopeKey ?? "");
@@ -693,10 +662,6 @@ export function BrowserPane({
     }, 0);
   }, []);
 
-  const handleUrlBarFocus = useCallback(() => {
-    selectUrlBar();
-  }, [selectUrlBar]);
-
   const focusUrlBar = useCallback(() => {
     urlInputRef.current?.focus();
     selectUrlBar();
@@ -715,7 +680,7 @@ export function BrowserPane({
         canGoForward: webview.canGoForward?.() ?? false,
         ...(input?.syncUrl === false
           ? {}
-          : { url: normalizeWorkspaceBrowserUrl(pendingNavigationUrlRef.current ?? currentUrl) }),
+          : { url: normalizeBrowserUrl(pendingNavigationUrlRef.current ?? currentUrl) }),
       };
       updateBrowserRef.current(browserIdRef.current, patch);
     } catch {
@@ -793,7 +758,7 @@ export function BrowserPane({
             typeof (event as Event & { url?: unknown }).url === "string"
               ? ((event as Event & { url?: string }).url ?? "")
               : (webview.getURL?.() ?? webview.getAttribute("src") ?? "");
-          const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
+          const normalized = normalizeBrowserUrl(nextUrl);
           const previousUrl = browserRef.current?.url ?? initialUrlRef.current;
           pendingNavigationUrlRef.current = null;
           updateBrowser(browserIdRef.current, {
@@ -814,7 +779,7 @@ export function BrowserPane({
           if (!nextUrl) {
             return;
           }
-          const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
+          const normalized = normalizeBrowserUrl(nextUrl);
           pendingNavigationUrlRef.current = normalized;
           updateBrowserRef.current(browserIdRef.current, {
             url: normalized,
@@ -962,7 +927,7 @@ export function BrowserPane({
 
   const navigate = useCallback(
     (nextUrl: string) => {
-      const normalizedUrl = normalizeWorkspaceBrowserUrl(nextUrl);
+      const normalizedUrl = normalizeBrowserUrl(nextUrl);
       const webview = webviewRef.current;
       const unsafeNavigationMessage = getUnsafeNavigationMessage(normalizedUrl, browserErrorLabels);
       const previousUrl = browserRef.current?.url ?? initialUrlRef.current;
@@ -1283,7 +1248,7 @@ export function BrowserPane({
     if (!currentPageUrl) {
       return [];
     }
-    const normalizedCurrent = normalizeWorkspaceBrowserUrl(currentPageUrl);
+    const normalizedCurrent = normalizeBrowserUrl(currentPageUrl);
     const markers: BrowserAnnotationMarker[] = [];
     let index = 0;
     for (const attachment of workspaceAttachments) {
@@ -1291,7 +1256,7 @@ export function BrowserPane({
         continue;
       }
       index += 1;
-      if (normalizeWorkspaceBrowserUrl(attachment.attachment.url) !== normalizedCurrent) {
+      if (normalizeBrowserUrl(attachment.attachment.url) !== normalizedCurrent) {
         continue;
       }
       markers.push({ index, selector: attachment.attachment.selector });
@@ -1499,7 +1464,7 @@ export function BrowserPane({
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setDraftUrl}
-            onFocus={handleUrlBarFocus}
+            onFocus={selectUrlBar}
             onSubmitEditing={handleNavigateDraftUrl}
             placeholder={t("workspace.browser.controls.enterUrl")}
             placeholderTextColor={theme.colors.foregroundMuted}

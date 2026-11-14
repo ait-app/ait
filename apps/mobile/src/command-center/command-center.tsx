@@ -84,9 +84,6 @@ import {
 import { useWorkspaceFileSearch } from "./workspace-file-search";
 import { displayInitial } from "@/utils/display-initial";
 
-const ThemedBottomSheetTextInput = withUnistyles(TextInput, (theme) => ({
-  placeholderTextColor: theme.colors.foregroundMuted,
-}));
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
@@ -830,11 +827,11 @@ export function CommandCenter() {
         keyboardBlurBehavior="restore"
         accessible={false}
       >
-        <View style={[styles.bottomSheetHeader, styles.searchRow]} testID="command-center-header">
+        <View style={[styles.header, styles.searchRow]} testID="command-center-header">
           {state.scope === "files" ? (
             <ScopeChip label={t("shell.commandCenter.files")} onRemove={state.clearScope} />
           ) : null}
-          <ThemedBottomSheetTextInput
+          <ThemedTextInput
             testID="command-center-input"
             ref={bottomSheetInputRef}
             initialValue={state.query}
@@ -958,12 +955,6 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.lg,
   },
   header: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  bottomSheetHeader: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: 1,

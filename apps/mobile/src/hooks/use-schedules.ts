@@ -29,9 +29,6 @@ export interface UseSchedulesResult {
   loadState: AggregateLoadState<AggregatedSchedule>;
   hostErrors: ScheduleHostError[];
   isError: boolean;
-  error: Error | null;
-  refetch: () => void;
-  isRefetching: boolean;
 }
 
 export function useSchedules(): UseSchedulesResult {
@@ -71,10 +68,5 @@ export function useSchedules(): UseSchedulesResult {
     loadState,
     hostErrors: query.data?.status === "loaded" ? query.data.hostErrors : [],
     isError: query.isError,
-    error: query.error,
-    refetch: () => {
-      void query.refetch();
-    },
-    isRefetching: query.isRefetching,
   };
 }

@@ -54,14 +54,6 @@ export interface BrowserElementAttachment {
   formatted: string;
 }
 
-export type PullRequestContextAttachmentKind =
-  | "forge.change_request_comment"
-  | "forge.change_request_review"
-  | "forge.change_request_check"
-  | "github.pull_request_comment"
-  | "github.pull_request_review"
-  | "github.pull_request_check";
-
 interface PullRequestContextAttachmentFields {
   id: string;
   title: string;

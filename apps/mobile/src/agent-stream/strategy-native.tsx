@@ -1,13 +1,5 @@
 import { shouldAnimateNativeScrollToBottom } from "./native-scroll-animation";
-import {
-  Fragment,
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, type ReactElement, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   FlatList,
   Platform,
@@ -29,25 +21,12 @@ import { useStreamTopOverlayInset } from "./top-overlay";
 import { useBottomAnchorController } from "./bottom-anchor-controller";
 import { useScrollKeyboardDismiss } from "./scroll-keyboard-dismiss/use-scroll-keyboard-dismiss";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
+import { createStreamStrategy, resolveBottomAnchorTransportBehavior } from "./strategy";
 import {
-  createStreamStrategy,
-  isNearBottomForStreamRenderStrategy,
-  resolveBottomAnchorTransportBehavior,
-} from "./strategy";
-import {
-  abandonHistoryStartPaginationRequest,
-  createHistoryStartPaginationState,
-  evaluateHistoryStartPagination,
   isHistoryStartLoadingOperation,
-  rearmHistoryStartPagination,
-  settleHistoryStartPagination,
   type HistoryStartPaginationInput,
-  type HistoryStartPaginationTransition,
 } from "./history-start-pagination";
-import {
-  createHistoryStartSettleScheduler,
-  type HistoryStartSettleScheduler,
-} from "./history-start-settle-scheduler";
+import { useHistoryStartPagination } from "./use-history-start-pagination";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
   minIndexForVisible: 0,
@@ -64,7 +43,6 @@ const historyStartSlotStyle: ViewStyle = {
   height: 32,
   flexShrink: 0,
 };
-const HISTORY_START_SETTLE_FRAMES = 2;
 
 function keyExtractor(item: { id: string }): string {
   return item.id;
@@ -87,7 +65,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     isLoadingOlderHistory,
     hasOlderHistory,
     olderHistoryProgressKey,
-    scrollEnabled,
     listStyle,
     baseListContentContainerStyle,
     strategy,
@@ -113,11 +90,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const isNativeViewportSettlingRef = useRef(false);
   const nativeViewportSettlingFrameIdRef = useRef<number | null>(null);
   const historyStartReadyRef = useRef(false);
-  const [historyStartPaginationState, setHistoryStartPaginationState] = useState(
-    createHistoryStartPaginationState,
-  );
-  const historyStartPaginationStateRef = useRef(historyStartPaginationState);
-  const historyStartSettleSchedulerRef = useRef<HistoryStartSettleScheduler | null>(null);
 
   const historyItems = useMemo(() => {
     if (segments.historyVirtualized.length === 0) {
@@ -139,62 +111,13 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       progressKey: olderHistoryProgressKey,
     };
   });
-  const applyHistoryStartPaginationTransition = useStableEvent(
-    (transition: HistoryStartPaginationTransition) => {
-      const previousState = historyStartPaginationStateRef.current;
-      historyStartPaginationStateRef.current = transition.state;
-      if (transition.state !== previousState) {
-        setHistoryStartPaginationState(transition.state);
-      }
-      if (transition.shouldLoad) {
-        const requestedProgressKey = olderHistoryProgressKey;
-        if (requestedProgressKey === null) {
-          return;
-        }
-        void (async () => {
-          const started = await onNearHistoryStart();
-          if (started === true) {
-            return;
-          }
-          applyHistoryStartPaginationTransition({
-            state: abandonHistoryStartPaginationRequest(
-              historyStartPaginationStateRef.current,
-              requestedProgressKey,
-            ),
-            shouldLoad: false,
-          });
-        })();
-      }
-    },
-  );
-  const evaluateHistoryStart = useStableEvent(() => {
-    const transition = evaluateHistoryStartPagination(
-      historyStartPaginationStateRef.current,
-      getHistoryStartPaginationInput(),
-    );
-    applyHistoryStartPaginationTransition(transition);
+  const historyStartPagination = useHistoryStartPagination({
+    getInput: getHistoryStartPaginationInput,
+    olderHistoryProgressKey,
+    onNearHistoryStart,
   });
-  const scheduleHistoryStartSettle = useStableEvent(() => {
-    let scheduler = historyStartSettleSchedulerRef.current;
-    if (!scheduler) {
-      scheduler = createHistoryStartSettleScheduler({
-        settleFrames: HISTORY_START_SETTLE_FRAMES,
-        requestFrame: requestAnimationFrame,
-        cancelFrame: cancelAnimationFrame,
-        isSettling: () => historyStartPaginationStateRef.current.status === "settling",
-        isLoading: () => getHistoryStartPaginationInput().isLoadingOlderHistory,
-        onSettle: () => {
-          const transition = settleHistoryStartPagination(
-            historyStartPaginationStateRef.current,
-            getHistoryStartPaginationInput(),
-          );
-          applyHistoryStartPaginationTransition(transition);
-        },
-      });
-      historyStartSettleSchedulerRef.current = scheduler;
-    }
-    scheduler.schedule();
-  });
+  const evaluateHistoryStart = historyStartPagination.evaluate;
+  const scheduleHistoryStartSettle = historyStartPagination.scheduleSettle;
 
   const clearNativeViewportSettling = useCallback(() => {
     if (nativeViewportSettlingFrameIdRef.current !== null) {
@@ -262,13 +185,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     agentId,
     routeRequest: routeBottomAnchorRequest,
     isAuthoritativeHistoryReady,
-    renderStrategy: "inverted-stream",
     getTransportBehavior: getBottomAnchorTransportBehavior,
     getMeasurementState: () => streamViewportMetricsRef.current,
     isNearBottom: () => {
       const metrics = streamViewportMetricsRef.current;
-      return isNearBottomForStreamRenderStrategy({
-        strategy,
+      return strategy.isNearBottom({
         offsetY: metrics.offsetY,
         threshold: 32,
         contentHeight: metrics.contentHeight,
@@ -320,9 +241,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearNativeViewportSettling();
     isNativeViewportSettlingRef.current = false;
     historyStartReadyRef.current = false;
-    const initialHistoryStartState = createHistoryStartPaginationState();
-    historyStartPaginationStateRef.current = initialHistoryStartState;
-    setHistoryStartPaginationState(initialHistoryStartState);
+    historyStartPagination.reset();
     const frame = requestAnimationFrame(() => {
       historyStartReadyRef.current = true;
       evaluateHistoryStart();
@@ -330,10 +249,16 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     return () => {
       cancelAnimationFrame(frame);
       clearPendingUserScrollEnd();
-      historyStartSettleSchedulerRef.current?.cancel();
-      historyStartSettleSchedulerRef.current = null;
+      historyStartPagination.cancelSettle();
     };
-  }, [agentId, clearNativeViewportSettling, clearPendingUserScrollEnd, evaluateHistoryStart]);
+  }, [
+    agentId,
+    clearNativeViewportSettling,
+    clearPendingUserScrollEnd,
+    evaluateHistoryStart,
+    historyStartPagination.reset,
+    historyStartPagination.cancelSettle,
+  ]);
 
   useEffect(() => () => clearNativeViewportSettling(), [clearNativeViewportSettling]);
 
@@ -365,8 +290,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const isScrollEventNearBottom = useStableEvent(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-      return isNearBottomForStreamRenderStrategy({
-        strategy,
+      return strategy.isNearBottom({
         offsetY: contentOffset.y,
         threshold: 32,
         contentHeight: contentSize.height,
@@ -416,12 +340,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     isUserScrollActiveRef.current = true;
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     bottomAnchorController.beginUserScroll();
-    const rearmed = rearmHistoryStartPagination(historyStartPaginationStateRef.current);
-    if (rearmed !== historyStartPaginationStateRef.current) {
-      historyStartPaginationStateRef.current = rearmed;
-      setHistoryStartPaginationState(rearmed);
-      evaluateHistoryStart();
-    }
+    historyStartPagination.rearm();
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
@@ -497,14 +416,14 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentHeight: nextContentHeight,
     });
     evaluateHistoryStart();
-    if (historyStartPaginationStateRef.current.status === "settling") {
+    if (historyStartPagination.isSettling()) {
       scheduleHistoryStartSettle();
     }
   });
 
   useEffect(() => {
     evaluateHistoryStart();
-    if (historyStartPaginationStateRef.current.status === "settling") {
+    if (historyStartPagination.isSettling()) {
       scheduleHistoryStartSettle();
     }
   }, [
@@ -554,7 +473,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   ]);
 
   const historyFooterContent = useMemo(() => {
-    const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPaginationState);
+    const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPagination.state);
     return (
       // The footer is the visual top of the inverted list. Reserve the floating
       // header here so the oldest message and loading spinner can rest below it.
@@ -568,7 +487,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         </View>
       </View>
     );
-  }, [historyStartPaginationState, topOverlayInset]);
+  }, [historyStartPagination.state, topOverlayInset]);
 
   // RN's FlatList strictMode keeps its internal renderItem wrapper stable when
   // data or the live header changes, preserving the row identities above.
@@ -598,7 +517,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       initialNumToRender={12}
       windowSize={10}
       removeClippedSubviews={false}
-      scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator
       inverted
     />
@@ -611,23 +529,15 @@ export function createNativeStreamStrategy(): StreamStrategy {
     orderTailReverse: true,
     orderHeadReverse: true,
     assistantTurnTraversalStep: 1,
-    edgeSlot: "header",
     historyLiveBoundaryEdge: "first",
     liveHeadHistoryBoundaryEdge: "last",
     frameChildOrder: "footer-then-content",
     flatListInverted: true,
-    overlayScrollbarInverted: true,
-    maintainVisibleContentPosition: DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION,
     bottomAnchorTransportBehavior: {
       verificationDelayFrames: 2,
       verificationRetryMode: "recheck",
     },
-    disableParentScrollOnInlineDetailsExpansion: false,
-    anchorBottomOnContentSizeChange: false,
-    animateManualScrollToBottom: true,
-    useVirtualizedList: true,
     isNearBottom: (input) => input.offsetY <= input.threshold,
-    getBottomOffset: () => 0,
   });
   return strategy;
 }

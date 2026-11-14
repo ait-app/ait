@@ -1,5 +1,3 @@
-import { pluginSettings } from "./plugin-settings";
-
 export const settings = {
   title: "设置",
   loading: "正在加载设置...",
@@ -26,7 +24,6 @@ export const settings = {
     layout: "布局",
     editor: "编辑器",
     shortcuts: "快捷键",
-    integrations: "集成",
     notifications: "通知",
     permissions: "权限",
     diagnostics: "诊断",
@@ -99,10 +96,8 @@ export const settings = {
     providers: "提供方",
     usage: "使用情况",
     terminals: "终端",
-    plugins: "插件",
     host: "概览",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "元数据生成",
     description: "选择 Ait 用于工作区标题、分支名称、提交消息和拉取请求草稿的模型",
@@ -335,7 +330,6 @@ export const settings = {
     help: {
       openProject: "打开项目",
       newWorkspace: "新建工作区",
-      newWorktree: "新建工作树",
       archiveWorkspace: "归档工作区",
       newTab: "新建标签",
       closeCurrentTab: "关闭当前标签",
@@ -371,29 +365,10 @@ export const settings = {
       toggleVoiceMode: "切换语音模式",
       startStopDictation: "开始/停止听写",
       interruptAgent: "中断智能体",
-      sendMessage: "发送消息",
-      queueMessage: "消息排队",
       muteUnmuteVoiceMode: "静音/取消静音语音模式",
-      switchProject: "切换项目",
     },
     helpNotes: {
       showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
-    },
-  },
-  integrations: {
-    title: "集成",
-    docs: {
-      cli: "CLI 文档",
-      openCli: "打开 CLI 文档",
-    },
-    commandLine: {
-      title: "命令行",
-      description: "从终端控制智能体并运行脚本",
-    },
-    actions: {
-      install: "安装",
-      installing: "正在安装...",
-      installed: "已安装",
     },
   },
   permissions: {
@@ -459,17 +434,10 @@ export const settings = {
       removeErrorMessage: "无法移除连接",
       timeout: "超时",
     },
-    pairDevices: {
-      title: "配对设备",
-      rowTitle: "配对设备",
-      rowHint: "扫描二维码或复制链接，将手机连接到这个主机",
-    },
     skills: {
       sectionTitle: "编排技能",
       title: "编排技能",
       description: "教会智能体通过 CLI 编排任务",
-      docs: "技能",
-      openDocs: "打开技能文档",
       unavailable: "连接到此主机以管理编排技能",
       unsupported: "更新此主机以管理编排技能",
       updateAvailable: "有更新可用",
@@ -500,7 +468,6 @@ export const settings = {
         uninstall: "卸载",
         save: "保存",
         saving: "正在保存...",
-        cancel: "取消",
       },
       operations: {
         add: "添加技能",
@@ -509,8 +476,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "编排",
-      unavailable: "连接到这个主机以管理编排",
       enableTools: {
         title: "启用 Ait 工具",
         hint: "智能体将能够管理工作树、智能体和计划",
@@ -591,7 +556,6 @@ export const settings = {
       nameLabel: "名称",
       namePlaceholder: "UI 工作",
       iconLabel: "图标",
-      noIcon: "无",
       providerLabel: "提供方",
       providerPlaceholder: "选择一个提供方",
       noProviders: "此主机上没有可用的提供方",
@@ -630,14 +594,11 @@ export const settings = {
         confirmMessage: "这会重启守护进程。其上运行的智能体会继续运行；应用会自动重新连接。",
         confirmDesktopMessage: "使用已保存的设置重启内置守护进程？运行中的任务和终端会话将被中断。",
         restarting: "正在重启...",
-        unableToReconnectTitle: "无法重新连接",
-        unableToReconnectMessage: "{{name}} 没有重新上线。请确认它已重启。",
         unavailableTitle: "主机不可用",
         unavailableMessage: "这个主机尚未连接。请等待它上线后再重启。",
         offlineTitle: "主机离线",
         offlineMessage: "这个主机已离线。Ait 会自动重连，请等它恢复在线后再重启。",
         requestFailedTitle: "错误",
-        requestFailedMessage: "发送重启请求失败。Ait 会自动重连，请在主机显示在线后重试。",
         dialogFailedMessage: "无法打开重启确认对话框。",
       },
       update: {
@@ -647,13 +608,10 @@ export const settings = {
         confirm: "更新",
         confirmTitle: "更新 {{name}}",
         confirmMessage: "这会将守护进程更新至最新版本并重启。运行中的智能体将被短暂中断。",
-        updating: "正在更新...",
         phaseStarting: "正在准备更新...",
         phaseDownloading: "正在下载安装包...",
         phaseInstalling: "正在安装...",
         phaseComplete: "更新完成，正在重启...",
-        unableToReconnectTitle: "无法重新连接",
-        unableToReconnectMessage: "{{name}} 更新后没有重新上线。请确认守护进程已重启。",
         unavailableTitle: "主机不可用",
         unavailableMessage: "该主机未连接。请等待其上线后再更新。",
         offlineTitle: "主机离线",
@@ -787,8 +745,6 @@ export const settings = {
     worktree: {
       title: "工作树生命周期钩子",
       info: "为此项目创建或清理工作树时运行的命令",
-      docs: "文档",
-      docsTooltip: "查看命令可用的环境变量和更多细节",
       setup: "安装",
       setupAccessibility: "工作树设置命令",
       uncommittedTitle: "提交 ait.json 更改",

@@ -11,8 +11,8 @@ import {
   ComposerTrackRow,
   type ComposerTrackPillSegment,
 } from "@/composer/tracks";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import { botKeys } from "./queries";
 import { botTicketStyles as ticketStyles } from "./styles";
@@ -46,9 +46,7 @@ const WITH_CLOSED_LIMIT = 64;
  * and sends no ticket request.
  */
 export function useBotTicketsSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotTickets === true,
-  );
+  return useHostFeature(serverId, "workspaceBotTickets");
 }
 
 /** The Bot's tickets, refreshed as often as the Bot itself while the tab is shown. */

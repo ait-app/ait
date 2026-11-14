@@ -172,10 +172,4 @@ export const desktop = {
       failed: "알림을 보내지 못했습니다.",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "CLI 설치 상태를 확인할 수 없습니다.",
-      installFailed: "Ait CLI를 설치할 수 없습니다.",
-    },
-  },
 };

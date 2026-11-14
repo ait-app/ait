@@ -24,26 +24,16 @@ export function buildDraftAgentControls(input: {
   onSetFeature?: DraftAgentControlsProps["onSetFeature"];
   onApplyAgentProfile: DraftAgentControlsProps["onApplyAgentProfile"];
   onApplyModelPreset?: DraftAgentControlsProps["onApplyModelPreset"];
-  onDropdownClose?: DraftAgentControlsProps["onDropdownClose"];
 }): DraftAgentControlsProps {
-  const {
-    formState,
-    features,
-    onSetFeature,
-    onApplyAgentProfile,
-    onApplyModelPreset,
-    onDropdownClose,
-  } = input;
+  const { formState, features, onSetFeature, onApplyAgentProfile, onApplyModelPreset } = input;
   return {
     providerDefinitions: formState.providerDefinitions,
     selectedProvider: formState.selectedProvider,
     modeOptions: formState.modeOptions,
     selectedMode: formState.selectedMode,
     onSelectMode: formState.setModeFromUser,
-    models: formState.availableModels,
     selectedModel: formState.selectedModel,
     onSelectModel: formState.setModelFromUser,
-    isModelLoading: formState.isModelLoading,
     modelSelectorProviders: formState.modelSelectorProviders,
     isAllModelsLoading: formState.isAllModelsLoading,
     onSelectProviderAndModel: formState.setProviderAndModelFromUser,
@@ -55,7 +45,6 @@ export function buildDraftAgentControls(input: {
     modelSelectorCwd: formState.workingDir,
     features,
     onSetFeature,
-    onDropdownClose,
     onModelSelectorOpen: formState.refetchProviderModelsIfStale,
     onRetryModelProvider: formState.refreshProviderModels,
     isRetryingModelProvider: formState.isProviderModelsRefreshing,

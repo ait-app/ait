@@ -14,7 +14,7 @@ const QUERY_KEY = ["keyboard-shortcut-overrides"];
 const EMPTY_OVERRIDES: ShortcutOverrides = {};
 const ShortcutOverridesSchema = z.record(z.string(), z.string().nullable());
 
-export interface UseKeyboardShortcutOverridesReturn {
+interface UseKeyboardShortcutOverridesReturn {
   overrides: ShortcutOverrides;
   isLoading: boolean;
   setOverride: (bindingId: string, comboString: string) => Promise<void>;

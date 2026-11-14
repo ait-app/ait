@@ -15,7 +15,7 @@ export function replaceBrowserRouteWithCanonicalHostWorkspaceRoute(route: string
   window.history.replaceState(null, "", stripHostWorkspaceRouteEchoSearch(route));
 }
 
-export function stripHostWorkspaceRouteEchoSearchFromBrowserUrl(): void {
+function stripHostWorkspaceRouteEchoSearchFromBrowserUrl(): void {
   const currentRoute = getCurrentBrowserRoute();
   if (!currentRoute) {
     return;

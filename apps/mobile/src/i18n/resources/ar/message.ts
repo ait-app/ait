@@ -44,11 +44,7 @@ export const message = {
   speak: {
     header: "تكلم",
   },
-  activity: {
-    details: "تفاصيل",
-  },
   dictation: {
-    start: "بدء الإملاء الصوتي",
     cancel: "إلغاء الإملاء",
     retry: "أعد محاولة الإملاء",
     insert: "إدراج النسخ",

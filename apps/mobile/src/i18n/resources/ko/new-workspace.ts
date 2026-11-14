@@ -7,12 +7,6 @@ export const newWorkspace = {
     sandboxedWorktree: "샌드박스 워크트리",
     label: "격리",
   },
-  fields: {
-    project: "프로젝트",
-    base: "기준",
-    baseNotApplicable: "해당 없음",
-  },
-  titlePlaceholder: "제목(선택 사항)",
   errors: {
     hostDisconnected: "호스트가 연결되어 있지 않습니다",
     createWorktreeFailed: "워크트리를 생성하지 못했습니다",

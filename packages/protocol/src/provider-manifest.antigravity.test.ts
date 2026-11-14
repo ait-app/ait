@@ -4,7 +4,6 @@ import {
   getAgentProviderDefinition,
   getUnattendedModeId,
 } from "./provider-manifest.js";
-import { ProviderOverridesSchema } from "./provider-config.js";
 
 describe("Antigravity provider", () => {
   it("registers the native provider with local permissions as its default", () => {
@@ -14,13 +13,5 @@ describe("Antigravity provider", () => {
       defaultModeId: "default",
     });
     expect(getUnattendedModeId("antigravity")).toBe("full-access");
-    expect(ProviderOverridesSchema.safeParse({ antigravity: { enabled: true } }).success).toBe(
-      true,
-    );
-    expect(
-      ProviderOverridesSchema.safeParse({
-        "custom-agy": { extends: "antigravity", label: "Custom AGY" },
-      }).success,
-    ).toBe(true);
   });
 });

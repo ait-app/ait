@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "البرامج النصية Workspace",
     copyPath: "نسخ المسار",
     copyBranchName: "نسخ اسم الفرع",
-    copied: "تم النسخ",
   },
   fileActions: {
     openFile: "افتح الملف",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "إظهار في {{target}}",
     download: "تحميل",
     addToChat: "إضافة إلى الدردشة",
-    moreActions: "المزيد من الإجراءات",
     newFile: "ملف جديد",
     newFolder: "مجلد جديد",
     collapseFolder: "طي المجلد",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "اسم",
       modified: "معدل",
       size: "مقاس",
-    },
-    context: {
-      size: "مقاس",
-      modified: "معدل",
     },
     actions: {
       back: "خلف",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "تحميل...",
     modified: "تغييرات غير محفوظة",
-    loadingAgentTitle: "جارٍ تحميل عنوان الوكيل",
     fallback: {
       newAgent: "وكيل جديد",
       setup: "يثبت",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "بالقرب من اليسار",
       closeRight: "قريب من اليمين",
       closeOthers: "أغلق علامات التبويب الأخرى",
-      moveToMain: "Move to main panel",
       reloadAgent: "إعادة تحميل الوكيل",
       reloadAgentTooltip: "قم بإعادة تحميل الوكيل لتحديث المهارات أو MCPs أو حالة تسجيل الدخول.",
       close: "يغلق",
@@ -217,12 +209,9 @@ export const workspace = {
       newTab: "علامة تبويب جديدة",
       newAgent: "وكيل جديد",
       newTerminal: "محطة جديدة",
-      preparingTerminal: "إعداد علامة التبويب المحطة الطرفية",
-      preparingTerminalTooltip: "جارٍ تحضير المحطة...",
       newBrowser: "متصفح جديد",
       maximizePane: "تكبير الجزء",
       restorePane: "استعادة الجزء",
-      closePane: "إغلاق الجزء",
       exitFocusMode: "إنهاء وضع التركيز",
       splitRight: "تقسيم الجزء الأيمن",
       splitDown: "تقسيم الجزء لأسفل",
@@ -439,11 +428,6 @@ export const workspace = {
         mergeNoBase: "الدمج غير متاح لأننا لم نتمكن من تحديد الفرع الأساسي",
         mergeDirty: "الدمج غير متاح عندما تكون لديك تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
         mergeNothing: "الدمج غير متاح لأن هذا الفرع لا يحتوي على أي شيء جديد لدمجه حتى الآن",
-        updateNoBase: "التحديث غير متاح لأننا لم نتمكن من تحديد الفرع الأساسي",
-        updateDirty: "التحديث غير متاح أثناء وجود تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
-        updateCurrent: "التحديث غير متاح لأن هذا الفرع محدث بالفعل باستخدام{{baseRef}}",
-        mergePrNoGithub: "دمج PR غير متاح الآن لأن GitHub غير متصل",
-        archiveNotWorktree: "الأرشيف غير متاح هنا لأنه لم يتم إنشاء مساحة العمل هذه كشجرة عمل Ait",
         mergePrNoForge: "دمج {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
         mergePrMissing: "دمج PR غير متاح لأنه لا يوجد طلب سحب حتى الآن",
         mergePrDraft: "دمج PR غير متاح لأن طلب السحب لا يزال مسودة",
@@ -484,7 +468,6 @@ export const workspace = {
     diff: {
       openChangesTab: "فتح علامة تبويب التغييرات",
       openDiffTab: "فتح علامة تبويب الفرق",
-      closeChangesTab: "إغلاق علامة تبويب التغييرات",
       jumpToFile: {
         title: "الانتقال إلى ملف",
       },
@@ -492,7 +475,6 @@ export const workspace = {
       tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
       previewTooLargeTitle: "هذا الفرق كبير جدًا بحيث لا يمكن معاينته",
       previewTooLargeDescription: "ضيّق نطاق المقارنة لمعاينتها هنا",
-      unified: "الفرق الموحدة",
       split: "فرق جنبًا إلى جنب",
       switchToUnified: "التبديل إلى الفرق الموحد",
       switchToSplit: "التبديل إلى الفرق جنبًا إلى جنب",
@@ -502,8 +484,6 @@ export const workspace = {
       showWhitespace: "إظهار المسافة البيضاء",
       scrollLongLines: "قم بتمرير الخطوط الطويلة",
       wrapLongLines: "لف الخطوط الطويلة",
-      collapseAllFolders: "طي كافة المجلدات",
-      expandAllFolders: "توسيع كافة المجلدات",
       collapseAllFiles: "طي كافة الملفات",
       expandAllFiles: "توسيع كافة الملفات",
       refreshing: "منعش",
@@ -526,11 +506,8 @@ export const workspace = {
         title: "الإيداعات",
         countLabel: "{{count}} من إيداعات مساحة العمل",
         noneAhead: "لا توجد إيداعات متقدمة على {{baseRef}} بعد",
-        fileDiffEmpty: "لا توجد تغييرات لعرضها",
-        fileDiffError: "تعذّر تحميل فروق الملف",
         loading: "جارٍ تحميل الإيداعات…",
         loadError: "تعذّر تحميل الإيداعات",
-        empty: "لا توجد إيداعات بعد",
       },
     },
     openInEditor: {
@@ -556,7 +533,6 @@ export const workspace = {
       sections: {
         checks: "الشيكات",
         pipeline: "خط المعالجة",
-        reviews: "التعليقات",
       },
       empty: {
         noJobs: "لا توجد مهام",
@@ -568,31 +544,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "سحب الطلب #{{number}}",
         pullRequest_mr: "طلب دمج !{{number}}",
-        checkStatus: {
-          passed: "ناجح",
-          failed: "فاشل",
-          warning: "تحذير",
-          actionRequired: "إجراء مطلوب",
-          manual: "يدوي",
-          pending: "قيد الانتظار",
-          skipped: "تم التخطي",
-          cancelled: "تم الإلغاء",
-        },
       },
       states: {
-        draft: "مسودة",
         merged: "تم الدمج",
         closed: "مغلق",
-        open: "يفتح",
-      },
-      activity: {
-        commented: "علق",
-        approved: "موافقة",
-        requestedChanges: "التغييرات المطلوبة",
-        reviewed: "تمت المراجعة",
-      },
-      time: {
-        justNow: "الآن",
       },
       thread: {
         discussion: "سلسلة المناقشة",

@@ -1,6 +1,5 @@
 export const common = {
   back: "Atrás",
-  loading: "Cargando...",
   actions: {
     save: "Guardar",
     back: "Atrás",
@@ -44,9 +43,6 @@ export const common = {
   connectionStatus: {
     online: "En línea",
     connecting: "Conectando",
-    offline: "Desconectado",
-    error: "Error",
-    idle: "Inactivo",
   },
 
   bottomSheetBackdrop: "Fondo del panel inferior",

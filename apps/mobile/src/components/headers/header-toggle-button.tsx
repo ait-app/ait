@@ -10,19 +10,13 @@ import {
   iconButtonChromeStyle,
 } from "@/components/ui/icon-button-chrome";
 
-interface HeaderToggleButtonState {
-  hovered: boolean;
-  pressed: boolean;
-}
-
 interface HeaderToggleButtonProps extends Omit<PressableProps, "style" | "onPress" | "children"> {
   onPress: NonNullable<PressableProps["onPress"]>;
   tooltipLabel: string;
   tooltipKeys: ShortcutKey[];
   tooltipSide: "left" | "right" | "top" | "bottom";
-  tooltipDelayDuration?: number;
   style?: StyleProp<ViewStyle>;
-  children: ReactNode | ((state: HeaderToggleButtonState) => ReactNode);
+  children: ReactNode;
 }
 
 export function HeaderToggleButton({
@@ -30,7 +24,6 @@ export function HeaderToggleButton({
   tooltipLabel,
   tooltipKeys,
   tooltipSide,
-  tooltipDelayDuration = 0,
   style,
   disabled,
   children,
@@ -59,7 +52,7 @@ export function HeaderToggleButton({
   );
 
   return (
-    <Tooltip delayDuration={tooltipDelayDuration} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         {...props}
         {...ariaExpandedProps}
@@ -67,10 +60,7 @@ export function HeaderToggleButton({
         onPress={onPress}
         style={combinedStyle}
       >
-        {typeof children === "function"
-          ? (state: { pressed: boolean; hovered?: boolean }) =>
-              children({ hovered: Boolean(state.hovered), pressed: state.pressed })
-          : children}
+        {children}
       </TooltipTrigger>
       <TooltipContent testID={tooltipTestID} side={tooltipSide} align="center" offset={8}>
         <View style={styles.tooltipRow}>

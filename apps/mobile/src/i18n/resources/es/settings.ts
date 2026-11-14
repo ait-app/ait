@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "Ajustes",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "Diseño",
     editor: "Editor",
     shortcuts: "Atajos",
-    integrations: "Integraciones",
     notifications: "Notificaciones",
     permissions: "Permisos",
     diagnostics: "Diagnóstico",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "Proveedores",
     usage: "Uso",
     terminals: "Terminals",
-    plugins: "Plugins",
     host: "Resumen",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "Generación de metadatos",
     description:
@@ -314,7 +310,6 @@ export const settings = {
     help: {
       openProject: "Abrir proyecto",
       newWorkspace: "Nuevo espacio de trabajo",
-      newWorktree: "Nuevo árbol de trabajo",
       archiveWorkspace: "Archivar espacio de trabajo",
       newTab: "Nueva pestaña",
       closeCurrentTab: "Cerrar pestaña actual",
@@ -350,29 +345,10 @@ export const settings = {
       toggleVoiceMode: "Alternar modo de voz",
       startStopDictation: "Iniciar dictado/stop",
       interruptAgent: "agente de interrupción",
-      sendMessage: "enviar mensaje",
-      queueMessage: "mensaje de cola",
       muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
-      switchProject: "Cambiar proyecto",
     },
     helpNotes: {
       showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
-    },
-  },
-  integrations: {
-    title: "Integraciones",
-    docs: {
-      cli: "DocumentosCLI",
-      openCli: "Abrir la documentación deCLI",
-    },
-    commandLine: {
-      title: "línea de comando",
-      description: "Agentes de control y script desde tu terminal",
-    },
-    actions: {
-      install: "Instalar",
-      installing: "Instalando...",
-      installed: "Instalado",
     },
   },
   permissions: {
@@ -438,14 +414,7 @@ export const settings = {
       removeErrorMessage: "No se puede eliminar la conexión",
       timeout: "Se acabó el tiempo",
     },
-    pairDevices: {
-      title: "Emparejar dispositivos",
-      rowTitle: "Emparejar un dispositivo",
-      rowHint: "Escanee un códigoQRo copie un enlace para conectar su teléfono a este host",
-    },
     skills: {
-      docs: "Habilidades",
-      openDocs: "Abrir documentación de habilidades",
       unavailable: "Conéctate a este host para gestionar las habilidades de orquestación",
       unsupported: "Actualiza este host para gestionar las habilidades de orquestación",
       sectionTitle: "Habilidades de orquestación",
@@ -481,7 +450,6 @@ export const settings = {
         uninstall: "Desinstalar",
         save: "Guardar",
         saving: "Guardando...",
-        cancel: "Cancelar",
       },
       operations: {
         add: "Agregar habilidad",
@@ -490,8 +458,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "Orquestación",
-      unavailable: "Conéctese a este host para administrar la orquestación",
       enableTools: {
         title: "Habilitar herramientas Ait",
         hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
@@ -573,7 +539,6 @@ export const settings = {
       nameLabel: "Nombre",
       namePlaceholder: "Trabajo de UI",
       iconLabel: "Icono",
-      noIcon: "Ninguno",
       providerLabel: "Proveedor",
       providerPlaceholder: "Seleccione un proveedor",
       noProviders: "No hay proveedores disponibles en este host",
@@ -614,9 +579,6 @@ export const settings = {
         confirmDesktopMessage:
           "¿Reiniciar el daemon integrado con los ajustes guardados? Se interrumpirán las tareas y sesiones de terminal en ejecución.",
         restarting: "Reiniciando...",
-        unableToReconnectTitle: "No se puede volver a conectar",
-        unableToReconnectMessage:
-          "{{name}}no volvió a conectarse. Por favor verifique que se haya reiniciado.",
         unavailableTitle: "Hostno disponible",
         unavailableMessage:
           "Este host no está conectado. Espere a que se conecte antes de reiniciar.",
@@ -624,8 +586,6 @@ export const settings = {
         offlineMessage:
           "Este anfitrión está desconectado.Ait se vuelve a conectar automáticamente; espere hasta que vuelva a estar en línea antes de reiniciar.",
         requestFailedTitle: "Error",
-        requestFailedMessage:
-          "No se pudo enviar la solicitud de reinicio.Ait se vuelve a conectar automáticamente; inténtelo nuevamente una vez que el host se muestre en línea.",
         dialogFailedMessage: "No se puede abrir el cuadro de diálogo de confirmación de reinicio.",
       },
       update: {
@@ -637,14 +597,10 @@ export const settings = {
         confirmTitle: "Update {{name}}",
         confirmMessage:
           "This will update the daemon to the latest version and restart it. Running agents will be briefly interrupted.",
-        updating: "Updating...",
         phaseStarting: "Preparing update...",
         phaseDownloading: "Downloading packages...",
         phaseInstalling: "Installing...",
         phaseComplete: "Update complete, restarting...",
-        unableToReconnectTitle: "Unable to reconnect",
-        unableToReconnectMessage:
-          "{{name}} did not come back online after updating. Please verify the daemon restarted.",
         unavailableTitle: "Host unavailable",
         unavailableMessage:
           "This host is not connected. Wait for it to come online before updating.",
@@ -779,9 +735,6 @@ export const settings = {
     worktree: {
       title: "Ganchos del ciclo de vida del árbol de trabajo",
       info: "Comandos que se ejecutan cuando se crea o elimina un árbol de trabajo para este proyecto",
-      docs: "Documentos",
-      docsTooltip:
-        "Consulte los documentos para obtener más detalles y las variables de entorno disponibles para estos comandos.",
       setup: "Configuración",
       setupAccessibility: "Comandos de configuración del árbol de trabajo",
       uncommittedTitle: "Confirma los cambios de ait.json",

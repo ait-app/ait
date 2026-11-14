@@ -175,8 +175,14 @@ export function buildPaseoToolDetailSections(
 ): PaseoToolDetailSection[] | null {
   const leafName = getAitToolLeafName(toolName);
   if (!leafName) return null;
+  return buildDetailSectionsFromSpec(getPaseoToolEntry(leafName)?.detail ?? {}, input, output);
+}
 
-  const spec: PaseoToolDetailSpec = getPaseoToolEntry(leafName)?.detail ?? {};
+export function buildDetailSectionsFromSpec(
+  spec: PaseoToolDetailSpec,
+  input: unknown,
+  output: unknown,
+): PaseoToolDetailSection[] {
   const sections: PaseoToolDetailSection[] = [];
   if (spec.promptField && isRecord(input)) {
     const prompt = input[spec.promptField];

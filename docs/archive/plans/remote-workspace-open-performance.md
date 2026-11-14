@@ -125,7 +125,7 @@ Codex 的 [history 适配](../../../crates/provider/codex/src/discovery.rs) 最�
 | Provider                       | 按 provider/scope 的 discover、native launch/init/history、reconcile 耗时                      |
 | 时间线                         | 原始事件数、投影项数、返回项数，DB 等锁/读/解析、投影、前端 merge/paint 耗时                   |
 
-已有 [SDK runtime metrics](../../../packages/client/src/daemon-client-runtime-metrics.ts) 统计入站字节与 handler 时长，但不是打开级瀑布，且 `connectionPath` 当前固定为 direct。复用它的计数机制，补足请求耗时和实际连接类型；结合现有 native trace、RenderProfile 与 workspace profiling 脚本。
+当时的 SDK runtime metrics（`packages/client/src/daemon-client-runtime-metrics.ts`，因无调用方已删除）统计入站字节与 handler 时长，但不是打开级瀑布，且 `connectionPath` 当前固定为 direct。复用它的计数机制，补足请求耗时和实际连接类型；结合现有 native trace、RenderProfile 与 workspace profiling 脚本。
 
 定义三个不同的终点：
 

@@ -1,7 +1,7 @@
-export type StatusLoaderBucket = "needs_input" | "failed" | "running" | "attention" | "done";
+import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 export function shouldRenderSyncedStatusLoader(input: {
-  bucket: StatusLoaderBucket | null | undefined;
+  bucket: SidebarStateBucket | null | undefined;
 }): boolean {
   return input.bucket === "running";
 }

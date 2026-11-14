@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, CircleAlert, SquareTerminal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Pressable, type PressableStateCallbackType, ScrollView, Text, View } from "react-native";
 import invariant from "tiny-invariant";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -33,47 +34,31 @@ function useSetupPanelDescriptor(
   });
   const snapshot = useWorkspaceSetupStore((state) => (key ? (state.snapshots[key] ?? null) : null));
 
-  if (snapshot?.status === "completed") {
-    return {
-      label: t("workspace.setup.descriptor.label"),
-      subtitle: t("workspace.setup.descriptor.completed"),
-      tooltip: t("workspace.setup.descriptor.completed"),
-      titleState: "ready",
-      icon: CheckCircle2,
-      statusBucket: null,
-    };
-  }
-
-  if (snapshot?.status === "failed") {
-    return {
-      label: t("workspace.setup.descriptor.label"),
-      subtitle: t("workspace.setup.descriptor.failed"),
-      tooltip: t("workspace.setup.descriptor.failed"),
-      titleState: "ready",
-      icon: CircleAlert,
-      statusBucket: null,
-    };
-  }
-
-  if (snapshot?.status === "blocked") {
-    return {
-      label: t("workspace.setup.descriptor.label"),
-      subtitle: t("workspace.setup.descriptor.blocked"),
-      tooltip: t("workspace.setup.descriptor.blocked"),
-      titleState: "ready",
-      icon: CircleAlert,
-      statusBucket: null,
-    };
-  }
-
+  const { subtitle, icon } = resolveSetupDescriptorState(snapshot?.status, t);
   return {
     label: t("workspace.setup.descriptor.label"),
-    subtitle: t("workspace.setup.descriptor.workspace"),
-    tooltip: t("workspace.setup.descriptor.workspace"),
+    subtitle,
+    tooltip: subtitle,
     titleState: "ready",
-    icon: SquareTerminal,
+    icon,
     statusBucket: snapshot?.status === "running" ? "running" : null,
   };
+}
+
+function resolveSetupDescriptorState(
+  status: WorkspaceSetupSnapshot["status"] | undefined,
+  t: TFunction,
+): Pick<PanelDescriptor, "subtitle" | "icon"> {
+  if (status === "completed") {
+    return { subtitle: t("workspace.setup.descriptor.completed"), icon: CheckCircle2 };
+  }
+  if (status === "failed") {
+    return { subtitle: t("workspace.setup.descriptor.failed"), icon: CircleAlert };
+  }
+  if (status === "blocked") {
+    return { subtitle: t("workspace.setup.descriptor.blocked"), icon: CircleAlert };
+  }
+  return { subtitle: t("workspace.setup.descriptor.workspace"), icon: SquareTerminal };
 }
 
 type CommandStatus = "running" | "completed" | "failed";

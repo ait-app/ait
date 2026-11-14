@@ -1,12 +1,10 @@
 export const providerSelection = {
   defaultModel: "기본값",
   selectModel: "모델 선택",
-  loading: "불러오는 중...",
   error: "오류",
   unavailable: "사용 불가",
   unknownError: "알 수 없는 오류",
   readiness: {
-    initialPromptRequired: "초기 프롬프트가 필요합니다",
     noProviders: "선택한 호스트에 사용 가능한 프로바이더가 없습니다",
     modelDefaultsLoading: "모델 기본값을 아직 불러오는 중입니다",
     noModelAvailable: "선택한 프로바이더에 사용 가능한 모델이 없습니다",

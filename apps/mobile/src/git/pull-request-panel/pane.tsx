@@ -152,13 +152,6 @@ function kebabTriggerStyle({
   return [styles.kebabButton, hovered && styles.kebabButtonHovered];
 }
 
-function refreshButtonStyle(
-  { hovered, pressed }: PressableStateCallbackType & { hovered?: boolean },
-  isCompact: boolean,
-) {
-  return paneContentToolbarIconButtonStyle({ hovered, pressed }, false, isCompact);
-}
-
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreHorizontal
@@ -202,7 +195,8 @@ export function PullRequestPane({
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const toolbarRefreshButtonStyle = useCallback(
-    (state: PressableStateCallbackType) => refreshButtonStyle(state, isCompact),
+    (state: PressableStateCallbackType) =>
+      paneContentToolbarIconButtonStyle(state, false, isCompact),
     [isCompact],
   );
   const toast = useToast();
@@ -829,33 +823,9 @@ function SingleActivityCard({
     void openExternalUrl(activity.url);
   }, [activity.url, collapsed, entry.id, hasBody, onToggleCollapsed]);
 
-  if (!hasBody) {
-    return (
-      <View
-        style={styles.eventRow}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        testID="pr-pane-activity-row"
-      >
-        <Pressable onPress={handleHeaderPress} style={entryHeaderPressableStyle}>
-          <ActivityHeader activity={activity} avatarSize={20}>
-            <ActivityKebab
-              activity={activity}
-              visible={actionsVisible}
-              attachEnabled={attachEnabled}
-              brandLabel={brandLabel}
-              onMenuOpenChange={setMenuOpen}
-              onAddToChat={onAddToChat}
-            />
-          </ActivityHeader>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
     <View
-      style={styles.card}
+      style={hasBody ? styles.card : styles.eventRow}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       testID="pr-pane-activity-row"
@@ -872,7 +842,7 @@ function SingleActivityCard({
           />
         </ActivityHeader>
       </Pressable>
-      {collapsed ? null : (
+      {collapsed || !hasBody ? null : (
         <>
           <View style={styles.cardBody}>
             <MarkdownRenderer text={activity.body} compact onLinkPress={handleMarkdownLinkPress} />
@@ -1195,9 +1165,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
-  invisible: {
-    opacity: 0,
-  },
   hoverable: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
@@ -1294,18 +1261,6 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
     paddingRight: theme.spacing[3],
     paddingBottom: theme.spacing[2],
-  },
-  toolbarTrailing: {
-    marginLeft: "auto",
-  },
-  filterTriggerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  filterHiddenCount: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foregroundMuted,
   },
   eventRow: {
     marginHorizontal: theme.spacing[3],

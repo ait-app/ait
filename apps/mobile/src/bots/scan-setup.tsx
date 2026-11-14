@@ -5,7 +5,6 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { TextLink, useLiveSetup } from "./channel-setup";
@@ -43,20 +42,6 @@ const COPY = {
     unavailable: "bots.qqScanUnavailable",
   },
 } as const;
-
-/** Whether the host can connect WeChat channels by scanning. */
-export function useWeixinSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotWeixinSetup === true,
-  );
-}
-
-/** Whether the host can connect and pair QQ channels. */
-export function useQqSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotQqSetup === true,
-  );
-}
 
 export function ChannelScanSetup({
   kind,

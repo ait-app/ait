@@ -1,4 +1,4 @@
-import { useCallback, type ReactElement } from "react";
+import { useCallback } from "react";
 import {
   MenuHint,
   MenuItem,
@@ -8,7 +8,6 @@ import {
   MenuSurface,
   MenuTrigger,
   useMenuContext,
-  type MenuSurfaceProps,
   type MenuTriggerProps,
 } from "@/components/ui/menu";
 
@@ -31,9 +30,7 @@ export type { ActionStatus, MenuItemProps as DropdownMenuItemProps } from "@/com
 export type { MenuPageDefinition } from "@/components/ui/menu";
 export { MenuSubTrigger as DropdownMenuSubTrigger } from "@/components/ui/menu";
 
-export function DropdownMenuContent(props: MenuSurfaceProps): ReactElement | null {
-  return <MenuSurface {...props} />;
-}
+export { MenuSurface as DropdownMenuContent };
 
 export function useDropdownMenuClose(): () => void {
   const { setOpen } = useMenuContext("useDropdownMenuClose");

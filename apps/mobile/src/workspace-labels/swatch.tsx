@@ -4,11 +4,9 @@ import { StyleSheet } from "react-native-unistyles";
 import { WORKSPACE_LABEL_COLORS, type WorkspaceLabelColor } from "@ait/protocol/workspace-labels";
 import { identityForeground } from "@/styles/identity-colors";
 import { i18n } from "@/i18n/i18next";
-import type { Theme } from "@/styles/theme";
 
 /**
- * A label's color as ink: the dot in front of its name, the swatches you pick it from, and the
- * tint mapping the sidebar's label group headers hand to a glyph.
+ * A label's color as ink: the dot in front of its name, and the swatches you pick it from.
  *
  * The ten names are the identity table's ten (`@/styles/identity-colors`) — the protocol happens
  * to spell them out again as `WorkspaceLabelColor`, and every `identityForeground` call below is
@@ -26,21 +24,6 @@ const SWATCH_SIZE = 20;
 export function workspaceLabelColorName(color: WorkspaceLabelColor): string {
   return i18n.t(`workspaceLabels.colors.${color}`);
 }
-
-/**
- * One stable mapping per color for the life of the module, for lucide glyphs that carry a
- * label's color (`withUnistyles` re-subscribes when `uniProps` changes identity). The scheme is
- * read inside the mapping, so switching themes repaints the glyph without a React render.
- */
-export const WORKSPACE_LABEL_ICON_MAPPINGS: Record<
-  WorkspaceLabelColor,
-  (theme: Theme) => { color: string }
-> = Object.fromEntries(
-  WORKSPACE_LABEL_COLORS.map((color) => [
-    color,
-    (theme: Theme) => ({ color: identityForeground(color, theme.colorScheme) }),
-  ]),
-) as Record<WorkspaceLabelColor, (theme: Theme) => { color: string }>;
 
 /** The mark that stands in for a label wherever its name is already spelled out beside it. */
 export function WorkspaceLabelDot({ color }: { color: WorkspaceLabelColor }): ReactElement {

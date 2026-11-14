@@ -7,7 +7,7 @@ import { resolveAgentModelSelection } from "@/composer/agent-controls/utils";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useSessionStore } from "@/stores/session-store";
 
-export interface AgentFactsInput {
+interface AgentFactsInput {
   models: AgentModelDefinition[] | null;
   runtimeModelId: string | null | undefined;
   configuredModelId: string | null | undefined;
@@ -24,7 +24,7 @@ export interface AgentFactsInput {
  * thinking, mode, and context usage, each resolved exactly as its control resolves it. Null until
  * the agent has a model at all.
  */
-export function buildAgentFactsLine(input: AgentFactsInput): string | null {
+function buildAgentFactsLine(input: AgentFactsInput): string | null {
   const hasModel = Boolean(input.runtimeModelId?.trim() || input.configuredModelId?.trim());
   if (!hasModel) return null;
   const selection = resolveAgentModelSelection(input);

@@ -165,10 +165,8 @@ describe("createWebStreamStrategy", () => {
             isLoadingOlderHistory: false,
             hasOlderHistory: false,
             olderHistoryProgressKey: null,
-            scrollEnabled: true,
             listStyle: null,
             baseListContentContainerStyle: null,
-            forwardListContentContainerStyle: null,
             contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
           })}
         </>,
@@ -205,10 +203,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     act(() => root?.render(strategy.render(input)));
@@ -278,10 +274,8 @@ describe("createWebStreamStrategy", () => {
           isLoadingOlderHistory: false,
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
-          scrollEnabled: true,
           listStyle: null,
           baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
           contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
         }),
       );
@@ -325,10 +319,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -384,10 +376,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     const unrevised = {
@@ -448,10 +438,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -524,10 +512,8 @@ describe("createWebStreamStrategy", () => {
           isLoadingOlderHistory: false,
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
-          scrollEnabled: true,
           listStyle: null,
           baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
           contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
         }),
       );
@@ -569,10 +555,8 @@ describe("createWebStreamStrategy", () => {
           isLoadingOlderHistory: false,
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
-          scrollEnabled: true,
           listStyle: null,
           baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
           contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
         }),
       );
@@ -641,10 +625,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -732,10 +714,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -839,10 +819,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: true,
       olderHistoryProgressKey: "epoch-1:20",
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -942,10 +920,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -1039,10 +1015,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -1137,10 +1111,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -1257,10 +1229,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     container = document.createElement("div");
@@ -1491,10 +1461,8 @@ describe("createWebStreamStrategy", () => {
       isLoadingOlderHistory: false,
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
-      scrollEnabled: true,
       listStyle: null,
       baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
       contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
     };
     const renderWithActivity = (active: boolean, input: StreamRenderInput = renderInput) => (

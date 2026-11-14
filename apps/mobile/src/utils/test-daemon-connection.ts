@@ -13,6 +13,7 @@ import type { DaemonClientConfig } from "@ait/client/internal/daemon-client";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
 import { resolveAppVersion } from "./app-version";
 import { getOrCreateClientId } from "./client-id";
+import { trimNonEmpty } from "./string";
 
 export interface DaemonProbeClient {
   readonly lastError: string | null;
@@ -36,12 +37,6 @@ const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonCl
   buildDesktopTransportUrl: buildDesktopDaemonTransportUrl,
   createClient: (config) => new DaemonClient(config),
 };
-
-function normalizeNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function pickBestReason(reason: string | null, lastError: string | null): string {
   const genericReason =
@@ -90,7 +85,7 @@ export class DaemonConnectionTestError extends Error {
   }
 }
 
-export async function buildClientConfig(
+async function buildClientConfig(
   connection: HostConnection,
   serverId?: string,
   options?: {
@@ -156,16 +151,16 @@ export async function buildClientConfig(
   throw new Error("Unsupported host connection");
 }
 
-export function connectAndProbe(
+function connectAndProbe(
   config: DaemonClientConfig,
   timeoutMs: number,
 ): Promise<{ client: DaemonClient; serverId: string; hostname: string | null }>;
-export function connectAndProbe<TClient extends DaemonProbeClient>(
+function connectAndProbe<TClient extends DaemonProbeClient>(
   config: DaemonClientConfig,
   timeoutMs: number,
   deps: Pick<DaemonConnectionDependencies<TClient>, "createClient">,
 ): Promise<{ client: TClient; serverId: string; hostname: string | null }>;
-export function connectAndProbe(
+function connectAndProbe(
   config: DaemonClientConfig,
   timeoutMs: number,
   deps: Pick<
@@ -211,10 +206,8 @@ export function connectAndProbe(
         })
         .catch((error) => {
           clearTimeout(timer);
-          const reason = normalizeNonEmptyString(
-            error instanceof Error ? error.message : String(error),
-          );
-          const lastError = normalizeNonEmptyString(client.lastError);
+          const reason = trimNonEmpty(error instanceof Error ? error.message : String(error));
+          const lastError = trimNonEmpty(client.lastError);
           const message = isIncorrectPasswordFailure({ config, reason, lastError })
             ? "Incorrect password"
             : pickBestReason(reason, lastError);

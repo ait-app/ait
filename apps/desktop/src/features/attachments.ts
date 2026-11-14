@@ -52,6 +52,10 @@ async function buildManagedAttachmentPath(input: {
   return path.join(dirPath, `${attachmentId}${extension}`);
 }
 
+async function managedFileResult(targetPath: string): Promise<AttachmentFileResult> {
+  return { path: targetPath, byteSize: (await stat(targetPath)).size };
+}
+
 function resolveManagedAttachmentPath(inputPath: unknown): string {
   if (typeof inputPath !== "string" || inputPath.trim().length === 0) {
     throw new Error("Attachment path is required.");
@@ -79,11 +83,7 @@ export async function writeAttachmentBase64(input: {
     extension: input.extension,
   });
   await writeFile(targetPath, Buffer.from(base64, "base64"));
-  const fileInfo = await stat(targetPath);
-  return {
-    path: targetPath,
-    byteSize: fileInfo.size,
-  };
+  return await managedFileResult(targetPath);
 }
 
 function normalizeBytes(value: unknown): Uint8Array {
@@ -110,11 +110,7 @@ export async function writeAttachmentBytes(input: {
     extension: input.extension,
   });
   await writeFile(targetPath, bytes);
-  const fileInfo = await stat(targetPath);
-  return {
-    path: targetPath,
-    byteSize: fileInfo.size,
-  };
+  return await managedFileResult(targetPath);
 }
 
 export async function copyAttachmentFileToManagedStorage(input: {
@@ -136,11 +132,7 @@ export async function copyAttachmentFileToManagedStorage(input: {
     await copyFile(sourcePath, targetPath);
   }
 
-  const fileInfo = await stat(targetPath);
-  return {
-    path: targetPath,
-    byteSize: fileInfo.size,
-  };
+  return await managedFileResult(targetPath);
 }
 
 export async function readManagedFileBase64(input: { path?: unknown }): Promise<string> {

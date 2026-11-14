@@ -4,7 +4,6 @@ export const sessions = {
   emptyForHost: "لا توجد جلسات لهذا المضيف",
   noMatches: "لا توجد جلسات مطابقة",
   tooManyMatches: "نتائج كثيرة جدًا — ضيّق نطاق البحث",
-  hostLoadFailed: "{{host}}: تعذر تحميل السجل",
   searchPlaceholder: "البحث في السجل",
   actions: {
     loadMore: "تحميل المزيد",

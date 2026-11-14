@@ -6,7 +6,6 @@ export const sidebar = {
       label: "그룹화",
       project: "프로젝트",
       status: "상태",
-      labels: "레이블",
     },
     titleSource: {
       label: "제목",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "고정됨",
   },
-  host: {
-    noHost: "호스트 없음",
-    switchTitle: "호스트 전환",
-    searchPlaceholder: "호스트 검색...",
-  },
   actions: {
     addProject: "프로젝트 추가",
     newWorkspace: "새 워크스페이스",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "진단 실행",
     shortcuts: "키보드 단축키",
     reportIssue: "문제 신고",
-    discord: "Discord",
     github: "GitHub 이슈 만들기",
     whatsNew: "새로운 소식",
     appName: "Ait",
@@ -109,7 +102,6 @@ export const sidebar = {
     status: {
       serviceRunning: "서비스 {{name}} 실행 중",
       serviceUnhealthy: "서비스 {{name}} 비정상",
-      creating: "생성하는 중...",
     },
     checks: {
       passed: "통과: {{count}}개",
@@ -131,29 +123,17 @@ export const sidebar = {
       pin: "상단에 고정",
       unpin: "고정 해제",
       archive: "보관",
-      archiveWorkspace: "워크스페이스 보관",
-      hideFromSidebar: "사이드바에서 숨기기",
       archiving: "보관하는 중...",
-      hiding: "숨기는 중...",
-    },
-    confirmations: {
-      hideTitle: "워크스페이스를 숨길까요?",
-      hideMessage:
-        '"{{workspaceName}}"을(를) 사이드바에서 숨길까요?\n\n디스크의 파일은 변경되지 않습니다.',
-      hideConfirm: "숨기기",
-      cancel: "취소",
     },
     rename: {
       title: "워크스페이스 이름 변경",
       submit: "이름 변경",
-      invalidBranchName: "잘못된 브랜치 이름",
     },
     toasts: {
       workspacePathUnavailable: "워크스페이스 경로를 사용할 수 없습니다",
       pathCopied: "경로가 복사되었습니다",
       branchNameCopied: "브랜치 이름이 복사되었습니다",
       hostDisconnected: "호스트가 연결되어 있지 않습니다",
-      hideFailed: "워크스페이스를 숨기지 못했습니다",
       archiveFailed: "워크스페이스를 보관하지 못했습니다.",
     },
   },

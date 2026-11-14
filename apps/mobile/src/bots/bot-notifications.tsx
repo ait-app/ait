@@ -9,8 +9,8 @@ import {
   type BotWakeScope,
   type BotWakeStatus,
 } from "@ait/protocol/bot/types";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { formatMessageTimestamp } from "@/utils/time";
 import { BotSelect } from "./bot-select";
 import { NotificationKindIcon, notificationKindLabel } from "./bot-wake";
@@ -20,16 +20,6 @@ import { botStyles as styles } from "./styles";
 
 /** Entries the settings screen shows; the log itself keeps more. */
 const RECENT_LIMIT = 10;
-
-/**
- * Whether the host implements Bot notifications (`bot.notifications.list.request` and the
- * `wakeScope` setting); older hosts hide both.
- */
-export function useBotNotificationsSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotNotifications === true,
-  );
-}
 
 /** The wake-scope choice shared by setup and settings. */
 export function BotWakeScopeField({
@@ -114,7 +104,7 @@ export function BotNotificationSettings({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
-  const supported = useBotNotificationsSupported(serverId);
+  const supported = useHostFeature(serverId, "workspaceBotNotifications");
   const wakeScope = bot.wakeScope;
   // A host that advertises the method but returns no wake scope cannot accept it either.
   const available = supported && wakeScope !== undefined;

@@ -20,7 +20,6 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostProjects } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
-import { i18n } from "@/i18n/i18next";
 import {
   aggregateSessionEntries,
   ALL_FILTER_VALUE,
@@ -109,7 +108,7 @@ function buildSessionsQueriesConfig(args: {
   cwd: string | null;
   query: string;
   limit: number;
-  hostDisconnectedMessage?: string;
+  hostDisconnectedMessage: string;
 }): SessionsQueryConfig[] {
   const {
     serverId,
@@ -130,7 +129,7 @@ function buildSessionsQueriesConfig(args: {
     placeholderData: keepPreviousData,
     queryFn: async () => {
       if (!client) {
-        throw new Error(hostDisconnectedMessage ?? i18n.t("workspace.terminal.hostDisconnected"));
+        throw new Error(hostDisconnectedMessage);
       }
       return await client.fetchRecentProviderSessions({
         ...(cwd ? { cwd } : {}),
@@ -722,7 +721,6 @@ export function ImportSessionSheet({
     [handleRefresh, handleShowAll, hostLabel, isRefreshing, scopeCwd, supportsSearch, t, visible],
   );
 
-  const isSnapshotUnsupported = requiresHostUpgrade;
   const isWaitingForSnapshot =
     supportsSnapshot && !requiresHostUpgrade && providersToFetch === null;
   const hasNoImportableProviders = providersToFetch !== null && providersToFetch.length === 0;
@@ -797,13 +795,12 @@ export function ImportSessionSheet({
             onOpenChange={setIsFilterOpen}
             anchorRef={filterAnchorRef}
             desktopPlacement="bottom-start"
-            desktopPreventInitialFlash
           />
         </View>
       ) : null}
       <SheetStatusMessages
         isClientReady={Boolean(client)}
-        isSnapshotUnsupported={isSnapshotUnsupported}
+        isSnapshotUnsupported={requiresHostUpgrade}
         hasNoImportableProviders={hasNoImportableProviders}
         isLoadingSessions={isLoadingSessions}
         hasRows={visibleEntries.length > 0}

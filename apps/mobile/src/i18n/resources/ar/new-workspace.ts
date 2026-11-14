@@ -7,12 +7,6 @@ export const newWorkspace = {
     sandboxedWorktree: "شجرة عمل معزولة",
     label: "العزل",
   },
-  fields: {
-    project: "المشروع",
-    base: "الأساس",
-    baseNotApplicable: "غير قابل للتطبيق",
-  },
-  titlePlaceholder: "العنوان (اختياري)",
   errors: {
     hostDisconnected: "Host غير متصل",
     createWorktreeFailed: "فشل في إنشاء شجرة العمل",

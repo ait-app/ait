@@ -1,43 +1,27 @@
 import type { TerminalState } from "@ait/protocol/messages";
 
-export interface WorkspaceTerminalSnapshots {
+interface WorkspaceTerminalSnapshots {
   get: (input: { terminalId: string }) => TerminalState | null;
   set: (input: { terminalId: string; state: TerminalState }) => void;
   clear: (input: { terminalId: string }) => void;
-  prune: (input: { terminalIds: string[] }) => void;
 }
 
-export interface WorkspaceTerminalSession {
-  scopeKey: string;
+interface WorkspaceTerminalSession {
   snapshots: WorkspaceTerminalSnapshots;
 }
 
-interface WorkspaceTerminalSessionRecord {
-  snapshotByTerminalId: Map<string, TerminalState>;
-  session: WorkspaceTerminalSession;
-}
-
-const sessionsByScopeKey = new Map<string, WorkspaceTerminalSessionRecord>();
+const sessionsByScopeKey = new Map<string, WorkspaceTerminalSession>();
 const refCountByScopeKey = new Map<string, number>();
 
-function createSnapshots(input: {
-  snapshotByTerminalId: Map<string, TerminalState>;
-}): WorkspaceTerminalSnapshots {
+function createSnapshots(): WorkspaceTerminalSnapshots {
+  const snapshotByTerminalId = new Map<string, TerminalState>();
   return {
-    get: ({ terminalId }) => input.snapshotByTerminalId.get(terminalId) ?? null,
+    get: ({ terminalId }) => snapshotByTerminalId.get(terminalId) ?? null,
     set: ({ terminalId, state }) => {
-      input.snapshotByTerminalId.set(terminalId, state);
+      snapshotByTerminalId.set(terminalId, state);
     },
     clear: ({ terminalId }) => {
-      input.snapshotByTerminalId.delete(terminalId);
-    },
-    prune: ({ terminalIds }) => {
-      const terminalIdSet = new Set(terminalIds);
-      for (const terminalId of Array.from(input.snapshotByTerminalId.keys())) {
-        if (!terminalIdSet.has(terminalId)) {
-          input.snapshotByTerminalId.delete(terminalId);
-        }
-      }
+      snapshotByTerminalId.delete(terminalId);
     },
   };
 }
@@ -45,21 +29,11 @@ function createSnapshots(input: {
 export function getWorkspaceTerminalSession(input: { scopeKey: string }): WorkspaceTerminalSession {
   const existing = sessionsByScopeKey.get(input.scopeKey);
   if (existing) {
-    return existing.session;
+    return existing;
   }
 
-  const snapshotByTerminalId = new Map<string, TerminalState>();
-  const session: WorkspaceTerminalSession = {
-    scopeKey: input.scopeKey,
-    snapshots: createSnapshots({
-      snapshotByTerminalId,
-    }),
-  };
-
-  sessionsByScopeKey.set(input.scopeKey, {
-    snapshotByTerminalId,
-    session,
-  });
+  const session: WorkspaceTerminalSession = { snapshots: createSnapshots() };
+  sessionsByScopeKey.set(input.scopeKey, session);
   return session;
 }
 

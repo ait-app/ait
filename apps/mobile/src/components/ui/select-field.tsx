@@ -57,7 +57,6 @@ export interface SelectFieldProps<TValue> {
   searchPlaceholder?: string;
   title?: string;
   size?: FieldControlSize;
-  getValueKey?: (value: TValue) => string;
   renderOption?: (input: SelectFieldRenderOptionInput<TValue>) => ReactElement;
   triggerLeading?: ReactNode;
   field?: boolean;
@@ -90,14 +89,9 @@ const foregroundMutedMapping = (theme: Theme) => ({
 function getSelectedOptionId<TValue>(
   options: readonly SelectFieldOption<TValue>[],
   value: TValue | null,
-  getValueKey: ((value: TValue) => string) | undefined,
 ): string {
   if (value === null) {
     return "";
-  }
-  if (getValueKey) {
-    const selectedKey = getValueKey(value);
-    return options.find((option) => getValueKey(option.value) === selectedKey)?.id ?? "";
   }
   return options.find((option) => Object.is(option.value, value))?.id ?? "";
 }
@@ -188,7 +182,6 @@ export function SelectField<TValue>({
   searchPlaceholder,
   title,
   size = "md",
-  getValueKey,
   renderOption,
   triggerLeading,
   field = true,
@@ -200,8 +193,8 @@ export function SelectField<TValue>({
   const [triggerFocused, setTriggerFocused] = useState(false);
   const visibleOptions = useVisibleSelectOptions(options, loading);
   const selectedOptionId = useMemo(
-    () => getSelectedOptionId(visibleOptions, value, getValueKey),
-    [getValueKey, value, visibleOptions],
+    () => getSelectedOptionId(visibleOptions, value),
+    [value, visibleOptions],
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -256,19 +249,8 @@ export function SelectField<TValue>({
       active: boolean;
       onPress: () => void;
     }) => {
-      const selectOption = optionById.get(option.id);
-      if (!selectOption) {
-        return (
-          <ComboboxItem
-            label={option.label}
-            description={option.description}
-            kind={option.kind}
-            selected={selected}
-            active={active}
-            onPress={onPress}
-          />
-        );
-      }
+      // Every combobox option is built from `visibleOptions`, so the lookup always hits.
+      const selectOption = optionById.get(option.id)!;
       if (renderOption) {
         return renderOption({ option: selectOption, selected, active, onPress });
       }

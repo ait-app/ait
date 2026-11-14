@@ -1,11 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useMemo,
-  useState,
-  type ForwardedRef,
-  type ReactNode,
-} from "react";
+import { forwardRef, useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Pressable,
   StyleSheet as RNStyleSheet,
@@ -27,13 +20,12 @@ import {
 interface FieldProps {
   label: string;
   children: ReactNode;
-  trailing?: ReactNode;
   hint?: string;
   error?: string | null;
   testID?: string;
 }
 
-export function Field({ label, children, trailing, hint, error, testID }: FieldProps) {
+export function Field({ label, children, hint, error, testID }: FieldProps) {
   const hintTestID = useMemo(() => (testID ? `${testID}-hint` : undefined), [testID]);
   const errorTestID = useMemo(() => (testID ? `${testID}-error` : undefined), [testID]);
   const subtext = useMemo(() => {
@@ -58,7 +50,6 @@ export function Field({ label, children, trailing, hint, error, testID }: FieldP
     <View style={styles.container} testID={testID}>
       <View style={styles.header}>
         <Text style={styles.label}>{label}</Text>
-        {trailing}
       </View>
       {children}
       {subtext}
@@ -145,19 +136,6 @@ function stripUnistylesMetadata<TStyle extends object>(style: TStyle): TStyle {
   return cleanStyle as TStyle;
 }
 
-function assignTextInputRef(
-  forwardedRef: ForwardedRef<EditingTextInputHandle>,
-  node: EditingTextInputHandle | null,
-): void {
-  if (typeof forwardedRef === "function") {
-    forwardedRef(node);
-    return;
-  }
-  if (forwardedRef) {
-    forwardedRef.current = node;
-  }
-}
-
 export const FormTextInput = forwardRef<EditingTextInputHandle, FormTextInputProps>(
   function FormTextInput({ size = "md", style, onFocus, onBlur, editable, ...props }, ref) {
     const [focused, setFocused] = useState(false);
@@ -165,12 +143,6 @@ export const FormTextInput = forwardRef<EditingTextInputHandle, FormTextInputPro
     const chromeSizeStyle = size === "sm" ? formInputStyles.chromeSm : formInputStyles.chromeMd;
     const inputSizeStyle = size === "sm" ? formInputStyles.inputSm : formInputStyles.inputMd;
     const splitStyle = useMemo(() => splitFormTextInputStyle(style), [style]);
-    const setInputRef = useCallback(
-      (node: EditingTextInputHandle | null) => {
-        assignTextInputRef(ref, node);
-      },
-      [ref],
-    );
     const handleFocus = useCallback<NonNullable<AdaptiveTextInputProps["onFocus"]>>(
       (event) => {
         setFocused(true);
@@ -214,7 +186,7 @@ export const FormTextInput = forwardRef<EditingTextInputHandle, FormTextInputPro
     return (
       <Pressable disabled={isDisabled} style={chromeStyle}>
         <AdaptiveTextInput
-          ref={setInputRef}
+          ref={ref}
           editable={editable}
           {...props}
           onBlur={handleBlur}

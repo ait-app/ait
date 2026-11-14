@@ -8,7 +8,7 @@ export interface NativeTerminalKeyEvent {
   meta: boolean;
 }
 
-export type NativeTerminalKeyHandler = (event: NativeTerminalKeyEvent) => Promise<void> | void;
+type NativeTerminalKeyHandler = (event: NativeTerminalKeyEvent) => Promise<void> | void;
 
 export function resolveNativeTerminalKey(key: string): NativeTerminalKey | null {
   switch (key) {
@@ -22,7 +22,7 @@ export function resolveNativeTerminalKey(key: string): NativeTerminalKey | null 
   }
 }
 
-export function createNativeTerminalKeyEvent(key: NativeTerminalKey): NativeTerminalKeyEvent {
+function createNativeTerminalKeyEvent(key: NativeTerminalKey): NativeTerminalKeyEvent {
   return {
     key,
     ctrl: false,

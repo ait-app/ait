@@ -2,17 +2,13 @@ const sharedSharing = {
   sharedWithMeCount: "共有されたリソース（{{count}}）",
   incomingHostHint: "有効なホストと共有されたプロジェクトやワークスペースが一覧に表示されます。",
   showHostInHosts: "{{host}} をホスト一覧に表示",
-  sharedByMe: "自分が共有",
   sharedByMeCount: "自分が共有（{{count}}）",
-  section: "共有",
   action: "グループと共有",
   manage: "管理",
   refresh: "更新",
   stop: "共有を停止",
   active: "有効",
   loading: "共有リソースを読み込み中…",
-  offline: "この共有リソースはオフラインです。",
-  emptyResources: "この共有リソースにはワークスペースがありません。",
   hostSection: "共有",
   hostTitle: "このノードを共有",
   hostHint:
@@ -56,7 +52,5 @@ const sharedSharing = {
 export const sharing = {
   ...sharedSharing,
   title: "共有",
-  offline: "この共有リソースはオフラインです。",
-  emptyResources: "この共有リソースにはワークスペースがありません。",
   listError: "共有リソースを読み込めませんでした。",
 };

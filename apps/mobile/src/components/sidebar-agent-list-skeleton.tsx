@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Animated, View, type StyleProp, type ViewStyle } from "react-native";
+import { useMemo } from "react";
+import { Animated, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { projectIconRadius } from "@/components/project-icon-view";
-import { isNative } from "@/constants/platform";
+import { SkeletonPulse, useSkeletonPulse } from "@/components/ui/skeleton-pulse";
 
 const PROJECT_ICON_SIZE = 16;
 
@@ -11,17 +11,6 @@ const SECTION_KEYS = SECTION_OPACITIES.map((_, i) => `skeleton-section-${i}`);
 const ROW_KEYS_BY_SECTION: readonly (readonly string[])[] = SECTION_OPACITIES.map((_, sIdx) =>
   [0, 1, 2].map((r) => `skeleton-row-${sIdx}-${r}`),
 );
-
-function SkeletonPulse({ pulse, style }: { pulse: Animated.Value; style: StyleProp<ViewStyle> }) {
-  const opacity = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.4, 0.8],
-  });
-
-  const pulseStyle = useMemo(() => [style, { opacity }], [style, opacity]);
-
-  return <Animated.View style={pulseStyle} />;
-}
 
 function SkeletonSection({
   pulse,
@@ -58,27 +47,7 @@ function SkeletonSection({
 }
 
 export function SidebarAgentListSkeleton() {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: isNative,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: isNative,
-        }),
-      ]),
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [pulse]);
+  const pulse = useSkeletonPulse();
 
   return (
     <View style={styles.container}>

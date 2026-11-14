@@ -183,11 +183,9 @@ function SessionsScreenContent() {
       {!isInitialLoad && agents.length > 0 ? (
         <AgentList
           agents={agents}
-          showCheckoutInfo={false}
           isRefreshing={isManualRefresh}
           onRefresh={handleRefresh}
           listFooterComponent={listFooterComponent}
-          showAttentionIndicator={false}
           showHostColumn
           search={isSearching ? search : undefined}
         />

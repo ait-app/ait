@@ -9,6 +9,10 @@ import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
+import {
+  resolveDefaultModel,
+  resolveDefaultModelId,
+} from "@/provider-selection/resolve-agent-form";
 
 /**
  * The persisted profile minus the id; the list owns identity.
@@ -167,7 +171,7 @@ function resolveEffectiveModel(
   if (trimmed) {
     return models.find((model) => model.id === trimmed) ?? null;
   }
-  return models.find((model) => model.isDefault) ?? models[0] ?? null;
+  return resolveDefaultModel(models);
 }
 
 function resolveThinkingOptions(
@@ -252,10 +256,6 @@ function buildThinkingOptions(options: readonly AgentSelectOption[]): AgentProfi
  * offered that row; this form now matches it and seeds the catalog's own default
  * instead, so what the form shows is what the profile stores.
  */
-function defaultModelId(models: readonly AgentModelDefinition[]): string {
-  return models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? "";
-}
-
 function defaultModeId(entry: ProviderSnapshotEntry | null, modes: readonly AgentMode[]): string {
   return entry?.defaultModeId ?? modes[0]?.id ?? "";
 }
@@ -278,7 +278,7 @@ function seedSelections(
     modes: readonly AgentMode[];
   },
 ): AgentProfileFormState {
-  const modelId = next.modelId || defaultModelId(input.models);
+  const modelId = next.modelId || resolveDefaultModelId(input.models);
   const modeId = next.modeId || defaultModeId(input.entry, input.modes);
   const thinkingOptionId =
     next.thinkingOptionId || defaultThinkingOptionId(resolveEffectiveModel(input.models, modelId));

@@ -17,14 +17,11 @@ import {
 } from "react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import {
-  MenuHint,
   MenuItem,
-  MenuLabel,
   MenuRoot,
   MenuSeparator,
   MenuSurface,
   useMenuContext,
-  type MenuSurfaceProps,
   type MenuTriggerState,
 } from "@/components/ui/menu";
 import { PressHighlight } from "@/components/ui/press-highlight";
@@ -39,9 +36,7 @@ import type { PressHighlightProps } from "@/components/ui/press-highlight.types"
  */
 
 export { MenuItem as ContextMenuItem };
-export { MenuLabel as ContextMenuLabel };
 export { MenuSeparator as ContextMenuSeparator };
-export { MenuHint as ContextMenuHint };
 export type { ActionStatus } from "@/components/ui/menu";
 
 /**
@@ -55,9 +50,7 @@ export function ContextMenu({
   return <MenuRoot {...props} compactMode={compactMode} />;
 }
 
-export function ContextMenuContent(props: MenuSurfaceProps): ReactElement | null {
-  return <MenuSurface {...props} />;
-}
+export { MenuSurface as ContextMenuContent };
 
 export function useContextMenu() {
   return useMenuContext("useContextMenu");

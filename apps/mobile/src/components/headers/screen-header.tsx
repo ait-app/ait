@@ -1,6 +1,5 @@
 import { ComposerDockBackground } from "@/composer/dock";
 import { useMemo, type ReactNode } from "react";
-import type { LayoutChangeEvent } from "react-native";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -17,23 +16,14 @@ interface ScreenHeaderProps {
   left?: ReactNode;
   right?: ReactNode;
   leftStyle?: StyleProp<ViewStyle>;
-  rightStyle?: StyleProp<ViewStyle>;
   borderless?: boolean;
-  onRowLayout?: (event: LayoutChangeEvent) => void;
 }
 
 /**
  * Shared frame for the home/back headers so we only maintain padding, border,
  * and safe-area logic in one place.
  */
-export function ScreenHeader({
-  left,
-  right,
-  leftStyle,
-  rightStyle,
-  borderless,
-  onRowLayout,
-}: ScreenHeaderProps) {
+export function ScreenHeader({ left, right, leftStyle, borderless }: ScreenHeaderProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
@@ -47,7 +37,6 @@ export function ScreenHeader({
   );
   const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
-  const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
 
   return (
     <ComposerDockBackground style={styles.header} testID="composer-dock-header">
@@ -55,12 +44,11 @@ export function ScreenHeader({
         <WindowChromeSafeArea
           placement="inline"
           horizontalPadding={baseHorizontalPadding}
-          onLayout={onRowLayout}
           style={rowStyle}
         >
           <TitlebarDragRegion />
           <View style={leftCombinedStyle}>{left}</View>
-          <View style={rightCombinedStyle}>{right}</View>
+          <View style={styles.right}>{right}</View>
         </WindowChromeSafeArea>
       </View>
     </ComposerDockBackground>

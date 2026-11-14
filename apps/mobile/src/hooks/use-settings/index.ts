@@ -15,24 +15,14 @@ import {
   APP_SETTINGS_QUERY_KEY,
   DEFAULT_APP_SETTINGS,
   DEFAULT_CLIENT_SETTINGS,
-  DEFAULT_CODE_FONT_SIZE,
-  DEFAULT_CONTENT_FONT_SIZE,
-  DEFAULT_CONTENT_MAX_WIDTH,
-  DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_THEME_PREFERENCE,
-  DEFAULT_UI_BASE_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
   MAX_CONTENT_FONT_SIZE,
-  MAX_CONTENT_MAX_WIDTH,
-  MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_BASE_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
   MIN_CONTENT_FONT_SIZE,
-  MIN_CONTENT_MAX_WIDTH,
-  MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_BASE_FONT_SIZE,
   loadAppSettingsFromStorage as loadAppSettingsFromStoragePure,
-  loadSettingsFromStorage as loadSettingsFromStoragePure,
   normalizeAppSettings,
   parseClampedFontSize,
   parseContentMaxWidth,
@@ -44,8 +34,6 @@ import {
   type AppSettingsUpdate,
   type OpenInSidePanePreferences,
   type PullRequestOpenLocation,
-  type DesktopSettingsBridge,
-  type KeyValueStorage,
   type ReleaseChannel,
   type SendBehavior,
   type ServiceUrlBehavior,
@@ -56,24 +44,13 @@ import {
 } from "./storage";
 
 export {
-  APP_SETTINGS_KEY,
   DEFAULT_APP_SETTINGS,
-  DEFAULT_CLIENT_SETTINGS,
-  DEFAULT_CODE_FONT_SIZE,
-  DEFAULT_CONTENT_FONT_SIZE,
-  DEFAULT_CONTENT_MAX_WIDTH,
-  DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_THEME_PREFERENCE,
-  DEFAULT_UI_BASE_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
   MAX_CONTENT_FONT_SIZE,
-  MAX_CONTENT_MAX_WIDTH,
-  MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_BASE_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
   MIN_CONTENT_FONT_SIZE,
-  MIN_CONTENT_MAX_WIDTH,
-  MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_BASE_FONT_SIZE,
   parseClampedFontSize,
   parseContentMaxWidth,
@@ -83,17 +60,13 @@ export {
 };
 export type {
   AppSettings,
-  AppSettingsUpdate,
   AppLanguage,
   OpenInSidePanePreferences,
   PullRequestOpenLocation,
-  DesktopSettingsBridge,
-  KeyValueStorage,
   ReleaseChannel,
   SendBehavior,
   ServiceUrlBehavior,
   Settings,
-  SettingsDeps,
   SidebarWorkspaceTrailing,
   WorkspaceTitleSource,
 };
@@ -124,7 +97,7 @@ const productionDeps: SettingsDeps = {
   },
 };
 
-export interface UseAppSettingsReturn {
+interface UseAppSettingsReturn {
   settings: AppSettings;
   isLoading: boolean;
   error: unknown;
@@ -132,7 +105,7 @@ export interface UseAppSettingsReturn {
   resetSettings: () => Promise<void>;
 }
 
-export interface UseSettingsReturn {
+interface UseSettingsReturn {
   settings: Settings;
   isLoading: boolean;
   error: unknown;
@@ -252,22 +225,17 @@ export async function persistAppSettings(updates: Partial<AppSettings>): Promise
   await saveAppSettings({ queryClient: appQueryClient, updates });
 }
 
-export async function saveAppSettings(input: {
+async function saveAppSettings(input: {
   queryClient: QueryClient;
   updates: AppSettingsUpdate;
-  deps?: SettingsDeps;
 }): Promise<void> {
   await saveAppSettingsPure({
     queryClient: input.queryClient,
     updates: input.updates,
-    deps: input.deps ?? productionDeps,
+    deps: productionDeps,
   });
 }
 
-export async function loadAppSettingsFromStorage(deps?: SettingsDeps): Promise<AppSettings> {
-  return loadAppSettingsFromStoragePure(deps ?? productionDeps);
-}
-
-export async function loadSettingsFromStorage(deps?: SettingsDeps): Promise<Settings> {
-  return loadSettingsFromStoragePure(deps ?? productionDeps);
+export async function loadAppSettingsFromStorage(): Promise<AppSettings> {
+  return loadAppSettingsFromStoragePure(productionDeps);
 }

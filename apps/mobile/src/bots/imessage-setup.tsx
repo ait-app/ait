@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { getIsElectron } from "@/constants/platform";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl, openSmsUrl } from "@/utils/open-external-url";
 import { useLiveSetup } from "./channel-setup";
 import { QrCode } from "./qr-code";
@@ -28,13 +27,6 @@ const FAILURE_KEYS = {
   unavailable: "bots.imessageUnavailable",
 } as const;
 type Failure = keyof typeof FAILURE_KEYS;
-
-/** Whether the host can pair an iMessage sender through Photon. */
-export function useImessageSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotImessageSetup === true,
-  );
-}
 
 export function ImessageGuidedSetup({
   serverId,

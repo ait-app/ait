@@ -125,7 +125,6 @@ function BotExchange({
         <AssistantMessage
           key={message.id}
           message={message.text}
-          timestamp={createdAt.getTime()}
           serverId={serverId}
           client={client}
           workspaceRoot={cwd}

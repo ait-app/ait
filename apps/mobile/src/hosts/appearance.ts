@@ -29,11 +29,6 @@ export function defaultHostAppearance(): HostAppearance {
   return { color: "none", badgeDisplay: null };
 }
 
-export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
-  const result = HostAppearanceSchema.safeParse(value);
-  return result.success ? result.data : defaultHostAppearance();
-}
-
 export function resolveHostBadgeDisplay(input: {
   appearance: HostAppearance;
   isLocalHost: boolean;

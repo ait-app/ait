@@ -169,7 +169,6 @@ export const schedules = {
   untitledAgent: "Агент без названия",
   product: {
     schedule: "Расписание",
-    heartbeat: "Пульс",
   },
   untitled: "Без названия ({{product}})",
   status: {
@@ -231,7 +230,6 @@ export const schedules = {
     workspace: "Рабочее пространство",
     chooseHost: "Сначала выберите хост.",
     chooseProject: "Сначала выберите проект.",
-    searchProjects: "Поиск проектов...",
     model: "Модель",
     thinking: "Рассуждение",
     selectThinking: "Выберите уровень рассуждений",
@@ -242,11 +240,6 @@ export const schedules = {
     noModelModes: "Для этой модели нет доступных режимов.",
     selectMode: "Выберите режим",
     archive: "Архивировать созданного агента после каждого запуска",
-    isolation: "Изоляция",
-    local: "Локально",
-    worktree: "Worktree",
-    selectIsolation: "Выберите изоляцию",
-    noIsolation: "Варианты изоляции не найдены",
     submitError: "Не удалось сохранить расписание: {{message}}",
     runningError:
       "Задача выполняется. Дождитесь завершения текущего запуска, прежде чем изменять её.",

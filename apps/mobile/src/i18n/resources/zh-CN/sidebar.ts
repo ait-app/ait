@@ -6,7 +6,6 @@ export const sidebar = {
       label: "分组",
       project: "项目",
       status: "状态",
-      labels: "标签",
     },
     titleSource: {
       label: "标题",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "已置顶",
   },
-  host: {
-    noHost: "没有主机",
-    switchTitle: "切换主机",
-    searchPlaceholder: "搜索主机...",
-  },
   actions: {
     addProject: "添加项目",
     newWorkspace: "新建工作区",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "运行诊断",
     shortcuts: "键盘快捷键",
     reportIssue: "报告问题",
-    discord: "Discord",
     github: "创建 GitHub 议题",
     whatsNew: "新功能",
     appName: "Ait",
@@ -108,7 +101,6 @@ export const sidebar = {
     status: {
       serviceRunning: "服务 {{name}} 运行中",
       serviceUnhealthy: "服务 {{name}} 异常",
-      creating: "正在创建...",
     },
     checks: {
       passed: "成功: {{count}}",
@@ -130,28 +122,17 @@ export const sidebar = {
       pin: "置顶",
       unpin: "取消置顶",
       archive: "归档",
-      archiveWorkspace: "归档工作区",
-      hideFromSidebar: "从侧边栏隐藏",
       archiving: "正在归档...",
-      hiding: "正在隐藏...",
-    },
-    confirmations: {
-      hideTitle: "隐藏工作区？",
-      hideMessage: "从侧边栏隐藏「{{workspaceName}}」？\n\n磁盘上的文件不会被更改。",
-      hideConfirm: "隐藏",
-      cancel: "取消",
     },
     rename: {
       title: "重命名工作区",
       submit: "重命名",
-      invalidBranchName: "无效的分支名称",
     },
     toasts: {
       workspacePathUnavailable: "工作区路径不可用",
       pathCopied: "路径已复制",
       branchNameCopied: "分支名称已复制",
       hostDisconnected: "Host 未连接",
-      hideFailed: "隐藏工作区失败",
       archiveFailed: "归档工作区失败",
     },
   },

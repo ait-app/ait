@@ -12,5 +12,3 @@ export function createBranchSwitcherOperations(client: DaemonClient, cwd: string
     switchBranch: (branch: string) => client.checkoutSwitchBranch(cwd, branch),
   };
 }
-
-export type BranchSwitcherOperations = ReturnType<typeof createBranchSwitcherOperations>;

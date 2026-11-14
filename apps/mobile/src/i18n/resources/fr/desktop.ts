@@ -182,10 +182,4 @@ export const desktop = {
       failed: "Échec de l'envoi de la notification.",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "Impossible de vérifier l'état de l'installation deCLI.",
-      installFailed: "Impossible d'installer le Ait CLI.",
-    },
-  },
 };

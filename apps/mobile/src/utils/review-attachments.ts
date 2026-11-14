@@ -34,8 +34,6 @@ export function buildForgeAttachmentFromSearchItem(
   };
 }
 
-export const buildGitHubAttachmentFromSearchItem = buildForgeAttachmentFromSearchItem;
-
 export function buildLegacyGitHubAttachmentFromSearchItem(
   item: ForgeSearchItem | null,
 ): AgentAttachment | null {

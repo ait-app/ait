@@ -17,7 +17,6 @@ interface DiffDocumentBaseProps {
 export interface WorkingDiffMode {
   kind: "working";
   reviewActions?: InlineReviewActions;
-  onFilePress?: (path: string) => void;
   focusPath?: string;
   focusRequestId?: number;
   workspaceFileDragScope?: { serverId: string; workspaceId: string };

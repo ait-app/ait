@@ -10,7 +10,7 @@ export interface CompactSheetPolicy {
 }
 
 /** Facts about a target that live outside the layout, resolved lazily by the workspace. */
-export interface PanelTargetFacts {
+interface PanelTargetFacts {
   isWorkspaceRootAgent(agentId: string): boolean;
 }
 

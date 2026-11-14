@@ -6,7 +6,6 @@ export const sidebar = {
       label: "グループ化",
       project: "プロジェクト",
       status: "ステータス",
-      labels: "ラベル",
     },
     titleSource: {
       label: "タイトル",
@@ -48,11 +47,6 @@ export const sidebar = {
   pinned: {
     title: "固定済み",
   },
-  host: {
-    noHost: "ホストなし",
-    switchTitle: "ホストを切り替え",
-    searchPlaceholder: "ホストを検索...",
-  },
   actions: {
     addProject: "プロジェクトを追加",
     newWorkspace: "新しいワークスペース",
@@ -66,7 +60,6 @@ export const sidebar = {
     diagnostics: "診断を実行",
     shortcuts: "キーボードショートカット",
     reportIssue: "問題を報告",
-    discord: "Discord",
     github: "GitHub Issueを作成",
     whatsNew: "新着情報",
     appName: "Ait",
@@ -110,7 +103,6 @@ export const sidebar = {
     status: {
       serviceRunning: "サービス {{name}} 実行中",
       serviceUnhealthy: "サービス {{name}} 異常",
-      creating: "作成中...",
     },
     checks: {
       passed: "成功: {{count}}",
@@ -132,29 +124,17 @@ export const sidebar = {
       pin: "上部に固定",
       unpin: "固定解除",
       archive: "アーカイブ",
-      archiveWorkspace: "ワークスペースをアーカイブ",
-      hideFromSidebar: "サイドバーから非表示",
       archiving: "アーカイブ中...",
-      hiding: "非表示にしています...",
-    },
-    confirmations: {
-      hideTitle: "ワークスペースを非表示にしますか？",
-      hideMessage:
-        '"{{workspaceName}}"をサイドバーから非表示にしますか？\n\nディスク上のファイルは変更されません。',
-      hideConfirm: "非表示",
-      cancel: "キャンセル",
     },
     rename: {
       title: "ワークスペースの名前を変更",
       submit: "名前を変更",
-      invalidBranchName: "無効なブランチ名",
     },
     toasts: {
       workspacePathUnavailable: "ワークスペースパスが利用できません",
       pathCopied: "パスをコピーしました",
       branchNameCopied: "ブランチ名をコピーしました",
       hostDisconnected: "ホストが接続されていません",
-      hideFailed: "ワークスペースの非表示に失敗しました",
       archiveFailed: "ワークスペースのアーカイブに失敗しました",
     },
   },

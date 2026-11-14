@@ -6,7 +6,6 @@ export const sidebar = {
       label: "Agrupación",
       project: "Proyecto",
       status: "Estado",
-      labels: "Etiquetas",
     },
     titleSource: {
       label: "Título",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "Anclados",
   },
-  host: {
-    noHost: "Sin anfitrión",
-    switchTitle: "Cambiar de anfitrión",
-    searchPlaceholder: "Buscar hosts...",
-  },
   actions: {
     addProject: "Agregar proyecto",
     newWorkspace: "Nuevo espacio de trabajo",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "Ejecutar diagnóstico",
     shortcuts: "Atajos de teclado",
     reportIssue: "Informar de un problema",
-    discord: "Discord",
     github: "Crear incidencia en GitHub",
     whatsNew: "Novedades",
     appName: "Ait",
@@ -109,7 +102,6 @@ export const sidebar = {
     status: {
       serviceRunning: "Servicio {{name}} en ejecución",
       serviceUnhealthy: "Servicio {{name}} con fallos",
-      creating: "Creando...",
     },
     checks: {
       passed: "Superados: {{count}}",
@@ -131,29 +123,17 @@ export const sidebar = {
       pin: "Anclar arriba",
       unpin: "Desanclar",
       archive: "Archivo",
-      archiveWorkspace: "Archivar espacio de trabajo",
-      hideFromSidebar: "Ocultar de la barra lateral",
       archiving: "Archivando...",
-      hiding: "Ocultación...",
-    },
-    confirmations: {
-      hideTitle: "¿Ocultar espacio de trabajo?",
-      hideMessage:
-        '¿Ocultar "{{workspaceName}}" de la barra lateral?\n\nLos archivos en el disco no se cambiarán.',
-      hideConfirm: "Esconder",
-      cancel: "Cancelar",
     },
     rename: {
       title: "Cambiar nombre del espacio de trabajo",
       submit: "Rebautizar",
-      invalidBranchName: "Nombre de sucursal no válido",
     },
     toasts: {
       workspacePathUnavailable: "RutaWorkspaceno disponible",
       pathCopied: "Ruta copiada",
       branchNameCopied: "Nombre de la sucursal copiado",
       hostDisconnected: "Hostno está conectado",
-      hideFailed: "No se pudo ocultar el espacio de trabajo",
       archiveFailed: "No se pudo archivar el espacio de trabajo",
     },
   },

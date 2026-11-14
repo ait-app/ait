@@ -232,17 +232,6 @@ async function getCliDaemonStatus(): Promise<string> {
   return JSON.stringify(await resolveDesktopDaemonStatus(), null, 2);
 }
 
-async function getLocalDaemonVersion(): Promise<{ version: string | null; error: string | null }> {
-  const status = await resolveDesktopDaemonStatus();
-  if (status.status !== "running") {
-    return { version: null, error: "Daemon is not running." };
-  }
-  return {
-    version: status.version,
-    error: status.version ? null : "Running daemon did not report a version.",
-  };
-}
-
 async function resolveRequestedReleaseChannel(
   args: Record<string, unknown> | undefined,
 ): Promise<AppReleaseChannel> {
@@ -338,7 +327,6 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
         },
       );
     },
-    get_local_daemon_version: () => getLocalDaemonVersion(),
     read_legacy_skill_selection: () => readLegacySkillSelection(),
     delete_legacy_skill_selection: () => deleteLegacySkillSelection(),
   };

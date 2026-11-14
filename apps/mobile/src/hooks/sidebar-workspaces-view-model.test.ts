@@ -5,7 +5,7 @@ import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activi
 import {
   buildSidebarWorkspaceEntries,
   buildSidebarWorkspacePlacementModel,
-  buildSidebarProjectsFromStructure,
+  buildSidebarProjectsFromHostProjects,
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
@@ -210,9 +210,9 @@ function workspace(input: {
   };
 }
 
-describe("buildSidebarProjectsFromStructure", () => {
+describe("buildSidebarProjectsFromHostProjects", () => {
   it("creates structural workspace rows from ordered workspace keys", () => {
-    const projects = buildSidebarProjectsFromStructure({
+    const projects = buildSidebarProjectsFromHostProjects({
       projects: [
         project({
           projectKey: "project-1",
@@ -235,7 +235,7 @@ describe("buildSidebarProjectsFromStructure", () => {
   });
 
   it("preserves the structure hook project order", () => {
-    const projects = buildSidebarProjectsFromStructure({
+    const projects = buildSidebarProjectsFromHostProjects({
       projects: [
         project({ projectKey: "project-b", workspaceKeys: ["ws-b"] }),
         project({ projectKey: "project-a", workspaceKeys: ["ws-a"] }),
@@ -246,7 +246,7 @@ describe("buildSidebarProjectsFromStructure", () => {
   });
 
   it("preserves the structure hook workspace order", () => {
-    const projects = buildSidebarProjectsFromStructure({
+    const projects = buildSidebarProjectsFromHostProjects({
       projects: [project({ projectKey: "project-1", workspaceKeys: ["feature", "main"] })],
     });
 
@@ -257,7 +257,7 @@ describe("buildSidebarProjectsFromStructure", () => {
   });
 
   it("resolves workspace keys by known host prefix when server ids contain colons", () => {
-    const projects = buildSidebarProjectsFromStructure({
+    const projects = buildSidebarProjectsFromHostProjects({
       projects: [
         project({
           projectKey: "project-1",

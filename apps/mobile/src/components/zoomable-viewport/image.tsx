@@ -11,13 +11,10 @@ interface ZoomableImageProps {
   actions?: ZoomableViewportAction[];
   contentSize?: ViewportSize;
   fit?: ViewportFitOptions;
-  maxScale?: number;
-  minScale?: number;
   onError?: () => void;
   onPressOutsideContent?: () => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;
-  wheelActivation?: "always" | "modifier";
 }
 
 export function ZoomableImage({
@@ -26,13 +23,10 @@ export function ZoomableImage({
   actions,
   contentSize,
   fit,
-  maxScale,
-  minScale = 1,
   onError,
   onPressOutsideContent,
   style,
   testID = "zoomable-image",
-  wheelActivation = "always",
 }: ZoomableImageProps) {
   const [loadedSize, setLoadedSize] = useState<ViewportSize | null>(null);
   const resolvedSize = contentSize ?? loadedSize;
@@ -78,12 +72,11 @@ export function ZoomableImage({
       actions={actions}
       contentSize={resolvedSize}
       fit={fit}
-      maxScale={maxScale}
-      minScale={minScale}
+      minScale={1}
       onPressOutsideContent={onPressOutsideContent}
       style={style}
       testID={testID}
-      wheelActivation={wheelActivation}
+      wheelActivation="always"
     >
       <Image
         onError={onError}

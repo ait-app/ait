@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
-import {
-  collectAssistantResponseContentForStreamRenderStrategy,
-  getBottomOffsetForStreamRenderStrategy,
-  getFrameChildOrderForStreamRenderStrategy,
-  getHistoryLiveBoundaryIndexForStreamRenderStrategy,
-  getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy,
-  getStreamEdgeSlotProps,
-  getStreamNeighborIndex,
-  getStreamNeighborItem,
-  isNearBottomForStreamRenderStrategy,
-  orderHeadForStreamRenderStrategy,
-  orderTailForStreamRenderStrategy,
-  resolveBottomAnchorTransportBehavior,
-} from "./strategy";
+import { resolveBottomAnchorTransportBehavior } from "./strategy";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 
 function createTimestamp(seed: number): Date {
@@ -63,10 +50,7 @@ describe("resolveStreamRenderStrategy", () => {
       isMobileBreakpoint: false,
     });
 
-    expect(strategy.shouldUseVirtualizedList()).toBe(false);
     expect(strategy.getFlatListInverted()).toBe(false);
-    expect(strategy.getOverlayScrollbarInverted()).toBe(false);
-    expect(strategy.shouldAnchorBottomOnContentSizeChange()).toBe(true);
     expect(strategy.getBottomAnchorTransportBehavior()).toEqual({
       verificationDelayFrames: 0,
       verificationRetryMode: "rescroll",
@@ -79,10 +63,7 @@ describe("resolveStreamRenderStrategy", () => {
       isMobileBreakpoint: false,
     });
 
-    expect(strategy.shouldUseVirtualizedList()).toBe(true);
     expect(strategy.getFlatListInverted()).toBe(true);
-    expect(strategy.getOverlayScrollbarInverted()).toBe(true);
-    expect(strategy.shouldAnchorBottomOnContentSizeChange()).toBe(false);
     expect(strategy.getBottomAnchorTransportBehavior()).toEqual({
       verificationDelayFrames: 2,
       verificationRetryMode: "recheck",
@@ -137,8 +118,8 @@ describe("stream ordering", () => {
       isMobileBreakpoint: false,
     });
 
-    const tail = orderTailForStreamRenderStrategy({ strategy, streamItems });
-    const head = orderHeadForStreamRenderStrategy({ strategy, streamHead: streamItems });
+    const tail = strategy.orderTail(streamItems);
+    const head = strategy.orderHead(streamItems);
 
     expect(tail.map((item) => item.id)).toEqual(["u1", "a1", "a2"]);
     expect(head.map((item) => item.id)).toEqual(["u1", "a1", "a2"]);
@@ -150,8 +131,8 @@ describe("stream ordering", () => {
       isMobileBreakpoint: false,
     });
 
-    const tail = orderTailForStreamRenderStrategy({ strategy, streamItems });
-    const head = orderHeadForStreamRenderStrategy({ strategy, streamHead: streamItems });
+    const tail = strategy.orderTail(streamItems);
+    const head = strategy.orderHead(streamItems);
 
     expect(tail.map((item) => item.id)).toEqual(["a2", "a1", "u1"]);
     expect(head.map((item) => item.id)).toEqual(["a2", "a1", "u1"]);
@@ -169,10 +150,10 @@ describe("neighbor and traversal semantics", () => {
       isMobileBreakpoint: false,
     });
 
-    expect(getStreamNeighborIndex({ strategy: forward, index: 3, relation: "above" })).toBe(2);
-    expect(getStreamNeighborIndex({ strategy: forward, index: 3, relation: "below" })).toBe(4);
-    expect(getStreamNeighborIndex({ strategy: inverted, index: 3, relation: "above" })).toBe(4);
-    expect(getStreamNeighborIndex({ strategy: inverted, index: 3, relation: "below" })).toBe(2);
+    expect(forward.getNeighborIndex(3, "above")).toBe(2);
+    expect(forward.getNeighborIndex(3, "below")).toBe(4);
+    expect(inverted.getNeighborIndex(3, "above")).toBe(4);
+    expect(inverted.getNeighborIndex(3, "below")).toBe(2);
   });
 
   it("collects assistant response content with strategy traversal direction", () => {
@@ -188,30 +169,19 @@ describe("neighbor and traversal semantics", () => {
       isMobileBreakpoint: false,
     });
     const forwardStartIndex = chronological.findIndex((item) => item.id === "a2");
-    expect(
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy: forward,
-        items: chronological,
-        startIndex: forwardStartIndex,
-      }),
-    ).toBe("assistant-1\n\nassistant-2");
+    expect(forward.collectAssistantResponseContent(chronological, forwardStartIndex)).toBe(
+      "assistant-1\n\nassistant-2",
+    );
 
     const inverted = resolveStreamRenderStrategy({
       platform: "android",
       isMobileBreakpoint: false,
     });
-    const invertedItems = orderTailForStreamRenderStrategy({
-      strategy: inverted,
-      streamItems: chronological,
-    });
+    const invertedItems = inverted.orderTail(chronological);
     const invertedStartIndex = invertedItems.findIndex((item) => item.id === "a2");
-    expect(
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy: inverted,
-        items: invertedItems,
-        startIndex: invertedStartIndex,
-      }),
-    ).toBe("assistant-1\n\nassistant-2");
+    expect(inverted.collectAssistantResponseContent(invertedItems, invertedStartIndex)).toBe(
+      "assistant-1\n\nassistant-2",
+    );
   });
 
   it("collects copy content across adjacent turns without a visible prompt", () => {
@@ -222,13 +192,9 @@ describe("neighbor and traversal semantics", () => {
     ];
     const strategy = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
 
-    expect(
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy,
-        items: chronological,
-        startIndex: 2,
-      }),
-    ).toBe("first turn\n\nsecond turn");
+    expect(strategy.collectAssistantResponseContent(chronological, 2)).toBe(
+      "first turn\n\nsecond turn",
+    );
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {
@@ -238,22 +204,8 @@ describe("neighbor and traversal semantics", () => {
     });
     const items: StreamItem[] = [userMessage("u1", "user-1", 1)];
 
-    expect(
-      getStreamNeighborItem({
-        strategy: forward,
-        items,
-        index: 0,
-        relation: "above",
-      }),
-    ).toBeUndefined();
-    expect(
-      getStreamNeighborItem({
-        strategy: forward,
-        items,
-        index: 0,
-        relation: "below",
-      }),
-    ).toBeUndefined();
+    expect(forward.getNeighborItem(items, 0, "above")).toBeUndefined();
+    expect(forward.getNeighborItem(items, 0, "below")).toBeUndefined();
   });
 });
 
@@ -265,8 +217,7 @@ describe("scroll/bottom calculations", () => {
     });
 
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 680,
         viewportHeight: 300,
         contentHeight: 1000,
@@ -274,8 +225,7 @@ describe("scroll/bottom calculations", () => {
       }),
     ).toBe(true);
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 600,
         viewportHeight: 300,
         contentHeight: 1000,
@@ -284,15 +234,14 @@ describe("scroll/bottom calculations", () => {
     ).toBe(false);
   });
 
-  it("computes near-bottom and scroll-to-bottom offset for inverted_stream", () => {
+  it("computes near-bottom for inverted_stream", () => {
     const strategy = resolveStreamRenderStrategy({
       platform: "ios",
       isMobileBreakpoint: false,
     });
 
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 12,
         viewportHeight: 300,
         contentHeight: 1000,
@@ -300,70 +249,13 @@ describe("scroll/bottom calculations", () => {
       }),
     ).toBe(true);
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 40,
         viewportHeight: 300,
         contentHeight: 1000,
         threshold: 24,
       }),
     ).toBe(false);
-    expect(
-      getBottomOffsetForStreamRenderStrategy({
-        strategy,
-        viewportHeight: 300,
-        contentHeight: 1000,
-      }),
-    ).toBe(0);
-  });
-
-  it("maps scroll-to-bottom to max offset for forward_stream", () => {
-    const strategy = resolveStreamRenderStrategy({
-      platform: "web",
-      isMobileBreakpoint: false,
-    });
-
-    expect(
-      getBottomOffsetForStreamRenderStrategy({
-        strategy,
-        viewportHeight: 320,
-        contentHeight: 1000,
-      }),
-    ).toBe(680);
-  });
-});
-
-describe("edge slot semantics", () => {
-  it("uses footer slot for forward_stream and header slot for inverted_stream", () => {
-    const EdgeSlot = () => null;
-    const forward = resolveStreamRenderStrategy({
-      platform: "web",
-      isMobileBreakpoint: false,
-    });
-    const inverted = resolveStreamRenderStrategy({
-      platform: "android",
-      isMobileBreakpoint: false,
-    });
-
-    const forwardProps = getStreamEdgeSlotProps({
-      strategy: forward,
-      component: EdgeSlot,
-      gapSize: 4,
-    });
-    const invertedProps = getStreamEdgeSlotProps({
-      strategy: inverted,
-      component: EdgeSlot,
-      gapSize: 4,
-    });
-
-    expect(forwardProps).toEqual({
-      ListFooterComponent: EdgeSlot,
-      ListFooterComponentStyle: { marginTop: 4 },
-    });
-    expect(invertedProps).toEqual({
-      ListHeaderComponent: EdgeSlot,
-      ListHeaderComponentStyle: { marginBottom: 4 },
-    });
   });
 });
 
@@ -383,21 +275,11 @@ describe("layout strategy edges", () => {
       isMobileBreakpoint: false,
     });
 
-    const forwardHistory = orderTailForStreamRenderStrategy({ strategy: forward, streamItems });
-    const invertedHistory = orderTailForStreamRenderStrategy({ strategy: inverted, streamItems });
+    const forwardHistory = forward.orderTail(streamItems);
+    const invertedHistory = inverted.orderTail(streamItems);
 
-    expect(
-      getHistoryLiveBoundaryIndexForStreamRenderStrategy({
-        strategy: forward,
-        history: forwardHistory,
-      }),
-    ).toBe(1);
-    expect(
-      getHistoryLiveBoundaryIndexForStreamRenderStrategy({
-        strategy: inverted,
-        history: invertedHistory,
-      }),
-    ).toBe(0);
+    expect(forward.getHistoryLiveBoundaryIndex(forwardHistory)).toBe(1);
+    expect(inverted.getHistoryLiveBoundaryIndex(invertedHistory)).toBe(0);
   });
 
   it("uses the oldest live-head edge as the live-head/history boundary", () => {
@@ -410,27 +292,11 @@ describe("layout strategy edges", () => {
       isMobileBreakpoint: false,
     });
 
-    const forwardHead = orderHeadForStreamRenderStrategy({
-      strategy: forward,
-      streamHead: streamItems,
-    });
-    const invertedHead = orderHeadForStreamRenderStrategy({
-      strategy: inverted,
-      streamHead: streamItems,
-    });
+    const forwardHead = forward.orderHead(streamItems);
+    const invertedHead = inverted.orderHead(streamItems);
 
-    expect(
-      getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy({
-        strategy: forward,
-        liveHead: forwardHead,
-      }),
-    ).toBe(0);
-    expect(
-      getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy({
-        strategy: inverted,
-        liveHead: invertedHead,
-      }),
-    ).toBe(1);
+    expect(forward.getLiveHeadHistoryBoundaryIndex(forwardHead)).toBe(0);
+    expect(inverted.getLiveHeadHistoryBoundaryIndex(invertedHead)).toBe(1);
   });
 
   it("names the frame child order needed by native inverted cells", () => {
@@ -443,11 +309,7 @@ describe("layout strategy edges", () => {
       isMobileBreakpoint: false,
     });
 
-    expect(getFrameChildOrderForStreamRenderStrategy({ strategy: forward })).toBe(
-      "content-then-footer",
-    );
-    expect(getFrameChildOrderForStreamRenderStrategy({ strategy: inverted })).toBe(
-      "footer-then-content",
-    );
+    expect(forward.getFrameChildOrder()).toBe("content-then-footer");
+    expect(inverted.getFrameChildOrder()).toBe("footer-then-content");
   });
 });

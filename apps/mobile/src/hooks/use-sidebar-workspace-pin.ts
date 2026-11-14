@@ -7,7 +7,7 @@ import { getHostRuntimeStore } from "@/runtime/host-runtime";
 
 // Everything the pin toggle actually needs. Kept narrower than SidebarWorkspaceEntry so the
 // global keyboard handler can build one from the active route selection without a sidebar row.
-export type PinnableWorkspace = Pick<
+type PinnableWorkspace = Pick<
   SidebarWorkspaceEntry,
   "serverId" | "workspaceId" | "workspaceKey" | "pinnedAt"
 >;

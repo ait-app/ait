@@ -44,11 +44,7 @@ export const message = {
   speak: {
     header: "말함",
   },
-  activity: {
-    details: "세부 정보",
-  },
   dictation: {
-    start: "음성 받아쓰기 시작",
     cancel: "받아쓰기 취소",
     retry: "받아쓰기 다시 시도",
     insert: "전사 삽입",

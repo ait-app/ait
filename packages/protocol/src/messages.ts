@@ -116,7 +116,6 @@ export const DAEMON_PERMISSIONS = [
   "automation.manage",
 ] as const;
 export const DaemonPermissionSchema = z.enum(DAEMON_PERMISSIONS);
-export type DaemonPermission = z.infer<typeof DaemonPermissionSchema>;
 
 const MutableDaemonProviderModelSchema = z
   .object({
@@ -1027,29 +1026,6 @@ export type {
   SideTurnStatus,
 } from "./side-questions.js";
 
-export const AgentListItemPayloadSchema = z.object({
-  id: z.string(),
-  shortId: z.string(),
-  title: z.string().nullable(),
-  provider: AgentProviderSchema,
-  model: z.string().nullable(),
-  thinkingOptionId: z.string().nullable().optional(),
-  effectiveThinkingOptionId: z.string().nullable().optional(),
-  status: AgentStatusSchema,
-  cwd: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  lastUserMessageAt: z.string().nullable(),
-  archivedAt: z.string().nullable().optional(),
-  requiresAttention: z.boolean().optional(),
-  attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
-  attentionTimestamp: z.string().nullable().optional(),
-  labels: z.record(z.string(), z.string()).default({}),
-  providerUnavailable: z.boolean().optional(),
-});
-
-export type AgentListItemPayload = z.infer<typeof AgentListItemPayloadSchema>;
-
 export type AgentStreamEventPayload = z.infer<typeof AgentStreamEventPayloadSchema>;
 
 export const RecentProviderSessionDescriptorPayloadSchema = z.object({
@@ -1062,10 +1038,6 @@ export const RecentProviderSessionDescriptorPayloadSchema = z.object({
   lastPromptPreview: z.string().nullable(),
   lastActivityAt: z.string(),
 });
-
-export type RecentProviderSessionDescriptorPayload = z.infer<
-  typeof RecentProviderSessionDescriptorPayloadSchema
->;
 
 // ============================================================================
 // Session Inbound Messages (Session receives these)
@@ -1384,16 +1356,6 @@ const ImageAttachmentSchema = z.object({
 export const ActiveTurnBehaviorSchema = z.enum(["interrupt", "steer"]);
 export type ActiveTurnBehavior = z.infer<typeof ActiveTurnBehaviorSchema>;
 
-export const SendAgentMessageSchema = z.object({
-  type: z.literal("send_agent_message"),
-  agentId: z.string(),
-  text: z.string(),
-  messageId: z.string().optional(), // Client-provided ID for deduplication
-  activeTurnBehavior: ActiveTurnBehaviorSchema.optional(),
-  images: z.array(ImageAttachmentSchema).optional(),
-  attachments: AgentAttachmentsSchema,
-});
-
 // ============================================================================
 // Agent RPCs (requestId-correlated)
 // ============================================================================
@@ -1666,7 +1628,6 @@ export const AgentSkillsStatusSchema = z.object({
 export type AgentSkillsStatus = z.infer<typeof AgentSkillsStatusSchema>;
 
 export const AgentSkillsConfirmationSchema = z.object({ removals: z.array(z.string()) }).strict();
-export type AgentSkillsConfirmation = z.infer<typeof AgentSkillsConfirmationSchema>;
 
 export const AgentSkillsSaveResultSchema = AgentSkillsStatusSchema.extend({
   confirmationRequired: AgentSkillsConfirmationSchema.nullable(),
@@ -1788,8 +1749,6 @@ export const CreateAgentWorktreeTargetSchema = z.discriminatedUnion("mode", [
     prNumber: z.number().int().positive(),
   }),
 ]);
-
-export type CreateAgentWorktreeTarget = z.infer<typeof CreateAgentWorktreeTargetSchema>;
 
 export const CreateAgentRequestMessageSchema = z.object({
   type: z.literal("agent.create.request"),
@@ -3006,8 +2965,6 @@ export const ProjectIconGetRequestSchema = z.object({
   requestId: z.string(),
 });
 
-export const ProjectIconRequestSchema = ProjectIconGetRequestSchema;
-
 export const FileDownloadTokenRequestSchema = z.object({
   type: z.literal("fs.file.download_token.request"),
   cwd: z.string(),
@@ -3151,8 +3108,6 @@ export const WorkspaceScriptStartRequestSchema = z.object({
   scriptName: z.string(),
   requestId: z.string(),
 });
-
-export const StartWorkspaceScriptRequestSchema = WorkspaceScriptStartRequestSchema;
 
 export const WorkspaceScriptStopRequestSchema = z.object({
   type: z.literal("workspace.script.stop.request"),
@@ -3932,8 +3887,6 @@ export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   DaemonConfigChangedStatusPayloadSchema,
 ]);
 
-export type KnownStatusPayload = z.infer<typeof KnownStatusPayloadSchema>;
-
 export const ArtifactMessageSchema = z.object({
   type: z.literal("artifact"),
   payload: z.object({
@@ -4198,13 +4151,6 @@ export const AgentStatusMessageSchema = z.object({
   }),
 });
 
-export const AgentListMessageSchema = z.object({
-  type: z.literal("agent_list"),
-  payload: z.object({
-    agents: z.array(AgentSnapshotPayloadSchema),
-  }),
-});
-
 export const AgentSearchMatchFieldSchema = z.enum(["workspace", "title", "branch", "project"]);
 
 export const AgentSearchMatchSchema = z.object({
@@ -4216,8 +4162,6 @@ export const AgentSearchMatchSchema = z.object({
     }),
   ),
 });
-
-export type AgentSearchMatch = z.infer<typeof AgentSearchMatchSchema>;
 
 const AgentDirectoryResponseEntrySchema = z.object({
   agent: AgentSnapshotPayloadSchema,
@@ -4603,15 +4547,6 @@ export const ProjectAddResponseSchema = z.object({
   }),
 });
 
-export const ProjectCreateDirectoryErrorCodeSchema = z.enum([
-  "invalid_name",
-  "parent_directory_not_found",
-  "directory_exists",
-  "permission_denied",
-  "registration_failed",
-  "filesystem_error",
-]);
-
 export const ProjectCreateDirectoryResponseSchema = z.object({
   type: z.literal("project.create_directory.response"),
   payload: z.object({
@@ -4694,7 +4629,6 @@ export const ProjectGithubCloneProgressMessageSchema = z.object({
 export type ProjectGithubCloneProgressMessage = z.infer<
   typeof ProjectGithubCloneProgressMessageSchema
 >;
-export type ProjectGithubCloneProgressPhase = z.infer<typeof ProjectGithubCloneProgressPhaseSchema>;
 
 const WorkspaceScriptOperationPayloadSchema = z.object({
   requestId: z.string(),
@@ -4714,8 +4648,6 @@ export const WorkspaceScriptStartResponseMessageSchema = z.object({
   type: z.literal("workspace.script.start.response"),
   payload: WorkspaceScriptOperationPayloadSchema,
 });
-
-export const StartWorkspaceScriptResponseMessageSchema = WorkspaceScriptStartResponseMessageSchema;
 
 export const WorkspaceScriptStopResponseMessageSchema = z.object({
   type: z.literal("workspace.script.stop.response"),
@@ -5078,8 +5010,6 @@ export const CreationSnapshotSchema = z.object({
   outcomeUnknown: z.boolean().optional(),
 });
 export type CreationSnapshot = z.infer<typeof CreationSnapshotSchema>;
-export type AgentCreateRequest = z.infer<typeof AgentCreateRequestSchema>;
-export type WorkspaceInitialAgent = z.infer<typeof WorkspaceInitialAgentSchema>;
 
 export const WorkspaceCreationUpdateSchema = z.object({
   type: z.literal("workspace.create.update"),
@@ -6777,8 +6707,6 @@ export const DaemonUpdateProgressMessageSchema = z.object({
   }),
 });
 
-export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
-
 export const AgentTimelineAppendResponseSchema = z.object({
   type: z.literal("agent.timeline.append.response"),
   payload: z.object({
@@ -7037,29 +6965,14 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;
 
 // Type exports for individual message types
-export type ActivityLogMessage = z.infer<typeof ActivityLogMessageSchema>;
-export type AssistantChunkMessage = z.infer<typeof AssistantChunkMessageSchema>;
-export type AudioOutputMessage = z.infer<typeof AudioOutputMessageSchema>;
-export type TranscriptionResultMessage = z.infer<typeof TranscriptionResultMessageSchema>;
 export type StatusMessage = z.infer<typeof StatusMessageSchema>;
 export type ServerCapabilityState = z.infer<typeof ServerCapabilityStateSchema>;
-export type ServerVoiceCapabilities = z.infer<typeof ServerVoiceCapabilitiesSchema>;
 export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>;
 export type ServerInfoStatusPayload = z.infer<typeof ServerInfoStatusPayloadSchema>;
-export type RpcErrorMessage = z.infer<typeof RpcErrorMessageSchema>;
-export type ArtifactMessage = z.infer<typeof ArtifactMessageSchema>;
-export type AgentUpdateMessage = z.infer<typeof AgentUpdateMessageSchema>;
-export type WorkspaceSetupProgressMessage = z.infer<typeof WorkspaceSetupProgressMessageSchema>;
 export type WorkspaceSetupSnapshot = z.infer<typeof WorkspaceSetupSnapshotSchema>;
 export type WorkspaceSetupStatusResponseMessage = z.infer<
   typeof WorkspaceSetupStatusResponseMessageSchema
 >;
-export type WorkspaceSetupRunResponseMessage = z.infer<
-  typeof WorkspaceSetupRunResponseMessageSchema
->;
-export type AgentStreamMessage = z.infer<typeof AgentStreamMessageSchema>;
-export type AgentStatusMessage = z.infer<typeof AgentStatusMessageSchema>;
-export type ProjectCheckoutLitePayload = z.infer<typeof ProjectCheckoutLitePayloadSchema>;
 export type ProjectPlacementPayload = z.infer<typeof ProjectPlacementPayloadSchema>;
 export type WorkspaceStateBucket = z.infer<typeof WorkspaceStateBucketSchema>;
 export type WorkspaceDescriptorPayload = z.infer<typeof WorkspaceDescriptorPayloadSchema>;
@@ -7069,23 +6982,12 @@ export type WorkspaceProjectDescriptorPayload = z.infer<
 export type ProjectListResponseMessage = z.infer<typeof ProjectListResponseMessageSchema>;
 export type ShareResourceKind = z.infer<typeof ShareResourceKindSchema>;
 export type ShareAudience = z.infer<typeof ShareAudienceSchema>;
-export type ShareState = z.infer<typeof ShareStateSchema>;
 export type ShareGroup = z.infer<typeof ShareGroupSchema>;
 export type ShareSetting = z.infer<typeof ShareSettingSchema>;
 export type ShareListResponse = z.infer<typeof ShareListResponseSchema>;
-export type ShareGroupsListResponse = z.infer<typeof ShareGroupsListResponseSchema>;
 export type ShareSetResponse = z.infer<typeof ShareSetResponseSchema>;
 export type ShareRemoveResponse = z.infer<typeof ShareRemoveResponseSchema>;
-export type WorkspaceScriptLifecycle = z.infer<typeof WorkspaceScriptLifecycleSchema>;
-export type WorkspaceScriptHealth = z.infer<typeof WorkspaceScriptHealthSchema>;
 export type WorkspaceScriptPayload = z.infer<typeof WorkspaceScriptPayloadSchema>;
-export type FetchAgentsResponseMessage = z.infer<typeof FetchAgentsResponseMessageSchema>;
-export type FetchAgentHistoryResponseMessage = z.infer<
-  typeof FetchAgentHistoryResponseMessageSchema
->;
-export type FetchRecentProviderSessionsResponseMessage = z.infer<
-  typeof FetchRecentProviderSessionsResponseMessageSchema
->;
 export type FetchWorkspacesResponseMessage = z.infer<typeof FetchWorkspacesResponseMessageSchema>;
 export type ProjectAddResponse = z.infer<typeof ProjectAddResponseSchema>;
 export type ProjectCreateDirectoryResponse = z.infer<typeof ProjectCreateDirectoryResponseSchema>;
@@ -7094,76 +6996,17 @@ export type OpenProjectResponseMessage = z.infer<typeof OpenProjectResponseMessa
 export type WorkspaceGithubSearchRepositoriesResponse = z.infer<
   typeof WorkspaceGithubSearchRepositoriesResponseSchema
 >;
-export type GithubRepository = z.infer<typeof GithubRepositorySchema>;
 export type ProjectGithubCloneResponse = z.infer<typeof ProjectGithubCloneResponseSchema>;
-export type StartWorkspaceScriptResponseMessage = z.infer<
-  typeof StartWorkspaceScriptResponseMessageSchema
->;
-export type WorkspaceScriptListRequest = z.infer<typeof WorkspaceScriptListRequestSchema>;
-export type WorkspaceScriptStartRequest = z.infer<typeof WorkspaceScriptStartRequestSchema>;
-export type WorkspaceScriptStopRequest = z.infer<typeof WorkspaceScriptStopRequestSchema>;
-export type WorkspaceScriptListResponseMessage = z.infer<
-  typeof WorkspaceScriptListResponseMessageSchema
->;
-export type WorkspaceScriptStartResponseMessage = z.infer<
-  typeof WorkspaceScriptStartResponseMessageSchema
->;
-export type WorkspaceScriptStopResponseMessage = z.infer<
-  typeof WorkspaceScriptStopResponseMessageSchema
->;
-export type LegacyListAvailableEditorsResponseMessage = z.infer<
-  typeof LegacyListAvailableEditorsResponseMessageSchema
->;
-export type LegacyOpenInEditorResponseMessage = z.infer<
-  typeof LegacyOpenInEditorResponseMessageSchema
->;
 export type ArchiveWorkspaceResponseMessage = z.infer<typeof ArchiveWorkspaceResponseMessageSchema>;
-export type FetchAgentResponseMessage = z.infer<typeof FetchAgentResponseMessageSchema>;
 export type FetchAgentTimelineResponseMessage = z.infer<
   typeof FetchAgentTimelineResponseMessageSchema
 >;
-export type AgentTimelineListPromptsResponseMessage = z.infer<
-  typeof AgentTimelineListPromptsResponseMessageSchema
->;
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
-export type AgentContextCompactResponseMessage = z.infer<
-  typeof AgentContextCompactResponseMessageSchema
->;
-export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
-export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
-export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;
-export type SetAgentModeResponseMessage = z.infer<typeof SetAgentModeResponseMessageSchema>;
-export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseMessageSchema>;
-export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingResponseMessageSchema>;
-export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
-export type AgentConfigApplyResponseMessage = z.infer<typeof AgentConfigApplyResponseMessageSchema>;
-export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
-export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
-export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
-export type ProjectIconSetResponse = z.infer<typeof ProjectIconSetResponseSchema>;
-export type ProjectRemoveResponse = z.infer<typeof ProjectRemoveResponseSchema>;
-export type WorkspaceTitleSetResponse = z.infer<typeof WorkspaceTitleSetResponseSchema>;
-export type WorkspaceTitleSetResponsePayload = z.infer<
-  typeof WorkspaceTitleSetResponsePayloadSchema
->;
-export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSchema>;
-export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
 export type WorkspaceRecoveryState = z.infer<typeof WorkspaceRecoveryStateSchema>;
-export type WorkspaceRecoveryInspectResponse = z.infer<
-  typeof WorkspaceRecoveryInspectResponseSchema
->;
-export type WorkspaceRecoveryRestoreResponse = z.infer<
-  typeof WorkspaceRecoveryRestoreResponseSchema
->;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
-export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
-export type ProjectRemoveResponsePayload = z.infer<typeof ProjectRemoveResponsePayloadSchema>;
-export type WaitForFinishResponseMessage = z.infer<typeof WaitForFinishResponseMessageSchema>;
-export type AgentPermissionRequestMessage = z.infer<typeof AgentPermissionRequestMessageSchema>;
 export type AgentPermissionResolvedMessage = z.infer<typeof AgentPermissionResolvedMessageSchema>;
-export type AgentDeletedMessage = z.infer<typeof AgentDeletedMessageSchema>;
 export type ListProviderModelsResponseMessage = z.infer<
   typeof ListProviderModelsResponseMessageSchema
 >;
@@ -7175,7 +7018,6 @@ export type ListProviderFeaturesResponseMessage = z.infer<
 >;
 export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
 export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
-export type DaemonConfigReloadResponse = z.infer<typeof DaemonConfigReloadResponseSchema>;
 export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
 export type GetProvidersSnapshotResponseMessage = z.infer<
   typeof GetProvidersSnapshotResponseMessageSchema
@@ -7197,11 +7039,7 @@ export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
 >;
 export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
-export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;
 export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;
-export type ProviderUsageWindow = z.infer<typeof ProviderUsageWindowSchema>;
-export type ProviderUsageBalance = z.infer<typeof ProviderUsageBalanceSchema>;
-export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
 export type ProviderUsageListResponseMessage = z.infer<
   typeof ProviderUsageListResponseMessageSchema
 >;
@@ -7209,155 +7047,41 @@ export type UsageLedgerGroup = z.infer<typeof UsageLedgerGroupSchema>;
 export type ProviderUsageLedgerResponseMessage = z.infer<
   typeof ProviderUsageLedgerResponseMessageSchema
 >;
-export type ScheduleCreateResponse = z.infer<typeof ScheduleCreateResponseSchema>;
-export type ScheduleListResponse = z.infer<typeof ScheduleListResponseSchema>;
-export type ScheduleInspectResponse = z.infer<typeof ScheduleInspectResponseSchema>;
-export type ScheduleLogsResponse = z.infer<typeof ScheduleLogsResponseSchema>;
-export type SchedulePauseResponse = z.infer<typeof SchedulePauseResponseSchema>;
-export type ScheduleResumeResponse = z.infer<typeof ScheduleResumeResponseSchema>;
-export type ScheduleDeleteResponse = z.infer<typeof ScheduleDeleteResponseSchema>;
-export type ScheduleRunOnceResponse = z.infer<typeof ScheduleRunOnceResponseSchema>;
-export type ScheduleUpdateResponse = z.infer<typeof ScheduleUpdateResponseSchema>;
-
-// Type exports for payload types
-export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 
 // Type exports for inbound message types
-export type VoiceAudioChunkMessage = z.infer<typeof VoiceAudioChunkMessageSchema>;
-export type FetchAgentsRequestMessage = z.infer<typeof FetchAgentsRequestMessageSchema>;
-export type FetchAgentHistoryRequestMessage = z.infer<typeof FetchAgentHistoryRequestMessageSchema>;
-export type FetchRecentProviderSessionsRequestMessage = z.infer<
-  typeof FetchRecentProviderSessionsRequestMessageSchema
->;
 export type FetchWorkspacesRequestMessage = z.infer<typeof FetchWorkspacesRequestMessageSchema>;
 export type ProjectListRequestMessage = z.infer<typeof ProjectListRequestMessageSchema>;
-export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
-export type AgentForkContextRequestMessage = z.infer<typeof AgentForkContextRequestMessageSchema>;
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
-export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
-export type DictationStreamStartMessage = z.infer<typeof DictationStreamStartMessageSchema>;
-export type DictationStreamChunkMessage = z.infer<typeof DictationStreamChunkMessageSchema>;
-export type DictationStreamFinishMessage = z.infer<typeof DictationStreamFinishMessageSchema>;
-export type DictationStreamCancelMessage = z.infer<typeof DictationStreamCancelMessageSchema>;
 export type CreateAgentRequestMessage = z.infer<typeof CreateAgentRequestMessageSchema>;
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
-export type ForgeChangeRequestAttachment = z.infer<typeof ForgeChangeRequestAttachmentSchema>;
-export type ForgeIssueAttachment = z.infer<typeof ForgeIssueAttachmentSchema>;
 export type UploadedFileAttachment = z.infer<typeof UploadedFileAttachmentSchema>;
-export type FirstAgentContext = z.infer<typeof FirstAgentContextSchema>;
 export type ReviewAttachment = z.infer<typeof ReviewAttachmentSchema>;
-export type ListProviderModelsRequestMessage = z.infer<
-  typeof ListProviderModelsRequestMessageSchema
->;
-export type ListProviderModesRequestMessage = z.infer<typeof ListProviderModesRequestMessageSchema>;
 export type ListProviderFeaturesRequestMessage = z.infer<
   typeof ListProviderFeaturesRequestMessageSchema
 >;
-export type ListAvailableProvidersRequestMessage = z.infer<
-  typeof ListAvailableProvidersRequestMessageSchema
->;
-export type GetProvidersSnapshotRequestMessage = z.infer<
-  typeof GetProvidersSnapshotRequestMessageSchema
->;
-export type RefreshProvidersSnapshotRequestMessage = z.infer<
-  typeof RefreshProvidersSnapshotRequestMessageSchema
->;
-export type ProviderDiagnosticRequestMessage = z.infer<
-  typeof ProviderDiagnosticRequestMessageSchema
->;
-export type ProviderPresetsDescribeRequestMessage = z.infer<
-  typeof ProviderPresetsDescribeRequestMessageSchema
->;
-export type ProviderPresetsListRequestMessage = z.infer<
-  typeof ProviderPresetsListRequestMessageSchema
->;
-export type ProviderPresetsSaveRequestMessage = z.infer<
-  typeof ProviderPresetsSaveRequestMessageSchema
->;
-export type ProviderPresetsDeleteRequestMessage = z.infer<
-  typeof ProviderPresetsDeleteRequestMessageSchema
->;
-export type ScheduleCreateRequest = z.infer<typeof ScheduleCreateRequestSchema>;
-export type ScheduleListRequest = z.infer<typeof ScheduleListRequestSchema>;
-export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema>;
-export type ScheduleLogsRequest = z.infer<typeof ScheduleLogsRequestSchema>;
-export type SchedulePauseRequest = z.infer<typeof SchedulePauseRequestSchema>;
-export type ScheduleResumeRequest = z.infer<typeof ScheduleResumeRequestSchema>;
-export type ScheduleDeleteRequest = z.infer<typeof ScheduleDeleteRequestSchema>;
-export type ScheduleRunOnceRequest = z.infer<typeof ScheduleRunOnceRequestSchema>;
-export type ScheduleUpdateRequest = z.infer<typeof ScheduleUpdateRequestSchema>;
-export type ResumeAgentRequestMessage = z.infer<typeof ResumeAgentRequestMessageSchema>;
-export type DeleteAgentRequestMessage = z.infer<typeof DeleteAgentRequestMessageSchema>;
-export type UpdateAgentRequestMessage = z.infer<typeof UpdateAgentRequestMessageSchema>;
 export type ProjectIconSource = z.infer<typeof ProjectIconSourceSchema>;
-export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
-export type ProjectIconSetRequest = z.infer<typeof ProjectIconSetRequestSchema>;
-export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
-export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
-export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
-export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
-export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
-export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
-export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
-export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;
-export type SetAgentFeatureRequestMessage = z.infer<typeof SetAgentFeatureRequestMessageSchema>;
-export type AgentConfigApplyRequestMessage = z.infer<typeof AgentConfigApplyRequestMessageSchema>;
-export type AgentDetachRequestMessage = z.infer<typeof AgentDetachRequestMessageSchema>;
-export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionResponseMessageSchema>;
-export type CheckoutStatusRequest = z.infer<typeof CheckoutStatusRequestSchema>;
 export type CheckoutStatusResponse = z.infer<typeof CheckoutStatusResponseSchema>;
 export type CheckoutStatusUpdate = z.infer<typeof CheckoutStatusUpdateSchema>;
-export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffRequestSchema>;
-export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;
-export type CheckoutDiffUpdate = z.infer<typeof CheckoutDiffUpdateSchema>;
-export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
-export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;
 export type CheckoutMergeResponse = z.infer<typeof CheckoutMergeResponseSchema>;
-export type CheckoutMergeFromBaseRequest = z.infer<typeof CheckoutMergeFromBaseRequestSchema>;
-export type CheckoutMergeFromBaseResponse = z.infer<typeof CheckoutMergeFromBaseResponseSchema>;
 export type CheckoutResetWorkspaceResponse = z.infer<typeof CheckoutResetWorkspaceResponseSchema>;
-export type CheckoutPullRequest = z.infer<typeof CheckoutPullRequestSchema>;
 export type CheckoutPullResponse = z.infer<typeof CheckoutPullResponseSchema>;
-export type CheckoutPushRequest = z.infer<typeof CheckoutPushRequestSchema>;
 export type CheckoutPushResponse = z.infer<typeof CheckoutPushResponseSchema>;
-export type CheckoutRefreshRequest = z.infer<typeof CheckoutRefreshRequestSchema>;
 export type CheckoutRefreshResponse = z.infer<typeof CheckoutRefreshResponseSchema>;
-export type CheckoutDiscardChangesRequest = z.infer<typeof CheckoutDiscardChangesRequestSchema>;
-export type CheckoutDiscardChangesResponse = z.infer<typeof CheckoutDiscardChangesResponseSchema>;
 export type CheckoutCommitFile = z.infer<typeof CheckoutCommitFileSchema>;
 export type CheckoutCommit = z.infer<typeof CheckoutCommitSchema>;
-export type CheckoutCommitsListRequest = z.infer<typeof CheckoutCommitsListRequestSchema>;
-export type CheckoutCommitsListResponse = z.infer<typeof CheckoutCommitsListResponseSchema>;
-export type CheckoutCommitFileDiffRequest = z.infer<typeof CheckoutCommitFileDiffRequestSchema>;
-export type CheckoutCommitFileDiffResponse = z.infer<typeof CheckoutCommitFileDiffResponseSchema>;
 export type ParsedDiffFile = z.infer<typeof ParsedDiffFileSchema>;
-export type CheckoutPrCreateRequest = z.infer<typeof CheckoutPrCreateRequestSchema>;
 export type CheckoutPrCreateResponse = z.infer<typeof CheckoutPrCreateResponseSchema>;
-export type CheckoutPrMergeRequest = z.infer<typeof CheckoutPrMergeRequestSchema>;
 export type CheckoutPrMergeResponse = z.infer<typeof CheckoutPrMergeResponseSchema>;
 export type CheckoutPrMergeMethod = z.infer<typeof CheckoutPrMergeRequestSchema>["mergeMethod"];
-export type CheckoutForgeSetAutoMergeRequest = z.infer<
-  typeof CheckoutForgeSetAutoMergeRequestSchema
->;
 export type CheckoutForgeSetAutoMergeResponse = z.infer<
   typeof CheckoutForgeSetAutoMergeResponseSchema
->;
-export type CheckoutGithubSetAutoMergeRequest = z.infer<
-  typeof CheckoutGithubSetAutoMergeRequestSchema
 >;
 export type CheckoutGithubSetAutoMergeResponse = z.infer<
   typeof CheckoutGithubSetAutoMergeResponseSchema
 >;
-export type CheckoutForgeGetCheckDetailsRequest = z.infer<
-  typeof CheckoutForgeGetCheckDetailsRequestSchema
->;
-export type CheckoutGithubGetCheckDetailsRequest = z.infer<
-  typeof CheckoutGithubGetCheckDetailsRequestSchema
->;
 export type CheckoutCheckDetails = z.infer<typeof CheckoutCheckDetailsSchema>;
-export type CheckoutGithubCheckDetails = z.infer<typeof CheckoutGithubCheckDetailsSchema>;
 export type CheckoutPipeline = z.infer<typeof CheckoutPipelineSchema>;
 export type CheckoutPipelineStage = z.infer<typeof CheckoutPipelineStageSchema>;
 export type CheckoutPipelineJob = z.infer<typeof CheckoutPipelineJobSchema>;
@@ -7368,130 +7092,47 @@ export type CheckoutGithubGetCheckDetailsResponse = z.infer<
   typeof CheckoutGithubGetCheckDetailsResponseSchema
 >;
 export type PullRequestMergeable = z.infer<typeof CheckoutPrStatusSchema>["mergeable"];
-export type CheckoutPrStatusRequest = z.infer<typeof CheckoutPrStatusRequestSchema>;
 export type CheckoutPrStatusResponse = z.infer<typeof CheckoutPrStatusResponseSchema>;
-export type PullRequestTimelineRequest = z.infer<typeof PullRequestTimelineRequestSchema>;
 export type PullRequestTimelineItem = z.infer<typeof PullRequestTimelineItemSchema>;
 export type PullRequestTimelineResponse = z.infer<typeof PullRequestTimelineResponseSchema>;
-export type CheckoutSwitchBranchRequest = z.infer<typeof CheckoutSwitchBranchRequestSchema>;
 export type CheckoutSwitchBranchResponse = z.infer<typeof CheckoutSwitchBranchResponseSchema>;
-export type CheckoutRenameBranchRequest = z.infer<typeof CheckoutRenameBranchRequestSchema>;
-export type CheckoutRenameBranchResponse = z.infer<typeof CheckoutRenameBranchResponseSchema>;
-export type StashSaveRequest = z.infer<typeof StashSaveRequestSchema>;
 export type StashSaveResponse = z.infer<typeof StashSaveResponseSchema>;
-export type StashPopRequest = z.infer<typeof StashPopRequestSchema>;
 export type StashPopResponse = z.infer<typeof StashPopResponseSchema>;
-export type StashListRequest = z.infer<typeof StashListRequestSchema>;
 export type StashListResponse = z.infer<typeof StashListResponseSchema>;
-export type StashEntry = z.infer<typeof StashEntrySchema>;
-export type ValidateBranchRequest = z.infer<typeof ValidateBranchRequestSchema>;
-export type ValidateBranchResponse = z.infer<typeof ValidateBranchResponseSchema>;
-export type BranchSuggestionsRequest = z.infer<typeof BranchSuggestionsRequestSchema>;
 export type BranchSuggestionsResponse = z.infer<typeof BranchSuggestionsResponseSchema>;
 export type ForgeSearchItem = z.infer<typeof ForgeSearchItemSchema>;
 export type ForgeSearchKind = "issue" | "change_request";
 export type ForgeSearchRequest = z.infer<typeof ForgeSearchRequestSchema>;
 export type ForgeSearchResponse = z.infer<typeof ForgeSearchResponseSchema>;
-export type GitHubSearchItem = z.infer<typeof GitHubSearchItemSchema>;
-export type GitHubSearchKind = z.infer<typeof GitHubSearchKindSchema>;
 export type GitHubSearchRequest = z.infer<typeof GitHubSearchRequestSchema>;
 export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
-export type ChangeRequestCheckoutSource = z.infer<typeof ChangeRequestCheckoutSourceSchema>;
 export type CreatePaseoWorktreeRequest = z.infer<typeof CreatePaseoWorktreeRequestSchema>;
-export type DirectorySuggestionsRequest = z.infer<typeof DirectorySuggestionsRequestSchema>;
 export type DirectorySuggestionsResponse = z.infer<typeof DirectorySuggestionsResponseSchema>;
-export type PaseoWorktreeListRequest = z.infer<typeof PaseoWorktreeListRequestSchema>;
 export type PaseoWorktreeListResponse = z.infer<typeof PaseoWorktreeListResponseSchema>;
-export type PaseoWorktreeArchiveRequest = z.infer<typeof PaseoWorktreeArchiveRequestSchema>;
 export type PaseoWorktreeArchiveResponse = z.infer<typeof PaseoWorktreeArchiveResponseSchema>;
-export type WorkspaceSetupStatusRequest = z.infer<typeof WorkspaceSetupStatusRequestSchema>;
-export type WorkspaceSetupRunRequest = z.infer<typeof WorkspaceSetupRunRequestSchema>;
-export type LegacyListAvailableEditorsRequest = z.infer<
-  typeof LegacyListAvailableEditorsRequestSchema
->;
-export type LegacyOpenInEditorRequest = z.infer<typeof LegacyOpenInEditorRequestSchema>;
-export type OpenProjectRequest = z.infer<typeof OpenProjectRequestSchema>;
-export type ProjectAddRequest = z.infer<typeof ProjectAddRequestSchema>;
-export type ProjectCreateDirectoryRequest = z.infer<typeof ProjectCreateDirectoryRequestSchema>;
-export type ProjectCreateDirectoryErrorCode = z.infer<typeof ProjectCreateDirectoryErrorCodeSchema>;
-export type WorkspaceGithubSearchRepositoriesRequest = z.infer<
-  typeof WorkspaceGithubSearchRepositoriesRequestSchema
->;
-export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequestSchema>;
 export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
-export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSchema>;
-export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
-export type WorkspaceMarkUnreadRequest = z.infer<typeof WorkspaceMarkUnreadRequestSchema>;
-export type FileExplorerRequest = z.infer<typeof FileExplorerRequestSchema>;
 export type FileExplorerResponse = z.infer<typeof FileExplorerResponseSchema>;
 export type FileVersion = z.infer<typeof FileVersionSchema>;
-export type FileSubscribeRequest = z.infer<typeof FileSubscribeRequestSchema>;
-export type FileSubscribeResponse = z.infer<typeof FileSubscribeResponseSchema>;
-export type FileUnsubscribeRequest = z.infer<typeof FileUnsubscribeRequestSchema>;
-export type FileUnsubscribeResponse = z.infer<typeof FileUnsubscribeResponseSchema>;
-export type FileWriteRequest = z.infer<typeof FileWriteRequestSchema>;
-export type FileWriteResponse = z.infer<typeof FileWriteResponseSchema>;
-export type FileEntryCreateRequest = z.infer<typeof FileEntryCreateRequestSchema>;
-export type FileEntryCreateResponse = z.infer<typeof FileEntryCreateResponseSchema>;
-export type FileEntryRenameRequest = z.infer<typeof FileEntryRenameRequestSchema>;
-export type FileEntryRenameResponse = z.infer<typeof FileEntryRenameResponseSchema>;
-export type FileEntryDuplicateRequest = z.infer<typeof FileEntryDuplicateRequestSchema>;
-export type FileEntryDuplicateResponse = z.infer<typeof FileEntryDuplicateResponseSchema>;
-export type FileEntryDeleteRequest = z.infer<typeof FileEntryDeleteRequestSchema>;
-export type FileEntryDeleteResponse = z.infer<typeof FileEntryDeleteResponseSchema>;
 export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
-export type FileUpdate = z.infer<typeof FileUpdateSchema>;
-export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;
 export type ProjectIconResponse = z.infer<typeof ProjectIconResponseSchema>;
-export type ProjectIconGetRequest = z.infer<typeof ProjectIconGetRequestSchema>;
 export type ProjectIconGetResponse = z.infer<typeof ProjectIconGetResponseSchema>;
 export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
-export type FileDownloadTokenRequest = z.infer<typeof FileDownloadTokenRequestSchema>;
 export type FileDownloadTokenResponse = z.infer<typeof FileDownloadTokenResponseSchema>;
-export type FileUploadRequest = z.infer<typeof FileUploadRequestSchema>;
 export type FileUploadResponse = z.infer<typeof FileUploadResponseSchema>;
-export type RestartServerRequestMessage = z.infer<typeof RestartServerRequestMessageSchema>;
-export type ShutdownServerRequestMessage = z.infer<typeof ShutdownServerRequestMessageSchema>;
-export type ClearAgentAttentionMessage = z.infer<typeof ClearAgentAttentionMessageSchema>;
-export type ClearAgentAttentionResponseMessage = z.infer<
-  typeof ClearAgentAttentionResponseMessageSchema
->;
-export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;
-export type ListCommandsRequest = z.infer<typeof ListCommandsRequestSchema>;
 export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
-export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
-export type PushUnregisterRequest = z.infer<typeof PushUnregisterRequestSchema>;
-export type PushUnregisterResponse = z.infer<typeof PushUnregisterResponseSchema>;
 
 // Terminal message types
-export type ListTerminalsRequest = z.infer<typeof ListTerminalsRequestSchema>;
 export type ListTerminalsResponse = z.infer<typeof ListTerminalsResponseSchema>;
-export type SubscribeTerminalsRequest = z.infer<typeof SubscribeTerminalsRequestSchema>;
-export type UnsubscribeTerminalsRequest = z.infer<typeof UnsubscribeTerminalsRequestSchema>;
-export type TerminalsChanged = z.infer<typeof TerminalsChangedSchema>;
 export type CreateTerminalRequest = z.infer<typeof CreateTerminalRequestSchema>;
 export type CreateTerminalResponse = z.infer<typeof CreateTerminalResponseSchema>;
-export type RenameTerminalRequest = z.infer<typeof RenameTerminalRequestSchema>;
-export type RenameTerminalResponse = z.infer<typeof RenameTerminalResponseSchema>;
-export type StartWorkspaceScriptRequest = z.infer<typeof StartWorkspaceScriptRequestSchema>;
-export type StartWorkspaceScriptResponse = z.infer<
-  typeof StartWorkspaceScriptResponseMessageSchema
->;
 export type SubscribeTerminalRequest = z.infer<typeof SubscribeTerminalRequestSchema>;
 export type SubscribeTerminalResponse = z.infer<typeof SubscribeTerminalResponseSchema>;
-export type UnsubscribeTerminalRequest = z.infer<typeof UnsubscribeTerminalRequestSchema>;
 export type TerminalInput = z.infer<typeof TerminalInputSchema>;
 export type TerminalCell = z.infer<typeof TerminalCellSchema>;
-export type TerminalCursorStyle = z.infer<typeof TerminalCursorStyleSchema>;
-export type TerminalCursor = z.infer<typeof TerminalCursorSchema>;
 export type TerminalState = z.infer<typeof TerminalStateSchema>;
-export type CloseItemsRequest = z.infer<typeof CloseItemsRequestMessageSchema>;
 export type CloseItemsResponse = z.infer<typeof CloseItemsResponseSchema>;
-export type KillTerminalRequest = z.infer<typeof KillTerminalRequestSchema>;
 export type KillTerminalResponse = z.infer<typeof KillTerminalResponseSchema>;
-export type CaptureTerminalRequest = z.infer<typeof CaptureTerminalRequestSchema>;
 export type CaptureTerminalResponse = z.infer<typeof CaptureTerminalResponseSchema>;
-export type TerminalStreamExit = z.infer<typeof TerminalStreamExitSchema>;
 
 // ============================================================================
 // WebSocket Level Messages (wraps session messages)
@@ -7563,35 +7204,11 @@ export const WSOutboundMessageSchema = z.discriminatedUnion("type", [
   WSSessionOutboundSchema,
 ]);
 
-export type WSInboundMessage = z.infer<typeof WSInboundMessageSchema>;
 export type WSOutboundMessage = z.infer<typeof WSOutboundMessageSchema>;
-export type WSHelloMessage = z.infer<typeof WSHelloMessageSchema>;
 
 // ============================================================================
 // Helper functions for message conversion
 // ============================================================================
-
-/**
- * Extract session message from WebSocket message
- * Returns null if message should be handled at WS level only
- */
-export function extractSessionMessage(wsMsg: WSInboundMessage): SessionInboundMessage | null {
-  if (wsMsg.type === "session") {
-    return wsMsg.message;
-  }
-  // Ping and recording_state are WS-level only
-  return null;
-}
-
-/**
- * Wrap session message in WebSocket envelope
- */
-export function wrapSessionMessage(sessionMsg: SessionOutboundMessage): WSOutboundMessage {
-  return {
-    type: "session",
-    message: sessionMsg,
-  };
-}
 
 export function parseServerInfoStatusPayload(payload: unknown): ServerInfoStatusPayload | null {
   const parsed = ServerInfoStatusPayloadSchema.safeParse(payload);

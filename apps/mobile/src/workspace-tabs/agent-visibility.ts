@@ -117,19 +117,3 @@ export function workspaceAgentVisibilityEqual(
       areSetsEqual(a.autoOpenAgentIds, b.autoOpenAgentIds))
   );
 }
-
-// Prune agent tabs that are no longer active once agents are hydrated.
-// Archived agents get pruned so that archiving on one client closes the tab on all clients.
-export function shouldPruneWorkspaceAgentTab(input: {
-  agentId: string;
-  agentsHydrated: boolean;
-  activeAgentIds: Set<string>;
-}): boolean {
-  if (!input.agentId.trim()) {
-    return false;
-  }
-  if (!input.agentsHydrated) {
-    return false;
-  }
-  return !input.activeAgentIds.has(input.agentId);
-}

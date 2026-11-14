@@ -23,7 +23,6 @@ type CheckoutDiffQueryPayload = Omit<SubscribeCheckoutDiffResponse["payload"], "
 export type { ParsedDiffFile };
 export type DiffHunk = ParsedDiffFile["hunks"][number];
 export type DiffLine = DiffHunk["lines"][number];
-export type HighlightToken = NonNullable<DiffLine["tokens"]>[number];
 
 function normalizeCheckoutDiffCompare(compare: {
   mode: "uncommitted" | "base";

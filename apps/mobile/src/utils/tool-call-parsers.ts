@@ -59,6 +59,24 @@ function lcsTableCells(leftLength: number, rightLength: number): number {
   return (leftLength + 1) * (rightLength + 1);
 }
 
+// dp[i][j] is the length of the longest common subsequence of left[i..] and right[j..].
+function buildLcsTable(left: string[], right: string[]): number[][] {
+  const m = left.length;
+  const n = right.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+  for (let i = m - 1; i >= 0; i -= 1) {
+    for (let j = n - 1; j >= 0; j -= 1) {
+      if (left[i] === right[j]) {
+        dp[i][j] = dp[i + 1][j + 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+  return dp;
+}
+
 function computeWordLevelDiff(
   oldWords: string[],
   newWords: string[],
@@ -67,17 +85,7 @@ function computeWordLevelDiff(
   const n = newWords.length;
 
   // LCS to find common words
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i -= 1) {
-    for (let j = n - 1; j >= 0; j -= 1) {
-      if (oldWords[i] === newWords[j]) {
-        dp[i][j] = dp[i + 1][j + 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-      }
-    }
-  }
+  const dp = buildLcsTable(oldWords, newWords);
 
   // Mark which words are in LCS (unchanged)
   const oldInLCS = new Set<number>();
@@ -156,17 +164,7 @@ export function buildLineDiff(originalText: string, updatedText: string): DiffLi
     ];
   }
 
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i -= 1) {
-    for (let j = n - 1; j >= 0; j -= 1) {
-      if (originalLines[i] === updatedLines[j]) {
-        dp[i][j] = dp[i + 1][j + 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-      }
-    }
-  }
+  const dp = buildLcsTable(originalLines, updatedLines);
 
   const diff: DiffLine[] = [];
 
@@ -304,7 +302,7 @@ export function parseUnifiedDiff(diffText?: string): DiffLine[] {
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
-export interface TaskEntry {
+interface TaskEntry {
   text: string;
   status: TaskStatus;
   completed: boolean;

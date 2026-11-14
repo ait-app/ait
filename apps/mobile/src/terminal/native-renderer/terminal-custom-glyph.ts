@@ -5,12 +5,12 @@ export interface TerminalGlyphRect {
   height: number;
 }
 
-export interface TerminalRectGlyph {
+interface TerminalRectGlyph {
   kind: "rects";
   rects: readonly TerminalGlyphRect[];
 }
 
-export interface TerminalPathGlyph {
+interface TerminalPathGlyph {
   kind: "path";
   path: string;
   strokeWidth: number;
@@ -84,10 +84,6 @@ const BLOCK_GLYPHS: Readonly<Record<string, TerminalRectGlyph>> = {
 
 export function resolveTerminalCustomGlyph(char: string): TerminalCustomGlyph | null {
   return LIGHT_BOX_GLYPHS[char] ?? HEAVY_BOX_GLYPHS[char] ?? BLOCK_GLYPHS[char] ?? null;
-}
-
-export function isTerminalCustomGlyph(char: string): boolean {
-  return resolveTerminalCustomGlyph(char) !== null;
 }
 
 function path(pathData: string, strokeWidth = 1): TerminalPathGlyph {
