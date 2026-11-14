@@ -1,7 +1,7 @@
 import { createInstance } from "i18next";
 import { initReactI18next } from "react-i18next";
 import { observeI18nInit } from "./init";
-import { ar, en, es, fr, ja, ko, ptBR, ru, zhCN } from "./translation-resources";
+import { resources } from "./translation-resources";
 
 const i18n = createInstance();
 
@@ -10,17 +10,9 @@ observeI18nInit(
     compatibilityJSON: "v4",
     fallbackLng: "en",
     lng: "en",
-    resources: {
-      ar: { translation: ar },
-      en: { translation: en },
-      es: { translation: es },
-      fr: { translation: fr },
-      ja: { translation: ja },
-      ko: { translation: ko },
-      "pt-BR": { translation: ptBR },
-      ru: { translation: ru },
-      "zh-CN": { translation: zhCN },
-    },
+    resources: Object.fromEntries(
+      Object.entries(resources).map(([locale, translation]) => [locale, { translation }]),
+    ),
     interpolation: {
       escapeValue: false,
     },
