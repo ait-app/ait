@@ -214,6 +214,19 @@ describe("translation resources", () => {
     }
   });
 
+  it.each(Object.entries({ ar, es, fr, ja, ko, "pt-BR": ptBR, ru, "zh-CN": zhCN }))(
+    "translates side conversation messages in %s",
+    (_locale, resource) => {
+      const translated = flattenStrings(resource.btw);
+      const untranslated = Object.entries(flattenStrings(en.btw))
+        // BTW is the feature name in every language.
+        .filter(([key]) => key !== "title")
+        .filter(([key, value]) => !translated[key]?.trim() || translated[key] === value)
+        .map(([key]) => key);
+      expect(untranslated).toEqual([]);
+    },
+  );
+
   it("provides every CLDR plural form for translated plural keys", () => {
     expect(findMissingTranslatedPluralForms(ru, "ru")).toEqual([]);
     expect(findMissingTranslatedPluralForms(ar, "ar")).toEqual([]);

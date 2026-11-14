@@ -205,9 +205,14 @@ npm ci
 npm run verify:release
 npm run test:release
 npm run test:mobile-release
+npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts
 npm run build:desktop-main
 npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 ```
+
+桌面、Web 和 Android 发布 job 在安装 npm 依赖后先检查翻译，再构建产物；iOS 在 Xcode Cloud
+的 `ci_post_clone.sh` 中执行相同检查。检查覆盖各语言的键、插值占位符和 BTW 文案，
+除功能名 `BTW` 外，旁支会话文案不能直接复用英文。
 
 更新根 CHANGELOG.md：该文件
 会打入应用，供“新功能”页面读取。把版本与发布变更经 PR 合并到 `main` 后，再创建标签。

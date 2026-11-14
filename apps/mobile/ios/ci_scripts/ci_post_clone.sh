@@ -74,6 +74,9 @@ bundle "_${bundler_version}_" exec pod --version
 echo "[Ait] Installing locked workspace dependencies"
 npm ci --include=dev --no-audit --no-fund
 
+echo "[Ait] Checking UI translations"
+npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts
+
 # Native files are committed. A new app version must update them before CI.
 node <<'NODE'
 const { execFileSync } = require('node:child_process');

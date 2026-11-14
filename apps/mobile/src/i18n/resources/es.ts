@@ -670,7 +670,50 @@ export const es: TranslationResources = {
       title_mr: "Adjuntar problema o MR",
     },
   },
-  btw: en.btw,
+  btw: {
+    attachmentsUnsupported:
+      "Las preguntas secundarias solo admiten texto. Elimina los archivos adjuntos para enviar esta pregunta.",
+    contextLimit:
+      "Esta conversación paralela ha alcanzado su límite de contexto. Ábrela como conversación completa para continuar.",
+    commandDescription: "Preguntar en una conversación paralela independiente",
+    requiresConversation: "Inicia una conversación antes de hacer una pregunta secundaria.",
+    expandedTitle: "Conversación paralela",
+    unsupportedProvider: "Este proveedor no ofrece conversaciones paralelas en este host.",
+    title: "BTW",
+    source: "Desde {{title}}",
+    sourceFallback: "esta conversación",
+    newConversation: "Nueva conversación paralela",
+    history: "Historial de conversaciones paralelas",
+    expand: "Abrir como conversación completa",
+    close: "Cerrar conversación paralela",
+    question: "Pregunta secundaria",
+    send: "Enviar pregunta secundaria",
+    stop: "Detener pregunta secundaria",
+    newPlaceholder: "Haz una pregunta secundaria…",
+    followUpPlaceholder: "Haz una pregunta de seguimiento…",
+    emptyTitle: "Pregunta sobre esta conversación",
+    emptyDescription:
+      "Un espacio independiente para explorar una idea mientras continúa tu conversación principal.",
+    emptyHistory: "Todavía no hay conversaciones paralelas.",
+    thinking: "Pensando…",
+    footer: "Las conversaciones paralelas se mantienen separadas de tu conversación principal.",
+    shortened:
+      "Se ha omitido parte del contexto o de la vista previa. Amplía para continuar con la conversación guardada.",
+    unsupportedHost:
+      "Las conversaciones paralelas no están disponibles en este host. Actualízalo e inténtalo de nuevo.",
+    cancelFailed: "No se pudo detener esta pregunta secundaria. Sigue en curso.",
+    busy: "Hay una pregunta secundaria en curso. Espera su respuesta o detenla primero.",
+    invalidQuestion: "Introduce una pregunta que no supere el límite de las preguntas secundarias.",
+    unknownTopic: "Esta conversación paralela ya no está disponible.",
+    topicNotSettled: "Espera a que termine esta respuesta antes de hacer otra pregunta.",
+    askFailed: "No se pudo enviar la pregunta secundaria.",
+    uncertain:
+      "El host aún no ha confirmado esta pregunta. Actualiza su estado antes de volver a enviarla.",
+    states: {
+      cancelled: "Detenida",
+      interrupted: "Interrumpida. Puedes iniciar una nueva conversación paralela.",
+    },
+  },
   agentControls: {
     provider: {
       fallback: "Proveedor",

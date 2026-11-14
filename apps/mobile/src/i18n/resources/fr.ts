@@ -676,7 +676,50 @@ export const fr: TranslationResources = {
       title_mr: "Joindre le problème ou MR",
     },
   },
-  btw: en.btw,
+  btw: {
+    attachmentsUnsupported:
+      "Les questions annexes ne prennent en charge que le texte. Retirez les pièces jointes pour envoyer cette question.",
+    contextLimit:
+      "Cette conversation parallèle a atteint sa limite de contexte. Ouvrez-la comme conversation complète pour continuer.",
+    commandDescription: "Poser une question dans une conversation parallèle distincte",
+    requiresConversation: "Démarrez une conversation avant de poser une question annexe.",
+    expandedTitle: "Conversation parallèle",
+    unsupportedProvider: "Ce fournisseur ne propose pas de conversations parallèles sur cet hôte.",
+    title: "BTW",
+    source: "Depuis {{title}}",
+    sourceFallback: "cette conversation",
+    newConversation: "Nouvelle conversation parallèle",
+    history: "Historique des conversations parallèles",
+    expand: "Ouvrir comme conversation complète",
+    close: "Fermer la conversation parallèle",
+    question: "Question annexe",
+    send: "Envoyer la question annexe",
+    stop: "Arrêter la question annexe",
+    newPlaceholder: "Posez une question annexe…",
+    followUpPlaceholder: "Posez une question de suivi…",
+    emptyTitle: "Posez une question sur cette conversation",
+    emptyDescription:
+      "Un espace distinct pour approfondir une idée pendant que votre conversation principale continue.",
+    emptyHistory: "Aucune conversation parallèle pour le moment.",
+    thinking: "Réflexion en cours…",
+    footer: "Les conversations parallèles restent séparées de votre conversation principale.",
+    shortened:
+      "Une partie du contexte ou de l’aperçu a été omise. Développez pour continuer avec la conversation enregistrée.",
+    unsupportedHost:
+      "Les conversations parallèles ne sont pas disponibles sur cet hôte. Mettez-le à jour et réessayez.",
+    cancelFailed: "Impossible d’arrêter cette question annexe. Elle est toujours en cours.",
+    busy: "Une question annexe est en cours. Attendez sa réponse ou arrêtez-la d’abord.",
+    invalidQuestion: "Saisissez une question qui respecte la limite des questions annexes.",
+    unknownTopic: "Cette conversation parallèle n’est plus disponible.",
+    topicNotSettled: "Attendez la fin de cette réponse avant de poser une autre question.",
+    askFailed: "Impossible d’envoyer la question annexe.",
+    uncertain:
+      "L’hôte n’a pas encore confirmé cette question. Actualisez son état avant de la renvoyer.",
+    states: {
+      cancelled: "Arrêtée",
+      interrupted: "Interrompue. Vous pouvez démarrer une nouvelle conversation parallèle.",
+    },
+  },
   agentControls: {
     provider: {
       fallback: "Fournisseur",

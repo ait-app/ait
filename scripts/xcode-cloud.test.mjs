@@ -48,7 +48,7 @@ test("Bundler pins the same CocoaPods version as Podfile.lock", () => {
   assert.equal(bundleVersion, version);
 });
 
-test("Cloud bootstrap selects locked CocoaPods over a different host version", () => {
+function runCloudBootstrap(npm) {
   const root = mkdtempSync(join(tmpdir(), "ait-cloud-pods-"));
   try {
     const bin = join(root, "tools", "bin");
@@ -73,15 +73,14 @@ test("Cloud bootstrap selects locked CocoaPods over a different host version", (
       node: 'printf "v26.13.1\\n"',
       ruby: 'printf "ruby 3.4\\n"',
       gem: "exit 0",
-      // Stop after tool setup, before changing dependencies or invoking Xcode.
-      npm: 'if [ "$1" = --version ]; then echo 10; else exit 42; fi',
+      npm,
       bundle: 'case "$*" in *"exec pod --version") echo LOCKED_COCOAPODS=1.16.2 ;; esac',
       pod: "echo HOST_COCOAPODS=1.17.0; exit 77",
     };
     for (const [name, body] of Object.entries(tools)) {
       writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
     }
-    const result = spawnSync("sh", [new URL("ci_scripts/ci_post_clone.sh", ios).pathname], {
+    return spawnSync("sh", [new URL("ci_scripts/ci_post_clone.sh", ios).pathname], {
       env: {
         ...process.env,
         CI_PRIMARY_REPOSITORY_PATH: root,
@@ -90,10 +89,34 @@ test("Cloud bootstrap selects locked CocoaPods over a different host version", (
       },
       encoding: "utf8",
     });
-    assert.equal(result.status, 42, result.stdout + result.stderr);
-    assert.match(result.stdout, /LOCKED_COCOAPODS=1\.16\.2/);
-    assert.doesNotMatch(result.stdout, /HOST_COCOAPODS/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+test("Cloud bootstrap selects locked CocoaPods over a different host version", () => {
+  // Stop after tool setup, before changing dependencies or invoking Xcode.
+  const result = runCloudBootstrap('if [ "$1" = --version ]; then echo 10; else exit 42; fi');
+  assert.equal(result.status, 42, result.stdout + result.stderr);
+  assert.match(result.stdout, /LOCKED_COCOAPODS=1\.16\.2/);
+  assert.doesNotMatch(result.stdout, /HOST_COCOAPODS/);
+});
+
+test("Cloud bootstrap stops on translation failures before building packages or installing pods", () => {
+  const result = runCloudBootstrap(`
+printf 'npm:%s\\n' "$*"
+case "$1" in
+  --version) echo 10 ;;
+  ci) exit 0 ;;
+  run) if [ "$2" = test ]; then exit 43; else exit 77; fi ;;
+  *) exit 77 ;;
+esac
+`);
+  assert.equal(result.status, 43, result.stdout + result.stderr);
+  assert.match(result.stdout, /npm:ci --include=dev --no-audit --no-fund/);
+  assert.match(
+    result.stdout,
+    /npm:run test --workspace=@ait\/mobile -- src\/i18n\/resources\.test\.ts/,
+  );
+  assert.doesNotMatch(result.stdout, /Building shared packages|Installing locked CocoaPods/);
 });

@@ -670,7 +670,50 @@ export const ptBR: TranslationResources = {
       title_mr: "Anexar issue ou MR",
     },
   },
-  btw: en.btw,
+  btw: {
+    attachmentsUnsupported:
+      "As perguntas paralelas aceitam apenas texto. Remova os anexos para enviar esta pergunta.",
+    contextLimit:
+      "Esta conversa paralela atingiu o limite de contexto. Abra-a como uma conversa completa para continuar.",
+    commandDescription: "Perguntar em uma conversa paralela independente",
+    requiresConversation: "Inicie uma conversa antes de fazer uma pergunta paralela.",
+    expandedTitle: "Conversa paralela",
+    unsupportedProvider: "Este provedor não oferece conversas paralelas neste host.",
+    title: "BTW",
+    source: "De {{title}}",
+    sourceFallback: "esta conversa",
+    newConversation: "Nova conversa paralela",
+    history: "Histórico de conversas paralelas",
+    expand: "Abrir como uma conversa completa",
+    close: "Fechar conversa paralela",
+    question: "Pergunta paralela",
+    send: "Enviar pergunta paralela",
+    stop: "Parar pergunta paralela",
+    newPlaceholder: "Faça uma pergunta paralela…",
+    followUpPlaceholder: "Faça uma pergunta de acompanhamento…",
+    emptyTitle: "Pergunte sobre esta conversa",
+    emptyDescription:
+      "Um espaço separado para explorar uma ideia enquanto sua conversa principal continua.",
+    emptyHistory: "Ainda não há conversas paralelas.",
+    thinking: "Pensando…",
+    footer: "As conversas paralelas ficam separadas da sua conversa principal.",
+    shortened:
+      "Parte do contexto ou da prévia foi omitida. Expanda para continuar com a conversa salva.",
+    unsupportedHost:
+      "As conversas paralelas não estão disponíveis neste host. Atualize o host e tente novamente.",
+    cancelFailed: "Não foi possível parar esta pergunta paralela. Ela ainda está em andamento.",
+    busy: "Há uma pergunta paralela em andamento. Aguarde a resposta ou pare-a primeiro.",
+    invalidQuestion: "Digite uma pergunta dentro do limite das perguntas paralelas.",
+    unknownTopic: "Esta conversa paralela não está mais disponível.",
+    topicNotSettled: "Aguarde o fim desta resposta antes de fazer outra pergunta.",
+    askFailed: "Não foi possível enviar a pergunta paralela.",
+    uncertain:
+      "O host ainda não confirmou esta pergunta. Atualize o status antes de enviá-la novamente.",
+    states: {
+      cancelled: "Parada",
+      interrupted: "Interrompida. Você pode iniciar uma nova conversa paralela.",
+    },
+  },
   agentControls: {
     provider: {
       fallback: "Provedor",
