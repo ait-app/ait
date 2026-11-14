@@ -1,0 +1,53 @@
+export const common = {
+  back: "Voltar",
+  loading: "Carregando...",
+  actions: {
+    save: "Salvar",
+    back: "Voltar",
+    cancel: "Cancelar",
+    close: "Fechar",
+    copy: "Copiar",
+    copyLine: "Copiar linha",
+    dismiss: "Dispensar",
+    reload: "Recarregar",
+    retry: "Tentar novamente",
+    search: "Buscar",
+    select: "Selecionar",
+    selectAll: "Selecionar tudo",
+  },
+  placeholders: {
+    search: "Buscar...",
+  },
+  empty: {
+    noResults: "Nenhum resultado encontrado",
+    noOptionsMatchSearch: "Nenhuma opção corresponde à sua busca.",
+  },
+  states: {
+    loading: "Carregando...",
+    starting: "Iniciando...",
+    copied: "Copiado",
+    copiedLabel: "{{label}} copiado",
+    downloadComplete: "Download concluído",
+    downloadFailed: "Falha no download",
+  },
+  errors: {
+    error: "Erro",
+    unableToSave: "Não foi possível salvar",
+    unableToCopy: "Não foi possível copiar",
+    nameRequired: "O nome é obrigatório",
+    daemonUnavailable: "Daemon indisponível",
+    daemonClientUnavailable: "Cliente do daemon indisponível",
+    daemonClientDisconnected: "O cliente do daemon está desconectado",
+    noFileFound: "Nenhum arquivo encontrado para {{token}}",
+    unexpectedDictationError: "Ocorreu um erro inesperado ao processar o ditado.",
+  },
+  connectionStatus: {
+    online: "Online",
+    connecting: "Conectando",
+    offline: "Offline",
+    error: "Erro",
+    idle: "Ocioso",
+  },
+
+  bottomSheetBackdrop: "Fundo do painel inferior",
+};

@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "新建工作区",
+  create: "创建",
+  isolation: {
+    local: "本地",
+    worktree: "新建工作树",
+    sandboxedWorktree: "沙箱化工作树",
+    label: "隔离",
+  },
+  fields: {
+    project: "项目",
+    base: "基线",
+    baseNotApplicable: "不适用",
+  },
+  titlePlaceholder: "标题（可选）",
+  errors: {
+    hostDisconnected: "Host 未连接",
+    createWorktreeFailed: "创建工作树失败",
+    composerStateRequired: "输入状态不能为空",
+    selectModel: "请选择模型",
+  },
+  tooltips: {
+    project: "选择项目",
+    host: "选择 Host",
+    isolation: "选择隔离级别",
+    startingRef: "选择起始位置",
+    launch: "选择启动内容",
+  },
+  refPicker: {
+    startingRef: "起始引用",
+    intoBase: "进入 {{baseRef}}",
+    searching: "正在搜索...",
+    noMatchingRefs: "没有匹配的引用。",
+    searchPlaceholder: "搜索分支和 PR",
+    title: "起始位置",
+  },
+  launch: {
+    title: "启动内容",
+    chat: "对话",
+    terminal: "终端",
+    manageProfiles: "管理配置",
+    submit: "启动",
+    promptPlaceholder: "向 {{name}} 输入提示词",
+    commandPlaceholder: "运行命令，或留空以打开空白终端",
+  },
+};

@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "新しいワークスペース",
+  create: "作成",
+  isolation: {
+    local: "ローカル",
+    worktree: "新しいワークツリー",
+    sandboxedWorktree: "サンドボックス化ワークツリー",
+    label: "分離方法",
+  },
+  fields: {
+    project: "プロジェクト",
+    base: "ベース",
+    baseNotApplicable: "該当なし",
+  },
+  titlePlaceholder: "タイトル（任意）",
+  errors: {
+    hostDisconnected: "ホストが接続されていません",
+    createWorktreeFailed: "ワークツリーの作成に失敗しました",
+    composerStateRequired: "コンポーザーの状態が必要です",
+    selectModel: "モデルを選択してください",
+  },
+  tooltips: {
+    project: "Choose the project",
+    host: "Choose the host",
+    isolation: "Choose the isolation level",
+    startingRef: "開始点を選択",
+    launch: "Choose what to launch",
+  },
+  refPicker: {
+    startingRef: "開始Ref",
+    intoBase: "{{baseRef}}に",
+    searching: "検索中...",
+    noMatchingRefs: "一致するRefがありません。",
+    searchPlaceholder: "ブランチとPRを検索",
+    title: "開始点",
+  },
+  launch: {
+    title: "What to launch",
+    chat: "Chat",
+    terminal: "Terminal",
+    manageProfiles: "Manage profiles",
+    submit: "Launch",
+    promptPlaceholder: "Prompt {{name}}",
+    commandPlaceholder: "Run a command, or leave empty for a blank terminal",
+  },
+};

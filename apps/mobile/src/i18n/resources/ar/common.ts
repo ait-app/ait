@@ -1,0 +1,53 @@
+export const common = {
+  back: "خلف",
+  loading: "تحميل...",
+  actions: {
+    save: "حفظ",
+    back: "خلف",
+    cancel: "يلغي",
+    close: "يغلق",
+    copy: "ينسخ",
+    copyLine: "نسخ السطر",
+    dismiss: "رفض",
+    reload: "إعادة التحميل",
+    retry: "أعد المحاولة",
+    search: "يبحث",
+    select: "يختار",
+    selectAll: "تحديد الكل",
+  },
+  placeholders: {
+    search: "يبحث...",
+  },
+  empty: {
+    noResults: "لم يتم العثور على نتائج",
+    noOptionsMatchSearch: "لا توجد خيارات تطابق بحثك.",
+  },
+  states: {
+    loading: "تحميل...",
+    starting: "جارٍ البدء...",
+    copied: "منقول",
+    copiedLabel: "منسوخ{{label}}",
+    downloadComplete: "اكتمل التنزيل",
+    downloadFailed: "فشل التنزيل",
+  },
+  errors: {
+    error: "خطأ",
+    unableToSave: "غير قادر على الحفظ",
+    unableToCopy: "تعذر النسخ",
+    nameRequired: "الاسم مطلوب",
+    daemonUnavailable: "Daemon غير متوفر",
+    daemonClientUnavailable: "عميل Daemon غير متوفر",
+    daemonClientDisconnected: "تم قطع اتصال عميل Daemon",
+    noFileFound: "لم يتم العثور على ملف لـ{{token}}",
+    unexpectedDictationError: "حدث خطأ غير متوقع أثناء معالجة الإملاء.",
+  },
+  connectionStatus: {
+    online: "متصل",
+    connecting: "الاتصال",
+    offline: "غير متصل",
+    error: "خطأ",
+    idle: "عاطل",
+  },
+
+  bottomSheetBackdrop: "خلفية اللوحة السفلية",
+};

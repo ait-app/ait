@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "새 워크스페이스",
+  create: "생성",
+  isolation: {
+    local: "로컬",
+    worktree: "새 워크트리",
+    sandboxedWorktree: "샌드박스 워크트리",
+    label: "격리",
+  },
+  fields: {
+    project: "프로젝트",
+    base: "기준",
+    baseNotApplicable: "해당 없음",
+  },
+  titlePlaceholder: "제목(선택 사항)",
+  errors: {
+    hostDisconnected: "호스트가 연결되어 있지 않습니다",
+    createWorktreeFailed: "워크트리를 생성하지 못했습니다",
+    composerStateRequired: "작성기 상태가 필요합니다",
+    selectModel: "모델을 선택하세요",
+  },
+  tooltips: {
+    project: "Choose the project",
+    host: "Choose the host",
+    isolation: "Choose the isolation level",
+    startingRef: "시작 위치를 선택하세요",
+    launch: "Choose what to launch",
+  },
+  refPicker: {
+    startingRef: "시작 ref",
+    intoBase: "{{baseRef}}(으)로",
+    searching: "검색 중...",
+    noMatchingRefs: "일치하는 ref가 없습니다.",
+    searchPlaceholder: "브랜치와 PR 검색",
+    title: "시작 위치",
+  },
+  launch: {
+    title: "What to launch",
+    chat: "Chat",
+    terminal: "Terminal",
+    manageProfiles: "Manage profiles",
+    submit: "Launch",
+    promptPlaceholder: "Prompt {{name}}",
+    commandPlaceholder: "Run a command, or leave empty for a blank terminal",
+  },
+};

@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { i18n } from "@/i18n/i18next";
-import { en } from "@/i18n/resources/en";
+import { en } from "@/i18n/translation-resources";
 import { formatCompactTimeAgo } from "@/utils/time";
 import type { HistoryRange } from "./history-model";
 

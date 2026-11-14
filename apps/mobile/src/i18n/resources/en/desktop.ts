@@ -1,0 +1,178 @@
+export const desktop = {
+  windowControls: {
+    minimize: "Minimize window",
+    maximize: "Maximize window",
+    restore: "Restore window",
+    close: "Close window",
+  },
+  quitting: {
+    title: "Quitting Ait...",
+    detail: "Stopping the local daemon.",
+  },
+  daemon: {
+    listen: {
+      host: "Listen address",
+      port: "Port",
+      savedHint: "Restart daemon to apply changes.",
+      override:
+        "AIT_SERVER_LISTEN overrides this setting: {{address}}. Remove the environment variable to use the saved address.",
+      invalid: "Enter an IPv4 or IPv6 address (or localhost) and a port from 0 to 65535.",
+    },
+    title: "Daemon",
+    lifecycle: {
+      owned: "Launched by this Desktop session",
+      attached: "Attached to an existing daemon",
+      ownedMessage: "This daemon was launched by this Desktop session.",
+      attachedMessage: "This daemon was not launched by this Desktop session.",
+      stopTitle: "Stop local daemon?",
+      stopMessage:
+        "{{ownership}}\nHome: {{home}}\nSupervisor PID: {{pid}}\nRunning agent work will be interrupted.",
+      stop: "Stop daemon",
+      stopping: "Stopping…",
+      stopFailed: "Unable to stop daemon",
+      pauseAttached: "Pause automatic daemon management? The attached daemon will keep running.",
+      pause: "Pause management",
+      workerUpdated: "Worker updated to {{version}}",
+      supervisorRefresh:
+        "The running supervisor retains its original code. Its launcher must stop and start it to refresh the supervisor.",
+    },
+    status: {
+      title: "Status",
+      builtInOnly: "Only the built-in desktop daemon is shown here",
+      running: "running",
+      notRunning: "not running",
+      pid: "PID {{pid}}",
+    },
+    management: {
+      title: "Manage built-in daemon",
+      hint: "Let Ait start and stop the built-in daemon",
+      pauseTitle: "Pause built-in daemon",
+      pauseMessage:
+        "This will stop the built-in daemon immediately. Running agents and terminals connected to the built-in daemon will be stopped.",
+      pauseAndStop: "Pause and stop",
+      registrationFailed:
+        "Built-in daemon started, but Ait could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+      pausedStopFailed: "Built-in daemon management was paused, but Ait could not stop the daemon.",
+      updateFailed: "Unable to update built-in daemon management.",
+    },
+    keepRunning: {
+      title: "Keep daemon running after quit",
+      hint: "Agents and terminals keep running after you quit Ait; the next launch reconnects to them.",
+    },
+    logs: {
+      title: "Log file",
+      modalTitle: "Daemon logs",
+      unavailable: "Log path unavailable",
+      empty: "(log file is empty)",
+      copied: "Log path copied.",
+      copyFailed: "Unable to copy log path.",
+      open: "Open logs",
+      copyPath: "Copy path",
+    },
+    fullStatus: {
+      title: "Full status",
+      modalTitle: "Daemon status",
+      view: "View status",
+      copied: "Status copied to clipboard.",
+      fetchFailed: "Failed to fetch daemon status: {{message}}",
+    },
+    versionMismatch:
+      "App and daemon versions don't match. Update both to the same version for the best experience.",
+    loadFailed: "Unable to load desktop daemon status.",
+  },
+  updates: {
+    status: {
+      checking: "Checking for app updates...",
+      installing: "Installing app update...",
+      upToDate: "App is up to date.",
+      upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
+      pending: "We'll let you know when the update is ready.",
+      pendingWithLastChecked:
+        "We'll let you know when the update is ready. Last checked at {{time}}.",
+      pendingWithVersion: "Update found: {{version}}. Downloading...",
+      pendingWithVersionAndLastChecked:
+        "Update found: {{version}}. Downloading... Last checked at {{time}}.",
+      availableWithVersion: "Update ready: {{version}}",
+      availableWithVersionAndLastChecked: "Update ready: {{version}}. Last checked at {{time}}.",
+      available: "An app update is ready to install.",
+      availableWithLastChecked: "An app update is ready to install. Last checked at {{time}}.",
+      installed: "App update installed. Restart required.",
+      failed: "Failed to update app.",
+      idle: "Update status has not been checked yet.",
+    },
+    installError: "Unable to install the desktop app update.",
+    callout: {
+      installingTitle: "Installing update",
+      failedTitle: "Update failed",
+      availableTitle: "Update available",
+      genericError: "Something went wrong.",
+      whatsNew: "What's new",
+      installingAction: "Installing...",
+      installAndRestart: "Install & restart",
+      installingDescription: "Installing and restarting...",
+      versionReady: "{{version}} is ready to install.",
+      newVersionReady: "A new version is ready to install.",
+      restartWarning: "Upgrading the app will stop running agents and close terminal sessions.",
+    },
+  },
+  settings: {
+    loadFailed: "Unable to load desktop settings.",
+    saveFailed: "Unable to save desktop settings.",
+  },
+  rosetta: {
+    title: "Download the Apple Silicon build",
+    runningIntel: "You're running the Intel build of Ait under Rosetta on Apple Silicon.",
+    highCpu: "This causes high CPU usage. Download the Apple Silicon build to fix it.",
+    download: "Download",
+  },
+  permissions: {
+    notifications: {
+      allowed: "Notifications are allowed by the OS.",
+      denied: "Notifications are denied in system settings.",
+      notGranted: "Notifications have not been granted yet.",
+      webOnly: "Desktop notification status is only available on web runtime.",
+      supported: "Desktop notifications are supported.",
+      unsupported: "Desktop notifications are not supported on this platform.",
+      apiUnavailable: "Web Notification API is unavailable in this environment.",
+      requestsWebOnly: "Desktop notification requests are only available on web runtime.",
+      requestUnavailable: "Web Notification API requestPermission() is unavailable.",
+      requestFailed: "Failed to request notification permission: {{message}}",
+      unexpectedState: "Unexpected notification permission state: {{state}}",
+    },
+    microphone: {
+      webOnly: "Desktop microphone status is only available on web runtime.",
+      navigatorUnavailable: "Navigator is unavailable in this environment.",
+      granted: "Microphone access is granted.",
+      denied: "Microphone access is denied in system settings.",
+      notGranted: "Microphone permission has not been granted yet.",
+      unexpectedState: "Unexpected microphone permission state: {{state}}",
+      statusApiUnavailable:
+        "Microphone status API is unavailable in this runtime. Use Request to check access.",
+      queryFailed: "Failed to query microphone status: {{message}}",
+      captureUnavailable: "Microphone capture is unavailable in this environment.",
+      permissionApiUnavailable:
+        "Permission status API is unavailable. Use Request to check access.",
+      requestsWebOnly: "Desktop microphone requests are only available on web runtime.",
+      captureApiUnavailable: "Microphone capture API is unavailable in this environment.",
+      requestDenied: "Microphone permission was denied by the user or system.",
+      noDevice: "No microphone device was found.",
+      requestFailed: "Failed to request microphone permission: {{message}}",
+    },
+    empty: {
+      notifications: "Notification status has not been checked yet.",
+      microphone: "Microphone status has not been checked yet.",
+    },
+    testNotification: {
+      title: "Ait notification test",
+      body: "If you can see this, desktop notifications work.",
+      notDelivered: "Notification was not delivered. Check System Settings > Notifications.",
+      failed: "Failed to send notification.",
+    },
+  },
+  integrations: {
+    cli: {
+      statusFailed: "Unable to check CLI install status.",
+      installFailed: "Unable to install the Ait CLI.",
+    },
+  },
+};

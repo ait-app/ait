@@ -2,15 +2,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { i18n } from "./i18next";
-import { ar } from "./resources/ar";
-import { en } from "./resources/en";
-import { es } from "./resources/es";
-import { fr } from "./resources/fr";
-import { ja } from "./resources/ja";
-import { ko } from "./resources/ko";
-import { ptBR } from "./resources/pt-BR";
-import { ru } from "./resources/ru";
-import { zhCN } from "./resources/zh-CN";
+import { en, resources, type TranslationResources } from "./translation-resources";
+
+const { ar, es, fr, ja, ko, ru } = resources;
+const ptBR = resources["pt-BR"];
+const zhCN = resources["zh-CN"];
+const allResources: [locale: string, resource: TranslationResources][] = Object.entries(resources);
+const nativeResources = allResources.filter(([locale]) => locale !== "en");
+const resourceDirectory = join(__dirname, "resources");
 
 function flattenKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) {
@@ -143,14 +142,23 @@ function findUntranslatedConnectionErrors(): string[] {
 describe("translation resources", () => {
   it("keeps all supported language keys in sync with English", () => {
     const englishKeys = flattenKeys(en).sort();
-    expect(withoutLocalePluralVariants(flattenKeys(ar), "ar").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(es), "es").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(fr), "fr").sort()).toEqual(englishKeys);
-    expect(flattenKeys(ja).sort()).toEqual(englishKeys);
-    expect(flattenKeys(ko).sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(ptBR), "pt-BR").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(ru), "ru").sort()).toEqual(englishKeys);
-    expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
+    for (const [locale, resource] of nativeResources) {
+      expect(withoutLocalePluralVariants(flattenKeys(resource), locale).sort(), locale).toEqual(
+        englishKeys,
+      );
+    }
+  });
+
+  it("lists every English component module in each locale's index", () => {
+    const components = readdirSync(join(resourceDirectory, "en"))
+      .filter((file) => file !== "index.ts")
+      .map((file) => file.replace(/\.ts$/, ""))
+      .sort();
+    for (const [locale] of allResources) {
+      const index = readFileSync(join(resourceDirectory, locale, "index.ts"), "utf8");
+      const listed = [...index.matchAll(/^export \* from "\.\/(.+)";$/gm)].map((match) => match[1]);
+      expect(listed, locale).toEqual(components);
+    }
   });
 
   it("resolves every fixed provider preset UI key from real resources in each supported language", () => {
@@ -169,17 +177,7 @@ describe("translation resources", () => {
     );
     expect(keys.has("settings.providers.presets.title")).toBe(true);
     expect(keys.has("providerControl.roleNative")).toBe(true);
-    for (const [locale, resource] of Object.entries({
-      en,
-      ar,
-      es,
-      fr,
-      ja,
-      ko,
-      "pt-BR": ptBR,
-      ru,
-      "zh-CN": zhCN,
-    })) {
+    for (const [locale, resource] of allResources) {
       const strings = flattenStrings(resource);
       const translate = i18n.getFixedT(locale);
       for (const key of keys) {
@@ -195,18 +193,13 @@ describe("translation resources", () => {
   it("keeps non-English supported languages translated beyond fallback labels", () => {
     const totalStrings = Object.keys(flattenStrings(en)).length;
     const maxFallbackStrings = Math.floor(totalStrings * 0.25);
-    expect(countMatchingEnglishStrings(ar)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(es)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(fr)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ja)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ko)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ptBR)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ru)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(zhCN)).toBeLessThan(maxFallbackStrings);
+    for (const [locale, resource] of nativeResources) {
+      expect(countMatchingEnglishStrings(resource), locale).toBeLessThan(maxFallbackStrings);
+    }
   });
 
   it("localizes the pull request empty state in every supported language", () => {
-    for (const resource of [ar, es, fr, ja, ko, ptBR, ru, zhCN]) {
+    for (const [, resource] of nativeResources) {
       expect(resource.panels.pullRequest.emptyTitle).not.toBe(en.panels.pullRequest.emptyTitle);
       expect(resource.panels.pullRequest.emptyDescription).not.toBe(
         en.panels.pullRequest.emptyDescription,
@@ -214,18 +207,50 @@ describe("translation resources", () => {
     }
   });
 
-  it.each(Object.entries({ ar, es, fr, ja, ko, "pt-BR": ptBR, ru, "zh-CN": zhCN }))(
-    "translates side conversation messages in %s",
-    (_locale, resource) => {
-      const translated = flattenStrings(resource.btw);
-      const untranslated = Object.entries(flattenStrings(en.btw))
-        // BTW is the feature name in every language.
-        .filter(([key]) => key !== "title")
-        .filter(([key, value]) => !translated[key]?.trim() || translated[key] === value)
-        .map(([key]) => key);
-      expect(untranslated).toEqual([]);
-    },
-  );
+  it.each(nativeResources)("translates side conversation messages in %s", (_locale, resource) => {
+    const translated = flattenStrings(resource.btw);
+    const untranslated = Object.entries(flattenStrings(en.btw))
+      .filter(([key, value]) => !translated[key]?.trim() || translated[key] === value)
+      .map(([key]) => key);
+    expect(untranslated).toEqual([]);
+  });
+
+  it("keeps the native high-traffic surfaces out of the English resource", () => {
+    for (const [, resource] of nativeResources) {
+      expect(resource.hostMonitor.title).not.toBe(en.hostMonitor.title);
+      expect(resource.onlineService.title).not.toBe(en.onlineService.title);
+      expect(resource.sharing.title).not.toBe(en.sharing.title);
+      expect(resource.btw.title).not.toBe(en.btw.title);
+      expect(resource.addProjectFlow.titles.host).not.toBe(en.addProjectFlow.titles.host);
+      expect(resource.settings.layout.openInSidePane.title).not.toBe(
+        en.settings.layout.openInSidePane.title,
+      );
+      expect(resource.settings.plugins.logs.action).not.toBe(en.settings.plugins.logs.action);
+    }
+  });
+
+  it("keeps schedule template prompts and topic fields native", () => {
+    const templateKeys = [
+      "nightly-test-heal",
+      "pr-gatekeeper",
+      "domain-radar",
+      "weekly-work-draft",
+      "docs-freshness",
+    ] as const;
+    for (const [, resource] of nativeResources) {
+      for (const key of templateKeys) {
+        expect(resource.schedules.templates.items[key].prompt).not.toBe(
+          en.schedules.templates.items[key].prompt,
+        );
+      }
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.label).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.label,
+      );
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.placeholder).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.placeholder,
+      );
+    }
+  });
 
   it("provides every CLDR plural form for translated plural keys", () => {
     expect(findMissingTranslatedPluralForms(ru, "ru")).toEqual([]);
@@ -290,14 +315,9 @@ describe("translation resources", () => {
   });
 
   it("preserves interpolation placeholders in every language", () => {
-    expect(findInterpolationMismatches(ar)).toEqual([]);
-    expect(findInterpolationMismatches(es)).toEqual([]);
-    expect(findInterpolationMismatches(fr)).toEqual([]);
-    expect(findInterpolationMismatches(ja)).toEqual([]);
-    expect(findInterpolationMismatches(ko)).toEqual([]);
-    expect(findInterpolationMismatches(ptBR)).toEqual([]);
-    expect(findInterpolationMismatches(ru)).toEqual([]);
-    expect(findInterpolationMismatches(zhCN)).toEqual([]);
+    for (const [locale, resource] of nativeResources) {
+      expect(findInterpolationMismatches(resource), locale).toEqual([]);
+    }
   });
 
   it("keeps reported Spanish settings and scripts labels clean", () => {

@@ -1,0 +1,53 @@
+export const common = {
+  back: "Back",
+  loading: "Loading...",
+  actions: {
+    save: "Save",
+    back: "Back",
+    cancel: "Cancel",
+    close: "Close",
+    copy: "Copy",
+    copyLine: "Copy line",
+    dismiss: "Dismiss",
+    reload: "Reload",
+    retry: "Retry",
+    search: "Search",
+    select: "Select",
+    selectAll: "Select all",
+  },
+  placeholders: {
+    search: "Search...",
+  },
+  empty: {
+    noResults: "No results found",
+    noOptionsMatchSearch: "No options match your search.",
+  },
+  states: {
+    loading: "Loading...",
+    starting: "Starting...",
+    copied: "Copied",
+    copiedLabel: "Copied {{label}}",
+    downloadComplete: "Download complete",
+    downloadFailed: "Download failed",
+  },
+  errors: {
+    error: "Error",
+    unableToSave: "Unable to save",
+    unableToCopy: "Unable to copy",
+    nameRequired: "Name is required",
+    daemonUnavailable: "Daemon unavailable",
+    daemonClientUnavailable: "Daemon client unavailable",
+    daemonClientDisconnected: "Daemon client is disconnected",
+    noFileFound: "No file found for {{token}}",
+    unexpectedDictationError: "An unexpected error occurred while handling dictation.",
+  },
+  connectionStatus: {
+    online: "Online",
+    connecting: "Connecting",
+    offline: "Offline",
+    error: "Error",
+    idle: "Idle",
+  },
+
+  bottomSheetBackdrop: "Bottom sheet backdrop",
+};
