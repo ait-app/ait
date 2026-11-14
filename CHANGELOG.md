@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.13 - 2026-11-15
 
 - Workspace rows in the status-grouped sidebar offer Share and "Open in file manager", as rows grouped by project already did.
 - A project folder opened from the desktop shell that cannot be added now shows an error instead of failing silently.
