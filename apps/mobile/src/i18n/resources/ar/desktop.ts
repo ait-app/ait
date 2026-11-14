@@ -7,7 +7,7 @@ export const desktop = {
   },
   quitting: {
     title: "جارٍ إنهاء Ait...",
-    detail: "إيقاف البرنامج الخفي المحلي.",
+    detail: "جارٍ إيقاف البرنامج الخفي المحلي.",
   },
   daemon: {
     listen: {
@@ -35,23 +35,23 @@ export const desktop = {
       supervisorRefresh:
         "يحتفظ المشرف الجاري بشفرته الأصلية. يجب أن يوقفه البرنامج الذي بدأه ويعيد تشغيله لتحديثه.",
     },
-    title: "Daemon",
+    title: "البرنامج الخفي",
     status: {
       title: "حالة",
       builtInOnly: "يتم عرض البرنامج الخفي لسطح المكتب المدمج فقط هنا",
-      running: "جري",
+      running: "قيد التشغيل",
       notRunning: "لا يعمل",
-      pid: "PID{{pid}}",
+      pid: "PID {{pid}}",
     },
     management: {
       title: "إدارة البرنامج الخفي المدمج",
       hint: "اسمح لـ Ait ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
-      pauseTitle: "وقفة المدمج في البرنامج الخفي",
+      pauseTitle: "إيقاف البرنامج الخفي المدمج مؤقتًا",
       pauseMessage:
-        "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
-      pauseAndStop: "وقفة وتوقف",
+        "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف الوكلاء قيد التشغيل والطرفيات المتصلة بالبرنامج الخفي المدمج.",
+      pauseAndStop: "إيقاف مؤقت وإيقاف",
       registrationFailed:
-        "Built-in daemon started, but Ait could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+        "بدأ البرنامج الخفي المدمج، لكن لم يتمكن Ait من حفظ اتصال localhost. أوقف إدارة البرنامج الخفي ثم فعّلها مرة أخرى، أو أضف localhost يدويًا.",
       pausedStopFailed:
         "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Ait من إيقاف البرنامج الخفي.",
       updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
@@ -62,7 +62,7 @@ export const desktop = {
     },
     logs: {
       title: "ملف السجل",
-      modalTitle: "سجلات Daemon",
+      modalTitle: "سجلات البرنامج الخفي",
       unavailable: "مسار السجل غير متاح",
       empty: "(ملف السجل فارغ)",
       copied: "تم نسخ مسار السجل.",
@@ -72,13 +72,13 @@ export const desktop = {
     },
     fullStatus: {
       title: "الوضع الكامل",
-      modalTitle: "حالة Daemon",
+      modalTitle: "حالة البرنامج الخفي",
       view: "عرض الحالة",
       copied: "تم نسخ الحالة إلى الحافظة.",
-      fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
+      fetchFailed: "فشل جلب حالة البرنامج الخفي: {{message}}",
     },
     versionMismatch:
-      "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كلاهما إلى نفس الإصدار للحصول على أفضل تجربة.",
+      "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كليهما إلى نفس الإصدار للحصول على أفضل تجربة.",
     loadFailed: "غير قادر على تحميل حالة البرنامج الخفي لسطح المكتب.",
   },
   updates: {
@@ -86,14 +86,14 @@ export const desktop = {
       checking: "جارٍ التحقق من وجود تحديثات للتطبيق...",
       installing: "جارٍ تثبيت تحديث التطبيق...",
       upToDate: "التطبيق محدث.",
-      upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
+      upToDateWithLastChecked: "محدث. آخر فحص في {{time}}.",
       pending: "سنخبرك عندما يصبح التحديث جاهزًا.",
       pendingWithLastChecked: "سنخبرك عندما يصبح التحديث جاهزًا. آخر فحص في {{time}}.",
       pendingWithVersion: "تم العثور على تحديث: {{version}}. جارٍ التنزيل...",
       pendingWithVersionAndLastChecked:
         "تم العثور على تحديث: {{version}}. جارٍ التنزيل... آخر فحص في {{time}}.",
-      availableWithVersion: "التحديث جاهز:{{version}}",
-      availableWithVersionAndLastChecked: "التحديث جاهز:{{version}}. آخر فحص في {{time}}.",
+      availableWithVersion: "التحديث جاهز: {{version}}",
+      availableWithVersionAndLastChecked: "التحديث جاهز: {{version}}. آخر فحص في {{time}}.",
       available: "تحديث التطبيق جاهز للتثبيت.",
       availableWithLastChecked: "تحديث التطبيق جاهز للتثبيت. آخر فحص في {{time}}.",
       installed: "تم تثبيت تحديث التطبيق. إعادة التشغيل مطلوبة.",
@@ -102,17 +102,17 @@ export const desktop = {
     },
     installError: "غير قادر على تثبيت تحديث تطبيق سطح المكتب.",
     callout: {
-      installingTitle: "تثبيت التحديث",
+      installingTitle: "جارٍ تثبيت التحديث",
       failedTitle: "فشل التحديث",
       availableTitle: "التحديث متاح",
       genericError: "حدث خطأ ما.",
       whatsNew: "ما هو الجديد",
       installingAction: "جارٍ التثبيت...",
       installAndRestart: "التثبيت وإعادة التشغيل",
-      installingDescription: "التثبيت وإعادة التشغيل...",
-      versionReady: "{{version}}جاهز للتثبيت.",
+      installingDescription: "جارٍ التثبيت وإعادة التشغيل...",
+      versionReady: "{{version}} جاهز للتثبيت.",
       newVersionReady: "إصدار جديد جاهز للتثبيت.",
-      restartWarning: "ستؤدي ترقية التطبيق إلى إيقاف تشغيل الوكلاء وإغلاق الجلسات الطرفية.",
+      restartWarning: "ستؤدي ترقية التطبيق إلى إيقاف الوكلاء قيد التشغيل وإغلاق جلسات الطرفية.",
     },
   },
   settings: {
@@ -137,8 +137,8 @@ export const desktop = {
       apiUnavailable: "واجهة برمجة تطبيقات إشعارات الويب غير متاحة في هذه البيئة.",
       requestsWebOnly: "طلبات إعلام سطح المكتب متاحة فقط في وقت تشغيل الويب.",
       requestUnavailable: "واجهة برمجة تطبيقات إشعارات الويب requestPermission() غير متاحة.",
-      requestFailed: "فشل طلب إذن الإعلام:{{message}}",
-      unexpectedState: "حالة إذن الإعلام غير المتوقعة:{{state}}",
+      requestFailed: "فشل طلب إذن الإعلام: {{message}}",
+      unexpectedState: "حالة إذن الإعلام غير المتوقعة: {{state}}",
     },
     microphone: {
       webOnly: "حالة ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
@@ -146,10 +146,10 @@ export const desktop = {
       granted: "تم منح الوصول إلى الميكروفون.",
       denied: "تم رفض الوصول إلى الميكروفون في إعدادات النظام.",
       notGranted: "لم يتم منح إذن الميكروفون بعد.",
-      unexpectedState: "حالة إذن الميكروفون غير متوقعة:{{state}}",
+      unexpectedState: "حالة إذن الميكروفون غير متوقعة: {{state}}",
       statusApiUnavailable:
         "واجهة برمجة التطبيقات لحالة الميكروفون غير متاحة في وقت التشغيل هذا. استخدم الطلب للتحقق من الوصول.",
-      queryFailed: "فشل الاستعلام عن حالة الميكروفون:{{message}}",
+      queryFailed: "فشل الاستعلام عن حالة الميكروفون: {{message}}",
       captureUnavailable: "التقاط الميكروفون غير متوفر في هذه البيئة.",
       permissionApiUnavailable:
         "واجهة برمجة تطبيقات حالة الإذن غير متاحة. استخدم الطلب للتحقق من الوصول.",
@@ -157,14 +157,14 @@ export const desktop = {
       captureApiUnavailable: "واجهة برمجة تطبيقات التقاط الميكروفون غير متاحة في هذه البيئة.",
       requestDenied: "تم رفض إذن الميكروفون من قبل المستخدم أو النظام.",
       noDevice: "لم يتم العثور على جهاز ميكروفون.",
-      requestFailed: "فشل طلب إذن الميكروفون:{{message}}",
+      requestFailed: "فشل طلب إذن الميكروفون: {{message}}",
     },
     empty: {
       notifications: "لم يتم التحقق من حالة الإخطار بعد.",
       microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
     },
     testNotification: {
-      title: "اختبار الإخطار Ait",
+      title: "اختبار إشعارات Ait",
       body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
       notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
       failed: "فشل في إرسال الإخطار.",

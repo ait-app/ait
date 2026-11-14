@@ -12,12 +12,12 @@ export const pairing = {
   },
   direct: {
     title: "직접 연결",
-    helper: "Ait 서버의 주소를 입력하세요.",
+    helper: "서버 주소와 액세스 토큰을 입력하세요.",
     fields: {
       host: "호스트",
       port: "포트",
-      password: "비밀번호",
-      optional: "선택 사항",
+      password: "서버 토큰",
+      optional: "필수",
       useSsl: "SSL 사용",
       connectionUri: "연결 URI",
     },
@@ -53,7 +53,7 @@ export const pairing = {
   },
   remoteSsh: {
     title: "원격 SSH",
-    helper: "원격 호스트에서 실행 중인 Ait 데몬에 연결합니다.",
+    helper: "SSH를 통해 원격 Ait 서버에 연결합니다(기본 서버 포트: 7316).",
     fields: {
       target: "SSH 호스트",
     },

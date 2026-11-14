@@ -1,6 +1,6 @@
 export const importSession = {
   chooseHostTitle: "Importer depuis l’hôte",
-  title: "Session d'importation",
+  title: "Importer une session",
   searchPlaceholder: "Rechercher des sessions...",
   scope: {
     host: "Sessions sur {{host}}",
@@ -22,19 +22,19 @@ export const importSession = {
       "Le dossier de travail de la session est indisponible sur cet hôte : {{path}}. Restaurez-le puis réessayez l’importation.",
   },
   actions: {
-    refresh: "Sessions de rafraîchissement",
+    refresh: "Actualiser les sessions",
     showAll: "Tout afficher",
     loadMore: "Charger plus",
   },
   preview: {
-    untitledSession: "Séance sans titre",
-    noPrompt: "Aucun aperçu rapide",
+    untitledSession: "Session sans titre",
+    noPrompt: "Aucun aperçu du prompt",
   },
   empty: {
     noRecent: "Aucune session récente à importer.",
     noMatches: "Aucune session ne correspond à votre recherche.",
     alreadyImported: "Toutes les sessions récentes sont déjà importées.",
-    noProviderSessions: "Aucune session{{provider}}trouvée.",
+    noProviderSessions: "Aucune session {{provider}} trouvée.",
   },
   row: {
     importing: "Importation...",

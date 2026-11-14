@@ -4,7 +4,7 @@ export const rewind = {
   actions: {
     conversation: "Rebobinar conversación",
     files: "Rebobinar archivos",
-    both: "Rebobinar conversaciones y archivos",
+    both: "Rebobinar conversación y archivos",
   },
   errors: {
     failed: "No se pudo rebobinar el agente",

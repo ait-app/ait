@@ -18,7 +18,7 @@ export const review = {
     placeholder: "Deja un comentario",
     cancel: "Cancelar",
     cancelAccessibility: "Cancelar comentario de revisión",
-    save: "Comentario",
+    save: "Comentar",
     saveAccessibility: "Guardar comentario de revisión",
   },
 };

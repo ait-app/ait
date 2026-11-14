@@ -1,5 +1,5 @@
 export const providerSelection = {
-  defaultModel: "تقصير",
+  defaultModel: "الافتراضي",
   selectModel: "حدد النموذج",
   error: "خطأ",
   unavailable: "غير متاح",
@@ -8,7 +8,7 @@ export const providerSelection = {
     noProviders: "لا يوجد موفري خدمة متاحين على المضيف المحدد",
     modelDefaultsLoading: "لا يزال يتم تحميل الإعدادات الافتراضية للنموذج",
     noModelAvailable: "لا يوجد نموذج متاح للموفر المحدد",
-    workspaceDirectoryNotFound: "لم يتم العثور على دليل Workspace",
-    hostDisconnected: "Host غير متصل",
+    workspaceDirectoryNotFound: "لم يتم العثور على دليل مساحة العمل",
+    hostDisconnected: "المضيف غير متصل",
   },
 };

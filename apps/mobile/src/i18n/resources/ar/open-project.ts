@@ -5,11 +5,11 @@ export const openProject = {
       description: "افتح مجلدًا على جهازك",
     },
     importSession: {
-      title: "جلسة الاستيراد",
-      description: "أحضر جلسات CLI الخارجية الأخيرة",
+      title: "استيراد جلسة",
+      description: "افتح جلسة Claude Code أو Codex أو غيرها بدأتها في طرفية",
     },
     setupProviders: {
-      title: "موفري الإعداد",
+      title: "إعداد المزوّدين",
       description: "قم بتكوين Claude Code و Codex والمزيد",
     },
     signIn: {

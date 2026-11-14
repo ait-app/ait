@@ -128,7 +128,7 @@ export const sidebar = {
       markAsRead: "تعليم كمقروء",
       markAsUnread: "تعليم كغير مقروء",
       archive: "أرشفة",
-      archiving: "أرشفة...",
+      archiving: "جارٍ الأرشفة...",
     },
     rename: {
       title: "إعادة تسمية مساحة العمل",

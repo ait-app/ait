@@ -53,7 +53,7 @@ export const pairing = {
   },
   remoteSsh: {
     title: "远程 SSH",
-    helper: "连接到远程主机上运行的 Ait 守护进程。",
+    helper: "通过 SSH 连接到远程 Ait 服务器（默认服务器端口：7316）。",
     fields: {
       target: "SSH 主机",
     },

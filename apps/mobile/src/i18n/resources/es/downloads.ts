@@ -3,6 +3,6 @@ export const downloads = {
   hostUnavailable: "El host de descarga no está disponible.",
   cancelled: "La descarga fue cancelada.",
   failed: "No se pudo descargar el archivo.",
-  shareFile: "compartir archivo",
-  shareFileNamed: "Compartir{{fileName}}",
+  shareFile: "Compartir archivo",
+  shareFileNamed: "Compartir {{fileName}}",
 };

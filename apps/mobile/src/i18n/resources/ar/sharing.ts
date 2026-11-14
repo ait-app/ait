@@ -1,6 +1,6 @@
 const sharedSharing = {
   sharedWithMeCount: "تمت مشاركته معي ({{count}})",
-  incomingHostHint: "تظهر المضيفون المفعّلون ومشاريعهم ومساحات عملهم المشتركة في قوائمك.",
+  incomingHostHint: "يظهر المضيفون المفعّلون ومشاريعهم ومساحات عملهم المشتركة في قوائمك.",
   showHostInHosts: "عرض {{host}} في المضيفين",
   sharedByMeCount: "ما شاركته ({{count}})",
   action: "مشاركة مع المجموعات",

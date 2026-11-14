@@ -1,13 +1,13 @@
 export const importSession = {
   chooseHostTitle: "الاستيراد من المضيف",
-  title: "جلسة الاستيراد",
+  title: "استيراد جلسة",
   searchPlaceholder: "البحث في الجلسات...",
   scope: {
     host: "الجلسات على {{host}}",
     workspace: "مساحة العمل هذه",
   },
   filters: {
-    all: "الجميع",
+    all: "الكل",
     label: "التصفية: {{provider}}",
     title: "تصفية حسب المزود",
   },
@@ -28,13 +28,13 @@ export const importSession = {
   },
   preview: {
     untitledSession: "جلسة بلا عنوان",
-    noPrompt: "لا توجد معاينة سريعة",
+    noPrompt: "لا توجد معاينة للمطالبة",
   },
   empty: {
     noRecent: "لا توجد جلسات حديثة لاستيرادها.",
     noMatches: "لا توجد جلسات تطابق بحثك.",
     alreadyImported: "تم بالفعل استيراد كافة الجلسات الأخيرة.",
-    noProviderSessions: "لم يتم العثور على جلسات{{provider}}.",
+    noProviderSessions: "لم يتم العثور على جلسات {{provider}}.",
   },
   row: {
     importing: "جارٍ الاستيراد...",

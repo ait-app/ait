@@ -1,4 +1,4 @@
 export const renameModal = {
-  rename: "Rebaptiser",
+  rename: "Renommer",
   saving: "Sauvegarde...",
 };

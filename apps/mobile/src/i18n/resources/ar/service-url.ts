@@ -1,6 +1,6 @@
 export const serviceUrl = {
-  title: "افتح الخدمة URL",
-  message: "افتح{{url}}؟",
+  title: "فتح عنوان URL للخدمة",
+  message: "هل تريد فتح {{url}}؟",
   inPaseo: "في Ait",
   externalBrowser: "متصفح خارجي",
   dontAskAgain: "لا تسأل مرة أخرى",

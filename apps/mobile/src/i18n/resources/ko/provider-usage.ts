@@ -1,7 +1,7 @@
 export const providerUsage = {
-  lastUpdated: "Last updated {{time}}",
-  noSuccessfulUpdate: "No successful update",
-  resetTimePassed: "Reset time passed",
+  lastUpdated: "마지막 업데이트 {{time}}",
+  noSuccessfulUpdate: "성공한 업데이트 없음",
+  resetTimePassed: "초기화 시간이 지났습니다",
   summaryUsed: "{{source}} {{amount}} 사용됨",
   summaryRemaining: "{{source}} {{amount}} 남음",
   options: "설정",

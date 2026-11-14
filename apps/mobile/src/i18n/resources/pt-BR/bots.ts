@@ -21,11 +21,11 @@ export const bots = {
   groupSchedules: "Agendamentos: criar e gerenciar agendamentos",
   groupScripts: "Scripts: executar scripts do workspace",
   groupTerminals: "Terminais: criar terminais e digitar neles",
-  permissionRiskHint: "Can run commands.",
-  modeCap: "Default agent mode",
-  modeNotAllowed: "Not allowed",
+  permissionRiskHint: "Pode executar comandos.",
+  modeCap: "Modo padrão do agente",
+  modeNotAllowed: "Não permitido",
   modeCapHint:
-    "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
+    "Escolha o modo dos agentes que o Bot inicia para cada provedor. O Bot só pode usar este modo; escolha Não permitido para impedir que ele use um provedor.",
   providerUnavailable: "{{provider}} (indisponível)",
   readOnlyHint:
     "O Bot é executado no modo mais restrito que o provedor oferece (no Claude, o modo padrão, em que suas próprias regras de permissão continuam valendo) e deixa as alterações para os agentes que ele inicia.",
@@ -51,7 +51,7 @@ export const bots = {
   message: "Mensagem",
   cancel: "Cancelar turno",
   emptyChat: "Envie uma mensagem para iniciar uma conversa.",
-  session: "Bot session",
+  session: "Sessão do Bot",
   reset: "Nova conversa",
   resetConfirm:
     "Iniciar uma nova conversa? As mensagens existentes são mantidas e as configurações mais recentes do Bot serão aplicadas.",

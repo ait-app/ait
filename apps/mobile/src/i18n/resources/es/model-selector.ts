@@ -17,11 +17,11 @@ export const modelSelector = {
   editProfilesCount: "Editar perfiles ({{count}})",
   modelCount: "{{count}} modelo",
   modelCountPlural: "{{count}} modelos",
-  retry: "Rever",
+  retry: "Reintentar",
   retrying: "Reintentando...",
   noMatches: "Ningún modelo coincide con tu búsqueda",
   noMatchesForQuery: "Ningún modelo coincide con «{{query}}»",
   searchAllPlaceholder: "Buscar en todos los modelos...",
   searchPlaceholder: "Buscar modelos...",
-  openProviderSettings: "Abrir configuración de{{provider}}",
+  openProviderSettings: "Abrir configuración de {{provider}}",
 };

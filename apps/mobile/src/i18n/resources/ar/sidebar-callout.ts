@@ -1,3 +1,3 @@
 export const sidebarCallout = {
-  dismiss: "رفض",
+  dismiss: "تجاهل",
 };

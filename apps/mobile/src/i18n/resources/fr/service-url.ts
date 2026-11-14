@@ -1,7 +1,7 @@
 export const serviceUrl = {
-  title: "Service ouvertURL",
-  message: "Ouvrir{{url}}?",
+  title: "Ouvrir l'URL du service",
+  message: "Ouvrir {{url}} ?",
   inPaseo: "Dans Ait",
   externalBrowser: "Navigateur externe",
-  dontAskAgain: "Ne demande plus",
+  dontAskAgain: "Ne plus demander",
 };

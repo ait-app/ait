@@ -4,6 +4,6 @@ export const toolCallDetails = {
   subAgentActivity: "Activité du sous-agent",
   subAgentSession: "session {{sessionId}}",
   preparingWorktree: "Préparation du worktree {{branchName}} dans {{worktreePath}}",
-  input: "Saisir",
-  output: "Sortir",
+  input: "Entrée",
+  output: "Sortie",
 };

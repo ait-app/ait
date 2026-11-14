@@ -3,11 +3,11 @@ export const composer = {
     desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
     mobile: "メッセージ、@ファイル、/コマンド",
     fallback: "メッセージ...",
-    terminal: "Prompt",
+    terminal: "プロンプト",
   },
   input: {
     accessibilityLabel: "エージェントにメッセージ...",
-    terminalAccessibilityLabel: "Terminal prompt",
+    terminalAccessibilityLabel: "ターミナルのプロンプト",
     fullscreen: "全画面表示",
     exitFullscreen: "全画面表示を終了",
     focusHint: "{{shortcut}}でフォーカス",

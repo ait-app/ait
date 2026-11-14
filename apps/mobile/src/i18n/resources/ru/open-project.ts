@@ -6,7 +6,7 @@ export const openProject = {
     },
     importSession: {
       title: "Импортировать сессию",
-      description: "Импортируйте недавние сессии из внешних CLI",
+      description: "Откройте сессию Claude Code, Codex или другую, запущенную в терминале",
     },
     setupProviders: {
       title: "Настроить провайдеров",

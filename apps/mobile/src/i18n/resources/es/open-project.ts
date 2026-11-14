@@ -6,11 +6,11 @@ export const openProject = {
     },
     importSession: {
       title: "Importar sesión",
-      description: "Incorporar sesionesCLIexternas recientes",
+      description: "Abra una sesión de Claude Code, Codex u otra que haya iniciado en una terminal",
     },
     setupProviders: {
-      title: "Proveedores de configuración",
-      description: "ConfigurarClaude Code,Codexy más",
+      title: "Configurar proveedores",
+      description: "Configure Claude Code, Codex y más",
     },
     signIn: {
       title: "Iniciar sesión",

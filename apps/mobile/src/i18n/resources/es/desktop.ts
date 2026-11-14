@@ -40,9 +40,9 @@ export const desktop = {
     status: {
       title: "Estado",
       builtInOnly: "Aquí solo se muestra el demonio de escritorio integrado.",
-      running: "correr",
-      notRunning: "no corriendo",
-      pid: "PID{{pid}}",
+      running: "en ejecución",
+      notRunning: "no se está ejecutando",
+      pid: "PID {{pid}}",
     },
     management: {
       title: "Administrar demonio incorporado",
@@ -50,9 +50,9 @@ export const desktop = {
       pauseTitle: "Pausar el demonio incorporado",
       pauseMessage:
         "Esto detendrá el demonio incorporado inmediatamente. Se detendrán los agentes en ejecución y los terminales conectados al demonio integrado.",
-      pauseAndStop: "Pausa y para",
+      pauseAndStop: "Pausar y detener",
       registrationFailed:
-        "Built-in daemon started, but Ait could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+        "El demonio integrado se inició, pero Ait no pudo guardar la conexión con localhost. Desactive y vuelva a activar la gestión del demonio, o agregue localhost manualmente.",
       pausedStopFailed:
         "La gestión del demonio integrado se pausó, pero Ait no pudo detener el demonio.",
       updateFailed: "No se puede actualizar la gestión de demonios integrada.",
@@ -63,7 +63,7 @@ export const desktop = {
     },
     logs: {
       title: "Archivo de registro",
-      modalTitle: "RegistrosDaemon",
+      modalTitle: "Registros del demonio",
       unavailable: "Ruta de registro no disponible",
       empty: "(el archivo de registro está vacío)",
       copied: "Ruta de registro copiada.",
@@ -73,10 +73,10 @@ export const desktop = {
     },
     fullStatus: {
       title: "Estado completo",
-      modalTitle: "EstadoDaemon",
+      modalTitle: "Estado del demonio",
       view: "Ver estado",
       copied: "Estado copiado al portapapeles.",
-      fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
+      fetchFailed: "No se pudo recuperar el estado del demonio: {{message}}",
     },
     versionMismatch:
       "Las versiones de la aplicación y del demonio no coinciden. Actualice ambos a la misma versión para obtener la mejor experiencia.",
@@ -87,16 +87,16 @@ export const desktop = {
       checking: "Buscando actualizaciones de la aplicación...",
       installing: "Instalando actualización de la aplicación...",
       upToDate: "La aplicación está actualizada.",
-      upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
+      upToDateWithLastChecked: "Actualizada. Última comprobación a las {{time}}.",
       pending: "Le avisaremos cuando la actualización esté lista.",
       pendingWithLastChecked:
         "Le avisaremos cuando la actualización esté lista. Última comprobación a las {{time}}.",
       pendingWithVersion: "Actualización encontrada: {{version}}. Descargando...",
       pendingWithVersionAndLastChecked:
         "Actualización encontrada: {{version}}. Descargando... Última comprobación a las {{time}}.",
-      availableWithVersion: "Actualización lista:{{version}}",
+      availableWithVersion: "Actualización lista: {{version}}",
       availableWithVersionAndLastChecked:
-        "Actualización lista:{{version}}. Última comprobación a las {{time}}.",
+        "Actualización lista: {{version}}. Última comprobación a las {{time}}.",
       available: "Una actualización de la aplicación está lista para instalarse.",
       availableWithLastChecked:
         "Una actualización de la aplicación está lista para instalarse. Última comprobación a las {{time}}.",
@@ -114,7 +114,7 @@ export const desktop = {
       installingAction: "Instalando...",
       installAndRestart: "Instalar y reiniciar",
       installingDescription: "Instalando y reiniciando...",
-      versionReady: "{{version}}está listo para instalar.",
+      versionReady: "{{version}} está listo para instalar.",
       newVersionReady: "Una nueva versión está lista para instalar.",
       restartWarning:
         "La actualización de la aplicación dejará de ejecutar agentes y cerrará sesiones de terminal.",
@@ -125,10 +125,10 @@ export const desktop = {
     saveFailed: "No se puede guardar la configuración del escritorio.",
   },
   rosetta: {
-    title: "Descargue la compilaciónApple Silicon",
-    runningIntel: "Estás ejecutando la compilaciónIntelde Ait enRosettaenApple Silicon.",
+    title: "Descargue la compilación de Apple Silicon",
+    runningIntel: "Estás ejecutando la compilación de Ait para Intel con Rosetta en Apple Silicon.",
     highCpu:
-      "Esto provoca un uso elevado de la CPU. Descargue la compilaciónApple Siliconpara solucionarlo.",
+      "Esto provoca un uso elevado de la CPU. Descargue la compilación de Apple Silicon para solucionarlo.",
     download: "Descargar",
   },
   permissions: {
@@ -143,9 +143,10 @@ export const desktop = {
       apiUnavailable: "La API de notificación web no está disponible en este entorno.",
       requestsWebOnly:
         "Las solicitudes de notificación de escritorio solo están disponibles en tiempo de ejecución web.",
-      requestUnavailable: "RequestPermission() de la API de notificación web no está disponible.",
-      requestFailed: "No se pudo solicitar permiso de notificación:{{message}}",
-      unexpectedState: "Estado de permiso de notificación inesperado:{{state}}",
+      requestUnavailable:
+        "La función requestPermission() de la API de notificación web no está disponible.",
+      requestFailed: "No se pudo solicitar permiso de notificación: {{message}}",
+      unexpectedState: "Estado de permiso de notificación inesperado: {{state}}",
     },
     microphone: {
       webOnly:
@@ -154,19 +155,19 @@ export const desktop = {
       granted: "Se concede acceso al micrófono.",
       denied: "El acceso al micrófono está denegado en la configuración del sistema.",
       notGranted: "Aún no se ha concedido el permiso para el micrófono.",
-      unexpectedState: "Estado de permiso de micrófono inesperado:{{state}}",
+      unexpectedState: "Estado de permiso de micrófono inesperado: {{state}}",
       statusApiUnavailable:
-        "La API de estado del micrófono no está disponible en este tiempo de ejecución. Utilice Solicitud para comprobar el acceso.",
-      queryFailed: "No se pudo consultar el estado del micrófono:{{message}}",
+        "La API de estado del micrófono no está disponible en este tiempo de ejecución. Utilice Solicitar para comprobar el acceso.",
+      queryFailed: "No se pudo consultar el estado del micrófono: {{message}}",
       captureUnavailable: "La captura de micrófono no está disponible en este entorno.",
       permissionApiUnavailable:
-        "La API de estado de permiso no está disponible. Utilice Solicitud para comprobar el acceso.",
+        "La API de estado de permiso no está disponible. Utilice Solicitar para comprobar el acceso.",
       requestsWebOnly:
         "Las solicitudes de micrófono de escritorio solo están disponibles en tiempo de ejecución web.",
       captureApiUnavailable: "La API de captura de micrófono no está disponible en este entorno.",
       requestDenied: "El usuario o el sistema denegaron el permiso del micrófono.",
       noDevice: "No se encontró ningún dispositivo de micrófono.",
-      requestFailed: "No se pudo solicitar el permiso del micrófono:{{message}}",
+      requestFailed: "No se pudo solicitar el permiso del micrófono: {{message}}",
     },
     empty: {
       notifications: "El estado de la notificación aún no se ha verificado.",
@@ -176,7 +177,7 @@ export const desktop = {
       title: "Prueba de notificación Ait",
       body: "Si puede ver esto, las notificaciones de escritorio funcionan.",
       notDelivered:
-        "La notificación no fue entregada. Verifique Configuración del sistema> Notificaciones.",
+        "La notificación no fue entregada. Verifique Configuración del sistema > Notificaciones.",
       failed: "No se pudo enviar la notificación.",
     },
   },
