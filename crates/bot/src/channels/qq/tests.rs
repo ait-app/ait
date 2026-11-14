@@ -128,6 +128,19 @@ fn leading_mentions_are_removed_in_either_form() {
 }
 
 #[test]
+fn passive_replies_allow_five_chunks_per_inbound_message() {
+    assert_eq!(passive_reply(Some("msg-1"), 4), Some(("msg-1", 5)));
+    assert_eq!(passive_reply(Some("msg-1"), 5), None);
+}
+
+#[test]
+fn refusal_accepts_numeric_and_string_error_codes() {
+    assert_eq!(refusal(&json!({"code": 40_034_005})), Some(40_034_005));
+    assert_eq!(refusal(&json!({"err_code": "40034026"})), Some(40_034_026));
+    assert_eq!(refusal(&json!({"code": 0})), None);
+}
+
+#[test]
 fn stored_peers_map_only_to_qq_message_paths() {
     assert_eq!(
         message_path("c2c:abc-1").unwrap(),
@@ -277,21 +290,24 @@ async fn replies_inside_the_window_reference_the_inbound_message() {
 }
 
 #[tokio::test]
-async fn a_closed_reply_window_falls_back_to_a_proactive_message() {
+async fn a_closed_reply_window_is_not_retried_as_a_proactive_message() {
     for code in REPLY_WINDOW_CLOSED {
         let (result, bodies) = post_once(
-            vec![
-                json!({"code":code,"message":"closed"}),
-                json!({"id":"sent-1"}),
-            ],
+            vec![json!({"code":code,"message":"closed"})],
             Some(("msg-1", 1)),
         )
         .await;
-        result.unwrap();
-        assert_eq!(bodies.len(), 2);
-        assert!(bodies[1].get("msg_id").is_none());
-        assert!(bodies[1].get("msg_seq").is_none());
+        assert_eq!(result, Err(ErrorCode::BotIo));
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0]["msg_id"], "msg-1");
     }
+}
+
+#[tokio::test]
+async fn a_reply_without_an_inbound_anchor_is_rejected_without_sending() {
+    let (result, bodies) = post_once(vec![json!({"id":"sent-1"})], None).await;
+    assert_eq!(result, Err(ErrorCode::BotIo));
+    assert!(bodies.is_empty());
 }
 
 #[tokio::test]

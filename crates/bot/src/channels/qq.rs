@@ -39,10 +39,10 @@ const OP_HELLO: u64 = 10;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_TEXT_BYTES: usize = 16 * 1024;
 const MAX_CHUNK_UTF16: usize = 4000;
-/// Replies QQ allows per inbound message, using the lower of its private and group limits.
-const PASSIVE_REPLIES: usize = 4;
-/// QQ's refusals for a reply outside its time or count limit, and for an expired `msg_id`.
-const REPLY_WINDOW_CLOSED: [i64; 2] = [40_034_128, 40_034_005];
+/// Replies QQ allows per inbound message in both private and group chats.
+const PASSIVE_REPLIES: usize = 5;
+/// QQ's refusals for an expired or exhausted passive-reply anchor.
+const REPLY_WINDOW_CLOSED: [i64; 4] = [304_103, 40_034_005, 40_034_026, 40_034_128];
 const PAIRED_NOTICE: &str = "Paired. This bot now accepts your messages here.";
 
 /// The two QQ hosts a connection talks to, separated so tests can replace them.
@@ -380,11 +380,7 @@ impl Connection<'_> {
         let mut index = 0;
         for text in parts {
             for chunk in chunks(text, MAX_CHUNK_UTF16) {
-                let passive = turn
-                    .reply_to
-                    .as_deref()
-                    .filter(|_| index < PASSIVE_REPLIES)
-                    .map(|id| (id, index + 1));
+                let passive = passive_reply(turn.reply_to.as_deref(), index);
                 self.post_text(&path, chunk, passive).await?;
                 index += 1;
             }
@@ -392,37 +388,54 @@ impl Connection<'_> {
         Ok(())
     }
 
-    /// Send text as a reply when `passive` names the inbound message and its sequence number,
-    /// falling back to a proactive message once QQ's reply window has closed.
+    /// Send text as a passive reply anchored to the inbound QQ message.
     async fn post_text(
         &self,
         path: &str,
         text: &str,
         passive: Option<(&str, usize)>,
     ) -> Result<(), ErrorCode> {
-        let proactive = json!({"content":text,"msg_type":0});
-        if let Some((message, sequence)) = passive {
-            let mut body = proactive.clone();
-            body["msg_id"] = json!(message);
-            body["msg_seq"] = json!(sequence);
-            let response = self.call(reqwest::Method::POST, path, Some(&body)).await?;
-            match refusal(&response) {
-                None => return Ok(()),
-                Some(code) if REPLY_WINDOW_CLOSED.contains(&code) => {}
-                Some(_) => return Err(ErrorCode::BotIo),
+        let Some((message, sequence)) = passive else {
+            // QQ no longer accepts proactive pushes for these channels. A response without the
+            // inbound message anchor cannot be delivered safely, so do not issue a second request.
+            tracing::warn!("QQ reply has no inbound message anchor");
+            return Err(ErrorCode::BotIo);
+        };
+        let body = json!({
+            "content": text,
+            "msg_type": 0,
+            "msg_id": message,
+            "msg_seq": sequence,
+        });
+        let response = self.call(reqwest::Method::POST, path, Some(&body)).await?;
+        match refusal(&response) {
+            None => Ok(()),
+            Some(code) if REPLY_WINDOW_CLOSED.contains(&code) => {
+                tracing::warn!(code, "QQ passive reply window is closed");
+                Err(ErrorCode::BotIo)
+            }
+            Some(code) => {
+                tracing::warn!(code, "QQ passive reply was refused");
+                Err(ErrorCode::BotIo)
             }
         }
-        let response = self
-            .call(reqwest::Method::POST, path, Some(&proactive))
-            .await?;
-        refusal(&response).map_or(Ok(()), |_| Err(ErrorCode::BotIo))
     }
 }
 
+fn passive_reply(reply_to: Option<&str>, index: usize) -> Option<(&str, usize)> {
+    reply_to
+        .filter(|_| index < PASSIVE_REPLIES)
+        .map(|id| (id, index + 1))
+}
+
 fn refusal(response: &Value) -> Option<i64> {
-    response["code"]
-        .as_i64()
-        .or_else(|| response["err_code"].as_i64())
+    ["code", "err_code"]
+        .into_iter()
+        .find_map(|field| {
+            response[field]
+                .as_i64()
+                .or_else(|| response[field].as_str()?.parse().ok())
+        })
         .filter(|code| *code != 0)
 }
 

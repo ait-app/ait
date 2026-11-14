@@ -72,8 +72,8 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
   `ait.bot.conversation` 与定时任务的 `botConversation` 字段，由 daemon 写入；Bot、它启动的 Agent 与 Ait MCP 调用都不能写入或修改。
 - 没有来源（例如用户自己启动的 Agent）、来源对话已不可用（Channel 停用或删除、对话有 `uncertain` 轮次），
   或来源是 Webhook Channel 时，回到 Ait 主对话，即 Bot 标签页显示的对话。Webhook 只能返回调用方发起的轮次的结果，无法主动推送。
-- 外部平台的投递方式：Telegram 发到原聊天与话题；飞书发到原聊天，不在话题内回复；QQ 以主动消息发送，
-  受平台主动消息配额限制，被拒时投递记为 `uncertain`；微信不带上下文 token 发送。
+- 外部平台的投递方式：Telegram 发到原聊天与话题；飞书发到原聊天，不在话题内回复；QQ 只在原入站消息的
+  被动回复窗口内发送，消息锚点过期或来源缺失时投递记为 `uncertain`；微信不带上下文 token 发送。
 
 **合并与限额**
 
@@ -321,7 +321,7 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 
 手动接入的 Channel 起初没有允许的发送者，开启群聊的 Channel 也可能无法在群里识别扫码者。此时在该 Channel 所在行点击“获取配对码”，把配对码私聊发给机器人，或在群里 @ 机器人并发送它，发送者即加入允许列表。配对码只能使用一次，10 分钟后过期，daemon 重启后失效。
 
-QQ 限制被动回复的时间和次数，超出后 Ait 改用主动消息；在 QQ 中关闭机器人的“允许主动发送”后，这部分回复会发送失败。
+QQ 只接受带原消息 `msg_id` 的被动回复；每条入站消息最多回复 5 次，窗口过期后无法补发，投递会记为 `uncertain`。
 如果群主开启了“接收群内全部消息”，QQ 会用 `GROUP_MESSAGE_CREATE` 推送群内消息，Ait 会把这些普通消息也送进 Bot；未开启时继续使用 `GROUP_AT_MESSAGE_CREATE`，只接收 @ 机器人的消息。
 
 ### iMessage 接入

@@ -160,8 +160,9 @@ Bot 新增设置 `wakeScope`：`own`（默认）只让 `scope` 等于本 Bot 根
   写入顺序保证任一时刻崩溃都只重试一次：关闭时先把条目改回 `pending` 并保存日志，再提交该轮次的终态；
   启动时先保存把条目改回 `pending` 的日志，再写回改为 `uncertain` 的轮次。两次写入之间崩溃时，该轮次在磁盘上仍为执行中，
   下次启动照常视为被打断，而条目已是 `pending`，不会再改动，因此既不丢失也不重复重试。
-- 外部 Channel 对唤醒轮次（无 `replyTo`）发送普通消息：Telegram 发到原 chat 与话题；飞书发到原 chat（不在话题内回复）；
-  QQ 发送主动消息，受平台主动消息配额限制，被拒时投递记为 `uncertain`；微信不带 context token 发送；iMessage 不受影响。
+- 外部 Channel 对唤醒轮次发送普通消息：Telegram 发到原 chat 与话题；飞书发到原 chat（不在话题内回复）；
+  QQ 唤醒轮次没有可用的原始消息锚点，投递记为 `uncertain`；直接回复入站 QQ 消息时只使用仍有效的被动回复锚点；
+  微信不带 context token 发送；iMessage 不受影响。
 
 ### 12. 降级兼容
 
