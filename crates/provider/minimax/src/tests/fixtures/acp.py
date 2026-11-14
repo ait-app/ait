@@ -17,6 +17,7 @@ active = None
 session_id = "minimax-session"
 # Like native ACP agents, a prompt blocked on an unanswered permission cannot settle a cancel.
 awaiting_permission = False
+awaiting_questionnaire = False
 
 
 def send(value):
@@ -77,6 +78,7 @@ for line in sys.stdin:
     identity = request.get("id")
     params = request.get("params", {})
     if method == "initialize":
+        assert params["clientCapabilities"]["elicitation"]["form"] == {}
         reply(identity, {"protocolVersion": 1, "agentCapabilities": {
             "promptCapabilities": {"image": True}, "mcpCapabilities": {"http": True},
             "sessionCapabilities": {"resume": {}, "close": {}}}})
@@ -122,6 +124,17 @@ for line in sys.stdin:
                 "options": [{"optionId": "yes", "kind": "allow_once", "name": "Allow once"},
                             {"optionId": "no", "kind": "reject_once", "name": "Deny"}]}})
             awaiting_permission = True
+        elif text == "questionnaire":
+            send({"id": "question", "method": "elicitation/create", "params": {
+                "sessionId": session_id, "toolCallId": "tool-question", "mode": "form",
+                "message": "Choose languages", "requestedSchema": {"type": "object",
+                    "properties": {
+                        "language": {"type": "array", "uniqueItems": True, "items": {"anyOf": [
+                            {"const": "rust", "title": "Rust, stable"},
+                            {"const": "go", "title": "Go"}]}},
+                        "language_custom": {"type": "string", "title": "Other language"}},
+                    "required": ["language"]}}})
+            awaiting_questionnaire = True
         elif text == "remember":
             (root / "native-memory").write_text("remembered")
             finish("remembered")
@@ -130,7 +143,7 @@ for line in sys.stdin:
         else:
             finish("Hello from MiniMax")
     elif method == "session/cancel":
-        if scenario != "ignore-cancel" and not awaiting_permission:
+        if scenario != "ignore-cancel" and not awaiting_permission and not awaiting_questionnaire:
             reply(active, {"stopReason": "cancelled"})
     elif method == "session/close":
         reply(identity, {})
@@ -141,5 +154,15 @@ for line in sys.stdin:
             continue
         update({"sessionUpdate": "tool_call_update", "toolCallId": "tool", "status": "completed"})
         finish("approved" if outcome.get("optionId") == "yes" else "denied")
+    elif identity == "question":
+        awaiting_questionnaire = False
+        result = request["result"]
+        if result["action"] == "cancel":
+            continue
+        assert result["action"] == "accept"
+        content = result["content"]
+        assert content["language"] == ["rust", "go"]
+        assert content["language_custom"] == "C++"
+        finish("rust, go, C++")
     else:
         raise AssertionError(method)

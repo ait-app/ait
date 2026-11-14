@@ -5,7 +5,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{MiniMaxClient, PROVIDER, config};
+use super::{MiniMaxClient, PROVIDER, config, interactions};
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -70,7 +70,7 @@ pub(super) async fn open(
         .request(
             "initialize",
             json!({"protocolVersion":1,
-        "clientCapabilities":{},"clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
+        "clientCapabilities":{"elicitation":{"form":{}}},"clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
         )
         .await?;
     if initialized["protocolVersion"] != 1 {
@@ -293,6 +293,25 @@ impl Session {
                     .events
                     .push_back(AgentTurnEvent::PermissionRequested(request));
             }
+            Some("elicitation/create") => {
+                if self.active.is_none()
+                    || message["params"]["sessionId"] != self.id
+                    || self.permissions.len() >= 128
+                    || self
+                        .permissions
+                        .values()
+                        .any(|pending| pending.rpc_id == message["id"])
+                {
+                    return Err(AgentSessionError::Failed);
+                }
+                let captured = interactions::form(message)?;
+                let id = text(&captured.request, "id")?.to_owned();
+                let request = captured.request.clone();
+                self.permissions.insert(id, captured);
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::PermissionRequested(request));
+            }
             None => {
                 let (turn, id) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
                 if message["id"] != *id {
@@ -479,7 +498,7 @@ impl AgentSession for Session {
             .permissions
             .get(id)
             .ok_or(AgentSessionError::Rejected)?;
-        let reply = acp_permissions::resolve_tool(pending, response)?;
+        let reply = interactions::resolve(pending, response)?;
         self.transport.send(&reply).await?;
         self.permissions.remove(id);
         self.stream
