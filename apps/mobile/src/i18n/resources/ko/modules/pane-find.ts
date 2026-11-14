@@ -1,0 +1,21 @@
+export const paneFind = {
+  searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
+  searching: "검색 중…",
+  loading: "불러오는 중…",
+  failed: "실패",
+  retry: "다시 시도",
+
+  title: "찾기",
+  placeholder: "패널에서 찾기",
+  close: "찾기 닫기",
+  matches: "검색 결과",
+  previous: "이전 일치 항목",
+  next: "다음 일치 항목",
+  toggleReplace: "바꾸기 표시 전환",
+  replaceWith: "바꿀 내용",
+  replace: "바꾸기",
+  replaceAll: "모두 바꾸기",
+  noMatches: "일치 항목 없음",
+  position: "{{current}} / {{total}}",
+  total: "일치 항목 {{total}}개",
+};

@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "مساحة عمل جديدة",
+  create: "يخلق",
+  isolation: {
+    local: "محلي",
+    worktree: "شجرة عمل جديدة",
+    sandboxedWorktree: "شجرة عمل معزولة",
+    label: "العزل",
+  },
+  fields: {
+    project: "المشروع",
+    base: "الأساس",
+    baseNotApplicable: "غير قابل للتطبيق",
+  },
+  titlePlaceholder: "العنوان (اختياري)",
+  errors: {
+    hostDisconnected: "Host غير متصل",
+    createWorktreeFailed: "فشل في إنشاء شجرة العمل",
+    composerStateRequired: "حالة الملحن مطلوبة",
+    selectModel: "اختر نموذجا",
+  },
+  tooltips: {
+    project: "Choose the project",
+    host: "Choose the host",
+    isolation: "Choose the isolation level",
+    startingRef: "اختر من أين تبدأ",
+    launch: "Choose what to launch",
+  },
+  refPicker: {
+    startingRef: "بدء المرجع",
+    intoBase: "إلى {{baseRef}}",
+    searching: "جارٍ البحث...",
+    noMatchingRefs: "لا توجد مراجع مطابقة.",
+    searchPlaceholder: "بحث الفروع والعلاقات العامة",
+    title: "ابدأ من",
+  },
+  launch: {
+    title: "What to launch",
+    chat: "Chat",
+    terminal: "Terminal",
+    manageProfiles: "Manage profiles",
+    submit: "Launch",
+    promptPlaceholder: "Prompt {{name}}",
+    commandPlaceholder: "Run a command, or leave empty for a blank terminal",
+  },
+};

@@ -1,0 +1,179 @@
+export const desktop = {
+  windowControls: {
+    minimize: "تصغير النافذة",
+    maximize: "تكبير النافذة",
+    restore: "استعادة النافذة",
+    close: "إغلاق النافذة",
+  },
+  quitting: {
+    title: "جارٍ إنهاء Ait...",
+    detail: "إيقاف البرنامج الخفي المحلي.",
+  },
+  daemon: {
+    listen: {
+      host: "عنوان الاستماع",
+      port: "المنفذ",
+      savedHint: "أعد تشغيل الخدمة الخلفية لتطبيق التغييرات.",
+      override:
+        "يتجاوز AIT_SERVER_LISTEN هذا الإعداد: {{address}}. أزل متغير البيئة لاستخدام العنوان المحفوظ.",
+      invalid: "أدخل عنوان IPv4 أو IPv6 (أو localhost) ومنفذًا بين 0 و65535.",
+    },
+    lifecycle: {
+      owned: "بدأته جلسة سطح المكتب هذه",
+      attached: "متصل بخدمة خلفية موجودة",
+      ownedMessage: "بدأت جلسة سطح المكتب هذه هذه الخدمة الخلفية.",
+      attachedMessage: "لم تبدأ جلسة سطح المكتب هذه هذه الخدمة الخلفية.",
+      stopTitle: "إيقاف الخدمة الخلفية المحلية؟",
+      stopMessage:
+        "{{ownership}}\nالمجلد الرئيسي: {{home}}\nمعرّف عملية المشرف: {{pid}}\nستتم مقاطعة مهام الوكلاء الجارية.",
+      stop: "إيقاف الخدمة الخلفية",
+      stopping: "جارٍ الإيقاف…",
+      stopFailed: "تعذّر إيقاف الخدمة الخلفية",
+      pauseAttached: "إيقاف الإدارة التلقائية للخدمة الخلفية مؤقتًا؟ ستستمر الخدمة المتصلة في العمل.",
+      pause: "إيقاف الإدارة مؤقتًا",
+      workerUpdated: "تم تحديث العامل إلى {{version}}",
+      supervisorRefresh:
+        "يحتفظ المشرف الجاري بشفرته الأصلية. يجب أن يوقفه البرنامج الذي بدأه ويعيد تشغيله لتحديثه.",
+    },
+    title: "Daemon",
+    status: {
+      title: "حالة",
+      builtInOnly: "يتم عرض البرنامج الخفي لسطح المكتب المدمج فقط هنا",
+      running: "جري",
+      notRunning: "لا يعمل",
+      pid: "PID{{pid}}",
+    },
+    management: {
+      title: "إدارة البرنامج الخفي المدمج",
+      hint: "اسمح لـ Ait ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
+      pauseTitle: "وقفة المدمج في البرنامج الخفي",
+      pauseMessage:
+        "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
+      pauseAndStop: "وقفة وتوقف",
+      registrationFailed:
+        "Built-in daemon started, but Ait could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+      pausedStopFailed:
+        "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Ait من إيقاف البرنامج الخفي.",
+      updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
+    },
+    keepRunning: {
+      title: "إبقاء البرنامج الخفي قيد التشغيل بعد الخروج",
+      hint: "تستمر الوكلاء والطرفيات في العمل بعد الخروج من Ait، ويعيد التشغيل التالي الاتصال بها.",
+    },
+    logs: {
+      title: "ملف السجل",
+      modalTitle: "سجلات Daemon",
+      unavailable: "مسار السجل غير متاح",
+      empty: "(ملف السجل فارغ)",
+      copied: "تم نسخ مسار السجل.",
+      copyFailed: "غير قادر على نسخ مسار السجل.",
+      open: "فتح السجلات",
+      copyPath: "نسخ المسار",
+    },
+    fullStatus: {
+      title: "الوضع الكامل",
+      modalTitle: "حالة Daemon",
+      view: "عرض الحالة",
+      copied: "تم نسخ الحالة إلى الحافظة.",
+      fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
+    },
+    versionMismatch:
+      "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كلاهما إلى نفس الإصدار للحصول على أفضل تجربة.",
+    loadFailed: "غير قادر على تحميل حالة البرنامج الخفي لسطح المكتب.",
+  },
+  updates: {
+    status: {
+      checking: "جارٍ التحقق من وجود تحديثات للتطبيق...",
+      installing: "جارٍ تثبيت تحديث التطبيق...",
+      upToDate: "التطبيق محدث.",
+      upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
+      pending: "سنخبرك عندما يصبح التحديث جاهزًا.",
+      pendingWithLastChecked: "سنخبرك عندما يصبح التحديث جاهزًا. آخر فحص في {{time}}.",
+      pendingWithVersion: "تم العثور على تحديث: {{version}}. جارٍ التنزيل...",
+      pendingWithVersionAndLastChecked:
+        "تم العثور على تحديث: {{version}}. جارٍ التنزيل... آخر فحص في {{time}}.",
+      availableWithVersion: "التحديث جاهز:{{version}}",
+      availableWithVersionAndLastChecked: "التحديث جاهز:{{version}}. آخر فحص في {{time}}.",
+      available: "تحديث التطبيق جاهز للتثبيت.",
+      availableWithLastChecked: "تحديث التطبيق جاهز للتثبيت. آخر فحص في {{time}}.",
+      installed: "تم تثبيت تحديث التطبيق. إعادة التشغيل مطلوبة.",
+      failed: "فشل في تحديث التطبيق.",
+      idle: "لم يتم التحقق من حالة التحديث بعد.",
+    },
+    installError: "غير قادر على تثبيت تحديث تطبيق سطح المكتب.",
+    callout: {
+      installingTitle: "تثبيت التحديث",
+      failedTitle: "فشل التحديث",
+      availableTitle: "التحديث متاح",
+      genericError: "حدث خطأ ما.",
+      whatsNew: "ما هو الجديد",
+      installingAction: "جارٍ التثبيت...",
+      installAndRestart: "التثبيت وإعادة التشغيل",
+      installingDescription: "التثبيت وإعادة التشغيل...",
+      versionReady: "{{version}}جاهز للتثبيت.",
+      newVersionReady: "إصدار جديد جاهز للتثبيت.",
+      restartWarning: "ستؤدي ترقية التطبيق إلى إيقاف تشغيل الوكلاء وإغلاق الجلسات الطرفية.",
+    },
+  },
+  settings: {
+    loadFailed: "غير قادر على تحميل إعدادات سطح المكتب.",
+    saveFailed: "غير قادر على حفظ إعدادات سطح المكتب.",
+  },
+  rosetta: {
+    title: "قم بتنزيل نسخة Apple Silicon",
+    runningIntel: "أنت تقوم بتشغيل إصدار Intel من Ait ضمن Rosetta على Apple Silicon.",
+    highCpu:
+      "يؤدي هذا إلى ارتفاع استخدام وحدة المعالجة المركزية. قم بتنزيل إصدار Apple Silicon لإصلاحه.",
+    download: "تحميل",
+  },
+  permissions: {
+    notifications: {
+      allowed: "يسمح نظام التشغيل بالإشعارات.",
+      denied: "تم رفض الإخطارات في إعدادات النظام.",
+      notGranted: "لم يتم منح الإخطارات بعد.",
+      webOnly: "حالة إشعار سطح المكتب متاحة فقط في وقت تشغيل الويب.",
+      supported: "يتم دعم إشعارات سطح المكتب.",
+      unsupported: "إشعارات سطح المكتب غير مدعومة على هذا النظام الأساسي.",
+      apiUnavailable: "واجهة برمجة تطبيقات إشعارات الويب غير متاحة في هذه البيئة.",
+      requestsWebOnly: "طلبات إعلام سطح المكتب متاحة فقط في وقت تشغيل الويب.",
+      requestUnavailable: "واجهة برمجة تطبيقات إشعارات الويب requestPermission() غير متاحة.",
+      requestFailed: "فشل طلب إذن الإعلام:{{message}}",
+      unexpectedState: "حالة إذن الإعلام غير المتوقعة:{{state}}",
+    },
+    microphone: {
+      webOnly: "حالة ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
+      navigatorUnavailable: "Navigator غير متوفر في هذه البيئة.",
+      granted: "تم منح الوصول إلى الميكروفون.",
+      denied: "تم رفض الوصول إلى الميكروفون في إعدادات النظام.",
+      notGranted: "لم يتم منح إذن الميكروفون بعد.",
+      unexpectedState: "حالة إذن الميكروفون غير متوقعة:{{state}}",
+      statusApiUnavailable:
+        "واجهة برمجة التطبيقات لحالة الميكروفون غير متاحة في وقت التشغيل هذا. استخدم الطلب للتحقق من الوصول.",
+      queryFailed: "فشل الاستعلام عن حالة الميكروفون:{{message}}",
+      captureUnavailable: "التقاط الميكروفون غير متوفر في هذه البيئة.",
+      permissionApiUnavailable:
+        "واجهة برمجة تطبيقات حالة الإذن غير متاحة. استخدم الطلب للتحقق من الوصول.",
+      requestsWebOnly: "طلبات ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
+      captureApiUnavailable: "واجهة برمجة تطبيقات التقاط الميكروفون غير متاحة في هذه البيئة.",
+      requestDenied: "تم رفض إذن الميكروفون من قبل المستخدم أو النظام.",
+      noDevice: "لم يتم العثور على جهاز ميكروفون.",
+      requestFailed: "فشل طلب إذن الميكروفون:{{message}}",
+    },
+    empty: {
+      notifications: "لم يتم التحقق من حالة الإخطار بعد.",
+      microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
+    },
+    testNotification: {
+      title: "اختبار الإخطار Ait",
+      body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
+      notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
+      failed: "فشل في إرسال الإخطار.",
+    },
+  },
+  integrations: {
+    cli: {
+      statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
+      installFailed: "غير قادر على تثبيت Ait CLI.",
+    },
+  },
+};

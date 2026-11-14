@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "New workspace",
+  create: "Create",
+  isolation: {
+    local: "Local",
+    worktree: "New worktree",
+    sandboxedWorktree: "Sandboxed worktree",
+    label: "Isolation",
+  },
+  fields: {
+    project: "Project",
+    base: "Base",
+    baseNotApplicable: "Not applicable",
+  },
+  titlePlaceholder: "Title (optional)",
+  errors: {
+    hostDisconnected: "Host is not connected",
+    createWorktreeFailed: "Failed to create worktree",
+    composerStateRequired: "Composer state is required",
+    selectModel: "Select a model",
+  },
+  tooltips: {
+    project: "Choose the project",
+    host: "Choose the host",
+    isolation: "Choose the isolation level",
+    startingRef: "Choose where to start from",
+    launch: "Choose what to launch",
+  },
+  refPicker: {
+    startingRef: "Starting ref",
+    intoBase: "into {{baseRef}}",
+    searching: "Searching...",
+    noMatchingRefs: "No matching refs.",
+    searchPlaceholder: "Search branches and PRs",
+    title: "Start from",
+  },
+  launch: {
+    title: "What to launch",
+    chat: "Chat",
+    terminal: "Terminal",
+    manageProfiles: "Manage profiles",
+    submit: "Launch",
+    promptPlaceholder: "Prompt {{name}}",
+    commandPlaceholder: "Run a command, or leave empty for a blank terminal",
+  },
+};

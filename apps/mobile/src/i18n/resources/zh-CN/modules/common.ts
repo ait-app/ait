@@ -1,0 +1,53 @@
+export const common = {
+  back: "返回",
+  loading: "加载中...",
+  actions: {
+    save: "保存",
+    back: "返回",
+    cancel: "取消",
+    close: "关闭",
+    copy: "复制",
+    copyLine: "复制行",
+    dismiss: "关闭",
+    reload: "重新加载",
+    retry: "重试",
+    search: "搜索",
+    select: "选择",
+    selectAll: "全选",
+  },
+  placeholders: {
+    search: "搜索...",
+  },
+  empty: {
+    noResults: "没有结果",
+    noOptionsMatchSearch: "没有匹配搜索的选项。",
+  },
+  states: {
+    loading: "加载中...",
+    starting: "正在开始...",
+    copied: "已复制",
+    copiedLabel: "已复制 {{label}}",
+    downloadComplete: "下载完成",
+    downloadFailed: "下载失败",
+  },
+  errors: {
+    error: "错误",
+    unableToSave: "无法保存",
+    unableToCopy: "无法复制",
+    nameRequired: "名称必填",
+    daemonUnavailable: "守护进程不可用",
+    daemonClientUnavailable: "守护进程客户端不可用",
+    daemonClientDisconnected: "守护进程客户端已断开连接",
+    noFileFound: "未找到 {{token}} 对应的文件",
+    unexpectedDictationError: "处理听写时发生意外错误。",
+  },
+  connectionStatus: {
+    online: "在线",
+    connecting: "正在连接",
+    offline: "离线",
+    error: "错误",
+    idle: "空闲",
+  },
+
+  bottomSheetBackdrop: "底部面板背景",
+};

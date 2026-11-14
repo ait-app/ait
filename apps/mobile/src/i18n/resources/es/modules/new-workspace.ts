@@ -1,0 +1,46 @@
+export const newWorkspace = {
+  title: "Nuevo espacio de trabajo",
+  create: "Crear",
+  isolation: {
+    local: "Local",
+    worktree: "Nuevo worktree",
+    sandboxedWorktree: "Worktree aislado",
+    label: "Aislamiento",
+  },
+  fields: {
+    project: "Proyecto",
+    base: "Base",
+    baseNotApplicable: "No aplicable",
+  },
+  titlePlaceholder: "Título (opcional)",
+  errors: {
+    hostDisconnected: "Hostno está conectado",
+    createWorktreeFailed: "No se pudo crear el árbol de trabajo",
+    composerStateRequired: "Se requiere el estado del compositor",
+    selectModel: "Selecciona un modelo",
+  },
+  tooltips: {
+    project: "Choose the project",
+    host: "Choose the host",
+    isolation: "Choose the isolation level",
+    startingRef: "Elige por dónde empezar",
+    launch: "Choose what to launch",
+  },
+  refPicker: {
+    startingRef: "Árbitro inicial",
+    intoBase: "en {{baseRef}}",
+    searching: "Búsqueda...",
+    noMatchingRefs: "No hay árbitros coincidentes.",
+    searchPlaceholder: "Buscar sucursales y relaciones públicas",
+    title: "Empezar desde",
+  },
+  launch: {
+    title: "What to launch",
+    chat: "Chat",
+    terminal: "Terminal",
+    manageProfiles: "Manage profiles",
+    submit: "Launch",
+    promptPlaceholder: "Prompt {{name}}",
+    commandPlaceholder: "Run a command, or leave empty for a blank terminal",
+  },
+};

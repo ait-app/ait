@@ -1,0 +1,53 @@
+export const common = {
+  back: "뒤로",
+  loading: "불러오는 중...",
+  actions: {
+    save: "저장",
+    back: "뒤로",
+    cancel: "취소",
+    close: "닫기",
+    copy: "복사",
+    copyLine: "줄 복사",
+    dismiss: "닫기",
+    reload: "다시 로드",
+    retry: "다시 시도",
+    search: "검색",
+    select: "선택",
+    selectAll: "모두 선택",
+  },
+  placeholders: {
+    search: "검색...",
+  },
+  empty: {
+    noResults: "결과가 없습니다",
+    noOptionsMatchSearch: "검색과 일치하는 옵션이 없습니다.",
+  },
+  states: {
+    loading: "불러오는 중...",
+    starting: "시작 중...",
+    copied: "복사됨",
+    copiedLabel: "{{label}} 복사됨",
+    downloadComplete: "다운로드 완료",
+    downloadFailed: "다운로드 실패",
+  },
+  errors: {
+    error: "오류",
+    unableToSave: "저장할 수 없습니다",
+    unableToCopy: "복사할 수 없습니다",
+    nameRequired: "이름을 입력하세요",
+    daemonUnavailable: "데몬을 사용할 수 없습니다",
+    daemonClientUnavailable: "데몬 클라이언트를 사용할 수 없습니다",
+    daemonClientDisconnected: "데몬 클라이언트 연결이 끊어졌습니다",
+    noFileFound: "{{token}}에 해당하는 파일을 찾을 수 없습니다",
+    unexpectedDictationError: "받아쓰기를 처리하는 중 예기치 않은 오류가 발생했습니다.",
+  },
+  connectionStatus: {
+    online: "온라인",
+    connecting: "연결 중",
+    offline: "오프라인",
+    error: "오류",
+    idle: "대기 중",
+  },
+
+  bottomSheetBackdrop: "하단 시트 배경",
+};
