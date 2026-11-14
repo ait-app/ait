@@ -152,6 +152,7 @@ impl State {
         self.inputs.retain(|_, id| !turns.contains(id));
         self.wakes.remove(&conversation);
         self.seen.remove(&conversation);
+        self.activity.remove(&conversation);
         self.conversations.remove(&conversation);
     }
 }

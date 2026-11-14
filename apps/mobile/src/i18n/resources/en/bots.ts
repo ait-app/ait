@@ -48,6 +48,11 @@ export const bots = {
   message: "Message",
   cancel: "Cancel turn",
   emptyChat: "Send a message to start a conversation.",
+  conversation: "Conversation",
+  conversationOwner: "Ait (you)",
+  conversationOtherChannel: "Other channel",
+  conversationReadOnly:
+    "Read-only: this conversation happens in {{channel}}. Only your Ait conversation takes messages here.",
   session: "Bot session",
   reset: "New conversation",
   resetConfirm:

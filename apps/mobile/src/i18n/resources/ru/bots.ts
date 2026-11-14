@@ -52,6 +52,11 @@ export const bots = {
   message: "Сообщение",
   cancel: "Отменить ход",
   emptyChat: "Отправьте сообщение, чтобы начать разговор.",
+  conversation: "Разговор",
+  conversationOwner: "Ait (вы)",
+  conversationOtherChannel: "Другой канал",
+  conversationReadOnly:
+    "Только чтение: этот разговор идёт в {{channel}}. Здесь сообщения принимает только ваш разговор в Ait.",
   session: "Сессия бота",
   reset: "Новый разговор",
   resetConfirm:

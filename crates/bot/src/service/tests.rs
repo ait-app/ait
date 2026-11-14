@@ -787,3 +787,58 @@ async fn ticket_entry_points_open_assign_report_and_wake_the_tickets_conversatio
         Err(ErrorCode::ServerDraining)
     );
 }
+
+#[tokio::test]
+async fn reads_resolve_the_viewer_and_stop_with_the_service() {
+    use domain::ConversationId;
+
+    use crate::recall::{Origin, Read, Reader, Viewer};
+
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let owner: ConversationId = serde_json::from_value(open(&bots, WORKSPACE).await).unwrap();
+    let stranger = ConversationId::generate();
+    let read = |reader, resource: &str| Read {
+        root: WORKSPACE.into(),
+        reader,
+        resource: resource.into(),
+        offset: None,
+        limit: None,
+        agent: None,
+    };
+
+    let viewer = bots
+        .sight(WORKSPACE.into(), Origin::Conversation(owner))
+        .await
+        .map(|sight| sight.map(|sight| sight.viewer));
+    let foreign = bots
+        .sight(WORKSPACE.into(), Origin::Conversation(stranger))
+        .await
+        .map(|sight| sight.map(|sight| sight.viewer));
+    let conversations = bots
+        .read(read(Reader::Conversation(owner), "conversations"))
+        .await
+        .unwrap();
+    let refused = bots
+        .read(read(
+            Reader::Conversation(stranger),
+            &format!("conversation/{owner}"),
+        ))
+        .await;
+    let unconfigured = bots
+        .sight(OTHER_WORKSPACE.into(), Origin::Conversation(owner))
+        .await;
+
+    assert_eq!(viewer, Ok(Some(Viewer::Owner(owner))));
+    assert_eq!(foreign, Ok(Some(Viewer::External(stranger))));
+    assert_eq!(conversations["items"][0]["id"], json!(owner));
+    assert_eq!(conversations["items"][0]["label"], "Ait");
+    assert_eq!(refused, Err(ErrorCode::Forbidden));
+    assert_eq!(unconfigured, Err(ErrorCode::BotNotFound));
+    bots.shutdown().await.unwrap();
+    assert_eq!(
+        bots.read(read(Reader::Conversation(owner), "tickets"))
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
+}

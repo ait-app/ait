@@ -9,6 +9,7 @@ pub mod legacy;
 pub mod mcp;
 pub mod ports;
 mod protocol;
+pub mod recall;
 pub mod service;
 mod state;
 #[cfg(test)]

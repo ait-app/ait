@@ -15,7 +15,7 @@ use crate::connection::rpc;
 use crate::mcp::Scope;
 use crate::mcp::scope::Failure;
 
-use super::{creation, take};
+use super::{creation, recall, take};
 
 /// Refusal for a `ticketId` that names no ticket of the calling Bot.
 const UNKNOWN_TICKET: &str =
@@ -35,6 +35,9 @@ const EMPTY_UPDATE: &str = "Give at least one of status, outcome, title or note;
 /// Refusal for a report on a closed ticket or while the Bot is paused.
 const REPORT_REFUSED: &str = "Your ticket is closed or the Workspace Bot is paused, so the report \
     was not recorded; finish your current work and reply normally";
+/// Refusal for changing or joining a ticket another conversation originated (ADR-280).
+const FOREIGN_TICKET: &str = "This ticket belongs to another conversation of the Workspace \
+    Bot; only that conversation or the workspace owner's Ait conversation can change it";
 /// Refusal for a report whose ticket the Bot no longer has.
 const REPORT_GONE: &str = "Your ticket no longer exists, so the report was not recorded; finish \
     your current work and reply normally";
@@ -64,9 +67,17 @@ pub(super) async fn execute(
         "bot_tickets" => {
             let params = json!({"workspaceId":root,
                 "includeClosed":arguments.get("includeClosed").unwrap_or(&json!(false))});
-            Ok(rpc::execute(state, "bot.ticket.list.request", params).await?)
+            let mut listed = rpc::execute(state, "bot.ticket.list.request", params).await?;
+            recall::restrict_tickets(
+                &mut listed,
+                recall::sight(state, scope, context).await?.as_ref(),
+            );
+            Ok(listed)
         }
-        "bot_ticket_update" => update(bots(state)?, root, arguments).await,
+        "bot_ticket_update" => {
+            originated(state, scope, &arguments["ticketId"]).await?;
+            update(bots(state)?, root, arguments).await
+        }
         _ => report(bots(state)?, scope, &arguments, context).await,
     }
 }
@@ -75,13 +86,16 @@ pub(super) async fn execute(
 ///
 /// A Bot session without `ticketId` opens a ticket keyed by the creation's idempotency key,
 /// generating and passing one when the call has none; with `ticketId` it joins that open
-/// ticket. A subtree caller on a ticket passes it on to the child. The Agent carries
+/// ticket, if its conversation may read it (ADR-280 §4): a worker reads its whole ticket, so
+/// joining another person's ticket would read it. A subtree caller on a ticket passes it on to
+/// the child. The Agent carries
 /// `ait.bot.ticket` and is then assigned; a failed assignment is logged and does not fail the
 /// creation, since the Agent already runs and its first report assigns it again.
 /// `arguments` are already confined; `context` is a subtree caller's own Agent record.
 /// # Errors
-/// Returns the open-ticket limit, unknown, closed or full ticket refusals before anything is
-/// created, and creation failures, after deleting a ticket this call opened for the Agent.
+/// Returns the open-ticket limit, unknown, foreign, closed or full ticket refusals before
+/// anything is created, and creation failures, after deleting a ticket this call opened for
+/// the Agent.
 pub(super) async fn create_agent(
     state: &Shared,
     scope: &Scope,
@@ -90,9 +104,9 @@ pub(super) async fn create_agent(
 ) -> Result<Value, Failure> {
     let requested = take(&mut arguments, "ticketId")?;
     let joined = match (&scope.caller.kind, requested) {
-        (CallerKind::Bot { .. }, Some(ticket)) => Some(Join::Named(
-            named(state, &scope.caller.root, &ticket).await?,
-        )),
+        (CallerKind::Bot { .. }, Some(ticket)) => {
+            Some(Join::Named(named(state, scope, &ticket).await?))
+        }
         (
             CallerKind::Bot {
                 conversation_id, ..
@@ -270,10 +284,11 @@ async fn agents_archived(state: &Shared, ticket: TicketId) -> bool {
     })
 }
 
-/// Require `ticket` to name an open ticket of `root`'s Bot with room for another Agent.
+/// Require `ticket` to name an open ticket of the scope's Bot that the calling conversation
+/// may read, with room for another Agent.
 /// # Errors
-/// Returns the unknown, closed or full ticket refusals and other Bot failures.
-async fn named(state: &Shared, root: &str, ticket: &Value) -> Result<TicketId, Failure> {
+/// Returns the unknown, foreign, closed or full ticket refusals and other Bot failures.
+async fn named(state: &Shared, scope: &Scope, ticket: &Value) -> Result<TicketId, Failure> {
     let id: TicketId = ticket
         .as_str()
         .and_then(|ticket| ticket.parse().ok())
@@ -281,7 +296,7 @@ async fn named(state: &Shared, root: &str, ticket: &Value) -> Result<TicketId, F
     let found = rpc::execute(
         state,
         "bot.ticket.get.request",
-        json!({"workspaceId":root,"ticketId":id}),
+        json!({"workspaceId":scope.caller.root,"ticketId":id}),
     )
     .await;
     let found = match found {
@@ -289,6 +304,10 @@ async fn named(state: &Shared, root: &str, ticket: &Value) -> Result<TicketId, F
         other => other?,
     };
     let ticket = &found["ticket"];
+    let sight = recall::sight(state, scope, None).await?;
+    if !recall::sees(sight.as_ref(), &ticket["conversationId"]) {
+        return Err(Failure::Refused(FOREIGN_TICKET));
+    }
     if !matches!(ticket["status"].as_str(), Some("open" | "waiting")) {
         return Err(Failure::Refused(CLOSED_TICKET));
     }
@@ -299,6 +318,30 @@ async fn named(state: &Shared, root: &str, ticket: &Value) -> Result<TicketId, F
         return Err(Failure::Refused(FULL_TICKET));
     }
     Ok(id)
+}
+
+/// Refuse a Bot conversation's change to `ticket` when another conversation originated it and
+/// the caller is not the owner's conversation; an unknown ticket is left to the update, which
+/// refuses it.
+/// # Errors
+/// Returns the foreign ticket refusal and Bot failures.
+async fn originated(state: &Shared, scope: &Scope, ticket: &Value) -> Result<(), Failure> {
+    let sight = recall::sight(state, scope, None).await?;
+    if !recall::external(sight.as_ref()) {
+        return Ok(());
+    }
+    let found = rpc::execute(
+        state,
+        "bot.ticket.get.request",
+        json!({"workspaceId":scope.caller.root,"ticketId":ticket}),
+    )
+    .await;
+    match found {
+        Ok(found) if !recall::sees(sight.as_ref(), &found["ticket"]["conversationId"]) => {
+            Err(Failure::Refused(FOREIGN_TICKET))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Delete the ticket this call opened for an Agent that could not be created; a failure only

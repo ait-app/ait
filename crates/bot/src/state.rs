@@ -2,6 +2,7 @@ mod catalog;
 mod conversations;
 mod execution;
 mod notifications;
+mod recall;
 mod tickets;
 mod webhook;
 
@@ -77,6 +78,8 @@ pub(crate) struct State {
     woken: BTreeMap<(BotId, String), DateTime<Utc>>,
     /// Every live Bot's tickets, each with its newest report only; the files hold the rest.
     tickets: BTreeMap<TicketId, Ticket>,
+    /// Sequence and admission time of each conversation's newest turn.
+    activity: BTreeMap<ConversationId, (u64, String)>,
     /// The service is stopping: running turns are being cancelled by shutdown, not by a user.
     pub(crate) stopping: bool,
 }
@@ -136,6 +139,7 @@ impl State {
             observing: BTreeMap::new(),
             woken: BTreeMap::new(),
             tickets: loaded.tickets,
+            activity: BTreeMap::new(),
             stopping: false,
         };
         state.load_turns(now)?;
@@ -259,7 +263,7 @@ impl State {
                 let request: protocol::WorkspaceRequest = decode(params)?;
                 let bot = self.current(&request.workspace_id)?.id;
                 Ok(
-                    json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == bot).map(project_conversation).collect::<Vec<_>>()}),
+                    json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == bot).map(|conversation| self.project_conversation(conversation)).collect::<Vec<_>>()}),
                 )
             }
             "bot.conversation.reset.request" => self.reset(&decode(params)?),
@@ -383,6 +387,13 @@ impl State {
         );
         self.order
             .insert((turn.conversation_id, turn.sequence), turn.id);
+        let newest = self.activity.get(&turn.conversation_id);
+        if newest.is_none_or(|(sequence, _)| *sequence <= turn.sequence) {
+            self.activity.insert(
+                turn.conversation_id,
+                (turn.sequence, turn.created_at.clone()),
+            );
+        }
         if turn.status == TurnStatus::Queued {
             self.pending
                 .insert((turn.conversation_id, turn.sequence), turn.id);
@@ -433,6 +444,30 @@ impl State {
             conversation_id: conversation.id,
             workspace_id: self.bot(conversation.bot_id)?.workspace_id.clone(),
         })
+    }
+    /// Admission time of `conversation`'s newest turn, if it has one.
+    pub(super) fn last_activity(&self, conversation: ConversationId) -> Option<&str> {
+        self.activity.get(&conversation).map(|(_, at)| at.as_str())
+    }
+    /// The `kind` of channel `id`'s configuration, deleted or not.
+    pub(super) fn channel_kind(&self, id: ChannelId) -> Option<String> {
+        let channel = self
+            .catalog
+            .channels
+            .iter()
+            .find(|channel| channel.id == id)?;
+        let config = serde_json::to_value(&channel.config).ok()?;
+        config["kind"].as_str().map(str::to_owned)
+    }
+    /// Client projection of a conversation without the owning Bot or native session identity,
+    /// with its channel kind and last activity (ADR-280).
+    pub(super) fn project_conversation(&self, conversation: &Conversation) -> Value {
+        json!({"id":conversation.id,"channelId":conversation.channel_id,
+            "channelKind":self.channel_kind(conversation.channel_id),
+            "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,
+            "generation":conversation.generation,"nextSequence":conversation.next_sequence,
+            "sessionAgentId":conversation.session_id,
+            "lastActivityAt":self.last_activity(conversation.id)})
     }
     pub(crate) fn channels(&self) -> Vec<Channel> {
         self.catalog
@@ -497,13 +532,6 @@ fn view(bot: &Bot) -> Value {
 fn project_channel(channel: &Channel) -> Value {
     json!({"id":channel.id,"config":channel.config,"enabled":channel.enabled,
         "cursor":channel.cursor,"deleted":channel.deleted})
-}
-
-/// Client projection of a conversation without the owning Bot or native session identity.
-fn project_conversation(conversation: &Conversation) -> Value {
-    json!({"id":conversation.id,"channelId":conversation.channel_id,
-        "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,"generation":conversation.generation,"nextSequence":conversation.next_sequence,
-        "sessionAgentId":conversation.session_id})
 }
 
 #[cfg(test)]

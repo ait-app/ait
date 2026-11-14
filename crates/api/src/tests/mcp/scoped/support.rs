@@ -482,9 +482,16 @@ impl Scoped {
             .await;
     }
 
-    /// Simulate opening the current Bot's hidden session of a conversation it does not have.
+    /// Simulate opening the current Bot's hidden session of a conversation it does not have,
+    /// which reads and reaches only what it started, like an external conversation (ADR-280).
     pub(super) fn bot_credential(&self) -> String {
         self.bot_credential_in(ConversationId::generate())
+    }
+
+    /// Open the owner's conversation and simulate opening its hidden session, which reaches
+    /// every Agent in scope.
+    pub(super) async fn owner_credential(&self) -> String {
+        self.bot_credential_in(self.conversation().await)
     }
 
     /// Open the current Bot's `owner` conversation and return its id.

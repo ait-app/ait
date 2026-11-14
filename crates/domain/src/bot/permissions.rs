@@ -99,7 +99,9 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("workspace_overview", BotOnly),
     ("bot_tickets", BotOnly),
     ("bot_ticket_update", BotOnly),
+    ("bot_read", BotOnly),
     ("report_progress", Worker),
+    ("ticket_read", Worker),
     ("create_workspace", HostOnly),
     ("respond_to_permission", HostOnly),
     ("archive_workspace", HostOnly),
@@ -124,7 +126,7 @@ pub fn grantable_tools() -> impl Iterator<Item = &'static str> {
         .map(|(name, _)| *name)
 }
 
-/// Tool names only an Agent working on a Bot ticket may call (ADR-274).
+/// Tool names only an Agent working on a Bot ticket may call (ADR-274, ADR-280).
 pub fn worker_tools() -> impl Iterator<Item = &'static str> {
     TOOLS
         .iter()

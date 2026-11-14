@@ -41,6 +41,9 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
 3. 设置完成后进入对话，轮次显示状态与错误。由通知唤醒的轮次不显示为用户消息，见下文“通知与唤醒”；
    输入框上方的“任务”标签列出 Bot 正在做的工作，见下文“任务”。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
    目录缺失导致的暂停会说明原因。暂停期间记忆保存、Channel 新增与启停也停用，恢复后才能修改。
+   Bot 在其他 Channel 中有对话时，对话上方出现对话选择：默认是 Ait 对话，也只有它能输入；选择 Telegram 等外部对话时只读显示其轮次
+   （与 Ait 对话相同的显示，包括唤醒标题与“无需告知”），不显示输入框、重置与取消。外部对话以 Channel 种类和聊天、发送者、话题的 id 标识，
+   Ait 不保存外部平台的显示名。
 4. 在设置页可修改模型（对新对话生效）、选择唤醒范围并查看最近的通知、暂停或恢复、按 revision 编辑记忆、管理外部 Channel、移除 Bot。
    飞书 Channel 默认扫码接入，也可手动填写凭据，见下文“飞书接入”；Telegram 按页面引导粘贴 Token 并点击 Start，见下文“Telegram 接入”。两者都可改用 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用并配置允许的发送者；通过环境变量引用新建的 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
 5. 访客在所有视图中只读。重新设置被移除的 Bot（包括在其他设备上）得到空的对话与 Channel，客户端不会显示旧 Bot 的缓存内容。
@@ -95,7 +98,7 @@ Ait 中显示为一行“无需告知”，流式输出期间也不显示该标�
 
 **在 Ait 中查看**：唤醒轮次在对话中显示为“Workspace 动态”标题和通知列表（每条的标题与摘要），而不是用户消息；
 同一 Workspace 的 Agent 与定时任务可点击打开。设置页“最近的通知”列出最近 10 条通知及其去向（已唤醒、等待唤醒、不在唤醒范围内、未送达及原因）。
-Bot 标签页尚不能查看外部对话，因此回到 Telegram 等平台的唤醒轮次只在该平台可见。
+回到 Telegram 等平台的唤醒轮次可在 Bot 标签页的对话选择中只读查看。
 
 **暂停与重启**
 
@@ -157,7 +160,37 @@ Bot 交办的每项工作记为一个**任务**（协议与存储中称 ticket�
 
 内置指令要求 Bot 把工作交给 Agent、告诉用户已开始，然后结束本轮，不在 `wait_for_agent` 中等待长时间的工作；只有预计一分钟内结束的工作才短暂等待。
 Agent 完成、失败、等待审批，或汇报 `blocked`、`done`、`failed` 时，Bot 在交办该任务的对话中被唤醒（合并、限额与回复去向见“通知与唤醒”），
-唤醒输入的每行标出所属任务。Bot 把结果告诉用户后用 `bot_ticket_update` 关闭任务，也可以改名或追加备注。
+唤醒输入的每行标出所属任务，并以 `(read notification/<序号>)` 结尾；摘要超过 600 字符时截断并标明全文长度。
+Bot 把结果告诉用户后用 `bot_ticket_update` 关闭任务，也可以改名或追加备注。
+
+**按 id 回读**（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）：概览与唤醒输入只内联有界的预览，Bot 用 `bot_read` 读取全文与历史：
+`tickets`、`tickets/closed`、`ticket/<id>`（请求、结论、各 Agent 的实时状态与最近汇报、汇报首页）、`ticket/<id>/reports`、`ticket/<id>/report/<n>`、
+`ticket/<id>/request`、`ticket/<id>/outcome`、`conversations`、`conversation/<id>`（轮次页，最新在前）、`turn/<id>`、`turn/<id>/input`、`turn/<id>/message/<n>`、
+`notifications`、`notification/<序号>`、`agent/<id>`（所属任务、来源对话与最近汇报；Agent 的结果与转录用 `get_agent_activity`）。页面上的每个 id 都能再读；
+被截断的文本为 `{"preview","chars","read"}`。列表默认 20 条、至多 50 条，文本页默认 4000 字符、至多 8000 字符，以 `nextOffset` 续读。读取不改变任何状态，
+不影响“未看过”的通知。内置指令要求 Bot 按指针读取而不是猜测，跟进任务前先读它，在 Ait 对话中被问到其他对话里的事时去查。
+
+**对话之间的隔离**（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）：每个外部发送者的对话是不同的人，由 daemon 按凭据隔离，不依赖指令：
+
+- 只有 Ait 对话（Workspace 所有者）能读 Bot 的全部对话、任务与通知，并能查看、指挥作用域内的全部 Agent。
+- 外部对话只能读自己、自己发起的任务与通知，只能查看和指挥自己任务的 Agent。这包括所有者加入该任务的 Agent，也包括这些 Agent 的子 Agent。
+- 外部对话启动的 Agent（以及它们的子 Agent）受同样的限制：它们经 MCP 也只能查看和指挥这个对话的任务的 Agent，不能借它们读别人的 Agent。
+  所有者对话启动的 Agent 不受限制。
+- 别人的任务只看到标题、状态与等待原因，不显示是哪个 Agent 在等待，也看不到它有哪些 Agent，只显示数量。
+- 别人的 Agent，以及所有者自己启动、不属于 Bot 的 Agent，都不出现在外部对话的概览与 `list_agents`、`list_pending_permissions` 中。
+  对它们的 `get_agent_status`、`get_agent_activity`、`wait_for_agent`、`send_agent_prompt`、`update_agent`、`set_agent_mode`、
+  `cancel_agent`、`archive_agent`、`kill_agent` 与 `bot_read agent/<id>` 都返回同一段说明，不含标题或 id。不存在的 id 也返回这段说明。
+  `list_agents` 对它们只看最新的 200 个 Agent，不给翻页游标，列表不全时 `truncated` 为真。
+- 外部对话不能用 `create_agent` 的 `ticketId` 加入别人的任务，`bot_ticket_update` 不能修改别人的任务。别人的通知与已不保留的通知一样读不到。
+
+按设计在对话之间共享、不在此隔离内的：
+
+- Workspace 记忆：它保存所有者的偏好，进入每个对话的指令，任何对话都能读写。不要把只给所有者看的内容写进记忆。
+- 定时任务与心跳、终端、Workspace 脚本。
+- 所有任务的标题与状态。
+
+**工作者读任务**：属于任务的 Agent 用 `ticket_read` 读自己的任务（请求、结论、其他 Agent 及其最近汇报、汇报历史），资源为 `ticket`、`ticket/reports`、
+`ticket/report/<n>`、`ticket/request`、`ticket/outcome`，看不到其他任务、对话或通知。Claude 工作者预授权该工具。
 这些都是指令对模型的要求而不是强制规则：模型可能忘记关闭任务，用户可以在 Ait 中自行关闭，达到上限时 Ait 也会关闭 Agent 都已归档的任务。
 
 Agent 先用 `report_progress` 汇报 `done`、`failed` 或 `blocked`，随后结束这一轮时，结束通知仍记入任务与通知列表，但不再唤醒 Bot
@@ -235,8 +268,8 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 | `terminals` | 创建终端、发送按键、读取并终止终端                                      | 否   |
 
 `create_workspace`、`respond_to_permission`、`archive_workspace`、`rename_workspace`、`list_workspaces` 永不授予 Bot，Bot 不能通过 Ait MCP 创建 worktree 或 Workspace（[ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-`bot_memory_read`、`bot_memory_update`、`bot_tickets`、`bot_ticket_update`、`workspace_overview`（作用域概览，含未关闭的任务，输出上限 24 KiB）只对 Bot 自己可见；
-`report_progress` 只对属于任务的 Agent 可见。
+`bot_memory_read`、`bot_memory_update`、`bot_tickets`、`bot_ticket_update`、`bot_read`、`workspace_overview`（作用域概览，含未关闭的任务，输出上限 24 KiB，
+截断的文本带全文长度与读取指针）只对 Bot 自己可见；`report_progress`、`ticket_read` 只对属于任务的 Agent 可见。
 
 **Agent 模式**为每个 Provider 选择一个原生模式（至多 32 个 Provider），Bot 与它启动的 Agent 只能使用该模式；
 未列出的 Provider 不能被使用。阶段 1／2 创建的 Bot 升级后得到默认分组但模式上限为空，不能启动 Agent，需在设置中配置。
@@ -268,7 +301,7 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 
 ### Bot 启动的 Agent
 
-Bot 创建的 Agent 带保留标签 `ait.bot.scope`、记录发起对话的 `ait.bot.conversation` 与所属任务的 `ait.bot.ticket`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具（属于任务时另有 `report_progress`）；
+Bot 创建的 Agent 带保留标签 `ait.bot.scope`、记录发起对话的 `ait.bot.conversation` 与所属任务的 `ait.bot.ticket`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具（属于任务时另有 `report_progress` 与 `ticket_read`）；
 作用域调用者不能写入任何 `ait.` 前缀的标签。Bot 暂停期间这些 Agent 保留完整授权（只有 Bot 自身的凭据失效）；Bot 移除后降为只读观察；
 同一 Workspace 设置新 Bot 后，新 Bot 的授权适用于该 Workspace 已有的这些 Agent 与定时任务。
 

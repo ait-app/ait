@@ -49,6 +49,11 @@ export const bots = {
   message: "メッセージ",
   cancel: "ターンをキャンセル",
   emptyChat: "メッセージを送信して会話を始めましょう。",
+  conversation: "会話",
+  conversationOwner: "Ait（あなた）",
+  conversationOtherChannel: "その他のチャネル",
+  conversationReadOnly:
+    "閲覧のみ：この会話は {{channel}} で行われています。ここでメッセージを送れるのは Ait の会話だけです。",
   session: "Bot セッション",
   reset: "新しい会話",
   resetConfirm:

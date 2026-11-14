@@ -9,6 +9,7 @@ import {
 } from "./rpc-schemas.js";
 import {
   BotChannelConfigSchema,
+  BotConversationSchema,
   BotNotificationSchema,
   BotPermissionsSchema,
   BotSkipReasonSchema,
@@ -214,6 +215,30 @@ describe("Bot wire contract", () => {
         },
       }).type,
     ).toBe("bot.permissions.update.response");
+  });
+
+  it("reads each conversation's channel kind and last activity, and older hosts without them", () => {
+    const base = {
+      id: crypto.randomUUID(),
+      channelId: crypto.randomUUID(),
+      peer: "chat-7",
+      sender: "alice",
+      thread: null,
+      generation: 0,
+      nextSequence: 2,
+      sessionAgentId: "session",
+    };
+    expect(
+      BotConversationSchema.parse({
+        ...base,
+        channelKind: "telegram",
+        lastActivityAt: "2026-11-14T00:00:00Z",
+      }),
+    ).toMatchObject({ channelKind: "telegram", lastActivityAt: "2026-11-14T00:00:00Z" });
+    expect(
+      BotConversationSchema.parse({ ...base, lastActivityAt: null }).lastActivityAt,
+    ).toBeNull();
+    expect(BotConversationSchema.parse(base).channelKind).toBeUndefined();
   });
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {

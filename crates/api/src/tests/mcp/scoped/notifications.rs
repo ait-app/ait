@@ -51,7 +51,20 @@ async fn overview_lists_unseen_notifications_of_the_calling_conversation() {
     assert_eq!(listed[0]["sequence"], 1);
     assert_eq!(listed[0]["kind"], "agent_failed");
     assert_eq!(listed[0]["agentId"], "agent-1");
-    assert_eq!(listed[0]["summary"].as_str().unwrap().len(), 512);
+    // The summary spills to the notification, which reads it whole (ADR-280).
+    let summary = &listed[0]["summary"];
+    assert_eq!(summary["preview"].as_str().unwrap().len(), 512);
+    assert_eq!(summary["chars"], 1024);
+    assert_eq!(summary["read"], "notification/1");
+    let full = scoped
+        .call(
+            &credential,
+            None,
+            "bot_read",
+            json!({"resource":summary["read"]}),
+        )
+        .await;
+    assert_eq!(structured(&full)["summary"].as_str().unwrap().len(), 1024);
 
     // A session of a conversation the Bot no longer has gets no notification list.
     let stale = scoped

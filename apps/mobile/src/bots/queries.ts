@@ -15,6 +15,13 @@ export const botKeys = {
     workspaceId,
     builtinChannelId,
   ],
+  /** Every conversation of the Bot, for viewing the other channels' conversations. */
+  conversations: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-conversations",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
   history: (serverId: string, workspaceId: string, conversationId?: string) => [
     "bot-history",
     serverId,

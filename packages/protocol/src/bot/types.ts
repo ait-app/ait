@@ -223,6 +223,11 @@ export const BotConversationSchema = z.object({
   nextSequence: z.number().int().nonnegative(),
   // Absent on hosts that predate read-only inspection of the Bot's session.
   sessionAgentId: z.string().optional(),
+  // The `kind` of the conversation's channel configuration, also once the channel is deleted;
+  // absent on hosts that predate reading other conversations (ADR-280).
+  channelKind: z.string().nullish(),
+  // When the conversation's newest turn was admitted; null before its first turn.
+  lastActivityAt: z.string().nullish(),
 });
 export const BotTurnMessageSchema = z.object({
   id: z.string(),

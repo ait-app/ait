@@ -3,6 +3,7 @@
 use std::time::Instant;
 
 use bot::mcp::CallerKind;
+use bot::recall::Sight;
 use chrono::{DateTime, Utc};
 use model::ErrorCode;
 use serde_json::{Value, json};
@@ -17,6 +18,7 @@ use super::scope::{self, Failure};
 pub(super) mod creation;
 mod overview;
 mod queries;
+pub(super) mod recall;
 mod schedules;
 mod tickets;
 
@@ -43,6 +45,9 @@ pub(super) async fn execute(
     }
     if overview::handles(&tool.name) {
         return overview::execute(state, &tool.name, arguments, scope).await;
+    }
+    if recall::handles(&tool.name) {
+        return recall::execute(state, &tool.name, &arguments, scope).await;
     }
     if tickets::handles(&tool.name) {
         return tickets::execute(state, &tool.name, arguments, scope, caller).await;
@@ -142,9 +147,15 @@ async fn dispatch(
             rpc::execute(state, "agent.message.send.request", arguments).await
         }
         "get_agent_status" => queries::status(state, arguments).await,
-        "list_agents" => queries::agents(state, &arguments, workspaces).await,
+        "list_agents" => {
+            let sight = reach(state, scope, caller).await?;
+            queries::agents(state, &arguments, workspaces, sight.as_ref()).await
+        }
         "list_workspaces" => queries::workspaces(state, &arguments).await,
-        "list_pending_permissions" => queries::permissions(state, workspaces).await,
+        "list_pending_permissions" => {
+            let sight = reach(state, scope, caller).await?;
+            queries::permissions(state, workspaces, sight.as_ref()).await
+        }
         "list_profiles" => queries::profiles(state).await,
         "get_agent_activity" => queries::activity(state, arguments).await,
         "inspect_provider" => queries::provider(state, arguments, caller).await,
@@ -190,6 +201,19 @@ async fn dispatch(
             schedules::operate(state, tool, arguments, caller).await
         }
         _ => rpc::execute(state, &tool.methods[0], arguments).await,
+    }
+}
+
+/// Which Agents a scoped caller may list (ADR-280 §4), with `caller` a subtree caller's own
+/// Agent record; `None` lists every Agent the Workspace scope allows.
+async fn reach(
+    state: &Shared,
+    scope: Option<&Scope>,
+    caller: Option<&Value>,
+) -> Result<Option<Sight>, ErrorCode> {
+    match scope {
+        Some(scope) => recall::sight(state, scope, caller).await,
+        None => Ok(None),
     }
 }
 

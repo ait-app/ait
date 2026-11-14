@@ -421,7 +421,7 @@ impl State {
         Ok(bot.id)
     }
 
-    fn indexed_ticket(&self, bot: BotId, id: TicketId) -> Result<&Ticket, ErrorCode> {
+    pub(super) fn indexed_ticket(&self, bot: BotId, id: TicketId) -> Result<&Ticket, ErrorCode> {
         self.tickets
             .get(&id)
             .filter(|ticket| ticket.bot_id == bot)
@@ -429,7 +429,7 @@ impl State {
     }
 
     /// Read `bot`'s ticket `id` with all its reports.
-    fn load_ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, ErrorCode> {
+    pub(super) fn load_ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, ErrorCode> {
         self.indexed_ticket(bot, id)?;
         self.store.ticket(bot, id).map_err(|_| ErrorCode::BotIo)
     }

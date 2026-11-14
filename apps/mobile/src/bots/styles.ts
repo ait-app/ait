@@ -61,6 +61,14 @@ export const botChatStyles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[4],
   },
   emptyChat: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // Picks the conversation the transcript shows, above it and aligned with its content.
+  conversationSwitch: {
+    width: "100%",
+    maxWidth: theme.contentMaxWidth,
+    alignSelf: "center",
+    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[4] },
+    paddingTop: theme.spacing[3],
+  },
   turnStatus: {
     flexDirection: "row",
     alignItems: "center",

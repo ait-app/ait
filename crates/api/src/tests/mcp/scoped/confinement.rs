@@ -43,7 +43,7 @@ impl Scoped {
     }
 
     /// Wait until `agent` reports a pending permission request.
-    async fn awaiting_permission(&self, agent: &str) {
+    pub(super) async fn awaiting_permission(&self, agent: &str) {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 let value = self
@@ -79,7 +79,7 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
             &["auto"],
         ))
         .await;
-    let bot = scoped.bot_credential();
+    let bot = scoped.owner_credential().await;
     let call = |tool: &'static str, arguments: Value| scoped.call(&bot, None, tool, arguments);
 
     let mut outside = create("Outside");
@@ -268,7 +268,7 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
 async fn command_tools_reach_every_agent_in_scope_only() {
     let scoped = Scoped::start().await;
     scoped.setup(codex_modes(&["auto", "read-only"])).await;
-    let bot = scoped.bot_credential();
+    let bot = scoped.owner_credential().await;
     let call = |tool: &'static str, arguments: Value| scoped.call(&bot, None, tool, arguments);
     let user = scoped.agent(json!({})).await;
     let prefix = &user[..8];

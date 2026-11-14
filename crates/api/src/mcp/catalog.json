@@ -117,7 +117,7 @@
   {
     "name": "list_agents",
     "methods": ["agent.list.request"],
-    "description": "List compact agent snapshots, newest first. limit defaults to 50. nextCursor continues the directory. Internal Bot sessions remain private.",
+    "description": "List compact agent snapshots, newest first. limit defaults to 50. nextCursor continues the directory. Internal Bot sessions remain private. Where only the agents of this conversation's own tasks are reachable, the newest 200 agents are read and filtered, nextCursor is null and truncated says whether the list is incomplete.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1123,7 +1123,7 @@
       "bot.notifications.list.request",
       "bot.ticket.list.request"
     ],
-    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, your open tickets with their agents' live status and latest report, notifications this conversation has not seen yet, memory revision and your permissions. Call it at the start of every turn.",
+    "description": "Bounded overview of the Workspace: checkout state, your agents (read an agent's result with get_agent_activity), agents needing attention, schedules, your open tickets with their agents' live status and latest report, notifications this conversation has not seen yet, memory revision and your permissions. Text cut short shows its length and a read pointer for bot_read. Call it at the start of every turn.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -1187,7 +1187,7 @@
   {
     "name": "report_progress",
     "methods": ["bot.ticket.update.request"],
-    "description": "Report to the Workspace Bot that assigned you this task. Call it with kind blocked when you cannot continue without a decision or information from the user (say exactly what you need), done when your part is finished (summarize the result), failed when you gave up (say why), or progress for a milestone worth recording. blocked, done and failed notify the Bot, which tells the user; progress is only recorded. Reporting does not end your turn: keep working after progress, and after blocked, done or failed finish your reply as usual.",
+    "description": "Report to the Workspace Bot that assigned you this task. Call it with kind blocked when you cannot continue without a decision or information from the user (say exactly what you need), done when your part is finished (summarize the result), failed when you gave up (say why), or progress for a milestone worth recording. blocked, done and failed notify the Bot, which tells the user; progress is only recorded. Reporting does not end your turn: keep working after progress, and after blocked, done or failed finish your reply as usual. Read your task's full request and what other agents on it reported with ticket_read.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1205,5 +1205,59 @@
       "additionalProperties": false
     },
     "readOnly": false
+  },
+  {
+    "name": "bot_read",
+    "methods": ["bot.ticket.get.request", "agent.get.request"],
+    "description": "Read your records by id in bounded pages. resource is one of: tickets, tickets/closed, ticket/<id>, ticket/<id>/reports, ticket/<id>/report/<n>, ticket/<id>/request, ticket/<id>/outcome, conversations, conversation/<id>, turn/<id>, turn/<id>/input, turn/<id>/message/<n>, notifications, notification/<sequence>, agent/<id>. Every id a page shows can be read in turn. Text cut short is {preview, chars, read}: pass read as the resource to get it whole. Lists return items and nextOffset (limit at most 50, default 20); text pages return text, chars and nextOffset (limit at most 8000 characters, default 4000); pass nextOffset as offset to continue. In the workspace owner's Ait conversation you can read every conversation; any other conversation reads only itself and the work it started. For an agent's result and transcript use get_agent_activity.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000
+        }
+      },
+      "required": ["resource"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "ticket_read",
+    "methods": ["bot.ticket.get.request", "agent.get.request"],
+    "description": "Read the Workspace Bot ticket you work on: what the user asked for, its status and outcome, the other agents on it with their latest reports, and the report history. resource is ticket (the default), ticket/reports, ticket/report/<n>, ticket/request or ticket/outcome. Text cut short is {preview, chars, read}: pass read as the resource to get it whole. Lists return items and nextOffset (limit at most 50); text pages return text and nextOffset (limit at most 8000 characters); pass nextOffset as offset to continue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
   }
 ]
