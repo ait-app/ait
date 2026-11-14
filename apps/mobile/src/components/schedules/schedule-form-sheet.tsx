@@ -26,7 +26,6 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
-import { Switch } from "@/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
 import { ScheduleTemplatePicker } from "@/components/schedules/schedule-template-picker";
@@ -1049,6 +1048,17 @@ function ScheduleNewAgentFields({
   mutationServerId,
 }: ScheduleNewAgentFieldsProps): ReactElement {
   const { t } = useTranslation();
+  const completionOptions = useMemo<SelectFieldOption<"keep" | "archive">[]>(
+    () => [
+      { id: "keep", value: "keep", label: t("schedules.form.keepSession") },
+      { id: "archive", value: "archive", label: t("schedules.form.archiveSession") },
+    ],
+    [t],
+  );
+  const handleSelectCompletion = useCallback(
+    (value: "keep" | "archive") => model.setArchiveOnFinish(value === "archive"),
+    [model],
+  );
   const modeOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
       state.modeOptions.map((option) => ({
@@ -1214,14 +1224,28 @@ function ScheduleNewAgentFields({
       ) : null}
 
       {state.disclosure.showArchiveOnFinishField ? (
-        <Field label={t("schedules.form.archive")}>
-          <Switch
-            value={state.archiveOnFinish}
-            onValueChange={model.setArchiveOnFinish}
-            accessibilityLabel={t("schedules.form.archive")}
-            testID="schedule-archive-on-finish-switch"
-          />
-        </Field>
+        <SelectField
+          label={t("schedules.form.afterRun")}
+          value={state.archiveOnFinish ? "archive" : "keep"}
+          selectedDisplay={{
+            label: state.archiveOnFinish
+              ? t("schedules.form.archiveSession")
+              : t("schedules.form.keepSession"),
+          }}
+          options={completionOptions}
+          onChange={handleSelectCompletion}
+          placeholder={t("schedules.form.afterRun")}
+          emptyText={t("schedules.form.afterRun")}
+          hint={
+            state.archiveOnFinish
+              ? t("schedules.form.archiveSessionHint")
+              : t("schedules.form.keepSessionHint")
+          }
+          searchable={false}
+          title={t("schedules.form.afterRun")}
+          size={controlSize}
+          triggerTestID="schedule-after-run-trigger"
+        />
       ) : null}
     </>
   );

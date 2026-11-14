@@ -166,7 +166,12 @@ export const schedules = {
     noModes: "No modes found",
     noModelModes: "No modes are available for this model.",
     selectMode: "Select mode",
-    archive: "Archive the created agent after each run",
+    afterRun: "After each run",
+    keepSession: "Keep session in workspace",
+    archiveSession: "Archive session",
+    keepSessionHint:
+      "Each run creates a new session that stays in this workspace so you can review results and continue the conversation, even after the schedule ends.",
+    archiveSessionHint: "The new session is archived when the run finishes. The workspace is kept.",
     submitError: "Unable to save schedule: {{message}}",
     runningError: "This schedule is running. Wait for the current run to finish before editing it.",
   },

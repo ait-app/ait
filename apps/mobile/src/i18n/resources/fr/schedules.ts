@@ -242,7 +242,13 @@ export const schedules = {
     noModes: "Aucun mode trouvé",
     noModelModes: "Aucun mode n’est disponible pour ce modèle.",
     selectMode: "Sélectionner un mode",
-    archive: "Archiver l’agent créé après chaque exécution",
+    afterRun: "Après chaque exécution",
+    keepSession: "Conserver la session dans l’espace de travail",
+    archiveSession: "Archiver la session",
+    keepSessionHint:
+      "Chaque exécution crée une session qui reste dans cet espace de travail pour consulter les résultats et poursuivre la conversation, même après la fin de la planification.",
+    archiveSessionHint:
+      "La nouvelle session est archivée à la fin de l’exécution. L’espace de travail est conservé.",
     submitError: "Impossible d’enregistrer la planification : {{message}}",
     runningError:
       "Cette tâche est en cours d’exécution. Attendez la fin de l’exécution actuelle avant de la modifier.",

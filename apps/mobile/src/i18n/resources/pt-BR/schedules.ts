@@ -239,7 +239,13 @@ export const schedules = {
     noModes: "Nenhum modo encontrado",
     noModelModes: "Nenhum modo disponível para este modelo.",
     selectMode: "Selecionar modo",
-    archive: "Arquivar o agente criado após cada execução",
+    afterRun: "Após cada execução",
+    keepSession: "Manter a sessão no espaço de trabalho",
+    archiveSession: "Arquivar a sessão",
+    keepSessionHint:
+      "Cada execução cria uma nova sessão que permanece neste espaço de trabalho para consultar os resultados e continuar a conversa, mesmo após o término do agendamento.",
+    archiveSessionHint:
+      "A nova sessão é arquivada ao fim da execução. O espaço de trabalho é mantido.",
     submitError: "Não foi possível salvar o agendamento: {{message}}",
     runningError:
       "A tarefa está em execução. Aguarde a execução atual terminar antes de modificá-la.",

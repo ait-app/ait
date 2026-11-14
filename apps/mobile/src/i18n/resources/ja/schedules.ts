@@ -238,7 +238,13 @@ export const schedules = {
     noModes: "モードが見つかりません",
     noModelModes: "このモデルで利用できるモードはありません。",
     selectMode: "モードを選択",
-    archive: "実行のたびに作成したエージェントをアーカイブ",
+    afterRun: "実行終了後",
+    keepSession: "ワークスペースにセッションを保持",
+    archiveSession: "セッションをアーカイブ",
+    keepSessionHint:
+      "実行ごとに新しいセッションを作成し、このワークスペースに保持します。スケジュール終了後も結果を確認し、会話を続けられます。",
+    archiveSessionHint:
+      "実行が終了すると、新しいセッションをアーカイブします。ワークスペースは保持されます。",
     submitError: "スケジュールを保存できません: {{message}}",
     runningError: "タスクは実行中です。今回の実行が終了してから変更してください。",
   },

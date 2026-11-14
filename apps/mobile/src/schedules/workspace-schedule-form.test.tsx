@@ -138,7 +138,6 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     <div data-testid={testID}>{children}</div>
   ),
 }));
-vi.mock("@/components/ui/switch", () => ({ Switch: () => null }));
 vi.mock("@/components/ui/combobox", () => ({ ComboboxItem: () => null }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
@@ -391,6 +390,99 @@ describe("workspace schedule form", () => {
     }
   });
 
+  it.each(["keep", "archive"])("creates a cron task with the %s session choice", async (choice) => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    chooseTemplate("pr-gatekeeper");
+    chooseModel();
+    fireEvent.change(getField("Max runs"), { target: { value: "1" } });
+    showSection("execution");
+    const completion = screen.getByRole("combobox", { name: "After each run" });
+    expect((completion as HTMLSelectElement).value).toBe("archive");
+    expect(screen.getByRole("option", { name: "Keep session in workspace" })).toBeTruthy();
+    fireEvent.change(completion, { target: { value: choice } });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+
+    await waitFor(() =>
+      expect(createSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: "workspace-a",
+          cadence: expect.objectContaining({ type: "cron" }),
+          maxRuns: 1,
+          target: {
+            type: "new-agent",
+            config: expect.objectContaining({ archiveOnFinish: choice === "archive" }),
+          },
+        }),
+      ),
+    );
+  });
+
+  it.each([
+    { stored: undefined, selected: "keep", archiveOnFinish: false },
+    { stored: true, selected: "keep", archiveOnFinish: false },
+    { stored: false, selected: "keep", archiveOnFinish: false },
+    { stored: false, selected: "archive", archiveOnFinish: true },
+  ])(
+    "edits session retention from $stored to $selected",
+    async ({ stored, selected, archiveOnFinish }) => {
+      const schedule: ScheduleSummary = {
+        id: "retained-session",
+        workspaceId: "workspace-a",
+        name: "Review",
+        prompt: "Review changes",
+        cadence: { type: "cron", expression: "0 9 * * *" },
+        target: {
+          type: "new-agent",
+          config: {
+            provider: "mock",
+            model: "model-a",
+            cwd: "/worktrees/feature",
+            ...(stored === undefined ? {} : { archiveOnFinish: stored }),
+          },
+        },
+        status: "active",
+        createdAt: "2026-10-12T00:00:00Z",
+        updatedAt: "2026-10-12T00:00:00Z",
+        nextRunAt: null,
+        lastRunAt: null,
+        pausedAt: null,
+        maxRuns: 1,
+        expiresAt: null,
+      };
+      render(
+        <WorkspaceScheduleForm
+          serverId="host-a"
+          workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+          schedule={schedule}
+          onClose={vi.fn()}
+        />,
+      );
+      showSection("execution");
+      const completion = screen.getByRole("combobox", { name: "After each run" });
+      expect((completion as HTMLSelectElement).value).toBe(stored === false ? "keep" : "archive");
+      fireEvent.change(completion, { target: { value: selected } });
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() =>
+        expect(updateSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: schedule.id,
+            target: {
+              type: "new-agent",
+              config: expect.objectContaining({ archiveOnFinish }),
+            },
+          }),
+        ),
+      );
+    },
+  );
+
   it("creates a schedule for an active agent in the owning workspace", async () => {
     render(
       <WorkspaceScheduleForm
@@ -446,10 +538,18 @@ describe("workspace schedule form", () => {
     fireEvent.change(getField("Prompt"), {
       target: { value: "Keep my review instructions" },
     });
+    showSection("execution");
+    fireEvent.change(screen.getByRole("combobox", { name: "After each run" }), {
+      target: { value: "keep" },
+    });
     fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
     expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "After each run" })).toBeNull();
     fireEvent.change(getExecutionAgent(), { target: { value: "new-agent" } });
     expect(screen.getByRole("button", { name: "Choose model" })).toBeTruthy();
+    expect(
+      (screen.getByRole("combobox", { name: "After each run" }) as HTMLSelectElement).value,
+    ).toBe("keep");
     expect((getField("Prompt") as HTMLInputElement).value).toBe("Keep my review instructions");
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
     await waitFor(() =>
@@ -458,7 +558,11 @@ describe("workspace schedule form", () => {
           prompt: "Keep my review instructions",
           target: {
             type: "new-agent",
-            config: expect.objectContaining({ provider: "mock", model: "model-a" }),
+            config: expect.objectContaining({
+              provider: "mock",
+              model: "model-a",
+              archiveOnFinish: false,
+            }),
           },
         }),
       ),
