@@ -1,8 +1,3 @@
-export interface BranchComboOption {
-  id: string;
-  label: string;
-}
-
 export function normalizeBranchOptionName(input: string | null | undefined): string | null {
   const trimmed = input?.trim();
   if (!trimmed || trimmed === "HEAD") {
@@ -20,32 +15,4 @@ export function normalizeBranchOptionName(input: string | null | undefined): str
   }
 
   return normalized.length > 0 && normalized !== "HEAD" ? normalized : null;
-}
-
-export function buildBranchComboOptions(input: {
-  suggestedBranches?: string[];
-  currentBranch?: string | null;
-  baseRef?: string | null;
-  typedBaseBranch?: string | null;
-  worktreeBranchLabels?: string[];
-}): BranchComboOption[] {
-  const branchSet = new Set<string>();
-  const addBranch = (name: string | null | undefined) => {
-    const normalized = normalizeBranchOptionName(name);
-    if (normalized) {
-      branchSet.add(normalized);
-    }
-  };
-
-  for (const branch of input.suggestedBranches ?? []) {
-    addBranch(branch);
-  }
-  addBranch(input.currentBranch ?? null);
-  addBranch(input.baseRef ?? null);
-  addBranch(input.typedBaseBranch ?? null);
-  for (const label of input.worktreeBranchLabels ?? []) {
-    addBranch(label);
-  }
-
-  return Array.from(branchSet).map((name) => ({ id: name, label: name }));
 }

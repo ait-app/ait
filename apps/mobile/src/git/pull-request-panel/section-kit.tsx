@@ -19,7 +19,6 @@ export const foregroundMutedColorMapping = (theme: Theme) => ({
 });
 export const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 export const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
-export const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 interface SectionProps {
   title: string;

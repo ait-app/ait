@@ -6,25 +6,27 @@ import type {
 } from "./target.js";
 import { androidStudioTarget } from "./targets/android-studio.js";
 import { antigravityTarget } from "./targets/antigravity.js";
-import { aquaTarget } from "./targets/aqua.js";
-import { clionTarget } from "./targets/clion.js";
 import { cursorTarget } from "./targets/cursor.js";
-import { datagripTarget } from "./targets/datagrip.js";
-import { dataspellTarget } from "./targets/dataspell.js";
 import { explorerTarget, fileManagerTarget, finderTarget } from "./targets/file-manager.js";
-import { golandTarget } from "./targets/goland.js";
-import { intellijIdeaTarget } from "./targets/intellij-idea.js";
 import { kiroTarget } from "./targets/kiro.js";
-import { phpstormTarget } from "./targets/phpstorm.js";
-import { pycharmTarget } from "./targets/pycharm.js";
-import { riderTarget } from "./targets/rider.js";
-import { rubymineTarget } from "./targets/rubymine.js";
-import { rustroverTarget } from "./targets/rustrover.js";
+import {
+  aquaTarget,
+  clionTarget,
+  datagripTarget,
+  dataspellTarget,
+  golandTarget,
+  intellijIdeaTarget,
+  phpstormTarget,
+  pycharmTarget,
+  riderTarget,
+  rubymineTarget,
+  rustroverTarget,
+  webstormTarget,
+} from "./targets/jetbrains.js";
 import { traeTarget } from "./targets/trae.js";
 import { vscodiumTarget } from "./targets/vscodium.js";
 import { vscodeInsidersTarget } from "./targets/vscode-insiders.js";
 import { vscodeTarget } from "./targets/vscode.js";
-import { webstormTarget } from "./targets/webstorm.js";
 import { zedTarget } from "./targets/zed.js";
 
 export const EDITOR_TARGETS: readonly EditorTarget[] = [

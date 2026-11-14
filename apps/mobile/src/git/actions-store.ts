@@ -59,6 +59,12 @@ function resolveAutoMergeActionsRpc(serverId: string): AutoMergeActionsRpc {
   throw new Error("Update the host to use auto-merge actions.");
 }
 
+function throwOnPayloadError(payload: { error?: { message: string } | null }): void {
+  if (payload.error) {
+    throw new Error(payload.error.message);
+  }
+}
+
 function setStatus(
   key: CheckoutKey,
   actionId: CheckoutGitAsyncActionId,
@@ -239,10 +245,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "commit",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutCommit(cwd, { addAll: true });
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutCommit(cwd, { addAll: true }));
       },
     });
   },
@@ -254,10 +257,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "pull",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutPull(cwd);
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutPull(cwd));
       },
     });
   },
@@ -269,10 +269,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "push",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutPush(cwd);
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutPush(cwd));
       },
     });
   },
@@ -284,10 +281,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "refresh",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutRefresh(cwd);
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutRefresh(cwd));
       },
     });
   },
@@ -299,14 +293,8 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "pull-and-push",
       run: async () => {
         const client = resolveClient(serverId);
-        const pullPayload = await client.checkoutPull(cwd);
-        if (pullPayload.error) {
-          throw new Error(pullPayload.error.message);
-        }
-        const pushPayload = await client.checkoutPush(cwd);
-        if (pushPayload.error) {
-          throw new Error(pushPayload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutPull(cwd));
+        throwOnPayloadError(await client.checkoutPush(cwd));
       },
     });
   },
@@ -318,10 +306,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "create-pr",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutPrCreate(cwd, {});
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutPrCreate(cwd, {}));
       },
     });
   },
@@ -333,10 +318,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: `merge-pr-${method}`,
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutPrMerge(cwd, { method });
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutPrMerge(cwd, { method }));
       },
     });
   },
@@ -352,13 +334,11 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
         // COMPAT(githubAutoMergeRpc): use the legacy GitHub RPC with daemons
         // that predate checkout.forge.set_auto_merge.*. Remove after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.
-        const payload =
+        throwOnPayloadError(
           rpc === "forge"
             ? await client.checkoutForgeSetAutoMerge(cwd, { enabled: true, method })
-            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: true, method });
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: true, method }),
+        );
       },
     });
   },
@@ -374,13 +354,11 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
         // COMPAT(githubAutoMergeRpc): use the legacy GitHub RPC with daemons
         // that predate checkout.forge.set_auto_merge.*. Remove after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.
-        const payload =
+        throwOnPayloadError(
           rpc === "forge"
             ? await client.checkoutForgeSetAutoMerge(cwd, { enabled: false })
-            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: false });
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: false }),
+        );
       },
     });
   },
@@ -393,14 +371,13 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       variant: baseRef,
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutMerge(cwd, {
-          baseRef,
-          strategy: "merge",
-          requireCleanTarget: true,
-        });
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(
+          await client.checkoutMerge(cwd, {
+            baseRef,
+            strategy: "merge",
+            requireCleanTarget: true,
+          }),
+        );
       },
     });
   },
@@ -412,10 +389,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       actionId: "reset-workspace",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutResetWorkspace(cwd, workspaceId, initialBranch);
-        if (payload.error) {
-          throw new Error(payload.error.message);
-        }
+        throwOnPayloadError(await client.checkoutResetWorkspace(cwd, workspaceId, initialBranch));
       },
     });
   },

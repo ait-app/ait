@@ -88,7 +88,6 @@ interface SidebarLabels {
   hosts: string;
   importSession: string;
   settings: string;
-  searchHosts: string;
   closeSidebar: string;
 }
 
@@ -182,7 +181,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       hosts: t("sidebar.actions.hosts"),
       importSession: t("importSession.title"),
       settings: t("sidebar.actions.settings"),
-      searchHosts: t("sidebar.host.searchPlaceholder"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
     }),
     [t],
@@ -314,20 +312,13 @@ function SidebarHostPicker({
   const triggerRef = useRef<View | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleSelect = useCallback(
-    (id: string) => {
-      onOpenHostSettings(id);
-    },
-    [onOpenHostSettings],
-  );
-
   const handleOpen = useCallback(() => setIsOpen(true), []);
 
   return (
     <HostPicker
       hosts={hosts}
       value=""
-      onSelect={handleSelect}
+      onSelect={onOpenHostSettings}
       open={isOpen}
       onOpenChange={setIsOpen}
       anchorRef={triggerRef}
@@ -387,7 +378,6 @@ function SidebarFooter({
     hosts: string;
     importSession: string;
     settings: string;
-    searchHosts: string;
   };
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
@@ -464,10 +454,6 @@ function MobileSidebar({
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
 
-  const handleWorkspacePress = useCallback(() => {
-    closeSidebar();
-  }, [closeSidebar]);
-
   const mobileSidebarInsetStyle = useMemo(
     () => ({
       paddingTop: insetsTop,
@@ -523,7 +509,7 @@ function MobileSidebar({
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh}
             onRefresh={handleRefresh}
-            onWorkspacePress={handleWorkspacePress}
+            onWorkspacePress={closeSidebar}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
             parentGestureRef={closeGestureRef}

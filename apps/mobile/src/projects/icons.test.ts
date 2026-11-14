@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectIconLookup } from "./icons";
+import { resolveProjectIconLookup } from "./icon-cache";
 
 describe("project icon lookup", () => {
   const target = {

@@ -1,6 +1,7 @@
 import {
   type AssistantImageContext,
   estimateAssistantMessageHeightFromCache as estimateImageHeight,
+  touchCacheEntry,
 } from "./assistant-image-metadata";
 const ASSISTANT_MESSAGE_HEIGHT_CACHE_LIMIT = 1000;
 
@@ -11,18 +12,6 @@ interface MessageHeightInput {
 }
 
 const assistantMessageHeightCache = new Map<string, number>();
-
-function touchCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, limit: number): void {
-  cache.delete(key);
-  cache.set(key, value);
-  if (cache.size <= limit) {
-    return;
-  }
-  const oldestKey = cache.keys().next().value;
-  if (oldestKey !== undefined) {
-    cache.delete(oldestKey);
-  }
-}
 
 function hashMessage(markdown: string): string {
   let hash = 2166136261;

@@ -195,15 +195,7 @@ function script(
 
 const LIVE_TERMINAL_IDS: string[] = ["terminal-script-1"];
 
-interface RenderScriptsOptions {
-  hideLabels?: boolean;
-  presentation?: "split" | "ghost";
-}
-
-function renderScripts(
-  scripts: WorkspaceScriptPayload[],
-  options: RenderScriptsOptions = {},
-): {
+function renderScripts(scripts: WorkspaceScriptPayload[]): {
   rerender: (nextScripts: WorkspaceScriptPayload[]) => Promise<void>;
   unmount: () => void;
 } {
@@ -225,8 +217,6 @@ function renderScripts(
           workspaceId="workspace-1"
           scripts={nextScripts}
           liveTerminalIds={LIVE_TERMINAL_IDS}
-          hideLabels={options.hideLabels}
-          presentation={options.presentation}
         />
       </QueryClientProvider>
     );
@@ -387,17 +377,6 @@ describe("WorkspaceScriptsButton", () => {
     expect(requirePrimaryIcon(requireRow("old-service")).dataset.color).toBe(
       theme.colors.foregroundMuted,
     );
-  });
-
-  it("removes the trigger caret in ghost presentation", () => {
-    current = renderScripts([script({ scriptName: "dev" })], {
-      hideLabels: true,
-      presentation: "ghost",
-    });
-
-    const trigger = document.querySelector('[data-testid="workspace-scripts-button"]');
-    expect(trigger?.querySelector('[data-icon="Play"]')?.getAttribute("data-size")).toBe("16");
-    expect(trigger?.querySelector('[data-icon="ChevronDown"]')).toBeNull();
   });
 
   it("keeps the trigger caret in split presentation", () => {

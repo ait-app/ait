@@ -1,4 +1,4 @@
-import type { ComponentType, ReactElement, ReactNode, RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
 import { continuesResponse } from "./turn-membership";
@@ -8,36 +8,20 @@ import type {
   BottomAnchorRouteRequest,
 } from "./bottom-anchor-controller";
 
-type EdgeSlot = "header" | "footer";
 type NeighborRelation = "above" | "below";
 type AssistantTurnTraversalStep = -1 | 1;
 export type StreamFrameChildOrder = "content-then-footer" | "footer-then-content";
-
-export type MaintainVisibleContentPositionConfig = Readonly<{
-  minIndexForVisible: number;
-  autoscrollToTopThreshold: number;
-}>;
 
 export type BottomAnchorTransportBehavior = Readonly<{
   verificationDelayFrames: number;
   verificationRetryMode: "rescroll" | "recheck";
 }>;
 
-export interface StreamViewportMetrics {
+export interface StreamNearBottomInput {
   contentHeight: number;
   viewportHeight: number;
-}
-
-export type StreamNearBottomInput = StreamViewportMetrics & {
   offsetY: number;
   threshold: number;
-};
-
-export interface StreamEdgeSlotProps {
-  ListHeaderComponent?: ReactElement | ComponentType<unknown> | null;
-  ListHeaderComponentStyle?: StyleProp<ViewStyle>;
-  ListFooterComponent?: ReactElement | ComponentType<unknown> | null;
-  ListFooterComponentStyle?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -91,10 +75,8 @@ export interface StreamRenderInput {
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;
   olderHistoryProgressKey: string | null;
-  scrollEnabled: boolean;
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
-  forwardListContentContainerStyle: StyleProp<ViewStyle>;
   // The chat column's max width. The web viewport estimates unmeasured row heights with it.
   contentMaxWidth: number;
 }
@@ -116,23 +98,12 @@ export interface StreamStrategy {
   ) => StreamItem | undefined;
   collectAssistantResponseContent: (items: StreamItem[], startIndex: number) => string;
   isNearBottom: (input: StreamNearBottomInput) => boolean;
-  getBottomOffset: (metrics: StreamViewportMetrics) => number;
-  getEdgeSlotProps: (
-    component: ReactElement | ComponentType<unknown> | null,
-    gapSize: number,
-  ) => StreamEdgeSlotProps;
-  getMaintainVisibleContentPosition: () => MaintainVisibleContentPositionConfig | undefined;
   getBottomAnchorTransportBehavior: () => BottomAnchorTransportBehavior;
   getHistoryLiveBoundaryIndex: (history: StreamItem[]) => number | null;
   getLiveHeadHistoryBoundaryIndex: (liveHead: StreamItem[]) => number | null;
   getLatestItemIndex: (items: StreamItem[]) => number | null;
   getFrameChildOrder: () => StreamFrameChildOrder;
   getFlatListInverted: () => boolean;
-  getOverlayScrollbarInverted: () => boolean;
-  shouldDisableParentScrollOnInlineDetailsExpansion: () => boolean;
-  shouldAnchorBottomOnContentSizeChange: () => boolean;
-  shouldAnimateManualScrollToBottom: () => boolean;
-  shouldUseVirtualizedList: () => boolean;
 }
 
 interface StreamStrategyConfig {
@@ -140,40 +111,30 @@ interface StreamStrategyConfig {
   orderTailReverse: boolean;
   orderHeadReverse: boolean;
   assistantTurnTraversalStep: AssistantTurnTraversalStep;
-  edgeSlot: EdgeSlot;
   historyLiveBoundaryEdge: "first" | "last";
   liveHeadHistoryBoundaryEdge: "first" | "last";
   frameChildOrder: StreamFrameChildOrder;
   flatListInverted: boolean;
-  overlayScrollbarInverted: boolean;
-  maintainVisibleContentPosition?: MaintainVisibleContentPositionConfig;
   bottomAnchorTransportBehavior: BottomAnchorTransportBehavior;
-  disableParentScrollOnInlineDetailsExpansion: boolean;
-  anchorBottomOnContentSizeChange: boolean;
-  animateManualScrollToBottom: boolean;
-  useVirtualizedList: boolean;
   isNearBottom: (input: StreamNearBottomInput) => boolean;
-  getBottomOffset: (metrics: StreamViewportMetrics) => number;
 }
 
 const NATIVE_SETTLING_VERIFICATION_DELAY_FRAMES = 4;
 
 export function createStreamStrategy(config: StreamStrategyConfig): StreamStrategy {
+  const getNeighborIndex = (index: number, relation: NeighborRelation) =>
+    relation === "above"
+      ? index + config.assistantTurnTraversalStep
+      : index - config.assistantTurnTraversalStep;
   return {
     render: config.render,
     orderTail: (streamItems) =>
       config.orderTailReverse ? [...streamItems].toReversed() : streamItems,
     orderHead: (streamHead) =>
       config.orderHeadReverse ? [...streamHead].toReversed() : streamHead,
-    getNeighborIndex: (index, relation) =>
-      relation === "above"
-        ? index + config.assistantTurnTraversalStep
-        : index - config.assistantTurnTraversalStep,
+    getNeighborIndex,
     getNeighborItem: (items, index, relation) => {
-      const neighborIndex =
-        relation === "above"
-          ? index + config.assistantTurnTraversalStep
-          : index - config.assistantTurnTraversalStep;
+      const neighborIndex = getNeighborIndex(index, relation);
       if (neighborIndex < 0 || neighborIndex >= items.length) {
         return undefined;
       }
@@ -198,21 +159,7 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
       }
       return messages.toReversed().join("\n\n");
     },
-    isNearBottom: (input) => config.isNearBottom(input),
-    getBottomOffset: (metrics) => config.getBottomOffset(metrics),
-    getEdgeSlotProps: (component, gapSize) => {
-      if (config.edgeSlot === "header") {
-        return {
-          ListHeaderComponent: component,
-          ListHeaderComponentStyle: { marginBottom: gapSize },
-        };
-      }
-      return {
-        ListFooterComponent: component,
-        ListFooterComponentStyle: { marginTop: gapSize },
-      };
-    },
-    getMaintainVisibleContentPosition: () => config.maintainVisibleContentPosition,
+    isNearBottom: config.isNearBottom,
     getBottomAnchorTransportBehavior: () => config.bottomAnchorTransportBehavior,
     getHistoryLiveBoundaryIndex: (history) => {
       if (history.length === 0) {
@@ -234,12 +181,6 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
     },
     getFrameChildOrder: () => config.frameChildOrder,
     getFlatListInverted: () => config.flatListInverted,
-    getOverlayScrollbarInverted: () => config.overlayScrollbarInverted,
-    shouldDisableParentScrollOnInlineDetailsExpansion: () =>
-      config.disableParentScrollOnInlineDetailsExpansion,
-    shouldAnchorBottomOnContentSizeChange: () => config.anchorBottomOnContentSizeChange,
-    shouldAnimateManualScrollToBottom: () => config.animateManualScrollToBottom,
-    shouldUseVirtualizedList: () => config.useVirtualizedList,
   };
 }
 
@@ -258,93 +199,4 @@ export function resolveBottomAnchorTransportBehavior(input: {
     ),
     verificationRetryMode: "recheck",
   };
-}
-
-export function orderTailForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-  streamItems: StreamItem[];
-}): StreamItem[] {
-  return params.strategy.orderTail(params.streamItems);
-}
-
-export function orderHeadForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-  streamHead: StreamItem[];
-}): StreamItem[] {
-  return params.strategy.orderHead(params.streamHead);
-}
-
-export function getStreamNeighborIndex(params: {
-  strategy: StreamStrategy;
-  index: number;
-  relation: NeighborRelation;
-}): number {
-  return params.strategy.getNeighborIndex(params.index, params.relation);
-}
-
-export function getStreamNeighborItem(params: {
-  strategy: StreamStrategy;
-  items: StreamItem[];
-  index: number;
-  relation: NeighborRelation;
-}): StreamItem | undefined {
-  return params.strategy.getNeighborItem(params.items, params.index, params.relation);
-}
-
-export function collectAssistantResponseContentForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-  items: StreamItem[];
-  startIndex: number;
-}): string {
-  return params.strategy.collectAssistantResponseContent(params.items, params.startIndex);
-}
-
-export function isNearBottomForStreamRenderStrategy(
-  params: StreamNearBottomInput & { strategy: StreamStrategy },
-): boolean {
-  return params.strategy.isNearBottom({
-    offsetY: params.offsetY,
-    threshold: params.threshold,
-    contentHeight: params.contentHeight,
-    viewportHeight: params.viewportHeight,
-  });
-}
-
-export function getBottomOffsetForStreamRenderStrategy(
-  params: StreamViewportMetrics & {
-    strategy: StreamStrategy;
-  },
-): number {
-  return params.strategy.getBottomOffset({
-    contentHeight: params.contentHeight,
-    viewportHeight: params.viewportHeight,
-  });
-}
-
-export function getStreamEdgeSlotProps(params: {
-  strategy: StreamStrategy;
-  component: ReactElement | ComponentType<unknown> | null;
-  gapSize: number;
-}): StreamEdgeSlotProps {
-  return params.strategy.getEdgeSlotProps(params.component, params.gapSize);
-}
-
-export function getHistoryLiveBoundaryIndexForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-  history: StreamItem[];
-}): number | null {
-  return params.strategy.getHistoryLiveBoundaryIndex(params.history);
-}
-
-export function getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-  liveHead: StreamItem[];
-}): number | null {
-  return params.strategy.getLiveHeadHistoryBoundaryIndex(params.liveHead);
-}
-
-export function getFrameChildOrderForStreamRenderStrategy(params: {
-  strategy: StreamStrategy;
-}): StreamFrameChildOrder {
-  return params.strategy.getFrameChildOrder();
 }

@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useWorkspaceScriptActions } from "@/screens/workspace/scripts/use-workspace-script-actions";
+import { ExitCodeBadge } from "@/screens/workspace/scripts/script-marks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,8 +46,6 @@ interface WorkspaceScriptsButtonProps {
   onScriptTerminalStarted?: (terminalId: string) => void;
   onViewTerminal?: (terminalId: string) => void;
   onOpenUrlInBrowserTab?: (url: string) => void;
-  hideLabels?: boolean;
-  presentation?: "split" | "ghost";
 }
 
 const ThemedPlay = withUnistyles(Play);
@@ -57,8 +56,6 @@ const ThemedEye = withUnistyles(Eye);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedSquare = withUnistyles(Square);
-
-const GHOST_TRIGGER_ICON_SIZE = 16;
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -76,7 +73,21 @@ const redColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.red[500],
 });
 const playFillTransparent = { fill: "transparent" };
-const ghostPlayStroke = { strokeWidth: 1.5 };
+
+function triggerStyle({
+  hovered,
+  pressed,
+  open,
+}: {
+  hovered: boolean;
+  pressed: boolean;
+  open: boolean;
+}) {
+  return [
+    styles.splitButtonPrimary,
+    (hovered || pressed || open) && styles.splitButtonPrimaryHovered,
+  ];
+}
 
 interface ScriptRowActionButtonProps {
   accessibilityLabel: string;
@@ -184,17 +195,6 @@ function ServiceLinkRow({ selectedTarget, scriptName, onCopy }: ServiceLinkRowPr
         onPress={handleCopy}
         tooltipLabel={t("workspace.scripts.actions.copyUrl")}
       />
-    </View>
-  );
-}
-
-function ExitCodeBadge({ code }: { code: number }): ReactElement {
-  const { t } = useTranslation();
-  const exitTextStyle =
-    code === 0 ? styles.exitBadgeText : [styles.exitBadgeText, styles.exitBadgeTextError];
-  return (
-    <View style={styles.exitBadge}>
-      <Text style={exitTextStyle}>{t("workspace.scripts.states.exitCode", { code })}</Text>
     </View>
   );
 }
@@ -386,8 +386,6 @@ export function WorkspaceScriptsButton({
   onScriptTerminalStarted,
   onViewTerminal,
   onOpenUrlInBrowserTab,
-  hideLabels,
-  presentation = "split",
 }: WorkspaceScriptsButtonProps): ReactElement | null {
   const { t } = useTranslation();
   const toast = useToast();
@@ -399,15 +397,6 @@ export function WorkspaceScriptsButton({
     scripts,
     onScriptTerminalStarted,
   });
-
-  const triggerStyle = useCallback(
-    ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
-      presentation === "ghost" ? styles.ghostButton : styles.splitButtonPrimary,
-      (hovered || pressed || open) &&
-        (presentation === "ghost" ? styles.ghostButtonHovered : styles.splitButtonPrimaryHovered),
-    ],
-    [presentation],
-  );
 
   const handleCopyUrl = useCallback(
     (url: string, label: string) => {
@@ -423,13 +412,10 @@ export function WorkspaceScriptsButton({
 
   const hasAnyRunning = scripts.some((s) => s.lifecycle === "running");
   const triggerPlayMapping = hasAnyRunning ? blueColorMapping : mutedColorMapping;
-  const triggerIconSize = presentation === "ghost" ? GHOST_TRIGGER_ICON_SIZE : 14;
-  const triggerPlayProps =
-    presentation === "ghost" ? { ...playFillTransparent, ...ghostPlayStroke } : playFillTransparent;
 
   return (
     <View style={styles.row}>
-      <View style={presentation === "ghost" ? styles.ghostButtonFrame : styles.splitButton}>
+      <View style={styles.splitButton}>
         <DropdownMenu>
           <DropdownMenuTrigger
             testID="workspace-scripts-button"
@@ -438,17 +424,8 @@ export function WorkspaceScriptsButton({
             accessibilityLabel={t("workspace.scripts.accessibility.trigger")}
           >
             <View style={styles.splitButtonContent}>
-              <ThemedPlay
-                size={triggerIconSize}
-                uniProps={triggerPlayMapping}
-                {...triggerPlayProps}
-              />
-              {!hideLabels && (
-                <Text style={styles.splitButtonText}>{t("workspace.scripts.title")}</Text>
-              )}
-              {presentation === "split" ? (
-                <ThemedChevronDown size={16} uniProps={extraMutedIconColorMapping} />
-              ) : null}
+              <ThemedPlay size={14} uniProps={triggerPlayMapping} {...playFillTransparent} />
+              <ThemedChevronDown size={16} uniProps={extraMutedIconColorMapping} />
             </View>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -499,21 +476,6 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.borderAccent,
     overflow: "hidden",
   },
-  ghostButtonFrame: {
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  ghostButton: {
-    width: theme.spacing[8],
-    height: theme.spacing[8],
-    padding: 0,
-    borderRadius: theme.borderRadius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ghostButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
   splitButtonPrimary: {
     paddingHorizontal: {
       xs: theme.spacing[3],
@@ -523,12 +485,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   splitButtonPrimaryHovered: {
     backgroundColor: theme.colors.surface2,
-  },
-  splitButtonText: {
-    fontSize: theme.fontSize.base,
-    lineHeight: theme.fontSize.base * 1.5,
-    color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.normal,
   },
   splitButtonContent: {
     flexDirection: "row",
@@ -589,21 +545,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: 14,
     color: theme.colors.foregroundMuted,
-  },
-  exitBadge: {
-    paddingHorizontal: theme.spacing[1.5],
-    paddingVertical: 1,
-    borderRadius: 2,
-    backgroundColor: theme.colors.surface2,
-  },
-  exitBadgeText: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.foregroundMuted,
-  },
-  exitBadgeTextError: {
-    color: theme.colors.statusDanger,
   },
   iconActionButton: {
     padding: 2,

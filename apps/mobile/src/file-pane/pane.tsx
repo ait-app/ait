@@ -1,18 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { filePreviewRenderKind } from "@/components/file-pane-render-mode";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
@@ -56,7 +48,6 @@ interface FilePreviewBodyProps {
   preview: ExplorerFile | null;
   mode?: "preview" | "source";
   isLoading: boolean;
-  isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
@@ -75,20 +66,9 @@ function formatFileSize({ size }: { size: number }): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ReadonlySource({
-  preview,
-  filename,
-  location,
-  navigationRevision,
-}: {
-  preview: ExplorerFile;
-  filename: string;
-  location: WorkspaceFileLocation;
-  navigationRevision: number;
-}) {
+function useFileVisualTheme() {
   const theme = UnistylesRuntime.getTheme();
-  const { t } = useTranslation();
-  const visualTheme = useMemo(
+  return useMemo(
     () => ({
       colorScheme: theme.colorScheme,
       background: theme.colors.surface0,
@@ -101,8 +81,34 @@ function ReadonlySource({
       codeFontSize: theme.fontSize.code,
       syntax: theme.colors.syntax,
     }),
-    [theme],
+    [
+      theme.colors.border,
+      theme.colors.foreground,
+      theme.colors.foregroundMuted,
+      theme.colors.surface0,
+      theme.colors.syntax,
+      theme.colors.terminal.cursor,
+      theme.colors.terminal.selectionBackground,
+      theme.colorScheme,
+      theme.fontFamily.mono,
+      theme.fontSize.code,
+    ],
   );
+}
+
+function ReadonlySource({
+  preview,
+  filename,
+  location,
+  navigationRevision,
+}: {
+  preview: ExplorerFile;
+  filename: string;
+  location: WorkspaceFileLocation;
+  navigationRevision: number;
+}) {
+  const { t } = useTranslation();
+  const visualTheme = useFileVisualTheme();
   return (
     <FileSourceView
       content={preview.content ?? ""}
@@ -133,7 +139,6 @@ function FilePreviewBody({
   preview,
   mode,
   isLoading,
-  isMobile: _isMobile,
   location,
   navigationRevision,
   imagePreviewUri,
@@ -147,8 +152,6 @@ function FilePreviewBody({
     preview?.kind === "text" && !location.lineStart && mode !== "source"
       ? filePreviewRenderKind(filePath)
       : null;
-
-  const previewScrollRef = useRef<RNScrollView>(null);
 
   if (isLoading && !preview) {
     return (
@@ -180,11 +183,7 @@ function FilePreviewBody({
     if (renderKind === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
-          <RNScrollView
-            ref={previewScrollRef}
-            style={styles.previewContent}
-            showsVerticalScrollIndicator
-          >
+          <RNScrollView style={styles.previewContent} showsVerticalScrollIndicator>
             <FileMarkdownPreview
               source={preview.content ?? ""}
               filePath={filePath}
@@ -235,7 +234,6 @@ export function FilePane({
   navigationRevision: number;
 }) {
   const { t } = useTranslation();
-  const isMobile = useIsCompactFormFactor();
   const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
 
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
@@ -316,7 +314,6 @@ export function FilePane({
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
       errorMessage={errorMessage}
       isLoading={isLoading}
-      isMobile={isMobile}
       location={location}
       navigationRevision={navigationRevision}
       previewAttachment={imageAttachment}
@@ -358,7 +355,6 @@ function FilePanePresentation({
   disconnectedMessage,
   errorMessage,
   isLoading,
-  isMobile,
   location,
   navigationRevision,
   imagePreviewUri,
@@ -380,7 +376,6 @@ function FilePanePresentation({
   disconnectedMessage: string;
   errorMessage: string | null;
   isLoading: boolean;
-  isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
@@ -411,7 +406,6 @@ function FilePanePresentation({
         mode={previewMode}
         onModeChange={onPreviewModeChange}
         isLoading={isLoading}
-        isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
       />
@@ -455,7 +449,6 @@ function FilePanePresentation({
         preview={preview}
         mode={previewMode}
         isLoading={isLoading}
-        isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
         previewAttachment={previewAttachment}
@@ -477,7 +470,6 @@ function EditableFilePane({
   mode,
   onModeChange,
   isLoading,
-  isMobile,
   location,
   navigationRevision,
 }: {
@@ -492,7 +484,6 @@ function EditableFilePane({
   mode?: "preview" | "source";
   onModeChange?: (mode: "preview" | "source") => void;
   isLoading: boolean;
-  isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
 }) {
@@ -533,33 +524,7 @@ function EditableFilePane({
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
   usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
-  const theme = UnistylesRuntime.getTheme();
-  const visualTheme = useMemo(
-    () => ({
-      colorScheme: theme.colorScheme,
-      background: theme.colors.surface0,
-      foreground: theme.colors.foreground,
-      cursor: theme.colors.terminal.cursor,
-      foregroundMuted: theme.colors.foregroundMuted,
-      border: theme.colors.border,
-      selection: theme.colors.terminal.selectionBackground,
-      monoFont: theme.fontFamily.mono,
-      codeFontSize: theme.fontSize.code,
-      syntax: theme.colors.syntax,
-    }),
-    [
-      theme.colors.border,
-      theme.colors.foreground,
-      theme.colors.foregroundMuted,
-      theme.colors.surface0,
-      theme.colors.syntax,
-      theme.colors.terminal.cursor,
-      theme.colors.terminal.selectionBackground,
-      theme.colorScheme,
-      theme.fontFamily.mono,
-      theme.fontSize.code,
-    ],
-  );
+  const visualTheme = useFileVisualTheme();
 
   useEffect(() => () => model.dispose(), [model]);
 
@@ -586,7 +551,6 @@ function EditableFilePane({
     onRetry: onRetryRead,
     retrying: retryingRead,
   });
-  const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
   const renderedPreview = useMemo<ExplorerFile>(
     () => ({
       ...preview,
@@ -622,7 +586,7 @@ function EditableFilePane({
           vimEnabled={settings.vimKeybindings}
           theme={visualTheme}
           onCursorChange={setCursor}
-          onVimModeChange={handleVimModeChange}
+          onVimModeChange={setVimMode}
         />
       ) : (
         <FilePreviewBody
@@ -631,7 +595,6 @@ function EditableFilePane({
           preview={renderedPreview}
           mode={mode}
           isLoading={isLoading}
-          isMobile={isMobile}
           location={location}
           navigationRevision={navigationRevision}
           imagePreviewUri={null}
@@ -701,8 +664,5 @@ const styles = StyleSheet.create((theme) => ({
   previewContent: {
     flex: 1,
     minHeight: 0,
-  },
-  previewCodeScrollContent: {
-    padding: theme.spacing[4],
   },
 }));

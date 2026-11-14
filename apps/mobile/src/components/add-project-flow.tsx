@@ -188,8 +188,8 @@ function directoryOptionSubtitle(
   return option.path;
 }
 
+// A cloning page shows `CloneProgressView` instead.
 function progressText(page: AddProjectPage, t: TFunction): string {
-  if (page.kind === "github-location") return t("addProjectFlow.progress.cloning");
   if (page.kind === "new-directory-name") return t("addProjectFlow.progress.creating");
   return t("addProjectFlow.progress.adding");
 }
@@ -388,14 +388,12 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const localServerId = useLocalDaemonServerId();
   const availableHosts = useMemo<AddProjectHost[]>(
     () =>
-      groupHosts(
-        hosts.filter((host) => connectionStatuses.get(host.serverId) === "online"),
-      ).flatMap((host) => {
-        const canAddProject =
-          projectAddByHost.get(host.serverId) === true &&
-          stableProjectIdentityByHost.get(host.serverId) === true;
-        return [
-          {
+      groupHosts(hosts.filter((host) => connectionStatuses.get(host.serverId) === "online")).map(
+        (host) => {
+          const canAddProject =
+            projectAddByHost.get(host.serverId) === true &&
+            stableProjectIdentityByHost.get(host.serverId) === true;
+          return {
             serverId: host.serverId,
             label: host.label,
             canAddProject,
@@ -403,9 +401,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
-          },
-        ];
-      }),
+          };
+        },
+      ),
     [
       connectionStatuses,
       createDirectoryByHost,

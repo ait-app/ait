@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { FileDiff, GitCommitHorizontal } from "lucide-react-native";
+import { GitCommitHorizontal } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -14,7 +14,11 @@ import { useCommitDiffFiles } from "@/git/use-diff-files";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { useAppSettings } from "@/hooks/use-settings";
 import { usePaneContext } from "@/panels/pane-context";
-import { definePanel, type PanelDescriptor, type PanelPresentation } from "@/panels/panel-registry";
+import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import {
+  changesTreePanelPresentation,
+  workingDiffPanelPresentation,
+} from "@/panels/panel-presentations";
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
@@ -22,7 +26,6 @@ import { defaultChangesState, changesStateSchema } from "@/panels/changes/state"
 import { usePanelState } from "@/panels/use-panel-state";
 import { RenderProfile } from "@/utils/render-profiler";
 
-const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
 
 function useDiffPanelPreferences() {
@@ -210,20 +213,6 @@ function CommitDiffPanel() {
   );
 }
 
-const workingDiffPresentation = {
-  label: (t) => t("panels.diff.diffLabel"),
-  subtitle: (t) => t("panels.diff.changesSubtitle"),
-  tooltip: (t) => t("panels.diff.changesSubtitle"),
-  icon: ThemedFileDiff,
-} satisfies PanelPresentation;
-
-const changesTreePresentation = {
-  label: (t) => t("panels.diff.changesLabel"),
-  subtitle: (t) => t("panels.diff.changesSubtitle"),
-  tooltip: (t) => t("panels.diff.changesSubtitle"),
-  icon: ThemedFileDiff,
-} satisfies PanelPresentation;
-
 function useCommitDiffPanelDescriptor(
   target: Extract<WorkspaceTabTarget, { kind: "commit_diff" }>,
 ): PanelDescriptor {
@@ -240,12 +229,12 @@ function useCommitDiffPanelDescriptor(
 
 export const workingDiffPanelRegistration = definePanel("working_diff", {
   component: ChangesPanel,
-  presentation: workingDiffPresentation,
+  presentation: workingDiffPanelPresentation,
 });
 
 export const changesTreePanelRegistration = definePanel("changes_tree", {
   component: ChangesPanel,
-  presentation: changesTreePresentation,
+  presentation: changesTreePanelPresentation,
 });
 
 export const commitDiffPanelRegistration = definePanel("commit_diff", {

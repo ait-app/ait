@@ -64,9 +64,6 @@ describe("buildProjects", () => {
     expect(result.projects).toEqual([
       expect.objectContaining({
         viewKey: createProjectViewKey({ kind: "equivalence", projectKey: key }),
-        hostCount: 2,
-        onlineHostCount: 1,
-        totalWorkspaceCount: 2,
         hosts: [
           expect.objectContaining({
             serverId: "host-a",
@@ -97,8 +94,7 @@ describe("buildProjects", () => {
     });
 
     expect(result.projects[0]).toMatchObject({
-      totalWorkspaceCount: 0,
-      hosts: [{ projectId: "prj_a", repoRoot: "/a/app" }],
+      hosts: [{ projectId: "prj_a", repoRoot: "/a/app", workspaces: [] }],
     });
   });
 

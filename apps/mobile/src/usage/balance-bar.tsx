@@ -1,11 +1,11 @@
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { clampPct, formatAmount, formatResetLabel } from "./format";
+import { formatAmount, formatResetLabel } from "./format";
 import { formatNativeUsageText } from "./copy";
-import type { UsageBalance, UsageTone } from "./types";
+import { UsageMeter } from "./meter";
+import type { UsageBalance } from "./types";
 
 interface ResolvedBalance {
   amountText: string;
@@ -33,19 +33,6 @@ function resolveBalance(balance: UsageBalance, locale: string, t: TFunction): Re
   return { amountText: "—", usedPct: null };
 }
 
-function fillToneStyle(tone: UsageTone) {
-  switch (tone) {
-    case "ok":
-      return styles.fillOk;
-    case "warning":
-      return styles.fillWarning;
-    case "danger":
-      return styles.fillDanger;
-    default:
-      return styles.fillDefault;
-  }
-}
-
 export function UsageBalanceBar({
   balance,
   retained = false,
@@ -55,13 +42,7 @@ export function UsageBalanceBar({
 }) {
   const { i18n, t } = useTranslation();
   const { amountText, usedPct } = resolveBalance(balance, i18n.language, t);
-  const tone = balance.tone ?? "default";
   const resetLabel = formatResetLabel(balance.resetsAt, t, retained);
-
-  const fillStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.fill, fillToneStyle(tone), { width: `${clampPct(usedPct ?? 0)}%` }],
-    [usedPct, tone],
-  );
 
   return (
     <View style={styles.container}>
@@ -74,11 +55,7 @@ export function UsageBalanceBar({
           {resetLabel ? <Text style={styles.reset}>{` · ${resetLabel}`}</Text> : null}
         </Text>
       </View>
-      {usedPct != null ? (
-        <View style={styles.track}>
-          <View style={fillStyle} />
-        </View>
-      ) : null}
+      {usedPct != null ? <UsageMeter percent={usedPct} tone={balance.tone ?? "default"} /> : null}
     </View>
   );
 }
@@ -106,27 +83,5 @@ const styles = StyleSheet.create((theme) => ({
   reset: {
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
-  },
-  track: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.surface3,
-    overflow: "hidden",
-  },
-  fill: {
-    height: 4,
-    borderRadius: 2,
-  },
-  fillDefault: {
-    backgroundColor: theme.colors.foregroundMuted,
-  },
-  fillOk: {
-    backgroundColor: theme.colors.statusSuccess,
-  },
-  fillWarning: {
-    backgroundColor: theme.colors.statusWarning,
-  },
-  fillDanger: {
-    backgroundColor: theme.colors.statusDanger,
   },
 }));

@@ -52,9 +52,7 @@ describe("workspace action dropdown", () => {
       startsGroup: true,
       handler,
     };
-    render(
-      <GitActionsSplitButton gitActions={{ primary: null, secondary: [archive], menu: [] }} />,
-    );
+    render(<GitActionsSplitButton gitActions={{ primary: null, secondary: [archive] }} />);
 
     expect(screen.queryByTestId("changes-primary-cta")).toBeNull();
     expect(screen.getByTestId("changes-actions-menu-trigger")).toBeTruthy();
@@ -85,9 +83,7 @@ describe("workspace action dropdown", () => {
       handler: mergeHandler,
     };
 
-    render(
-      <GitActionsSplitButton gitActions={{ primary: viewPr, secondary: [mergePr], menu: [] }} />,
-    );
+    render(<GitActionsSplitButton gitActions={{ primary: viewPr, secondary: [mergePr] }} />);
 
     expect(screen.getByTestId("changes-merge-pr-cta")).toBeTruthy();
     fireEvent.click(screen.getByTestId("changes-merge-pr-cta"));

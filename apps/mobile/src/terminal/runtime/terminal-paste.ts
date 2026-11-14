@@ -1,17 +1,17 @@
-export interface TerminalPasteInput {
+interface TerminalPasteInput {
   text: string;
   bracketedPaste: boolean;
 }
 
-export interface TerminalClipboardReader {
+interface TerminalClipboardReader {
   readText: () => Promise<string>;
 }
 
-export interface TerminalPaster {
+interface TerminalPaster {
   paste: (text: string) => void;
 }
 
-export interface PasteTerminalClipboardInput {
+interface PasteTerminalClipboardInput {
   clipboard: TerminalClipboardReader;
   terminal: TerminalPaster;
 }

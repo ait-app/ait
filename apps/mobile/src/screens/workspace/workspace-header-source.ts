@@ -68,10 +68,3 @@ export function resolveWorkspaceHeaderRenderState(input: {
     currentBranchName,
   };
 }
-
-export function shouldRenderMissingWorkspaceDescriptor(input: {
-  workspace: WorkspaceDescriptor | null;
-  hasHydratedWorkspaces: boolean;
-}): boolean {
-  return !input.workspace && input.hasHydratedWorkspaces;
-}

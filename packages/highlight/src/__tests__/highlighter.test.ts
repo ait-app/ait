@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { highlightCode, highlightLine } from "../highlighter.js";
+import { highlightCode } from "../highlighter.js";
 
 describe("highlightCode", () => {
   it("highlights JavaScript code with correct token styles", () => {
@@ -330,21 +330,5 @@ const title = "Hello";
         expect(validStyles.has(token.style)).toBe(true);
       }
     }
-  });
-});
-
-describe("highlightLine", () => {
-  it("highlights a single line", () => {
-    const tokens = highlightLine("const x = 1;", "test.js");
-
-    expect(tokens.length).toBeGreaterThan(1);
-    const keywordToken = tokens.find((t) => t.text === "const");
-    expect(keywordToken?.style).toBe("keyword");
-  });
-
-  it("returns unhighlighted token for unsupported files", () => {
-    const tokens = highlightLine("hello", "test.xyz");
-
-    expect(tokens).toEqual([{ text: "hello", style: null }]);
   });
 });

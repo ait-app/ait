@@ -10,7 +10,7 @@ export type ConnectionProbeState =
   | { status: "unavailable"; latencyMs: null }
   | { status: "available"; latencyMs: number };
 
-export interface SelectBestConnectionInput {
+interface SelectBestConnectionInput {
   candidates: ConnectionCandidate[];
   probeByConnectionId: Map<string, ConnectionProbeState>;
 }

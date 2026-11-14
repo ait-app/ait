@@ -21,9 +21,8 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 export interface SearchFieldProps {
   value: string;
   onChangeText: (value: string) => void;
+  /** Also the field's accessibility label: it already names the field. */
   placeholder: string;
-  /** Falls back to `placeholder`, which already names the field. */
-  accessibilityLabel?: string;
   clearAccessibilityLabel: string;
   testID?: string;
   clearTestID?: string;
@@ -40,7 +39,6 @@ export function SearchField({
   value,
   onChangeText,
   placeholder,
-  accessibilityLabel,
   clearAccessibilityLabel,
   testID,
   clearTestID,
@@ -65,7 +63,7 @@ export function SearchField({
         onFocus={handleFocus}
         onBlur={handleBlur}
         placeholder={placeholder}
-        accessibilityLabel={accessibilityLabel ?? placeholder}
+        accessibilityLabel={placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"

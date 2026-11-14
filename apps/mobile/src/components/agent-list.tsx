@@ -29,13 +29,9 @@ import { SPACING } from "@/styles/theme";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
-  showCheckoutInfo?: boolean;
   isRefreshing?: boolean;
   onRefresh?: () => void;
-  selectedAgentId?: string;
-  onAgentSelect?: () => void;
   listFooterComponent?: ReactElement | null;
-  showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
   search?: string;
 }
@@ -137,12 +133,10 @@ function SessionRowBadges({
   agent,
   archivedIcon,
   pendingPermissionCount,
-  showDesktopAttention,
 }: {
   agent: AggregatedAgent;
   archivedIcon: ReactElement;
   pendingPermissionCount: number;
-  showDesktopAttention: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -156,30 +150,7 @@ function SessionRowBadges({
           tone="warning"
         />
       ) : null}
-      {showDesktopAttention ? (
-        <SessionBadge label={t("agentList.badges.attention")} tone="danger" />
-      ) : null}
     </>
-  );
-}
-
-function SessionRowTrailingAttention({
-  isMobile,
-  showAttentionIndicator,
-  requiresAttention,
-}: {
-  isMobile: boolean;
-  showAttentionIndicator: boolean;
-  requiresAttention: boolean | undefined;
-}) {
-  const { t } = useTranslation();
-  if (!isMobile || !showAttentionIndicator || !requiresAttention) {
-    return null;
-  }
-  return (
-    <View style={styles.rowTrailing}>
-      <SessionBadge label={t("agentList.badges.attention")} tone="danger" />
-    </View>
   );
 }
 
@@ -187,8 +158,6 @@ function SessionRow({
   agent,
   search,
   isMobile,
-  selectedAgentId,
-  showAttentionIndicator,
   showHostColumn,
   onPress,
   onLongPress,
@@ -196,8 +165,6 @@ function SessionRow({
   agent: AggregatedAgent;
   search?: string;
   isMobile: boolean;
-  selectedAgentId?: string;
-  showAttentionIndicator: boolean;
   showHostColumn: boolean;
   onPress: (agent: AggregatedAgent) => void;
   onLongPress: (agent: AggregatedAgent) => void;
@@ -205,8 +172,6 @@ function SessionRow({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const timeAgo = formatTimeAgo(agent.lastActivityAt);
-  const agentKey = `${agent.serverId}:${agent.id}`;
-  const isSelected = selectedAgentId === agentKey;
   const projectName = agent.projectPlacement?.projectName ?? "";
   const branch = agent.projectPlacement?.checkout.currentBranch ?? "";
   const workspaceName = agent.projectPlacement?.workspaceName ?? "";
@@ -223,16 +188,6 @@ function SessionRow({
     [search, workspaceName, agent.title, branch, projectName],
   );
 
-  const pressableStyle = useCallback(
-    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.row,
-      isSelected && styles.rowSelected,
-      Boolean(hovered) && styles.rowHovered,
-      pressed && styles.rowPressed,
-    ],
-    [isSelected],
-  );
-
   const handlePress = useCallback(() => onPress(agent), [onPress, agent]);
   const handleLongPress = useCallback(() => onLongPress(agent), [onLongPress, agent]);
 
@@ -240,8 +195,6 @@ function SessionRow({
     () => <Archive size={theme.fontSize.sm} color={theme.colors.foregroundMuted} />,
     [theme.fontSize.sm, theme.colors.foregroundMuted],
   );
-  const showDesktopAttention =
-    !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
   // A narrow list on a wide window stacks its rows while the breakpoint styles stay wide.
   const workspaceTitleStyle = useMemo(
     () => [styles.workspaceTitleText, isMobile && styles.workspaceTitleTextStacked],
@@ -265,7 +218,7 @@ function SessionRow({
 
   return (
     <Pressable
-      style={pressableStyle}
+      style={rowPressableStyle}
       onPress={handlePress}
       onLongPress={handleLongPress}
       accessibilityRole="button"
@@ -290,7 +243,6 @@ function SessionRow({
             agent={agent}
             archivedIcon={archivedIcon}
             pendingPermissionCount={pendingPermissionCount}
-            showDesktopAttention={showDesktopAttention}
           />
         </View>
         {isMobile ? agentTitle : null}
@@ -350,23 +302,22 @@ function SessionRow({
           </Text>
         </View>
       ) : null}
-      <SessionRowTrailingAttention
-        isMobile={isMobile}
-        showAttentionIndicator={showAttentionIndicator}
-        requiresAttention={agent.requiresAttention}
-      />
     </Pressable>
   );
+}
+
+function rowPressableStyle({
+  pressed,
+  hovered = false,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.row, Boolean(hovered) && styles.rowHovered, pressed && styles.rowPressed];
 }
 
 export function AgentList({
   agents,
   isRefreshing = false,
   onRefresh,
-  selectedAgentId,
-  onAgentSelect,
   listFooterComponent,
-  showAttentionIndicator = true,
   showHostColumn = false,
   search,
 }: AgentListProps) {
@@ -395,18 +346,14 @@ export function AgentList({
         return;
       }
 
-      const serverId = agent.serverId;
-      const agentId = agent.id;
-
-      onAgentSelect?.();
       navigateToAgent({
-        serverId,
-        agentId,
+        serverId: agent.serverId,
+        agentId: agent.id,
         workspaceId: agent.workspaceId,
         pin: true,
       });
     },
-    [isActionSheetVisible, onAgentSelect],
+    [isActionSheetVisible],
   );
 
   const handleAgentLongPress = useCallback(
@@ -477,24 +424,13 @@ export function AgentList({
           agent={item.agent}
           search={search}
           isMobile={isMobile}
-          selectedAgentId={selectedAgentId}
-          showAttentionIndicator={showAttentionIndicator}
           showHostColumn={showHostColumn}
           onPress={handleAgentPress}
           onLongPress={handleAgentLongPress}
         />
       );
     },
-    [
-      handleAgentLongPress,
-      handleAgentPress,
-      isMobile,
-      search,
-      selectedAgentId,
-      showAttentionIndicator,
-      showHostColumn,
-      t,
-    ],
+    [handleAgentLongPress, handleAgentPress, isMobile, search, showHostColumn, t],
   );
 
   const keyExtractor = useCallback((item: FlatListItem) => item.key, []);
@@ -661,12 +597,6 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: theme.spacing[1],
     marginTop: 2,
-  },
-  rowTrailing: {
-    marginLeft: theme.spacing[2],
-  },
-  rowSelected: {
-    backgroundColor: theme.colors.surface2,
   },
   rowHovered: {
     backgroundColor: theme.colors.surface1,

@@ -10,6 +10,7 @@ import type {
   BrowserAutomationNetworkLogEntry,
 } from "@ait/protocol/browser-automation/rpc-schemas";
 import { waitForActionableTarget, type ActionabilityResult } from "./actionability.js";
+import { CdpSessionQueue } from "./cdp-session-queue.js";
 import { BrowserSnapshotEngine } from "./snapshot-engine.js";
 import {
   dispatchTrustedClick,
@@ -74,7 +75,7 @@ const ALLOWED_PAGE_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const MAX_EVALUATE_RESULT_JSON_LENGTH = 80_000;
 const MAX_EVALUATE_RESULT_PREVIEW_LENGTH = 79_000;
 const MAX_EVALUATE_ERROR_MESSAGE_LENGTH = 2_000;
-let pixelCaptureQueue: Promise<void> = Promise.resolve();
+const pixelCaptureQueue = new CdpSessionQueue();
 
 function fail(
   requestId: string,
@@ -104,8 +105,8 @@ export class BrowserTabClosedError extends Error {
 }
 
 class ScreenshotNoFrameError extends Error {
-  public constructor(message = SCREENSHOT_NO_FRAME_MESSAGE) {
-    super(message);
+  public constructor() {
+    super(SCREENSHOT_NO_FRAME_MESSAGE);
     this.name = "ScreenshotNoFrameError";
   }
 }
@@ -144,26 +145,6 @@ async function withPixelCaptureTimeout<T>(
   }
 }
 
-async function runSerializedPixelCapture<T>(capture: () => Promise<T>): Promise<T> {
-  const previous = pixelCaptureQueue;
-  let releaseCurrent = () => {};
-  const current = new Promise<void>((resolve) => {
-    releaseCurrent = resolve;
-  });
-  const tail = previous.catch(() => {}).then(() => current);
-  pixelCaptureQueue = tail;
-
-  await previous.catch(() => {});
-  try {
-    return await capture();
-  } finally {
-    releaseCurrent();
-    if (pixelCaptureQueue === tail) {
-      pixelCaptureQueue = Promise.resolve();
-    }
-  }
-}
-
 async function capturePixelFrameWithRetry<T>(
   contents: TabContents,
   capture: () => Promise<T>,
@@ -174,9 +155,6 @@ async function capturePixelFrameWithRetry<T>(
       contents.invalidate();
       return await withPixelCaptureTimeout(capture(), deadline - Date.now());
     } catch (error) {
-      if (isScreenshotNoFrameError(error)) {
-        throw error;
-      }
       if (!isKnownNoFrameCaptureError(error)) {
         throw error;
       }
@@ -210,7 +188,7 @@ async function runPaintedPixelCapture<T>(
   contents: TabContents,
   capture: () => Promise<T>,
 ): Promise<T> {
-  return runSerializedPixelCapture(() =>
+  return pixelCaptureQueue.run(() =>
     contents.withFrameProduction(async () => {
       const deadline = Date.now() + PIXEL_CAPTURE_TIMEOUT_MS;
       await waitForPaint(contents, deadline);
@@ -220,7 +198,7 @@ async function runPaintedPixelCapture<T>(
 }
 
 async function capturePaintedViewport(contents: TabContents): Promise<TabImage> {
-  return runSerializedPixelCapture(() =>
+  return pixelCaptureQueue.run(() =>
     contents.withFrameProduction(async () => {
       const deadline = Date.now() + PIXEL_CAPTURE_TIMEOUT_MS;
       const controller = new AbortController();
@@ -264,7 +242,7 @@ export function executeAutomationCommand(
   const { requestId, command } = request;
   const workspaceId = request.workspaceId;
   const snapshotEngine = options?.snapshotEngine ?? defaultSnapshotEngine;
-  const handler = commandHandlers[command.command];
+  const handler = commandHandlers[command.command] as CommandHandler;
 
   return handler({ request, command, requestId, workspaceId, registry, snapshotEngine });
 }
@@ -278,230 +256,165 @@ interface CommandHandlerContext {
   snapshotEngine: BrowserSnapshotEngine;
 }
 
-type CommandHandler = (
-  context: CommandHandlerContext,
+type CommandHandler<TCommand extends BrowserAutomationCommand = BrowserAutomationCommand> = (
+  context: CommandHandlerContext & { command: TCommand },
 ) => AutomationCommandPayload | Promise<AutomationCommandPayload>;
 
-const commandHandlers: Record<BrowserAutomationCommand["command"], CommandHandler> = {
+type CommandHandlers = {
+  [TName in BrowserAutomationCommand["command"]]: CommandHandler<
+    Extract<BrowserAutomationCommand, { command: TName }>
+  >;
+};
+
+const commandHandlers: CommandHandlers = {
   list_tabs: ({ requestId, workspaceId, registry }) =>
     executeListTabs(requestId, workspaceId, registry),
   new_tab: ({ requestId }) =>
     fail(requestId, "browser_unsupported", "browser_new_tab is handled by the app runtime."),
-  snapshot: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const snapshotCommand = command as Extract<BrowserAutomationCommand, { command: "snapshot" }>;
-    return executeSnapshot(
+  snapshot: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeSnapshot(requestId, workspaceId, args.browserId, registry, snapshotEngine),
+  click: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeClick(
       requestId,
       workspaceId,
-      snapshotCommand.args.browserId,
-      registry,
-      snapshotEngine,
-    );
-  },
-  click: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const clickCommand = command as Extract<BrowserAutomationCommand, { command: "click" }>;
-    return executeClick(
-      requestId,
-      workspaceId,
-      clickCommand.args.browserId,
-      clickCommand.args.ref,
+      args.browserId,
+      args.ref,
       {
-        button: clickCommand.args.button,
-        doubleClick: clickCommand.args.doubleClick,
-        modifiers: clickCommand.args.modifiers,
+        button: args.button,
+        doubleClick: args.doubleClick,
+        modifiers: args.modifiers,
       },
       registry,
       snapshotEngine,
-    );
-  },
-  fill: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const fillCommand = command as Extract<BrowserAutomationCommand, { command: "fill" }>;
-    return executeFill(
+    ),
+  fill: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeFill(
       requestId,
       workspaceId,
-      fillCommand.args.browserId,
-      fillCommand.args.ref,
-      fillCommand.args.value,
+      args.browserId,
+      args.ref,
+      args.value,
       registry,
       snapshotEngine,
-    );
-  },
-  wait: ({ command, requestId, workspaceId, registry }) => {
-    const waitCommand = command as Extract<BrowserAutomationCommand, { command: "wait" }>;
-    return executeWait(
+    ),
+  wait: ({ command: { args }, requestId, workspaceId, registry }) =>
+    executeWait(
       requestId,
       workspaceId,
-      waitCommand.args.browserId,
+      args.browserId,
       {
-        text: waitCommand.args.text,
-        url: waitCommand.args.url,
-        timeoutMs: waitCommand.args.timeoutMs,
+        text: args.text,
+        url: args.url,
+        timeoutMs: args.timeoutMs,
       },
       registry,
-    );
-  },
-  type: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const typeCommand = command as Extract<BrowserAutomationCommand, { command: "type" }>;
-    return executeType(
+    ),
+  type: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeType(
       requestId,
       workspaceId,
-      typeCommand.args.browserId,
-      typeCommand.args.ref,
-      typeCommand.args.text,
+      args.browserId,
+      args.ref,
+      args.text,
       registry,
       snapshotEngine,
-    );
-  },
-  keypress: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const keypressCommand = command as Extract<BrowserAutomationCommand, { command: "keypress" }>;
-    return executeKeypress(
+    ),
+  keypress: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeKeypress(
       requestId,
       workspaceId,
-      keypressCommand.args.browserId,
-      keypressCommand.args.ref,
-      keypressCommand.args.key,
+      args.browserId,
+      args.ref,
+      args.key,
       registry,
       snapshotEngine,
-    );
-  },
-  navigate: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const navigateCommand = command as Extract<BrowserAutomationCommand, { command: "navigate" }>;
-    return executeNavigate(
+    ),
+  navigate: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeNavigate(requestId, workspaceId, args.browserId, args.url, registry, snapshotEngine),
+  back: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeNavigationAction(
       requestId,
       workspaceId,
-      navigateCommand.args.browserId,
-      navigateCommand.args.url,
-      registry,
-      snapshotEngine,
-    );
-  },
-  back: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const backCommand = command as Extract<BrowserAutomationCommand, { command: "back" }>;
-    return executeNavigationAction(
-      requestId,
-      workspaceId,
-      backCommand.args.browserId,
+      args.browserId,
       "back",
       registry,
       snapshotEngine,
-    );
-  },
-  forward: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const forwardCommand = command as Extract<BrowserAutomationCommand, { command: "forward" }>;
-    return executeNavigationAction(
+    ),
+  forward: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeNavigationAction(
       requestId,
       workspaceId,
-      forwardCommand.args.browserId,
+      args.browserId,
       "forward",
       registry,
       snapshotEngine,
-    );
-  },
-  reload: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const reloadCommand = command as Extract<BrowserAutomationCommand, { command: "reload" }>;
-    return executeNavigationAction(
+    ),
+  reload: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeNavigationAction(
       requestId,
       workspaceId,
-      reloadCommand.args.browserId,
+      args.browserId,
       "reload",
       registry,
       snapshotEngine,
-    );
-  },
-  screenshot: ({ command, requestId, workspaceId, registry }) => {
-    const screenshotCommand = command as Extract<
-      BrowserAutomationCommand,
-      { command: "screenshot" }
-    >;
-    return executeScreenshot(
-      requestId,
-      workspaceId,
-      screenshotCommand.args.browserId,
-      screenshotCommand.args.fullPage,
-      registry,
-    );
-  },
-  upload: ({ request, command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const uploadCommand = command as Extract<BrowserAutomationCommand, { command: "upload" }>;
-    return executeUpload(
+    ),
+  screenshot: ({ command: { args }, requestId, workspaceId, registry }) =>
+    executeScreenshot(requestId, workspaceId, args.browserId, args.fullPage, registry),
+  upload: ({ request, command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeUpload(
       requestId,
       request.cwd,
       workspaceId,
-      uploadCommand.args.browserId,
-      { ref: uploadCommand.args.ref, filePaths: uploadCommand.args.filePaths },
+      args.browserId,
+      { ref: args.ref, filePaths: args.filePaths },
       registry,
       snapshotEngine,
-    );
-  },
-  select: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const selectCommand = command as Extract<BrowserAutomationCommand, { command: "select" }>;
-    return executeSelect(
+    ),
+  select: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeSelect(
       requestId,
       workspaceId,
-      selectCommand.args.browserId,
-      selectCommand.args.ref,
-      selectCommand.args.value,
+      args.browserId,
+      args.ref,
+      args.value,
       registry,
       snapshotEngine,
-    );
-  },
-  hover: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const hoverCommand = command as Extract<BrowserAutomationCommand, { command: "hover" }>;
-    return executeHover(
+    ),
+  hover: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeHover(requestId, workspaceId, args.browserId, args.ref, registry, snapshotEngine),
+  drag: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeDrag(
       requestId,
       workspaceId,
-      hoverCommand.args.browserId,
-      hoverCommand.args.ref,
+      args.browserId,
+      args.sourceRef,
+      args.targetRef,
       registry,
       snapshotEngine,
-    );
-  },
-  drag: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const dragCommand = command as Extract<BrowserAutomationCommand, { command: "drag" }>;
-    return executeDrag(
+    ),
+  logs: ({ command: { args }, requestId, workspaceId, registry }) =>
+    executeLogs(requestId, workspaceId, args.browserId, args.maxEntries, registry),
+  evaluate: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeEvaluate(
       requestId,
       workspaceId,
-      dragCommand.args.browserId,
-      dragCommand.args.sourceRef,
-      dragCommand.args.targetRef,
+      args.browserId,
+      args.function,
+      args.ref,
       registry,
       snapshotEngine,
-    );
-  },
-  logs: ({ command, requestId, workspaceId, registry }) => {
-    const logsCommand = command as Extract<BrowserAutomationCommand, { command: "logs" }>;
-    return executeLogs(
+    ),
+  scroll: ({ command: { args }, requestId, workspaceId, registry, snapshotEngine }) =>
+    executeScroll(
       requestId,
       workspaceId,
-      logsCommand.args.browserId,
-      logsCommand.args.maxEntries,
-      registry,
-    );
-  },
-  evaluate: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const evaluateCommand = command as Extract<BrowserAutomationCommand, { command: "evaluate" }>;
-    return executeEvaluate(
-      requestId,
-      workspaceId,
-      evaluateCommand.args.browserId,
-      evaluateCommand.args.function,
-      evaluateCommand.args.ref,
+      args.browserId,
+      args.ref,
+      args.deltaX,
+      args.deltaY,
       registry,
       snapshotEngine,
-    );
-  },
-  scroll: ({ command, requestId, workspaceId, registry, snapshotEngine }) => {
-    const scrollCommand = command as Extract<BrowserAutomationCommand, { command: "scroll" }>;
-    return executeScroll(
-      requestId,
-      workspaceId,
-      scrollCommand.args.browserId,
-      scrollCommand.args.ref,
-      scrollCommand.args.deltaX,
-      scrollCommand.args.deltaY,
-      registry,
-      snapshotEngine,
-    );
-  },
+    ),
   resize: ({ requestId }) =>
     fail(requestId, "browser_unsupported", "browser_resize is handled by the app runtime."),
   close_tab: ({ requestId }) =>
@@ -548,17 +461,7 @@ async function executeSnapshot(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({
-    requestId,
-    workspaceId,
-    browserId,
-    registry,
-  });
-  if ("ok" in target) {
-    return target;
-  }
-
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     const snapshot = await snapshotEngine.snapshot({
       browserId: target.browserId,
       page: target.contents,
@@ -590,11 +493,7 @@ async function executeClick(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_click requires trusted browser input");
     }
@@ -636,11 +535,7 @@ async function executeFill(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     const result = await snapshotEngine.fill({
       browserId: target.browserId,
       page: target.contents,
@@ -663,11 +558,7 @@ async function executeSelect(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     const result = await snapshotEngine.select({
       browserId: target.browserId,
       page: target.contents,
@@ -693,11 +584,7 @@ async function executeHover(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_hover requires trusted browser input");
     }
@@ -739,11 +626,7 @@ async function executeDrag(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_drag requires trusted browser input");
     }
@@ -801,11 +684,7 @@ async function executeLogs(
   maxEntries: number,
   registry: BrowserRegistry,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     const consoleMessages = target.contents.getConsoleMessages?.() ?? [];
     const networkEntries = parseNetworkEntries(
       await target.contents.executeJavaScript(NETWORK_PERFORMANCE_SCRIPT),
@@ -832,11 +711,7 @@ async function executeEvaluate(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     let elementExpression: string | undefined;
     if (ref) {
       const expression = snapshotEngine.runtimeElementExpression({
@@ -890,11 +765,7 @@ async function executeScroll(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(
         requestId,
@@ -990,11 +861,7 @@ async function executeWait(
   condition: { text?: string; url?: string; timeoutMs?: number },
   registry: BrowserRegistry,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!condition.text && !condition.url) {
       return fail(requestId, "browser_unsupported", "browser_wait requires text or url");
     }
@@ -1022,23 +889,14 @@ async function executeWait(
       await delay(WAIT_POLL_INTERVAL_MS);
     } while (Date.now() < deadline);
 
-    if (condition.text) {
-      return fail(
-        requestId,
-        "browser_timeout",
-        `Timed out waiting for browser text: ${condition.text}`,
-        true,
-      );
-    }
-    if (condition.url) {
-      return fail(
-        requestId,
-        "browser_timeout",
-        `Timed out waiting for browser URL: ${condition.url}`,
-        true,
-      );
-    }
-    return fail(requestId, "browser_unsupported", "browser_wait requires text or url");
+    return fail(
+      requestId,
+      "browser_timeout",
+      condition.text
+        ? `Timed out waiting for browser text: ${condition.text}`
+        : `Timed out waiting for browser URL: ${condition.url}`,
+      true,
+    );
   });
 }
 
@@ -1051,11 +909,7 @@ async function executeType(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_type requires trusted browser input");
     }
@@ -1101,11 +955,7 @@ async function executeKeypress(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     let actionable: ActionabilityResult | null = null;
     if (ref) {
       const elementExpression = snapshotEngine.runtimeElementExpression({
@@ -1160,11 +1010,7 @@ async function executeNavigate(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!isAllowedPageUrl(url)) {
       return fail(
         requestId,
@@ -1190,11 +1036,7 @@ async function executeNavigationAction(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (action === "back") {
       if (!target.contents.canGoBack()) {
         return fail(requestId, "browser_denied", "There is nothing to go back to.");
@@ -1228,11 +1070,7 @@ async function executeScreenshot(
     return executeFullPageScreenshot(requestId, workspaceId, browserId, registry);
   }
 
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     let image: TabImage;
     try {
       image = await capturePaintedViewport(target.contents);
@@ -1325,11 +1163,7 @@ async function executeFullPageScreenshot(
   browserId: string,
   registry: BrowserRegistry,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_screenshot fullPage requires CDP");
     }
@@ -1389,11 +1223,7 @@ async function executeUpload(
   registry: BrowserRegistry,
   snapshotEngine: BrowserSnapshotEngine,
 ): Promise<AutomationCommandPayload> {
-  const target = resolveTabTarget({ requestId, workspaceId, browserId, registry });
-  if ("ok" in target) {
-    return target;
-  }
-  return withDialogCapture(target.contents, async () => {
+  return withTabTarget({ requestId, workspaceId, browserId, registry }, async (target) => {
     if (!target.contents.sendDebugCommand) {
       return fail(requestId, "browser_unsupported", "browser_upload requires CDP");
     }
@@ -1634,6 +1464,17 @@ const NETWORK_PERFORMANCE_SCRIPT = String.raw`(() => {
     }));
   return JSON.stringify(entries);
 })()`;
+
+async function withTabTarget(
+  input: Parameters<typeof resolveTabTarget>[0],
+  task: (target: ResolvedTabTarget) => Promise<AutomationCommandPayload>,
+): Promise<AutomationCommandPayload> {
+  const target = resolveTabTarget(input);
+  if ("ok" in target) {
+    return target;
+  }
+  return withDialogCapture(target.contents, () => task(target));
+}
 
 function resolveTabTarget(input: {
   requestId: string;

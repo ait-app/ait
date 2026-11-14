@@ -25,7 +25,6 @@ it.each([
     sendVoiceAudioChunk: vi.fn().mockResolvedValue(undefined),
     audioPlayed: vi.fn().mockResolvedValue(undefined),
     abortRequest: vi.fn().mockResolvedValue(undefined),
-    setAssistantAudioPlaying: vi.fn(),
   };
   const runtime = createVoiceRuntime({
     engine,
@@ -109,7 +108,6 @@ it("keeps consecutive native PCM packets contiguous despite delayed ended callba
     sendVoiceAudioChunk: vi.fn().mockResolvedValue(undefined),
     audioPlayed: vi.fn().mockResolvedValue(undefined),
     abortRequest: vi.fn().mockResolvedValue(undefined),
-    setAssistantAudioPlaying: vi.fn(),
   };
   const runtime = createVoiceRuntime({
     engine,

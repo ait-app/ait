@@ -14,7 +14,7 @@ import {
 import { ViewportToolbar } from "./toolbar";
 import type { ZoomableViewportProps } from "./types";
 
-const DEFAULT_MAX_SCALE = 8;
+const MAX_SCALE = 8;
 const DEFAULT_MIN_SCALE = 0.25;
 
 interface DragGesture {
@@ -49,7 +49,6 @@ export function ZoomableViewport({
   actions = [],
   accessibilityLabel,
   fit,
-  maxScale = DEFAULT_MAX_SCALE,
   minScale = DEFAULT_MIN_SCALE,
   onPressOutsideContent,
   style,
@@ -71,7 +70,7 @@ export function ZoomableViewport({
     () => (viewport ? fitContentSize(contentSize, viewport, fit) : null),
     [contentSize, fit, viewport],
   );
-  const limits = useMemo(() => ({ minScale, maxScale }), [maxScale, minScale]);
+  const limits = useMemo(() => ({ minScale, maxScale: MAX_SCALE }), [minScale]);
 
   const commitTransform = useCallback((next: ViewportTransform) => {
     transformRef.current = next;
@@ -309,7 +308,7 @@ export function ZoomableViewport({
       >
         <ViewportToolbar
           actions={actions}
-          maxScale={maxScale}
+          maxScale={MAX_SCALE}
           minScale={minScale}
           onReset={reset}
           onZoomIn={zoomIn}

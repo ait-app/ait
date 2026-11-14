@@ -90,7 +90,6 @@ describe("native microphone cancellation", () => {
         sendVoiceAudioChunk: async () => {},
         audioPlayed: async () => {},
         abortRequest: async () => {},
-        setAssistantAudioPlaying: vi.fn(),
       });
       const starting = runtime.startVoice("server", "agent");
       await vi.waitFor(() =>

@@ -4,11 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
-import {
-  mergeProviderPreferences,
-  type FormPreferences,
-  type ProviderPreferences,
-} from "@/hooks/use-form-preferences";
+import type { FormPreferences } from "@/hooks/use-form-preferences";
 import { findModelByReference } from "./model-catalog";
 
 export interface FormInitialValues {
@@ -55,7 +51,6 @@ export const INITIAL_USER_MODIFIED: UserModifiedFields = {
 };
 
 export const PENDING_AGENT_FORM_RESOLUTION: AgentFormResolutionState = { status: "pending" };
-export const INITIAL_AGENT_FORM_RESOLUTION = PENDING_AGENT_FORM_RESOLUTION;
 
 type ProviderPrefs = NonNullable<FormPreferences["providerPreferences"]>[AgentProvider];
 
@@ -121,7 +116,6 @@ export type AgentFormAction =
       availableModels: AgentModelDefinition[] | null;
       providerPrefs: ProviderPrefs | undefined;
     }
-  | { type: "CLEAR_PROVIDER_SELECTION_FROM_USER" }
   | { type: "SET_THINKING_OPTION_FROM_USER"; thinkingOptionId: string }
   | { type: "RESET" };
 
@@ -133,13 +127,15 @@ export function normalizeSelectedModelId(modelId: string | null | undefined): st
 }
 
 export function resolveDefaultModel(
-  availableModels: AgentModelDefinition[] | null,
+  availableModels: readonly AgentModelDefinition[] | null,
 ): AgentModelDefinition | null {
   if (!availableModels || availableModels.length === 0) return null;
   return availableModels.find((model) => model.isDefault) ?? availableModels[0] ?? null;
 }
 
-export function resolveDefaultModelId(availableModels: AgentModelDefinition[] | null): string {
+export function resolveDefaultModelId(
+  availableModels: readonly AgentModelDefinition[] | null,
+): string {
   return resolveDefaultModel(availableModels)?.id ?? "";
 }
 
@@ -210,18 +206,6 @@ function resolvePreferredModeId(input: {
     return defaultModeId;
   }
   return modes[0]?.id ?? "";
-}
-
-export function mergeSelectedComposerPreferences(args: {
-  preferences: FormPreferences;
-  provider: AgentProvider;
-  updates: Partial<ProviderPreferences>;
-}): FormPreferences {
-  return mergeProviderPreferences({
-    preferences: args.preferences,
-    provider: args.provider,
-    updates: args.updates,
-  });
 }
 
 export function hasFormStateChanged(prev: FormState, next: FormState): boolean {
@@ -455,17 +439,6 @@ export function resolveFormStateFromProviderModels(
   );
 }
 
-function pickNextModeForProvider(input: {
-  providerDef: AgentProviderDefinition | undefined;
-  providerPrefs: ProviderPrefs | undefined;
-}): string {
-  const { providerDef, providerPrefs } = input;
-  return resolvePreferredModeId({
-    preferredModeId: providerPrefs?.mode,
-    providerDef,
-  });
-}
-
 function pickNextModeForProviderAndModel(input: {
   currentProvider: AgentProvider | null;
   currentModeId: string;
@@ -475,9 +448,9 @@ function pickNextModeForProviderAndModel(input: {
 }): string {
   const currentModeId = normalizeSelectedModeId(input.currentModeId);
   if (input.currentProvider === input.provider && currentModeId) return currentModeId;
-  return pickNextModeForProvider({
+  return resolvePreferredModeId({
+    preferredModeId: input.providerPrefs?.mode,
     providerDef: input.providerDef,
-    providerPrefs: input.providerPrefs,
   });
 }
 
@@ -721,25 +694,6 @@ export function resolveAgentForm(
       };
     }
 
-    case "CLEAR_PROVIDER_SELECTION_FROM_USER":
-      return {
-        ...state,
-        form: {
-          ...state.form,
-          provider: null,
-          model: "",
-          modeId: "",
-          thinkingOptionId: "",
-        },
-        userModified: {
-          ...state.userModified,
-          provider: true,
-          model: true,
-          modeId: true,
-          thinkingOptionId: true,
-        },
-      };
-
     case "SET_THINKING_OPTION_FROM_USER":
       return {
         ...state,
@@ -751,7 +705,7 @@ export function resolveAgentForm(
       return {
         ...state,
         userModified: INITIAL_USER_MODIFIED,
-        resolution: INITIAL_AGENT_FORM_RESOLUTION,
+        resolution: PENDING_AGENT_FORM_RESOLUTION,
       };
     default:
       throw new Error("unreachable");

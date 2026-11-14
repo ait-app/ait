@@ -3,8 +3,8 @@ import { CancelledError, skipToken } from "@tanstack/react-query";
 import { useFetchQuery } from "@/data/query";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { getSharedHostScope } from "@/hosts/host-groups";
+import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import {
   useActiveWorkspaceSelection,
   useLastWorkspaceSelection,
@@ -26,9 +26,7 @@ export function useHostStats(serverId: string, includeHistory: boolean, active: 
   const host = useHosts().find((candidate) => candidate.serverId === serverId);
   const scope = host ? getSharedHostScope(host) : null;
   const restricted = scope === "project" || scope === "workspace";
-  const supported = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.hostStats === true,
-  );
+  const supported = useHostFeature(serverId, "hostStats");
   const query = useFetchQuery({
     queryKey: ["host-stats", serverId, includeHistory],
     queryFn: serverId

@@ -214,26 +214,18 @@ function computePosition({
 
 export function Tooltip({
   open,
-  defaultOpen,
-  onOpenChange,
   delayDuration = 0,
   enabledOnDesktop = true,
   enabledOnMobile = false,
   children,
 }: PropsWithChildren<{
   open?: boolean;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
   delayDuration?: number;
   enabledOnDesktop?: boolean;
   enabledOnMobile?: boolean;
 }>): ReactElement {
   const triggerRef = useRef<TooltipTriggerElement>(null);
-  const [isOpen, setIsOpen] = useControllableOpenState({
-    open,
-    defaultOpen,
-    onOpenChange,
-  });
+  const [isOpen, setIsOpen] = useControllableOpenState({ open });
 
   const isCompact = useIsCompactFormFactor();
   const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;

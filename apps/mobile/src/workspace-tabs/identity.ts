@@ -44,10 +44,6 @@ export function normalizeWorkspaceTabTarget(
 
 function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): WorkspaceTabTarget | null {
   switch (value.kind) {
-    case "agent": {
-      const agentId = trimNonEmpty(value.agentId);
-      return agentId ? { kind: "agent", agentId } : null;
-    }
     case "terminal": {
       const terminalId = trimNonEmpty(value.terminalId);
       return terminalId ? { kind: "terminal", terminalId } : null;
@@ -88,9 +84,7 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
   }
 }
 
-export function normalizeWorkspaceDraftTabSetup(
-  value: unknown,
-): WorkspaceDraftTabSetup | undefined {
+function normalizeWorkspaceDraftTabSetup(value: unknown): WorkspaceDraftTabSetup | undefined {
   const record = isPlainRecord(value) ? value : null;
   if (!record) {
     return undefined;
@@ -103,9 +97,9 @@ export function normalizeWorkspaceDraftTabSetup(
   return {
     provider,
     cwd,
-    modeId: trimOptionalString(typeof record.modeId === "string" ? record.modeId : null),
-    model: trimOptionalString(typeof record.model === "string" ? record.model : null),
-    thinkingOptionId: trimOptionalString(
+    modeId: trimNonEmpty(typeof record.modeId === "string" ? record.modeId : null),
+    model: trimNonEmpty(typeof record.model === "string" ? record.model : null),
+    thinkingOptionId: trimNonEmpty(
       typeof record.thinkingOptionId === "string" ? record.thinkingOptionId : null,
     ),
     featureValues: isPlainRecord(record.featureValues) ? { ...record.featureValues } : {},
@@ -293,10 +287,6 @@ function normalizePositiveInteger(value: number | null | undefined): number | nu
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : null;
-}
-
-function trimOptionalString(value: string | null | undefined): string | null {
-  return value == null ? null : trimNonEmpty(value);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

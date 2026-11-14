@@ -1,5 +1,5 @@
 import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -15,15 +15,7 @@ import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
 
 interface MenuHeaderProps {
   title?: string;
-  rightContent?: ReactNode;
   borderless?: boolean;
-}
-
-interface SidebarMenuToggleProps {
-  style?: StyleProp<ViewStyle>;
-  tooltipSide?: "left" | "right" | "top" | "bottom";
-  testID?: string;
-  nativeID?: string;
 }
 
 const MOBILE_MENU_LINE_WIDTH = 16;
@@ -49,10 +41,7 @@ function SidebarMenuToggleButton({
   isMobile,
   extraMutedIdleIcon = false,
   resolvedStyle,
-  tooltipSide = "right",
-  testID = "menu-button",
-  nativeID = "menu-button",
-}: Omit<SidebarMenuToggleProps, "style"> & {
+}: {
   isMobile: boolean;
   extraMutedIdleIcon?: boolean;
   resolvedStyle: StyleProp<ViewStyle>;
@@ -73,9 +62,9 @@ function SidebarMenuToggleButton({
       onPress={handlePress}
       tooltipLabel={t("shell.menu.toggleSidebar")}
       tooltipKeys={toggleShortcutKeys}
-      tooltipSide={tooltipSide}
-      testID={testID}
-      nativeID={nativeID}
+      tooltipSide="right"
+      testID="menu-button"
+      nativeID="menu-button"
       style={resolvedStyle}
       accessible
       accessibilityRole="button"
@@ -101,15 +90,10 @@ function SidebarMenuToggleButton({
   );
 }
 
-export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
+export function SidebarMenuToggle() {
   const isMobile = useIsCompactFormFactor();
   const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
   const hasTopLeftWindowControls = useHasWindowChromeObstruction("top-left");
-  const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
-  const placeholderStyle = useMemo(
-    () => [headerIconSlotStyle.slot, resolvedStyle],
-    [resolvedStyle],
-  );
 
   if (!isMobile && !ownsTopLeft) {
     return null;
@@ -117,28 +101,23 @@ export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = 
 
   if (!isMobile && hasTopLeftWindowControls) {
     return (
-      <View pointerEvents="none" style={placeholderStyle}>
+      <View pointerEvents="none" style={[headerIconSlotStyle.slot, styles.leadingToggle]}>
         <View style={styles.desktopMenuIconSpace} />
       </View>
     );
   }
 
-  return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
+  return <SidebarMenuToggleButton isMobile={isMobile} resolvedStyle={styles.leadingToggle} />;
 }
 
-export function WindowSidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
+export function WindowSidebarMenuToggle({ style }: { style?: StyleProp<ViewStyle> }) {
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
   return (
-    <SidebarMenuToggleButton
-      {...props}
-      isMobile={false}
-      extraMutedIdleIcon
-      resolvedStyle={resolvedStyle}
-    />
+    <SidebarMenuToggleButton isMobile={false} extraMutedIdleIcon resolvedStyle={resolvedStyle} />
   );
 }
 
-export function MenuHeader({ title, rightContent, borderless }: MenuHeaderProps) {
+export function MenuHeader({ title, borderless }: MenuHeaderProps) {
   return (
     <ScreenHeader
       left={
@@ -147,7 +126,6 @@ export function MenuHeader({ title, rightContent, borderless }: MenuHeaderProps)
           {title && <ScreenTitle>{title}</ScreenTitle>}
         </>
       }
-      right={rightContent}
       leftStyle={styles.left}
       borderless={borderless}
     />

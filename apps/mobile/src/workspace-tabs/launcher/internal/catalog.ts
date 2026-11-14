@@ -1,4 +1,4 @@
-export const PRIMARY_LAUNCH_ORDER = [
+const PRIMARY_LAUNCH_ORDER = [
   "agent",
   "bot",
   "terminal",
@@ -10,7 +10,7 @@ export const PRIMARY_LAUNCH_ORDER = [
   "schedule",
 ] as const;
 
-export const SUPPORTING_LAUNCH_ORDER = [
+const SUPPORTING_LAUNCH_ORDER = [
   "changes",
   "terminal",
   "diff",

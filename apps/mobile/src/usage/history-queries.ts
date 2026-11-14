@@ -1,9 +1,9 @@
 import type { UsageLedgerGroup } from "@ait/protocol/messages";
 import { useCallback, useMemo } from "react";
 import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { useShallow } from "zustand/shallow";
 import { useFetchQueries, useFetchQuery } from "@/data/query";
 import { groupHosts } from "@/hosts/host-groups";
+import { useHostFeatureAvailabilityMap } from "@/runtime/host-features";
 import {
   getHostRuntimeStore,
   useHostRuntimeConnectionStatuses,
@@ -100,16 +100,14 @@ export function useUsageHistoryHosts(): UsageHistoryHost[] {
   const hosts = useMemo(() => groupHosts(hostProfiles), [hostProfiles]);
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const statuses = useHostRuntimeConnectionStatuses(serverIds);
-  const support = useSessionStore(
-    useShallow((state) => serverIds.map((serverId) => ledgerSupport(state.sessions[serverId]))),
-  );
+  const support = useHostFeatureAvailabilityMap(serverIds, "providerUsageLedger");
   return useMemo(
     () =>
-      hosts.map((host, index) => ({
+      hosts.map((host) => ({
         serverId: host.serverId,
         label: host.label,
         isConnected: statuses.get(host.serverId) === "online",
-        supportsLedger: support[index] ?? null,
+        supportsLedger: support.get(host.serverId) ?? null,
       })),
     [hosts, statuses, support],
   );

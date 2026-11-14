@@ -15,25 +15,16 @@ import { queryClient as singletonQueryClient } from "@/data/query-client";
 import {
   normalizeProvidersSnapshotCwd,
   providersSnapshotQueryKey,
-  providersSnapshotQueryRoot,
   fetchProvidersSnapshot,
-  refreshAndApplyProvidersSnapshot,
   refreshProvidersOnAccess,
 } from "@/data/providers-snapshot";
-
-export {
-  providersSnapshotQueryKey,
-  providersSnapshotQueryRoot,
-  fetchProvidersSnapshot,
-  refreshAndApplyProvidersSnapshot,
-};
 
 export type ProvidersSnapshotClient = Pick<
   DaemonClient,
   "getProvidersSnapshot" | "refreshProvidersSnapshot"
 >;
 
-export type SelectorOpenRefetchDecision = "refetch-stale" | "refetch-always";
+type SelectorOpenRefetchDecision = "refetch-stale" | "refetch-always";
 
 export function selectorOpenRefetchDecision(input: {
   entries: ProviderSnapshotEntry[] | undefined;

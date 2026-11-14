@@ -82,26 +82,17 @@ export function MenuPage({ depth, children }: PropsWithChildren<{ depth: number 
 
 export function MenuLabel({
   children,
-  style,
   testID,
-}: PropsWithChildren<{ style?: ViewStyle | ViewStyle[]; testID?: string }>): ReactElement {
-  const labelContainerStyle = useMemo(() => [styles.labelContainer, style], [style]);
+}: PropsWithChildren<{ testID?: string }>): ReactElement {
   return (
-    <View style={labelContainerStyle} testID={testID}>
+    <View style={styles.labelContainer} testID={testID}>
       <Text style={styles.labelText}>{children}</Text>
     </View>
   );
 }
 
-export function MenuSeparator({
-  style,
-  testID,
-}: {
-  style?: ViewStyle;
-  testID?: string;
-}): ReactElement {
-  const separatorStyle = useMemo(() => [styles.separator, style], [style]);
-  return <View style={separatorStyle} testID={testID} />;
+export function MenuSeparator({ testID }: { testID?: string }): ReactElement {
+  return <View style={styles.separator} testID={testID} />;
 }
 
 export function MenuHint({
@@ -149,20 +140,16 @@ export function menuRowContentInset(theme: Theme): number {
  * sheet: `BottomSheetTextInput` outside a sheet has no context to read.
  */
 export function MenuTextField({
-  initialValue,
   onChangeText,
   placeholder,
-  accessibilityLabel,
   autoFocus = false,
   editable = true,
   onSubmitEditing,
   testID,
 }: {
-  initialValue?: string;
   onChangeText: (value: string) => void;
+  /** Also the field's accessibility label: it already names the field. */
   placeholder: string;
-  /** Falls back to `placeholder`, which already names the field. */
-  accessibilityLabel?: string;
   autoFocus?: boolean;
   editable?: boolean;
   onSubmitEditing?: () => void;
@@ -175,13 +162,12 @@ export function MenuTextField({
   return (
     <View style={fieldStyle}>
       <AdaptiveTextInput
-        initialValue={initialValue}
         onChangeText={onChangeText}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onSubmitEditing={onSubmitEditing}
         placeholder={placeholder}
-        accessibilityLabel={accessibilityLabel ?? placeholder}
+        accessibilityLabel={placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus={autoFocus}
@@ -195,7 +181,7 @@ export function MenuTextField({
 }
 
 function resolveLeadingContent(input: {
-  isPending: boolean | undefined;
+  isPending: boolean;
   isSuccess: boolean;
   leading: ReactElement | null;
 }): ReactElement | null {
@@ -211,7 +197,7 @@ function resolveLeadingContent(input: {
 
 function resolveItemLabel(input: {
   children: ReactNode;
-  isPending: boolean | undefined;
+  isPending: boolean;
   isSuccess: boolean;
   pendingLabel?: string;
   successLabel?: string;
@@ -242,8 +228,6 @@ export interface MenuItemProps {
   active?: boolean;
   leading?: ReactElement | null;
   trailing?: ReactElement | null;
-  /** @deprecated Use `status` instead */
-  loading?: boolean;
   status?: ActionStatus;
   /** Label to show while pending (e.g. "Pushing…") */
   pendingLabel?: string;
@@ -266,7 +250,6 @@ export function MenuItem({
   active = false,
   leading,
   trailing,
-  loading,
   status,
   pendingLabel,
   successLabel,
@@ -276,7 +259,7 @@ export function MenuItem({
 }: PropsWithChildren<MenuItemProps>): ReactElement {
   const { selectItem } = useMenuContext("MenuItem");
   const finePointer = useHasFinePointer();
-  const isPending = status === "pending" || loading;
+  const isPending = status === "pending";
   const isSuccess = status === "success";
   const isDisabled = disabled || isPending || isSuccess;
 

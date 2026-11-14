@@ -19,7 +19,7 @@ function purgeArchivedWorkspaceState(input: { serverId: string; workspaceId: str
   }
 }
 
-export interface ArchiveWorkspaceInput {
+interface ArchiveWorkspaceInput {
   serverId: string;
   workspaceId: string;
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
@@ -32,7 +32,7 @@ export interface ArchiveWorkspaceInput {
   onSetHiding?: (hiding: boolean) => void;
 }
 
-export interface WorkspaceArchiveController {
+interface WorkspaceArchiveController {
   archive: () => void;
 }
 

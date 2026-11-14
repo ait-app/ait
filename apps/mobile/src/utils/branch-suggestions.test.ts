@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBranchComboOptions, normalizeBranchOptionName } from "./branch-suggestions";
+import { normalizeBranchOptionName } from "./branch-suggestions";
 
 describe("normalizeBranchOptionName", () => {
   it("normalizes local and origin-prefixed refs", () => {
@@ -14,23 +14,5 @@ describe("normalizeBranchOptionName", () => {
     expect(normalizeBranchOptionName("   ")).toBeNull();
     expect(normalizeBranchOptionName("HEAD")).toBeNull();
     expect(normalizeBranchOptionName("origin/HEAD")).toBeNull();
-  });
-});
-
-describe("buildBranchComboOptions", () => {
-  it("merges branch sources and de-duplicates normalized names", () => {
-    const options = buildBranchComboOptions({
-      suggestedBranches: ["origin/main", "refs/remotes/origin/main", "feature/a"],
-      currentBranch: "refs/heads/feature/a",
-      baseRef: "origin/main",
-      typedBaseBranch: "main",
-      worktreeBranchLabels: ["refs/heads/release/next"],
-    });
-
-    expect(options).toEqual([
-      { id: "main", label: "main" },
-      { id: "feature/a", label: "feature/a" },
-      { id: "release/next", label: "release/next" },
-    ]);
   });
 });

@@ -22,7 +22,6 @@ export class LegacySubscriptions {
   private readonly workspaces: LegacyWorkspaces | null;
   constructor(
     private readonly info: ServerInfoStatusPayload,
-    private readonly send: (message: ObservationRequest) => Promise<void>,
     private readonly browserHost: unknown,
   ) {
     this.workspaces = info.features?.workspaceMultiplicity === true ? null : new LegacyWorkspaces();
@@ -35,12 +34,10 @@ export class LegacySubscriptions {
   prepareRequest(message: SessionInboundMessage): {
     message: SessionInboundMessage;
     receive(message: SessionOutboundMessage): SessionOutboundMessage;
-    finish(): Promise<void>;
   } {
     const identity = {
       message,
       receive: (value: SessionOutboundMessage) => value,
-      finish: async () => {},
     };
     const workspaces = this.workspaces;
     if (workspaces && message.type === "workspace.list.request") {
@@ -88,22 +85,6 @@ export class LegacySubscriptions {
           ...message,
           subscribe: { subscriptionId: `legacy:${crypto.randomUUID()}` },
         },
-      };
-    }
-    if (message.type === "checkout.diff.get.request") {
-      const subscriptionId = `legacy:${crypto.randomUUID()}`;
-      return {
-        message: SessionInboundMessageSchema.parse({
-          ...message,
-          type: "checkout.diff.subscribe.request",
-          subscriptionId,
-        }),
-        receive: (value) => {
-          if (value.type !== "checkout.diff.subscribe.response") return value;
-          if (value.payload.requestId !== message.requestId) return value;
-          return { ...value, type: "checkout.diff.get.response" };
-        },
-        finish: () => this.send({ type: "checkout.diff.unsubscribe.request", subscriptionId }),
       };
     }
     return identity;

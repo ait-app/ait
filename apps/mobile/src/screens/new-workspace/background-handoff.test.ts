@@ -3,10 +3,7 @@ import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useDraftStore } from "@/stores/draft-store";
 import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
-import {
-  captureWorkspaceDraftCleanup,
-  createWorkspaceAgentInBackground,
-} from "./background-handoff";
+import { captureWorkspaceDraftCleanup } from "./background-handoff";
 
 const DRAFT_ID = "draft_1";
 const DRAFT_KEY = "new-workspace";
@@ -32,8 +29,10 @@ function captureCleanup() {
   });
 }
 
-function run(createAgent: () => Promise<unknown>, clearConsumedDraft = captureCleanup()) {
-  return createWorkspaceAgentInBackground({ createAgent, clearConsumedDraft });
+// Background creation: the agent is created first, then the draft captured before it is cleared.
+async function run(createAgent: () => Promise<unknown>, clearConsumedDraft = captureCleanup()) {
+  await createAgent();
+  clearConsumedDraft();
 }
 
 beforeEach(() => {
@@ -43,7 +42,7 @@ beforeEach(() => {
   saveDraft("do the thing");
 });
 
-describe("createWorkspaceAgentInBackground", () => {
+describe("captureWorkspaceDraftCleanup", () => {
   it("preserves context added to a newer draft without editing its text", async () => {
     await run(async () => {
       useWorkspaceAttachmentsStore.getState().addWorkspaceAttachment({
@@ -122,25 +121,6 @@ describe("createWorkspaceAgentInBackground", () => {
     });
     await run(async () => undefined, clearConsumedDraft);
     expect(useWorkspaceAttachmentsStore.getState().attachmentsByScope[SCOPE_KEY]).toHaveLength(1);
-    expect(draftText()).toBe("do the thing");
-  });
-
-  it("leaves no pending submission behind, so no draft tab can create a second agent", async () => {
-    await run(async () => undefined);
-
-    expect(useWorkspaceDraftSubmissionStore.getState().pendingByDraftId).toEqual({});
-    expect(useCreateFlowStore.getState().pendingByDraftId).toEqual({});
-  });
-
-  it("rethrows a failed creation and keeps the prompt for retry", async () => {
-    const failure = new Error("daemon exploded");
-
-    await expect(
-      run(async () => {
-        throw failure;
-      }),
-    ).rejects.toThrow(failure);
-
     expect(draftText()).toBe("do the thing");
   });
 

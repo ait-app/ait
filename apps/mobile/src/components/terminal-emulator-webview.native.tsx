@@ -123,35 +123,11 @@ interface PendingTerminalTap {
   moved: boolean;
 }
 
-function buildThemeKey(theme: ITheme): string {
-  return JSON.stringify(theme);
-}
-
-function serializeForInjectedJavaScript(message: BridgeInboundMessage): string {
-  return JSON.stringify(message).replace(/<\/script/gi, "<\\/script");
-}
-
-function createMountMessage(input: {
-  streamKey: string;
-  initialSnapshot: TerminalState | null;
-  scrollbackLines: number;
-  theme: ITheme;
-  fontFamily?: string;
-  fontSize?: number;
-  pendingModifiers: PendingTerminalModifiers;
-  swipeGesturesEnabled: boolean;
-}): BridgeInboundMessage {
-  return {
-    type: "mount",
-    streamKey: input.streamKey,
-    initialSnapshot: input.initialSnapshot,
-    scrollbackLines: input.scrollbackLines,
-    theme: input.theme,
-    fontFamily: input.fontFamily,
-    fontSize: input.fontSize,
-    pendingModifiers: input.pendingModifiers,
-    swipeGesturesEnabled: input.swipeGesturesEnabled,
-  };
+function injectBridgeMessage(webView: WebView, message: BridgeInboundMessage): void {
+  const payload = JSON.stringify(message).replace(/<\/script/gi, "<\\/script");
+  webView.injectJavaScript(
+    `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
+  );
 }
 
 export default function WebViewTerminalEmulator({
@@ -305,13 +281,10 @@ export default function WebViewTerminalEmulator({
   }, [clearRendererReadyTimeout, resetWebViewDocument, streamKey]);
 
   const flushPendingMessages = useCallback(() => {
-    if (!bridgeReadyRef.current || !webViewRef.current) return;
-    const pending = pendingMessagesRef.current.splice(0);
-    for (const message of pending) {
-      const payload = serializeForInjectedJavaScript(message);
-      webViewRef.current.injectJavaScript(
-        `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
-      );
+    const webView = webViewRef.current;
+    if (!bridgeReadyRef.current || !webView) return;
+    for (const message of pendingMessagesRef.current.splice(0)) {
+      injectBridgeMessage(webView, message);
     }
   }, []);
 
@@ -320,10 +293,7 @@ export default function WebViewTerminalEmulator({
       pendingMessagesRef.current.push(message);
       return;
     }
-    const payload = serializeForInjectedJavaScript(message);
-    webViewRef.current.injectJavaScript(
-      `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
-    );
+    injectBridgeMessage(webViewRef.current, message);
   }, []);
 
   useImperativeHandle(
@@ -384,7 +354,7 @@ export default function WebViewTerminalEmulator({
 
   useEffect(() => {
     if (bridgeReadyVersion <= 0) return;
-    const mountMessage = createMountMessage(mountConfigRef.current);
+    const mountMessage: BridgeInboundMessage = { type: "mount", ...mountConfigRef.current };
     mountRequestedStreamKeyRef.current = streamKey;
     rendererReadyStreamKeyRef.current = null;
     sendToWebView(mountMessage);
@@ -398,11 +368,10 @@ export default function WebViewTerminalEmulator({
     streamKey,
   ]);
 
-  const themeKey = useMemo(() => buildThemeKey(xtermTheme), [xtermTheme]);
   useEffect(() => {
     if (!mountRequestedStreamKeyRef.current) return;
     sendToWebView({ type: "setTheme", streamKey, theme: xtermTheme });
-  }, [sendToWebView, streamKey, themeKey, xtermTheme]);
+  }, [sendToWebView, streamKey, xtermTheme]);
 
   useEffect(() => {
     if (!mountRequestedStreamKeyRef.current) return;
@@ -456,52 +425,43 @@ export default function WebViewTerminalEmulator({
   }, [clearBridgeReadyTimeout, clearRendererReadyTimeout, sendToWebView]);
 
   const handleLifecycleMessage = useCallback(
-    (message: BridgeOutboundMessage): boolean => {
+    (message: Extract<BridgeOutboundMessage, { type: "bridgeReady" | "rendererReady" }>) => {
       if (message.type === "bridgeReady") {
         bridgeReadyRef.current = true;
         bridgeReadyVersionRef.current += 1;
         clearBridgeReadyTimeout();
         setBridgeReadyVersion((value) => value + 1);
-        return true;
+        return;
       }
-      if (message.type === "rendererReady") {
-        if (message.streamKey === mountRequestedStreamKeyRef.current) {
-          rendererReadyStreamKeyRef.current = message.isReady ? message.streamKey : null;
-          if (message.isReady) {
-            rendererReadyVersionRef.current += 1;
-            clearRendererReadyTimeout();
-          }
+      if (message.streamKey === mountRequestedStreamKeyRef.current) {
+        rendererReadyStreamKeyRef.current = message.isReady ? message.streamKey : null;
+        if (message.isReady) {
+          rendererReadyVersionRef.current += 1;
+          clearRendererReadyTimeout();
         }
-        callbacksRef.current.onRendererReadyChange?.({
-          streamKey: message.streamKey,
-          isReady: message.isReady,
-        });
-        return true;
       }
-      return false;
+      callbacksRef.current.onRendererReadyChange?.({
+        streamKey: message.streamKey,
+        isReady: message.isReady,
+      });
     },
     [clearBridgeReadyTimeout, clearRendererReadyTimeout],
   );
 
   const resolveLocalFileLink = useCallback(
     async (message: Extract<BridgeOutboundMessage, { type: "resolveLocalFileLink" }>) => {
+      let target: TerminalLocalFileLinkTarget | null = null;
       try {
-        const target = await (callbacksRef.current.onResolveLocalFileLink?.(message.source) ??
-          null);
-        sendToWebView({
-          type: "resolveLocalFileLinkResponse",
-          streamKey: message.streamKey,
-          requestId: message.requestId,
-          target,
-        });
+        target = await (callbacksRef.current.onResolveLocalFileLink?.(message.source) ?? null);
       } catch {
-        sendToWebView({
-          type: "resolveLocalFileLinkResponse",
-          streamKey: message.streamKey,
-          requestId: message.requestId,
-          target: null,
-        });
+        // An unresolvable link answers with no target.
       }
+      sendToWebView({
+        type: "resolveLocalFileLinkResponse",
+        streamKey: message.streamKey,
+        requestId: message.requestId,
+        target,
+      });
     },
     [sendToWebView],
   );
@@ -602,18 +562,6 @@ export default function WebViewTerminalEmulator({
     scheduleBridgeReadyWatchdog();
   }, [scheduleBridgeReadyWatchdog]);
 
-  const handleContentProcessDidTerminate = useCallback<
-    NonNullable<WebViewProps["onContentProcessDidTerminate"]>
-  >(() => {
-    resetWebViewDocument();
-  }, [resetWebViewDocument]);
-
-  const handleRenderProcessGone = useCallback<
-    NonNullable<WebViewProps["onRenderProcessGone"]>
-  >(() => {
-    resetWebViewDocument();
-  }, [resetWebViewDocument]);
-
   const handleWebViewTouchStart = useCallback((event: GestureResponderEvent) => {
     pendingTapRef.current = {
       startX: event.nativeEvent.pageX,
@@ -692,8 +640,8 @@ export default function WebViewTerminalEmulator({
         onTouchCancel={handleWebViewTouchCancel}
         onMessage={handleMessage}
         onLoadStart={handleLoadStart}
-        onContentProcessDidTerminate={handleContentProcessDidTerminate}
-        onRenderProcessGone={handleRenderProcessGone}
+        onContentProcessDidTerminate={resetWebViewDocument}
+        onRenderProcessGone={resetWebViewDocument}
       />
     </View>
   );

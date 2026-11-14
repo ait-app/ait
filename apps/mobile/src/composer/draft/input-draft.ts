@@ -392,12 +392,3 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     composerState,
   };
 }
-
-export const __private__ = {
-  resolveDraftKey,
-  resolveEffectiveComposerModelId,
-  resolveEffectiveComposerThinkingOptionId,
-  buildDraftCommandConfig,
-  buildDraftComposerCommandConfig: buildDraftCommandConfig,
-  buildDraftAgentControls,
-};

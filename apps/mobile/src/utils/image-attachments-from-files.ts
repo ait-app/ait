@@ -2,19 +2,19 @@ import type { AttachmentMetadata } from "@/attachments/types";
 import { persistAttachmentFromBlob } from "@/attachments/service";
 import { resolveRasterImageMimeType } from "@/attachments/file-types";
 
-export interface ClipboardItemLike {
+interface ClipboardItemLike {
   kind?: string;
   type?: string;
   getAsFile?: () => File | null;
 }
 
-export interface ClipboardDataLike {
+interface ClipboardDataLike {
   items?: ArrayLike<ClipboardItemLike> | null;
 }
 
-export type ImageAttachmentFromFile = AttachmentMetadata;
+type ImageAttachmentFromFile = AttachmentMetadata;
 
-export interface ClipboardImageFile {
+interface ClipboardImageFile {
   file: File;
   mimeType: string;
 }

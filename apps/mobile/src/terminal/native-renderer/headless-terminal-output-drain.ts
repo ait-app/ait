@@ -7,7 +7,7 @@ export const NATIVE_TERMINAL_PARSE_CHUNK_CHARS = 64 * 1024;
 
 const NATIVE_TERMINAL_PARSE_CHUNKS_PER_TURN = 32;
 
-export interface NativeTerminalParseSample {
+interface NativeTerminalParseSample {
   durationMs: number;
   parsedChars: number;
   queuedChars: number;
@@ -23,7 +23,7 @@ export interface NativeTerminalOutputDrain {
   getQueuedChars(): number;
 }
 
-export interface NativeTerminalOutputDrainOptions {
+interface NativeTerminalOutputDrainOptions {
   write: (chunk: string) => Promise<void>;
   reset: () => void;
   getViewportState: () => TerminalViewportState | null;

@@ -17,7 +17,7 @@ const AGENT_HISTORY_SORT: NonNullable<FetchAgentHistoryOptions["sort"]> = [
   { key: "updated_at", direction: "desc" },
 ];
 
-export interface AgentHistoryResult {
+interface AgentHistoryResult {
   agents: AggregatedAgent[];
   isLoading: boolean;
   isInitialLoad: boolean;
@@ -35,7 +35,7 @@ export interface AgentHistoryResult {
   loadMore: () => void;
 }
 
-export interface AgentHistoryPage {
+interface AgentHistoryPage {
   agents: AggregatedAgent[];
   pageInfo: FetchAgentHistoryPageInfo;
   /** More matched this host's query than its page could hold. */
@@ -49,7 +49,7 @@ export type AgentHistoryClient = Pick<DaemonClient, "fetchAgentHistory">;
  * are missing from the list, which under a query means "no matches" would be a
  * claim the app cannot make.
  */
-export interface AgentHistoryHostError {
+interface AgentHistoryHostError {
   serverId: string;
   serverName: string;
 }

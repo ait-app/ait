@@ -72,68 +72,6 @@ function ShortcutSequence({
   return <Shortcut chord={displayChord} />;
 }
 
-interface ShortcutRowContainerProps {
-  row: KeyboardShortcutHelpRow;
-  bindingId: string | null;
-  displayChord: ShortcutKey[][] | null;
-  hasOverride: boolean;
-  hasDefault: boolean;
-  isCapturing: boolean;
-  capturedCombos: string[];
-  heldModifiers: string | null;
-  onStartCapture: (bindingId: string) => void;
-  onSaveCapture: () => void;
-  onCancelCapture: () => void;
-  onClearOverride: (bindingId: string) => void;
-  onRemoveOverride: (bindingId: string) => void;
-}
-
-function ShortcutRowContainer({
-  row,
-  bindingId,
-  displayChord,
-  hasOverride,
-  hasDefault,
-  isCapturing,
-  capturedCombos,
-  heldModifiers,
-  onStartCapture,
-  onSaveCapture,
-  onCancelCapture,
-  onClearOverride,
-  onRemoveOverride,
-}: ShortcutRowContainerProps) {
-  const handleRebind = useCallback(() => {
-    if (bindingId) onStartCapture(bindingId);
-  }, [bindingId, onStartCapture]);
-
-  const handleClear = useCallback(() => {
-    if (bindingId) onClearOverride(bindingId);
-  }, [bindingId, onClearOverride]);
-
-  const handleReset = useCallback(() => {
-    if (bindingId) onRemoveOverride(bindingId);
-  }, [bindingId, onRemoveOverride]);
-
-  return (
-    <ShortcutRow
-      row={row}
-      bindingId={bindingId}
-      displayChord={displayChord}
-      hasOverride={hasOverride}
-      hasDefault={hasDefault}
-      isCapturing={isCapturing}
-      capturedCombos={capturedCombos}
-      heldModifiers={heldModifiers}
-      onRebind={handleRebind}
-      onDone={onSaveCapture}
-      onCancel={onCancelCapture}
-      onClear={handleClear}
-      onReset={handleReset}
-    />
-  );
-}
-
 function ShortcutRowKeys({
   displayChord,
   isCapturing,
@@ -234,6 +172,22 @@ function ShortcutActionsMenu({
   );
 }
 
+interface ShortcutRowProps {
+  row: KeyboardShortcutHelpRow;
+  bindingId: string | null;
+  displayChord: ShortcutKey[][] | null;
+  hasOverride: boolean;
+  hasDefault: boolean;
+  isCapturing: boolean;
+  capturedCombos: string[];
+  heldModifiers: string | null;
+  onStartCapture: (bindingId: string) => void;
+  onSaveCapture: () => void;
+  onCancelCapture: () => void;
+  onClearOverride: (bindingId: string) => void;
+  onRemoveOverride: (bindingId: string) => void;
+}
+
 function ShortcutRow({
   row,
   bindingId,
@@ -243,27 +197,24 @@ function ShortcutRow({
   isCapturing,
   capturedCombos,
   heldModifiers,
-  onRebind,
-  onDone,
-  onCancel,
-  onClear,
-  onReset,
-}: {
-  row: KeyboardShortcutHelpRow;
-  bindingId: string | null;
-  displayChord: ShortcutKey[][] | null;
-  hasOverride: boolean;
-  hasDefault: boolean;
-  isCapturing: boolean;
-  capturedCombos: string[];
-  heldModifiers: string | null;
-  onRebind: () => void;
-  onDone: () => void;
-  onCancel: () => void;
-  onClear: () => void;
-  onReset: () => void;
-}) {
+  onStartCapture,
+  onSaveCapture,
+  onCancelCapture,
+  onClearOverride,
+  onRemoveOverride,
+}: ShortcutRowProps) {
   const { t } = useTranslation();
+  const handleRebind = useCallback(() => {
+    if (bindingId) onStartCapture(bindingId);
+  }, [bindingId, onStartCapture]);
+
+  const handleClear = useCallback(() => {
+    if (bindingId) onClearOverride(bindingId);
+  }, [bindingId, onClearOverride]);
+
+  const handleReset = useCallback(() => {
+    if (bindingId) onRemoveOverride(bindingId);
+  }, [bindingId, onRemoveOverride]);
   const rowStyle = useMemo(() => [styles.row, isCapturing && styles.rowCapturing], [isCapturing]);
 
   const isBindable = bindingId !== null;
@@ -291,12 +242,12 @@ function ShortcutRow({
         {isCapturing ? (
           <>
             {showDone && (
-              <Button variant="ghost" size="sm" onPress={onDone}>
+              <Button variant="ghost" size="sm" onPress={onSaveCapture}>
                 {t("settings.shortcuts.actions.done")}
               </Button>
             )}
             {isBindable && (
-              <Button variant="ghost" size="sm" onPress={onCancel}>
+              <Button variant="ghost" size="sm" onPress={onCancelCapture}>
                 {t("settings.shortcuts.actions.cancel")}
               </Button>
             )}
@@ -311,9 +262,9 @@ function ShortcutRow({
                 bindLabel={bindLabel}
                 showClear={showClear}
                 showReset={showReset}
-                onRebind={onRebind}
-                onClear={onClear}
-                onReset={onReset}
+                onRebind={handleRebind}
+                onClear={handleClear}
+                onReset={handleReset}
               />
             )}
           </View>
@@ -464,7 +415,7 @@ export function KeyboardShortcutsSection() {
 
                 return (
                   <View key={row.id}>
-                    <ShortcutRowContainer
+                    <ShortcutRow
                       row={row}
                       bindingId={bindingId}
                       displayChord={displayChord}

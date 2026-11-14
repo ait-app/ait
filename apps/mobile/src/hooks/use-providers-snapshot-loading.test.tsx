@@ -9,7 +9,8 @@ import {
 } from "@tanstack/react-query";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { providersSnapshotQueryKey, useProvidersSnapshot } from "./use-providers-snapshot";
+import { providersSnapshotQueryKey } from "@/data/providers-snapshot";
+import { useProvidersSnapshot } from "./use-providers-snapshot";
 
 const host = vi.hoisted(() => ({
   connected: true,

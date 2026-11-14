@@ -14,37 +14,22 @@ interface VolumeMeterProps {
   volume: number;
   isMuted?: boolean;
   isSpeaking?: boolean;
-  orientation?: "vertical" | "horizontal";
-  variant?: "default" | "compact";
   color?: string;
 }
+
+const LINE_SPACING = 8;
+const LINE_WIDTH = 8;
+const MAX_HEIGHT = 30;
+const MIN_HEIGHT = 12;
+const spacerStyle = { width: LINE_SPACING };
 
 export function VolumeMeter({
   volume,
   isMuted = false,
   isSpeaking = false,
-  orientation = "vertical",
-  variant = "default",
   color,
 }: VolumeMeterProps) {
   const { theme } = useUnistyles();
-  const isCompact = variant === "compact";
-
-  // Base dimensions
-  const LINE_SPACING = isCompact ? 6 : 8;
-  const LINE_WIDTH = isCompact ? 6 : 8;
-  let MAX_HEIGHT: number;
-  if (orientation === "horizontal") {
-    MAX_HEIGHT = isCompact ? 18 : 30;
-  } else {
-    MAX_HEIGHT = isCompact ? 32 : 50;
-  }
-  let MIN_HEIGHT: number;
-  if (orientation === "horizontal") {
-    MIN_HEIGHT = isCompact ? 8 : 12;
-  } else {
-    MIN_HEIGHT = isCompact ? 14 : 20;
-  }
 
   // Create shared values for 3 dots unconditionally
   const animatedVolume = useSharedValue(0);
@@ -109,12 +94,6 @@ export function VolumeMeter({
   }, [animatedVolume, isMuted, volume]);
 
   const lineColor = color ?? theme.colors.foreground;
-  let containerHeight: number;
-  if (orientation === "horizontal") {
-    containerHeight = isCompact ? 32 : 60;
-  } else {
-    containerHeight = isCompact ? 64 : 100;
-  }
 
   // Create animated styles unconditionally at top level
   const line1Style = useAnimatedStyle(() => {
@@ -162,15 +141,7 @@ export function VolumeMeter({
     };
   });
 
-  const containerStyle = useMemo(
-    () => [styles.container, { height: containerHeight }],
-    [containerHeight],
-  );
-  const lineBase = useMemo(
-    () => ({ width: LINE_WIDTH, backgroundColor: lineColor }),
-    [LINE_WIDTH, lineColor],
-  );
-  const spacerStyle = useMemo(() => ({ width: LINE_SPACING }), [LINE_SPACING]);
+  const lineBase = useMemo(() => ({ width: LINE_WIDTH, backgroundColor: lineColor }), [lineColor]);
   const line1CombinedStyle = useMemo(
     () => [styles.line, lineBase, line1Style],
     [lineBase, line1Style],
@@ -185,7 +156,7 @@ export function VolumeMeter({
   );
 
   return (
-    <View style={containerStyle}>
+    <View style={styles.container}>
       <ReanimatedAnimated.View style={line1CombinedStyle} />
       <View style={spacerStyle} />
       <ReanimatedAnimated.View style={line2CombinedStyle} />
@@ -197,6 +168,7 @@ export function VolumeMeter({
 
 const styles = StyleSheet.create((theme) => ({
   container: {
+    height: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

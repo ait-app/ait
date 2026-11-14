@@ -48,9 +48,9 @@ const ThemePreferenceSchema = z.enum([
 ]);
 /** Where the theme picker lands when the persisted preference cannot be honoured. */
 export const DEFAULT_THEME_PREFERENCE = "auto" satisfies ThemePreference;
-export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
-export const MIN_TERMINAL_SCROLLBACK_LINES = 0;
-export const MAX_TERMINAL_SCROLLBACK_LINES = 1_000_000;
+const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
+const MIN_TERMINAL_SCROLLBACK_LINES = 0;
+const MAX_TERMINAL_SCROLLBACK_LINES = 1_000_000;
 export function defaultUiBaseFontSize(native: boolean): number {
   return native ? 15 : FONT_SIZE.base;
 }
@@ -68,10 +68,9 @@ export const MAX_CONTENT_FONT_SIZE = 21;
 export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
-export const MAX_FONT_FAMILY_LENGTH = 200;
-export { DEFAULT_CONTENT_MAX_WIDTH };
-export const MIN_CONTENT_MAX_WIDTH = 600;
-export const MAX_CONTENT_MAX_WIDTH = 4000;
+const MAX_FONT_FAMILY_LENGTH = 200;
+const MIN_CONTENT_MAX_WIDTH = 600;
+const MAX_CONTENT_MAX_WIDTH = 4000;
 
 export interface AppSettings {
   experimentalFeatures: boolean;
@@ -119,7 +118,7 @@ export interface OpenInSidePanePreferences {
   subagents: boolean;
 }
 
-export const DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES: OpenInSidePanePreferences = {
+const DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES: OpenInSidePanePreferences = {
   explorerFiles: false,
   diffs: false,
   chatFiles: false,
@@ -464,19 +463,10 @@ function pickAppSettingsFromLegacy(legacy: StoredAppSettings): AppSettings {
 }
 
 export function parseTerminalScrollbackLines(value: unknown): number | null {
-  let numericValue = NaN;
-  if (typeof value === "number") {
-    numericValue = value;
-  } else if (typeof value === "string" && value.trim().length > 0) {
-    numericValue = Number(value);
-  }
-  if (!Number.isFinite(numericValue)) {
-    return null;
-  }
-  return Math.min(
-    MAX_TERMINAL_SCROLLBACK_LINES,
-    Math.max(MIN_TERMINAL_SCROLLBACK_LINES, Math.floor(numericValue)),
-  );
+  return parseClampedFontSize(value, {
+    min: MIN_TERMINAL_SCROLLBACK_LINES,
+    max: MAX_TERMINAL_SCROLLBACK_LINES,
+  });
 }
 
 export function parseContentMaxWidth(value: unknown): number | null {

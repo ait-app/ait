@@ -35,7 +35,3 @@ export function isResponseBoundary(previous: StreamItem | null, next: StreamItem
 export function startsNewTurn(item: StreamItem, previous: StreamItem | null): boolean {
   return previous === null || isTurnBoundary(previous, item);
 }
-
-export function belongsToTurn(item: StreamItem, turnId: string | null): boolean {
-  return turnId !== null && item.turnId === turnId;
-}

@@ -50,7 +50,6 @@ interface DraftStoreActions {
   hydrateDraftInput: (input: { draftKey: string }) => Promise<DraftInput | undefined>;
   saveDraftInput: (input: { draftKey: string; draft: DraftInput }) => void;
   editDraftText: (input: { draftKey: string; text: string }) => void;
-  markDraftLifecycle: (input: { draftKey: string; lifecycle: DraftLifecycleState }) => void;
   clearDraftInput: (input: {
     draftKey: string;
     lifecycle?: Exclude<DraftLifecycleState, "active">;
@@ -59,8 +58,6 @@ interface DraftStoreActions {
     draftKey: string;
     attachment: WorkspaceFileComposerAttachment;
   }) => Promise<void>;
-  getCreateModalDraft: () => DraftInput | null;
-  saveCreateModalDraft: (draft: DraftInput | null) => void;
   collectActiveAttachmentIds: () => string[];
 }
 
@@ -374,27 +371,6 @@ export const useDraftStore = create<DraftStore>()(
           });
         },
 
-        markDraftLifecycle: ({ draftKey, lifecycle }) => {
-          set((state) => {
-            const existing = state.drafts[draftKey];
-            if (!existing || existing.lifecycle === lifecycle) {
-              return state;
-            }
-            return {
-              drafts: {
-                ...state.drafts,
-                [draftKey]: {
-                  ...existing,
-                  lifecycle,
-                  updatedAt: Date.now(),
-                  version: existing.version + 1,
-                },
-              },
-            };
-          });
-          scheduleAttachmentGc();
-        },
-
         clearDraftInput: ({ draftKey, lifecycle }) => {
           set((state) => {
             const existing = state.drafts[draftKey];
@@ -443,27 +419,6 @@ export const useDraftStore = create<DraftStore>()(
                 ...state.attachmentFocusRequestByDraftKey,
                 [draftKey]: (state.attachmentFocusRequestByDraftKey[draftKey] ?? 0) + 1,
               },
-            };
-          });
-          scheduleAttachmentGc();
-        },
-
-        getCreateModalDraft: () => {
-          const record = get().createModalDraft;
-          return toDraftInputIfReady(record) ?? null;
-        },
-
-        saveCreateModalDraft: (draft) => {
-          set((state) => {
-            if (!draft) {
-              return { createModalDraft: null };
-            }
-            return {
-              createModalDraft: createDraftRecord({
-                draft,
-                lifecycle: "active",
-                previousVersion: state.createModalDraft?.version,
-              }),
             };
           });
           scheduleAttachmentGc();

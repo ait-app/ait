@@ -6,9 +6,7 @@ import {
   buildProviderQualifiedDescription,
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
-  buildSelectedTriggerLabel,
   filterAndRankModelRows,
-  matchesModelSearch,
   resolveSelectedModelLabel,
   resolveAgentCreationReadiness,
 } from "./provider-selection";
@@ -237,10 +235,10 @@ describe("combined model selector data", () => {
       description: "OpenCode Zen - kimi",
     };
 
-    expect(matchesModelSearch(row, "kimi zen")).toBe(true);
-    expect(matchesModelSearch(row, "zen kimi")).toBe(true);
-    expect(matchesModelSearch(row, "k2.5 zen")).toBe(true);
-    expect(matchesModelSearch(row, "kimi gemini")).toBe(false);
+    expect(filterAndRankModelRows([row], "kimi zen")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "zen kimi")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "k2.5 zen")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "kimi gemini")).toEqual([]);
   });
 
   it("ranks model search results by fuzzy match quality", () => {
@@ -269,10 +267,6 @@ describe("combined model selector data", () => {
     ];
 
     expect(filterAndRankModelRows(rows, "gpt54").map((row) => row.modelId)).toEqual(["gpt-5.4"]);
-  });
-
-  it("keeps the selected trigger label model-only", () => {
-    expect(buildSelectedTriggerLabel("GPT-5.4")).toBe("GPT-5.4");
   });
 
   it("names the provider first when a model row is shown outside its provider", () => {

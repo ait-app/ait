@@ -4,10 +4,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
-import {
-  collectAssistantResponseContentForStreamRenderStrategy,
-  type StreamStrategy,
-} from "./strategy";
+import type { StreamStrategy } from "./strategy";
 import { resolveAssistantTurnForkBoundary, type AssistantTurnForkBoundary } from "./turn-boundary";
 import {
   AssistantTurnFooter,
@@ -172,12 +169,7 @@ function CompletedTurnFooter({
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
   const getContent = useCallback(
-    () =>
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy,
-        items,
-        startIndex,
-      }),
+    () => strategy.collectAssistantResponseContent(items, startIndex),
     [strategy, items, startIndex],
   );
   const boundary = resolveAssistantTurnForkBoundary({

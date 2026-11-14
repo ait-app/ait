@@ -1,12 +1,7 @@
-import { useCallback, useState } from "react";
 import type { MutableDaemonConfigPatch } from "@ait/protocol/messages";
-import { ACP_PROVIDER_CATALOG, type AcpProviderCatalogEntry } from "@/data/acp-provider-catalog";
+import type { AcpProviderCatalogEntry } from "@/data/acp-provider-catalog";
 
 export type AcpProviderCatalogItem = AcpProviderCatalogEntry;
-
-export function getAcpProviderCatalog(): AcpProviderCatalogItem[] {
-  return ACP_PROVIDER_CATALOG;
-}
 
 export function buildAcpProviderConfigPatch(
   entry: AcpProviderCatalogItem,
@@ -23,12 +18,4 @@ export function buildAcpProviderConfigPatch(
       },
     },
   };
-}
-
-export function useAcpProviderCatalog() {
-  const [entries] = useState<AcpProviderCatalogItem[]>(ACP_PROVIDER_CATALOG);
-
-  const refetch = useCallback(async () => entries, [entries]);
-
-  return { entries, loading: false, error: null, refetch };
 }

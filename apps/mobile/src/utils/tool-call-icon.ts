@@ -29,7 +29,7 @@ const ICON_COMPONENTS: Record<ToolCallIcon, ToolCallIconComponent> = {
   paseo: AitLogo,
 };
 
-export function componentForToolCallIcon(name: ToolCallIcon): ToolCallIconComponent {
+function componentForToolCallIcon(name: ToolCallIcon): ToolCallIconComponent {
   return ICON_COMPONENTS[name];
 }
 

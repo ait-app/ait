@@ -12,10 +12,6 @@ import {
   type WorkspaceFileSearchEntry,
 } from "./workspace-file-search-model";
 
-interface DirectorySuggestionEntry {
-  path: string;
-}
-
 const FILE_SEARCH_DEBOUNCE_MS = 100;
 const FILE_SEARCH_LIMIT = 100;
 
@@ -39,12 +35,6 @@ function errorMessage(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
   if (error.name !== "DaemonRpcError") return error.message;
   return error.message.replace(/ requestType=\S+(?: code=\S+)?$/, "");
-}
-
-function describeFileEntries(
-  entries: readonly DirectorySuggestionEntry[],
-): WorkspaceFileSearchEntry[] {
-  return entries.map(({ path }) => describeWorkspaceFilePath(path));
 }
 
 export function useWorkspaceFileSearch(input: { enabled: boolean; query: string }): {
@@ -99,7 +89,9 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
         setState({
           sourceKey,
           requestKey,
-          entries: payload.error ? [] : describeFileEntries(payload.entries),
+          entries: payload.error
+            ? []
+            : payload.entries.map(({ path }) => describeWorkspaceFilePath(path)),
           loading: false,
           error: payload.error ?? null,
         });

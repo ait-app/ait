@@ -3,7 +3,7 @@ export interface TerminalMeasuredLayout {
   height: number;
 }
 
-export interface TerminalMeasuredCellMetrics {
+interface TerminalMeasuredCellMetrics {
   cellWidth: number;
   cellHeight: number;
 }

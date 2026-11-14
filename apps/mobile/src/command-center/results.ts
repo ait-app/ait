@@ -107,14 +107,9 @@ export interface CommandCenterResultSection {
   results: readonly CommandCenterResult[];
 }
 
-interface MutableCommandCenterResultSection {
-  id: string;
-  band: number;
-  rank: number;
-  title?: string;
-  score?: CommandCenterScore;
+type MutableCommandCenterResultSection = Omit<CommandCenterResultSection, "results"> & {
   results: CommandCenterResult[];
-}
+};
 
 export type CommandCenterListRow =
   | { kind: "section"; key: string; title?: string; divider: boolean; height: number }

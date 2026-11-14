@@ -6,7 +6,6 @@ import { applyRootUiFont } from "@/appearance/apply-root-font.web";
 import { DEFAULT_TERMINAL_FONT_FAMILY } from "@/terminal/runtime/terminal-font";
 import TerminalEmulator from "./terminal-emulator";
 
-vi.mock("expo/dom", () => ({ useDOMImperativeHandle: () => {} }));
 vi.mock("@xterm/addon-webgl", () => ({
   WebglAddon: class {
     constructor() {

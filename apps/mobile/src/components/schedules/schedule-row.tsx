@@ -183,7 +183,7 @@ export function ScheduleRow({
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
 
   const title = resolveScheduleTitle(schedule, t);
-  const productName = scheduleProductName(schedule, t);
+  const productName = scheduleProductName(t);
   const badge = stateBadge(state, t);
   const meta = buildMeta(
     schedule,
@@ -370,7 +370,7 @@ function ScheduleKebabMenu({
   canRun: boolean;
 }): ReactElement {
   const { t } = useTranslation();
-  const productName = scheduleProductName(schedule, t);
+  const productName = scheduleProductName(t);
   const productNameLower = productName.toLowerCase();
   return (
     <DropdownMenu>

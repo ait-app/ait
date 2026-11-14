@@ -9,16 +9,7 @@ export function reconcileMissingAgentStateWithPresentAgent(
   return state;
 }
 
-export function clearHistorySyncErrorAfterSuccessfulSync(
-  state: AgentScreenMissingState,
-): AgentScreenMissingState {
-  if (state.kind === "error") {
-    return { kind: "idle" };
-  }
-  return state;
-}
-
-export type AgentLookupTag = "idle" | "loading" | "not_found" | "error";
+type AgentLookupTag = "idle" | "loading" | "not_found" | "error";
 
 /** Only an idle lookup may fetch: a settled error waits for Retry, which resets to idle. */
 export function shouldFetchAgentForLookup(tag: AgentLookupTag): boolean {

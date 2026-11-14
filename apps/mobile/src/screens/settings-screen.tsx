@@ -18,7 +18,7 @@ import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
 import { Button } from "@/components/ui/button";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
@@ -75,6 +75,7 @@ import {
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { LayoutSection } from "@/screens/settings/layout/layout-section";
 import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
+import { ValueMenuItem } from "@/components/settings";
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
@@ -95,7 +96,7 @@ import {
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useFocusEffect } from "@react-navigation/native";
 import { Buffer } from "buffer";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import type { TFunction } from "i18next";
 import {
   ArrowLeft,
@@ -276,71 +277,6 @@ interface GeneralSectionProps {
   handleTerminalScrollbackLinesChange: (lines: number) => void;
 }
 
-interface ServiceUrlBehaviorMenuItemProps {
-  value: ServiceUrlBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: ServiceUrlBehavior) => void;
-}
-
-interface SendBehaviorMenuItemProps {
-  value: SendBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: SendBehavior) => void;
-}
-
-function SendBehaviorMenuItem({ value, label, selected, onChange }: SendBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-function ServiceUrlBehaviorMenuItem({
-  value,
-  label,
-  selected,
-  onChange,
-}: ServiceUrlBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-interface LanguageMenuItemProps {
-  value: AppLanguage;
-  activeLocale: SupportedLocale;
-  selected: boolean;
-  onChange: (value: AppLanguage) => void;
-}
-
-function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageMenuItemProps) {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  const option = LANGUAGE_OPTIONS.find((entry) => entry.value === value);
-  const label = option
-    ? formatLanguageOptionLabel(option, activeLocale, t(option.labelKey))
-    : value;
-
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
 function GeneralSection({
   settings,
   isDesktopApp,
@@ -409,7 +345,7 @@ function GeneralSection({
             </DropdownTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
               {sendBehaviorOptions.map((option) => (
-                <SendBehaviorMenuItem
+                <ValueMenuItem
                   key={option.value}
                   value={option.value}
                   label={option.label}
@@ -435,10 +371,10 @@ function GeneralSection({
             </DropdownTrigger>
             <DropdownMenuContent side="bottom" align="end" width={300}>
               {LANGUAGE_OPTIONS.map((option) => (
-                <LanguageMenuItem
+                <ValueMenuItem
                   key={option.value}
                   value={option.value}
-                  activeLocale={activeLocale}
+                  label={formatLanguageOptionLabel(option, activeLocale, t(option.labelKey))}
                   selected={settings.language === option.value}
                   onChange={handleLanguageChange}
                 />
@@ -462,7 +398,7 @@ function GeneralSection({
               </DropdownTrigger>
               <DropdownMenuContent side="bottom" align="end" width={200}>
                 {SERVICE_URL_BEHAVIOR_VALUES.map((value) => (
-                  <ServiceUrlBehaviorMenuItem
+                  <ValueMenuItem
                     key={value}
                     value={value}
                     label={getServiceUrlBehaviorLabel(t, value)}
@@ -902,21 +838,23 @@ function useSortedHosts(hosts: HostProfile[], localServerId: string | null): Hos
   return useMemo(() => orderHostsLocalFirst(hosts, localServerId), [hosts, localServerId]);
 }
 
-interface SidebarSectionButtonProps {
-  itemId: SettingsSectionSlug;
+interface SidebarSectionButtonProps<Slug extends string> {
+  itemId: Slug;
   label: string;
   icon: ComponentType<{ size: number; color: string }>;
   isSelected: boolean;
-  onSelect: (section: SettingsSectionSlug) => void;
+  onSelect: (section: Slug) => void;
+  testID?: string;
 }
 
-function SidebarSectionButton({
+function SidebarSectionButton<Slug extends string>({
   itemId,
   label,
   icon: IconComponent,
   isSelected,
   onSelect,
-}: SidebarSectionButtonProps) {
+  testID,
+}: SidebarSectionButtonProps<Slug>) {
   const { theme } = useUnistyles();
   const handlePress = useCallback(() => {
     onSelect(itemId);
@@ -931,49 +869,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
-      style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
-    >
-      <IconComponent
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
-      />
-      <Text style={labelStyle} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-interface SidebarHostSectionButtonProps {
-  itemId: HostSectionSlug;
-  label: string;
-  icon: ComponentType<{ size: number; color: string }>;
-  isSelected: boolean;
-  onSelect: (section: HostSectionSlug) => void;
-}
-
-function SidebarHostSectionButton({
-  itemId,
-  label,
-  icon: IconComponent,
-  isSelected,
-  onSelect,
-}: SidebarHostSectionButtonProps) {
-  const { theme } = useUnistyles();
-  const handlePress = useCallback(() => {
-    onSelect(itemId);
-  }, [onSelect, itemId]);
-  const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
-  const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
-  );
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={accessibilityState}
-      onPress={handlePress}
-      testID={`settings-host-section-${itemId}`}
+      testID={testID}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -1154,9 +1050,10 @@ function SettingsSidebar({
           {HOST_SECTION_ITEMS.filter(
             (item) => canManage || item.id === "host" || item.id === "connections",
           ).map((item) => (
-            <SidebarHostSectionButton
+            <SidebarSectionButton
               key={item.id}
               itemId={item.id}
+              testID={`settings-host-section-${item.id}`}
               label={t(item.labelKey)}
               icon={item.icon}
               isSelected={selectedHostSection === item.id}
@@ -1391,9 +1288,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     setIsRemoteSshVisible(true);
   }, []);
 
-  const handleHostAdded = useCallback(
-    ({ serverId }: { serverId: string }) => {
-      const target = buildSettingsHostSectionRoute(serverId, "connections");
+  // Compact layouts stack settings pages; the desktop split view swaps the detail pane.
+  const openSettingsRoute = useCallback(
+    (target: Href) => {
       if (isCompactLayout) {
         router.push(target);
       } else {
@@ -1403,16 +1300,18 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [isCompactLayout, router],
   );
 
+  const handleHostAdded = useCallback(
+    ({ serverId }: { serverId: string }) => {
+      openSettingsRoute(buildSettingsHostSectionRoute(serverId, "connections"));
+    },
+    [openSettingsRoute],
+  );
+
   const handleSelectSection = useCallback(
     (section: SettingsSectionSlug) => {
-      const target = buildSettingsSectionRoute(section);
-      if (isCompactLayout) {
-        router.push(target);
-      } else {
-        router.replace(target);
-      }
+      openSettingsRoute(buildSettingsSectionRoute(section));
     },
-    [isCompactLayout, router],
+    [openSettingsRoute],
   );
 
   // Picker: choose the host for host-section rows. If the user is already on a
@@ -1421,25 +1320,15 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     (serverId: string) => {
       setSelectedSettingsHostServerId(serverId);
       if (view.kind === "project") {
-        const target = buildSettingsHostSectionRoute(serverId, "projects");
-        if (isCompactLayout) {
-          router.push(target);
-        } else {
-          router.replace(target);
-        }
+        openSettingsRoute(buildSettingsHostSectionRoute(serverId, "projects"));
         return;
       }
       if (view.kind !== "host") {
         return;
       }
-      const target = buildSettingsHostSectionRoute(serverId, view.section);
-      if (isCompactLayout) {
-        router.push(target);
-      } else {
-        router.replace(target);
-      }
+      openSettingsRoute(buildSettingsHostSectionRoute(serverId, view.section));
     },
-    [isCompactLayout, router, view],
+    [openSettingsRoute, view],
   );
 
   const handleSelectHostSection = useCallback(
@@ -1448,14 +1337,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         handleAddHost();
         return;
       }
-      const target = buildSettingsHostSectionRoute(activeHostServerId, section);
-      if (isCompactLayout) {
-        router.push(target);
-      } else {
-        router.replace(target);
-      }
+      openSettingsRoute(buildSettingsHostSectionRoute(activeHostServerId, section));
     },
-    [activeHostServerId, handleAddHost, isCompactLayout, router],
+    [activeHostServerId, handleAddHost, openSettingsRoute],
   );
 
   const handleHostRemoved = useCallback(() => {
@@ -1478,7 +1362,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const detailHeader = ((): {
     title: string;
     Icon: ComponentType<{ size: number; color: string }>;
-    titleAccessory?: ReactNode;
   } | null => {
     if (view.kind === "host") {
       const item = HOST_SECTION_ITEMS.find((s) => s.id === view.section);
@@ -1588,7 +1471,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         <detailHeader.Icon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
       </HeaderIconBadge>
       <ScreenTitle testID="settings-detail-header-title">{detailHeader.title}</ScreenTitle>
-      {detailHeader.titleAccessory}
     </>
   ) : null;
 
@@ -1640,11 +1522,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
-        <BackHeader
-          title={detailHeader?.title}
-          titleAccessory={detailHeader?.titleAccessory}
-          onBack={handleBackFromDetail}
-        />
+        <BackHeader title={detailHeader?.title} onBack={handleBackFromDetail} />
         <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
           <View style={styles.content}>{content}</View>
         </ScrollView>
@@ -1764,16 +1642,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     textAlign: "right",
-  },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing[8],
-  },
-  placeholderText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
   },
 }));
 

@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import type { AgentFeature, AgentProvider } from "@ait/protocol/agent-types";
+import type { AgentFeature } from "@ait/protocol/agent-types";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -185,11 +185,4 @@ export function useProviderPresets(input: {
         : (query.data?.error ?? null)
       : null,
   };
-}
-
-/** Host/provider/directory whose settings the model picker gear opens. */
-export interface PresetSettingsTarget {
-  serverId: string | null | undefined;
-  provider: AgentProvider | null | undefined;
-  cwd: string | null | undefined;
 }

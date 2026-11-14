@@ -40,14 +40,6 @@ interface FileAction {
   testID?: string;
 }
 
-function optionalFileAction(
-  available: boolean,
-  onSelect: (() => void) | undefined,
-  action: Omit<FileAction, "onSelect">,
-): FileAction | null {
-  return available && onSelect ? { ...action, onSelect } : null;
-}
-
 interface FileActionsContextMenuContentProps {
   fileKind: "file" | "directory";
   fileExists?: boolean;
@@ -98,19 +90,6 @@ export function FileActionsContextMenuContent({
   testIDPrefix,
 }: FileActionsContextMenuContentProps): ReactElement | null {
   const { t } = useTranslation();
-  const openInEditorAction = useMemo<FileAction | null>(
-    () =>
-      fileKind === "directory" && onOpenInEditor && editorTargetName
-        ? {
-            key: "open-in-editor",
-            group: "open",
-            label: t("workspace.fileActions.openIn", { target: editorTargetName }),
-            icon: ExternalLink,
-            onSelect: onOpenInEditor,
-          }
-        : null,
-    [editorTargetName, fileKind, onOpenInEditor, t],
-  );
   const actions = useMemo<FileAction[]>(() => {
     const availableFile = fileKind === "file" && fileExists;
     const specs: Array<FileAction | null> = [
@@ -150,13 +129,24 @@ export function FileActionsContextMenuContent({
             onSelect: onOpenFile,
           }
         : null,
-      openInEditorAction,
-      optionalFileAction(availableFile, onOpenToSide, {
-        key: "open-to-side",
-        group: "open",
-        label: t("workspace.fileActions.openToSide"),
-        icon: ArrowRightToLine,
-      }),
+      fileKind === "directory" && onOpenInEditor && editorTargetName
+        ? {
+            key: "open-in-editor",
+            group: "open",
+            label: t("workspace.fileActions.openIn", { target: editorTargetName }),
+            icon: ExternalLink,
+            onSelect: onOpenInEditor,
+          }
+        : null,
+      availableFile && onOpenToSide
+        ? {
+            key: "open-to-side",
+            group: "open",
+            label: t("workspace.fileActions.openToSide"),
+            icon: ArrowRightToLine,
+            onSelect: onOpenToSide,
+          }
+        : null,
       onCopyPath
         ? {
             key: "copy-path",
@@ -249,6 +239,7 @@ export function FileActionsContextMenuContent({
       }),
     );
   }, [
+    editorTargetName,
     fileExists,
     fileKind,
     onAddToChat,
@@ -261,7 +252,7 @@ export function FileActionsContextMenuContent({
     onNewFile,
     onNewFolder,
     onOpenFile,
-    openInEditorAction,
+    onOpenInEditor,
     onOpenToSide,
     onRename,
     onReveal,

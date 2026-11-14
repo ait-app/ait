@@ -42,7 +42,6 @@ interface CreateFlowState {
     lifecycle: CreateFlowLifecycleState;
     errorMessage?: string;
   }) => void;
-  rekeyDraft: (input: { fromDraftId: string; toDraftId: string }) => void;
   clear: (input: { draftId: string }) => void;
   clearByAgent: (input: { serverId: string; agentId: string }) => void;
   clearAll: () => void;
@@ -89,23 +88,6 @@ export const useCreateFlowStore = create<CreateFlowState>((set, get) => ({
         pendingByDraftId: {
           ...state.pendingByDraftId,
           [draftId]: { ...current, lifecycle, errorMessage },
-        },
-      };
-    }),
-  rekeyDraft: ({ fromDraftId, toDraftId }) =>
-    set((state) => {
-      const current = state.pendingByDraftId[fromDraftId];
-      if (!current) {
-        return state;
-      }
-      if (fromDraftId === toDraftId) {
-        return state;
-      }
-      const { [fromDraftId]: _removed, ...rest } = state.pendingByDraftId;
-      return {
-        pendingByDraftId: {
-          ...rest,
-          [toDraftId]: { ...current, draftId: toDraftId },
         },
       };
     }),

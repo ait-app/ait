@@ -1,10 +1,5 @@
 import { useCallback, useMemo } from "react";
-import {
-  Pressable,
-  type GestureResponderEvent,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Pressable, type GestureResponderEvent } from "react-native";
 import Animated, {
   Easing,
   interpolateColor,
@@ -22,7 +17,6 @@ interface SwitchProps {
   disabled?: boolean;
   accessibilityLabel?: string;
   testID?: string;
-  style?: StyleProp<ViewStyle>;
 }
 
 const TIMING = { duration: 180, easing: Easing.inOut(Easing.ease) };
@@ -79,7 +73,6 @@ export function Switch({
   disabled = false,
   accessibilityLabel,
   testID,
-  style,
 }: SwitchProps) {
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -92,8 +85,8 @@ export function Switch({
 
   const accessibilityState = useMemo(() => ({ checked: value, disabled }), [value, disabled]);
   const pressableStyle = useMemo(
-    () => [styles.switchControl, disabled ? styles.disabled : null, style],
-    [disabled, style],
+    () => [styles.switchControl, disabled ? styles.disabled : null],
+    [disabled],
   );
 
   return (

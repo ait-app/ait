@@ -14,6 +14,4 @@ export const GITLAB_ACTIVE_PIPELINE_STATUSES = [
   "scheduled",
 ] as const;
 
-export type GitLabActivePipelineStatus = (typeof GITLAB_ACTIVE_PIPELINE_STATUSES)[number];
-
 export const GITLAB_ACTIVE_PIPELINE_STATUS_SET = new Set<string>(GITLAB_ACTIVE_PIPELINE_STATUSES);

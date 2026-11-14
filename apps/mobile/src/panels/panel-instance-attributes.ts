@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { usePaneContext } from "@/panels/pane-context";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 
-export interface PanelInstanceIdentity {
+interface PanelInstanceIdentity {
   serverId: string;
   workspaceId: string;
   tabId: string;
 }
 
-export interface PanelInstanceAttributes {
+interface PanelInstanceAttributes {
   modified: boolean;
   suspendPendingSave?: () => () => void;
 }
@@ -23,7 +23,7 @@ function buildWorkspacePanelKey(workspaceKey: string, tabId: string): string {
   return `${workspaceKey}:${tabId}`;
 }
 
-export function buildPanelInstanceKey(identity: PanelInstanceIdentity): string {
+function buildPanelInstanceKey(identity: PanelInstanceIdentity): string {
   return buildWorkspacePanelKey(buildWorkspaceTabPersistenceKey(identity) ?? "", identity.tabId);
 }
 

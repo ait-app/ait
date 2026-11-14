@@ -109,7 +109,6 @@ export function BranchSwitcher({
         onOpenChange={setIsOpen}
         anchorRef={anchorRef}
         desktopPlacement="bottom-start"
-        desktopPreventInitialFlash
         desktopMinWidth={280}
         renderOption={renderBranchOption}
       />

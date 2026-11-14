@@ -12,7 +12,6 @@ type BrowserAutomationExecuteResponse = Extract<
   { type: "browser.automation.execute.response" }
 >;
 
-export type DesktopNotificationPermission = "granted" | "denied" | "default";
 export type DesktopWindowChromeMode = "native-mac" | "custom-windows" | "custom-linux";
 
 export interface DesktopDialogAskOptions {
@@ -101,7 +100,6 @@ export interface DesktopWindowChromeUpdate {
 }
 
 export interface DesktopWindowBridge {
-  label?: string;
   minimize?: () => Promise<void>;
   close?: () => Promise<void>;
   toggleMaximize?: () => Promise<void>;
@@ -113,9 +111,6 @@ export interface DesktopWindowBridge {
     handler: (event: TEvent) => void,
   ) => Promise<() => void> | (() => void);
   setBadgeCount?: (count?: number) => Promise<void>;
-  onDragDropEvent?: <TEvent = unknown>(
-    handler: (event: TEvent) => void,
-  ) => Promise<() => void> | (() => void);
 }
 
 export interface DesktopWindowModuleBridge {
@@ -134,9 +129,10 @@ export interface DesktopAgentNavigationBridge {
   ready?: () => Promise<{ serverId: string; agentId: string } | null>;
 }
 
-export type DesktopBrowserShortcutEvent =
-  | { browserId?: string; action: "focus-url" }
-  | { browserId: string; action: "new-tab" };
+export interface DesktopBrowserShortcutEvent {
+  browserId?: string;
+  action: "focus-url";
+}
 
 export interface DesktopBrowserNewTabRequestEvent {
   sourceBrowserId: string;

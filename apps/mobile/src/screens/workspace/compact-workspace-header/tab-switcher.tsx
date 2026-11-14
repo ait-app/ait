@@ -152,6 +152,7 @@ interface MobileWorkspaceTabSwitcherProps {
 
 function MobileWorkspaceTabOption({
   tab,
+  fallbackLabel,
   tabIndex,
   tabCount,
   normalizedServerId,
@@ -171,6 +172,7 @@ function MobileWorkspaceTabOption({
   onCloseOtherTabs,
 }: {
   tab: WorkspaceTabDescriptor;
+  fallbackLabel: string;
   tabIndex: number;
   tabCount: number;
   normalizedServerId: string;
@@ -230,23 +232,6 @@ function MobileWorkspaceTabOption({
     labels: tabMenuLabels,
   });
 
-  const fallbackLabels = useMemo(
-    () => ({
-      newTab: t("workspace.tabs.actions.newTab"),
-      newAgent: t("workspace.tabs.fallback.newAgent"),
-      setup: t("workspace.tabs.fallback.setup"),
-      terminal: t("workspace.tabs.fallback.terminal"),
-      browser: t("workspace.tabs.fallback.browser"),
-      agent: t("workspace.tabs.fallback.agent"),
-      changes: t("panels.diff.changesLabel"),
-      files: t("panels.files.label"),
-      pullRequest: t("panels.pullRequest.label"),
-      schedule: t("schedules.product.schedule"),
-      bot: t("bots.title"),
-    }),
-    [t],
-  );
-  const fallbackLabel = getFallbackTabOptionLabel(tab, fallbackLabels);
   const trailingAccessory = useMemo(
     () => (
       <MobileTabTrailingAccessory
@@ -408,6 +393,7 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
       return (
         <MobileWorkspaceTabOption
           tab={tab}
+          fallbackLabel={option.label}
           tabIndex={tabIndex}
           tabCount={tabs.length}
           normalizedServerId={normalizedServerId}

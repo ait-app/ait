@@ -21,7 +21,6 @@ export function SortableInlineList<T>({
   keyExtractor: (item: T, index: number) => string;
   renderItem: (info: DraggableRenderItemInfo<T>) => ReactElement;
   onDragEnd?: (data: T[]) => void;
-  useDragHandle?: boolean;
   disabled?: boolean;
   externalDndContext?: boolean;
   activeId?: string | null;

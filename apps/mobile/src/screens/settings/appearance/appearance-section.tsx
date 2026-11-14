@@ -1,4 +1,4 @@
-import { SettingsCard, SettingsSwitch } from "@/components/settings";
+import { SettingsCard, SettingsSwitch, ValueMenuItem } from "@/components/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
   DropdownMenu,
@@ -38,7 +38,7 @@ import {
   THEME_SWATCHES,
   type Theme,
 } from "@/styles/theme";
-import { SYNTAX_THEME_OPTIONS, type SyntaxThemeId, type SyntaxThemeOption } from "@ait/highlight";
+import { SYNTAX_THEME_OPTIONS, type SyntaxThemeId } from "@ait/highlight";
 import type { TFunction } from "i18next";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -184,40 +184,6 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
   );
 }
 
-interface AutoExpandReasoningRowProps {
-  value: boolean;
-  onChange: (value: boolean) => void;
-}
-
-function AutoExpandReasoningRow({ value, onChange }: AutoExpandReasoningRowProps) {
-  const { t } = useTranslation();
-  return (
-    <SettingsSwitch
-      label={t("settings.general.autoExpandReasoning.label")}
-      hint={t("settings.general.autoExpandReasoning.description")}
-      value={value}
-      onValueChange={onChange}
-    />
-  );
-}
-
-interface ChatOutlineRowProps {
-  value: boolean;
-  onChange: (value: boolean) => void;
-}
-
-function ChatOutlineRow({ value, onChange }: ChatOutlineRowProps) {
-  const { t } = useTranslation();
-  return (
-    <SettingsSwitch
-      label={t("settings.appearance.chatOutline.title")}
-      hint={t("settings.appearance.chatOutline.description")}
-      value={value}
-      onValueChange={onChange}
-    />
-  );
-}
-
 const TOOL_CALL_DETAIL_LEVELS: readonly AppSettings["toolCallDetailLevel"][] = [
   "detailed",
   "overview",
@@ -228,22 +194,6 @@ function getToolCallDetailLevelLabel(
   value: AppSettings["toolCallDetailLevel"],
 ): string {
   return t(`settings.general.toolCallDetail.options.${value}`);
-}
-
-interface ToolCallDetailMenuItemProps {
-  value: AppSettings["toolCallDetailLevel"];
-  selected: boolean;
-  onChange: (value: AppSettings["toolCallDetailLevel"]) => void;
-}
-
-function ToolCallDetailMenuItem({ value, selected, onChange }: ToolCallDetailMenuItemProps) {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => onChange(value), [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {getToolCallDetailLevelLabel(t, value)}
-    </DropdownMenuItem>
-  );
 }
 
 interface ToolCallDetailRowProps {
@@ -274,9 +224,10 @@ function ToolCallDetailRow({ value, onChange }: ToolCallDetailRowProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {TOOL_CALL_DETAIL_LEVELS.map((option) => (
-            <ToolCallDetailMenuItem
+            <ValueMenuItem
               key={option}
               value={option}
+              label={getToolCallDetailLevelLabel(t, option)}
               selected={value === option}
               onChange={onChange}
             />
@@ -391,6 +342,39 @@ function FontSizeRow({
   );
 }
 
+type FontSizeSettingKey = "uiBaseFontSize" | "contentFontSize" | "codeFontSize";
+
+/** A digits-only draft of a font size that commits, clamped, on blur or submit. */
+function useFontSizeDraft(input: {
+  key: FontSizeSettingKey;
+  committed: number;
+  min: number;
+  max: number;
+  updateSettings: ReturnType<typeof useAppSettings>["updateSettings"];
+}) {
+  const { key, committed, min, max, updateSettings } = input;
+  const [draft, setDraft] = useState(String(committed));
+
+  // Resync when the committed value changes elsewhere.
+  useEffect(() => {
+    setDraft(String(committed));
+  }, [committed]);
+
+  const change = useCallback((value: string) => {
+    setDraft(value.replace(/[^\d]/g, ""));
+  }, []);
+
+  const commit = useCallback(() => {
+    const next = parseClampedFontSize(draft, { min, max }) ?? committed;
+    setDraft(String(next));
+    if (next !== committed) {
+      void updateSettings({ [key]: next });
+    }
+  }, [committed, draft, key, max, min, updateSettings]);
+
+  return { draft, change, commit };
+}
+
 // ---------------------------------------------------------------------------
 // Content width: numeric field (commit on blur/submit) + reset to the default
 // ---------------------------------------------------------------------------
@@ -468,23 +452,6 @@ function syntaxLabelForId(id: SyntaxThemeId): string {
   return option ? option.label : id;
 }
 
-interface SyntaxMenuItemProps {
-  option: SyntaxThemeOption;
-  selected: boolean;
-  onChange: (id: SyntaxThemeId) => void;
-}
-
-function SyntaxMenuItem({ option, selected, onChange }: SyntaxMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(option.id);
-  }, [onChange, option.id]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {option.label}
-    </DropdownMenuItem>
-  );
-}
-
 interface SyntaxRowProps {
   value: SyntaxThemeId;
   onChange: (id: SyntaxThemeId) => void;
@@ -515,9 +482,10 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {SYNTAX_THEME_OPTIONS.map((option) => (
-            <SyntaxMenuItem
+            <ValueMenuItem
               key={option.id}
-              option={option}
+              value={option.id}
+              label={option.label}
               selected={value === option.id}
               onChange={onChange}
             />
@@ -541,20 +509,27 @@ export function AppearanceSection() {
 
   const [uiFontDraft, setUiFontDraft] = useState(settings.uiFontFamily);
   const [monoFontDraft, setMonoFontDraft] = useState(settings.monoFontFamily);
-  const [uiBaseSizeDraft, setUiBaseSizeDraft] = useState(String(settings.uiBaseFontSize));
-  const [contentSizeDraft, setContentSizeDraft] = useState(String(settings.contentFontSize));
-  const [codeSizeDraft, setCodeSizeDraft] = useState(String(settings.codeFontSize));
-
-  // Resync numeric drafts when the committed value changes elsewhere.
-  useEffect(() => {
-    setUiBaseSizeDraft(String(settings.uiBaseFontSize));
-  }, [settings.uiBaseFontSize]);
-  useEffect(() => {
-    setContentSizeDraft(String(settings.contentFontSize));
-  }, [settings.contentFontSize]);
-  useEffect(() => {
-    setCodeSizeDraft(String(settings.codeFontSize));
-  }, [settings.codeFontSize]);
+  const uiBaseSize = useFontSizeDraft({
+    key: "uiBaseFontSize",
+    committed: settings.uiBaseFontSize,
+    min: MIN_UI_BASE_FONT_SIZE,
+    max: MAX_UI_BASE_FONT_SIZE,
+    updateSettings,
+  });
+  const contentSize = useFontSizeDraft({
+    key: "contentFontSize",
+    committed: settings.contentFontSize,
+    min: MIN_CONTENT_FONT_SIZE,
+    max: MAX_CONTENT_FONT_SIZE,
+    updateSettings,
+  });
+  const codeSize = useFontSizeDraft({
+    key: "codeFontSize",
+    committed: settings.codeFontSize,
+    min: MIN_CODE_FONT_SIZE,
+    max: MAX_CODE_FONT_SIZE,
+    updateSettings,
+  });
 
   const handleThemeChange = useCallback(
     (theme: BuiltInThemePreference) => {
@@ -628,64 +603,16 @@ export function AppearanceSection() {
     [settings.monoFontFamily, updateSettings],
   );
 
-  const handleUiBaseSizeChange = useCallback((value: string) => {
-    setUiBaseSizeDraft(value.replace(/[^\d]/g, ""));
-  }, []);
-
-  const handleCodeSizeChange = useCallback((value: string) => {
-    setCodeSizeDraft(value.replace(/[^\d]/g, ""));
-  }, []);
-
-  const handleContentSizeChange = useCallback((value: string) => {
-    setContentSizeDraft(value.replace(/[^\d]/g, ""));
-  }, []);
-
-  const commitUiBaseSize = useCallback(() => {
-    const parsed = parseClampedFontSize(uiBaseSizeDraft, {
-      min: MIN_UI_BASE_FONT_SIZE,
-      max: MAX_UI_BASE_FONT_SIZE,
-    });
-    const next = parsed ?? settings.uiBaseFontSize;
-    setUiBaseSizeDraft(String(next));
-    if (next !== settings.uiBaseFontSize) {
-      void updateSettings({ uiBaseFontSize: next });
-    }
-  }, [settings.uiBaseFontSize, uiBaseSizeDraft, updateSettings]);
-
-  const commitCodeSize = useCallback(() => {
-    const parsed = parseClampedFontSize(codeSizeDraft, {
-      min: MIN_CODE_FONT_SIZE,
-      max: MAX_CODE_FONT_SIZE,
-    });
-    const next = parsed ?? settings.codeFontSize;
-    setCodeSizeDraft(String(next));
-    if (next !== settings.codeFontSize) {
-      void updateSettings({ codeFontSize: next });
-    }
-  }, [codeSizeDraft, settings.codeFontSize, updateSettings]);
-
-  const commitContentSize = useCallback(() => {
-    const parsed = parseClampedFontSize(contentSizeDraft, {
-      min: MIN_CONTENT_FONT_SIZE,
-      max: MAX_CONTENT_FONT_SIZE,
-    });
-    const next = parsed ?? settings.contentFontSize;
-    setContentSizeDraft(String(next));
-    if (next !== settings.contentFontSize) {
-      void updateSettings({ contentFontSize: next });
-    }
-  }, [contentSizeDraft, settings.contentFontSize, updateSettings]);
-
   // Live-while-typing: the in-progress drafts drive the preview without
   // committing to the global theme. Empty/invalid fields fall back to the
   // theme value inside the preview.
   const previewOverrides = useMemo(
     () => ({
-      contentFontSize: sizeDraftToOverride(contentSizeDraft),
+      contentFontSize: sizeDraftToOverride(contentSize.draft),
       monoFontFamily: monoFontDraft,
-      codeFontSize: sizeDraftToOverride(codeSizeDraft),
+      codeFontSize: sizeDraftToOverride(codeSize.draft),
     }),
-    [codeSizeDraft, contentSizeDraft, monoFontDraft],
+    [codeSize.draft, contentSize.draft, monoFontDraft],
   );
 
   return (
@@ -697,18 +624,22 @@ export function AppearanceSection() {
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <SettingsCard>
-          <AutoExpandReasoningRow
+          <SettingsSwitch
+            label={t("settings.general.autoExpandReasoning.label")}
+            hint={t("settings.general.autoExpandReasoning.description")}
             value={settings.autoExpandReasoning}
-            onChange={handleAutoExpandReasoningChange}
+            onValueChange={handleAutoExpandReasoningChange}
           />
           <ToolCallDetailRow
             value={settings.toolCallDetailLevel}
             onChange={handleToolCallDetailLevelChange}
           />
           {!isNative ? (
-            <ChatOutlineRow
+            <SettingsSwitch
+              label={t("settings.appearance.chatOutline.title")}
+              hint={t("settings.appearance.chatOutline.description")}
               value={settings.chatOutlineEnabled}
-              onChange={handleChatOutlineChange}
+              onValueChange={handleChatOutlineChange}
             />
           ) : null}
         </SettingsCard>
@@ -733,18 +664,18 @@ export function AppearanceSection() {
             title={t("settings.appearance.fonts.interfaceSize")}
             hint={t("settings.appearance.fonts.interfaceSizeHint")}
             accessibilityLabel={t("settings.appearance.fonts.interfaceSizeAccessibility")}
-            draft={uiBaseSizeDraft}
+            draft={uiBaseSize.draft}
             withBorder={showInterfaceFontFamilyRow}
-            onChangeDraft={handleUiBaseSizeChange}
-            onCommit={commitUiBaseSize}
+            onChangeDraft={uiBaseSize.change}
+            onCommit={uiBaseSize.commit}
           />
           <FontSizeRow
             title={t("settings.appearance.fonts.contentSize")}
             hint={t("settings.appearance.fonts.contentSizeHint")}
             accessibilityLabel={t("settings.appearance.fonts.contentSizeAccessibility")}
-            draft={contentSizeDraft}
-            onChangeDraft={handleContentSizeChange}
-            onCommit={commitContentSize}
+            draft={contentSize.draft}
+            onChangeDraft={contentSize.change}
+            onCommit={contentSize.commit}
           />
           <FontFamilyRow
             title={t("settings.appearance.fonts.codeFont")}
@@ -761,9 +692,9 @@ export function AppearanceSection() {
             title={t("settings.appearance.fonts.codeSize")}
             hint={t("settings.appearance.fonts.codeSizeHint")}
             accessibilityLabel={t("settings.appearance.fonts.codeSizeAccessibility")}
-            draft={codeSizeDraft}
-            onChangeDraft={handleCodeSizeChange}
-            onCommit={commitCodeSize}
+            draft={codeSize.draft}
+            onChangeDraft={codeSize.change}
+            onCommit={codeSize.commit}
           />
         </View>
       </SettingsSection>

@@ -23,7 +23,7 @@ export interface TerminalLocalFileLinkTarget {
   lineEnd?: number;
 }
 
-export interface TerminalLocalFileLinkProviderOptions {
+interface TerminalLocalFileLinkProviderOptions {
   resolveLink: (source: TerminalLocalFileLinkSource) => Promise<TerminalLocalFileLinkTarget | null>;
   openLink: (
     target: TerminalLocalFileLinkTarget,

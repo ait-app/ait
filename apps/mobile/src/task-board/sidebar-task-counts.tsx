@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useTaskBoardModel } from "./use-task-board";
-import { taskLane, type TaskLane } from "./model";
+import { laneStatusBucket, taskLane, type TaskLane } from "./model";
 import { TaskStatusIcon } from "./task-status";
 
 export function SidebarTaskCounts() {
@@ -18,12 +18,7 @@ export function SidebarTaskCounts() {
           key={lane}
           accessibilityLabel={`${t(`taskBoard.lanes.${lane}`)} ${counts[lane]}`}
         >
-          <TaskStatusIcon
-            bucket={
-              lane === "needs_action" ? "needs_input" : lane === "review" ? "attention" : "running"
-            }
-            size={10}
-          />
+          <TaskStatusIcon bucket={laneStatusBucket(lane)} size={10} />
           <Text style={styles.text}>{counts[lane]}</Text>
         </View>
       ))}

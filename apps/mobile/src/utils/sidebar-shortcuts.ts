@@ -1,8 +1,4 @@
-import type {
-  SidebarProjectEntry,
-  SidebarWorkspacePlacement,
-} from "@/hooks/use-sidebar-workspaces-list";
-import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
+import type { SidebarWorkspacePlacement } from "@/hooks/use-sidebar-workspaces-list";
 
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
@@ -34,39 +30,9 @@ function createShortcutTarget(
   };
 }
 
-export function buildSidebarShortcutModel(input: {
-  projects: SidebarProjectEntry[];
-  collapsedProjectKeys: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.projects.map((project) => ({
-      workspaces: project.workspaces,
-      collapsed: input.collapsedProjectKeys.has(project.viewKey),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildStatusSidebarShortcutModel(input: {
-  groups: readonly StatusGroup[];
-  collapsedStatusGroupKeys?: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.groups.map((group) => ({
-      workspaces: group.rows,
-      collapsed: input.collapsedStatusGroupKeys?.has(group.bucket),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
 export function buildSidebarShortcutSections(input: {
   sections: readonly SidebarShortcutSection[];
-  shortcutLimit?: number;
 }): SidebarShortcutModel {
-  const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? SIDEBAR_SHORTCUT_LIMIT));
   const shortcutTargets: SidebarShortcutWorkspaceTarget[] = [];
   const navigationTargets: SidebarShortcutWorkspaceTarget[] = [];
   const shortcutIndexByWorkspaceKey = new Map<string, number>();
@@ -79,7 +45,7 @@ export function buildSidebarShortcutSections(input: {
     for (const workspace of section.workspaces) {
       const target = createShortcutTarget(workspace);
       navigationTargets.push(target);
-      if (shortcutTargets.length >= maxShortcuts) {
+      if (shortcutTargets.length >= SIDEBAR_SHORTCUT_LIMIT) {
         continue;
       }
 

@@ -47,7 +47,6 @@ interface Pending {
 /** SDK-owned Rust v1 session. Platform transports carry only wire frames. */
 export interface MessageMetrics {
   bytes: number;
-  decodeMs: number;
 }
 
 type MessageHandler = (data: unknown, binary: boolean, metrics?: MessageMetrics) => void;
@@ -283,15 +282,10 @@ export function createDaemonConnection(
       return;
     }
     const wire = String(data);
-    const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
-    const started = now();
     const message = traced("paseo.ws.json.parse", { size: String(wire.length) }, () =>
       object(JSON.parse(wire)),
     );
-    const metrics = {
-      bytes: new TextEncoder().encode(wire).length,
-      decodeMs: now() - started,
-    };
+    const metrics = { bytes: new TextEncoder().encode(wire).length };
     const publish = (value: Payload) => emit(value, metrics);
     if (message.type === "server_info") {
       if (!helloSent || negotiated.has(channel)) throw new Error("Unexpected Rust daemon hello");

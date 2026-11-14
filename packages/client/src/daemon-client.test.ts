@@ -1,13 +1,11 @@
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
-  FileTransferOpcode,
-} from "@ait/protocol/binary-frames/index";
-import {
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
+  FileTransferOpcode,
   TerminalStreamOpcode,
-} from "@ait/protocol/terminal-stream-protocol";
+} from "@ait/protocol/binary-frames/index";
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -543,42 +541,6 @@ test("timeline observation consumes broadcasts from a host without selective del
   expect(updates).toEqual([expect.objectContaining({ type: "agent.stream" })]);
   await observation.release();
   expect(mock.sent).toEqual([]);
-});
-
-test("normalizes legacy and dedicated agent attention notifications", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "attention_normalization",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connect = client.connect();
-  mock.triggerOpen();
-  await connect;
-  const notifications: unknown[] = [];
-  client.onAgentAttentionRequired((notification) => notifications.push(notification));
-  const payload = {
-    agentId: "agent-a",
-    reason: "finished",
-    timestamp: "2026-07-12T00:00:00.000Z",
-    shouldNotify: true,
-  } as const;
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "agent.stream",
-      payload: {
-        agentId: payload.agentId,
-        timestamp: payload.timestamp,
-        event: { type: "attention_required", provider: "codex", ...payload },
-      },
-    }),
-  );
-  mock.triggerMessage(wrapSessionMessage({ type: "agent.attention.required", payload }));
-
-  expect(notifications).toEqual([payload, payload]);
 });
 
 const noopLogger: Logger = {
@@ -1751,52 +1713,6 @@ test("honors explicit fetchAgents timeout below the session RPC default", async 
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1200ms)");
 });
 
-test("honors explicit shutdownServer timeout below the session RPC default", async () => {
-  useHeartbeatClock();
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.shutdownServer({
-    requestId: "req-shutdown-1",
-    timeout: 1_500,
-  });
-  let settled = false;
-  void responsePromise.then(
-    () => {
-      settled = true;
-      return undefined;
-    },
-    () => {
-      settled = true;
-      return undefined;
-    },
-  );
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "server.shutdown.request",
-    requestId: "req-shutdown-1",
-  });
-
-  await vi.advanceTimersByTimeAsync(1_499);
-  expect(settled).toBe(false);
-
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
 test("honors explicit getDaemonStatus timeout below the session RPC default", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -1841,65 +1757,6 @@ test("honors explicit getDaemonStatus timeout below the session RPC default", as
 
   await vi.advanceTimersByTimeAsync(1);
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
-test("gates config reload on the daemon capability", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  await expect(client.reloadDaemonConfig("reload-old-host")).rejects.toThrow(
-    "Update the host to reload daemon configuration.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
-test("sends and parses daemon config reload", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { daemonConfigReload: true } });
-  await connectPromise;
-
-  const response = client.reloadDaemonConfig("reload-new-host");
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "daemon.config.reload.request",
-    requestId: "reload-new-host",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "daemon.config.reload.response",
-      payload: {
-        requestId: "reload-new-host",
-        appliedPaths: ["daemon.browserTools.enabled"],
-        restartRequiredPaths: ["daemon.listen"],
-        overrideControlledPaths: [],
-      },
-    }),
-  );
-
-  await expect(response).resolves.toEqual({
-    requestId: "reload-new-host",
-    appliedPaths: ["daemon.browserTools.enabled"],
-    restartRequiredPaths: ["daemon.listen"],
-    overrideControlledPaths: [],
-  });
 });
 
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
@@ -3797,51 +3654,6 @@ test("omitting workspace.worktree.create.request worktree base-ref fields preser
   });
 });
 
-test("sends explicit server.shutdown.request via shutdownServer", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  expect(typeof client.shutdownServer).toBe("function");
-  const promise = client.shutdownServer({ requestId: "req-shutdown-1" });
-
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request).toEqual({
-    type: "server.shutdown.request",
-    requestId: "req-shutdown-1",
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "status",
-      payload: {
-        status: "shutdown_requested",
-        clientId: "clsk_unit_test",
-        requestId: "req-shutdown-1",
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    status: "shutdown_requested",
-    clientId: "clsk_unit_test",
-    requestId: "req-shutdown-1",
-  });
-});
-
 test("restartServer remains restart-only and sends server.restart.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -4162,59 +3974,6 @@ test("subscribes to checkout diff updates via RPC handshake", async () => {
   });
 });
 
-test("getCheckoutDiff reads a snapshot without creating a subscription", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.getCheckoutDiff("/tmp/project", { mode: "base", baseRef: "main" });
-
-  expect(mock.sent).toHaveLength(1);
-  const subscribeRequest = parseSentFrame(mock.sent[0]);
-  expect(subscribeRequest.type).toBe("checkout.diff.get.request");
-  expect(subscribeRequest.cwd).toBe("/tmp/project");
-  expect(subscribeRequest.compare).toEqual({
-    mode: "base",
-    baseRef: "main",
-  });
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.diff.get.response",
-        payload: {
-          cwd: "/tmp/project",
-          files: [],
-          error: null,
-          requestId: subscribeRequest.requestId,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    cwd: "/tmp/project",
-    files: [],
-    error: null,
-    requestId: subscribeRequest.requestId,
-  });
-
-  expect(mock.sent).toHaveLength(1);
-});
-
 test("requests branch suggestions via RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -4433,60 +4192,6 @@ test("requests directory suggestions via RPC", async () => {
     entries: [{ path: "README.md", kind: "file" }],
     error: null,
     requestId: "req-directories",
-  });
-});
-
-test("requests checkout merge from base via RPC", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.checkoutMergeFromBase(
-    "/tmp/project",
-    { baseRef: "main", requireCleanTarget: true },
-    "req-merge-from-base",
-  );
-
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout.merge_from_base.request");
-  expect(request.cwd).toBe("/tmp/project");
-  expect(request.baseRef).toBe("main");
-  expect(request.requireCleanTarget).toBe(true);
-  expect(request.requestId).toBe("req-merge-from-base");
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.merge_from_base.response",
-        payload: {
-          cwd: "/tmp/project",
-          requestId: "req-merge-from-base",
-          success: true,
-          error: null,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    cwd: "/tmp/project",
-    requestId: "req-merge-from-base",
-    success: true,
-    error: null,
   });
 });
 
@@ -4778,119 +4483,6 @@ test("requests checkout pull via RPC", async () => {
     requestId: "req-pull",
     success: true,
     error: null,
-  });
-});
-
-test("renames a branch via RPC", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.renameBranch({
-    cwd: "/tmp/project",
-    branch: "feature/new-name",
-    requestId: "req-rename-branch",
-  });
-
-  expect(mock.sent).toHaveLength(1);
-  const request = JSON.parse(assertStr(mock.sent[0])) as {
-    type: "session";
-    message: {
-      type: "checkout.rename_branch.request";
-      cwd: string;
-      branch: string;
-      requestId: string;
-    };
-  };
-  expect(request.message.type).toBe("checkout.rename_branch.request");
-  expect(request.message.cwd).toBe("/tmp/project");
-  expect(request.message.branch).toBe("feature/new-name");
-  expect(request.message.requestId).toBe("req-rename-branch");
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.rename_branch.response",
-        payload: {
-          requestId: "req-rename-branch",
-          success: true,
-          cwd: "/tmp/project",
-          currentBranch: "feature/new-name",
-          error: null,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    requestId: "req-rename-branch",
-    success: true,
-    cwd: "/tmp/project",
-    currentBranch: "feature/new-name",
-    error: null,
-  });
-});
-
-test("returns renameBranch business failures", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.renameBranch({
-    cwd: "/tmp/project",
-    branch: "already-exists",
-    requestId: "req-rename-branch-fail",
-  });
-
-  expect(mock.sent).toHaveLength(1);
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.rename_branch.response",
-        payload: {
-          requestId: "req-rename-branch-fail",
-          success: false,
-          cwd: "/tmp/project",
-          currentBranch: null,
-          error: { code: "NOT_ALLOWED", message: "Branch already exists" },
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    requestId: "req-rename-branch-fail",
-    success: false,
-    cwd: "/tmp/project",
-    currentBranch: null,
-    error: { code: "NOT_ALLOWED", message: "Branch already exists" },
   });
 });
 

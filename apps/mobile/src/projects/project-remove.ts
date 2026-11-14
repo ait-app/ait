@@ -2,18 +2,13 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import { selectHostFeature } from "@/runtime/host-features";
 
-interface ProjectRemoveHost {
+export interface ProjectRemoveTarget {
   serverId: string;
   projectId: string;
 }
 
 export interface ProjectRemoveProject {
-  hosts: readonly ProjectRemoveHost[];
-}
-
-export interface ProjectRemoveTarget {
-  serverId: string;
-  projectId: string;
+  hosts: readonly ProjectRemoveTarget[];
 }
 
 export type ProjectRemoveReadiness =

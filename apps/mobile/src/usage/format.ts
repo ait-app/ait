@@ -1,10 +1,6 @@
 import { formatTokenCount } from "@/components/context-window-meter.utils";
 import type { TFunction } from "i18next";
 import { i18n } from "@/i18n/i18next";
-import {
-  formatResetLabel as localizedResetLabel,
-  formatRunOutLabel as localizedRunOutLabel,
-} from "@/provider-usage/format";
 import type { UsageDisplayAs } from "./preferences";
 import type { UsageBalanceUnit } from "./types";
 
@@ -27,22 +23,39 @@ export function formatDisplayPct(
     : t("providerUsage.remaining", { amount: formatPct(value) });
 }
 
+/** Time until `iso` in the largest whole unit, "" once it has passed, or null if unparseable. */
+function relativeDuration(iso: string, t: TFunction): string | null {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (!Number.isFinite(diffMs)) return null;
+  if (diffMs <= 0) return "";
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays > 0) return t("providerUsage.days", { count: diffDays });
+  if (diffHours > 0) return t("providerUsage.hours", { count: diffHours });
+  return t("providerUsage.minutes", { count: diffMinutes });
+}
+
 export function formatResetLabel(
   iso: string | null | undefined,
-  translator: TFunction | boolean = i18n.t.bind(i18n),
+  t: TFunction = i18n.t.bind(i18n),
   retained = false,
 ): string | null {
-  const t = typeof translator === "function" ? translator : i18n.t.bind(i18n);
-  const isRetained = typeof translator === "boolean" ? translator : retained;
-  if (isRetained && iso && Date.parse(iso) <= Date.now()) return t("providerUsage.resetTimePassed");
-  return localizedResetLabel(iso, t);
+  if (!iso) return null;
+  if (retained && Date.parse(iso) <= Date.now()) return t("providerUsage.resetTimePassed");
+  const time = relativeDuration(iso, t);
+  if (time === null) return null;
+  return time === "" ? t("providerUsage.resettingNow") : t("providerUsage.resets", { time });
 }
 
 export function formatRunOutLabel(
   iso: string | null | undefined,
   t: TFunction = i18n.t.bind(i18n),
 ): string | null {
-  return localizedRunOutLabel(iso, t);
+  if (!iso) return null;
+  const time = relativeDuration(iso, t);
+  if (time === null) return null;
+  return time === "" ? t("providerUsage.runsOutNow") : t("providerUsage.runsOut", { time });
 }
 
 /** A balance amount as the app's language writes it: "$1,234.50", "12,345". */

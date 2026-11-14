@@ -26,7 +26,6 @@ import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import {
   computePosition,
   measureElement,
-  type Alignment,
   type Placement,
   type Rect,
   type Size,
@@ -58,25 +57,12 @@ const HoverCardContext = createContext<HoverCardContextValue | null>(null);
  * </HoverCard>
  * ```
  */
-export function HoverCard({
-  disabled = false,
-  children,
-}: {
-  /** Closes the card and keeps it closed, e.g. while its trigger is dragged. */
-  disabled?: boolean;
-  children: ReactNode;
-}): ReactNode {
+export function HoverCard({ children }: { children: ReactNode }): ReactNode {
   if (!isWeb) return children;
-  return <WebHoverCard disabled={disabled}>{children}</WebHoverCard>;
+  return <WebHoverCard>{children}</WebHoverCard>;
 }
 
-function WebHoverCard({
-  disabled,
-  children,
-}: {
-  disabled: boolean;
-  children: ReactNode;
-}): ReactElement {
+function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
   const layer = useOverlayLayer("floating");
   const triggerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
@@ -93,7 +79,6 @@ function WebHoverCard({
   }, []);
 
   const focusInside = useCallback(() => {
-    if (!isWeb) return false;
     const active = document.activeElement;
     return [triggerRef.current, contentRef.current].some((view) =>
       (view as unknown as HTMLElement | null)?.contains(active),
@@ -118,14 +103,11 @@ function WebHoverCard({
 
   const openNow = useCallback(() => {
     clearGraceTimer();
-    if (!disabled) {
-      setOpen(true);
-    }
-  }, [clearGraceTimer, disabled]);
+    setOpen(true);
+  }, [clearGraceTimer]);
 
   const keyPressed = useCallback(
     (event: KeyboardEvent): boolean => {
-      if (!isWeb) return false;
       const trigger = triggerRef.current as unknown as HTMLElement | null;
       if (!trigger) return false;
       if (event.key === "Escape" && open) {
@@ -156,7 +138,7 @@ function WebHoverCard({
   );
 
   const setOverlayScope = useWebOverlayRegistration({
-    active: !disabled && open,
+    active: open,
     layer,
     onKeyDown: keyPressed,
     manageFocus: false,
@@ -170,7 +152,6 @@ function WebHoverCard({
   );
 
   useEffect(() => {
-    if (!isWeb) return;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
     if (!trigger) return;
     const close = () => {
@@ -236,13 +217,6 @@ function WebHoverCard({
     onLeaveSafeZone: scheduleClose,
   });
 
-  useEffect(() => {
-    if (disabled) {
-      clearGraceTimer();
-      setOpen(false);
-    }
-  }, [clearGraceTimer, disabled]);
-
   useEffect(() => clearGraceTimer, [clearGraceTimer]);
 
   const value = useMemo<HoverCardContextValue>(
@@ -285,7 +259,6 @@ export function HoverCardTrigger({
 
 interface HoverCardContentProps {
   placement: Placement;
-  alignment?: Alignment;
   offset?: number;
   /** Layered over the default popover surface. */
   style?: StyleProp<ViewStyle>;
@@ -314,7 +287,6 @@ function HoverCardSurface({
   triggerRef,
   contentRef,
   placement,
-  alignment = "center",
   offset = 4,
   style,
   role,
@@ -351,11 +323,11 @@ function HoverCardSurface({
       contentSize,
       displayArea: { x: 0, y: 0, width, height },
       placement,
-      alignment,
+      alignment: "center",
       offset,
     });
     setPosition({ x, y });
-  }, [alignment, contentSize, offset, placement, triggerRect]);
+  }, [contentSize, offset, placement, triggerRect]);
 
   const handleLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {

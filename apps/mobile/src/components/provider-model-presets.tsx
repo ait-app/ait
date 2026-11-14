@@ -69,10 +69,9 @@ export function ProviderModelPresets({
   query?: string;
 }) {
   const { t } = useTranslation();
-  const presets =
-    choices.presets.filter((preset) =>
-      `${preset.name} ${preset.model}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
-    ) ?? [];
+  const presets = choices.presets.filter((preset) =>
+    `${preset.name} ${preset.model}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+  );
   if (presets.length === 0) return null;
   return (
     <View testID={`provider-model-presets-${provider}`}>

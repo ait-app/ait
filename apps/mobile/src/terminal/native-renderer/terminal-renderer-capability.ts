@@ -1,4 +1,4 @@
-export type TerminalRendererSelection = "native-grid" | "webview" | "update-host";
+type TerminalRendererSelection = "native-grid" | "webview" | "update-host";
 
 export function resolveTerminalRendererSelection(input: {
   useLegacyTerminalRenderer: boolean;

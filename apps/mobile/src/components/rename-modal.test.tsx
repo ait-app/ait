@@ -173,7 +173,6 @@ interface RenderOptions {
   submitLabel?: string;
   onClose?: () => void;
   onSubmit?: (value: string) => Promise<void> | void;
-  validate?: (value: string) => string | null;
   maxLength?: number;
 }
 
@@ -186,7 +185,6 @@ function renderModal(options: RenderOptions = {}): void {
     submitLabel,
     onClose = vi.fn(),
     onSubmit = vi.fn(),
-    validate,
     maxLength,
   } = options;
   act(() => {
@@ -199,7 +197,6 @@ function renderModal(options: RenderOptions = {}): void {
         submitLabel={submitLabel}
         onClose={onClose}
         onSubmit={onSubmit}
-        validate={validate}
         maxLength={maxLength}
         testID="rename-modal"
       />,
@@ -309,23 +306,6 @@ describe("RenameModal", () => {
     typeInto("main");
     await flush();
     expect(querySubmit()?.disabled).toBe(true);
-  });
-
-  it("surfaces validate errors inline and blocks submission", async () => {
-    const onSubmit = vi.fn();
-    const validate = vi.fn((value: string) => (value === "bad" ? "Invalid name" : null));
-    renderModal({ initialValue: "ok", validate, onSubmit });
-
-    typeInto("bad");
-    const submit = querySubmit()!;
-    expect(submit.disabled).toBe(true);
-
-    pressEnter();
-    await flush();
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    const errorNode = queryError();
-    expect(errorNode?.textContent).toContain("Invalid name");
   });
 
   it("disables the submit button while onSubmit is pending", async () => {

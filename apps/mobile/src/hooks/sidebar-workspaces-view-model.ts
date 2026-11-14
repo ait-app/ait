@@ -448,22 +448,6 @@ function areSidebarWorkspaceEntriesEqual(
   });
 }
 
-export function buildSidebarProjectsFromStructure(input: {
-  projects: WorkspaceStructureProject[];
-}): SidebarProjectEntry[] {
-  return buildSidebarProjectsFromHostProjects({
-    projects: input.projects.map((project) => ({
-      viewKey: project.viewKey,
-      projectKey: project.projectKey,
-      projectName: project.projectName,
-      projectKind: project.projectKind,
-      iconWorkingDir: project.iconWorkingDir,
-      hosts: project.hosts,
-      workspaceKeys: project.workspaceKeys,
-    })),
-  });
-}
-
 export function buildSidebarProjectsFromHostProjects(input: {
   projects: readonly HostProjectListItem[];
 }): SidebarProjectEntry[] {

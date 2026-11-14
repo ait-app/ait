@@ -5,7 +5,6 @@ import {
   getRasterImageMimeTypeFromPath,
   isRasterImageFile,
   isRasterImageMimeType,
-  isRasterImagePath,
   RASTER_IMAGE_FILE_EXTENSIONS,
   resolveRasterImageMimeType,
 } from "./file-types";
@@ -13,7 +12,6 @@ import {
 describe("attachment file types", () => {
   it("keeps SVG as a file while treating raster image files as images", () => {
     expect(getMimeTypeFromPath("/tmp/logo.svg")).toBe("application/octet-stream");
-    expect(isRasterImagePath("/tmp/logo.svg")).toBe(false);
     expect(isRasterImageMimeType("image/svg+xml")).toBe(false);
     expect(isRasterImageFile(new File(["<svg />"], "logo.svg", { type: "image/svg+xml" }))).toBe(
       false,
@@ -21,7 +19,6 @@ describe("attachment file types", () => {
 
     expect(getRasterImageMimeTypeFromPath("/tmp/screenshot.PNG?cache=1")).toBe("image/png");
     expect(getMimeTypeFromPath("/tmp/screenshot.PNG?cache=1")).toBe("image/png");
-    expect(isRasterImagePath("/tmp/screenshot.PNG?cache=1")).toBe(true);
     expect(isRasterImageMimeType("image/png; charset=binary")).toBe(true);
     expect(isRasterImageFile(new File([new Uint8Array([0])], "screenshot.png"))).toBe(true);
   });

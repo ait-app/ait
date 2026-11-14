@@ -30,6 +30,7 @@ import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { useTaskBoard } from "@/task-board/use-task-board";
 import {
   filterTaskBoard,
+  laneStatusBucket,
   TASK_LANES,
   taskKey,
   taskLane,
@@ -85,7 +86,7 @@ export function TasksScreen() {
   return focused ? <TasksScreenContent /> : <View style={styles.container} />;
 }
 
-export function TasksScreenContent() {
+function TasksScreenContent() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const {
@@ -329,7 +330,6 @@ export function TasksScreenContent() {
                 variant="ghost"
                 onPress={() => {
                   selectHost(ALL_HOSTS_OPTION_ID);
-                  setProjectKey("");
                   setSort("recent");
                   setSearch("");
                 }}
@@ -404,16 +404,7 @@ export function TasksScreenContent() {
                         onPress={() => setMobileLane(lane)}
                         testID={`task-tab-${lane}`}
                       >
-                        <TaskStatusIcon
-                          bucket={
-                            lane === "needs_action"
-                              ? "needs_input"
-                              : lane === "review"
-                                ? "attention"
-                                : lane
-                          }
-                          size={10}
-                        />
+                        <TaskStatusIcon bucket={laneStatusBucket(lane)} size={10} />
                         <Text style={[styles.tabText, mobileLane === lane && styles.activeTabText]}>
                           {t(`taskBoard.lanes.${lane}`)} {lanes[lane].length}
                         </Text>
@@ -453,15 +444,7 @@ export function TasksScreenContent() {
                           onPress={() => toggleLane(lane)}
                           testID={`task-expand-${lane}`}
                         >
-                          <TaskStatusIcon
-                            bucket={
-                              lane === "needs_action"
-                                ? "needs_input"
-                                : lane === "review"
-                                  ? "attention"
-                                  : lane
-                            }
-                          />
+                          <TaskStatusIcon bucket={laneStatusBucket(lane)} />
                           <ChevronsRight size={14} color={theme.colors.foregroundMuted} />
                           <Text style={styles.collapsedTitle}>
                             {t(`taskBoard.lanes.${lane}`)} {lanes[lane].length}
@@ -471,15 +454,7 @@ export function TasksScreenContent() {
                         <>
                           {!compact ? (
                             <View style={styles.laneHeader}>
-                              <TaskStatusIcon
-                                bucket={
-                                  lane === "needs_action"
-                                    ? "needs_input"
-                                    : lane === "review"
-                                      ? "attention"
-                                      : lane
-                                }
-                              />
+                              <TaskStatusIcon bucket={laneStatusBucket(lane)} />
                               <Text style={styles.laneTitle}>{t(`taskBoard.lanes.${lane}`)}</Text>
                               <Text style={styles.count}>{lanes[lane].length}</Text>
                               <View style={styles.collapseControl}>

@@ -1,12 +1,15 @@
 import { useAppSettings } from "@/hooks/use-settings";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { panelCanLaunchInPane, panelSupportsHost, type PaneHost } from "@/panels/panel-manifest";
+import type { PanelIconProps } from "@/panels/panel-registry";
 import {
-  getPanelRegistration,
-  type PanelIconProps,
-  type PanelPresentation,
-} from "@/panels/panel-registry";
-import { ensurePanelsRegistered } from "@/panels/register-panels";
+  botPanelPresentation,
+  changesTreePanelPresentation,
+  filesPanelPresentation,
+  pullRequestPanelPresentation,
+  schedulePanelPresentation,
+  workingDiffPanelPresentation,
+} from "@/panels/panel-presentations";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { NewTabSelection } from "@/workspace-tabs/new-tab";
@@ -51,7 +54,7 @@ export interface WorkspaceTabLaunchItem {
   launch: (destination: WorkspaceTabLaunchDestination) => void;
 }
 
-export interface WorkspaceTabLaunchGroup {
+interface WorkspaceTabLaunchGroup {
   id: "tabs" | "terminal-profiles";
   label: string | null;
   items: readonly WorkspaceTabLaunchItem[];
@@ -84,12 +87,6 @@ const BUILT_IN_SELECTIONS = {
   schedule: { kind: "target", target: { kind: "schedule" } },
 } satisfies Record<BuiltInLaunchItemId, NewTabSelection>;
 
-function getLaunchPresentation(kind: WorkspaceTabTarget["kind"]): PanelPresentation {
-  const registration = getPanelRegistration(kind);
-  invariant(registration?.presentation, `Panel ${kind} has no launch presentation`);
-  return registration.presentation;
-}
-
 export function useWorkspaceTabLaunchCatalog(input: {
   serverId: string;
   purpose: WorkspaceTabLaunchPurpose;
@@ -106,7 +103,6 @@ export function useWorkspaceTabLaunchCatalog(input: {
   const launcher = useContext(NewTabLauncherContext);
   invariant(launcher, "NewTabLauncherProvider is required");
   const { config } = useDaemonConfig(serverId);
-  ensurePanelsRegistered();
 
   const launchSelection = useCallback(
     (selection: NewTabSelection) => (destination: WorkspaceTabLaunchDestination) => {
@@ -120,11 +116,6 @@ export function useWorkspaceTabLaunchCatalog(input: {
 
   return useMemo(() => {
     const isExplorerMenu = host === "explorer" && surface === "menu";
-    const changesPresentation = getLaunchPresentation("changes_tree");
-    const diffPresentation = getLaunchPresentation("working_diff");
-    const filesPresentation = getLaunchPresentation("files");
-    const pullRequestPresentation = getLaunchPresentation("pull_request");
-    const schedulePresentation = getLaunchPresentation("schedule");
     const builtIns: Record<BuiltInLaunchItemId, WorkspaceTabLaunchItem & { hidden?: boolean }> = {
       agent: {
         id: "agent",
@@ -139,7 +130,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
       bot: {
         id: "bot",
         label: "Bot",
-        Icon: getLaunchPresentation("bot").icon,
+        Icon: botPanelPresentation.icon,
         disabled: false,
         hidden: !experimentalFeatures,
         panelKind: "bot",
@@ -156,8 +147,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
       },
       changes: {
         id: "changes",
-        label: changesPresentation.label(t),
-        Icon: changesPresentation.icon,
+        label: changesTreePanelPresentation.label(t),
+        Icon: changesTreePanelPresentation.icon,
         disabled: false,
         panelKind: "changes_tree",
         hidden: !launcher.showChanges,
@@ -165,8 +156,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
       },
       diff: {
         id: "diff",
-        label: diffPresentation.label(t),
-        Icon: diffPresentation.icon,
+        label: workingDiffPanelPresentation.label(t),
+        Icon: workingDiffPanelPresentation.icon,
         shortcutActionId: "workspace-tab-target-changes",
         disabled: false,
         panelKind: "working_diff",
@@ -175,8 +166,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
       },
       files: {
         id: "files",
-        label: filesPresentation.label(t),
-        Icon: filesPresentation.icon,
+        label: filesPanelPresentation.label(t),
+        Icon: filesPanelPresentation.icon,
         shortcutActionId: "workspace-tab-target-files",
         disabled: false,
         panelKind: "files",
@@ -194,8 +185,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
       },
       pullRequest: {
         id: "pull-request",
-        label: pullRequestPresentation.label(t),
-        Icon: pullRequestPresentation.icon,
+        label: pullRequestPanelPresentation.label(t),
+        Icon: pullRequestPanelPresentation.icon,
         disabled: false,
         panelKind: "pull_request",
         hidden: !launcher.showPullRequest,
@@ -203,8 +194,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
       },
       schedule: {
         id: "schedule",
-        label: schedulePresentation.label(t),
-        Icon: schedulePresentation.icon,
+        label: schedulePanelPresentation.label(t),
+        Icon: schedulePanelPresentation.icon,
         disabled: false,
         panelKind: "schedule",
         launch: launchSelection(BUILT_IN_SELECTIONS.schedule),
@@ -256,5 +247,3 @@ export function useWorkspaceTabLaunchCatalog(input: {
     t,
   ]);
 }
-
-export { getBuiltInLaunchOrder } from "./internal/catalog";

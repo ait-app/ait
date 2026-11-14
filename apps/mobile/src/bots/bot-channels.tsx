@@ -9,29 +9,19 @@ import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField } from "@/components/ui/select-field";
 import { Switch } from "@/components/ui/switch";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
-import {
-  FeishuManualGuide,
-  FeishuScanSetup,
-  useFeishuSetupSupported,
-  useLarkSetupSupported,
-} from "./feishu-setup";
+import { FeishuManualGuide, FeishuScanSetup } from "./feishu-setup";
 import { TextLink } from "./channel-setup";
-import {
-  ChannelScanSetup,
-  QqManualSetup,
-  QqPairing,
-  useQqSetupSupported,
-  useWeixinSetupSupported,
-} from "./scan-setup";
-import { ImessageGuidedSetup, useImessageSetupSupported } from "./imessage-setup";
+import { ChannelScanSetup, QqManualSetup, QqPairing } from "./scan-setup";
+import { ImessageGuidedSetup } from "./imessage-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
 import { botStyles as styles } from "./styles";
-import { TelegramGuidedSetup, useTelegramSetupSupported } from "./telegram-setup";
-import { WebhookDetails, WebhookSetup, useWebhookSetupSupported } from "./webhook-setup";
+import { TelegramGuidedSetup } from "./telegram-setup";
+import { WebhookDetails, WebhookSetup } from "./webhook-setup";
 
 type BotChannel = z.infer<typeof BotChannelSchema>;
 
@@ -219,8 +209,8 @@ function ChannelForm({
   const client = useHostRuntimeClient(serverId);
   // One id per opened form: a retry after a lost response must not create a second channel.
   const [channelId] = useState(() => randomUUID());
-  const feishuSetupSupported = useFeishuSetupSupported(serverId);
-  const larkSetupSupported = useLarkSetupSupported(serverId);
+  const feishuSetupSupported = useHostFeature(serverId, "workspaceBotFeishuSetup");
+  const larkSetupSupported = useHostFeature(serverId, "workspaceBotLarkSetup");
   const [kind, setKind] = useState<ExternalKind>(
     feishuSetupSupported && kinds.includes("feishu") ? "feishu" : (kinds[0] ?? "telegram"),
   );
@@ -231,7 +221,7 @@ function ChannelForm({
   const [allowGroups, setAllowGroups] = useState(false);
   const [enterManually, setEnterManually] = useState(false);
   const scanning = kind === "feishu" && feishuSetupSupported && !enterManually;
-  const telegramSetupSupported = useTelegramSetupSupported(serverId);
+  const telegramSetupSupported = useHostFeature(serverId, "workspaceBotTelegramSetup");
   const [useEnvironment, setUseEnvironment] = useState(false);
   const [enterQqManually, setEnterQqManually] = useState(false);
   const telegramGuided = kind === "telegram" && telegramSetupSupported && !useEnvironment;
@@ -299,89 +289,77 @@ function ChannelForm({
       testID="bot-channel-type"
     />
   );
+  const card = (body: React.ReactNode) => (
+    <View style={styles.card} testID="bot-channel-form">
+      {typeField}
+      {body}
+    </View>
+  );
   if (kind === "weixin" || (kind === "qq" && !enterQqManually)) {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <ChannelScanSetup
-          key={kind}
-          kind={kind}
-          serverId={serverId}
-          workspaceId={workspaceId}
-          active={active}
-          onDone={onDone}
-          onEnterManually={kind === "qq" ? () => setEnterQqManually(true) : undefined}
-        />
-      </View>
+    return card(
+      <ChannelScanSetup
+        key={kind}
+        kind={kind}
+        serverId={serverId}
+        workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+        onEnterManually={kind === "qq" ? () => setEnterQqManually(true) : undefined}
+      />,
     );
   }
   if (kind === "qq") {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <QqManualSetup
-          serverId={serverId}
-          workspaceId={workspaceId}
-          channelId={channelId}
-          active={active}
-          onDone={onDone}
-          onScanInstead={() => setEnterQqManually(false)}
-        />
-      </View>
+    return card(
+      <QqManualSetup
+        serverId={serverId}
+        workspaceId={workspaceId}
+        channelId={channelId}
+        active={active}
+        onDone={onDone}
+        onScanInstead={() => setEnterQqManually(false)}
+      />,
     );
   }
   if (kind === "webhook") {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <WebhookSetup
-          serverId={serverId}
-          workspaceId={workspaceId}
-          active={active}
-          onDone={onDone}
-        />
-      </View>
+    return card(
+      <WebhookSetup
+        serverId={serverId}
+        workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+      />,
     );
   }
   if (kind === "photon_imessage") {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <ImessageGuidedSetup
-          serverId={serverId}
-          workspaceId={workspaceId}
-          active={active}
-          onDone={onDone}
-        />
-      </View>
+    return card(
+      <ImessageGuidedSetup
+        serverId={serverId}
+        workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+      />,
     );
   }
   if (scanning) {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <FeishuScanSetup
-          serverId={serverId}
-          workspaceId={workspaceId}
-          active={active}
-          onDone={onDone}
-          onEnterManually={() => setEnterManually(true)}
-        />
-      </View>
+    return card(
+      <FeishuScanSetup
+        serverId={serverId}
+        workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+        onEnterManually={() => setEnterManually(true)}
+      />,
     );
   }
   if (telegramGuided) {
-    return (
-      <View style={styles.card} testID="bot-channel-form">
-        {typeField}
-        <TelegramGuidedSetup
-          serverId={serverId}
-          workspaceId={workspaceId}
-          active={active}
-          onDone={onDone}
-          onUseEnvironment={() => setUseEnvironment(true)}
-        />
-      </View>
+    return card(
+      <TelegramGuidedSetup
+        serverId={serverId}
+        workspaceId={workspaceId}
+        active={active}
+        onDone={onDone}
+        onUseEnvironment={() => setUseEnvironment(true)}
+      />,
     );
   }
   return (
@@ -503,11 +481,11 @@ export function BotChannels({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
-  const weixinSupported = useWeixinSetupSupported(serverId);
-  const larkSupported = useLarkSetupSupported(serverId);
-  const qqSupported = useQqSetupSupported(serverId);
-  const imessageSupported = useImessageSetupSupported(serverId);
-  const webhookSupported = useWebhookSetupSupported(serverId);
+  const weixinSupported = useHostFeature(serverId, "workspaceBotWeixinSetup");
+  const larkSupported = useHostFeature(serverId, "workspaceBotLarkSetup");
+  const qqSupported = useHostFeature(serverId, "workspaceBotQqSetup");
+  const imessageSupported = useHostFeature(serverId, "workspaceBotImessageSetup");
+  const webhookSupported = useHostFeature(serverId, "workspaceBotWebhookSetup");
   const enabled = interactive && Boolean(client);
   const list = useQuery({
     queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),

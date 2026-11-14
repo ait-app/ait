@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SidebarWorkspaceEntry } from "./sidebar-workspaces-view-model";
-import {
-  buildStatusGroups,
-  buildStatusShortcutIndex,
-  STATUS_BUCKET_LABELS,
-  STATUS_BUCKET_ORDER,
-  type StatusGroup,
-} from "./sidebar-status-view-model";
+import { STATUS_BUCKET_ORDER } from "@/utils/sidebar-agent-state";
+import { buildStatusGroups, STATUS_BUCKET_LABELS } from "./sidebar-status-view-model";
 
 function ws(
   input: Partial<SidebarWorkspaceEntry> & { workspaceKey: string },
@@ -191,42 +186,5 @@ describe("buildStatusGroups", () => {
       expect(group.rows).toHaveLength(1);
       expect(group.rows[0]?.statusBucket).toBe(group.bucket);
     }
-  });
-});
-
-describe("buildStatusShortcutIndex", () => {
-  it("assigns sequential numbers in status visual order", () => {
-    const groups: StatusGroup[] = [
-      { bucket: "needs_input", label: "Needs input", rows: [ws({ workspaceKey: "srv:ni" })] },
-      {
-        bucket: "running",
-        label: "Working",
-        rows: [ws({ workspaceKey: "srv:run" }), ws({ workspaceKey: "srv:run2" })],
-      },
-      { bucket: "done", label: "Done", rows: [ws({ workspaceKey: "srv:dn" })] },
-    ];
-
-    const index = buildStatusShortcutIndex(groups);
-
-    expect(index.get("srv:ni")).toBe(1);
-    expect(index.get("srv:run")).toBe(2);
-    expect(index.get("srv:run2")).toBe(3);
-    expect(index.get("srv:dn")).toBe(4);
-  });
-
-  it("stops at 9 shortcuts", () => {
-    const rows = Array.from({ length: 12 }, (_, i) => ws({ workspaceKey: `srv:ws${i}` }));
-    const groups: StatusGroup[] = [{ bucket: "done", label: "Done", rows }];
-
-    const index = buildStatusShortcutIndex(groups);
-
-    expect(index.size).toBe(9);
-    expect(index.has("srv:ws8")).toBe(true);
-    expect(index.has("srv:ws9")).toBe(false);
-  });
-
-  it("returns empty map for empty groups", () => {
-    const index = buildStatusShortcutIndex([]);
-    expect(index.size).toBe(0);
   });
 });

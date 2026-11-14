@@ -43,7 +43,7 @@ export function useLocalDaemonServerId(): string | null {
   return query.data?.serverId ?? null;
 }
 
-export type LocalDaemonServerIdState =
+type LocalDaemonServerIdState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "resolved"; serverId: string | null };

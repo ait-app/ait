@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useToast } from "@/contexts/toast-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { InlineReviewAddButton, InlineReviewThread } from "@/review";
+import { InlineReviewAddButton, InlineReviewThread, isInlineReviewEditorForTarget } from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
@@ -852,10 +852,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
                 return row.cells.map((cell, index) => {
                   if (!cell?.reviewTarget) return null;
                   const comments = reviewActions.commentsByTarget.get(cell.reviewTarget.key) ?? [];
-                  const hasEditor =
-                    reviewActions.editor?.target.filePath === cell.reviewTarget.filePath &&
-                    reviewActions.editor.target.side === cell.reviewTarget.side &&
-                    reviewActions.editor.target.lineNumber === cell.reviewTarget.lineNumber;
+                  const hasEditor = isInlineReviewEditorForTarget(
+                    reviewActions.editor,
+                    cell.reviewTarget,
+                  );
                   if (comments.length === 0 && !hasEditor) return null;
                   return (
                     <WebReviewThread

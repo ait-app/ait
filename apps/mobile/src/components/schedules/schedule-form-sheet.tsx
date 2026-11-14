@@ -13,18 +13,18 @@ import {
   type ReactNode,
 } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Brain, Folder, GitBranch, Plus } from "lucide-react-native";
+import { Brain, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
-import { createControlGeometry, type FieldControlSize } from "@/components/ui/control-geometry";
+import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -33,7 +33,6 @@ import { ScheduleTemplatePicker } from "@/components/schedules/schedule-template
 import {
   SelectField,
   SelectFieldTrigger,
-  type SelectFieldDisplay,
   type SelectFieldOption,
   type SelectFieldRenderOptionInput,
 } from "@/components/ui/select-field";
@@ -52,7 +51,6 @@ import { buildScheduleProjectTargets } from "@/schedules/schedule-project-target
 import { useScheduleFormModel } from "@/schedules/use-schedule-form-model";
 import { useScheduleFormProviderSnapshot } from "@/schedules/use-schedule-form-provider-snapshot";
 import type {
-  ScheduleFormDisplay,
   ScheduleFormHost,
   ScheduleFormModel,
   ScheduleFormSnapshot,
@@ -108,7 +106,6 @@ export function WorkspaceScheduleForm({
       schedule={schedule}
       onSaved={onSaved}
       visible
-      inline
       onClose={onClose}
     />
   );
@@ -450,20 +447,16 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
 
 function ScheduleFormContent({
   serverId,
-  visible,
   onClose,
-  onDismiss,
   mode,
   schedule,
   workspace,
-  inline = false,
   embedded = false,
   onSaved,
   renderPlacementFields,
 }: ScheduleFormSheetProps & {
-  onDismiss?: () => void;
   workspace?: ScheduleFormWorkspace;
-  inline?: boolean;
+  /** Inside `ScheduleFormScope`'s sheet; otherwise the form is the workspace tab's inline page. */
   embedded?: boolean;
   onSaved?: (schedule: ScheduleSummary) => void;
   renderPlacementFields?: (disabled: boolean) => ReactNode;
@@ -727,15 +720,6 @@ function ScheduleFormContent({
     [model, t, timezone],
   );
 
-  const header = useMemo<SheetHeader>(() => {
-    if (mode !== "edit") {
-      return { title: t("schedules.new") };
-    }
-    return {
-      title: t("schedules.edit", { product: t("schedules.product.schedule").toLowerCase() }),
-    };
-  }, [mode, t]);
-
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
@@ -786,7 +770,7 @@ function ScheduleFormContent({
         size={controlSize}
         disabled={isSubmitting}
         browsing={browsingTemplates}
-        onBack={inline ? onClose : undefined}
+        onBack={embedded ? undefined : onClose}
         onBrowsingChange={setBrowsingTemplates}
         onApply={handleApplyTemplate}
       />
@@ -833,32 +817,16 @@ function ScheduleFormContent({
       </View>
     );
 
-  if (inline) {
-    return (
-      <View style={styles.inlineContainer}>
-        <ScrollView ref={formScrollRef} contentContainerStyle={styles.inlineContent}>
-          <View style={styles.inlineFields} testID="workspace-schedule-form">
-            {templatePicker}
-            {editor}
-          </View>
-        </ScrollView>
-        {!browsingTemplates ? <View style={styles.inlineFooter}>{footer}</View> : null}
-      </View>
-    );
-  }
-
   return (
-    <AdaptiveModalSheet
-      header={header}
-      visible={visible}
-      onClose={onClose}
-      onDismiss={onDismiss}
-      footer={!browsingTemplates ? footer : undefined}
-      testID="schedule-form-sheet"
-    >
-      {templatePicker}
-      {editor}
-    </AdaptiveModalSheet>
+    <View style={styles.inlineContainer}>
+      <ScrollView ref={formScrollRef} contentContainerStyle={styles.inlineContent}>
+        <View style={styles.inlineFields} testID="workspace-schedule-form">
+          {templatePicker}
+          {editor}
+        </View>
+      </ScrollView>
+      {!browsingTemplates ? <View style={styles.inlineFooter}>{footer}</View> : null}
+    </View>
   );
 }
 
@@ -1086,27 +1054,6 @@ function ScheduleNewAgentFields({
   mutationServerId,
 }: ScheduleNewAgentFieldsProps): ReactElement {
   const { t } = useTranslation();
-  const hostOptions = useMemo<SelectFieldOption<string>[]>(
-    () =>
-      state.hosts.map((host) => ({
-        id: host.serverId,
-        value: host.serverId,
-        label: host.label,
-        testID: buildScheduleHostOptionTestId(host.serverId),
-      })),
-    [state.hosts],
-  );
-  const selectedHost = state.hosts.find((host) => host.serverId === state.selectedServerId) ?? null;
-  const selectedHostDisplay = useMemo<SelectFieldDisplay | null>(() => {
-    if (selectedHost) {
-      return { label: selectedHost.label };
-    }
-    if (state.selectedServerId) {
-      return { label: state.selectedServerId };
-    }
-    return null;
-  }, [selectedHost, state.selectedServerId]);
-  const projectOptions = state.projectOptions;
   const modeOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
       state.modeOptions.map((option) => ({
@@ -1125,18 +1072,6 @@ function ScheduleNewAgentFields({
         testID: buildThinkingOptionTestId(option.id),
       })),
     [state.availableThinkingOptions, t],
-  );
-  const handleSelectHost = useCallback(
-    (nextServerId: string) => {
-      model.setHost(nextServerId);
-    },
-    [model],
-  );
-  const handleSelectProject = useCallback(
-    (optionId: string, display: ScheduleFormDisplay) => {
-      model.setProject(optionId, display);
-    },
-    [model],
   );
   const handleSelectModel = useCallback(
     (provider: AgentProvider, modelId: string) => {
@@ -1164,14 +1099,6 @@ function ScheduleNewAgentFields({
       void providerSnapshot.refresh([provider]);
     },
     [providerSnapshot],
-  );
-  const renderHostOption = useCallback(
-    (input: SelectFieldRenderOptionInput<string>) => <HostOptionItem {...input} />,
-    [],
-  );
-  const renderProjectOption = useCallback(
-    (input: SelectFieldRenderOptionInput<string>) => <ProjectOptionItem {...input} />,
-    [],
   );
   const renderThinkingOption = useCallback(
     (input: SelectFieldRenderOptionInput<string>) => <ThinkingOptionItem {...input} />,
@@ -1215,44 +1142,6 @@ function ScheduleNewAgentFields({
 
   return (
     <>
-      {!state.workspace && (state.mode === "edit" || state.hosts.length > 1) ? (
-        <SelectField
-          label={t("schedules.form.host")}
-          value={state.selectedServerId}
-          selectedDisplay={selectedHostDisplay}
-          options={hostOptions}
-          onChange={handleSelectHost}
-          placeholder={t("schedules.form.selectHost")}
-          emptyText={t("schedules.form.noHosts")}
-          disabled={state.mode === "edit"}
-          searchable={false}
-          title={t("schedules.form.host")}
-          size={controlSize}
-          triggerTestID="schedule-host-trigger"
-          renderOption={renderHostOption}
-        />
-      ) : null}
-
-      {state.disclosure.showProjectField ? (
-        <SelectField
-          label={t("schedules.form.project")}
-          value={state.selectedProjectOptionId || null}
-          selectedDisplay={state.projectDisplay}
-          options={projectOptions}
-          onChange={handleSelectProject}
-          placeholder={t("schedules.form.selectProject")}
-          emptyText={t("schedules.form.noProjects")}
-          disabled={!state.selectedServerId}
-          hint={!state.selectedServerId ? t("schedules.form.chooseHost") : undefined}
-          searchable
-          searchPlaceholder={t("schedules.form.searchProjects")}
-          title={t("schedules.form.selectProject")}
-          size={controlSize}
-          triggerTestID="schedule-project-trigger"
-          renderOption={renderProjectOption}
-        />
-      ) : null}
-
       {state.disclosure.showModelField ? (
         <Field label={t("schedules.form.model")}>
           <CombinedModelSelector
@@ -1329,10 +1218,6 @@ function ScheduleNewAgentFields({
         />
       ) : null}
 
-      {state.disclosure.showIsolationField ? (
-        <ScheduleIsolationField model={model} state={state} size={controlSize} />
-      ) : null}
-
       {state.disclosure.showArchiveOnFinishField ? (
         <Field label={t("schedules.form.archive")}>
           <Switch
@@ -1344,119 +1229,6 @@ function ScheduleNewAgentFields({
         </Field>
       ) : null}
     </>
-  );
-}
-
-function ScheduleIsolationField({
-  model,
-  state,
-  size,
-}: {
-  model: ScheduleFormModel;
-  state: ScheduleFormState;
-  size: FieldControlSize;
-}): ReactElement {
-  const { t } = useTranslation();
-  const options = useMemo<SelectFieldOption<"local" | "worktree">[]>(
-    () => [
-      {
-        id: "local",
-        value: "local",
-        label: t("schedules.form.local"),
-        testID: "schedule-isolation-local",
-      },
-      {
-        id: "worktree",
-        value: "worktree",
-        label: t("schedules.form.worktree"),
-        testID: "schedule-isolation-worktree",
-      },
-    ],
-    [t],
-  );
-  const selectedDisplay = useMemo<SelectFieldDisplay>(
-    () => ({
-      label: t(
-        state.effectiveIsolation === "worktree"
-          ? "schedules.form.worktree"
-          : "schedules.form.local",
-      ),
-    }),
-    [state.effectiveIsolation, t],
-  );
-  const triggerLeading = useMemo(
-    () => (
-      <View style={styles.optionIconBox}>
-        {state.effectiveIsolation === "worktree" ? (
-          <GitBranch size={16} color={styles.providerIcon.color} />
-        ) : (
-          <Folder size={16} color={styles.providerIcon.color} />
-        )}
-      </View>
-    ),
-    [state.effectiveIsolation],
-  );
-  const handleSelectIsolation = useCallback(
-    (value: "local" | "worktree") => {
-      model.setIsolation(value);
-    },
-    [model],
-  );
-  const renderIsolationOption = useCallback(
-    (input: SelectFieldRenderOptionInput<"local" | "worktree">) => (
-      <IsolationOptionItem {...input} />
-    ),
-    [],
-  );
-
-  return (
-    <SelectField
-      label={t("schedules.form.isolation")}
-      value={state.effectiveIsolation}
-      selectedDisplay={selectedDisplay}
-      options={options}
-      onChange={handleSelectIsolation}
-      placeholder={t("schedules.form.selectIsolation")}
-      emptyText={t("schedules.form.noIsolation")}
-      searchable={false}
-      title={t("schedules.form.isolation")}
-      size={size}
-      testID="schedule-isolation"
-      triggerTestID="schedule-isolation-trigger"
-      triggerLeading={triggerLeading}
-      renderOption={renderIsolationOption}
-    />
-  );
-}
-
-function IsolationOptionItem({
-  option,
-  selected,
-  active,
-  onPress,
-}: SelectFieldRenderOptionInput<"local" | "worktree">): ReactElement {
-  const leadingSlot = useMemo(
-    () => (
-      <View style={styles.optionIconBox}>
-        {option.value === "worktree" ? (
-          <GitBranch size={16} color={styles.providerIcon.color} />
-        ) : (
-          <Folder size={16} color={styles.providerIcon.color} />
-        )}
-      </View>
-    ),
-    [option.value],
-  );
-
-  return (
-    <ComboboxItem
-      testID={option.testID}
-      label={option.label}
-      selected={selected}
-      active={active}
-      onPress={onPress}
-      leadingSlot={leadingSlot}
-    />
   );
 }
 
@@ -1482,33 +1254,6 @@ function HostOptionItem({
 
 function renderScheduleHostOption(input: SelectFieldRenderOptionInput<string>): ReactElement {
   return <HostOptionItem {...input} />;
-}
-
-function ProjectOptionItem({
-  option,
-  selected,
-  active,
-  onPress,
-}: SelectFieldRenderOptionInput<string>): ReactElement {
-  const leadingSlot = useMemo(
-    () => (
-      <View style={styles.optionIconBox}>
-        <Folder size={16} color={styles.providerIcon.color} />
-      </View>
-    ),
-    [],
-  );
-
-  return (
-    <ComboboxItem
-      testID={option.testID}
-      label={option.label}
-      selected={selected}
-      active={active}
-      onPress={onPress}
-      leadingSlot={leadingSlot}
-    />
-  );
 }
 
 function ThinkingOptionItem({
@@ -1553,8 +1298,6 @@ function ProviderGlyph({
 }
 
 const styles = StyleSheet.create((theme) => {
-  const geometry = createControlGeometry(theme);
-
   return {
     inlineContainer: {
       flex: 1,
@@ -1615,30 +1358,6 @@ const styles = StyleSheet.create((theme) => {
     },
     multilineInput: {
       minHeight: 156,
-    },
-    readonlyField: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.surface2,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    readonlyFieldSm: {
-      ...geometry.formTextInputSm,
-    },
-    readonlyFieldMd: {
-      ...geometry.formTextInputMd,
-    },
-    readonlyText: {
-      flex: 1,
-      minWidth: 0,
-      color: theme.colors.foreground,
-    },
-    readonlyTextSm: {
-      fontSize: theme.fontSize.base,
-    },
-    readonlyTextMd: {
-      fontSize: theme.fontSize.base,
     },
     optionIconBox: {
       width: 18,

@@ -12,7 +12,7 @@ export interface PresetRoleRow {
   model: string;
   thinking: string;
 }
-export interface RoleModelChoice {
+interface RoleModelChoice {
   id: string;
   label: string;
   thinkingOptions: AgentSelectOption[];
@@ -27,10 +27,8 @@ export function splitRoleSelector(value: string): { model: string; thinking: str
   return match ? { model: match[1]!, thinking: match[2]! } : { model: value, thinking: "" };
 }
 
-/** A route's readable fallback; serialized OMP arrays never appear in the preset list. */
-export function presetModelLabel(model: string, models: readonly AgentModelDefinition[]): string {
-  const known = models.find((entry) => entry.id === model);
-  if (known) return known.label;
+/** A serialized OMP `[provider, model]` route, or null for ordinary aliases and qualified names. */
+function parseModelRoute(model: string): [string, string] | null {
   try {
     const route: unknown = JSON.parse(model);
     if (
@@ -38,28 +36,24 @@ export function presetModelLabel(model: string, models: readonly AgentModelDefin
       route.length === 2 &&
       route.every((part) => typeof part === "string")
     ) {
-      return route[1];
+      return [route[0], route[1]];
     }
   } catch {
     // Providers also use ordinary aliases and qualified model names.
   }
-  return model;
+  return null;
 }
 
+/** A route's readable fallback; serialized OMP arrays never appear in the preset list. */
+export function presetModelLabel(model: string, models: readonly AgentModelDefinition[]): string {
+  const known = models.find((entry) => entry.id === model);
+  if (known) return known.label;
+  return parseModelRoute(model)?.[1] ?? model;
+}
+
+/** Ait-managed providers keep their own catalog identifiers. */
 function nativeModelSelector(model: string): string {
-  try {
-    const route: unknown = JSON.parse(model);
-    if (
-      Array.isArray(route) &&
-      route.length === 2 &&
-      route.every((part) => typeof part === "string")
-    ) {
-      return route.join("/");
-    }
-  } catch {
-    // Ait-managed providers keep their own catalog identifiers.
-  }
-  return model;
+  return parseModelRoute(model)?.join("/") ?? model;
 }
 
 export function presetRoleFeatures(features: readonly AgentFeature[]): RoleFeature[] {

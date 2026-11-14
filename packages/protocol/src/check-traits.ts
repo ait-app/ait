@@ -7,8 +7,3 @@
 export const CHECK_TRAIT_MANUAL = "manual";
 export const CHECK_TRAIT_ACTION_REQUIRED = "action_required";
 export const CHECK_TRAIT_WARNING = "warning";
-
-export type KnownCheckTrait =
-  | typeof CHECK_TRAIT_MANUAL
-  | typeof CHECK_TRAIT_ACTION_REQUIRED
-  | typeof CHECK_TRAIT_WARNING;

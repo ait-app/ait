@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   type HostAppearanceSource,
   defaultHostAppearance,
-  normalizeStoredHostAppearance,
   resolveHostBadgeDisplay,
   selectHostBadges,
 } from "@/hosts/appearance";
@@ -14,25 +13,6 @@ function host(
 ): HostAppearanceSource {
   return { serverId, label, appearance };
 }
-
-describe("normalizeStoredHostAppearance", () => {
-  it("defaults when the stored registry predates the field or holds junk", () => {
-    const expected = { color: "none", badgeDisplay: null };
-    expect(normalizeStoredHostAppearance(undefined)).toEqual(expected);
-    expect(normalizeStoredHostAppearance(null)).toEqual(expected);
-    expect(normalizeStoredHostAppearance("x")).toEqual(expected);
-    expect(normalizeStoredHostAppearance({})).toEqual(expected);
-    expect(normalizeStoredHostAppearance({ color: "chartreuse" })).toEqual(expected);
-    expect(normalizeStoredHostAppearance({ badgeDisplay: "loud" })).toEqual(expected);
-  });
-
-  it("round-trips a value the user actually chose", () => {
-    expect(normalizeStoredHostAppearance({ color: "teal", badgeDisplay: "icon" })).toEqual({
-      color: "teal",
-      badgeDisplay: "icon",
-    });
-  });
-});
 
 describe("resolveHostBadgeDisplay", () => {
   it("hides the badge for the local host until the user chooses", () => {

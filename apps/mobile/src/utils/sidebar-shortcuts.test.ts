@@ -6,8 +6,7 @@ import type {
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
 
 import {
-  buildSidebarShortcutModel,
-  buildStatusSidebarShortcutModel,
+  buildSidebarShortcutSections,
   getRelativeSidebarShortcutTarget,
 } from "./sidebar-shortcuts";
 
@@ -45,6 +44,23 @@ function workspace(input: {
   };
 }
 
+function projectSections(projects: SidebarProjectEntry[], collapsedProjectKeys: Set<string>) {
+  return projects.map((entry) => ({
+    workspaces: entry.workspaces,
+    collapsed: collapsedProjectKeys.has(entry.viewKey),
+  }));
+}
+
+function statusSections(
+  groups: ReturnType<typeof buildStatusGroups>,
+  collapsedStatusGroupKeys?: Set<string>,
+) {
+  return groups.map((group) => ({
+    workspaces: group.rows,
+    collapsed: collapsedStatusGroupKeys?.has(group.bucket),
+  }));
+}
+
 function project(projectKey: string, workspaces: SidebarWorkspaceEntry[]): SidebarProjectEntry {
   return {
     viewKey: projectKey,
@@ -63,7 +79,7 @@ function project(projectKey: string, workspaces: SidebarWorkspaceEntry[]): Sideb
   };
 }
 
-describe("buildSidebarShortcutModel", () => {
+describe("buildSidebarShortcutSections for project sections", () => {
   it("builds shortcut targets in visual order and excludes collapsed projects", () => {
     const projects = [
       project("p1", [
@@ -96,9 +112,8 @@ describe("buildSidebarShortcutModel", () => {
       ]),
     ];
 
-    const model = buildSidebarShortcutModel({
-      projects,
-      collapsedProjectKeys: new Set<string>(["p2"]),
+    const model = buildSidebarShortcutSections({
+      sections: projectSections(projects, new Set<string>(["p2"])),
     });
 
     expect(model.shortcutTargets).toEqual([
@@ -121,9 +136,8 @@ describe("buildSidebarShortcutModel", () => {
     );
     const projects = [project("p", workspaces)];
 
-    const model = buildSidebarShortcutModel({
-      projects,
-      collapsedProjectKeys: new Set<string>(),
+    const model = buildSidebarShortcutSections({
+      sections: projectSections(projects, new Set<string>()),
     });
 
     expect(model.shortcutTargets).toHaveLength(9);
@@ -157,16 +171,15 @@ describe("buildSidebarShortcutModel", () => {
       worktreeSupport: "unsupported" as const,
     }));
 
-    const model = buildSidebarShortcutModel({
-      projects: [gitProject, directoryProject],
-      collapsedProjectKeys: new Set<string>(["p1", "p2"]),
+    const model = buildSidebarShortcutSections({
+      sections: projectSections([gitProject, directoryProject], new Set<string>(["p1", "p2"])),
     });
 
     expect(model.shortcutTargets).toEqual([]);
   });
 });
 
-describe("buildStatusSidebarShortcutModel", () => {
+describe("buildSidebarShortcutSections for status groups", () => {
   it("builds shortcut targets in status visual order", () => {
     const workspaces = [
       workspace({
@@ -207,13 +220,15 @@ describe("buildStatusSidebarShortcutModel", () => {
       }),
     ];
 
-    const model = buildStatusSidebarShortcutModel({
-      groups: buildStatusGroups(
-        workspaces,
-        new Map([
-          ["p1", "Project 1"],
-          ["p2", "Project 2"],
-        ]),
+    const model = buildSidebarShortcutSections({
+      sections: statusSections(
+        buildStatusGroups(
+          workspaces,
+          new Map([
+            ["p1", "Project 1"],
+            ["p2", "Project 2"],
+          ]),
+        ),
       ),
     });
 
@@ -249,9 +264,11 @@ describe("buildStatusSidebarShortcutModel", () => {
       }),
     ];
 
-    const model = buildStatusSidebarShortcutModel({
-      groups: buildStatusGroups(workspaces, new Map([["p1", "Project 1"]])),
-      collapsedStatusGroupKeys: new Set(["needs_input"]),
+    const model = buildSidebarShortcutSections({
+      sections: statusSections(
+        buildStatusGroups(workspaces, new Map([["p1", "Project 1"]])),
+        new Set(["needs_input"]),
+      ),
     });
 
     expect(model.shortcutTargets).toEqual([{ serverId: "s1", workspaceId: "running" }]);

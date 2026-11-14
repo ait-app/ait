@@ -7,9 +7,8 @@ vi.hoisted(() => {
 import {
   resolveWorkspaceHeader,
   resolveWorkspaceHeaderRenderState,
-  shouldRenderMissingWorkspaceDescriptor,
 } from "./workspace-header-source";
-import { createSidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import { createSidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 
 function createWorkspaceDescriptor(input: Partial<WorkspaceDescriptor> = {}): WorkspaceDescriptor {
@@ -189,21 +188,5 @@ describe("workspace source of truth consumption", () => {
       isGitCheckout: false,
       currentBranchName: null,
     });
-  });
-
-  it("renders explicit missing state only after workspace hydration", () => {
-    expect(
-      shouldRenderMissingWorkspaceDescriptor({
-        workspace: null,
-        hasHydratedWorkspaces: true,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldRenderMissingWorkspaceDescriptor({
-        workspace: null,
-        hasHydratedWorkspaces: false,
-      }),
-    ).toBe(false);
   });
 });

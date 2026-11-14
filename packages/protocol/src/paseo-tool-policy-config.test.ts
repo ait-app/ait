@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { MutableDaemonConfigPatchSchema, MutableDaemonConfigSchema } from "./messages.js";
-import { ProviderOverrideSchema, ProviderPaseoToolsPolicySchema } from "./provider-config.js";
+import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 
 describe("provider Paseo-tool policy", () => {
   test("accepts arbitrary tool IDs and leaves an empty policy enabled by default", () => {
@@ -13,22 +13,6 @@ describe("provider Paseo-tool policy", () => {
       disabledTools: ["future_tool", "browser_future_tool"],
     });
     expect(ProviderPaseoToolsPolicySchema.parse({})).toEqual({});
-    expect(ProviderOverrideSchema.parse({}).paseoTools).toBeUndefined();
-  });
-
-  test("accepts paseoTools on persisted provider overrides", () => {
-    expect(
-      ProviderOverrideSchema.parse({
-        extends: "claude",
-        paseoTools: {
-          enabled: false,
-          disabledTools: ["create_workspace"],
-        },
-      }).paseoTools,
-    ).toEqual({
-      enabled: false,
-      disabledTools: ["create_workspace"],
-    });
   });
 
   test("accepts paseoTools when reading and patching mutable daemon providers", () => {

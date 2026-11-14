@@ -1,9 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { i18n } from "@/i18n/i18next";
-import {
-  formatCheckPresentationCountsLabel,
-  getCheckPresentationStatusLabel,
-} from "./check-presentation-copy";
+import { formatCheckPresentationCountsLabel } from "./check-presentation-copy";
 
 describe("check presentation copy", () => {
   beforeAll(async () => {
@@ -25,12 +22,5 @@ describe("check presentation copy", () => {
         i18n.t,
       ),
     ).toBe("Checks, Passed: 2, Warnings: 1, Action required: 1, Manual: 1");
-  });
-
-  it("uses presentation policy for row status labels", () => {
-    expect(
-      getCheckPresentationStatusLabel({ status: "success", traits: ["warning"] }, i18n.t),
-    ).toBe("Warning");
-    expect(getCheckPresentationStatusLabel({ status: "cancelled" }, i18n.t)).toBe("Cancelled");
   });
 });

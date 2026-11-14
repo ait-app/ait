@@ -27,10 +27,8 @@ vi.mock("expo-router", () => ({
   usePathname: () => pathnameState.value,
 }));
 
-import {
-  createSidebarWorkspaceEntry,
-  type SidebarProjectEntry,
-} from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarProjectEntry } from "@/hooks/use-sidebar-workspaces-list";
+import { createSidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
 import { useSidebarWorkspacesList } from "@/hooks/use-sidebar-workspaces-list";
 import {
   getHostRuntimeStore,

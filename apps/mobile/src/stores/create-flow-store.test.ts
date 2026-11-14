@@ -51,29 +51,6 @@ describe("create-flow-store", () => {
     expect(useCreateFlowStore.getState().pendingByDraftId["draft-1"]?.lifecycle).toBe("abandoned");
   });
 
-  it("rekeys draft id idempotently", () => {
-    useCreateFlowStore.getState().setPending({
-      draftId: "draft-a",
-      serverId: "server-1",
-      agentId: null,
-      clientMessageId: "msg-1",
-      text: "hello",
-      timestamp: Date.now(),
-      images: [],
-    });
-
-    useCreateFlowStore.getState().rekeyDraft({
-      fromDraftId: "draft-a",
-      toDraftId: "draft-b",
-    });
-    useCreateFlowStore.getState().rekeyDraft({
-      fromDraftId: "draft-a",
-      toDraftId: "draft-b",
-    });
-
-    expect(useCreateFlowStore.getState().pendingByDraftId["draft-b"]?.draftId).toBe("draft-b");
-  });
-
   it("supports multiple pending attempts", () => {
     useCreateFlowStore.getState().setPending({
       draftId: "draft-1",

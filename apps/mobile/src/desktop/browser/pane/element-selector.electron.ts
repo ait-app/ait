@@ -56,7 +56,10 @@ export interface ElementSelectorRuntime {
 
 const SELECTOR_TIMEOUT_MS = 30_000;
 
-function executeWebviewJavaScript(webview: ElementSelectorWebview, code: string): Promise<unknown> {
+export function executeWebviewJavaScript(
+  webview: ElementSelectorWebview,
+  code: string,
+): Promise<unknown> {
   if (!webview.isConnected) {
     return Promise.resolve(null);
   }
@@ -67,7 +70,7 @@ function executeWebviewJavaScript(webview: ElementSelectorWebview, code: string)
   }
 }
 
-function ignoreWebviewJavaScriptError() {}
+export function ignoreWebviewJavaScriptError() {}
 
 function destroyWebviewSelector(webview: ElementSelectorWebview, sessionToken: string): void {
   const token = JSON.stringify(sessionToken);

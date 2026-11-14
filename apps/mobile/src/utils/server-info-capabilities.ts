@@ -1,7 +1,7 @@
 import type { ServerCapabilityState } from "@ait/protocol/messages";
 import type { DaemonServerInfo } from "@/stores/session-store";
 
-export type VoiceReadinessMode = "dictation" | "voice";
+type VoiceReadinessMode = "dictation" | "voice";
 
 export function getServerCapabilities(params: {
   serverInfo: DaemonServerInfo | null | undefined;

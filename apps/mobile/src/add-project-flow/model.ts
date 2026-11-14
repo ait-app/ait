@@ -70,16 +70,22 @@ function methodPage(hostId: string): AddProjectPage {
   return { kind: "method", hostId, activeIndex: 0, error: null, isSubmitting: false };
 }
 
-export function openAddProjectFlow(input: OpenAddProjectFlowInput): AddProjectFlowState {
-  const preferredHost = input.preferredHostId
-    ? input.hosts.find((host) => host.serverId === input.preferredHostId)
+/** The host the flow can start on without asking: the preferred one, else the only one. */
+function initialHost(
+  hosts: readonly AddProjectHost[],
+  preferredHostId: string | undefined,
+): AddProjectHost | null {
+  const preferredHost = preferredHostId
+    ? hosts.find((host) => host.serverId === preferredHostId)
     : null;
-  const onlyHost = input.hosts.length === 1 ? input.hosts[0] : null;
-  const initialHost = preferredHost ?? onlyHost;
+  return preferredHost ?? (hosts.length === 1 ? hosts[0] : null);
+}
 
+export function openAddProjectFlow(input: OpenAddProjectFlowInput): AddProjectFlowState {
+  const host = initialHost(input.hosts, input.preferredHostId);
   return {
     hosts: input.hosts,
-    pages: initialHost ? [methodPage(initialHost.serverId)] : [searchPage("host")],
+    pages: host ? [methodPage(host.serverId)] : [searchPage("host")],
     newDirectoryNameDrafts: {},
     githubLocationDrafts: {},
   };
@@ -94,16 +100,8 @@ export function applyAvailableAddProjectHosts(
   if (state.pages.length !== 1 || current.kind !== "host") {
     return { ...state, hosts };
   }
-  const preferredHost = preferredHostId
-    ? hosts.find((host) => host.serverId === preferredHostId)
-    : null;
-  const onlyHost = hosts.length === 1 ? hosts[0] : null;
-  const initialHost = preferredHost ?? onlyHost;
-  return {
-    ...state,
-    hosts,
-    pages: initialHost ? [methodPage(initialHost.serverId)] : state.pages,
-  };
+  const host = initialHost(hosts, preferredHostId);
+  return { ...state, hosts, pages: host ? [methodPage(host.serverId)] : state.pages };
 }
 
 export function currentAddProjectPage(state: AddProjectFlowState): AddProjectPage {

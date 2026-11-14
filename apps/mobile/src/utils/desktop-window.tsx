@@ -26,7 +26,7 @@ interface WindowChromeObstruction {
   topRight: WindowChromeCornerObstruction | null;
 }
 
-export type WindowChromeCorner = "top-left" | "top-right";
+type WindowChromeCorner = "top-left" | "top-right";
 
 type WindowChromeSafeAreaStyle = { height: number } | { paddingLeft: number; paddingRight: number };
 
@@ -46,7 +46,7 @@ function windowChromeCornersFromFlags(topLeft: boolean, topRight: boolean): Wind
   return "none";
 }
 
-export function windowChromeCornersInclude(
+function windowChromeCornersInclude(
   corners: WindowChromeCorners,
   corner: WindowChromeCorner,
 ): boolean {
@@ -62,13 +62,11 @@ export function intersectWindowChromeCorners(
   inherited: WindowChromeCorners,
   declared: WindowChromeCorners,
 ): WindowChromeCorners {
-  const inheritedTopLeft = inherited === "top-left" || inherited === "both";
-  const inheritedTopRight = inherited === "top-right" || inherited === "both";
-  const declaredTopLeft = declared === "top-left" || declared === "both";
-  const declaredTopRight = declared === "top-right" || declared === "both";
   return windowChromeCornersFromFlags(
-    inheritedTopLeft && declaredTopLeft,
-    inheritedTopRight && declaredTopRight,
+    windowChromeCornersInclude(inherited, "top-left") &&
+      windowChromeCornersInclude(declared, "top-left"),
+    windowChromeCornersInclude(inherited, "top-right") &&
+      windowChromeCornersInclude(declared, "top-right"),
   );
 }
 
@@ -107,10 +105,12 @@ export function resolveWindowChromeSafeArea(input: {
   corners: WindowChromeCorners;
   placement: WindowChromeSafeAreaPlacement;
 }): WindowChromeSafeAreaStyle {
-  const ownsTopLeft = input.corners === "top-left" || input.corners === "both";
-  const ownsTopRight = input.corners === "top-right" || input.corners === "both";
-  const topLeft = ownsTopLeft ? input.obstruction.topLeft : null;
-  const topRight = ownsTopRight ? input.obstruction.topRight : null;
+  const topLeft = windowChromeCornersInclude(input.corners, "top-left")
+    ? input.obstruction.topLeft
+    : null;
+  const topRight = windowChromeCornersInclude(input.corners, "top-right")
+    ? input.obstruction.topRight
+    : null;
   if (input.placement === "below") {
     return { height: Math.max(topLeft?.height ?? 0, topRight?.height ?? 0) };
   }

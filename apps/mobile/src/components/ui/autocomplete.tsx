@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   ScrollView,
   Text,
@@ -31,7 +31,6 @@ interface AutocompleteProps {
   errorMessage?: string;
   loadingText?: string;
   emptyText?: string;
-  maxHeight?: number;
 }
 
 const BOLT_GLYPH_PATTERN = /\u26A1|\uFE0F/gu;
@@ -125,7 +124,6 @@ export function Autocomplete({
   errorMessage,
   loadingText,
   emptyText,
-  maxHeight = 220,
 }: AutocompleteProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -211,11 +209,10 @@ export function Autocomplete({
   );
 
   const selectedOption = options[selectedIndex];
-  const containerStyle = useMemo(() => [styles.container, { maxHeight }], [maxHeight]);
 
   if (isLoading) {
     return (
-      <View style={containerStyle}>
+      <View style={styles.container}>
         <View style={styles.emptyItem}>
           <Text style={styles.emptyText}>{resolvedLoadingText}</Text>
         </View>
@@ -225,7 +222,7 @@ export function Autocomplete({
 
   if (errorMessage) {
     return (
-      <View style={containerStyle}>
+      <View style={styles.container}>
         <View style={styles.emptyItem}>
           <Text style={styles.emptyText}>Error: {errorMessage}</Text>
         </View>
@@ -235,7 +232,7 @@ export function Autocomplete({
 
   if (options.length === 0) {
     return (
-      <View style={containerStyle}>
+      <View style={styles.container}>
         <View style={styles.emptyItem}>
           <Text style={styles.emptyText}>{resolvedEmptyText}</Text>
         </View>
@@ -258,7 +255,7 @@ export function Autocomplete({
           ) : null}
         </View>
       ) : null}
-      <View style={containerStyle}>
+      <View style={styles.container}>
         <ScrollView
           ref={scrollRef}
           onLayout={handleScrollViewLayout}
@@ -317,6 +314,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     marginTop: theme.spacing[1],
   },
   container: {
+    maxHeight: 220,
     flexShrink: 1,
     minHeight: 0,
     backgroundColor: theme.colors.surface1,

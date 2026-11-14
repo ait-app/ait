@@ -1,6 +1,6 @@
 import type { FetchAgentsEntry } from "@ait/client/internal/daemon-client";
 import type { AgentSnapshotPayload } from "@ait/protocol/messages";
-import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
+import { clearArchiveAgentPending } from "@/data/archive-agent-pending";
 import { queryClient } from "@/data/query-client";
 import type { Agent } from "@/stores/session-store";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";

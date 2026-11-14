@@ -18,9 +18,7 @@ import {
   View,
   type NativeSyntheticEvent,
   type PressableStateCallbackType,
-  type StyleProp,
   type TextInputKeyPressEventData,
-  type ViewStyle,
 } from "react-native";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
@@ -994,15 +992,17 @@ export function FileExplorerPane({
           />
         );
       }
+      const { entry, depth } = info.item.row;
+      const isDirectory = entry.kind === "directory";
       return (
-        <TreeRowDispatcher
+        <TreeRowItem
           serverId={serverId}
           workspaceId={workspaceId}
-          row={info.item.row}
-          index={info.index}
-          expandedPaths={expandedPaths}
-          selectedEntryPath={selectedEntryPath}
-          isDirectoryLoading={isDirectoryLoading}
+          entry={entry}
+          depth={depth}
+          isExpanded={isDirectory && expandedPaths.has(entry.path)}
+          isSelected={selectedEntryPath === entry.path}
+          loading={isDirectory && isDirectoryLoading(entry.path)}
           onEntryPress={handleEntryPress}
           onSelectEntry={handleSelectEntry}
           onCopyPath={handleCopyPath}
@@ -1019,6 +1019,7 @@ export function FileExplorerPane({
           onRenameEntry={fsEntryOpsEnabled ? handleRenameEntry : undefined}
           onDuplicateEntry={fsEntryDuplicateEnabled ? handleDuplicateEntry : undefined}
           onDeleteEntry={fsEntryOpsEnabled ? handleDeleteEntry : undefined}
+          testID={`file-explorer-row-${info.index}`}
         />
       );
     },
@@ -1102,7 +1103,6 @@ export function FileExplorerPane({
         handleRefresh={handleRefresh}
         handleBackFromError={handleBackFromError}
         handleRetry={handleRetry}
-        sortTriggerStyle={sortTriggerStyle}
       />
     </View>
   );
@@ -1176,7 +1176,6 @@ interface FileExplorerPaneContentProps {
   handleRefresh: () => void;
   handleBackFromError: () => void;
   handleRetry: () => void;
-  sortTriggerStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
 }
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
@@ -1199,7 +1198,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     handleRefresh,
     handleBackFromError,
     handleRetry,
-    sortTriggerStyle: sortTriggerStyleProp,
   } = props;
 
   const showHiddenFiles = usePanelStore((state) => state.explorerShowHiddenFiles);
@@ -1254,11 +1252,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         ]}
         testID="files-pane-header"
       >
-        <Pressable
-          onPress={handleSortCycle}
-          style={sortTriggerStyleProp}
-          testID="files-sort-trigger"
-        >
+        <Pressable onPress={handleSortCycle} style={sortTriggerStyle} testID="files-sort-trigger">
           <Text style={styles.sortTriggerText} testID="files-sort-label">
             {currentSortLabel}
           </Text>
@@ -1415,11 +1409,8 @@ function resolveShowInitialLoading({
   isExplorerLoading: boolean;
   pendingRequest: AgentFileExplorerState["pendingRequest"] | null;
 }): boolean {
-  if (directories.has(".")) {
-    return false;
-  }
-  return Boolean(
-    isExplorerLoading && pendingRequest?.mode === "list" && pendingRequest?.path === ".",
+  return (
+    !directories.has(".") && isPendingListForPath({ isExplorerLoading, pendingRequest, path: "." })
   );
 }
 
@@ -1465,92 +1456,6 @@ function toggleDirectory({
       setCurrentPath: false,
     });
   }
-}
-
-function TreeRowDispatcher({
-  serverId,
-  workspaceId,
-  row,
-  index,
-  expandedPaths,
-  selectedEntryPath,
-  isDirectoryLoading,
-  onEntryPress,
-  onSelectEntry,
-  onCopyPath,
-  onCopyRelativePath,
-  onOpenInEditor,
-  editorTargetName,
-  onRevealEntry,
-  revealTargetName,
-  onDownloadEntry,
-  onAddToChat,
-  onOpenFileToSide,
-  onNewEntry,
-  onCollapseDirectory,
-  onRenameEntry,
-  onDuplicateEntry,
-  onDeleteEntry,
-}: {
-  serverId: string;
-  workspaceId?: string | null;
-  row: ExplorerTreeRow;
-  index: number;
-  expandedPaths: Set<string>;
-  selectedEntryPath: string | null;
-  isDirectoryLoading: (path: string) => boolean;
-  onEntryPress: (entry: ExplorerEntry) => void;
-  onSelectEntry: (entry: ExplorerEntry) => void;
-  onCopyPath: (path: string) => void | Promise<void>;
-  onCopyRelativePath: (path: string) => void | Promise<void>;
-  onOpenInEditor?: (entry: ExplorerEntry) => void;
-  editorTargetName?: string;
-  onRevealEntry?: (entry: ExplorerEntry) => void;
-  revealTargetName?: string;
-  onDownloadEntry: (entry: ExplorerEntry) => void;
-  onAddToChat?: (path: string) => void;
-  onOpenFileToSide?: (path: string) => void;
-  onNewEntry?: (parentPath: string, kind: "file" | "directory") => void;
-  onCollapseDirectory?: (path: string) => void;
-  onRenameEntry?: (entry: ExplorerEntry) => void;
-  onDuplicateEntry?: (entry: ExplorerEntry) => void;
-  onDeleteEntry?: (entry: ExplorerEntry) => void;
-}) {
-  const entry = row.entry;
-  const depth = row.depth;
-  const isDirectory = entry.kind === "directory";
-  const isExpanded = isDirectory && expandedPaths.has(entry.path);
-  const isSelected = selectedEntryPath === entry.path;
-  const loading = isDirectory && isDirectoryLoading(entry.path);
-
-  return (
-    <TreeRowItem
-      serverId={serverId}
-      workspaceId={workspaceId}
-      entry={entry}
-      depth={depth}
-      isExpanded={isExpanded}
-      isSelected={isSelected}
-      loading={loading}
-      onEntryPress={onEntryPress}
-      onSelectEntry={onSelectEntry}
-      onCopyPath={onCopyPath}
-      onCopyRelativePath={onCopyRelativePath}
-      onOpenInEditor={onOpenInEditor}
-      editorTargetName={editorTargetName}
-      onRevealEntry={onRevealEntry}
-      revealTargetName={revealTargetName}
-      onDownloadEntry={onDownloadEntry}
-      onAddToChat={onAddToChat}
-      onOpenFileToSide={onOpenFileToSide}
-      onNewEntry={onNewEntry}
-      onCollapseDirectory={onCollapseDirectory}
-      onRenameEntry={onRenameEntry}
-      onDuplicateEntry={onDuplicateEntry}
-      onDeleteEntry={onDeleteEntry}
-      testID={`file-explorer-row-${index}`}
-    />
-  );
 }
 
 function replaceExplorerPathPrefix(
@@ -1672,36 +1577,12 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
   },
-  desktopSplit: {
-    flex: 1,
-    flexDirection: "row",
-    minHeight: 0,
-  },
   treePane: {
     minWidth: 0,
     position: "relative",
   },
   treePaneFill: {
     flex: 1,
-  },
-  treePaneWithPreview: {
-    flex: 0,
-    flexGrow: 0,
-    flexShrink: 0,
-    borderLeftWidth: 1,
-    borderLeftColor: theme.colors.border,
-  },
-  splitResizeHandle: {
-    position: "absolute",
-    left: -5,
-    top: 0,
-    bottom: 0,
-    width: 10,
-    zIndex: 20,
-  },
-  previewPane: {
-    flex: 1,
-    minWidth: 0,
   },
   paneHeader: {
     flexDirection: "row",
@@ -1781,10 +1662,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     textAlign: "center",
   },
-  binaryMetaText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-  },
   entryInfo: {
     flex: 1,
     flexDirection: "row",
@@ -1815,76 +1692,10 @@ const styles = StyleSheet.create((theme) => ({
   draftPlaceholder: {
     color: theme.colors.foregroundExtraMuted,
   },
-  previewHeaderText: {
-    flex: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-  },
   refreshIcon: {
     width: 16,
     height: 16,
     alignItems: "center",
     justifyContent: "center",
-  },
-  previewContent: {
-    flex: 1,
-  },
-  previewScrollContainer: {
-    flex: 1,
-    minHeight: 0,
-    position: "relative",
-  },
-  previewCodeScrollContent: {
-    paddingTop: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
-    paddingBottom: theme.spacing[3] + theme.spacing[2],
-  },
-  codeText: {
-    color: theme.colors.foreground,
-    fontFamily: theme.fontFamily.mono,
-    fontSize: theme.fontSize.code,
-    flexShrink: 0,
-  },
-  previewImageScrollContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: theme.spacing[3],
-  },
-  previewImage: {
-    width: "100%",
-    aspectRatio: 1,
-  },
-  sheetBackground: {
-    backgroundColor: theme.colors.surface2,
-  },
-  handleIndicator: {
-    backgroundColor: theme.colors.palette.zinc[600],
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
-  },
-  sheetTitle: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.semibold,
-    color: theme.colors.foreground,
-    flex: 1,
-  },
-  sheetCloseButton: {
-    padding: theme.spacing[2],
-  },
-  sheetCenterState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[2],
-    padding: theme.spacing[4],
   },
 }));

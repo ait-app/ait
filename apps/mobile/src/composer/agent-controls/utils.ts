@@ -6,6 +6,8 @@ import {
   PLAN_MODE_FEATURE_ID,
   SPEED_FEATURE_ID,
 } from "@/agent-controls/policy";
+import { findModelByReference } from "@/provider-selection/model-catalog";
+import { resolveDefaultModel } from "@/provider-selection/resolve-agent-form";
 
 export type ExplainedAgentControl = "mode" | "model" | "thinking";
 export type FeatureHighlightColor = "blue" | "default" | "green" | "yellow";
@@ -63,18 +65,7 @@ function findModelById(
   models: AgentModelDefinition[] | null,
   modelId: string | null,
 ): AgentModelDefinition | null {
-  if (!models || !modelId) {
-    return null;
-  }
-  return (
-    models.find((model) => model.id === modelId) ??
-    models.find((model) => model.aliases?.includes(modelId)) ??
-    null
-  );
-}
-
-function getFallbackModel(models: AgentModelDefinition[] | null): AgentModelDefinition | null {
-  return models?.find((model) => model.isDefault) ?? models?.[0] ?? null;
+  return modelId ? findModelByReference(models, modelId) : null;
 }
 
 function resolvePreferredModelId(
@@ -162,7 +153,7 @@ export function resolveAgentModelSelection(input: {
     normalizedConfiguredModelId,
     normalizedRuntimeModelId,
   );
-  const fallbackModel = getFallbackModel(models);
+  const fallbackModel = resolveDefaultModel(models);
   const selectedModel = pickSelectedModel(models, preferredModelId, fallbackModel);
 
   const { activeModelId, displayModel } = resolveModelDisplay(
@@ -183,7 +174,6 @@ export function resolveAgentModelSelection(input: {
   );
 
   return {
-    selectedModel,
     activeModelId,
     displayModel,
     thinkingOptions,

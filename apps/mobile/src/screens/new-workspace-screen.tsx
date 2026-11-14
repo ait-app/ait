@@ -92,7 +92,6 @@ import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import type { WorkspaceIsolation } from "@/create-agent-preferences/preferences";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { toErrorMessage } from "@/utils/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
@@ -188,13 +187,6 @@ function resolveVisibleDraftContextScopeKeys(input: {
     return [];
   }
   return [input.draftContextScopeKey];
-}
-
-function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | "terminal" | "voice" | null;
-  isDraftHandoffActive: boolean;
-}): boolean {
-  return input.pendingAction !== null || input.isDraftHandoffActive;
 }
 
 function buildFirstAgentContext(input: {
@@ -981,20 +973,6 @@ function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
   });
 }
 
-function buildComposerInitialValues(input: {
-  initialSetup?: WorkspaceDraftTabSetup | null;
-}): CreateAgentInitialValues | undefined {
-  if (input.initialSetup) {
-    return {
-      provider: input.initialSetup.provider,
-      modeId: input.initialSetup.modeId,
-      model: input.initialSetup.model,
-      thinkingOptionId: input.initialSetup.thinkingOptionId,
-    };
-  }
-  return undefined;
-}
-
 const pendingWorkspaceSubmissions = new Map<string, Promise<SubmitOutcome>>();
 function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOutcome> {
   const key = JSON.stringify([input.serverId, input.draftId]);
@@ -1017,16 +995,12 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
   if (!provider) {
     throw new Error(input.labels.selectModel);
   }
-  const attachmentSubmitFormat = resolveComposerAttachmentSubmitFormat({
-    supportsForgeAttachments: input.supportsForgeSearch,
-  });
-  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments, {
-    format: attachmentSubmitFormat,
-  });
-  const workspaceNamingAttachments = getWorkspaceNamingAttachments(reviewAttachments);
   const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
-    format: attachmentSubmitFormat,
+    format: resolveComposerAttachmentSubmitFormat({
+      supportsForgeAttachments: input.supportsForgeSearch,
+    }),
   });
+  const workspaceNamingAttachments = getWorkspaceNamingAttachments(wirePayload.attachments);
   const images = await encodeImages(wirePayload.images, {
     text,
     attachments: wirePayload.attachments,
@@ -1121,7 +1095,14 @@ function buildComposerConfig(input: {
   const workingDir = workspaceDirectory || sourceDirectory || undefined;
   return {
     initialServerId: serverId || null,
-    initialValues: buildComposerInitialValues({ initialSetup }),
+    initialValues: initialSetup
+      ? {
+          provider: initialSetup.provider,
+          modeId: initialSetup.modeId,
+          model: initialSetup.model,
+          thinkingOptionId: initialSetup.thinkingOptionId,
+        }
+      : undefined,
     initialFeatureValues: initialSetup?.featureValues,
     isVisible: true,
     lockedWorkingDir: workingDir,
@@ -1325,10 +1306,6 @@ function useNewWorkspaceHostSelector(input: {
     [routeServerId],
   );
 
-  const handleHostPickerOpenChange = useCallback((open: boolean) => {
-    setHostPickerOpen(open);
-  }, []);
-
   const openHostPicker = useCallback(() => {
     setHostPickerOpen(true);
   }, []);
@@ -1337,7 +1314,7 @@ function useNewWorkspaceHostSelector(input: {
     selectedServerId,
     hostPickerOpen,
     handleSelectHost,
-    handleHostPickerOpenChange,
+    handleHostPickerOpenChange: setHostPickerOpen,
     openHostPicker,
   };
 }
@@ -1895,7 +1872,7 @@ export function NewWorkspaceScreen({
   const worktreeSupport = selectedProject
     ? getWorktreeSupportForHostProject({ project: selectedProject, serverId: selectedServerId })
     : "unsupported";
-  const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
+  const isPending = pendingAction !== null || isDraftHandoffActive;
   const { effectiveIsolation, setIsolation, canCreateWorktree, canSandboxWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
@@ -2065,10 +2042,6 @@ export function NewWorkspaceScreen({
     setIsolationPickerOpen(true);
   }, []);
 
-  const handleIsolationPickerOpenChange = useCallback((nextOpen: boolean) => {
-    setIsolationPickerOpen(nextOpen);
-  }, []);
-
   // Worktree levels are omitted entirely (not disabled) when the project isn't a
   // git checkout, and the sandboxed level when the host cannot confine writes.
   const isolationOptions = useMemo<ComboboxOptionType[]>(
@@ -2120,19 +2093,11 @@ export function NewWorkspaceScreen({
     [isPending, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
-  const handleClearDraft = useCallback(() => {
-    // No-op: screen navigates away on success, text should stay for retry on error
-  }, []);
-
   const handlePickerOpenChange = useCallback((nextOpen: boolean) => {
     setPickerOpen(nextOpen);
     if (!nextOpen) {
       setPickerSearchQuery("");
     }
-  }, []);
-
-  const handleProjectPickerOpenChange = useCallback((nextOpen: boolean) => {
-    setProjectPickerOpen(nextOpen);
   }, []);
 
   const ensureWorkspace = useCallback(
@@ -2493,7 +2458,7 @@ export function NewWorkspaceScreen({
       onSelect: handleSelectProjectOption,
       onAddProject: handleAddProject,
       openState: projectPickerOpen,
-      onOpenChange: handleProjectPickerOpenChange,
+      onOpenChange: setProjectPickerOpen,
       renderOption: renderProjectOption,
     },
     host: {
@@ -2512,7 +2477,7 @@ export function NewWorkspaceScreen({
       options: isolationOptions,
       onSelect: handleSelectIsolationOption,
       openState: isolationPickerOpen,
-      onOpenChange: handleIsolationPickerOpenChange,
+      onOpenChange: setIsolationPickerOpen,
       renderOption: renderIsolationOption,
       canCreateWorktree,
     },
@@ -2598,7 +2563,8 @@ export function NewWorkspaceScreen({
       onForgeChangeRequestDetected={handleForgeChangeRequestDetected}
       onForgeChangeRequestAutoAttach={handleForgeChangeRequestAutoAttach}
       cwd={selectedSourceDirectory ?? ""}
-      clearDraft={handleClearDraft}
+      // The screen navigates away on success; text stays for a retry on error.
+      clearDraft={noopClearDraft}
       autoFocus
       autoFocusKey={launchFocusKey}
       commandDraftConfig={composerState?.commandDraftConfig}
@@ -2798,10 +2764,5 @@ const styles = StyleSheet.create((theme) => ({
     height: theme.iconSize.md,
     alignItems: "center",
     justifyContent: "center",
-  },
-  hostStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
 }));

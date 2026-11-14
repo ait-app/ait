@@ -1,4 +1,4 @@
-export function trimNonEmpty(value: string | null | undefined): string | null {
+export function trimNonEmpty(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }

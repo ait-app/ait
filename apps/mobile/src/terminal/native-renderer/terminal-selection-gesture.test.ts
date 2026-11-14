@@ -186,11 +186,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("focus");
     });
@@ -200,11 +198,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "scrolled",
         }),
       ).toEqual("focus");
     });
@@ -214,11 +210,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: TERMINAL_GESTURE_LONG_PRESS_MS + 50,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("select");
     });
@@ -228,11 +222,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 500,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("select");
     });
@@ -242,11 +234,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 400,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("focus");
     });
@@ -256,25 +246,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: true,
-          didNavigate: false,
           movedBeyondTapTolerance: true,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "scrolled",
-        }),
-      ).toEqual("none");
-    });
-
-    it("does nothing after a navigation swipe", () => {
-      expect(
-        resolveTerminalGestureReleaseAction({
-          status: "pressing",
-          didScroll: false,
-          didNavigate: true,
-          movedBeyondTapTolerance: true,
-          pressDurationMs: 80,
-          longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("none");
     });
@@ -284,11 +258,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "selecting",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: true,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("none");
     });
@@ -299,11 +271,9 @@ describe("native terminal gesture policy", () => {
           status: "selecting",
           startedWithSelection: true,
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("clear");
     });
@@ -314,11 +284,9 @@ describe("native terminal gesture policy", () => {
           status: "selecting",
           startedWithSelection: false,
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: TERMINAL_GESTURE_LONG_PRESS_MS + 50,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("none");
     });
@@ -328,11 +296,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "pressing",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: true,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("none");
     });
@@ -342,11 +308,9 @@ describe("native terminal gesture policy", () => {
         resolveTerminalGestureReleaseAction({
           status: "idle",
           didScroll: false,
-          didNavigate: false,
           movedBeyondTapTolerance: false,
           pressDurationMs: 80,
           longPressMs: TERMINAL_GESTURE_LONG_PRESS_MS,
-          scrollMode: "following",
         }),
       ).toEqual("none");
     });

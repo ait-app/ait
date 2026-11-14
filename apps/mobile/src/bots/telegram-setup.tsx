@@ -5,7 +5,6 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { TextLink, useLiveSetup } from "./channel-setup";
@@ -29,13 +28,6 @@ const FAILURE_KEYS = {
   unavailable: "bots.telegramUnavailable",
 } as const;
 type Failure = keyof typeof FAILURE_KEYS;
-
-/** Whether the host can verify a pasted Telegram token and pair its owner. */
-export function useTelegramSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotTelegramSetup === true,
-  );
-}
 
 export function TelegramGuidedSetup({
   serverId,

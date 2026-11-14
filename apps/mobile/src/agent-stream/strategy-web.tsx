@@ -30,19 +30,10 @@ import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./
 import { useRevisedHistoryRows } from "./history-row-revision";
 import { createStreamStrategy } from "./strategy";
 import {
-  abandonHistoryStartPaginationRequest,
-  createHistoryStartPaginationState,
-  evaluateHistoryStartPagination,
   isHistoryStartLoadingOperation,
-  rearmHistoryStartPagination,
-  settleHistoryStartPagination,
   type HistoryStartPaginationInput,
-  type HistoryStartPaginationTransition,
 } from "./history-start-pagination";
-import {
-  createHistoryStartSettleScheduler,
-  type HistoryStartSettleScheduler,
-} from "./history-start-settle-scheduler";
+import { useHistoryStartPagination } from "./use-history-start-pagination";
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { getStreamItemMessageId } from "./presentation";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
@@ -58,7 +49,6 @@ const USER_SCROLL_DELTA_EPSILON = 1;
 const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
-const HISTORY_START_SETTLE_FRAMES = 2;
 const HISTORY_START_SLOT_HEIGHT_PX = 32;
 const CONTENT_PADDING_TOP_PX = 16;
 const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
@@ -305,7 +295,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     isLoadingOlderHistory,
     hasOlderHistory,
     olderHistoryProgressKey,
-    scrollEnabled,
     contentMaxWidth,
     imageContext,
     isMobileBreakpoint,
@@ -353,13 +342,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingAutoScrollTimeoutRef = useRef<number | null>(null);
   const historyStartReadyRef = useRef(false);
-  const [historyStartPaginationState, setHistoryStartPaginationState] = useState(
-    createHistoryStartPaginationState,
-  );
-  const historyStartPaginationStateRef = useRef(historyStartPaginationState);
   const readingAnchor = useMemo(createReadingAnchor, []);
   const measuredRowHeights = useRef(new Map<string, { width: number; height: number }>());
-  const historyStartSettleSchedulerRef = useRef<HistoryStartSettleScheduler | null>(null);
   const lastActiveFollowOutputLayoutRef = useRef<ActiveFollowOutputLayout | null>(null);
   const lastObservedViewportGeometryRef = useRef<ObservedViewportGeometry | null>(null);
   const wasFollowOutputLayoutActiveRef = useRef(false);
@@ -485,80 +469,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       progressKey: olderHistoryProgressKey,
     };
   });
-  const applyHistoryStartPaginationTransition = useStableEvent(
-    (transition: HistoryStartPaginationTransition) => {
-      const previousState = historyStartPaginationStateRef.current;
-      historyStartPaginationStateRef.current = transition.state;
-      if (transition.state !== previousState) {
-        setHistoryStartPaginationState(transition.state);
-      }
-      if (!transition.shouldLoad || olderHistoryProgressKey === null) {
-        return;
-      }
-      const requestedProgressKey = olderHistoryProgressKey;
-      void (async () => {
-        const started = await onNearHistoryStart();
-        if (started === true) {
-          return;
-        }
-        applyHistoryStartPaginationTransition({
-          state: abandonHistoryStartPaginationRequest(
-            historyStartPaginationStateRef.current,
-            requestedProgressKey,
-          ),
-          shouldLoad: false,
-        });
-      })();
-    },
-  );
-  const evaluateHistoryStart = useStableEvent(() => {
-    const input = getHistoryStartPaginationInput();
-    if (!input) {
-      return;
-    }
-    const transition = evaluateHistoryStartPagination(
-      historyStartPaginationStateRef.current,
-      input,
-    );
-    applyHistoryStartPaginationTransition(transition);
+  const historyStartPagination = useHistoryStartPagination({
+    getInput: getHistoryStartPaginationInput,
+    olderHistoryProgressKey,
+    onNearHistoryStart,
   });
-  const rearmHistoryStartFromUserIntent = useStableEvent(() => {
-    const rearmed = rearmHistoryStartPagination(historyStartPaginationStateRef.current);
-    if (rearmed === historyStartPaginationStateRef.current) {
-      return;
-    }
-    historyStartPaginationStateRef.current = rearmed;
-    setHistoryStartPaginationState(rearmed);
-    evaluateHistoryStart();
-  });
-  const scheduleHistoryStartPrependSettle = useStableEvent(() => {
-    let scheduler = historyStartSettleSchedulerRef.current;
-    if (!scheduler) {
-      scheduler = createHistoryStartSettleScheduler({
-        settleFrames: HISTORY_START_SETTLE_FRAMES,
-        requestFrame: (callback) => window.requestAnimationFrame(callback),
-        cancelFrame: (frame) => window.cancelAnimationFrame(frame),
-        isSettling: () => historyStartPaginationStateRef.current.status === "settling",
-        isLoading: () => {
-          const input = getHistoryStartPaginationInput();
-          return !input || input.isLoadingOlderHistory;
-        },
-        onSettle: () => {
-          const input = getHistoryStartPaginationInput();
-          if (!input) {
-            return;
-          }
-          const transition = settleHistoryStartPagination(
-            historyStartPaginationStateRef.current,
-            input,
-          );
-          applyHistoryStartPaginationTransition(transition);
-        },
-      });
-      historyStartSettleSchedulerRef.current = scheduler;
-    }
-    scheduler.schedule();
-  });
+  const evaluateHistoryStart = historyStartPagination.evaluate;
+  const rearmHistoryStartFromUserIntent = historyStartPagination.rearm;
+  const scheduleHistoryStartPrependSettle = historyStartPagination.scheduleSettle;
 
   const measureVirtualizedRows = useStableEvent(() => {
     let resized = false;
@@ -632,11 +550,17 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       return;
     }
     cancelPendingStickToBottom();
-    historyStartSettleSchedulerRef.current?.cancel();
+    historyStartPagination.cancelSettle();
     clearMouseScrollGesture();
     clearUpwardInputEvidence();
     lastTouchClientYRef.current = null;
-  }, [cancelPendingStickToBottom, clearMouseScrollGesture, clearUpwardInputEvidence, isActive]);
+  }, [
+    cancelPendingStickToBottom,
+    clearMouseScrollGesture,
+    clearUpwardInputEvidence,
+    historyStartPagination.cancelSettle,
+    isActive,
+  ]);
 
   const scrollMessagesToBottom = useCallback(
     (behavior: ScrollBehaviorLike = "auto") => {
@@ -820,9 +744,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   useEffect(() => {
-    const initialHistoryStartState = createHistoryStartPaginationState();
-    historyStartPaginationStateRef.current = initialHistoryStartState;
-    setHistoryStartPaginationState(initialHistoryStartState);
+    historyStartPagination.reset();
     readingAnchor.reset();
     const frame = window.requestAnimationFrame(() => {
       historyStartReadyRef.current = true;
@@ -831,10 +753,15 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return () => {
       window.cancelAnimationFrame(frame);
       historyStartReadyRef.current = false;
-      historyStartSettleSchedulerRef.current?.cancel();
-      historyStartSettleSchedulerRef.current = null;
+      historyStartPagination.cancelSettle();
     };
-  }, [evaluateHistoryStart, props.agentId, readingAnchor]);
+  }, [
+    evaluateHistoryStart,
+    historyStartPagination.reset,
+    historyStartPagination.cancelSettle,
+    props.agentId,
+    readingAnchor,
+  ]);
 
   useLayoutEffect(() => {
     if (!isActiveRef.current || !isActivationReady) {
@@ -923,7 +850,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       updateScrollMetrics();
     }
     evaluateHistoryStart();
-    if (historyStartPaginationStateRef.current.status === "settling") {
+    if (historyStartPagination.isSettling()) {
       scheduleHistoryStartPrependSettle();
     }
   }, [
@@ -971,7 +898,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         lastObservedViewportGeometryRef.current = nextGeometry;
       }
       reconcileReadingPosition();
-      if (historyStartPaginationStateRef.current.status === "settling") {
+      if (historyStartPagination.isSettling()) {
         scheduleHistoryStartPrependSettle();
       }
       updateScrollMetrics();
@@ -1205,19 +1132,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     };
   }, [isMobileBreakpoint]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
-    const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
+    const overlayScrollbarEnabled = !isMobileBreakpoint;
     return {
       width: "100%",
       height: "100%",
       overflowX: "hidden",
-      overflowY: scrollEnabled ? "auto" : "hidden",
+      overflowY: "auto",
       overscrollBehaviorY: "contain",
       // The browser still anchors delayed image growth while following output.
       // Detached reading has one owner: reconcileReadingPosition.
       overflowAnchor: followOutput ? "auto" : "none",
       scrollbarWidth: overlayScrollbarEnabled ? "none" : undefined,
     };
-  }, [followOutput, isMobileBreakpoint, scrollEnabled]);
+  }, [followOutput, isMobileBreakpoint]);
   const viewportStyle = useMemo(
     (): CSSProperties => ({
       position: "relative",
@@ -1291,7 +1218,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return renderLiveAuxiliary();
   }, [renderLiveAuxiliary]);
   const historyStartSlot = useMemo(() => {
-    const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPaginationState);
+    const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPagination.state);
     return (
       <div style={historyStartSlotStyle} data-testid="older-history-slot">
         {isLoadingOperation ? (
@@ -1301,7 +1228,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         ) : null}
       </div>
     );
-  }, [historyStartPaginationState]);
+  }, [historyStartPagination.state]);
   const shouldRenderEmpty =
     !boundary.hasMountedHistory &&
     !boundary.hasVirtualizedHistory &&
@@ -1315,7 +1242,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         // Let clicks focus the feed for browser keyboard scrolling without adding a Tab stop.
         tabIndex={-1}
         data-testid="agent-chat-scroll"
-        data-overlay-scrollbar={scrollEnabled && !isMobileBreakpoint ? "true" : undefined}
+        data-overlay-scrollbar={!isMobileBreakpoint ? "true" : undefined}
         id={`agent-chat-scroll-${shouldUseVirtualizer ? "web-dom-virtualized" : "web-dom-scroll"}`}
         style={scrollContainerStyle}
       >
@@ -1353,7 +1280,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
           {shouldRenderEmpty ? listEmptyComponent : null}
         </div>
       </div>
-      {scrollEnabled && !isMobileBreakpoint ? (
+      {!isMobileBreakpoint ? (
         <DomOverlayScrollbar
           scrollContainerRef={scrollContainerRef}
           onUserScrollUp={stopFollowingOutputFromUserIntent}
@@ -1375,21 +1302,14 @@ export function createWebStreamStrategy(input: CreateWebStreamStrategyInput): St
     orderTailReverse: false,
     orderHeadReverse: false,
     assistantTurnTraversalStep: -1,
-    edgeSlot: "footer",
     historyLiveBoundaryEdge: "last",
     liveHeadHistoryBoundaryEdge: "first",
     frameChildOrder: "content-then-footer",
     flatListInverted: false,
-    overlayScrollbarInverted: false,
-    maintainVisibleContentPosition: undefined,
     bottomAnchorTransportBehavior: {
       verificationDelayFrames: 0,
       verificationRetryMode: "rescroll",
     },
-    disableParentScrollOnInlineDetailsExpansion: false,
-    anchorBottomOnContentSizeChange: true,
-    animateManualScrollToBottom: false,
-    useVirtualizedList: false,
     isNearBottom: (inputMetrics) => {
       const distanceFromBottom = Math.max(
         0,
@@ -1397,6 +1317,5 @@ export function createWebStreamStrategy(input: CreateWebStreamStrategyInput): St
       );
       return distanceFromBottom <= inputMetrics.threshold;
     },
-    getBottomOffset: (metrics) => Math.max(0, metrics.contentHeight - metrics.viewportHeight),
   });
 }

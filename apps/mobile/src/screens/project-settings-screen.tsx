@@ -542,26 +542,22 @@ function ProjectConfigForm({
     onReload();
   }, [onReload]);
 
-  const updateDraft = useCallback((updater: (draft: ProjectConfigDraft) => ProjectConfigDraft) => {
-    setDraft((prev) => updater(prev));
-  }, []);
-
   const handleSetupChange = useCallback(
-    (text: string) => updateDraft((d) => ({ ...d, setupText: text })),
-    [updateDraft],
+    (text: string) => setDraft((d) => ({ ...d, setupText: text })),
+    [],
   );
   const handleTeardownChange = useCallback(
-    (text: string) => updateDraft((d) => ({ ...d, teardownText: text })),
-    [updateDraft],
+    (text: string) => setDraft((d) => ({ ...d, teardownText: text })),
+    [],
   );
 
   const handleMetadataPromptChange = useCallback(
     (key: MetadataPromptKey, text: string) =>
-      updateDraft((d) => ({
+      setDraft((d) => ({
         ...d,
         metadataPrompts: { ...d.metadataPrompts, [key]: text },
       })),
-    [updateDraft],
+    [],
   );
 
   const handleRemoveScript = useCallback(
@@ -576,12 +572,12 @@ function ProjectConfigForm({
         destructive: true,
       });
       if (!ok) return;
-      updateDraft((d) => ({
+      setDraft((d) => ({
         ...d,
         scripts: d.scripts.filter((entry) => entry.id !== script.id),
       }));
     },
-    [t, updateDraft],
+    [t],
   );
 
   const handleEditScript = useCallback((script: ProjectScriptDraft) => {
@@ -590,7 +586,7 @@ function ProjectConfigForm({
 
   const handleAddScript = useCallback(() => {
     const id = `script-draft-new-${Date.now()}`;
-    updateDraft((d) => ({
+    setDraft((d) => ({
       ...d,
       scripts: [
         ...d.scripts,
@@ -606,23 +602,20 @@ function ProjectConfigForm({
       ],
     }));
     setEditingScriptId(id);
-  }, [updateDraft]);
+  }, []);
 
-  const handleEditingDraftChange = useCallback(
-    (next: ProjectScriptDraft) => {
-      updateDraft((d) => ({
-        ...d,
-        scripts: d.scripts.map((entry) => (entry.id === next.id ? next : entry)),
-      }));
-    },
-    [updateDraft],
-  );
+  const handleEditingDraftChange = useCallback((next: ProjectScriptDraft) => {
+    setDraft((d) => ({
+      ...d,
+      scripts: d.scripts.map((entry) => (entry.id === next.id ? next : entry)),
+    }));
+  }, []);
 
   const handleCancelEditing = useCallback(() => {
     if (!editingScriptId) {
       return;
     }
-    updateDraft((d) => {
+    setDraft((d) => {
       const entry = d.scripts.find((row) => row.id === editingScriptId);
       if (!entry) return d;
       const isEmpty =
@@ -634,7 +627,7 @@ function ProjectConfigForm({
       return { ...d, scripts: d.scripts.filter((row) => row.id !== editingScriptId) };
     });
     setEditingScriptId(null);
-  }, [editingScriptId, updateDraft]);
+  }, [editingScriptId]);
 
   const handleSaveEditing = useCallback(() => {
     setEditingScriptId(null);

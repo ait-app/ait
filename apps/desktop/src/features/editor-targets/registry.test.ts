@@ -4,10 +4,8 @@ import { listAvailableEditorTargets, openEditorTarget } from "./registry.js";
 import type { EditorTargetIcon, EditorTargetRuntime } from "./target.js";
 import { cursorTarget } from "./targets/cursor.js";
 import { explorerTarget, fileManagerTarget, finderTarget } from "./targets/file-manager.js";
-import { intellijIdeaTarget } from "./targets/intellij-idea.js";
-import { pycharmTarget } from "./targets/pycharm.js";
+import { intellijIdeaTarget, pycharmTarget, webstormTarget } from "./targets/jetbrains.js";
 import { vscodeTarget } from "./targets/vscode.js";
-import { webstormTarget } from "./targets/webstorm.js";
 import { zedTarget } from "./targets/zed.js";
 
 interface RecordedLaunch {

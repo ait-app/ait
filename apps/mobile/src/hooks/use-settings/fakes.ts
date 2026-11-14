@@ -1,7 +1,7 @@
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import type { DesktopSettingsBridge, KeyValueStorage, ReleaseChannel } from "./storage";
 
-export interface InMemoryKeyValueStorage extends KeyValueStorage {
+interface InMemoryKeyValueStorage extends KeyValueStorage {
   readonly entries: Map<string, string>;
 }
 
@@ -23,7 +23,7 @@ export function createInMemoryKeyValueStorage(
   };
 }
 
-export interface FakeDesktopBridge extends DesktopSettingsBridge {
+interface FakeDesktopBridge extends DesktopSettingsBridge {
   readonly migrationsApplied: Array<{
     manageBuiltInDaemon?: boolean;
     releaseChannel?: ReleaseChannel;

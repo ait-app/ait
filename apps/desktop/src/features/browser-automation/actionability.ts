@@ -25,13 +25,12 @@ export async function waitForActionableTarget(input: {
   page: SnapshotPage;
   elementExpression: string;
   editable?: boolean;
-  timeoutMs?: number;
 }): Promise<ActionabilityResult> {
   const result = await input.page.executeJavaScript(
     buildActionabilityScript({
       elementExpression: input.elementExpression,
       editable: input.editable === true,
-      timeoutMs: input.timeoutMs ?? DEFAULT_ACTIONABILITY_TIMEOUT_MS,
+      timeoutMs: DEFAULT_ACTIONABILITY_TIMEOUT_MS,
     }),
   );
   return readActionabilityResult(result);

@@ -168,9 +168,6 @@ export function PermissionRequestCard({
   }, [isPlanRequest, request, t]);
 
   const planMarkdown = useMemo(() => {
-    if (!request) {
-      return undefined;
-    }
     const planFromMetadata =
       typeof request.metadata?.planText === "string" ? request.metadata.planText : undefined;
     if (planFromMetadata) {

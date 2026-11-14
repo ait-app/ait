@@ -26,14 +26,19 @@ import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { Pressable } from "react-native";
-import type { GestureResponderEvent } from "react-native";
+import type {
+  GestureResponderEvent,
+  PressableStateCallbackType,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 import { Portal } from "@gorhom/portal";
 import { useBottomSheetModalInternal } from "@gorhom/bottom-sheet";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
-import { PrBadge } from "@/components/sidebar-workspace-list";
+import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
@@ -91,15 +96,11 @@ const HOVER_CARD_WIDTH = 260;
 
 interface WorkspaceHoverCardProps {
   workspace: SidebarWorkspaceEntry;
-  prHint: PrHint | null;
-  isDragging: boolean;
   disabled?: boolean;
 }
 
 export function WorkspaceHoverCard({
   workspace,
-  prHint,
-  isDragging,
   disabled = false,
   children,
 }: PropsWithChildren<WorkspaceHoverCardProps>): ReactNode {
@@ -110,12 +111,7 @@ export function WorkspaceHoverCard({
   }
 
   return (
-    <WorkspaceHoverCardDesktop
-      workspace={workspace}
-      prHint={prHint}
-      isDragging={isDragging}
-      disabled={disabled}
-    >
+    <WorkspaceHoverCardDesktop workspace={workspace} disabled={disabled}>
       {children}
     </WorkspaceHoverCardDesktop>
   );
@@ -123,8 +119,6 @@ export function WorkspaceHoverCard({
 
 function WorkspaceHoverCardDesktop({
   workspace,
-  prHint,
-  isDragging,
   disabled = false,
   children,
 }: PropsWithChildren<WorkspaceHoverCardProps>): ReactElement {
@@ -152,10 +146,10 @@ function WorkspaceHoverCardDesktop({
   const handleTriggerEnter = useCallback(() => {
     triggerHoveredRef.current = true;
     clearGraceTimer();
-    if (!isDragging && !disabled) {
+    if (!disabled) {
       setOpen(true);
     }
-  }, [clearGraceTimer, disabled, isDragging]);
+  }, [clearGraceTimer, disabled]);
 
   const handleTriggerLeave = useCallback(() => {
     triggerHoveredRef.current = false;
@@ -175,11 +169,11 @@ function WorkspaceHoverCardDesktop({
 
   // Close while another row interaction owns attention.
   useEffect(() => {
-    if (isDragging || disabled) {
+    if (disabled) {
       clearGraceTimer();
       setOpen(false);
     }
-  }, [clearGraceTimer, disabled, isDragging]);
+  }, [clearGraceTimer, disabled]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -199,7 +193,6 @@ function WorkspaceHoverCardDesktop({
       {open ? (
         <WorkspaceHoverCardContent
           workspace={workspace}
-          prHint={prHint}
           triggerRef={triggerRef}
           contentRef={contentRef}
         />
@@ -210,16 +203,15 @@ function WorkspaceHoverCardDesktop({
 
 function WorkspaceHoverCardContent({
   workspace,
-  prHint,
   triggerRef,
   contentRef,
 }: {
   workspace: SidebarWorkspaceEntry;
-  prHint: PrHint | null;
   triggerRef: React.RefObject<View | null>;
   contentRef: React.RefObject<View | null>;
 }): ReactElement | null {
   const { t } = useTranslation();
+  const { prHint } = workspace;
   const bottomSheetInternal = useBottomSheetModalInternal(true);
   const [triggerRect, setTriggerRect] = useState<Rect | null>(null);
   const [contentSize, setContentSize] = useState<{ width: number; height: number } | null>(null);
@@ -552,6 +544,88 @@ function ChecksSummaryPressable({
 function checksSummaryPressableStyle({ hovered = false }: { pressed: boolean; hovered?: boolean }) {
   return [styles.checksSummaryRow, hovered && styles.listRowHovered];
 }
+
+function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewStyle> }) {
+  const { t } = useTranslation();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handlePressIn = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+  }, []);
+
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      void openExternalUrl(hint.url);
+    },
+    [hint.url],
+  );
+
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+
+  // Callers that place the badge in a list of icon+text rows pass that row's layout in, so the
+  // icon and text land on the same rails as their neighbors instead of on the badge's tighter
+  // inline spacing.
+  const pressableStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      prBadgeStyles.badge,
+      style,
+      pressed && prBadgeStyles.badgePressed,
+    ],
+    [style],
+  );
+
+  const textStyle = isHovered
+    ? [prBadgeStyles.text, prBadgeStyles.textHovered]
+    : prBadgeStyles.text;
+  const presentation = getForgePresentation(normalizeForge(hint.forge));
+
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={t("workspace.git.pr.accessibility.pullRequest", {
+        number: hint.number,
+        context: presentation.changeRequestContext,
+      })}
+      hitSlop={4}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      style={pressableStyle}
+    >
+      {isHovered ? (
+        <ThemedExternalLink size={12} uniProps={foregroundColorMapping} />
+      ) : (
+        <PullRequestStateIcon state={hint.state} size={12} />
+      )}
+      <Text style={textStyle} numberOfLines={1}>
+        {hint.number}
+      </Text>
+    </Pressable>
+  );
+}
+
+const prBadgeStyles = StyleSheet.create((theme) => ({
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  badgePressed: {
+    opacity: 0.82,
+  },
+  text: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 14,
+    color: theme.colors.foregroundMuted,
+  },
+  textHovered: {
+    color: theme.colors.foreground,
+  },
+}));
 
 const styles = StyleSheet.create((theme) => ({
   portalOverlay: {

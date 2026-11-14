@@ -4,7 +4,6 @@ export const TERMINAL_ACTIVITY_STATES = ["idle", "working", "attention"] as cons
 export const TERMINAL_ACTIVITY_ATTENTION_REASONS = ["finished", "needs_input"] as const;
 
 export type TerminalActivityState = (typeof TERMINAL_ACTIVITY_STATES)[number];
-export type TerminalActivityAttentionReason = (typeof TERMINAL_ACTIVITY_ATTENTION_REASONS)[number];
 
 export const TerminalActivitySchema = z.object({
   // Forward-compat: a newer daemon may send a state this client doesn't know.

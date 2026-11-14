@@ -9,9 +9,10 @@ import { Field, FormTextInput } from "@/components/ui/form-field";
 import { BotChannels } from "./bot-channels";
 import { BotLoadingSpinner } from "./loading";
 import { BotNotificationSettings } from "./bot-notifications";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
+import { BotPermissionFields } from "./bot-permissions";
 import { BotExecutionFields, executionDraft, resolveExecution, useBotProviders } from "./bot-setup";
 import { botKeys, isBotConflict } from "./queries";
 import { closeBotSessionTab } from "./session-tab";
@@ -260,7 +261,7 @@ export function BotSettings({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const readOnly = !canManageBackgroundTasks(serverId);
-  const supportsPermissions = useBotPermissionsSupported(serverId);
+  const supportsPermissions = useHostFeature(serverId, "workspaceBotPermissions");
   const [permissionsSaved, setPermissionsSaved] = useState(false);
   const memory = useQuery({
     queryKey: botKeys.memory(serverId, workspaceId),

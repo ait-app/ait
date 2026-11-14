@@ -99,7 +99,6 @@ export function DictationOverlay({
             volume={volume}
             isMuted={false}
             isSpeaking={false}
-            orientation="horizontal"
             color={theme.colors.accentForeground}
           />
           <Text style={overlayTimerTextStyle}>{formatDuration(duration)}</Text>

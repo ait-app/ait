@@ -22,7 +22,7 @@ import { useSessionStore } from "@/stores/session-store";
 export type CreateScheduleInput = Omit<CreateScheduleOptions, "requestId">;
 export type UpdateScheduleInput = Omit<UpdateScheduleOptions, "requestId">;
 
-export interface UseScheduleMutationsResult {
+interface UseScheduleMutationsResult {
   createSchedule: (input: CreateScheduleInput) => Promise<ScheduleSummary>;
   updateSchedule: (input: UpdateScheduleInput) => Promise<void>;
   pauseSchedule: (id: string) => Promise<void>;
@@ -31,9 +31,6 @@ export interface UseScheduleMutationsResult {
   runScheduleNow: (id: string) => Promise<void>;
   isCreating: boolean;
   isUpdating: boolean;
-  isPausing: boolean;
-  isResuming: boolean;
-  isDeleting: boolean;
   isRunningNow: boolean;
 }
 
@@ -83,26 +80,32 @@ function updateSchedulesData(
   );
 }
 
-function optimisticallySetStatus(
-  queryClient: QueryClient,
+function setScheduleStatus(
   serverId: string,
   id: string,
   status: ScheduleSummary["status"],
-): void {
+): (schedules: AggregatedSchedule[]) => AggregatedSchedule[] {
   const pausedAt = status === "paused" ? new Date().toISOString() : null;
-  updateSchedulesData(queryClient, (schedules) =>
+  return (schedules) =>
     schedules.map((schedule) =>
       schedule.serverId === serverId && schedule.id === id
         ? { ...schedule, status, pausedAt }
         : schedule,
-    ),
-  );
+    );
 }
 
-function optimisticallyRemove(queryClient: QueryClient, serverId: string, id: string): void {
-  updateSchedulesData(queryClient, (schedules) =>
-    schedules.filter((schedule) => !(schedule.serverId === serverId && schedule.id === id)),
-  );
+function removeSchedule(
+  serverId: string,
+  id: string,
+): (schedules: AggregatedSchedule[]) => AggregatedSchedule[] {
+  return (schedules) =>
+    schedules.filter((schedule) => !(schedule.serverId === serverId && schedule.id === id));
+}
+
+function throwIfError(payload: { error?: string | null }): void {
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
 }
 
 export function useScheduleMutations({
@@ -119,13 +122,31 @@ export function useScheduleMutations({
     void queryClient.invalidateQueries({ queryKey: ["schedule-detail"] });
   }, [queryClient]);
 
+  const getClient = () => requireClient(serverId, t("common.errors.daemonClientUnavailable"));
+
+  const applyOptimisticUpdate = async (
+    updateSchedules: (schedules: AggregatedSchedule[]) => AggregatedSchedule[],
+  ): Promise<ScheduleListSnapshot> => {
+    await queryClient.cancelQueries({ queryKey: schedulesQueryBaseKey });
+    const snapshot = snapshotSchedules(queryClient);
+    updateSchedulesData(queryClient, updateSchedules);
+    return snapshot;
+  };
+
+  const restoreOnError = (
+    _error: unknown,
+    _id: string,
+    context: ScheduleListSnapshot | undefined,
+  ): void => {
+    if (context) {
+      restoreSchedules(queryClient, context);
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: async (input: CreateScheduleInput): Promise<ScheduleSummary> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.scheduleCreate(input);
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      const payload = await getClient().scheduleCreate(input);
+      throwIfError(payload);
       if (!payload.schedule) throw new Error(t("schedules.loadError"));
       return payload.schedule;
     },
@@ -134,146 +155,54 @@ export function useScheduleMutations({
 
   const updateMutation = useMutation({
     mutationFn: async (input: UpdateScheduleInput): Promise<void> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.scheduleUpdate(input);
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      throwIfError(await getClient().scheduleUpdate(input));
     },
     onSettled: invalidate,
   });
 
   const pauseMutation = useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.schedulePause({ id });
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      throwIfError(await getClient().schedulePause({ id }));
     },
-    onMutate: async (id): Promise<ScheduleListSnapshot> => {
-      await queryClient.cancelQueries({ queryKey: schedulesQueryBaseKey });
-      const snapshot = snapshotSchedules(queryClient);
-      optimisticallySetStatus(queryClient, serverId, id, "paused");
-      return snapshot;
-    },
-    onError: (_error, _id, context) => {
-      if (context) {
-        restoreSchedules(queryClient, context);
-      }
-    },
+    onMutate: (id) => applyOptimisticUpdate(setScheduleStatus(serverId, id, "paused")),
+    onError: restoreOnError,
     onSettled: invalidate,
   });
 
   const resumeMutation = useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.scheduleResume({ id });
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      throwIfError(await getClient().scheduleResume({ id }));
     },
-    onMutate: async (id): Promise<ScheduleListSnapshot> => {
-      await queryClient.cancelQueries({ queryKey: schedulesQueryBaseKey });
-      const snapshot = snapshotSchedules(queryClient);
-      optimisticallySetStatus(queryClient, serverId, id, "active");
-      return snapshot;
-    },
-    onError: (_error, _id, context) => {
-      if (context) {
-        restoreSchedules(queryClient, context);
-      }
-    },
+    onMutate: (id) => applyOptimisticUpdate(setScheduleStatus(serverId, id, "active")),
+    onError: restoreOnError,
     onSettled: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.scheduleDelete({ id });
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      throwIfError(await getClient().scheduleDelete({ id }));
     },
-    onMutate: async (id): Promise<ScheduleListSnapshot> => {
-      await queryClient.cancelQueries({ queryKey: schedulesQueryBaseKey });
-      const snapshot = snapshotSchedules(queryClient);
-      optimisticallyRemove(queryClient, serverId, id);
-      return snapshot;
-    },
-    onError: (_error, _id, context) => {
-      if (context) {
-        restoreSchedules(queryClient, context);
-      }
-    },
+    onMutate: (id) => applyOptimisticUpdate(removeSchedule(serverId, id)),
+    onError: restoreOnError,
     onSettled: invalidate,
   });
 
   const runNowMutation = useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
-      const payload = await client.scheduleRunOnce({ id });
-      if (payload.error) {
-        throw new Error(payload.error);
-      }
+      throwIfError(await getClient().scheduleRunOnce({ id }));
     },
     onSettled: invalidate,
   });
 
-  const createSchedule = useCallback(
-    async (input: CreateScheduleInput): Promise<ScheduleSummary> => {
-      return await createMutation.mutateAsync(input);
-    },
-    [createMutation],
-  );
-
-  const updateSchedule = useCallback(
-    async (input: UpdateScheduleInput): Promise<void> => {
-      await updateMutation.mutateAsync(input);
-    },
-    [updateMutation],
-  );
-
-  const pauseSchedule = useCallback(
-    async (id: string): Promise<void> => {
-      await pauseMutation.mutateAsync(id);
-    },
-    [pauseMutation],
-  );
-
-  const resumeSchedule = useCallback(
-    async (id: string): Promise<void> => {
-      await resumeMutation.mutateAsync(id);
-    },
-    [resumeMutation],
-  );
-
-  const deleteSchedule = useCallback(
-    async (id: string): Promise<void> => {
-      await deleteMutation.mutateAsync(id);
-    },
-    [deleteMutation],
-  );
-
-  const runScheduleNow = useCallback(
-    async (id: string): Promise<void> => {
-      await runNowMutation.mutateAsync(id);
-    },
-    [runNowMutation],
-  );
-
   return {
-    createSchedule,
-    updateSchedule,
-    pauseSchedule,
-    resumeSchedule,
-    deleteSchedule,
-    runScheduleNow,
+    createSchedule: createMutation.mutateAsync,
+    updateSchedule: updateMutation.mutateAsync,
+    pauseSchedule: pauseMutation.mutateAsync,
+    resumeSchedule: resumeMutation.mutateAsync,
+    deleteSchedule: deleteMutation.mutateAsync,
+    runScheduleNow: runNowMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
-    isPausing: pauseMutation.isPending,
-    isResuming: resumeMutation.isPending,
-    isDeleting: deleteMutation.isPending,
     isRunningNow: runNowMutation.isPending,
   };
 }

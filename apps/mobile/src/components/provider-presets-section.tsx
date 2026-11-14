@@ -33,13 +33,11 @@ export function ProviderPresetsSection({
   serverId,
   cwd,
   models = [],
-  showTitle = true,
 }: {
   provider: string;
   serverId: string;
   cwd?: string;
   models?: readonly AgentModelDefinition[];
-  showTitle?: boolean;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -183,11 +181,7 @@ export function ProviderPresetsSection({
   return (
     <View style={styles.section} testID="provider-presets-section">
       <View style={styles.header}>
-        {showTitle ? (
-          <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
+        <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
         {canSave && presets.length > 0 ? (
           <Button
             variant="ghost"
@@ -413,21 +407,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
-  },
-  formGroup: { gap: theme.spacing[3] },
-  formLabel: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.foreground,
-  },
-  formInput: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    color: theme.colors.foreground,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
   },
   formActions: {
     flexDirection: "row",

@@ -4,14 +4,12 @@ interface ComputeResizeHandleSizesInput {
   sizes: number[];
   index: number;
   deltaRatio: number;
-  minSize?: number;
 }
 
 export function computeResizeHandleSizes({
   sizes,
   index,
   deltaRatio,
-  minSize = MIN_SPLIT_SIZE,
 }: ComputeResizeHandleSizesInput): number[] {
   const nextSizes = sizes.slice();
   const leftSize = sizes[index];
@@ -25,7 +23,7 @@ export function computeResizeHandleSizes({
     return nextSizes;
   }
 
-  const adjacentMinSize = Math.min(minSize, pairSize / 2);
+  const adjacentMinSize = Math.min(MIN_SPLIT_SIZE, pairSize / 2);
   const nextLeftSize = Math.min(
     pairSize - adjacentMinSize,
     Math.max(adjacentMinSize, leftSize + deltaRatio),

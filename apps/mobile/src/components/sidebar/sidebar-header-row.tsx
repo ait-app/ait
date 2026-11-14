@@ -19,8 +19,6 @@ interface SidebarHeaderRowProps {
   onPress: () => void;
   isActive?: boolean;
   testID?: string;
-  nativeID?: string;
-  accessibilityLabel?: string;
   trailingText?: string | null;
   trailing?: ReactNode;
   /**
@@ -39,8 +37,6 @@ export function SidebarHeaderRow({
   onPress,
   isActive = false,
   testID,
-  nativeID,
-  accessibilityLabel,
   trailingText = null,
   trailing,
   variant = "header",
@@ -93,10 +89,9 @@ export function SidebarHeaderRow({
       <Pressable
         onPress={onPress}
         testID={testID}
-        nativeID={nativeID}
         accessible
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityLabel={label}
         style={buttonStyle}
       >
         {renderChildren}
