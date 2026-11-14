@@ -1,6 +1,6 @@
 import { scheduleLimitPluralForms } from "./helpers";
 import { scheduleCadencePluralForms } from "./helpers";
-import { schedules as enSchedules } from "../../en/modules/schedules";
+import { schedules as enSchedules } from "../en/schedules";
 import { scheduleTemplatePrompts } from "./schedule-template-prompts";
 
 export const schedules = {
