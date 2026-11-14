@@ -269,9 +269,8 @@ async fn call(
         .get("arguments")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    if !validation::matches(&tool.schema(scope.as_ref()), &arguments) {
-        return Err((-32602, "Arguments do not match the tool input schema"));
-    }
+    validation::arguments(name, &tool.schema(scope.as_ref()), &arguments)
+        .map_err(|message| (-32602, message))?;
     let header = auth::single_header(headers, "x-ait-agent-id")
         .map_err(|_| (-32602, "Invalid caller header"))?;
     let caller = claimed(scope.as_ref(), header)?.map(str::to_owned);

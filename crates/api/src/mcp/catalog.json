@@ -8,6 +8,7 @@
       "properties": {
         "provider": {
           "type": "string",
+          "description": "Required provider/model pair: join the Ait provider id, /, and the model id returned by list_models. Format: <provider-id>/<model-id>. Preserve all slashes in the model id. Do not pass model separately or in settings.",
           "minLength": 1
         },
         "title": {
@@ -29,6 +30,7 @@
         },
         "settings": {
           "type": "object",
+          "description": "Optional mode, thinking and feature settings. Model selection belongs in the combined provider/model string, not settings.model.",
           "properties": {
             "modeId": {
               "type": "string",

@@ -151,6 +151,9 @@ Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot
 ## 编排流程
 
 先用 `list_profiles` 读取保存的 profile 和 notes，用 `list_models` 确认模型。
+`create_agent.provider` 必须使用 `<provider-id>/<model-id>`，只在第一个 `/` 处分隔；
+模型 ID 中的命名空间与后续 `/` 原样保留。不要单独传顶层 `model` 或 `settings.model`，
+这两种写法会返回带修正指引的 `-32602` 参数错误。`settings` 用于模式、思考与功能设置。
 外部创建 Agent 使用以下调用：
 
 ```json
