@@ -36,6 +36,28 @@ test("every release job builds the requested source with validated rebuild input
   }
 });
 
+test("release builds check translations before building or publishing artifacts", () => {
+  for (const [name, buildStep] of [
+    ["windows", "Build Windows desktop without daemon"],
+    ["web-client", "Build and check web client image"],
+    ["build", "Build release daemon only"],
+    ["android-play", "Build shared UI dependencies"],
+  ]) {
+    const steps = workflow.jobs[name].steps;
+    const install = steps.findIndex((step) => step.run === "npm ci");
+    const check = steps.findIndex((step) => step.name === "Verify UI translations");
+    const build = steps.findIndex((step) => step.name === buildStep);
+    assert(install >= 0 && check > install && build > check, name);
+    assert.equal(
+      steps[check].run,
+      "npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts",
+      name,
+    );
+    assert.equal(steps[check].if, undefined, name);
+    assert.equal(steps[check]["continue-on-error"], undefined, name);
+  }
+});
+
 test("release publication waits for the Windows build and requires its assets", () => {
   assert.deepEqual(workflow.jobs.release.needs, ["build", "windows"]);
   assert.match(workflow.jobs.release.if, /needs\.windows\.result == 'success'/);

@@ -207,6 +207,14 @@ describe("translation resources", () => {
     }
   });
 
+  it.each(nativeResources)("translates side conversation messages in %s", (_locale, resource) => {
+    const translated = flattenStrings(resource.btw);
+    const untranslated = Object.entries(flattenStrings(en.btw))
+      .filter(([key, value]) => !translated[key]?.trim() || translated[key] === value)
+      .map(([key]) => key);
+    expect(untranslated).toEqual([]);
+  });
+
   it("keeps the native high-traffic surfaces out of the English resource", () => {
     for (const [, resource] of nativeResources) {
       expect(resource.hostMonitor.title).not.toBe(en.hostMonitor.title);
