@@ -171,6 +171,23 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
             if let Err(error) = state.manager.poll().await {
                 tracing::warn!(error = ?error, "Agent poll failed");
             }
+            // Fence queued recovery admission before native I/O, just like foreground requests.
+            let pending = state
+                .manager
+                .owned_agents()
+                .into_iter()
+                .filter_map(|id| match state.manager.has_pending_input(&id) {
+                    Ok(true) => Some(id),
+                    Ok(false) => None,
+                    Err(error) => {
+                        tracing::warn!(agent_id = %id, error = ?error, "Agent admission state failed");
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            if let Err(error) = state.owners.pending(&pending) {
+                tracing::warn!(error = ?error, "Agent admission observation failed");
+            }
             if let Err(error) = state.manager.dispatch_pending_inputs().await {
                 tracing::warn!(error = ?error, "Queued Agent input dispatch failed");
             }
