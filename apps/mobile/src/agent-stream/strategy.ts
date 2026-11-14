@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
-import { continuesResponse } from "./turn-membership";
+import { continuesResponse } from "@/types/turn-membership";
 import type { StreamHistoryBoundary, StreamRenderSegments } from "./model";
 import type {
   BottomAnchorLocalRequest,
@@ -56,7 +56,7 @@ export interface StreamHistoryRowRevision {
 }
 
 export interface StreamRenderInput {
-  imageContext?: import("@/utils/assistant-image-metadata").AssistantImageContext;
+  imageContext?: import("@/assistant-image/assistant-image-metadata").AssistantImageContext;
   agentId: string;
   segments: StreamRenderSegments;
   historyRowRevision?: StreamHistoryRowRevision;

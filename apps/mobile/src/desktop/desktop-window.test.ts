@@ -3,7 +3,7 @@ import {
   intersectWindowChromeCorners,
   resolveWindowChromeObstruction,
   resolveWindowChromeSafeArea,
-} from "@/utils/desktop-window";
+} from "@/desktop/desktop-window";
 
 describe("window chrome", () => {
   it("has no corner obstruction outside Electron or in fullscreen", () => {

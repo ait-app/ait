@@ -11,7 +11,7 @@ const clipboard = vi.hoisted(() => ({
 }));
 
 vi.mock("@/constants/platform", () => ({ isWeb: true }));
-vi.mock("@/utils/image-attachments-from-files", () => ({
+vi.mock("@/attachments/image-attachments-from-files", () => ({
   collectImageFilesFromClipboardData: clipboard.collect,
   filesToImageAttachments: clipboard.save,
 }));

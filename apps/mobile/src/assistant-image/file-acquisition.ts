@@ -1,7 +1,7 @@
 import type { FileReadResult } from "@ait/client/internal/daemon-client";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { getFileNameFromPath } from "@/attachments/utils";
-import type { AssistantImageSourceResolution } from "@/utils/assistant-image-source";
+import type { AssistantImageSourceResolution } from "@/assistant-image/assistant-image-source";
 import {
   createAssistantImageFileAcquisitionKey,
   createAssistantImageFilePreviewAttachmentId,

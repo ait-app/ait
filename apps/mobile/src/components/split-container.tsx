@@ -39,10 +39,8 @@ import {
   getWorkspacePaneDescriptors,
 } from "@/screens/workspace/workspace-pane-state";
 import { WorkspacePanelHost } from "@/screens/workspace/workspace-panel-host";
-import {
-  WorkspaceTabIcon,
-  WorkspaceTabPresentationResolver,
-} from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   createDefaultLayout,
@@ -58,7 +56,7 @@ import {
   removeWindowChromeCorner,
   useWindowChromeCorners,
   type WindowChromeCorners,
-} from "@/utils/desktop-window";
+} from "@/desktop/desktop-window";
 import { recordRenderProfileReasons, RenderProfile } from "@/utils/render-profiler";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import {

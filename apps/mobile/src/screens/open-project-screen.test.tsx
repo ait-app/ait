@@ -25,7 +25,7 @@ vi.mock("@/stores/panel-store", () => ({
     select({ openDesktopAgentList: mocks.openSidebar }),
 }));
 vi.mock("@/hooks/use-open-add-project", () => ({ useOpenAddProject: () => vi.fn() }));
-vi.mock("@/hooks/use-import-session", () => ({
+vi.mock("@/components/use-import-session", () => ({
   useImportSession: () => ({ open: vi.fn(), sheet: null }),
 }));
 vi.mock("@/hosts/host-chooser", () => ({ useHostChooser: () => vi.fn() }));

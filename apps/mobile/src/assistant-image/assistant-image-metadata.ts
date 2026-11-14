@@ -1,4 +1,4 @@
-import { resolveAssistantImageSource } from "@/utils/assistant-image-source";
+import { resolveAssistantImageSource } from "@/assistant-image/assistant-image-source";
 import { createImageSourceCacheKey } from "@/attachments/utils";
 
 export interface AssistantImageContext {

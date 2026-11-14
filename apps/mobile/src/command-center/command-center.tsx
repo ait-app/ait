@@ -54,7 +54,7 @@ import {
   takeCommandCenterFocusRestoreElement,
 } from "@/utils/command-center-focus-restore";
 import { focusWithRetries } from "@/utils/web-focus";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { shortenPath } from "@/utils/shorten-path";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {

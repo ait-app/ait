@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { scheduleOnUI } from "react-native-worklets";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import {
   SYNCED_LOADER_DOT_COUNT,
   getSyncedLoaderDotOpacity,

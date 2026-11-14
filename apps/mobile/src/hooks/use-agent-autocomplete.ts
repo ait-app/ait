@@ -1,6 +1,6 @@
 import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
-import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
+import { orderAutocompleteOptions } from "@/utils/autocomplete-utils";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import {

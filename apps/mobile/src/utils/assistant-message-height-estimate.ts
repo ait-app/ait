@@ -2,7 +2,7 @@ import {
   type AssistantImageContext,
   estimateAssistantMessageHeightFromCache as estimateImageHeight,
   touchCacheEntry,
-} from "./assistant-image-metadata";
+} from "@/assistant-image/assistant-image-metadata";
 const ASSISTANT_MESSAGE_HEIGHT_CACHE_LIMIT = 1000;
 
 interface MessageHeightInput {

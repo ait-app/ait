@@ -1,7 +1,7 @@
 import { TerminalFind, type TerminalPaneFindHandle } from "@/terminal/find";
 import type { TerminalFindResult } from "@/terminal/runtime/terminal-emulator-runtime";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";

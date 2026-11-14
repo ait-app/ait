@@ -52,9 +52,9 @@ import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-lay
 import { retainWorkspaceTabMeasuredWidth } from "@/screens/workspace/workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
-  WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
 import {
   buildWorkspaceDesktopTabActions,

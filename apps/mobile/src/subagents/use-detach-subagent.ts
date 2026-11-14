@@ -4,7 +4,7 @@ import { i18n } from "@/i18n/i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { toErrorMessage } from "@/utils/error-messages";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { requestDetachSubagent, type ResolveDetachSubagentDialogInput } from "./detach-subagent";
 
 export { resolveDetachSubagentDialog, requestDetachSubagent } from "./detach-subagent";

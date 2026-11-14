@@ -24,7 +24,7 @@ import {
   useActiveWorkspaceSelection,
   type ActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
+import { redirectIfArchivingActiveWorkspace } from "@/workspace/sidebar-workspace-archive-redirect";
 import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warning";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";

@@ -8,7 +8,7 @@ import {
 } from "@/data/providers-snapshot";
 import { orderCheckoutDiffFiles } from "@/git/diff-order";
 import { shareCheckoutDiff } from "@/git/diff-sharing";
-import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
+import { agentCommandsQueryRoot } from "@/data/agent-commands-query";
 import type { OwnedSubscription } from "@ait/client";
 import type {
   ListTerminalsResponse,

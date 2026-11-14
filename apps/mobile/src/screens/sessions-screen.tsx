@@ -16,7 +16,7 @@ import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker-constants";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 

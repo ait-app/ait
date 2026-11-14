@@ -15,7 +15,7 @@ import {
   type UserMessageImageAttachment,
 } from "@/types/stream";
 import type { AgentAttachment } from "@ait/protocol/messages";
-import type { PendingMessageSubmission } from "@/composer/submission/model";
+import type { PendingMessageSubmission } from "@/stores/message-submission-model";
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 

@@ -12,7 +12,7 @@ import {
 } from "@/stores/session-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { SessionOutboundMessage } from "@ait/protocol/messages";
-import { getSendingClientMessageIds } from "@/composer/submission/model";
+import { getSendingClientMessageIds } from "@/stores/message-submission-model";
 import {
   getInitDeferred,
   getInitKey,

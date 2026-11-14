@@ -1,9 +1,9 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import { buildWorkspaceArchiveRedirectRoute } from "@/utils/workspace-archive-navigation";
+import { buildWorkspaceArchiveRedirectRoute } from "@/workspace/workspace-archive-navigation";
 import {
   redirectIfArchivingActiveWorkspace,
   type RedirectIfArchivingActiveWorkspaceDeps,
-} from "@/utils/workspace-archive-redirect";
+} from "@/workspace/workspace-archive-redirect";
 import type { Href } from "expo-router";
 import { describe, expect, it } from "vitest";
 

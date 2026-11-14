@@ -1,7 +1,7 @@
 import type { Href } from "expo-router";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import { buildWorkspaceArchiveRedirectRoute } from "@/utils/workspace-archive-navigation";
+import { buildWorkspaceArchiveRedirectRoute } from "@/workspace/workspace-archive-navigation";
 
 export interface RedirectIfArchivingActiveWorkspaceInput {
   serverId: string;

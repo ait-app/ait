@@ -11,7 +11,7 @@ import {
   WindowChromeProvider,
   WindowChromeRegion,
   WindowChromeSafeArea,
-} from "@/utils/desktop-window";
+} from "@/desktop/desktop-window";
 import { WindowSidebarMenuToggle } from "./menu-header";
 
 vi.mock("@/constants/layout", async (importOriginal) => ({

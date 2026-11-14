@@ -9,10 +9,8 @@ import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { ToolbarButton, paneContentToolbarIconSize } from "@/components/ui/pane-content-toolbar";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
-import {
-  WorkspaceTabIcon,
-  type WorkspaceTabPresentation,
-} from "@/screens/workspace/workspace-tab-presentation";
+import type { WorkspaceTabPresentation } from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import type { Theme } from "@/styles/theme";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { getPanelManifest } from "@/panels/panel-manifest";

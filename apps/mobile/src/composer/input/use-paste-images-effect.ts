@@ -4,7 +4,7 @@ import { isWeb } from "@/constants/platform";
 import {
   collectImageFilesFromClipboardData,
   filesToImageAttachments,
-} from "@/utils/image-attachments-from-files";
+} from "@/attachments/image-attachments-from-files";
 
 interface PasteImagesEffectArgs {
   textarea: HTMLElement | null;

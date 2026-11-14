@@ -1,4 +1,4 @@
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Alert } from "@/components/ui/alert";

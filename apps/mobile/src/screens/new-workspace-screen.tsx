@@ -9,7 +9,7 @@ import type {
   ForgeSearchItem,
   TerminalProfile,
 } from "@ait/protocol/messages";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";

@@ -9,7 +9,7 @@ import { AitLogo } from "@/components/icons/ait-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useHostChooser } from "@/hosts/host-chooser";
 import { usePanelStore } from "@/stores/panel-store";
 import {

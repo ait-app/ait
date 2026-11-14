@@ -20,7 +20,7 @@ import {
   type ContextBridge,
 } from "@/components/ui/isolated-bottom-sheet-modal";
 import { SPACING, type Theme } from "@/styles/theme";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
 import { MenuPage } from "./menu-item";
 import { currentPageId } from "./menu-navigation";

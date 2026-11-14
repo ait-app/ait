@@ -1,4 +1,4 @@
-import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
+import { useToggleAgentList } from "@/components/use-toggle-agent-list";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -10,7 +10,7 @@ import { HeaderToggleButton, headerIconSlotStyle } from "./header-toggle-button"
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { useHasWindowChromeObstruction, useOwnsWindowChromeCorner } from "@/utils/desktop-window";
+import { useHasWindowChromeObstruction, useOwnsWindowChromeCorner } from "@/desktop/desktop-window";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
 
 interface MenuHeaderProps {

@@ -20,12 +20,12 @@ import { withUnistyles } from "react-native-unistyles";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
+import { useToggleAgentList } from "@/components/use-toggle-agent-list";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import {

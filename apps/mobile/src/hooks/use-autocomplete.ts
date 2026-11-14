@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getAutocompleteFallbackIndex } from "@/components/ui/autocomplete-utils";
-import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
+import { getAutocompleteFallbackIndex } from "@/utils/autocomplete-utils";
+import { getNextActiveIndex } from "@/utils/combobox-keyboard";
 
 interface AutocompleteKeyPressEvent {
   key: string;

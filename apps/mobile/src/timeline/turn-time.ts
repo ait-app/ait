@@ -1,5 +1,5 @@
 import type { StreamItem } from "@/types/stream";
-import { startsNewTurn } from "@/agent-stream/turn-membership";
+import { startsNewTurn } from "@/types/turn-membership";
 
 export interface TurnTiming {
   completedAt: Date;

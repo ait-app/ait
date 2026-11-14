@@ -21,7 +21,7 @@ import {
   isDeliveredSendError,
   markDeliveredSendError,
   type MessageSubmissionRejectionOutcome,
-} from "@/composer/submission/model";
+} from "@/stores/message-submission-model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
 import { type EncodedSendImage, type ImageSendContext } from "@/attachments/image-send";

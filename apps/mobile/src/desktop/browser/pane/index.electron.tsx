@@ -33,7 +33,7 @@ import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles"
 import { useTranslation } from "react-i18next";
 import * as Clipboard from "expo-clipboard";
 import { Button } from "@/components/ui/button";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/contexts/toast-context";
 import {

@@ -12,7 +12,7 @@ import {
 } from "lucide-react-native";
 import type { ToolCallDetail } from "@ait/protocol/agent-types";
 import { AitLogo } from "@/components/icons/ait-logo";
-import { resolveToolCallIconName, type ToolCallIcon } from "./tool-call-icon-name";
+import { resolveToolCallIconName, type ToolCallIcon } from "@/utils/tool-call-icon-name";
 
 export type ToolCallIconComponent = ComponentType<{ size?: number; color?: string }>;
 

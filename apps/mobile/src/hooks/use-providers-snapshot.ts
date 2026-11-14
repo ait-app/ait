@@ -3,7 +3,7 @@ import { CancelledError, useMutation, useQueryClient } from "@tanstack/react-que
 import { useTranslation } from "react-i18next";
 import type { AgentProvider, ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import {
   getHostRuntimeStore,
   useHostRuntimeClient,
