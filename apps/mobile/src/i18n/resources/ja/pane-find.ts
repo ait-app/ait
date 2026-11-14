@@ -1,0 +1,21 @@
+export const paneFind = {
+  searchFailed: "このチャットを検索できませんでした。ホストへの接続を確認して再試行してください。",
+  searching: "検索中…",
+  loading: "読み込み中…",
+  failed: "失敗",
+  retry: "再試行",
+
+  title: "検索",
+  placeholder: "ペイン内を検索",
+  close: "検索を閉じる",
+  matches: "検索結果",
+  previous: "前の一致",
+  next: "次の一致",
+  toggleReplace: "置換を切り替え",
+  replaceWith: "置換後の文字列",
+  replace: "置換",
+  replaceAll: "すべて置換",
+  noMatches: "一致なし",
+  position: "{{current}} / {{total}}",
+  total: "{{total}} 件の一致",
+};

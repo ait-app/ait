@@ -2,15 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { i18n } from "./i18next";
-import { ar } from "./resources/ar";
-import { en } from "./resources/en";
-import { es } from "./resources/es";
-import { fr } from "./resources/fr";
-import { ja } from "./resources/ja";
-import { ko } from "./resources/ko";
-import { ptBR } from "./resources/pt-BR";
-import { ru } from "./resources/ru";
-import { zhCN } from "./resources/zh-CN";
+import { ar, en, es, fr, ja, ko, ptBR, ru, zhCN } from "./translation-resources";
 
 function flattenKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) {
@@ -210,6 +202,45 @@ describe("translation resources", () => {
       expect(resource.panels.pullRequest.emptyTitle).not.toBe(en.panels.pullRequest.emptyTitle);
       expect(resource.panels.pullRequest.emptyDescription).not.toBe(
         en.panels.pullRequest.emptyDescription,
+      );
+    }
+  });
+
+  it("keeps the native high-traffic surfaces out of the English resource", () => {
+    const nativeResources = [ar, es, fr, ja, ko, ptBR, ru, zhCN];
+    for (const resource of nativeResources) {
+      expect(resource.hostMonitor.title).not.toBe(en.hostMonitor.title);
+      expect(resource.onlineService.title).not.toBe(en.onlineService.title);
+      expect(resource.sharing.title).not.toBe(en.sharing.title);
+      expect(resource.btw.title).not.toBe(en.btw.title);
+      expect(resource.addProjectFlow.titles.host).not.toBe(en.addProjectFlow.titles.host);
+      expect(resource.settings.layout.openInSidePane.title).not.toBe(
+        en.settings.layout.openInSidePane.title,
+      );
+      expect(resource.settings.plugins.logs.action).not.toBe(en.settings.plugins.logs.action);
+    }
+  });
+
+  it("keeps schedule template prompts and topic fields native", () => {
+    const nativeResources = [ar, es, fr, ja, ko, ptBR, ru, zhCN];
+    const templateKeys = [
+      "nightly-test-heal",
+      "pr-gatekeeper",
+      "domain-radar",
+      "weekly-work-draft",
+      "docs-freshness",
+    ] as const;
+    for (const resource of nativeResources) {
+      for (const key of templateKeys) {
+        expect(resource.schedules.templates.items[key].prompt).not.toBe(
+          en.schedules.templates.items[key].prompt,
+        );
+      }
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.label).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.label,
+      );
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.placeholder).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.placeholder,
       );
     }
   });

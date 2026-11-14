@@ -1,0 +1,48 @@
+import { labelDeletePluralForms } from "./helpers";
+
+export const workspaceLabels = {
+  title: "Étiquettes",
+  unlabelled: "Sans étiquette",
+  create: "Créer une étiquette",
+  createConfirm: "Créer",
+  creating: "Création…",
+  name: "Nom de l’étiquette",
+  updateHostUse: "Mettez à jour cet hôte pour utiliser les étiquettes.",
+  errors: {
+    update: "Impossible de mettre à jour l’étiquette",
+    load: "Impossible de charger les étiquettes",
+  },
+  colors: {
+    violet: "Violet",
+    sky: "Ciel",
+    emerald: "Émeraude",
+    orange: "Orange",
+    pink: "Rose",
+    indigo: "Indigo",
+    teal: "Sarcelle",
+    red: "Rouge",
+    amber: "Ambre",
+    blue: "Bleu",
+  },
+  filter: {
+    clear: "Effacer le filtre",
+  },
+  manage: {
+    open: "Gérer les étiquettes…",
+    title: "Gérer les étiquettes",
+    search: "Rechercher des étiquettes",
+    empty: "Aucune étiquette sur cet hôte.",
+    edit: "Modifier l’étiquette",
+    editLabel: "Modifier {{name}}",
+    name: "Nom",
+    color: "Couleur",
+    save: "Enregistrer",
+    delete: "Supprimer",
+    deleteTitle: "Supprimer {{name}} ?",
+    deleteMessage_one: "Cela retire l’étiquette de {{count}} espace de travail sur cet hôte.",
+    ...labelDeletePluralForms,
+    deleteMessage_other: "Cela retire l’étiquette de {{count}} espaces de travail sur cet hôte.",
+    offline: "Cet hôte est hors ligne.",
+    updateHost: "Mettez à jour cet hôte pour gérer les étiquettes.",
+  },
+};
