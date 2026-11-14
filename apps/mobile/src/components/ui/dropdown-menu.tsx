@@ -14,9 +14,9 @@ import {
 /**
  * A menu opened by pressing its trigger.
  *
- * Everything below the trigger is the shared menu engine — see `@/components/ui/menu` and
- * docs/menus.md. This file is the press-to-open shape and the `DropdownMenu*` names the app
- * already uses; `context-menu.tsx` is the same engine behind a long press.
+ * Everything below the trigger is the shared menu engine — see `@/components/ui/menu`. This file
+ * is the press-to-open shape and the `DropdownMenu*` names the app already uses;
+ * `context-menu.tsx` is the same engine behind a long press.
  */
 
 export { MenuRoot as DropdownMenu };

@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { ITheme } from "@xterm/xterm";
+import { useTranslation } from "react-i18next";
 import type { TerminalState } from "@ait/protocol/messages";
 import {
   TerminalInputModeTracker,
@@ -204,6 +205,7 @@ export default function NativeGridTerminalEmulator({
   focusRequestToken = 0,
   resizeRequestToken = 0,
 }: TerminalEmulatorProps) {
+  const { t } = useTranslation();
   const terminalRef = useRef<NativeHeadlessTerminal | null>(null);
   const mountInputRef = useRef({ streamKey, initialSnapshot });
   if (
@@ -972,13 +974,13 @@ export default function NativeGridTerminalEmulator({
       </View>
       {isScrolled ? (
         <Pressable
-          accessibilityLabel="Bottom"
+          accessibilityLabel={t("workspace.terminal.bottom")}
           accessibilityRole="button"
           onPress={returnToBottom}
           style={styles.followButton}
           testID="terminal-follow-bottom"
         >
-          <Text style={styles.followButtonText}>Bottom</Text>
+          <Text style={styles.followButtonText}>{t("workspace.terminal.bottom")}</Text>
         </Pressable>
       ) : null}
     </View>

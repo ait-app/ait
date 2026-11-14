@@ -38,7 +38,7 @@ function ThemedStackBase({
     [backgroundColor, colorScheme, screenOptions],
   );
   // Appearance changes remount each screen's content below the native stack, so the navigator
-  // and its screen containers keep their identity. See docs/unistyles.md.
+  // and its screen containers keep their identity.
   const screenLayout = useCallback(
     ({ route, children: content }: ScreenContent): ReactElement => {
       if (

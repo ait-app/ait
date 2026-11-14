@@ -24,3 +24,12 @@ export function shouldRetryLookupOnConnectionChange(input: {
 }): boolean {
   return input.tag === "error" && !input.wasConnected && input.isConnected;
 }
+
+/**
+ * The daemon answers a lookup for a missing Agent with `Agent not found: <id>`, and its RPC
+ * error for the same condition reads `Agent was not found`; any other "not found" (a workspace,
+ * a route, a host) is a load failure worth retrying.
+ */
+export function isAgentNotFoundErrorMessage(message: string): boolean {
+  return /\bagent (?:was )?not found\b/i.test(message);
+}

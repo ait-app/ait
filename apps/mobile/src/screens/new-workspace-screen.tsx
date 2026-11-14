@@ -342,6 +342,7 @@ function ProjectPickerTrigger({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(label);
   const placeholderInitial = displayInitial(placeholderLabel) || "?";
   return (
@@ -355,7 +356,7 @@ function ProjectPickerTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="Workspace project"
+          accessibilityLabel={t("newWorkspace.projectPicker.accessibilityLabel")}
         >
           <View style={styles.badgeIconBox}>
             {projectViewKey ? (
@@ -688,6 +689,7 @@ function IsolationPickerTrigger({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
@@ -699,7 +701,7 @@ function IsolationPickerTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="Workspace isolation"
+          accessibilityLabel={t("newWorkspace.isolation.accessibilityLabel")}
         >
           <View style={styles.badgeIconBox}>
             <IsolationIcon isolation={isolation} iconSize={iconSize} iconColor={iconColor} />
@@ -1478,7 +1480,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
   const selectedHostLabel =
-    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
+    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? t("hostPicker.host");
   const showHostControl = groupHosts(host.allHosts).length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
@@ -1521,14 +1523,14 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         value={project.selectedOptionId}
         onSelect={project.onSelect}
         searchable
-        searchPlaceholder="Search projects"
-        title="Project"
+        searchPlaceholder={t("newWorkspace.projectPicker.searchPlaceholder")}
+        title={t("newWorkspace.projectPicker.title")}
         open={project.openState}
         onOpenChange={project.onOpenChange}
         desktopPlacement="bottom-start"
         desktopMinWidth={360}
         anchorRef={project.anchorRef}
-        emptyText="No projects available."
+        emptyText={t("newWorkspace.projectPicker.empty")}
         renderOption={project.renderOption}
         footer={addProjectAction}
       />
@@ -1545,7 +1547,6 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         onOpenChange={host.onOpenChange}
         anchorRef={host.anchorRef}
         searchable={false}
-        title="Host"
         desktopPlacement="bottom-start"
         desktopMinWidth={200}
         hostOptionTestID={newWorkspaceHostOptionTestID}
@@ -1555,7 +1556,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
             <Pressable
               ref={host.anchorRef}
               accessibilityRole="button"
-              accessibilityLabel="Host"
+              accessibilityLabel={t("hostPicker.host")}
               onPress={host.open}
               disabled={isPending || host.allHosts.length === 0}
               style={badgePressableStyle}
@@ -2110,10 +2111,10 @@ export function NewWorkspaceScreen({
       onEvent?: (snapshot: CreationSnapshot) => void;
     }) => {
       if (!selectedProject) {
-        throw new Error("Choose a project");
+        throw new Error(t("newWorkspace.errors.chooseProject"));
       }
       if (!selectedSourceDirectory) {
-        throw new Error("Choose a host for this project");
+        throw new Error(t("newWorkspace.errors.chooseHost"));
       }
       const isolation = supportsWorkspaceMultiplicity ? effectiveIsolation : "worktree";
       const requestKey = buildWorkspaceCreationRequestKey({

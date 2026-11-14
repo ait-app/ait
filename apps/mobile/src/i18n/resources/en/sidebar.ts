@@ -46,6 +46,9 @@ export const sidebar = {
   pinned: {
     title: "Pinned",
   },
+  statusGroup: {
+    accessibilityLabel: "{{label}} group",
+  },
   actions: {
     addProject: "Add project",
     newWorkspace: "New workspace",
@@ -122,6 +125,8 @@ export const sidebar = {
       rename: "Rename workspace",
       pin: "Pin to top",
       unpin: "Unpin",
+      markAsRead: "Mark as read",
+      markAsUnread: "Mark as unread",
       archive: "Archive",
       archiving: "Archiving...",
     },
@@ -135,6 +140,8 @@ export const sidebar = {
       branchNameCopied: "Branch name copied",
       hostDisconnected: "Host is not connected",
       archiveFailed: "Failed to archive workspace",
+      markAsReadFailed: "Failed to mark workspace as read",
+      markAsUnreadFailed: "Failed to mark workspace as unread",
     },
   },
 };

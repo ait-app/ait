@@ -47,6 +47,9 @@ export const sidebar = {
   pinned: {
     title: "固定済み",
   },
+  statusGroup: {
+    accessibilityLabel: "{{label}} グループ",
+  },
   actions: {
     addProject: "プロジェクトを追加",
     newWorkspace: "新しいワークスペース",
@@ -65,7 +68,7 @@ export const sidebar = {
     appName: "Ait",
   },
   sections: {
-    usage: "Usage",
+    usage: "使用量",
     workspaces: "ワークスペース",
     sessions: "履歴",
     search: "検索",
@@ -77,8 +80,8 @@ export const sidebar = {
       openSettings: "プロジェクト設定を開く",
       openNewWindow: "新しいウィンドウで開く",
       openNewWindowFailed: "新しいウィンドウを開けませんでした",
-      openFolder: "Open in file manager",
-      openFolderFailed: "Couldn't open folder",
+      openFolder: "ファイルマネージャーで開く",
+      openFolderFailed: "フォルダーを開けませんでした",
       remove: "プロジェクトを削除",
       removing: "削除中...",
     },
@@ -123,6 +126,8 @@ export const sidebar = {
       rename: "ワークスペースの名前を変更",
       pin: "上部に固定",
       unpin: "固定解除",
+      markAsRead: "既読にする",
+      markAsUnread: "未読にする",
       archive: "アーカイブ",
       archiving: "アーカイブ中...",
     },
@@ -136,6 +141,8 @@ export const sidebar = {
       branchNameCopied: "ブランチ名をコピーしました",
       hostDisconnected: "ホストが接続されていません",
       archiveFailed: "ワークスペースのアーカイブに失敗しました",
+      markAsReadFailed: "ワークスペースを既読にできませんでした",
+      markAsUnreadFailed: "ワークスペースを未読にできませんでした",
     },
   },
 };

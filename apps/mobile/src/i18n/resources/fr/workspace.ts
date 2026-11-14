@@ -1,10 +1,10 @@
 export const workspace = {
   route: {
     loading: "Chargement de l'espace de travail",
-    connecting: "De liaison",
-    hostOffline: "{{hostName}}est hors ligne",
-    cannotReachHost: "Impossible d'atteindre{{hostName}}",
-    hostStatus: "StatutHost:{{status}}",
+    connecting: "Connexion",
+    hostOffline: "{{hostName}} est hors ligne",
+    cannotReachHost: "Impossible d'atteindre {{hostName}}",
+    hostStatus: "Statut de l'hôte : {{status}}",
     needsHostUpgrade: "Mettez à jour votre hôte pour restaurer cet espace de travail",
     manageHost: "Gérer l'hôte",
     recovery: {
@@ -21,7 +21,7 @@ export const workspace = {
     },
   },
   hoverCard: {
-    scriptsAccessibility: "ScriptsWorkspace",
+    scriptsAccessibility: "Scripts de l'espace de travail",
     copyPath: "Copier le chemin",
     copyBranchName: "Copier le nom de la branche",
   },
@@ -63,7 +63,7 @@ export const workspace = {
       size: "Taille",
     },
     actions: {
-      back: "Dos",
+      back: "Retour",
       retry: "Réessayer",
       refresh: "Actualiser les fichiers",
       refreshing: "Actualisation des fichiers",
@@ -75,7 +75,7 @@ export const workspace = {
       noVisibleFiles: "Aucun fichier visible",
     },
     states: {
-      unavailable: "Workspacen'est pas disponible",
+      unavailable: "L'espace de travail n'est pas disponible",
       loading: "Chargement des fichiers...",
     },
     errors: {
@@ -96,7 +96,7 @@ export const workspace = {
       label: "Installation",
       completed: "Configuration terminée",
       failed: "Échec de l'installation",
-      workspace: "ConfigurationWorkspace",
+      workspace: "Configuration de l'espace de travail",
       blocked: "Configuration bloquée",
     },
     status: {
@@ -119,7 +119,7 @@ export const workspace = {
     },
     accessibility: {
       noCommands: "Aucune commande de configuration n'a été exécutée pour cet espace de travail",
-      log: "Journal de configurationWorkspace",
+      log: "Journal de configuration de l'espace de travail",
     },
     log: {
       noOutput: "Aucune sortie",
@@ -130,15 +130,15 @@ export const workspace = {
       title: "Le navigateur est réservé au bureau",
       subtitle: "Ouvrez cet espace de travail dans Electron pour utiliser le navigateur intégré.",
     },
-    session: "Session de navigateur{{browserId}}",
+    session: "Session de navigateur {{browserId}}",
     controls: {
-      back: "Dos",
-      forward: "Avant",
+      back: "Retour",
+      forward: "Suivant",
       stopLoading: "Arrêter le chargement",
       refresh: "Rafraîchir",
-      browserUrl: "NavigateurURL",
-      enterUrl: "EntrezURL",
-      openDevTools: "Outils de développement du navigateur ouvert",
+      browserUrl: "URL du navigateur",
+      enterUrl: "Entrez l'URL",
+      openDevTools: "Ouvrir les outils de développement du navigateur",
       cancelSelector: "Annuler le sélecteur d'élément",
       annotateElement: "Annoter l'élément",
       screenshotElement: "Capturer l'élément",
@@ -160,44 +160,54 @@ export const workspace = {
     },
     errors: {
       failedToLoad: "Échec du chargement de la page",
-      invalidUrl: "NavigateurURLinvalide",
-      unsupportedProtocol: "Navigateur non pris en charge bloquéURL:{{protocol}}",
+      invalidUrl: "URL du navigateur invalide",
+      unsupportedProtocol: "URL de navigateur non prise en charge bloquée : {{protocol}}",
     },
   },
   terminal: {
-    hostDisconnected: "Hostn'est pas connecté",
+    hostDisconnected: "L'hôte n'est pas connecté",
     updateHost: "Mettez à jour l’hôte pour utiliser le terminal natif.",
     unableToSubscribe: "Impossible de s'abonner au terminal",
+    hideKeyboard: "Masquer le clavier",
+    showKeyboard: "Afficher le clavier",
+    paste: "Coller",
+    bottom: "En bas",
   },
   tabs: {
     loading: "Chargement...",
     modified: "Modifications non enregistrées",
+    empty: {
+      missingDirectory:
+        "Le répertoire de l'espace de travail est introuvable. Rechargez les données de l'espace de travail avant d'ouvrir des onglets.",
+      noTabs:
+        "Aucun onglet n'est encore disponible. Utilisez Nouvel onglet pour créer un agent ou un terminal.",
+    },
     fallback: {
       newAgent: "Nouvel agent",
       setup: "Installation",
-      workspaceSetup: "ConfigurationWorkspace",
+      workspaceSetup: "Configuration de l'espace de travail",
       terminal: "Terminal",
       browser: "Navigateur",
       agent: "Agent",
-      workspace: "Workspace",
+      workspace: "Espace de travail",
     },
     switcher: {
-      trigger: "Changer d'onglet ({{count}}ouvert)",
+      trigger: "Changer d'onglet ({{count}} ouverts)",
       title: "Changer d'onglet",
-      searchPlaceholder: "Onglets de recherche",
+      searchPlaceholder: "Rechercher des onglets",
     },
     menu: {
-      openFor: "Ouvrir le menu pour{{label}}",
+      openFor: "Ouvrir le menu pour {{label}}",
       copyResumeCommand: "Copier la commande de reprise",
       copyAgentId: "Copier l'identifiant de l'agent",
       copyTerminalId: "Copier l'identifiant du terminal",
-      rename: "Rebaptiser",
+      rename: "Renommer",
       closeAbove: "Fermer les onglets ci-dessus",
       closeBelow: "Fermer les onglets ci-dessous",
-      closeLeft: "Près de la gauche",
-      closeRight: "Près de la droite",
+      closeLeft: "Fermer les onglets à gauche",
+      closeRight: "Fermer les onglets à droite",
       closeOthers: "Fermer les autres onglets",
-      reloadAgent: "Agent de rechargement",
+      reloadAgent: "Recharger l'agent",
       reloadAgentTooltip:
         "Rechargez l'agent pour mettre à jour les compétences, les MCP ou le statut de connexion.",
       close: "Fermer",
@@ -214,13 +224,13 @@ export const workspace = {
       maximizePane: "Agrandir le volet",
       restorePane: "Restaurer le volet",
       exitFocusMode: "Quitter le mode concentration",
-      splitRight: "Volet divisé à droite",
+      splitRight: "Diviser le volet à droite",
       splitDown: "Diviser le volet vers le bas",
       changes: "Modifications",
       files: "Fichiers",
       pullRequest: "Demande de fusion",
-      terminalProfilesMenu: "Terminal profiles",
-      editTerminalProfiles: "Edit profiles",
+      terminalProfilesMenu: "Profils de terminal",
+      editTerminalProfiles: "Modifier les profils",
     },
     explorerSidebar: {
       open: "Ouvrir le panneau latéral",
@@ -231,13 +241,13 @@ export const workspace = {
     },
     toasts: {
       copyFailed: "Échec de la copie",
-      agentIdCopiedLabel: "AgentID",
+      agentIdCopiedLabel: "Identifiant de l'agent",
       terminalIdCopiedLabel: "Identifiant du terminal",
-      resumeCommandCopiedLabel: "reprendre la commande",
-      filePathCopiedLabel: "File path",
-      resumeIdUnavailable: "ReprendreIDnon disponible",
+      resumeCommandCopiedLabel: "commande de reprise",
+      filePathCopiedLabel: "Chemin du fichier",
+      resumeIdUnavailable: "ID de reprise non disponible",
       resumeCommandUnavailable: "Commande de reprise non disponible",
-      reloadingAgent: "Agent de rechargement...",
+      reloadingAgent: "Rechargement de l'agent...",
       reloadedAgent: "Agent rechargé",
       failedToReloadAgent: "Échec du rechargement de l'agent",
       failedToCloseAgent: "Échec de la fermeture de l'agent",
@@ -252,7 +262,7 @@ export const workspace = {
         "{{count}} onglet(s) contiennent des modifications non enregistrées. Les fermer supprimera ces brouillons.",
       close: "Fermer",
       cancel: "Annuler",
-      archive: "Archive",
+      archive: "Archiver",
       closeTerminalTitle: "Fermer le terminal?",
       closeTerminalMessage:
         "Tout processus en cours d’exécution dans ce terminal sera immédiatement arrêté.",
@@ -263,16 +273,16 @@ export const workspace = {
       closeTabsRightTitle: "Fermer les onglets à droite?",
       closeOtherTabsTitle: "Fermer les autres onglets?",
       bulk: {
-        all: "Cela archivera les agents{{agents}}, fermera les terminaux{{terminals}}et fermera les onglets{{tabs}}. Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
+        all: "Cela archivera {{agents}} agent(s), fermera {{terminals}} terminal(s) et fermera {{tabs}} onglet(s). Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
         agentsAndTerminals:
-          "Cela archivera les agents{{agents}}et fermera les terminaux{{terminals}}. Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
+          "Cela archivera {{agents}} agent(s) et fermera {{terminals}} terminal(s). Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
         terminalsAndTabs:
-          "Cela fermera le(s) terminal(s){{terminals}}et fermera le(s) onglet(s){{tabs}}. Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
-        agentsAndTabs: "Cela archivera les agents{{agents}}et fermera les onglets{{tabs}}.",
+          "Cela fermera {{terminals}} terminal(s) et fermera {{tabs}} onglet(s). Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
+        agentsAndTabs: "Cela archivera {{agents}} agent(s) et fermera {{tabs}} onglet(s).",
         terminals:
-          "Cela fermera le(s) terminal(s){{terminals}}. Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
-        tabs: "Cela fermera les onglets{{tabs}}.",
-        agents: "Cela archivera les agents{{agents}}.",
+          "Cela fermera {{terminals}} terminal(s). Tout processus en cours d’exécution dans un terminal fermé sera immédiatement arrêté.",
+        tabs: "Cela fermera {{tabs}} onglet(s).",
+        agents: "Cela archivera {{agents}} agent(s).",
       },
     },
   },
@@ -281,20 +291,20 @@ export const workspace = {
       workspaceActions: "Actions de l’espace de travail",
       workspaceActionsUnhealthy: "Actions de l’espace de travail, un service est en mauvaise santé",
       newAgent: "Nouvel agent",
-      newTerminal: "Nouvelle borne",
+      newTerminal: "Nouveau terminal",
       newBrowser: "Nouvel onglet du navigateur",
-      importSession: "Session d'importation",
+      importSession: "Importer une session",
       copyPath: "Copier le chemin de l'espace de travail",
       copyBranchName: "Copier le nom de la branche",
       showSetup: "Afficher la configuration",
     },
     toasts: {
-      workspacePathUnavailable: "Le cheminWorkspacen'est pas encore disponible",
-      branchNameUnavailable: "Nom de la succursale non disponible",
+      workspacePathUnavailable: "Le chemin de l'espace de travail n'est pas encore disponible",
+      branchNameUnavailable: "Nom de la branche non disponible",
       terminalQueued:
-        "Préparation de l'espace de travail, ouverture du terminal lorsque vous êtes prêt...",
-      workspacePathCopiedLabel: "CheminWorkspace",
-      branchNameCopiedLabel: "Nom de la succursale",
+        "Préparation de l'espace de travail, ouverture du terminal dès qu'il sera prêt...",
+      workspacePathCopiedLabel: "Chemin de l'espace de travail",
+      branchNameCopiedLabel: "Nom de la branche",
     },
   },
   scripts: {
@@ -303,19 +313,19 @@ export const workspace = {
       copyUrl: "Copier l’URL",
       openService: "Voir le service",
       restart: "Redémarrer",
-      run: "Courir",
+      run: "Exécuter",
       stop: "Arrêter",
       view: "Voir le terminal",
     },
     accessibility: {
-      trigger: "ScriptsWorkspace",
+      trigger: "Scripts de l'espace de travail",
       openService: "Voir le service {{scriptName}}",
-      viewTerminal: "Voir le terminal{{scriptName}}",
-      runScript: "Exécuter le script{{scriptName}}",
-      stopScript: "Arrêter{{scriptName}}",
-      restartScript: "Redémarrer{{scriptName}}",
-      copyUrl: "Copier l'URL de{{scriptName}}",
-      script: "Script{{scriptName}}",
+      viewTerminal: "Voir le terminal {{scriptName}}",
+      runScript: "Exécuter le script {{scriptName}}",
+      stopScript: "Arrêter {{scriptName}}",
+      restartScript: "Redémarrer {{scriptName}}",
+      copyUrl: "Copier l'URL de {{scriptName}}",
+      script: "Script {{scriptName}}",
     },
     states: {
       exitCode: "sortie {{code}}",
@@ -332,28 +342,28 @@ export const workspace = {
   git: {
     actions: {
       moreOptions: "Plus d'options",
-      moreActions: "Plus de propositions",
+      moreActions: "Plus d'actions",
       commit: {
-        label: "Commettre",
-        pending: "S'engager...",
-        success: "Engagé",
+        label: "Valider",
+        pending: "Validation...",
+        success: "Validé",
       },
       pull: {
-        label: "Tirer",
-        pending: "Tirer...",
-        success: "Tiré",
+        label: "Pull",
+        pending: "Pull en cours...",
+        success: "Pull effectué",
       },
       push: {
-        label: "Pousser",
-        pending: "Pousser...",
-        success: "Poussé",
+        label: "Push",
+        pending: "Push en cours...",
+        success: "Push effectué",
       },
       pullAndPush: {
-        label: "Tirez et poussez",
-        pending: "Tirer et pousser...",
-        success: "Tiré et poussé",
+        label: "Pull et push",
+        pending: "Pull et push en cours...",
+        success: "Pull et push effectués",
       },
-      viewPr: "VoirPR",
+      viewPr: "Voir PR",
       branchStatus: {
         behind: "Branche en retard sur le distant",
         diverged: "La branche a divergé",
@@ -361,9 +371,9 @@ export const workspace = {
         unknown: "État Git indisponible",
       },
       createPr: {
-        label: "CréerPR",
-        pending: "Création dePR...",
-        success: "PRcréé",
+        label: "Créer PR",
+        pending: "Création de PR...",
+        success: "PR créé",
         label_mr: "Créer MR",
         pending_mr: "Création de MR...",
         success_mr: "MR créé",
@@ -415,17 +425,17 @@ export const workspace = {
         viewPrNoForge:
           "Voir {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
         pullNoRemote:
-          "Pull n'est pas disponible ici car cette branche n'est pas encore connectée à une télécommande",
+          "Pull n'est pas disponible ici car cette branche n'est pas encore connectée à un dépôt distant",
         pullDirty:
           "Pull n'est pas disponible tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
         pullUpToDate: "Pull n'est pas disponible car cette branche est déjà à jour",
         pushNoRemote:
-          "Push n'est pas disponible ici car cette branche n'est pas encore connectée à une télécommande",
+          "Push n'est pas disponible ici car cette branche n'est pas encore connectée à un dépôt distant",
         pushBehind:
-          "Push n'est pas encore disponible, car de nouvelles modifications doivent être apportées en premier.",
+          "Push n'est pas encore disponible, car il faut d'abord récupérer des modifications plus récentes",
         pushNothing: "Push n'est pas disponible car il n'y a rien de nouveau à envoyer",
         pullAndPushNoRemote:
-          "Le pull et le push ne sont pas disponibles ici car cette branche n'est pas encore connectée à une télécommande",
+          "Le pull et le push ne sont pas disponibles ici car cette branche n'est pas encore connectée à un dépôt distant",
         pullAndPushDirty:
           "Pull et push ne sont pas disponibles tant que vous avez des modifications locales, alors validez-les ou cachez-les d'abord",
         pullAndPushNoIncoming:
@@ -437,7 +447,7 @@ export const workspace = {
         createPrNoForge:
           "Créer {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
         createPrNoCommits:
-          "CréerPRn'est pas disponible car cette branche n'a pas encore de nouveaux commits",
+          "Créer PR n'est pas disponible car cette branche n'a pas encore de nouveaux commits",
         mergeNoBase:
           "La fusion n'est pas disponible car nous n'avons pas pu déterminer la branche de base",
         mergeDirty:
@@ -447,16 +457,17 @@ export const workspace = {
         mergePrNoForge:
           "La fusion {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
         mergePrMissing:
-          "La fusionPRn'est pas disponible car il n'y a pas encore de demande d'extraction",
+          "La fusion de PR n'est pas disponible car il n'y a pas encore de demande d'extraction",
         mergePrDraft:
-          "La fusionPRn'est pas disponible car la demande d'extraction est encore un brouillon",
+          "La fusion de PR n'est pas disponible car la demande d'extraction est encore un brouillon",
         mergePrMerged:
-          "La fusionPRn'est pas disponible car la demande d'extraction est déjà fusionnée",
-        mergePrClosed: "La fusionPRn'est pas disponible car la demande d'extraction est fermée",
+          "La fusion de PR n'est pas disponible car la demande d'extraction est déjà fusionnée",
+        mergePrClosed:
+          "La fusion de PR n'est pas disponible car la demande d'extraction est fermée",
         mergePrConflicts:
-          "La fusionPRn'est pas disponible car la demande d'extraction présente des conflits",
+          "La fusion de PR n'est pas disponible car la demande d'extraction présente des conflits",
         mergePrQueue:
-          "MergePRn'est pas disponible ici car ce référentiel utilise une file d'attente de fusion",
+          "La fusion de PR n'est pas disponible ici car ce dépôt utilise une file d'attente de fusion",
         mergePrNotReady:
           "La fusion {{noun}} n'est pas disponible jusqu'à ce que {{brand}} signale que {{noun}} est prête à fusionner",
         autoMergeCannotDisable:
@@ -465,10 +476,10 @@ export const workspace = {
       toasts: {
         failedCommit: "Échec de la validation",
         failedPull: "Échec de l'extraction",
-        failedPush: "Échec de la poussée",
-        failedPullAndPush: "Impossible de tirer et de pousser",
-        failedCreatePr: "Échec de la création dePR",
-        failedMergePr: "Échec de la fusion dePR",
+        failedPush: "Échec du push",
+        failedPullAndPush: "Échec du pull et du push",
+        failedCreatePr: "Échec de la création de PR",
+        failedMergePr: "Échec de la fusion de PR",
         failedEnableAutoMerge: "Échec de l'activation de la fusion automatique",
         failedDisableAutoMerge: "Échec de la désactivation de la fusion automatique",
         baseRefUnavailable: "Réf de base indisponible",
@@ -477,16 +488,16 @@ export const workspace = {
       },
       archiveWarning: {
         title: "Archiver «{{workspaceName}}»?",
-        confirm: "Archive",
+        confirm: "Archiver",
         cancel: "Annuler",
         uncommittedChanges: "Modifications non validées",
         uncommittedChangesWithDiff: "Modifications non validées ({{diffStat}})",
-        addedLine: "Ligne ajoutée{{count}}",
-        addedLines: "{{count}}lignes ajoutées",
-        deletedLine: "Ligne supprimée{{count}}",
-        deletedLines: "{{count}}lignes supprimées",
-        unpushedCommit: "Validation non poussée{{count}}",
-        unpushedCommits: "Validations non poussées{{count}}",
+        addedLine: "{{count}} ligne ajoutée",
+        addedLines: "{{count}} lignes ajoutées",
+        deletedLine: "{{count}} ligne supprimée",
+        deletedLines: "{{count}} lignes supprimées",
+        unpushedCommit: "{{count}} validation non poussée",
+        unpushedCommits: "{{count}} validations non poussées",
       },
     },
     diff: {
@@ -499,7 +510,7 @@ export const workspace = {
       tooLarge: "Diff trop grand pour être affiché",
       previewTooLargeTitle: "Ce diff est trop volumineux pour être prévisualisé",
       previewTooLargeDescription: "Réduisez la comparaison pour la prévisualiser ici",
-      split: "Différent côte à côte",
+      split: "Diff côte à côte",
       switchToUnified: "Passer au diff unifié",
       switchToSplit: "Passer au diff côte à côte",
       options: "Options du diff",
@@ -507,10 +518,10 @@ export const workspace = {
       hideWhitespace: "Masquer les espaces",
       showWhitespace: "Afficher les espaces",
       scrollLongLines: "Faire défiler les longues lignes",
-      wrapLongLines: "Enroulez les longues lignes",
+      wrapLongLines: "Renvoyer les longues lignes à la ligne",
       collapseAllFiles: "Réduire tous les fichiers",
       expandAllFiles: "Développer tous les fichiers",
-      refreshing: "Rafraîchissant",
+      refreshing: "Actualisation",
       refresh: "Rafraîchir",
       refreshState: "Actualiser l'état de git et de {{brand}}",
       failedRefresh: "Échec de l'actualisation de l'état git.",
@@ -518,9 +529,9 @@ export const workspace = {
       seeCommittedChanges: "Voir les modifications validées",
       checkingRepository: "Vérification du référentiel...",
       notRepository: "Pas un dépôt git",
-      diffMode: "Mode différentiel",
-      uncommitted: "Non engagé",
-      committed: "Engagé",
+      diffMode: "Mode diff",
+      uncommitted: "Non validé",
+      committed: "Validé",
       branchUnknown: "Inconnu",
       base: "base",
       newFile: "Nouveau",
@@ -537,14 +548,15 @@ export const workspace = {
     openInEditor: {
       open: "Ouvrir",
       chooseEditor: "Choisir l'éditeur",
-      openIn: "Espace de travail ouvert dans{{target}}",
-      openFileIn: "Open {{fileName}} in {{target}}",
+      openIn: "Ouvrir l'espace de travail dans {{target}}",
+      openFileIn: "Ouvrir {{fileName}} dans {{target}}",
       failedOpen: "Échec de l'ouverture de l'espace de travail",
     },
     pr: {
       actions: {
         viewPullRequest: "Voir",
         openOn: "Ouvrir sur {{brand}}",
+        addAllToChat: "Tout ajouter au chat",
       },
       checksSummary: {
         passedLabel: "succès",
@@ -555,19 +567,23 @@ export const workspace = {
         runningAccessible: "Vérifications en cours",
       },
       sections: {
-        checks: "Chèques",
+        checks: "Vérifications",
         pipeline: "Pipeline",
+        activity: "Activité",
       },
       empty: {
         noJobs: "Aucune tâche",
         loadingPipeline: "Chargement du pipeline...",
         pipelineJobsLoadFailed: "Impossible de charger les tâches du pipeline",
         allowedToFail: "autorisé à échouer",
+        noActivity: "Aucune activité pour le moment",
       },
       approvals: "{{given}} sur {{required}} approbations",
       accessibility: {
         pullRequest: "Demande de tirage #{{number}}",
         pullRequest_mr: "Demande de fusion !{{number}}",
+        commentActions: "Actions du commentaire",
+        threadActions: "Actions du fil de discussion",
       },
       states: {
         merged: "Fusionné",
@@ -575,6 +591,8 @@ export const workspace = {
       },
       thread: {
         discussion: "Fil de discussion",
+        resolved: "Résolu",
+        outdated: "Obsolète",
       },
       errors: {
         statusLoadFailed: "Impossible de charger le statut de la demande d'extraction",

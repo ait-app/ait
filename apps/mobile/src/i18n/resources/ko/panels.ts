@@ -3,6 +3,13 @@ export const panels = {
     newAgent: "새 에이전트",
     creatingAgent: "에이전트 생성 중",
   },
+  agent: {
+    subtitle: "{{provider}} 에이전트",
+  },
+  providerSubagent: {
+    label: "하위 에이전트",
+    subtitle: "{{provider}} 하위 에이전트",
+  },
   file: {
     directoryMissing: "워크스페이스 디렉터리를 찾을 수 없습니다.",
     loading: "파일 불러오는 중...",

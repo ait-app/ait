@@ -8,6 +8,8 @@ export const importSession = {
   },
   filters: {
     all: "الجميع",
+    label: "التصفية: {{provider}}",
+    title: "تصفية حسب المزود",
   },
   status: {
     connectHost: "اتصل بمضيف لاستيراد الجلسات",

@@ -1,10 +1,17 @@
 export const panels = {
   draft: {
     newAgent: "Nuevo agente",
-    creatingAgent: "Agente creador",
+    creatingAgent: "Creando agente",
+  },
+  agent: {
+    subtitle: "Agente de {{provider}}",
+  },
+  providerSubagent: {
+    label: "Subagente",
+    subtitle: "Subagente de {{provider}}",
   },
   file: {
-    directoryMissing: "No se encontró el directorio de Workspace.",
+    directoryMissing: "No se encontró el directorio del espacio de trabajo.",
     loading: "Cargando archivo...",
     noPreview: "No hay vista previa disponible",
     openWithSystem: "Abrir con una aplicación del sistema",
@@ -53,7 +60,7 @@ export const panels = {
     diffLabel: "Diferencia",
     changesSubtitle: "Diferencias del árbol de trabajo",
     commitSubtitle: "Diferencias del commit",
-    directoryMissing: "No se encontró el directorio de Workspace.",
+    directoryMissing: "No se encontró el directorio del espacio de trabajo.",
     empty: "Sin cambios",
     loadError: "No se pudieron cargar las diferencias",
     capabilityMissing: "Actualiza el host para ver las diferencias de los commits.",

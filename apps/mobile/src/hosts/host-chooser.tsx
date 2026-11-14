@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/text-input";
 import { router } from "expo-router";
 import { Server } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { create } from "zustand";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
@@ -74,6 +75,7 @@ export function useHostChooser() {
   const hosts = useHosts({ availableOnly: true });
   const localServerId = useLocalDaemonServerId();
   const open = useHostChooserStore((state) => state.open);
+  const { t } = useTranslation();
 
   return useCallback(
     (input: ChooseHostInput) => {
@@ -92,13 +94,13 @@ export function useHostChooser() {
       }
 
       open({
-        title: input.title ?? "Choose host",
+        title: input.title ?? t("addProjectFlow.titles.host"),
         serverIds: availableHosts.map((host) => host.serverId),
         onChooseHost: input.onChooseHost,
       });
       return true;
     },
-    [hosts, localServerId, open],
+    [hosts, localServerId, open, t],
   );
 }
 
@@ -146,6 +148,7 @@ function HostChooserRow({
 
 export function HostChooserModal() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const hosts = useHosts({ availableOnly: true });
   const request = useHostChooserStore((state) => state.request);
   const close = useHostChooserStore((state) => state.close);
@@ -253,7 +256,7 @@ export function HostChooserModal() {
               ref={inputRef}
               initialValue={query}
               onChangeText={handleQueryChange}
-              placeholder="Search hosts..."
+              placeholder={t("addProjectFlow.placeholders.hosts")}
               placeholderTextColor={theme.colors.foregroundMuted}
               style={styles.input}
               autoCapitalize="none"
@@ -267,7 +270,9 @@ export function HostChooserModal() {
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
           >
-            {options.length === 0 ? <Text style={styles.emptyText}>No matching hosts</Text> : null}
+            {options.length === 0 ? (
+              <Text style={styles.emptyText}>{t("addProjectFlow.empty.noMatchingHosts")}</Text>
+            ) : null}
             {options.map((host, index) => (
               <HostChooserRow
                 key={host.serverId}

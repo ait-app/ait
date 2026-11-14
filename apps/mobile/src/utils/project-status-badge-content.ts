@@ -9,7 +9,7 @@ export type ProjectStatusBadgeContent =
 /**
  * What the project status badge should render for a project's aggregate bucket, or null when
  * no badge should show at all. Kept as plain data (no React) so it's testable without JSDOM
- * or component mounting — see docs/testing.md's two test categories.
+ * or component mounting.
  *
  * Running is a dot like failed and attention rather than its own glyph. The badge is 14pt;
  * anything with internal detail at that size loses to a solid disc, so the buckets separate

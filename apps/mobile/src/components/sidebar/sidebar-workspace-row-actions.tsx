@@ -1,4 +1,9 @@
 import { useCallback, useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ShareManagerSheet,
+  type ShareResourceTarget,
+} from "@/components/sharing/share-manager-sheet";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useToast } from "@/contexts/toast-context";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
@@ -37,11 +42,14 @@ export interface SidebarWorkspaceRowActions {
   onMarkAsUnread?: () => void;
   isPinned: boolean;
   onTogglePin?: () => void;
+  onShare: () => void;
+  openInFileManagerPath: string;
 }
 
 /**
- * Archive, clipboard, rename, read-state and pin handling for one sidebar workspace row, shared by
- * the project-mode and grouped-mode rows. The row renders `renameModal` beside itself.
+ * Archive, clipboard, rename, read-state, pin and share handling for one sidebar workspace row,
+ * shared by the project-mode and grouped-mode rows. The row renders `renameModal` and
+ * `shareSheet` beside itself.
  */
 export function useSidebarWorkspaceRowActions({
   workspace,
@@ -55,7 +63,13 @@ export function useSidebarWorkspaceRowActions({
   canCopyBranchName: boolean;
   canPin: boolean;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
-}): { isArchiving: boolean; actions: SidebarWorkspaceRowActions; renameModal: ReactElement } {
+}): {
+  isArchiving: boolean;
+  actions: SidebarWorkspaceRowActions;
+  renameModal: ReactElement;
+  shareSheet: ReactElement;
+} {
+  const { t } = useTranslation();
   const toast = useToast();
   const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -108,14 +122,32 @@ export function useSidebarWorkspaceRowActions({
     });
   const handleMarkAsRead = useCallback(() => {
     void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.toasts.markAsReadFailed"),
+      );
     });
-  }, [clearAttention, toast]);
+  }, [clearAttention, t, toast]);
   const handleMarkAsUnread = useCallback(() => {
     void markUnread().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as unread");
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.toasts.markAsUnreadFailed"),
+      );
     });
-  }, [markUnread, toast]);
+  }, [markUnread, t, toast]);
+
+  const [shareTarget, setShareTarget] = useState<ShareResourceTarget | null>(null);
+  const handleShare = useCallback(
+    () =>
+      setShareTarget({
+        serverId: workspace.serverId,
+        resourceKind: "workspace",
+        resourceKey: workspace.workspaceId,
+        displayName: workspace.name,
+        projectName: workspace.projectName,
+      }),
+    [workspace],
+  );
+  const closeShare = useCallback(() => setShareTarget(null), []);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
@@ -141,6 +173,8 @@ export function useSidebarWorkspaceRowActions({
       onMarkAsUnread: canMarkUnread ? handleMarkAsUnread : undefined,
       isPinned: workspace.pinnedAt != null,
       onTogglePin: canPin ? handleTogglePin : undefined,
+      onShare: handleShare,
+      openInFileManagerPath: workspace.workspaceDirectory,
     },
     renameModal: (
       <WorkspaceRenameModal
@@ -149,6 +183,9 @@ export function useSidebarWorkspaceRowActions({
         onClose={handleCloseRename}
         testID={`sidebar-workspace-rename-modal-${workspace.workspaceKey}`}
       />
+    ),
+    shareSheet: (
+      <ShareManagerSheet visible={shareTarget !== null} target={shareTarget} onClose={closeShare} />
     ),
   };
 }
@@ -163,8 +200,6 @@ export function SidebarWorkspaceActionSlot({
   showScrim,
   reserveSlotWidth,
   actions,
-  onShare,
-  openInFileManagerPath,
 }: {
   workspace: SidebarWorkspaceEntry;
   backdrop: SidebarSurfaceBackdrop;
@@ -174,8 +209,6 @@ export function SidebarWorkspaceActionSlot({
   showScrim: boolean;
   reserveSlotWidth: boolean;
   actions: SidebarWorkspaceRowActions;
-  onShare?: () => void;
-  openInFileManagerPath?: string | null;
 }) {
   const kebab = useOpenKebabMenuVisibility(showKebab);
   return (
@@ -194,8 +227,6 @@ export function SidebarWorkspaceActionSlot({
           serverId={workspace.serverId}
           workspaceId={workspace.workspaceId}
           workspaceLabels={workspace.labels}
-          onShare={onShare}
-          openInFileManagerPath={openInFileManagerPath}
         />
       </SidebarWorkspaceTrailingActionOverlay>
     </SidebarWorkspaceTrailingActionSlot>

@@ -47,6 +47,9 @@ export const sidebar = {
   pinned: {
     title: "Закреплённые",
   },
+  statusGroup: {
+    accessibilityLabel: "Группа {{label}}",
+  },
   actions: {
     addProject: "Добавить проект",
     newWorkspace: "Новое рабочее пространство",
@@ -65,7 +68,7 @@ export const sidebar = {
     appName: "Ait",
   },
   sections: {
-    usage: "Usage",
+    usage: "Использование",
     workspaces: "Рабочие пространства",
     sessions: "История",
     search: "Поиск",
@@ -123,6 +126,8 @@ export const sidebar = {
       rename: "Переименовать рабочее пространство",
       pin: "Закрепить вверху",
       unpin: "Открепить",
+      markAsRead: "Отметить как прочитанное",
+      markAsUnread: "Отметить как непрочитанное",
       archive: "Архивировать",
       archiving: "Архивирование...",
     },
@@ -136,6 +141,8 @@ export const sidebar = {
       branchNameCopied: "Имя ветки скопировано",
       hostDisconnected: "Хост не подключён",
       archiveFailed: "Не удалось архивировать рабочее пространство",
+      markAsReadFailed: "Не удалось отметить рабочее пространство как прочитанное",
+      markAsUnreadFailed: "Не удалось отметить рабочее пространство как непрочитанное",
     },
   },
 };

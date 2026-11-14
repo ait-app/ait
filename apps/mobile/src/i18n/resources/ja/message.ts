@@ -57,6 +57,7 @@ export const message = {
     next: "次へ",
     answerPlaceholder: "回答を入力...",
     otherPlaceholder: "その他...",
+    navLabel: "質問 {{current}} / {{total}}",
   },
   todo: {
     title: "タスク",
@@ -78,5 +79,8 @@ export const message = {
     completed: "コンテキストを圧縮しました",
   },
 
-  turnFooter: { workedFor: "作業時間 {{duration}}" },
+  turnFooter: {
+    workedFor: "作業時間 {{duration}}",
+    endedAt: "{{duration}}、終了: {{timestamp}}",
+  },
 };

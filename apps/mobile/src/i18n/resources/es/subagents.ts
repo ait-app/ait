@@ -12,8 +12,8 @@ export const subagents = {
   pillLabelReadyToReview: "{{count}} para revisar",
   detachAction: "Separar {{label}}",
   detachTooltip: "Separar subagente",
-  archiveAction: "Archivo{{label}}",
-  archiveTooltip: "Subagente de archivo",
+  archiveAction: "Archivar {{label}}",
+  archiveTooltip: "Archivar subagente",
   archiveFinishedAction: "Archivar subagentes finalizados",
   archiveFinishedRetry: "Reintentar ({{failed}}/{{total}})",
 };

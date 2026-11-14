@@ -8,6 +8,8 @@ export const importSession = {
   },
   filters: {
     all: "전체",
+    label: "필터: {{provider}}",
+    title: "프로바이더로 필터링",
   },
   status: {
     connectHost: "세션을 가져오려면 호스트에 연결하세요",

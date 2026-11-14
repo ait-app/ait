@@ -11,7 +11,7 @@ import {
 const ThemedSearch = withUnistyles(Search);
 const ThemedX = withUnistyles(X);
 const ThemedTextInput = withUnistyles(TextInput, (theme: Theme) => ({
-  // Placeholders sit at foregroundMuted and no dimmer — see docs/design.md §14.
+  // Placeholders sit at foregroundMuted and no dimmer.
   placeholderTextColor: theme.colors.foregroundMuted,
   selectionColor: theme.colors.foreground,
 }));

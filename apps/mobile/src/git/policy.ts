@@ -57,6 +57,8 @@ export interface BuildGitActionsInput {
   forgeBrandLabel: string;
   /** Short change-request noun label (e.g. "PR", "MR") for forge-neutral unavailable copy. */
   forgeChangeRequestNoun: string;
+  /** i18n context for keys with an `_mr` variant (`"mr"` on GitLab), so labels say PR or MR. */
+  forgeChangeRequestContext: "mr" | undefined;
   githubAutoMergeActionsEnabled: boolean;
   hasPullRequest: boolean;
   pullRequestUrl: string | null;
@@ -396,12 +398,13 @@ function getFeatureActionIds(input: BuildGitActionsInput): GitActionId[] {
 }
 
 function buildPrAction(input: BuildGitActionsInput): GitAction {
+  const vocabulary = { context: input.forgeChangeRequestContext };
   if (hasOpenPullRequest(input) && input.pullRequestUrl) {
     return {
       id: "pr",
-      label: i18n.t("workspace.git.actions.viewPr"),
-      pendingLabel: i18n.t("workspace.git.actions.viewPr"),
-      successLabel: i18n.t("workspace.git.actions.viewPr"),
+      label: i18n.t("workspace.git.actions.viewPr", vocabulary),
+      pendingLabel: i18n.t("workspace.git.actions.viewPr", vocabulary),
+      successLabel: i18n.t("workspace.git.actions.viewPr", vocabulary),
       disabled: input.runtime.pr.disabled,
       status: input.runtime.pr.status,
       unavailableMessage:
@@ -419,9 +422,9 @@ function buildPrAction(input: BuildGitActionsInput): GitAction {
 
   return {
     id: "pr",
-    label: i18n.t("workspace.git.actions.createPr.label"),
-    pendingLabel: i18n.t("workspace.git.actions.createPr.pending"),
-    successLabel: i18n.t("workspace.git.actions.createPr.success"),
+    label: i18n.t("workspace.git.actions.createPr.label", vocabulary),
+    pendingLabel: i18n.t("workspace.git.actions.createPr.pending", vocabulary),
+    successLabel: i18n.t("workspace.git.actions.createPr.success", vocabulary),
     disabled: input.runtime.pr.disabled,
     status: input.runtime.pr.status,
     unavailableMessage: input.runtime.pr.disabled
@@ -439,11 +442,12 @@ function buildDirectPullRequestMergeAction(
 ): GitAction {
   const runtime = input.runtime[model.id];
   const unavailableMessage = getMergePrUnavailableMessage(input);
+  const vocabulary = { context: input.forgeChangeRequestContext };
   return {
     id: model.id,
-    label: getDirectPullRequestMergeActionLabel(model.id),
-    pendingLabel: i18n.t("workspace.git.actions.mergePr.pending"),
-    successLabel: i18n.t("workspace.git.actions.mergePr.success"),
+    label: i18n.t(DIRECT_MERGE_LABEL_KEYS[model.id], vocabulary),
+    pendingLabel: i18n.t("workspace.git.actions.mergePr.pending", vocabulary),
+    successLabel: i18n.t("workspace.git.actions.mergePr.success", vocabulary),
     disabled: runtime.disabled || shouldDisableMergePrAction(input),
     status: runtime.status,
     unavailableMessage: runtime.disabled ? undefined : unavailableMessage,
@@ -491,16 +495,11 @@ function buildDisablePullRequestAutoMergeAction(input: BuildGitActionsInput): Gi
   };
 }
 
-function getDirectPullRequestMergeActionLabel(id: PullRequestDirectMergeActionId): string {
-  switch (id) {
-    case "merge-pr-squash":
-      return i18n.t("workspace.git.actions.mergePr.squash");
-    case "merge-pr-merge":
-      return i18n.t("workspace.git.actions.mergePr.merge");
-    case "merge-pr-rebase":
-      return i18n.t("workspace.git.actions.mergePr.rebase");
-  }
-}
+const DIRECT_MERGE_LABEL_KEYS = {
+  "merge-pr-squash": "workspace.git.actions.mergePr.squash",
+  "merge-pr-merge": "workspace.git.actions.mergePr.merge",
+  "merge-pr-rebase": "workspace.git.actions.mergePr.rebase",
+} as const satisfies Record<PullRequestDirectMergeActionId, string>;
 
 function getEnablePullRequestAutoMergeActionLabel(id: PullRequestAutoMergeEnableActionId): string {
   switch (id) {

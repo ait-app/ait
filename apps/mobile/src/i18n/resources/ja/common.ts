@@ -31,6 +31,7 @@ export const common = {
   },
   errors: {
     error: "エラー",
+    withMessage: "エラー: {{message}}",
     unableToSave: "保存できません",
     unableToCopy: "コピーできません",
     nameRequired: "名前は必須です",

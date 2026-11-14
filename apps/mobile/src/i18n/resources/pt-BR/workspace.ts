@@ -169,10 +169,19 @@ export const workspace = {
     hostDisconnected: "Host não está conectado",
     updateHost: "Atualize o host para usar o renderizador de terminal nativo.",
     unableToSubscribe: "Não foi possível assinar o terminal",
+    hideKeyboard: "Ocultar teclado",
+    showKeyboard: "Mostrar teclado",
+    paste: "Colar",
+    bottom: "Ir para o fim",
   },
   tabs: {
     loading: "Carregando...",
     modified: "Alterações não salvas",
+    empty: {
+      missingDirectory:
+        "O diretório do workspace está ausente. Recarregue os dados do workspace antes de abrir abas.",
+      noTabs: "Ainda não há abas disponíveis. Use Nova aba para criar um agente ou terminal.",
+    },
     fallback: {
       newAgent: "Novo agente",
       setup: "Configuração",
@@ -537,6 +546,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "Ver",
         openOn: "Abrir no {{brand}}",
+        addAllToChat: "Adicionar tudo ao chat",
       },
       checksSummary: {
         passedLabel: "passou",
@@ -549,17 +559,21 @@ export const workspace = {
       sections: {
         checks: "Verificações",
         pipeline: "Pipeline",
+        activity: "Atividade",
       },
       empty: {
         noJobs: "Sem jobs",
         loadingPipeline: "Carregando pipeline...",
         pipelineJobsLoadFailed: "Não foi possível carregar os jobs do pipeline",
         allowedToFail: "permitido falhar",
+        noActivity: "Nenhuma atividade ainda",
       },
       approvals: "{{given}} de {{required}} aprovações",
       accessibility: {
         pullRequest: "Pull request #{{number}}",
         pullRequest_mr: "Merge request !{{number}}",
+        commentActions: "Ações do comentário",
+        threadActions: "Ações do tópico",
       },
       states: {
         merged: "Mergeada",
@@ -567,6 +581,8 @@ export const workspace = {
       },
       thread: {
         discussion: "Tópico de discussão",
+        resolved: "Resolvido",
+        outdated: "Desatualizado",
       },
       errors: {
         statusLoadFailed: "Não foi possível carregar o status da pull request",

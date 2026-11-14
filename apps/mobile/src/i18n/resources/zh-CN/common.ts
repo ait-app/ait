@@ -31,6 +31,7 @@ export const common = {
   },
   errors: {
     error: "错误",
+    withMessage: "错误：{{message}}",
     unableToSave: "无法保存",
     unableToCopy: "无法复制",
     nameRequired: "名称必填",

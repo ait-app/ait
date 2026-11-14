@@ -32,7 +32,7 @@ import { useAgentControlCommandCenterActions } from "@/command-center/agent-cont
 import { requestWorkspaceDraftAgent } from "@/composer/draft/create-agent-request";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
-import { validateDraftCreation } from "@/composer/draft/workspace-tab-core";
+import { resolveDraftModeId, validateDraftCreation } from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentSnapshotPayload } from "@ait/protocol/messages";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
@@ -90,50 +90,6 @@ function resolveAutoSubmitConfig(
   };
 }
 
-// Reconcile the form's selected mode against the currently discovered modes.
-// The mode picker displays modeOptions[0] when the stored mode isn't in the
-// list (e.g. a globally-remembered "plan" that this workspace's OpenCode config
-// no longer defines), so the submitted mode must match that display — otherwise
-// we'd send a stale mode the provider rejects while the UI showed a valid one.
-function reconcileSelectedMode(modeOptionIds: readonly string[], selectedMode: string): string {
-  if (modeOptionIds.length === 0) {
-    return "";
-  }
-  return modeOptionIds.includes(selectedMode) ? selectedMode : (modeOptionIds[0] ?? "");
-}
-
-function resolveDraftModeIdOverride(input: {
-  autoSubmitConfig: AutoSubmitConfig | null;
-  modeOptionIds: readonly string[];
-  selectedMode: string;
-}): { modeId: string } | Record<string, never> {
-  const { autoSubmitConfig, modeOptionIds, selectedMode } = input;
-  if (autoSubmitConfig?.modeId) {
-    return { modeId: autoSubmitConfig.modeId };
-  }
-  const reconciled = reconcileSelectedMode(modeOptionIds, selectedMode);
-  if (reconciled !== "") {
-    return { modeId: reconciled };
-  }
-  return {};
-}
-
-function resolveDraftModeId(input: {
-  autoSubmitConfig: AutoSubmitConfig | null;
-  modeOptionIds: readonly string[];
-  selectedMode: string;
-}): string | null {
-  const { autoSubmitConfig, modeOptionIds, selectedMode } = input;
-  if (autoSubmitConfig?.modeId !== undefined) {
-    return autoSubmitConfig.modeId;
-  }
-  const reconciled = reconcileSelectedMode(modeOptionIds, selectedMode);
-  if (reconciled !== "") {
-    return reconciled;
-  }
-  return null;
-}
-
 async function submitDraftCreateRequest(input: {
   draftId: string;
   attempt: { clientMessageId: string };
@@ -185,7 +141,7 @@ async function submitDraftCreateRequest(input: {
   if (!provider) {
     throw new Error(input.selectModelMessage);
   }
-  const modeIdOverride = resolveDraftModeIdOverride({
+  const modeId = resolveDraftModeId({
     autoSubmitConfig,
     modeOptionIds: composerState.modeOptions.map((mode) => mode.id),
     selectedMode: composerState.selectedMode,
@@ -193,7 +149,7 @@ async function submitDraftCreateRequest(input: {
   const config = buildWorkspaceDraftAgentConfig({
     provider,
     cwd,
-    ...modeIdOverride,
+    ...(modeId ? { modeId } : {}),
     model: autoSubmitConfig?.model ?? (composerState.effectiveModelId || undefined),
     thinkingOptionId:
       autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),

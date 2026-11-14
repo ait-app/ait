@@ -46,6 +46,9 @@ export const sidebar = {
   pinned: {
     title: "المثبتة",
   },
+  statusGroup: {
+    accessibilityLabel: "مجموعة {{label}}",
+  },
   actions: {
     addProject: "إضافة مشروع",
     newWorkspace: "مساحة عمل جديدة",
@@ -64,7 +67,7 @@ export const sidebar = {
     appName: "Ait",
   },
   sections: {
-    usage: "Usage",
+    usage: "الاستخدام",
     workspaces: "مساحات العمل",
     sessions: "السجل",
     search: "بحث",
@@ -74,10 +77,10 @@ export const sidebar = {
     actions: {
       menu: "إجراءات المشروع",
       openSettings: "افتح إعدادات المشروع",
-      openNewWindow: "Open in new window",
-      openNewWindowFailed: "Couldn't open a new window",
-      openFolder: "Open in file manager",
-      openFolderFailed: "Couldn't open folder",
+      openNewWindow: "فتح في نافذة جديدة",
+      openNewWindowFailed: "تعذر فتح نافذة جديدة",
+      openFolder: "فتح في مدير الملفات",
+      openFolderFailed: "تعذر فتح المجلد",
       remove: "إزالة المشروع",
       removing: "جارٍ الإزالة...",
     },
@@ -85,13 +88,13 @@ export const sidebar = {
       removeTitle: "هل تريد إزالة المشروع؟",
       removeMessage:
         'هل تريد إزالة "{{projectName}}" من الشريط الجانبي؟\n\n لن يتم تغيير الملفات الموجودة على القرص.',
-      removeConfirm: "يزيل",
-      cancel: "يلغي",
+      removeConfirm: "إزالة",
+      cancel: "إلغاء",
     },
     toasts: {
-      hostDisconnected: "Host غير متصل",
+      hostDisconnected: "المضيف غير متصل",
       removeFailed: "فشل في إزالة بعض مساحات العمل",
-      updateHostToRemove: "قم بتحديث Host لإزالة المشاريع.",
+      updateHostToRemove: "قم بتحديث المضيف لإزالة المشاريع.",
     },
     empty: {
       title: "لا توجد مشاريع حتى الآن",
@@ -112,7 +115,7 @@ export const sidebar = {
       pending: "قيد الانتظار: {{count}}",
     },
     actions: {
-      menu: "إجراءات Workspace",
+      menu: "إجراءات مساحة العمل",
       newWorkspace: "مساحة عمل جديدة",
       showMore: "عرض المزيد",
       showLess: "عرض أقل",
@@ -122,7 +125,9 @@ export const sidebar = {
       rename: "إعادة تسمية مساحة العمل",
       pin: "تثبيت في الأعلى",
       unpin: "إلغاء التثبيت",
-      archive: "أرشيف",
+      markAsRead: "تعليم كمقروء",
+      markAsUnread: "تعليم كغير مقروء",
+      archive: "أرشفة",
       archiving: "أرشفة...",
     },
     rename: {
@@ -130,11 +135,13 @@ export const sidebar = {
       submit: "إعادة تسمية",
     },
     toasts: {
-      workspacePathUnavailable: "مسار Workspace غير متوفر",
+      workspacePathUnavailable: "مسار مساحة العمل غير متوفر",
       pathCopied: "تم نسخ المسار",
       branchNameCopied: "تم نسخ اسم الفرع",
-      hostDisconnected: "Host غير متصل",
+      hostDisconnected: "المضيف غير متصل",
       archiveFailed: "فشل في أرشفة مساحة العمل",
+      markAsReadFailed: "فشل في تعليم مساحة العمل كمقروءة",
+      markAsUnreadFailed: "فشل في تعليم مساحة العمل كغير مقروءة",
     },
   },
 };

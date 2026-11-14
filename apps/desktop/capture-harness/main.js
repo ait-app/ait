@@ -2437,9 +2437,9 @@ async function runAutomationGroup() {
 
     // Resize is not harness-testable: the harness hosts webviews in the parked
     // 1px resident host, and Electron does not propagate CSS-box resizes to a
-    // parked guest's capture surface (see docs/browser-capture-harness.md).
+    // parked guest's capture surface.
     // The production resize path is app-owned webview sizing, covered by
-    // packages/app/src/desktop/browser/automation/handler.test.ts.
+    // apps/mobile/src/desktop/browser/automation/handler.test.ts.
 
     await fsp.writeFile(
       path.join(OUT_DIR, "automation-results.json"),

@@ -168,10 +168,19 @@ export const workspace = {
     hostDisconnected: "호스트가 연결되어 있지 않습니다",
     updateHost: "기본 터미널 렌더러를 사용하도록 호스트를 업데이트합니다.",
     unableToSubscribe: "터미널을 구독할 수 없습니다",
+    hideKeyboard: "키보드 숨기기",
+    showKeyboard: "키보드 표시",
+    paste: "붙여넣기",
+    bottom: "맨 아래로",
   },
   tabs: {
     loading: "불러오는 중...",
     modified: "저장되지 않은 변경사항",
+    empty: {
+      missingDirectory:
+        "워크스페이스 디렉터리가 없습니다. 탭을 열기 전에 워크스페이스 데이터를 다시 불러오세요.",
+      noTabs: "아직 사용할 수 있는 탭이 없습니다. 새 탭에서 에이전트나 터미널을 만드세요.",
+    },
     fallback: {
       newAgent: "새 에이전트",
       setup: "설정",
@@ -523,6 +532,7 @@ export const workspace = {
       actions: {
         viewPullRequest: "보기",
         openOn: "{{brand}}에서 열기",
+        addAllToChat: "모두 채팅에 추가",
       },
       checksSummary: {
         passedLabel: "통과",
@@ -535,17 +545,21 @@ export const workspace = {
       sections: {
         checks: "검사",
         pipeline: "파이프라인",
+        activity: "활동",
       },
       empty: {
         noJobs: "작업 없음",
         loadingPipeline: "파이프라인 로드 중…",
         pipelineJobsLoadFailed: "파이프라인 작업을 로드할 수 없습니다.",
         allowedToFail: "실패가 허용됨",
+        noActivity: "아직 활동이 없습니다",
       },
       approvals: "{{required}} 중 {{given}} 승인",
       accessibility: {
         pullRequest: "풀 리퀘스트 #{{number}}",
         pullRequest_mr: "병합 요청 !{{number}}",
+        commentActions: "댓글 작업",
+        threadActions: "스레드 작업",
       },
       states: {
         merged: "병합됨",
@@ -553,6 +567,8 @@ export const workspace = {
       },
       thread: {
         discussion: "토론 스레드",
+        resolved: "해결됨",
+        outdated: "오래됨",
       },
       errors: {
         statusLoadFailed: "풀 리퀘스트 상태를 불러올 수 없습니다",

@@ -40,11 +40,13 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { useSettings } from "@/hooks/use-settings";
 import {
+  isAgentNotFoundErrorMessage,
   reconcileMissingAgentStateWithPresentAgent,
   shouldFetchAgentForLookup,
   shouldRetryLookupOnConnectionChange,
 } from "@/panels/agent-panel-load-state";
 import { AgentTracks, hasAgentTracks } from "@/panels/agent-tracks";
+import { formatAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
@@ -267,17 +269,6 @@ function renderChatAgentNonReadyView(args: {
   return null;
 }
 
-function formatProviderLabel(provider: Agent["provider"]): string {
-  if (!provider) {
-    return "Agent";
-  }
-  return provider
-    .split(/[-_\s]+/)
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
   if (typeof title !== "string") {
     return null;
@@ -343,6 +334,8 @@ function useAgentPanelDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
 ): PanelDescriptor {
+  // Subscribes to language changes so the translated subtitle follows them.
+  useTranslation();
   const descriptorState = useSessionStore(
     useShallow((state) => {
       const session = state.sessions[context.serverId];
@@ -363,10 +356,12 @@ function useAgentPanelDescriptor(
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = getProviderIcon(provider, context.serverId);
 
+  const subtitle = formatAgentPanelSubtitle(provider);
+
   return {
     label: label ?? "",
-    subtitle: `${formatProviderLabel(provider)} agent`,
-    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
+    subtitle,
+    tooltip: label ?? subtitle,
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -498,10 +493,6 @@ function findActiveCreateHandoff(input: {
       pending.serverId === input.serverId &&
       pending.agentId === input.agentId,
   );
-}
-
-function isNotFoundErrorMessage(message: string): boolean {
-  return /agent not found|not found/i.test(message);
 }
 
 type AgentLookupState =
@@ -661,7 +652,7 @@ function AgentPanelBody({
           return;
         }
         const message = toErrorMessage(error);
-        if (isNotFoundErrorMessage(message)) {
+        if (isAgentNotFoundErrorMessage(message)) {
           setLookupState({ tag: "not_found", message });
           return;
         }
@@ -995,7 +986,7 @@ function ChatAgentContent({
           return;
         }
         const message = toErrorMessage(error);
-        if (isNotFoundErrorMessage(message)) {
+        if (isAgentNotFoundErrorMessage(message)) {
           setMissingAgentState({ kind: "not_found", message });
           return;
         }

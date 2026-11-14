@@ -8,6 +8,8 @@ export const importSession = {
   },
   filters: {
     all: "Все",
+    label: "Фильтр: {{provider}}",
+    title: "Фильтр по провайдеру",
   },
   status: {
     connectHost: "Подключитесь к хосту, чтобы импортировать сессии",

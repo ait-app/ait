@@ -14,7 +14,7 @@ import { SPACING } from "@/styles/theme";
  *
  * Exported because it is the chip's optical offset as much as its padding: a caller that puts a
  * chip at the head of a line has to hang the ground by this much to land the name on the rail.
- * A static number from the spacing scale, not a theme read — see docs/unistyles.md.
+ * A static number from the spacing scale, not a theme read.
  */
 export const WORKSPACE_LABEL_CHIP_INSET = SPACING[1.5];
 
@@ -69,7 +69,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   // Text has no `color` prop to hand a mapping to, so the name's color has to come from a
-  // registered style — one per color, picked at render time. See docs/unistyles.md.
+  // registered style — one per color, picked at render time.
   nameViolet: { color: identityForeground("violet", theme.colorScheme) },
   nameSky: { color: identityForeground("sky", theme.colorScheme) },
   nameEmerald: { color: identityForeground("emerald", theme.colorScheme) },

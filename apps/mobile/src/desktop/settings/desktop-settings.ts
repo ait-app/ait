@@ -145,16 +145,6 @@ export async function updatePersistedDesktopSettings(
   );
 }
 
-export async function migrateLegacyDesktopSettings(input: {
-  manageBuiltInDaemon?: boolean;
-  releaseChannel?: ReleaseChannel;
-}): Promise<void> {
-  if (!getIsElectron()) {
-    return;
-  }
-  await invokeDesktopCommand("migrate_legacy_desktop_settings", input);
-}
-
 function parseDesktopSettings(raw: unknown): DesktopSettings {
   const record = isRecord(raw) ? raw : {};
   const notifications = isRecord(record.notifications) ? record.notifications : {};

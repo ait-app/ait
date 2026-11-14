@@ -45,6 +45,7 @@ export const addProjectFlow = {
     hosts: "没有已连接的主机",
     repository: "请输入 GitHub 地址或“所有者/仓库名”",
     options: "没有匹配的选项",
+    noMatchingHosts: "没有匹配的主机",
     hostUpgrade: "请更新主机以使用“添加项目”功能。",
   },
   actions: {

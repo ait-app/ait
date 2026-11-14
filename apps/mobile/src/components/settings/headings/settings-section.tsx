@@ -8,7 +8,7 @@ interface SettingsSectionProps {
   title: string;
   /**
    * What this section is for. Renders as an info tooltip on the header; a
-   * paragraph between the header and the card is wrong (docs/design.md §7).
+   * paragraph between the header and the card is wrong.
    */
   info?: ReactNode;
   trailing?: ReactNode;

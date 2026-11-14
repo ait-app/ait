@@ -133,7 +133,7 @@ const styles = StyleSheet.create((theme) => ({
   fillBlue: { backgroundColor: identityForeground("blue", theme.colorScheme) },
 }));
 
-// Read inside render, never into a module-scope table — see docs/unistyles.md.
+// Read inside render, never into a module-scope table.
 function fillStyle(color: WorkspaceLabelColor) {
   switch (color) {
     case "violet":

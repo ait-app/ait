@@ -158,6 +158,7 @@ function QuestionNavButton({
   isResponding,
   onSelect,
 }: QuestionNavButtonProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const accessibilityState = useMemo(() => ({ selected: isActive }), [isActive]);
   const handlePress = useCallback(() => {
@@ -194,7 +195,7 @@ function QuestionNavButton({
   return (
     <Pressable
       accessibilityRole="tab"
-      accessibilityLabel={`Question ${index + 1} of ${total}`}
+      accessibilityLabel={t("message.question.navLabel", { current: index + 1, total })}
       accessibilityState={accessibilityState}
       aria-selected={isActive}
       testID={`question-form-question-nav-${index + 1}`}

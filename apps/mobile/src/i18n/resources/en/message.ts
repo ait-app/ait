@@ -57,6 +57,7 @@ export const message = {
     next: "Next",
     answerPlaceholder: "Type your answer...",
     otherPlaceholder: "Other...",
+    navLabel: "Question {{current}} of {{total}}",
   },
   todo: {
     title: "Tasks",
@@ -78,5 +79,8 @@ export const message = {
     completed: "Context compacted",
   },
 
-  turnFooter: { workedFor: "Worked for {{duration}}" },
+  turnFooter: {
+    workedFor: "Worked for {{duration}}",
+    endedAt: "{{duration}}, ended {{timestamp}}",
+  },
 };

@@ -769,7 +769,9 @@ export function ImportSessionSheet({
             style={filterTriggerStyle}
             testID="import-session-filter-trigger"
             accessibilityRole="button"
-            accessibilityLabel={`Filter: ${selectedProviderLabel}`}
+            accessibilityLabel={t("importSession.filters.label", {
+              provider: selectedProviderLabel,
+            })}
           >
             {selectedProvider === ALL_FILTER_VALUE ? (
               <Layers size={14} color={theme.colors.foregroundMuted} />
@@ -790,7 +792,7 @@ export function ImportSessionSheet({
             onSelect={handleFilterSelect}
             renderOption={renderFilterOption}
             searchable={false}
-            title="Filter by provider"
+            title={t("importSession.filters.title")}
             open={isFilterOpen}
             onOpenChange={setIsFilterOpen}
             anchorRef={filterAnchorRef}

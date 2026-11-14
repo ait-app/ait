@@ -8,6 +8,7 @@ import { QuestionFormCard } from "./question-form-card";
 import ompQuestion from "../../../../crates/provider/omp/tests/fixtures/omp_question.json";
 import ompDialogs from "../../../../crates/provider/omp/tests/fixtures/omp_dialogs.json";
 import { parseQuestionFormQuestions } from "./question-form-card-core";
+import { i18n } from "@/i18n/i18next";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/components/ui/loading-spinner", () => ({
@@ -197,5 +198,26 @@ describe("question response recovery", () => {
       ...fixture.response,
       updatedInput: { ...request.input, ...fixture.response.updatedInput },
     });
+  });
+  it("labels the question tabs in the active app language", async () => {
+    const request = AgentPermissionRequestPayloadSchema.parse(ompQuestion.request);
+    const permission = { key: "agent:ask-1", agentId: "agent", request };
+    const { unmount } = render(
+      <QuestionFormCard permission={permission} onRespond={vi.fn()} isResponding={false} />,
+    );
+    expect(screen.getByTestId("question-form-question-nav-2").getAttribute("aria-label")).toBe(
+      "Question 2 of 2",
+    );
+    unmount();
+
+    await i18n.changeLanguage("fr");
+    try {
+      render(<QuestionFormCard permission={permission} onRespond={vi.fn()} isResponding={false} />);
+      expect(screen.getByTestId("question-form-question-nav-2").getAttribute("aria-label")).toBe(
+        "Question 2 sur 2",
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });

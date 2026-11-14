@@ -1,21 +1,21 @@
 export const common = {
-  back: "خلف",
+  back: "رجوع",
   actions: {
     save: "حفظ",
-    back: "خلف",
-    cancel: "يلغي",
-    close: "يغلق",
-    copy: "ينسخ",
+    back: "رجوع",
+    cancel: "إلغاء",
+    close: "إغلاق",
+    copy: "نسخ",
     copyLine: "نسخ السطر",
-    dismiss: "رفض",
+    dismiss: "تجاهل",
     reload: "إعادة التحميل",
     retry: "أعد المحاولة",
-    search: "يبحث",
-    select: "يختار",
+    search: "بحث",
+    select: "تحديد",
     selectAll: "تحديد الكل",
   },
   placeholders: {
-    search: "يبحث...",
+    search: "بحث...",
   },
   empty: {
     noResults: "لم يتم العثور على نتائج",
@@ -24,13 +24,14 @@ export const common = {
   states: {
     loading: "تحميل...",
     starting: "جارٍ البدء...",
-    copied: "منقول",
-    copiedLabel: "منسوخ{{label}}",
+    copied: "تم النسخ",
+    copiedLabel: "تم نسخ {{label}}",
     downloadComplete: "اكتمل التنزيل",
     downloadFailed: "فشل التنزيل",
   },
   errors: {
     error: "خطأ",
+    withMessage: "خطأ: {{message}}",
     unableToSave: "غير قادر على الحفظ",
     unableToCopy: "تعذر النسخ",
     nameRequired: "الاسم مطلوب",
@@ -42,7 +43,7 @@ export const common = {
   },
   connectionStatus: {
     online: "متصل",
-    connecting: "الاتصال",
+    connecting: "جارٍ الاتصال",
   },
 
   bottomSheetBackdrop: "خلفية اللوحة السفلية",

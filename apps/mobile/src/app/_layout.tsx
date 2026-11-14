@@ -45,7 +45,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
-import { ToastProvider } from "@/contexts/toast-context";
+import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
 import { AgentNavigationListener } from "@/desktop/agent-navigation";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
@@ -61,6 +61,8 @@ import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-ac
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useOpenProject } from "@/hooks/use-open-project";
+import { getOpenProjectFailureReason, type OpenProjectResult } from "@/hooks/open-project";
+import { useTranslation } from "react-i18next";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HostChooserModal, useHostChooser } from "@/hosts/host-chooser";
@@ -724,6 +726,17 @@ function OpenProjectListener() {
   const [request, setRequest] = useState<PendingOpenProjectRequest | null>(null);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const openProject = useOpenProject(request?.serverId ?? null);
+  const { t } = useTranslation();
+  const toast = useToast();
+  // Stable so a language or toast change does not re-run the request effect and add the project
+  // twice.
+  const reportOpenProjectFailure = useStableEvent((result: OpenProjectResult | null) => {
+    toast.error(
+      result && getOpenProjectFailureReason(result) === "directory_not_found"
+        ? t("addProjectFlow.errors.directoryNotFound")
+        : t("addProjectFlow.errors.addProject"),
+    );
+  });
 
   const openPathOnChosenHost = useCallback(
     (path: string) => {
@@ -738,7 +751,6 @@ function OpenProjectListener() {
       }
 
       chooseHost({
-        title: "Choose host",
         onChooseHost: (serverId) => {
           setRequest({
             id: nextOpenProjectRequestId++,
@@ -765,16 +777,19 @@ function OpenProjectListener() {
       return;
     }
     let cancelled = false;
-    void openProject(request.path).then(() => {
-      if (!cancelled) {
-        setRequest((current) => (current?.id === request.id ? null : current));
-      }
-      return null;
-    });
+    void openProject(request.path)
+      .catch(() => null)
+      .then((result) => {
+        if (!cancelled) {
+          if (!result?.ok) reportOpenProjectFailure(result);
+          setRequest((current) => (current?.id === request.id ? null : current));
+        }
+        return null;
+      });
     return () => {
       cancelled = true;
     };
-  }, [openProject, request]);
+  }, [openProject, reportOpenProjectFailure, request]);
 
   useEffect(() => {
     let disposed = false;

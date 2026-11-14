@@ -29,7 +29,7 @@ import {
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 
 // Themed lucide wrappers — module-scope so only the icon re-renders on theme
-// change (never call useUnistyles in render). See docs/unistyles.md.
+// change (never call useUnistyles in render).
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPause = withUnistyles(Pause);
 const ThemedPlay = withUnistyles(Play);
@@ -155,7 +155,7 @@ function ProviderGlyph({
  * a muted secondary line (model · cadence · next run), a StatusBadge, a direct
  * pause/resume button, and the kebab menu. Tapping the task opens the editor.
  *
- * Hover lives on the outer plain View (docs/hover.md): the inner Pressable owns
+ * Hover lives on the outer plain View: the inner Pressable owns
  * press, the sibling actions never open the editor, and the row background
  * highlights without reflow.
  */

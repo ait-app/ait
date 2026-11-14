@@ -17,13 +17,11 @@ type UseAgentHistoryModule = typeof import("./use-agent-history");
 
 let fetchAgentHistoryBatch: UseAgentHistoryModule["fetchAgentHistoryBatch"];
 let fetchAgentHistoryPage: UseAgentHistoryModule["fetchAgentHistoryPage"];
-let collectAgentHistoryHostErrors: UseAgentHistoryModule["collectAgentHistoryHostErrors"];
 
 beforeAll(async () => {
   const module = await import("./use-agent-history");
   fetchAgentHistoryBatch = module.fetchAgentHistoryBatch;
   fetchAgentHistoryPage = module.fetchAgentHistoryPage;
-  collectAgentHistoryHostErrors = module.collectAgentHistoryHostErrors;
 });
 
 type FetchAgentHistory = DaemonClient["fetchAgentHistory"];
@@ -421,7 +419,7 @@ describe("fetchAgentHistoryPage", () => {
     expect(page.agents).toHaveLength(300);
   });
 
-  it("names the host that failed instead of quietly shortening the list", async () => {
+  it("keeps the reachable host's matches when another host's request fails", async () => {
     const workingClient = createClient([
       historyPayload({
         entries: [
@@ -445,71 +443,9 @@ describe("fetchAgentHistoryPage", () => {
       search: "match",
     });
 
-    expect(page.hostErrors).toEqual([{ serverId: "server-b", serverName: "Linux box" }]);
     expect(page.agents.map((agent) => agent.id)).toEqual(["reachable"]);
   });
 
-  it("keeps naming a host that failed page one when another host loads page two", async () => {
-    // A host that rejects the first page contributes no cursor, so it is never
-    // asked again. Reading only the newest page would drop its error while its
-    // history stays missing, so the projection has to see every page.
-    const workingClient = createClient([
-      historyPayload({
-        entries: [
-          historyEntry({ id: "page-1", cwd: "/repo/a", updatedAt: "2026-04-02T10:00:00.000Z" }),
-        ],
-        hasMore: true,
-        nextCursor: "cursor-2",
-      }),
-      historyPayload({
-        entries: [
-          historyEntry({ id: "page-2", cwd: "/repo/a", updatedAt: "2026-04-01T10:00:00.000Z" }),
-        ],
-      }),
-    ]);
-    const hosts = [
-      { serverId: "server-a", serverLabel: "MacBook", client: workingClient },
-      { serverId: "server-b", serverLabel: "Linux box", client: createFailingClient() },
-    ] satisfies AgentHistoryHost[];
-
-    const firstPage = await fetchAgentHistoryBatch({ hosts, cursorByServerId: null });
-    const secondPage = await fetchAgentHistoryBatch({
-      hosts,
-      cursorByServerId: { "server-a": "cursor-2" },
-    });
-
-    // Only the healthy host is re-fetched, so the second page carries no error
-    // of its own. That is exactly why the screen cannot read the newest page.
-    expect(secondPage.hostErrors).toEqual([]);
-    expect(secondPage.agents.map((agent) => agent.id)).toEqual(["page-2"]);
-    expect(
-      collectAgentHistoryHostErrors({
-        pages: [firstPage, secondPage],
-        unreachableHosts: [],
-      }),
-    ).toEqual([{ serverId: "server-b", serverName: "Linux box" }]);
-  });
-
-  it("reports a host that is not connected alongside one whose request failed", () => {
-    expect(
-      collectAgentHistoryHostErrors({
-        pages: [{ hostErrors: [{ serverId: "server-b", serverName: "Linux box" }] }],
-        unreachableHosts: [{ serverId: "server-c", serverName: "Offline box" }],
-      }),
-    ).toEqual([
-      { serverId: "server-c", serverName: "Offline box" },
-      { serverId: "server-b", serverName: "Linux box" },
-    ]);
-  });
-
-  it("names a host once when it is both unreachable and failed", () => {
-    expect(
-      collectAgentHistoryHostErrors({
-        pages: [{ hostErrors: [{ serverId: "server-b", serverName: "Linux box" }] }],
-        unreachableHosts: [{ serverId: "server-b", serverName: "Linux box" }],
-      }),
-    ).toEqual([{ serverId: "server-b", serverName: "Linux box" }]);
-  });
   it("orders searched history chronologically regardless of match strength", async () => {
     const serverAClient = createClient([
       historyPayload({

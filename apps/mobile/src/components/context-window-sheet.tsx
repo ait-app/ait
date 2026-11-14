@@ -12,7 +12,6 @@ import {
 
 // `backgroundStyle` and `handleIndicatorStyle` are style-shaped props the Babel plugin does not
 // track, so the sheet is wrapped rather than reading the theme through a hook.
-// See docs/unistyles.md.
 const ThemedBottomSheetModal = withUnistyles(IsolatedBottomSheetModal, (theme) => ({
   backgroundStyle: {
     backgroundColor: theme.colors.surface0,
