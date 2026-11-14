@@ -20,10 +20,10 @@ import {
   UserMessage,
   type InlinePathTarget,
 } from "@/components/message";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import type { ToastApi } from "@/components/toast-host";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
-import type { PendingMessageSubmission } from "@/composer/submission/model";
+import type { PendingMessageSubmission } from "@/stores/message-submission-model";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";

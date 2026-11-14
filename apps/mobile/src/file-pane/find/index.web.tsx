@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { PaneFind, findShortcutPlatform, isFindShortcut, type PaneFindHandle } from "@/pane-find";
 import { usePaneFocus } from "@/panels/pane-context";
 import { hasActiveWebOverlay } from "@/lib/overlay-root";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { FileFindModel } from "./model.web";
 

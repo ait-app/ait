@@ -34,7 +34,7 @@ import {
   stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit,
 } from "@/utils/host-route-browser";
 import { resolveOpenIntentConsumption } from "@/screens/workspace/workspace-open-intent-consumption";
-import { prepareWorkspaceTab } from "@/utils/workspace-navigation";
+import { prepareWorkspaceTab } from "@/workspace-tabs/workspace-navigation";
 import { isNative, isWeb } from "@/constants/platform";
 import { RenderProfile } from "@/utils/render-profiler";
 

@@ -15,7 +15,7 @@ import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-ac
 import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
+import { redirectIfArchivingActiveWorkspace } from "@/workspace/sidebar-workspace-archive-redirect";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import {

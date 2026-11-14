@@ -11,7 +11,7 @@ import {
   type ContextBridge,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import type { ToolCallIconComponent } from "@/utils/tool-call-icon";
+import type { ToolCallIconComponent } from "@/tool-calls/tool-call-icon";
 import { ToolCallDetailsContent } from "./tool-call-details";
 
 // ----- Types -----

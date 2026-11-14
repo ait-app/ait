@@ -1,6 +1,6 @@
 import React, { useEffect, useState, type ReactNode } from "react";
 import { Freeze } from "react-freeze";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 
 /**
  * Web only: suspends a hidden chat so its subscribers stop rendering while the

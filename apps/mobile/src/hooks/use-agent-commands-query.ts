@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/hooks/agent-commands-query";
+import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/data/agent-commands-query";
 
 const DRAFT_COMMANDS_STALE_TIME = Number.POSITIVE_INFINITY;
 const SESSION_COMMANDS_STALE_TIME = 60_000;

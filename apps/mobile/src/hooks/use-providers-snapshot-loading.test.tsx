@@ -37,7 +37,7 @@ vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => host.client,
   useHostRuntimeIsConnected: () => host.connected,
 }));
-vi.mock("@/components/retained-panel", () => ({
+vi.mock("@/hooks/use-retained-panel-active", () => ({
   useRetainedPanelActive: () => host.active,
 }));
 vi.mock("@/stores/session-store", () => ({ useSessionStore: () => true }));

@@ -7,7 +7,7 @@ import {
   hasActiveMessageSubmission,
   observeMessageSubmissionCanonical,
   rejectMessageSubmission,
-} from "./model";
+} from "./message-submission-model";
 
 describe("message submission transactions", () => {
   it("tracks every in-flight submission independently", () => {

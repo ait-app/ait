@@ -8,10 +8,7 @@ import {
   createProviderSnapshotCache,
   ProviderSnapshotCacheMissError,
 } from "./provider-snapshot-cache";
-import {
-  resolveProviderIconName,
-  replaceProviderSnapshotIcons,
-} from "@/components/provider-icon-name";
+import { resolveProviderIconName, replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
 import { describe, expect, it, vi } from "vitest";
 import {
   fetchProvidersSnapshot,

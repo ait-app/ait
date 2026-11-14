@@ -1,7 +1,7 @@
 import { Bot } from "lucide-react-native";
 import { SvgXml } from "react-native-svg";
 import { describe, expect, it } from "vitest";
-import { replaceProviderSnapshotIcons } from "./provider-icon-name";
+import { replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
 import { getProviderIcon, type ProviderIconComponent } from "./provider-icons";
 import { ACP_PROVIDER_ICON_SVGS } from "@/assets/acp-provider-icons";
 

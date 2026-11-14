@@ -27,7 +27,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MENU_ITEM_HEIGHT } from "@/components/ui/menu/menu-geometry";
 import { useToast } from "@/contexts/toast-context";
-import { openServiceUrl } from "@/utils/open-service-url";
+import { openServiceUrl } from "@/desktop/open-service-url";
 import {
   resolveWorkspaceScriptLink,
   type WorkspaceScriptLinkTarget,

@@ -17,7 +17,7 @@ import {
 } from "@tanstack/react-virtual";
 import { flushSync } from "react-dom";
 import { withUnistyles } from "react-native-unistyles";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { StreamItem } from "@/types/stream";

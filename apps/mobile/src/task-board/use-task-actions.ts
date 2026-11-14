@@ -2,7 +2,7 @@ import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { taskActions, type BoardTask } from "./model";
 
 /** Cards and details share capabilities and pending state for the same agent. */

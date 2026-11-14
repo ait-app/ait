@@ -8,8 +8,8 @@ import {
   type ProviderSnapshotCache,
 } from "./provider-snapshot-cache";
 import { queryClient as singletonQueryClient } from "./query-client";
-import { replaceProviderSnapshotIcons } from "@/components/provider-icon-name";
-import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
+import { replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
+import { agentCommandsQueryRoot } from "@/data/agent-commands-query";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import { normalizeWorkspacePath } from "@/utils/workspace-identity";
 

@@ -86,7 +86,7 @@ import {
 } from "@/types/host-connection";
 import { resolveAppVersion } from "@/utils/app-version";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { WindowChromeRegion, WindowChromeSafeArea } from "@/desktop/desktop-window";
 import {
   buildSettingsHostSectionRoute,
   buildSettingsSectionRoute,

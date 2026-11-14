@@ -3,7 +3,7 @@ import {
   resolveNavigateToAgent,
   type AgentNavTarget,
   type NavigateToAgentDeps,
-} from "@/utils/navigate-to-agent/resolve";
+} from "@/navigation/navigate-to-agent/resolve";
 import type { NavigateToWorkspaceInput } from "@/stores/navigation-active-workspace-store";
 
 const SERVER_ID = "server-1";

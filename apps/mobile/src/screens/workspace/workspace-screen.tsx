@@ -28,7 +28,7 @@ import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspac
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
-import { useNavigateToImportedAgent } from "@/hooks/use-import-session";
+import { useNavigateToImportedAgent } from "@/components/use-import-session";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useSettings } from "@/hooks/use-settings";
@@ -125,7 +125,7 @@ import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-works
 import { getOrCreateClientId } from "@/utils/client-id";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
-import { useHasWindowChromeObstruction } from "@/utils/desktop-window";
+import { useHasWindowChromeObstruction } from "@/desktop/desktop-window";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 import { RenderProfile } from "@/utils/render-profiler";

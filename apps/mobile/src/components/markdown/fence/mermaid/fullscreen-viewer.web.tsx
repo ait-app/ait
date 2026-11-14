@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ZoomableViewport } from "@/components/zoomable-viewport";
 import { SPACING } from "@/styles/theme";
-import { WindowChromeRootRegion } from "@/utils/desktop-window";
+import { WindowChromeRootRegion } from "@/desktop/desktop-window";
 import { MermaidIframeRuntime, type MermaidRenderedMessage } from "./iframe-runtime.web";
 import type { DiagramColorScheme } from "./render-model";
 import { useMermaidRenderModel } from "./use-render-model";

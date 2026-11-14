@@ -113,7 +113,7 @@ import {
 } from "@/runtime/host-runtime";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { RenderProfile } from "@/utils/render-profiler";
 import { focusWithRetries } from "@/utils/web-focus";

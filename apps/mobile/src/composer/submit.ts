@@ -1,4 +1,4 @@
-import { isDeliveredSendError } from "@/composer/submission/model";
+import { isDeliveredSendError } from "@/stores/message-submission-model";
 import { i18n } from "@/i18n/i18next";
 
 export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "delivered" | "failed";

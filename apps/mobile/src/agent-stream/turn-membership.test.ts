@@ -3,7 +3,7 @@ import type { StreamItem } from "@/types/stream";
 import { buildAgentStreamRenderModel } from "./model";
 import { layoutStream } from "./layout";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
-import { continuesTurn } from "./turn-membership";
+import { continuesTurn } from "@/types/turn-membership";
 
 function at(second: number): Date {
   return new Date(`2026-01-01T00:00:${second.toString().padStart(2, "0")}.000Z`);

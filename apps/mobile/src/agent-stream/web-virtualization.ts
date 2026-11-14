@@ -1,4 +1,4 @@
-import type { AssistantImageContext } from "@/utils/assistant-image-metadata";
+import type { AssistantImageContext } from "@/assistant-image/assistant-image-metadata";
 import type { StreamItem } from "@/types/stream";
 import { estimateAssistantMessageHeightFromCache } from "@/utils/assistant-message-height-estimate";
 import {

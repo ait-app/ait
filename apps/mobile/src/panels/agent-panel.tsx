@@ -11,7 +11,7 @@ import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-co
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { getProviderIcon } from "@/components/provider-icons";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { useToastHost, type ToastApi, type ToastState } from "@/components/toast-host";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
 } from "@/composer/pill-styles";
-import { getActiveMessageSubmissions } from "@/composer/submission/model";
+import { getActiveMessageSubmissions } from "@/stores/message-submission-model";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
@@ -76,7 +76,7 @@ import {
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import type { Theme } from "@/styles/theme";
 import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents";
-import { TimelineSyncStatus } from "@/timeline/sync-status";
+import { TimelineSyncStatus } from "@/components/timeline-sync-status";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";

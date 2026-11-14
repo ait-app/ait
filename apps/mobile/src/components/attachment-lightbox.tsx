@@ -9,7 +9,7 @@ import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { isNative, isWeb } from "@/constants/platform";
 import { SPACING } from "@/styles/theme";
-import { WindowChromeRootRegion } from "@/utils/desktop-window";
+import { WindowChromeRootRegion } from "@/desktop/desktop-window";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 import type { ViewportSize } from "@/components/zoomable-viewport/geometry";
 import { useGlobalWebOverlayLayer, useWebOverlayRegistration } from "@/lib/overlay-root";

@@ -1,4 +1,4 @@
-import { useToggleAgentList } from "@/hooks/use-toggle-agent-list";
+import { useToggleAgentList } from "@/components/use-toggle-agent-list";
 import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
@@ -106,12 +106,12 @@ import {
   WindowChromeProvider,
   WindowChromeRegion,
   WindowChromeSafeArea,
-} from "@/utils/desktop-window";
+} from "@/desktop/desktop-window";
 import {
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import {
   ensureOsNotificationPermission,

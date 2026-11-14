@@ -17,7 +17,7 @@ vi.mock("@/hooks/use-archive-agent", () => ({
   useArchiveAgent: () => ({ archiveAgent: vi.fn() }),
 }));
 vi.mock("@/stores/session-store", () => ({ useSessionStore: () => null }));
-vi.mock("@/utils/navigate-to-agent", () => ({ navigateToAgent: vi.fn() }));
+vi.mock("@/navigation/navigate-to-agent", () => ({ navigateToAgent: vi.fn() }));
 // jsdom has no layout, so the list renders its rows directly and the test reports its width.
 vi.mock("react-native", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-native")>();

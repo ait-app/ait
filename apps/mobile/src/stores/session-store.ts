@@ -20,7 +20,7 @@ import {
   rejectMessageSubmission,
   type MessageSubmissionRecord,
   type MessageSubmissionRejectionOutcome,
-} from "@/composer/submission/model";
+} from "@/stores/message-submission-model";
 import type { PendingPermission } from "@/types/shared";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { AgentLifecycleStatus } from "@ait/protocol/agent-lifecycle";

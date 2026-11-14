@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { prepareMarkdownSource } from "./source";
-import { resolveAssistantImageSource } from "@/utils/assistant-image-source";
+import { resolveAssistantImageSource } from "@/assistant-image/assistant-image-source";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveMarkdownFileDirectory, resolveMarkdownPreviewImageSource } from "./image-source";
 

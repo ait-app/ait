@@ -62,7 +62,7 @@ import {
   type ConnectionProbeState,
 } from "@/utils/connection-selection";
 import { normalizeHostPort } from "@/utils/daemon-endpoints";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { markStartupPhase } from "./startup-timeline";
 import {

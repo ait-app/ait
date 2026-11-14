@@ -15,7 +15,7 @@ import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pa
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SplitPane } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
-import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { WindowChromeRegion, WindowChromeSafeArea } from "@/desktop/desktop-window";
 
 interface ExplorerSidebarDockProps extends Pick<
   WorkspaceDesktopTabsRowProps,

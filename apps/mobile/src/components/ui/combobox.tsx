@@ -40,7 +40,7 @@ import {
   size as floatingSize,
   useFloating,
 } from "@floating-ui/react-native";
-import { getNextActiveIndex } from "./combobox-keyboard";
+import { getNextActiveIndex } from "@/utils/combobox-keyboard";
 import { filterAndRankComboboxOptions } from "./combobox-options";
 import type { ComboboxOptionModel } from "./combobox-options";
 import { isWeb } from "@/constants/platform";

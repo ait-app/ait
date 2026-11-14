@@ -10,7 +10,7 @@ import {
 } from "@/attachments/service";
 import { createAssistantImageAcquisitionCache } from "@/assistant-image/acquisition-cache";
 import { retainAttachmentForGarbageCollection } from "@/attachments/gc-retention";
-import { resolveAssistantImageSource } from "@/utils/assistant-image-source";
+import { resolveAssistantImageSource } from "@/assistant-image/assistant-image-source";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { resolveMarkdownPreviewImageSource } from "./image-source";
