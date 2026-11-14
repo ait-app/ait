@@ -1,10 +1,10 @@
 import { schedulePluralForms } from "./helpers";
-import { en } from "../../en";
+import { schedules as enSchedules } from "../../en/modules/schedules";
 import { scheduleTemplatePrompts } from "./schedule-template-prompts";
 
 export const schedules = {
   templates: {
-    ...en.schedules.templates,
+    ...enSchedules.templates,
     heading: "Planifica la próxima tarea de tu espacio de trabajo",
     description:
       "Elige un punto de partida, ajusta la tarea y el horario, y deja que Ait la ejecute.",
@@ -32,7 +32,7 @@ export const schedules = {
     apply: "Rellenar tarea",
     items: {
       "nightly-test-heal": {
-        ...en.schedules.templates.items["nightly-test-heal"],
+        ...enSchedules.templates.items["nightly-test-heal"],
         ...scheduleTemplatePrompts["nightly-test-heal"],
         cadence: "Diario · 02:00",
         name: "Ejecutar y reparar pruebas",
@@ -40,7 +40,7 @@ export const schedules = {
           "Comprueba las pruebas del espacio de trabajo, investiga los fallos y verifica una reparación concreta.",
       },
       "pr-gatekeeper": {
-        ...en.schedules.templates.items["pr-gatekeeper"],
+        ...enSchedules.templates.items["pr-gatekeeper"],
         ...scheduleTemplatePrompts["pr-gatekeeper"],
         cadence: "Días laborables · 10:00",
         name: "Revisión de riesgos de PR",
@@ -48,7 +48,7 @@ export const schedules = {
           "Revisa los pull requests activos para detectar defectos que puedan afectar a la combinación.",
       },
       "domain-radar": {
-        ...en.schedules.templates.items["domain-radar"],
+        ...enSchedules.templates.items["domain-radar"],
         ...scheduleTemplatePrompts["domain-radar"],
         cadence: "Días laborables · 09:00",
         name: "Informe del tema",
@@ -56,7 +56,7 @@ export const schedules = {
           "Lee las fuentes más recientes sobre tu tema y selecciona hasta cinco novedades relevantes.",
       },
       "weekly-work-draft": {
-        ...en.schedules.templates.items["weekly-work-draft"],
+        ...enSchedules.templates.items["weekly-work-draft"],
         ...scheduleTemplatePrompts["weekly-work-draft"],
         cadence: "Viernes · 16:00",
         name: "Resumen semanal del espacio",
@@ -64,7 +64,7 @@ export const schedules = {
           "Convierte los commits, PR y notas de la semana pasada en un informe revisable.",
       },
       "docs-freshness": {
-        ...en.schedules.templates.items["docs-freshness"],
+        ...enSchedules.templates.items["docs-freshness"],
         ...scheduleTemplatePrompts["docs-freshness"],
         cadence: "Mensual, día 1 · 10:00",
         name: "Revisión de documentación",

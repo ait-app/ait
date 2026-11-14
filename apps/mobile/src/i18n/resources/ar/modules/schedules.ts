@@ -1,11 +1,11 @@
 import { scheduleLimitPluralForms } from "./helpers";
 import { scheduleCadencePluralForms } from "./helpers";
-import { en } from "../../en";
+import { schedules as enSchedules } from "../../en/modules/schedules";
 import { scheduleTemplatePrompts } from "./schedule-template-prompts";
 
 export const schedules = {
   templates: {
-    ...en.schedules.templates,
+    ...enSchedules.templates,
     heading: "خطّط للمهمة التالية لمساحة عملك",
     description: "اختر نقطة بداية واضبط المهمة وتوقيتها ودع Ait ينفذها وفق الجدول.",
     blank: "البدء من الصفر",
@@ -32,28 +32,28 @@ export const schedules = {
     apply: "ملء المهمة",
     items: {
       "nightly-test-heal": {
-        ...en.schedules.templates.items["nightly-test-heal"],
+        ...enSchedules.templates.items["nightly-test-heal"],
         ...scheduleTemplatePrompts["nightly-test-heal"],
         cadence: "يوميًا · 02:00",
         name: "تشغيل الاختبارات وإصلاحها",
         description: "تحقق من اختبارات مساحة العمل، وابحث في الإخفاقات وتحقق من إصلاح مركز.",
       },
       "pr-gatekeeper": {
-        ...en.schedules.templates.items["pr-gatekeeper"],
+        ...enSchedules.templates.items["pr-gatekeeper"],
         ...scheduleTemplatePrompts["pr-gatekeeper"],
         cadence: "أيام العمل · 10:00",
         name: "مراجعة مخاطر PR",
         description: "راجع طلبات السحب النشطة بحثًا عن عيوب قد تؤثر في الدمج، مع دليل لكل نتيجة.",
       },
       "domain-radar": {
-        ...en.schedules.templates.items["domain-radar"],
+        ...enSchedules.templates.items["domain-radar"],
         ...scheduleTemplatePrompts["domain-radar"],
         cadence: "أيام العمل · 09:00",
         name: "إحاطة بالموضوع",
         description: "اقرأ أحدث المصادر حول موضوعك واختر حتى خمسة مستجدات تستحق انتباهك.",
       },
       "weekly-work-draft": {
-        ...en.schedules.templates.items["weekly-work-draft"],
+        ...enSchedules.templates.items["weekly-work-draft"],
         ...scheduleTemplatePrompts["weekly-work-draft"],
         cadence: "الجمعة · 16:00",
         name: "ملخص أسبوعي لمساحة العمل",
@@ -61,7 +61,7 @@ export const schedules = {
           "حوّل عمليات الالتزام وطلبات السحب والملاحظات في الأسبوع الماضي إلى ملخص قابل للمراجعة.",
       },
       "docs-freshness": {
-        ...en.schedules.templates.items["docs-freshness"],
+        ...enSchedules.templates.items["docs-freshness"],
         ...scheduleTemplatePrompts["docs-freshness"],
         cadence: "شهريًا في اليوم 1 · 10:00",
         name: "فحص الوثائق",

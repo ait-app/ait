@@ -2,15 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { i18n } from "./i18next";
-import { ar } from "./resources/ar";
-import { en } from "./resources/en";
-import { es } from "./resources/es";
-import { fr } from "./resources/fr";
-import { ja } from "./resources/ja";
-import { ko } from "./resources/ko";
-import { ptBR } from "./resources/pt-BR";
-import { ru } from "./resources/ru";
-import { zhCN } from "./resources/zh-CN";
+import { ar, en, es, fr, ja, ko, ptBR, ru, zhCN } from "./translation-resources";
 
 function flattenKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) {

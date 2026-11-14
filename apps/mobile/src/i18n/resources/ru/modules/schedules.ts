@@ -1,11 +1,11 @@
 import { scheduleLimitPluralForms } from "./helpers";
 import { scheduleCadencePluralForms } from "./helpers";
-import { en } from "../../en";
+import { schedules as enSchedules } from "../../en/modules/schedules";
 import { scheduleTemplatePrompts } from "./schedule-template-prompts";
 
 export const schedules = {
   templates: {
-    ...en.schedules.templates,
+    ...enSchedules.templates,
     heading: "План следующей задачи рабочего пространства",
     description: "Выберите начало, настройте задачу и время, а Ait выполнит её по расписанию.",
     blank: "Начать с нуля",
@@ -33,7 +33,7 @@ export const schedules = {
     apply: "Заполнить задачу",
     items: {
       "nightly-test-heal": {
-        ...en.schedules.templates.items["nightly-test-heal"],
+        ...enSchedules.templates.items["nightly-test-heal"],
         ...scheduleTemplatePrompts["nightly-test-heal"],
         cadence: "Ежедневно · 02:00",
         name: "Запуск и исправление тестов",
@@ -41,28 +41,28 @@ export const schedules = {
           "Проверьте тесты рабочего пространства, исследуйте сбои и подтвердите точечное исправление.",
       },
       "pr-gatekeeper": {
-        ...en.schedules.templates.items["pr-gatekeeper"],
+        ...enSchedules.templates.items["pr-gatekeeper"],
         ...scheduleTemplatePrompts["pr-gatekeeper"],
         cadence: "По будням · 10:00",
         name: "Проверка рисков PR",
         description: "Проверьте активные pull request на дефекты, способные повлиять на слияние.",
       },
       "domain-radar": {
-        ...en.schedules.templates.items["domain-radar"],
+        ...enSchedules.templates.items["domain-radar"],
         ...scheduleTemplatePrompts["domain-radar"],
         cadence: "По будням · 09:00",
         name: "Сводка по теме",
         description: "Изучите свежие источники по теме и выберите до пяти важных событий.",
       },
       "weekly-work-draft": {
-        ...en.schedules.templates.items["weekly-work-draft"],
+        ...enSchedules.templates.items["weekly-work-draft"],
         ...scheduleTemplatePrompts["weekly-work-draft"],
         cadence: "Пятница · 16:00",
         name: "Еженедельный итог рабочего пространства",
         description: "Соберите коммиты, PR и заметки недели в проверяемый отчёт о прогрессе.",
       },
       "docs-freshness": {
-        ...en.schedules.templates.items["docs-freshness"],
+        ...enSchedules.templates.items["docs-freshness"],
         ...scheduleTemplatePrompts["docs-freshness"],
         cadence: "1-е число месяца · 10:00",
         name: "Проверка документации",
