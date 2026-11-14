@@ -239,7 +239,12 @@ export const schedules = {
     noModes: "모드가 없습니다",
     noModelModes: "이 모델에서 사용할 수 있는 모드가 없습니다.",
     selectMode: "모드 선택",
-    archive: "실행이 끝날 때마다 생성된 에이전트 보관",
+    afterRun: "실행 종료 후",
+    keepSession: "워크스페이스에 세션 유지",
+    archiveSession: "세션 아카이브",
+    keepSessionHint:
+      "실행할 때마다 새 세션을 만들어 이 워크스페이스에 유지합니다. 일정이 종료된 후에도 결과를 확인하고 대화를 이어갈 수 있습니다.",
+    archiveSessionHint: "실행이 끝나면 새 세션을 아카이브합니다. 워크스페이스는 유지됩니다.",
     submitError: "일정을 저장할 수 없습니다: {{message}}",
     runningError: "작업이 실행 중입니다. 현재 실행이 끝난 후 수정해 주세요.",
   },

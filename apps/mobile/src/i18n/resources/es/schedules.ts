@@ -241,7 +241,13 @@ export const schedules = {
     noModes: "No se encontraron modos",
     noModelModes: "No hay modos disponibles para este modelo.",
     selectMode: "Seleccionar modo",
-    archive: "Archivar el agente creado después de cada ejecución",
+    afterRun: "Después de cada ejecución",
+    keepSession: "Conservar la sesión en el espacio de trabajo",
+    archiveSession: "Archivar la sesión",
+    keepSessionHint:
+      "Cada ejecución crea una sesión nueva que permanece en este espacio de trabajo para revisar los resultados y continuar la conversación, incluso cuando termine la programación.",
+    archiveSessionHint:
+      "La sesión nueva se archiva al finalizar la ejecución. El espacio de trabajo se conserva.",
     submitError: "No se pudo guardar la programación: {{message}}",
     runningError:
       "La tarea se está ejecutando. Espera a que termine la ejecución actual antes de modificarla.",

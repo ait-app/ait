@@ -163,7 +163,12 @@ export const schedules = {
     noModes: "未找到模式",
     noModelModes: "此模型没有可用的模式。",
     selectMode: "选择模式",
-    archive: "每次运行结束后归档新建 Agent",
+    afterRun: "运行结束后",
+    keepSession: "在工作区保留会话",
+    archiveSession: "归档会话",
+    keepSessionHint:
+      "每次运行都会新建会话并保留在当前工作区，方便查看结果、继续对话；定时任务结束后也会保留。",
+    archiveSessionHint: "本次运行结束后自动归档新建会话，工作区仍会保留。",
     submitError: "无法保存计划：{{message}}",
     runningError: "计划正在运行，请等待本次运行结束后再修改。",
   },
