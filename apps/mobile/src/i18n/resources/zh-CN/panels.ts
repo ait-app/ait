@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "暂不支持预览",
     binaryPreviewDescription: "Ait 暂不支持预览此文件类型。",
     tooLargeToDisplay: "此文件过大，无法显示",
-    failedToLoad: "加载文件失败",
     failedToLoadPreview: "加载文件预览失败",
     editor: {
       fileSize: "文件大小 {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "文件",
     subtitle: "工作区文件",
     tooltip: "浏览工作区文件",
-    chooseFile: "选择文件",
   },
   pullRequest: {
     label: "拉取请求",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "差异",
     changesSubtitle: "工作区差异",
     commitSubtitle: "提交差异",
-    uncommittedSubtitle: "未提交的更改",
-    baseSubtitle: "与 {{baseRef}} 比较",
     directoryMissing: "未找到工作区目录。",
     empty: "没有更改",
     loadError: "加载差异失败",

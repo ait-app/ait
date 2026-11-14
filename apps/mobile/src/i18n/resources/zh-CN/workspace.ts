@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "工作区脚本",
     copyPath: "复制路径",
     copyBranchName: "复制分支名称",
-    copied: "已复制",
   },
   fileActions: {
     openFile: "打开文件",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "在 {{target}} 中显示",
     download: "下载",
     addToChat: "添加到聊天",
-    moreActions: "更多操作",
     newFile: "新建文件",
     newFolder: "新建文件夹",
     collapseFolder: "折叠文件夹",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "名称",
       modified: "修改时间",
       size: "大小",
-    },
-    context: {
-      size: "大小",
-      modified: "修改时间",
     },
     actions: {
       back: "返回",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "正在加载...",
     modified: "未保存的更改",
-    loadingAgentTitle: "正在加载 Agent 标题",
     fallback: {
       newAgent: "新建 Agent",
       setup: "初始化",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "关闭左侧标签",
       closeRight: "关闭右侧标签",
       closeOthers: "关闭其他标签",
-      moveToMain: "移至主面板",
       reloadAgent: "重新加载 Agent",
       reloadAgentTooltip: "重新加载 Agent 以更新技能、MCP 或登录状态。",
       close: "关闭",
@@ -217,12 +209,9 @@ export const workspace = {
       newTab: "新建标签页",
       newAgent: "新建 Agent",
       newTerminal: "新建终端",
-      preparingTerminal: "正在准备终端标签",
-      preparingTerminalTooltip: "正在准备终端...",
       newBrowser: "新建浏览器",
       maximizePane: "最大化窗格",
       restorePane: "还原窗格",
-      closePane: "关闭窗格",
       exitFocusMode: "退出专注模式",
       splitRight: "向右拆分窗格",
       splitDown: "向下拆分窗格",
@@ -433,11 +422,6 @@ export const workspace = {
         mergeNoBase: "无法合并，因为无法确定基准分支",
         mergeDirty: "有本地变更时无法合并，请先提交或贮藏",
         mergeNothing: "无法合并，因为此分支没有可合并的新内容",
-        updateNoBase: "无法更新，因为无法确定基准分支",
-        updateDirty: "有本地变更时无法更新，请先提交或贮藏",
-        updateCurrent: "无法更新，因为此分支已与 {{baseRef}} 保持最新",
-        mergePrNoGithub: "当前无法合并 PR，因为 GitHub 未连接",
-        archiveNotWorktree: "此处无法归档，因为此工作区不是作为 Ait 工作树创建的",
         mergePrNoForge: "当前无法合并 {{noun}}，因为 {{brand}} 未连接",
         mergePrMissing: "无法合并 PR，因为还没有拉取请求",
         mergePrDraft: "无法合并 PR，因为拉取请求仍是草稿",
@@ -478,7 +462,6 @@ export const workspace = {
     diff: {
       openChangesTab: "打开“更改”标签页",
       openDiffTab: "打开差异标签页",
-      closeChangesTab: "关闭“更改”标签页",
       jumpToFile: {
         title: "跳转到文件",
       },
@@ -486,7 +469,6 @@ export const workspace = {
       tooLarge: "差异过大，无法显示",
       previewTooLargeTitle: "此差异过大，无法预览",
       previewTooLargeDescription: "缩小比较范围即可在此预览",
-      unified: "统一差异视图",
       split: "并排差异视图",
       switchToUnified: "切换到统一差异视图",
       switchToSplit: "切换到并排差异视图",
@@ -496,8 +478,6 @@ export const workspace = {
       showWhitespace: "显示空白差异",
       scrollLongLines: "滚动长行",
       wrapLongLines: "自动换行长行",
-      collapseAllFolders: "折叠所有文件夹",
-      expandAllFolders: "展开所有文件夹",
       collapseAllFiles: "折叠所有文件",
       expandAllFiles: "展开所有文件",
       refreshing: "正在刷新",
@@ -520,11 +500,8 @@ export const workspace = {
         title: "提交",
         countLabel: "{{count}} 个工作区提交",
         noneAhead: "尚无领先于 {{baseRef}} 的提交",
-        fileDiffEmpty: "没有可显示的更改",
-        fileDiffError: "加载文件差异失败",
         loading: "正在加载提交…",
         loadError: "加载提交失败",
-        empty: "暂无提交",
       },
     },
     openInEditor: {
@@ -550,7 +527,6 @@ export const workspace = {
       sections: {
         checks: "检查",
         pipeline: "流水线",
-        reviews: "审查",
       },
       empty: {
         noJobs: "无作业",
@@ -562,31 +538,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "拉取请求 #{{number}}",
         pullRequest_mr: "合并请求 !{{number}}",
-        checkStatus: {
-          passed: "成功",
-          failed: "失败",
-          warning: "警告",
-          actionRequired: "需要操作",
-          manual: "手动",
-          pending: "等待中",
-          skipped: "已跳过",
-          cancelled: "已取消",
-        },
       },
       states: {
-        draft: "草稿",
         merged: "已合并",
         closed: "已关闭",
-        open: "已打开",
-      },
-      activity: {
-        commented: "已评论",
-        approved: "已批准",
-        requestedChanges: "请求修改",
-        reviewed: "已审查",
-      },
-      time: {
-        justNow: "刚刚",
       },
       thread: {
         discussion: "讨论主题",

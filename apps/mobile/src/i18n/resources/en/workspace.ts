@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "Workspace scripts",
     copyPath: "Copy path",
     copyBranchName: "Copy branch name",
-    copied: "Copied",
   },
   fileActions: {
     openFile: "Open file",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "Reveal in {{target}}",
     download: "Download",
     addToChat: "Add to chat",
-    moreActions: "More actions",
     newFile: "New file",
     newFolder: "New folder",
     collapseFolder: "Collapse folder",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "Name",
       modified: "Modified",
       size: "Size",
-    },
-    context: {
-      size: "Size",
-      modified: "Modified",
     },
     actions: {
       back: "Back",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "Loading...",
     modified: "Unsaved changes",
-    loadingAgentTitle: "Loading agent title",
     fallback: {
       newAgent: "New agent",
       setup: "Setup",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "Close to the left",
       closeRight: "Close to the right",
       closeOthers: "Close other tabs",
-      moveToMain: "Move to main panel",
       reloadAgent: "Reload agent",
       reloadAgentTooltip: "Reload agent to update skills, MCPs or login status.",
       close: "Close",
@@ -217,12 +209,9 @@ export const workspace = {
       newTab: "New tab",
       newAgent: "New agent",
       newTerminal: "New terminal",
-      preparingTerminal: "Preparing terminal tab",
-      preparingTerminalTooltip: "Preparing terminal...",
       newBrowser: "New browser",
       maximizePane: "Maximize pane",
       restorePane: "Restore pane",
-      closePane: "Close pane",
       exitFocusMode: "Exit focus mode",
       splitRight: "Split pane right",
       splitDown: "Split pane down",
@@ -447,14 +436,6 @@ export const workspace = {
           "Merge isn't available while you have local changes so commit or stash them first",
         mergeNothing:
           "Merge isn't available because this branch doesn't have anything new to merge yet",
-        updateNoBase: "Update isn't available because we couldn't determine the base branch",
-        updateDirty:
-          "Update isn't available while you have local changes so commit or stash them first",
-        updateCurrent:
-          "Update isn't available because this branch is already up to date with {{baseRef}}",
-        mergePrNoGithub: "Merge PR isn't available right now because GitHub isn't connected",
-        archiveNotWorktree:
-          "Archive isn't available here because this workspace was not created as a Ait worktree",
         mergePrNoForge:
           "Merge {{noun}} isn't available right now because {{brand}} isn't connected",
         mergePrMissing: "Merge PR isn't available because there isn't a pull request yet",
@@ -497,7 +478,6 @@ export const workspace = {
     diff: {
       openChangesTab: "Open Changes tab",
       openDiffTab: "Open Diff tab",
-      closeChangesTab: "Close Changes tab",
       jumpToFile: {
         title: "Jump to file",
       },
@@ -505,7 +485,6 @@ export const workspace = {
       tooLarge: "Diff too large to display",
       previewTooLargeTitle: "This diff is too large to preview",
       previewTooLargeDescription: "Narrow the comparison to preview it here",
-      unified: "Unified diff",
       split: "Side-by-side diff",
       switchToUnified: "Switch to unified diff",
       switchToSplit: "Switch to side-by-side diff",
@@ -515,8 +494,6 @@ export const workspace = {
       showWhitespace: "Show whitespace",
       scrollLongLines: "Scroll long lines",
       wrapLongLines: "Wrap long lines",
-      collapseAllFolders: "Collapse all folders",
-      expandAllFolders: "Expand all folders",
       collapseAllFiles: "Collapse all files",
       expandAllFiles: "Expand all files",
       refreshing: "Refreshing",
@@ -539,11 +516,8 @@ export const workspace = {
         title: "Commits",
         countLabel: "{{count}} workspace commits",
         noneAhead: "No commits ahead of {{baseRef}} yet",
-        fileDiffEmpty: "No changes to display",
-        fileDiffError: "Failed to load file diff",
         loading: "Loading commits…",
         loadError: "Failed to load commits",
-        empty: "No commits yet",
       },
     },
     openInEditor: {
@@ -569,7 +543,6 @@ export const workspace = {
       sections: {
         checks: "Checks",
         pipeline: "Pipeline",
-        reviews: "Reviews",
       },
       empty: {
         noJobs: "No jobs",
@@ -581,31 +554,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "Pull request #{{number}}",
         pullRequest_mr: "Merge request !{{number}}",
-        checkStatus: {
-          passed: "Passed",
-          failed: "Failed",
-          warning: "Warning",
-          actionRequired: "Action required",
-          manual: "Manual",
-          pending: "Pending",
-          skipped: "Skipped",
-          cancelled: "Cancelled",
-        },
       },
       states: {
-        draft: "Draft",
         merged: "Merged",
         closed: "Closed",
-        open: "Open",
-      },
-      activity: {
-        commented: "Commented",
-        approved: "Approved",
-        requestedChanges: "Requested changes",
-        reviewed: "Reviewed",
-      },
-      time: {
-        justNow: "just now",
       },
       thread: {
         discussion: "Discussion thread",

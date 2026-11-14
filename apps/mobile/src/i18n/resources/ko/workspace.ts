@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "워크스페이스 스크립트",
     copyPath: "경로 복사",
     copyBranchName: "브랜치 이름 복사",
-    copied: "복사됨",
   },
   fileActions: {
     openFile: "파일 열기",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "{{target}}에서 보기",
     download: "다운로드",
     addToChat: "채팅에 추가",
-    moreActions: "추가 작업",
     newFile: "새 파일",
     newFolder: "새 폴더",
     collapseFolder: "폴더 접기",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "이름",
       modified: "수정일",
       size: "크기",
-    },
-    context: {
-      size: "크기",
-      modified: "수정일",
     },
     actions: {
       back: "뒤로",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "불러오는 중...",
     modified: "저장되지 않은 변경사항",
-    loadingAgentTitle: "에이전트 제목 불러오는 중",
     fallback: {
       newAgent: "새 에이전트",
       setup: "설정",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "왼쪽 탭 닫기",
       closeRight: "오른쪽 탭 닫기",
       closeOthers: "다른 탭 닫기",
-      moveToMain: "기본 패널로 이동",
       reloadAgent: "에이전트 다시 로드",
       reloadAgentTooltip: "스킬, MCP 또는 로그인 상태를 업데이트하려면 에이전트를 다시 로드하세요.",
       close: "닫기",
@@ -217,12 +209,9 @@ export const workspace = {
       newTab: "새 탭",
       newAgent: "새 에이전트",
       newTerminal: "새 터미널",
-      preparingTerminal: "터미널 탭 준비 중",
-      preparingTerminalTooltip: "터미널 준비 중...",
       newBrowser: "새 브라우저",
       maximizePane: "창 최대화",
       restorePane: "창 복원",
-      closePane: "창 닫기",
       exitFocusMode: "집중 모드 종료",
       splitRight: "창을 오른쪽으로 분할",
       splitDown: "창을 아래로 분할",
@@ -439,14 +428,6 @@ export const workspace = {
         mergeNoBase: "기준 브랜치를 확인할 수 없어 병합을 사용할 수 없습니다",
         mergeDirty: "로컬 변경 사항이 있어 병합을 사용할 수 없습니다. 먼저 커밋하거나 스태시하세요",
         mergeNothing: "이 브랜치에 아직 병합할 새 항목이 없어 병합을 사용할 수 없습니다",
-        updateNoBase: "기준 브랜치를 확인할 수 없어 업데이트를 사용할 수 없습니다",
-        updateDirty:
-          "로컬 변경 사항이 있어 업데이트를 사용할 수 없습니다. 먼저 커밋하거나 스태시하세요",
-        updateCurrent:
-          "이 브랜치가 이미 {{baseRef}}와 최신 상태이므로 업데이트를 사용할 수 없습니다",
-        mergePrNoGithub: "GitHub가 연결되어 있지 않아 지금은 PR 병합을 사용할 수 없습니다",
-        archiveNotWorktree:
-          "이 워크스페이스가 Ait 워크트리로 생성되지 않아 여기서 보관을 사용할 수 없습니다",
         mergePrNoForge:
           "{{brand}}가 연결되어 있지 않기 때문에 지금은 {{noun}} 병합을 사용할 수 없습니다.",
         mergePrMissing: "아직 풀 리퀘스트가 없어 PR 병합을 사용할 수 없습니다",
@@ -489,7 +470,6 @@ export const workspace = {
     diff: {
       openChangesTab: "변경사항 탭 열기",
       openDiffTab: "Diff 탭 열기",
-      closeChangesTab: "변경사항 탭 닫기",
       jumpToFile: {
         title: "파일로 이동",
       },
@@ -497,7 +477,6 @@ export const workspace = {
       tooLarge: "표시하기에 diff가 너무 큽니다",
       previewTooLargeTitle: "Diff가 너무 커서 미리 볼 수 없습니다",
       previewTooLargeDescription: "여기에서 미리 보려면 비교 범위를 좁히세요.",
-      unified: "통합 diff",
       split: "나란히 보기 diff",
       switchToUnified: "통합 diff로 전환",
       switchToSplit: "나란히 보기 diff로 전환",
@@ -507,8 +486,6 @@ export const workspace = {
       showWhitespace: "공백 표시",
       scrollLongLines: "긴 줄 스크롤",
       wrapLongLines: "긴 줄 줄바꿈",
-      collapseAllFolders: "모든 폴더 축소",
-      expandAllFolders: "모든 폴더 확장",
       collapseAllFiles: "모든 파일 축소",
       expandAllFiles: "모든 파일 확장",
       refreshing: "새로고침 중",
@@ -531,11 +508,8 @@ export const workspace = {
         title: "커밋",
         countLabel: "워크스페이스 커밋 {{count}}개",
         noneAhead: "아직 {{baseRef}}보다 앞서 커밋이 없습니다.",
-        fileDiffEmpty: "표시할 변경사항이 없습니다.",
-        fileDiffError: "파일 diff를 불러오지 못했습니다.",
         loading: "커밋 로드 중…",
         loadError: "커밋을 로드하지 못했습니다.",
-        empty: "아직 커밋이 없습니다.",
       },
     },
     openInEditor: {
@@ -561,7 +535,6 @@ export const workspace = {
       sections: {
         checks: "검사",
         pipeline: "파이프라인",
-        reviews: "리뷰",
       },
       empty: {
         noJobs: "작업 없음",
@@ -573,31 +546,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "풀 리퀘스트 #{{number}}",
         pullRequest_mr: "병합 요청 !{{number}}",
-        checkStatus: {
-          passed: "통과",
-          failed: "실패",
-          warning: "경고",
-          actionRequired: "조치 필요",
-          manual: "수동",
-          pending: "대기 중",
-          skipped: "건너뜀",
-          cancelled: "취소됨",
-        },
       },
       states: {
-        draft: "초안",
         merged: "병합됨",
         closed: "닫힘",
-        open: "열림",
-      },
-      activity: {
-        commented: "댓글 작성됨",
-        approved: "승인됨",
-        requestedChanges: "변경 요청됨",
-        reviewed: "리뷰됨",
-      },
-      time: {
-        justNow: "방금",
       },
       thread: {
         discussion: "토론 스레드",

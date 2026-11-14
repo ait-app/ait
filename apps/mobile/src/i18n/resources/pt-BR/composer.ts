@@ -44,7 +44,6 @@ export const composer = {
     addFile: "Enviar arquivo",
     addIssueOrPr: "Adicionar issue ou PR",
     addIssueOrPr_mr: "Adicionar issue ou MR",
-    dropImagesHere: "Solte imagens aqui",
     dropFilesHere: "Solte arquivos aqui",
     editQueuedMessage: "Editar mensagem na fila",
     sendQueuedMessageNow: "Enviar mensagem da fila agora",

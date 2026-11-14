@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "설정",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "레이아웃",
     editor: "편집기",
     shortcuts: "단축키",
-    integrations: "통합",
     notifications: "알림",
     permissions: "권한",
     diagnostics: "진단",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "프로바이더",
     usage: "사용량",
     terminals: "터미널",
-    plugins: "플러그인",
     host: "개요",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "메타데이터 생성",
     description:
@@ -308,7 +304,6 @@ export const settings = {
     help: {
       openProject: "프로젝트 열기",
       newWorkspace: "새 워크스페이스",
-      newWorktree: "새 워크트리",
       archiveWorkspace: "워크스페이스 보관",
       newTab: "새 탭",
       closeCurrentTab: "현재 탭 닫기",
@@ -344,29 +339,10 @@ export const settings = {
       toggleVoiceMode: "음성 모드 토글",
       startStopDictation: "받아쓰기 시작/중지",
       interruptAgent: "에이전트 중단",
-      sendMessage: "메시지 보내기",
-      queueMessage: "메시지 대기열에 추가",
       muteUnmuteVoiceMode: "음성 모드 음소거/해제",
-      switchProject: "프로젝트 전환",
     },
     helpNotes: {
       showKeyboardShortcuts: "포커스가 텍스트 필드나 터미널에 있지 않을 때 사용할 수 있습니다.",
-    },
-  },
-  integrations: {
-    title: "통합",
-    docs: {
-      cli: "CLI 문서",
-      openCli: "CLI 문서 열기",
-    },
-    commandLine: {
-      title: "명령줄",
-      description: "터미널에서 에이전트를 제어하고 스크립팅합니다",
-    },
-    actions: {
-      install: "설치",
-      installing: "설치 중...",
-      installed: "설치됨",
     },
   },
   permissions: {
@@ -432,14 +408,7 @@ export const settings = {
       removeErrorMessage: "연결을 제거할 수 없습니다",
       timeout: "시간 초과",
     },
-    pairDevices: {
-      title: "기기 페어링",
-      rowTitle: "기기 페어링",
-      rowHint: "QR 코드를 스캔하거나 링크를 복사하여 휴대폰을 이 호스트에 연결하세요",
-    },
     skills: {
-      docs: "스킬",
-      openDocs: "스킬 문서 열기",
       unavailable: "오케스트레이션 스킬을 관리하려면 이 호스트에 연결하세요",
       unsupported: "오케스트레이션 스킬을 관리하려면 이 호스트를 업데이트하세요",
       sectionTitle: "오케스트레이션 스킬",
@@ -474,7 +443,6 @@ export const settings = {
         uninstall: "제거",
         save: "저장",
         saving: "저장 중...",
-        cancel: "취소",
       },
       operations: {
         add: "스킬 추가",
@@ -483,8 +451,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "오케스트레이션",
-      unavailable: "오케스트레이션을 관리하려면 이 호스트에 연결하세요",
       enableTools: {
         title: "Ait 도구 활성화",
         hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
@@ -566,7 +532,6 @@ export const settings = {
       nameLabel: "이름",
       namePlaceholder: "UI 작업",
       iconLabel: "아이콘",
-      noIcon: "없음",
       providerLabel: "프로바이더",
       providerPlaceholder: "프로바이더 선택",
       noProviders: "이 호스트에서 사용 가능한 프로바이더가 없습니다",
@@ -607,9 +572,6 @@ export const settings = {
         confirmDesktopMessage:
           "저장된 설정으로 내장 데몬을 다시 시작할까요? 실행 중인 작업과 터미널 세션이 중단됩니다.",
         restarting: "재시작 중...",
-        unableToReconnectTitle: "다시 연결할 수 없습니다",
-        unableToReconnectMessage:
-          "{{name}}이(가) 다시 온라인 상태가 되지 않았습니다. 재시작되었는지 확인하세요.",
         unavailableTitle: "호스트를 사용할 수 없습니다",
         unavailableMessage:
           "이 호스트는 연결되어 있지 않습니다. 재시작하기 전에 온라인 상태가 될 때까지 기다리세요.",
@@ -617,8 +579,6 @@ export const settings = {
         offlineMessage:
           "이 호스트는 오프라인입니다. Ait가 자동으로 다시 연결하므로 다시 온라인이 될 때까지 기다린 후 재시작하세요.",
         requestFailedTitle: "오류",
-        requestFailedMessage:
-          "재시작 요청을 보내지 못했습니다. Ait가 자동으로 다시 연결하므로 호스트가 온라인으로 표시되면 다시 시도하세요.",
         dialogFailedMessage: "재시작 확인 대화 상자를 열 수 없습니다.",
       },
       update: {
@@ -630,14 +590,10 @@ export const settings = {
         confirmTitle: "{{name}} 업데이트",
         confirmMessage:
           "그러면 데몬이 최신 버전으로 업데이트되고 다시 시작됩니다. 실행 중인 에이전트가 잠시 중단됩니다.",
-        updating: "업데이트 중...",
         phaseStarting: "업데이트 준비 중...",
         phaseDownloading: "패키지 다운로드 중...",
         phaseInstalling: "설치 중...",
         phaseComplete: "업데이트 완료, 다시 시작 중...",
-        unableToReconnectTitle: "다시 연결할 수 없습니다.",
-        unableToReconnectMessage:
-          "업데이트 후 {{name}}가 다시 온라인 상태로 돌아오지 않았습니다. 데몬이 다시 시작되었는지 확인하세요.",
         unavailableTitle: "호스트를 사용할 수 없습니다",
         unavailableMessage:
           "이 호스트는 연결되어 있지 않습니다. 업데이트하기 전에 온라인 상태가 될 때까지 기다리십시오.",
@@ -773,8 +729,6 @@ export const settings = {
     worktree: {
       title: "워크트리 수명 주기 훅",
       info: "이 프로젝트에서 워크트리가 생성되거나 정리될 때 실행되는 명령",
-      docs: "문서",
-      docsTooltip: "자세한 내용과 이 명령에 사용할 수 있는 환경 변수는 문서를 참조하세요",
       setup: "설정",
       setupAccessibility: "워크트리 설정 명령",
       uncommittedTitle: "ait.json 변경 사항을 커밋하세요",

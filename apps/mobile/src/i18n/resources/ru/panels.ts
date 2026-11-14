@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "Предварительный просмотр недоступен",
     binaryPreviewDescription: "Ait не поддерживает предварительный просмотр этого типа файлов.",
     tooLargeToDisplay: "Этот файл слишком велик для отображения",
-    failedToLoad: "Не удалось загрузить файл",
     failedToLoadPreview: "Не удалось загрузить предварительный просмотр файла.",
     editor: {
       fileSize: "Размер файла {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "Файлы",
     subtitle: "Файлы рабочего пространства",
     tooltip: "Просмотр файлов рабочего пространства",
-    chooseFile: "Выберите файл",
   },
   pullRequest: {
     label: "PR",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "Дифф",
     changesSubtitle: "Изменения в worktree",
     commitSubtitle: "Изменения в коммите",
-    uncommittedSubtitle: "Незафиксированные изменения",
-    baseSubtitle: "Сравнение с {{baseRef}}",
     directoryMissing: "Каталог рабочего пространства не найден.",
     empty: "Нет изменений",
     loadError: "Не удалось загрузить список изменений",

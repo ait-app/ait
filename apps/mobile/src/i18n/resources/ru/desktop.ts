@@ -179,10 +179,4 @@ export const desktop = {
       failed: "Не удалось отправить уведомление.",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "Не удалось проверить состояние установки CLI.",
-      installFailed: "Не удалось установить Ait CLI.",
-    },
-  },
 };

@@ -1,5 +1,4 @@
 export const paneFind = {
-  searchFailed: "无法搜索此聊天。请检查主机连接后重试。",
   searching: "搜索中…",
   loading: "加载中…",
   failed: "失败",

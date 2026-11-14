@@ -6,7 +6,6 @@ export const sidebar = {
       label: "Regroupement",
       project: "Projet",
       status: "Statut",
-      labels: "Libellés",
     },
     titleSource: {
       label: "Titre",
@@ -48,11 +47,6 @@ export const sidebar = {
   pinned: {
     title: "Épinglés",
   },
-  host: {
-    noHost: "Aucun hôte",
-    switchTitle: "Changer d'hôte",
-    searchPlaceholder: "Rechercher des hôtes...",
-  },
   actions: {
     addProject: "Ajouter un projet",
     newWorkspace: "Nouvel espace de travail",
@@ -66,7 +60,6 @@ export const sidebar = {
     diagnostics: "Lancer le diagnostic",
     shortcuts: "Raccourcis clavier",
     reportIssue: "Signaler un problème",
-    discord: "Discord",
     github: "Créer un ticket GitHub",
     whatsNew: "Nouveautés",
     appName: "Ait",
@@ -110,7 +103,6 @@ export const sidebar = {
     status: {
       serviceRunning: "Service {{name}} en cours",
       serviceUnhealthy: "Service {{name}} en échec",
-      creating: "Création...",
     },
     checks: {
       passed: "Réussis : {{count}}",
@@ -132,29 +124,17 @@ export const sidebar = {
       pin: "Épingler en haut",
       unpin: "Désépingler",
       archive: "Archive",
-      archiveWorkspace: "Archiver l’espace de travail",
-      hideFromSidebar: "Masquer de la barre latérale",
       archiving: "Archivage...",
-      hiding: "Dissimulation...",
-    },
-    confirmations: {
-      hideTitle: "Masquer l'espace de travail?",
-      hideMessage:
-        "Masquer «{{workspaceName}}» dans la barre latérale?\n\nLes fichiers sur le disque ne seront pas modifiés.",
-      hideConfirm: "Cacher",
-      cancel: "Annuler",
     },
     rename: {
       title: "Renommer l'espace de travail",
       submit: "Rebaptiser",
-      invalidBranchName: "Nom de succursale invalide",
     },
     toasts: {
       workspacePathUnavailable: "CheminWorkspacenon disponible",
       pathCopied: "Chemin copié",
       branchNameCopied: "Nom de la succursale copié",
       hostDisconnected: "Hostn'est pas connecté",
-      hideFailed: "Échec du masquage de l'espace de travail",
       archiveFailed: "Échec de l'archivage de l'espace de travail",
     },
   },

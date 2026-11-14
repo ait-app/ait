@@ -3,17 +3,13 @@ const sharedSharing = {
   incomingHostHint:
     "Hosts ativados e seus projetos e workspaces compartilhados aparecem nas suas listas.",
   showHostInHosts: "Mostrar {{host}} em Hosts",
-  sharedByMe: "Compartilhado por mim",
   sharedByMeCount: "Compartilhado por mim ({{count}})",
-  section: "Compartilhamento",
   action: "Compartilhar com grupos",
   manage: "Gerenciar",
   refresh: "Atualizar",
   stop: "Parar compartilhamento",
   active: "Ativo",
   loading: "Carregando recursos compartilhados…",
-  offline: "Este recurso compartilhado está offline.",
-  emptyResources: "Este recurso compartilhado não tem workspaces.",
   hostSection: "Compartilhamento",
   hostTitle: "Compartilhar este nó",
   hostHint: "Dê a um grupo acesso a todos os projetos e workspaces neste host.",
@@ -57,7 +53,5 @@ const sharedSharing = {
 export const sharing = {
   ...sharedSharing,
   title: "Compartilhados",
-  offline: "Este recurso compartilhado está offline.",
-  emptyResources: "Este recurso compartilhado não tem espaços de trabalho.",
   listError: "Não foi possível carregar os recursos compartilhados.",
 };

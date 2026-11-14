@@ -7,12 +7,6 @@ export const newWorkspace = {
     sandboxedWorktree: "サンドボックス化ワークツリー",
     label: "分離方法",
   },
-  fields: {
-    project: "プロジェクト",
-    base: "ベース",
-    baseNotApplicable: "該当なし",
-  },
-  titlePlaceholder: "タイトル（任意）",
   errors: {
     hostDisconnected: "ホストが接続されていません",
     createWorktreeFailed: "ワークツリーの作成に失敗しました",

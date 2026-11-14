@@ -1,6 +1,5 @@
 export const common = {
   back: "戻る",
-  loading: "読み込み中...",
   actions: {
     save: "保存",
     back: "戻る",
@@ -44,9 +43,6 @@ export const common = {
   connectionStatus: {
     online: "オンライン",
     connecting: "接続中",
-    offline: "オフライン",
-    error: "エラー",
-    idle: "アイドル",
   },
 
   bottomSheetBackdrop: "ボトムシートの背景",

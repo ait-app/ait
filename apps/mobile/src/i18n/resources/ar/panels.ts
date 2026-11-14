@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "المعاينة غير متاحة",
     binaryPreviewDescription: "لا يمكن معاينة هذا النوع من الملفات في Ait.",
     tooLargeToDisplay: "هذا الملف كبير جدًا بحيث لا يمكن عرضه",
-    failedToLoad: "فشل تحميل الملف",
     failedToLoadPreview: "فشل تحميل معاينة الملف",
     editor: {
       fileSize: "حجم الملف {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "الملفات",
     subtitle: "ملفات مساحة العمل",
     tooltip: "تصفح ملفات مساحة العمل",
-    chooseFile: "اختر ملفًا",
   },
   pullRequest: {
     label: "طلب السحب",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "الفرق",
     changesSubtitle: "فروقات شجرة العمل",
     commitSubtitle: "فروقات الالتزام",
-    uncommittedSubtitle: "تغييرات غير ملتزم بها",
-    baseSubtitle: "مقارنة مع {{baseRef}}",
     directoryMissing: "لم يتم العثور على دليل Workspace.",
     empty: "لا توجد تغييرات",
     loadError: "فشل تحميل الفروقات",

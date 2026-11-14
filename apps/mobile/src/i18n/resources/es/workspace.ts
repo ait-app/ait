@@ -24,7 +24,6 @@ export const workspace = {
     scriptsAccessibility: "GuionesWorkspace",
     copyPath: "Copiar ruta",
     copyBranchName: "Copiar nombre de rama",
-    copied: "Copiado",
   },
   fileActions: {
     openFile: "Abrir archivo",
@@ -35,7 +34,6 @@ export const workspace = {
     revealIn: "Mostrar en {{target}}",
     download: "Descargar",
     addToChat: "Añadir al chat",
-    moreActions: "Más acciones",
     newFile: "Nuevo archivo",
     newFolder: "Nueva carpeta",
     collapseFolder: "Contraer carpeta",
@@ -63,10 +61,6 @@ export const workspace = {
       name: "Nombre",
       modified: "Modificado",
       size: "Tamaño",
-    },
-    context: {
-      size: "Tamaño",
-      modified: "Modificado",
     },
     actions: {
       back: "Atrás",
@@ -178,7 +172,6 @@ export const workspace = {
   tabs: {
     loading: "Cargando...",
     modified: "Cambios sin guardar",
-    loadingAgentTitle: "Título del agente de carga",
     fallback: {
       newAgent: "Nuevo agente",
       setup: "Configuración",
@@ -204,7 +197,6 @@ export const workspace = {
       closeLeft: "Cerrar pestañas a la izquierda",
       closeRight: "Cerrar pestañas a la derecha",
       closeOthers: "Cerrar otras pestañas",
-      moveToMain: "Mover al panel principal",
       reloadAgent: "Recargar agente",
       reloadAgentTooltip:
         "Vuelva a cargar el agente para actualizar habilidades, MCP o estado de inicio de sesión.",
@@ -218,12 +210,9 @@ export const workspace = {
       newTab: "Nueva pestaña",
       newAgent: "Nuevo agente",
       newTerminal: "Nueva terminal",
-      preparingTerminal: "Preparando la pestaña del terminal",
-      preparingTerminalTooltip: "Preparando terminal...",
       newBrowser: "Nuevo navegador",
       maximizePane: "Maximizar panel",
       restorePane: "Restaurar panel",
-      closePane: "Cerrar panel",
       exitFocusMode: "Salir del modo de concentración",
       splitRight: "Panel dividido a la derecha",
       splitDown: "Dividir panel hacia abajo",
@@ -452,16 +441,6 @@ export const workspace = {
           "La combinación no está disponible mientras tenga cambios locales, así que confírmelos o guárdelos primero",
         mergeNothing:
           "La combinación no está disponible porque esta rama aún no tiene nada nuevo que fusionar",
-        updateNoBase:
-          "La actualización no está disponible porque no pudimos determinar la rama base",
-        updateDirty:
-          "La actualización no está disponible mientras tenga cambios locales, así que confírmelos o guárdelos primero",
-        updateCurrent:
-          "La actualización no está disponible porque esta rama ya está actualizada con{{baseRef}}",
-        mergePrNoGithub:
-          "FusionarPRno está disponible en este momento porqueGitHubno está conectado",
-        archiveNotWorktree:
-          "El archivo no está disponible aquí porque este espacio de trabajo no se creó como un árbol de trabajo Ait",
         mergePrNoForge:
           "Fusionar {{noun}} no está disponible en este momento porque {{brand}} no está conectado",
         mergePrMissing:
@@ -511,7 +490,6 @@ export const workspace = {
     diff: {
       openChangesTab: "Abrir la pestaña Cambios",
       openDiffTab: "Abrir la pestaña Diferencia",
-      closeChangesTab: "Cerrar la pestaña Cambios",
       jumpToFile: {
         title: "Ir al archivo",
       },
@@ -519,7 +497,6 @@ export const workspace = {
       tooLarge: "La diferencia es demasiado grande para mostrarse",
       previewTooLargeTitle: "Este diff es demasiado grande para previsualizarlo",
       previewTooLargeDescription: "Reduce la comparación para previsualizarla aquí",
-      unified: "Diferencia unificada",
       split: "Diferencia de lado a lado",
       switchToUnified: "Cambiar a diferencia unificada",
       switchToSplit: "Cambiar a diferencia lado a lado",
@@ -529,8 +506,6 @@ export const workspace = {
       showWhitespace: "Mostrar espacios en blanco",
       scrollLongLines: "Desplazarse por largas filas",
       wrapLongLines: "Envolver largas filas",
-      collapseAllFolders: "Contraer todas las carpetas",
-      expandAllFolders: "Expandir todas las carpetas",
       collapseAllFiles: "Contraer todos los archivos",
       expandAllFiles: "Expandir todos los archivos",
       refreshing: "Refrescante",
@@ -553,11 +528,8 @@ export const workspace = {
         title: "Commits",
         countLabel: "{{count}} commits del espacio de trabajo",
         noneAhead: "Aún no hay commits por delante de {{baseRef}}",
-        fileDiffEmpty: "No hay cambios para mostrar",
-        fileDiffError: "Error al cargar el diff del archivo",
         loading: "Cargando commits…",
         loadError: "Error al cargar los commits",
-        empty: "Aún no hay commits",
       },
     },
     openInEditor: {
@@ -583,7 +555,6 @@ export const workspace = {
       sections: {
         checks: "cheques",
         pipeline: "Pipeline",
-        reviews: "Reseñas",
       },
       empty: {
         noJobs: "Sin trabajos",
@@ -595,31 +566,10 @@ export const workspace = {
       accessibility: {
         pullRequest: "Solicitud de extracción n.°{{number}}",
         pullRequest_mr: "Solicitud de fusión !{{number}}",
-        checkStatus: {
-          passed: "Superado",
-          failed: "Fallido",
-          warning: "Advertencia",
-          actionRequired: "Acción requerida",
-          manual: "Manual",
-          pending: "Pendiente",
-          skipped: "Omitido",
-          cancelled: "Cancelado",
-        },
       },
       states: {
-        draft: "Borrador",
         merged: "Fusionado",
         closed: "Cerrado",
-        open: "Abierto",
-      },
-      activity: {
-        commented: "Comentado",
-        approved: "Aprobado",
-        requestedChanges: "Cambios solicitados",
-        reviewed: "Revisado",
-      },
-      time: {
-        justNow: "En este momento",
       },
       thread: {
         discussion: "Hilo de discusión",

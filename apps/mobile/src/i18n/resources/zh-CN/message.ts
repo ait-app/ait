@@ -44,11 +44,7 @@ export const message = {
   speak: {
     header: "已朗读",
   },
-  activity: {
-    details: "详情",
-  },
   dictation: {
-    start: "开始语音听写",
     cancel: "取消听写",
     retry: "重试听写",
     insert: "插入转写",

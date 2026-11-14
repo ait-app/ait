@@ -1,13 +1,7 @@
 export const agentControls = {
-  provider: {
-    fallback: "مزود",
-    select: "حدد مزود الوكيل",
-  },
   thinking: {
     title: "التفكير",
     unknown: "مجهول",
-    extraHigh: "ارتفاع إضافي",
-    select: "حدد خيار التفكير",
     selectWithValue: "حدد خيار التفكير ({{value}})",
   },
   speed: {

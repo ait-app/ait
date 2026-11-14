@@ -180,10 +180,4 @@ export const desktop = {
       failed: "No se pudo enviar la notificación.",
     },
   },
-  integrations: {
-    cli: {
-      statusFailed: "No se puede verificar el estado de instalación deCLI.",
-      installFailed: "No se puede instalar el Ait CLI.",
-    },
-  },
 };

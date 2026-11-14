@@ -44,11 +44,7 @@ export const message = {
   speak: {
     header: "読み上げ済み",
   },
-  activity: {
-    details: "詳細",
-  },
   dictation: {
-    start: "音声入力を開始",
     cancel: "音声入力をキャンセル",
     retry: "音声入力を再試行",
     insert: "文字起こしを挿入",

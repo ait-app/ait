@@ -1,12 +1,10 @@
 export const providerSelection = {
   defaultModel: "Padrão",
   selectModel: "Selecionar modelo",
-  loading: "Carregando...",
   error: "Erro",
   unavailable: "Indisponível",
   unknownError: "Erro desconhecido",
   readiness: {
-    initialPromptRequired: "O prompt inicial é obrigatório",
     noProviders: "Nenhum provedor disponível no host selecionado",
     modelDefaultsLoading: "Os modelos padrão ainda estão carregando",
     noModelAvailable: "Nenhum modelo disponível para o provedor selecionado",

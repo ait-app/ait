@@ -6,7 +6,6 @@ export const sidebar = {
       label: "Grouping",
       project: "Project",
       status: "Status",
-      labels: "Labels",
     },
     titleSource: {
       label: "Title",
@@ -47,11 +46,6 @@ export const sidebar = {
   pinned: {
     title: "Pinned",
   },
-  host: {
-    noHost: "No host",
-    switchTitle: "Switch host",
-    searchPlaceholder: "Search hosts...",
-  },
   actions: {
     addProject: "Add project",
     newWorkspace: "New workspace",
@@ -65,7 +59,6 @@ export const sidebar = {
     diagnostics: "Run diagnostics",
     shortcuts: "Keyboard shortcuts",
     reportIssue: "Report an issue",
-    discord: "Discord",
     github: "Create GitHub issue",
     whatsNew: "What's new",
     appName: "Ait",
@@ -109,7 +102,6 @@ export const sidebar = {
     status: {
       serviceRunning: "Service {{name}} running",
       serviceUnhealthy: "Service {{name}} unhealthy",
-      creating: "Creating...",
     },
     checks: {
       passed: "Passed: {{count}}",
@@ -131,29 +123,17 @@ export const sidebar = {
       pin: "Pin to top",
       unpin: "Unpin",
       archive: "Archive",
-      archiveWorkspace: "Archive workspace",
-      hideFromSidebar: "Hide from sidebar",
       archiving: "Archiving...",
-      hiding: "Hiding...",
-    },
-    confirmations: {
-      hideTitle: "Hide workspace?",
-      hideMessage:
-        'Hide "{{workspaceName}}" from the sidebar?\n\nFiles on disk will not be changed.',
-      hideConfirm: "Hide",
-      cancel: "Cancel",
     },
     rename: {
       title: "Rename workspace",
       submit: "Rename",
-      invalidBranchName: "Invalid branch name",
     },
     toasts: {
       workspacePathUnavailable: "Workspace path not available",
       pathCopied: "Path copied",
       branchNameCopied: "Branch name copied",
       hostDisconnected: "Host is not connected",
-      hideFailed: "Failed to hide workspace",
       archiveFailed: "Failed to archive workspace",
     },
   },

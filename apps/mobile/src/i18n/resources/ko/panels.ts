@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "미리보기를 사용할 수 없습니다",
     binaryPreviewDescription: "Ait에서는 이 파일 형식을 미리 볼 수 없습니다.",
     tooLargeToDisplay: "이 파일은 너무 커서 표시할 수 없습니다",
-    failedToLoad: "파일을 불러오지 못했습니다",
     failedToLoadPreview: "파일 미리보기를 불러오지 못했습니다",
     editor: {
       fileSize: "파일 크기 {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "파일",
     subtitle: "워크스페이스 파일",
     tooltip: "워크스페이스 파일 탐색",
-    chooseFile: "파일 선택",
   },
   pullRequest: {
     label: "풀 리퀘스트",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "Diff",
     changesSubtitle: "작업 트리 diff",
     commitSubtitle: "커밋 diff",
-    uncommittedSubtitle: "커밋되지 않은 변경 사항",
-    baseSubtitle: "{{baseRef}}와 비교",
     directoryMissing: "워크스페이스 디렉터리를 찾을 수 없습니다.",
     empty: "변경사항 없음",
     loadError: "Diff를 불러오지 못했습니다.",

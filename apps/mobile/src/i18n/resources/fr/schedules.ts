@@ -172,7 +172,6 @@ export const schedules = {
   untitledAgent: "Agent sans titre",
   product: {
     schedule: "Planification",
-    heartbeat: "Pulsation",
   },
   untitled: "{{product}} sans titre",
   status: {
@@ -234,7 +233,6 @@ export const schedules = {
     workspace: "Espace de travail",
     chooseHost: "Choisissez d’abord un hôte.",
     chooseProject: "Choisissez d’abord un projet.",
-    searchProjects: "Rechercher des projets...",
     model: "Modèle",
     thinking: "Raisonnement",
     selectThinking: "Sélectionner le raisonnement",
@@ -245,11 +243,6 @@ export const schedules = {
     noModelModes: "Aucun mode n’est disponible pour ce modèle.",
     selectMode: "Sélectionner un mode",
     archive: "Archiver l’agent créé après chaque exécution",
-    isolation: "Isolation",
-    local: "Local",
-    worktree: "Worktree",
-    selectIsolation: "Sélectionner l’isolation",
-    noIsolation: "Aucune option d’isolation trouvée",
     submitError: "Impossible d’enregistrer la planification : {{message}}",
     runningError:
       "Cette tâche est en cours d’exécution. Attendez la fin de l’exécution actuelle avant de la modifier.",

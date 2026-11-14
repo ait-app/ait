@@ -26,7 +26,6 @@ export const addProjectFlow = {
     githubDescription: "البحث عن المشاريع المتاحة لحساب GitHub الخاص بك",
   },
   progress: {
-    cloning: "جارٍ استنساخ المشروع…",
     creating: "جارٍ إنشاء المجلد…",
     adding: "جارٍ إضافة المشروع…",
     phases: {

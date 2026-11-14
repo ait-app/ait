@@ -44,7 +44,6 @@ export const composer = {
     addFile: "파일 업로드",
     addIssueOrPr: "이슈 또는 PR 추가",
     addIssueOrPr_mr: "이슈 또는 MR 추가",
-    dropImagesHere: "여기에 이미지를 끌어다 놓으세요",
     dropFilesHere: "여기에 파일을 끌어다 놓으세요",
     editQueuedMessage: "대기 중인 메시지 편집",
     sendQueuedMessageNow: "대기 중인 메시지 지금 보내기",

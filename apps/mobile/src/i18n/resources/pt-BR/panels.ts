@@ -13,7 +13,6 @@ export const panels = {
     binaryPreviewUnavailable: "Prévia indisponível",
     binaryPreviewDescription: "Este tipo de arquivo não pode ser visualizado no Ait.",
     tooLargeToDisplay: "Este arquivo é grande demais para exibir",
-    failedToLoad: "Falha ao carregar arquivo",
     failedToLoadPreview: "Falha ao carregar prévia do arquivo",
     editor: {
       fileSize: "Tamanho {{size}}",
@@ -41,7 +40,6 @@ export const panels = {
     label: "Arquivos",
     subtitle: "Arquivos do espaço de trabalho",
     tooltip: "Explorar arquivos do espaço de trabalho",
-    chooseFile: "Escolha um arquivo",
   },
   pullRequest: {
     label: "Pull request",
@@ -54,8 +52,6 @@ export const panels = {
     diffLabel: "Diff",
     changesSubtitle: "Diff da árvore de trabalho",
     commitSubtitle: "Diff do commit",
-    uncommittedSubtitle: "Alterações não commitadas",
-    baseSubtitle: "Comparado com {{baseRef}}",
     directoryMissing: "Diretório do workspace não encontrado.",
     empty: "Nenhuma alteração",
     loadError: "Falha ao carregar diff",

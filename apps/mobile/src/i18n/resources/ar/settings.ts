@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "إعدادات",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "التخطيط",
     editor: "المحرر",
     shortcuts: "الاختصارات",
-    integrations: "التكامل",
     notifications: "الإشعارات",
     permissions: "الأذونات",
     diagnostics: "التشخيص",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "مقدمي الخدمات",
     usage: "الاستخدام",
     terminals: "Terminals",
-    plugins: "Plugins",
     host: "نظرة عامة",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "إنشاء البيانات الوصفية",
     description:
@@ -309,7 +305,6 @@ export const settings = {
     help: {
       openProject: "مشروع مفتوح",
       newWorkspace: "مساحة عمل جديدة",
-      newWorktree: "شجرة عمل جديدة",
       archiveWorkspace: "أرشفة مساحة العمل",
       newTab: "علامة تبويب جديدة",
       closeCurrentTab: "إغلاق علامة التبويب الحالية",
@@ -345,29 +340,10 @@ export const settings = {
       toggleVoiceMode: "تبديل الوضع الصوتي",
       startStopDictation: "بدء إملاء /stop",
       interruptAgent: "عامل المقاطعة",
-      sendMessage: "أرسل رسالة",
-      queueMessage: "رسالة قائمة الانتظار",
       muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
-      switchProject: "تبديل المشروع",
     },
     helpNotes: {
       showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
-    },
-  },
-  integrations: {
-    title: "التكامل",
-    docs: {
-      cli: "مستندات CLI",
-      openCli: "افتح وثائق CLI",
-    },
-    commandLine: {
-      title: "سطر الأوامر",
-      description: "وكلاء التحكم والبرنامج النصي من المحطة الطرفية الخاصة بك",
-    },
-    actions: {
-      install: "ثَبَّتَ",
-      installing: "جارٍ التثبيت...",
-      installed: "تم التثبيت",
     },
   },
   permissions: {
@@ -433,14 +409,7 @@ export const settings = {
       removeErrorMessage: "غير قادر على إزالة الاتصال",
       timeout: "نفذ الوقت",
     },
-    pairDevices: {
-      title: "إقران الأجهزة",
-      rowTitle: "إقران جهاز",
-      rowHint: "امسح رمز QR ضوئيًا أو انسخ رابطًا لتوصيل هاتفك بهذا المضيف",
-    },
     skills: {
-      docs: "المهارات",
-      openDocs: "فتح وثائق المهارات",
       unavailable: "اتصل بهذا المضيف لإدارة مهارات التنسيق",
       unsupported: "حدّث هذا المضيف لإدارة مهارات التنسيق",
       sectionTitle: "مهارات التنسيق",
@@ -474,7 +443,6 @@ export const settings = {
         uninstall: "إلغاء التثبيت",
         save: "حفظ",
         saving: "جارٍ الحفظ...",
-        cancel: "يلغي",
       },
       operations: {
         add: "أضف مهارة",
@@ -483,8 +451,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "التنسيق",
-      unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
       enableTools: {
         title: "تمكين أدوات Ait",
         hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
@@ -565,7 +531,6 @@ export const settings = {
       nameLabel: "الاسم",
       namePlaceholder: "عمل الواجهة",
       iconLabel: "الأيقونة",
-      noIcon: "بلا",
       providerLabel: "المزود",
       providerPlaceholder: "اختر مزودًا",
       noProviders: "لا يوجد مزودون متاحون على هذا المضيف",
@@ -606,16 +571,12 @@ export const settings = {
         confirmDesktopMessage:
           "إعادة تشغيل الخدمة الخلفية المدمجة بالإعدادات المحفوظة؟ ستتم مقاطعة المهام والجلسات الطرفية قيد التشغيل.",
         restarting: "جارٍ إعادة التشغيل...",
-        unableToReconnectTitle: "غير قادر على إعادة الاتصال",
-        unableToReconnectMessage: "لم يعد{{name}}متصلاً بالإنترنت. يرجى التحقق من إعادة تشغيله.",
         unavailableTitle: "Host غير متوفر",
         unavailableMessage: "هذا المضيف غير متصل. انتظر حتى يصبح متصلاً بالإنترنت قبل إعادة التشغيل.",
         offlineTitle: "Host غير متصل",
         offlineMessage:
           "هذا المضيف غير متصل.  يقوم Ait بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
         requestFailedTitle: "خطأ",
-        requestFailedMessage:
-          "فشل في إرسال طلب إعادة التشغيل.  يقوم Ait بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
         dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
       },
       update: {
@@ -626,14 +587,10 @@ export const settings = {
         confirmTitle: "Update {{name}}",
         confirmMessage:
           "This will update the daemon to the latest version and restart it. Running agents will be briefly interrupted.",
-        updating: "Updating...",
         phaseStarting: "Preparing update...",
         phaseDownloading: "Downloading packages...",
         phaseInstalling: "Installing...",
         phaseComplete: "Update complete, restarting...",
-        unableToReconnectTitle: "Unable to reconnect",
-        unableToReconnectMessage:
-          "{{name}} did not come back online after updating. Please verify the daemon restarted.",
         unavailableTitle: "Host unavailable",
         unavailableMessage:
           "This host is not connected. Wait for it to come online before updating.",
@@ -768,8 +725,6 @@ export const settings = {
     worktree: {
       title: "خطافات دورة حياة شجرة العمل",
       info: "الأوامر التي يتم تشغيلها عند إنشاء شجرة عمل أو هدمها لهذا المشروع",
-      docs: "المستندات",
-      docsTooltip: "راجع المستندات لمزيد من التفاصيل ومتغيرات البيئة المتاحة لهذه الأوامر",
       setup: "يثبت",
       setupAccessibility: "أوامر إعداد شجرة العمل",
       uncommittedTitle: "ثبّت تغييرات ait.json",

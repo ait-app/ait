@@ -9,14 +9,6 @@ export const pairing = {
       title: "Remote SSH",
       description: "Connect through the desktop SSH client.",
     },
-    scanQr: {
-      title: "Scan QR code",
-      description: "Encrypted relay connection.",
-    },
-    pasteLink: {
-      title: "Paste pairing link",
-      description: "Encrypted relay connection.",
-    },
   },
   direct: {
     title: "Direct connection",
@@ -77,62 +69,5 @@ export const pairing = {
       invalidTarget: "Enter a valid ssh:// host",
       failedToConnect: "Unable to connect over SSH. {{detail}}",
     },
-  },
-  link: {
-    title: "Paste pairing link",
-    helper: "Paste the pairing link from your server.",
-    label: "Pairing link",
-    errors: {
-      required: "Paste a pairing link (.../#offer=...)",
-      missingOffer: "Link must include #offer=...",
-      emptyOffer: "Offer payload is empty",
-      invalid: "Invalid pairing link",
-      unableToPair: "Unable to pair host",
-    },
-    alert: {
-      failedTitle: "Pairing failed",
-    },
-    actions: {
-      cancel: "Cancel",
-      pair: "Pair",
-      pairing: "Pairing...",
-    },
-  },
-  scan: {
-    title: "Scan QR",
-    webUnavailableTitle: "Not available on web",
-    webUnavailableBody: 'QR scanning is not supported in the web build. Use "Paste link" instead.',
-    backToSettings: "Back to Settings",
-    cameraPermissionTitle: "Camera permission",
-    cameraPermissionBody: "Allow camera access to scan the pairing QR code from your daemon.",
-    grantPermission: "Grant permission",
-    pairing: "Pairing...",
-    unableToPair: "Unable to pair host",
-    errorTitle: "Error",
-  },
-  device: {
-    loadingOffer: "Loading pairing offer...",
-    failedToLoadOffer: "Failed to load pairing offer.",
-    relayDisabled: "Relay is not enabled. Enable relay to pair a device.",
-    enableTitle: "Enable relay?",
-    enableDescription:
-      "Relay lets this device connect from anywhere. Pairing traffic is end-to-end encrypted.",
-    relayDocs: "How relay works",
-    relayDocsAccessibility: "Read how Ait relay works",
-    enableRelay: "Enable relay",
-    enablingRelay: "Enabling...",
-    notNow: "Not now",
-    directConnectionHint:
-      "Without relay, connect directly over TCP, Tailscale, or another VPN. No QR code is created.",
-    updateRequired: "Update the host to enable relay from Ait Desktop.",
-    unavailable: "Pairing offer unavailable.",
-    hint: "Scan this QR code with Ait on your phone, or copy the link below.",
-    securityWarning:
-      "Treat this pairing link like a password. Anyone with it can access this daemon.",
-    qrUnavailable: "QR code unavailable.",
-    qrAccessibility: "Pairing QR code",
-    retry: "Retry",
-    copy: "Copy",
-    copied: "Copied",
   },
 };

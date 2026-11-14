@@ -1,6 +1,5 @@
 export const common = {
   back: "خلف",
-  loading: "تحميل...",
   actions: {
     save: "حفظ",
     back: "خلف",
@@ -44,9 +43,6 @@ export const common = {
   connectionStatus: {
     online: "متصل",
     connecting: "الاتصال",
-    offline: "غير متصل",
-    error: "خطأ",
-    idle: "عاطل",
   },
 
   bottomSheetBackdrop: "خلفية اللوحة السفلية",

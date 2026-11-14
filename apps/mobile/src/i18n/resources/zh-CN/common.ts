@@ -1,6 +1,5 @@
 export const common = {
   back: "返回",
-  loading: "加载中...",
   actions: {
     save: "保存",
     back: "返回",
@@ -44,9 +43,6 @@ export const common = {
   connectionStatus: {
     online: "在线",
     connecting: "正在连接",
-    offline: "离线",
-    error: "错误",
-    idle: "空闲",
   },
 
   bottomSheetBackdrop: "底部面板背景",

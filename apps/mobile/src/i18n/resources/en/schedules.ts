@@ -96,7 +96,6 @@ export const schedules = {
   untitledAgent: "Untitled agent",
   product: {
     schedule: "Schedule",
-    heartbeat: "Heartbeat",
   },
   untitled: "Untitled {{product}}",
   status: {
@@ -158,7 +157,6 @@ export const schedules = {
     workspace: "Workspace",
     chooseHost: "Choose a host first.",
     chooseProject: "Choose a project first.",
-    searchProjects: "Search projects...",
     model: "Model",
     thinking: "Thinking",
     selectThinking: "Select thinking",
@@ -169,11 +167,6 @@ export const schedules = {
     noModelModes: "No modes are available for this model.",
     selectMode: "Select mode",
     archive: "Archive the created agent after each run",
-    isolation: "Isolation",
-    local: "Local",
-    worktree: "Worktree",
-    selectIsolation: "Select isolation",
-    noIsolation: "No isolation options found",
     submitError: "Unable to save schedule: {{message}}",
     runningError: "This schedule is running. Wait for the current run to finish before editing it.",
   },

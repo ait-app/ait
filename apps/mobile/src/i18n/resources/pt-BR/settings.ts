@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "Configurações",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "Layout",
     editor: "Editor",
     shortcuts: "Atalhos",
-    integrations: "Integrações",
     notifications: "Notificações",
     permissions: "Permissões",
     diagnostics: "Diagnósticos",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "Provedores",
     usage: "Uso",
     terminals: "Terminais",
-    plugins: "Plugins",
     host: "Visão geral",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "Geração de metadados",
     description:
@@ -311,7 +307,6 @@ export const settings = {
     help: {
       openProject: "Abrir projeto",
       newWorkspace: "Novo workspace",
-      newWorktree: "Novo worktree",
       archiveWorkspace: "Arquivar workspace",
       newTab: "Nova aba",
       closeCurrentTab: "Fechar aba atual",
@@ -347,29 +342,10 @@ export const settings = {
       toggleVoiceMode: "Alternar modo de voz",
       startStopDictation: "Iniciar/parar ditado",
       interruptAgent: "Interromper agente",
-      sendMessage: "Enviar mensagem",
-      queueMessage: "Enfileirar mensagem",
       muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
-      switchProject: "Trocar projeto",
     },
     helpNotes: {
       showKeyboardShortcuts: "Disponível quando o foco não está em um campo de texto ou terminal.",
-    },
-  },
-  integrations: {
-    title: "Integrações",
-    docs: {
-      cli: "Docs da CLI",
-      openCli: "Abrir documentação da CLI",
-    },
-    commandLine: {
-      title: "Linha de comando",
-      description: "Controle agentes e execute scripts pelo terminal",
-    },
-    actions: {
-      install: "Instalar",
-      installing: "Instalando...",
-      installed: "Instalado",
     },
   },
   permissions: {
@@ -435,14 +411,7 @@ export const settings = {
       removeErrorMessage: "Não foi possível remover a conexão",
       timeout: "Timeout",
     },
-    pairDevices: {
-      title: "Parear dispositivos",
-      rowTitle: "Parear um dispositivo",
-      rowHint: "Escaneie um QR code ou copie um link para conectar seu celular a este host",
-    },
     skills: {
-      docs: "Skills",
-      openDocs: "Abrir documentação de skills",
       unavailable: "Conecte-se a este host para gerenciar skills de orquestração",
       unsupported: "Atualize este host para gerenciar skills de orquestração",
       sectionTitle: "Skills de orquestração",
@@ -478,7 +447,6 @@ export const settings = {
         uninstall: "Desinstalar",
         save: "Salvar",
         saving: "Salvando...",
-        cancel: "Cancelar",
       },
       operations: {
         add: "Adicionar skill",
@@ -487,8 +455,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "Orquestração",
-      unavailable: "Conecte-se a este host para gerenciar a orquestração",
       enableTools: {
         title: "Ativar ferramentas do Ait",
         hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
@@ -571,7 +537,6 @@ export const settings = {
       nameLabel: "Nome",
       namePlaceholder: "Trabalho de UI",
       iconLabel: "Ícone",
-      noIcon: "Nenhum",
       providerLabel: "Provedor",
       providerPlaceholder: "Selecione um provedor",
       noProviders: "Nenhum provedor está disponível neste host",
@@ -612,8 +577,6 @@ export const settings = {
         confirmDesktopMessage:
           "Reiniciar o daemon integrado com as configurações salvas? As tarefas e sessões de terminal em execução serão interrompidas.",
         restarting: "Reiniciando...",
-        unableToReconnectTitle: "Não foi possível reconectar",
-        unableToReconnectMessage: "{{name}} não voltou a ficar online. Verifique se ele reiniciou.",
         unavailableTitle: "Host indisponível",
         unavailableMessage:
           "Este host não está conectado. Aguarde até ele ficar online antes de reiniciar.",
@@ -621,8 +584,6 @@ export const settings = {
         offlineMessage:
           "Este host está offline. O Ait reconecta automaticamente. Aguarde ele voltar a ficar online antes de reiniciar.",
         requestFailedTitle: "Erro",
-        requestFailedMessage:
-          "Falha ao enviar a solicitação de reinício. O Ait reconecta automaticamente. Tente novamente quando o host aparecer como online.",
         dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação de reinício.",
       },
       update: {
@@ -634,14 +595,10 @@ export const settings = {
         confirmTitle: "Atualizar {{name}}",
         confirmMessage:
           "Isso vai atualizar o daemon para a versão mais recente e reiniciá-lo. Agentes em execução serão interrompidos brevemente.",
-        updating: "Atualizando...",
         phaseStarting: "Preparando atualização...",
         phaseDownloading: "Baixando pacotes...",
         phaseInstalling: "Instalando...",
         phaseComplete: "Atualização concluída, reiniciando...",
-        unableToReconnectTitle: "Não foi possível reconectar",
-        unableToReconnectMessage:
-          "{{name}} não voltou a ficar online após a atualização. Verifique se o daemon reiniciou.",
         unavailableTitle: "Host indisponível",
         unavailableMessage:
           "Este host não está conectado. Aguarde até ele ficar online antes de atualizar.",
@@ -777,9 +734,6 @@ export const settings = {
     worktree: {
       title: "Hooks de ciclo de vida do worktree",
       info: "Comandos executados quando um worktree é criado ou desmontado para este projeto",
-      docs: "Docs",
-      docsTooltip:
-        "Veja a documentação para mais detalhes e as variáveis de ambiente disponíveis para estes comandos",
       setup: "Configuração",
       setupAccessibility: "Comandos de configuração do worktree",
       uncommittedTitle: "Faça commit das alterações no ait.json",

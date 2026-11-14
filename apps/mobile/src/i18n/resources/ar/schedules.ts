@@ -166,7 +166,6 @@ export const schedules = {
   untitledAgent: "وكيل بلا عنوان",
   product: {
     schedule: "جدول",
-    heartbeat: "نبضة",
   },
   untitled: "{{product}} بلا عنوان",
   status: {
@@ -227,7 +226,6 @@ export const schedules = {
     workspace: "مساحة العمل",
     chooseHost: "اختر مضيفًا أولًا.",
     chooseProject: "اختر مشروعًا أولًا.",
-    searchProjects: "البحث عن المشاريع...",
     model: "النموذج",
     thinking: "التفكير",
     selectThinking: "اختر مستوى التفكير",
@@ -238,11 +236,6 @@ export const schedules = {
     noModelModes: "لا تتوفر أوضاع لهذا النموذج.",
     selectMode: "اختر الوضع",
     archive: "أرشفة الوكيل المُنشأ بعد كل تشغيل",
-    isolation: "العزل",
-    local: "محلي",
-    worktree: "شجرة عمل",
-    selectIsolation: "اختر طريقة العزل",
-    noIsolation: "لم يتم العثور على خيارات عزل",
     submitError: "تعذر حفظ الجدول: {{message}}",
     runningError: "المهمة قيد التشغيل. انتظر انتهاء التشغيل الحالي قبل تعديلها.",
   },

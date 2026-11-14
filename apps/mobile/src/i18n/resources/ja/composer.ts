@@ -44,7 +44,6 @@ export const composer = {
     addFile: "ファイルをアップロード",
     addIssueOrPr: "イシューまたはPRを追加",
     addIssueOrPr_mr: "イシューまたはMRを追加",
-    dropImagesHere: "ここに画像をドロップ",
     dropFilesHere: "ここにファイルをドロップ",
     editQueuedMessage: "キューに入れたメッセージを編集",
     sendQueuedMessageNow: "キューに入れたメッセージを今すぐ送信",

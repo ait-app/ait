@@ -44,11 +44,7 @@ export const message = {
   speak: {
     header: "Spoke",
   },
-  activity: {
-    details: "Details",
-  },
   dictation: {
-    start: "Start voice dictation",
     cancel: "Cancel dictation",
     retry: "Retry dictation",
     insert: "Insert transcription",

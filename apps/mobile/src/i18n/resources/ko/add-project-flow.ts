@@ -26,7 +26,6 @@ export const addProjectFlow = {
     githubDescription: "GitHub 계정에서 사용할 수 있는 프로젝트 검색",
   },
   progress: {
-    cloning: "프로젝트 복제 중…",
     creating: "디렉터리 생성 중…",
     adding: "프로젝트 추가 중…",
     phases: {

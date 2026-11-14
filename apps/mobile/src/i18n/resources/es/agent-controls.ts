@@ -1,13 +1,7 @@
 export const agentControls = {
-  provider: {
-    fallback: "Proveedor",
-    select: "Seleccionar proveedor de agente",
-  },
   thinking: {
     title: "Pensamiento",
     unknown: "Desconocido",
-    extraHigh: "extra alto",
-    select: "Seleccione la opción de pensamiento",
     selectWithValue: "Seleccione la opción de pensamiento ({{value}})",
   },
   speed: {

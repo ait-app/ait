@@ -1,5 +1,4 @@
 import { settingsLayout } from "./settings-layout";
-import { pluginSettings } from "./plugin-settings";
 
 export const settings = {
   title: "Настройки",
@@ -27,7 +26,6 @@ export const settings = {
     layout: "Макет",
     editor: "Редактор",
     shortcuts: "Сочетания клавиш",
-    integrations: "Интеграции",
     notifications: "Уведомления",
     permissions: "Разрешения",
     diagnostics: "Диагностика",
@@ -65,10 +63,8 @@ export const settings = {
     providers: "Провайдеры",
     usage: "Использование",
     terminals: "Терминалы",
-    plugins: "Плагины",
     host: "Обзор",
   },
-  plugins: pluginSettings,
   metadataGeneration: {
     title: "Генерация метаданных",
     description:
@@ -315,7 +311,6 @@ export const settings = {
     help: {
       openProject: "Открыть проект",
       newWorkspace: "Новое рабочее пространство",
-      newWorktree: "Новый worktree",
       archiveWorkspace: "Архивировать рабочее пространство",
       newTab: "Новая вкладка",
       closeCurrentTab: "Закрыть текущую вкладку",
@@ -351,29 +346,10 @@ export const settings = {
       toggleVoiceMode: "Переключить голосовой режим",
       startStopDictation: "Начать/остановить диктовку",
       interruptAgent: "Прервать агента",
-      sendMessage: "Отправить сообщение",
-      queueMessage: "Поставить сообщение в очередь",
       muteUnmuteVoiceMode: "Выключить/включить звук в голосовом режиме",
-      switchProject: "Сменить проект",
     },
     helpNotes: {
       showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
-    },
-  },
-  integrations: {
-    title: "Интеграции",
-    docs: {
-      cli: "Документация CLI",
-      openCli: "Открыть документацию CLI",
-    },
-    commandLine: {
-      title: "Командная строка",
-      description: "Управляйте агентами и автоматизируйте их работу из терминала",
-    },
-    actions: {
-      install: "Установить",
-      installing: "Установка...",
-      installed: "Установлено",
     },
   },
   permissions: {
@@ -439,17 +415,10 @@ export const settings = {
       removeErrorMessage: "Не удалось удалить подключение",
       timeout: "Время ожидания истекло",
     },
-    pairDevices: {
-      title: "Подключение устройств",
-      rowTitle: "Подключить устройство",
-      rowHint: "Отсканируйте QR-код или скопируйте ссылку, чтобы подключить телефон к этому хосту.",
-    },
     skills: {
       sectionTitle: "Навыки оркестрации",
       title: "Навыки оркестрации",
       description: "Научите агентов координировать работу через CLI",
-      docs: "Навыки",
-      openDocs: "Открыть документацию по навыкам",
       unavailable: "Подключитесь к этому хосту, чтобы управлять навыками оркестрации",
       unsupported: "Обновите этот хост, чтобы управлять навыками оркестрации",
       updateAvailable: "Доступно обновление",
@@ -481,7 +450,6 @@ export const settings = {
         uninstall: "Удалить",
         save: "Сохранить",
         saving: "Сохранение...",
-        cancel: "Отмена",
       },
       operations: {
         add: "Добавить навык",
@@ -490,8 +458,6 @@ export const settings = {
       },
     },
     orchestration: {
-      title: "Оркестрация",
-      unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
       enableTools: {
         title: "Включить инструменты Ait",
         hint: "Агенты смогут управлять worktree, агентами и расписаниями.",
@@ -574,7 +540,6 @@ export const settings = {
       nameLabel: "Имя",
       namePlaceholder: "Работа над UI",
       iconLabel: "Значок",
-      noIcon: "Нет",
       providerLabel: "Провайдер",
       providerPlaceholder: "Выберите провайдера",
       noProviders: "На этом хосте нет доступных провайдеров",
@@ -615,9 +580,6 @@ export const settings = {
         confirmDesktopMessage:
           "Перезапустить встроенный демон с сохранёнными настройками? Запущенные задачи и сеансы терминала будут прерваны.",
         restarting: "Перезапуск...",
-        unableToReconnectTitle: "Не удалось переподключиться",
-        unableToReconnectMessage:
-          "Хост {{name}} не вернулся в сеть. Убедитесь, что демон перезапустился.",
         unavailableTitle: "Хост недоступен",
         unavailableMessage:
           "Этот хост не подключён. Дождитесь его появления в сети перед перезапуском.",
@@ -625,8 +587,6 @@ export const settings = {
         offlineMessage:
           "Этот хост не в сети. Ait переподключится автоматически. Дождитесь подключения перед перезапуском.",
         requestFailedTitle: "Ошибка",
-        requestFailedMessage:
-          "Не удалось отправить запрос на перезапуск. Ait переподключается автоматически. Повторите попытку, когда хост появится в сети.",
         dialogFailedMessage: "Не удалось открыть диалог подтверждения перезапуска.",
       },
       update: {
@@ -637,14 +597,10 @@ export const settings = {
         confirmTitle: "Обновить {{name}}",
         confirmMessage:
           "Демон будет обновлён до последней версии и перезапущен. Работа агентов будет ненадолго прервана.",
-        updating: "Обновление...",
         phaseStarting: "Подготовка обновления...",
         phaseDownloading: "Загрузка пакетов...",
         phaseInstalling: "Установка...",
         phaseComplete: "Обновление завершено. Перезапуск...",
-        unableToReconnectTitle: "Не удалось переподключиться",
-        unableToReconnectMessage:
-          "Хост {{name}} не вернулся в сеть после обновления. Убедитесь, что демон перезапустился.",
         unavailableTitle: "Хост недоступен",
         unavailableMessage:
           "Этот хост не подключён. Дождитесь его появления в сети перед обновлением.",
@@ -782,9 +738,6 @@ export const settings = {
     worktree: {
       title: "Хуки жизненного цикла worktree",
       info: "Команды, которые выполняются при создании или удалении worktree для этого проекта.",
-      docs: "Документация",
-      docsTooltip:
-        "Дополнительную информацию и переменные среды, доступные для этих команд, см. в документации.",
       setup: "Настройка",
       setupAccessibility: "Команды настройки worktree",
       uncommittedTitle: "Закоммитьте изменения в ait.json",
