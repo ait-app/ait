@@ -128,7 +128,8 @@ jobs:
   web-client-e2e:
     needs: changes
     if: needs.changes.outputs.web_client == 'true' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 cannot install Chromium on the ubuntu-latest (26.04) image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
