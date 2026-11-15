@@ -124,6 +124,12 @@
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
 
+## 客户端 Workspace 记事本
+
+- 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab。每个 Workspace 最多一个记事本 tab，tab 布局保留在客户端。
+- 记事本内容存放在 Workspace 根目录的 `.ait-notebook.md`，通过现有文件读取、实时订阅和带版本校验的写入接口同步；因此 Workspace 分享时，协作者访问同一份笔记与 TODO 内容。
+- 访客写入沿用 Workspace 文件权限。写入失败会显示只读状态，并发修改通过文件版本冲突提示处理。
+
 ## 定时任务归属
 
 - 新建任务必须提供 `workspaceId`，已绑定的 `workspaceId` 不能改成另一个。目标变更由宿主的

@@ -64,4 +64,18 @@ export const panels = {
     loadError: "Diff를 불러오지 못했습니다.",
     capabilityMissing: "커밋 diff를 보려면 호스트를 업데이트하세요.",
   },
+  notebook: {
+    label: "노트",
+    subtitle: "공유 워크스페이스 노트",
+    tooltip: "공유 워크스페이스 노트",
+    disabled: "실험적 기능을 켜면 워크스페이스 노트를 사용할 수 있습니다.",
+    loading: "공유 워크스페이스 노트를 불러오는 중…",
+    placeholder: "이 워크스페이스의 메모와 TODO를 작성하세요…",
+    saved: "저장됨",
+    saving: "저장 중…",
+    unsaved: "저장되지 않은 변경 사항",
+    readOnly: "공유 워크스페이스 노트는 게스트에게 읽기 전용입니다.",
+    conflict: "디스크의 노트가 변경되었습니다. 최신 버전을 확인한 후 다시 편집하세요.",
+    saveFailed: "워크스페이스 노트를 저장할 수 없습니다.",
+  },
 };

@@ -64,4 +64,18 @@ export const panels = {
     loadError: "差分の読み込みに失敗しました",
     capabilityMissing: "コミット差分を表示するにはホストを更新してください。",
   },
+  notebook: {
+    label: "ノート",
+    subtitle: "共有ワークスペースノート",
+    tooltip: "共有ワークスペースノート",
+    disabled: "実験的機能を有効にするとワークスペースノートを使えます。",
+    loading: "共有ワークスペースノートを読み込み中…",
+    placeholder: "このワークスペースのメモと TODO を入力…",
+    saved: "保存済み",
+    saving: "保存中…",
+    unsaved: "未保存の変更",
+    readOnly: "共有ワークスペースノートはゲストには読み取り専用です。",
+    conflict: "ディスク上のノートが変更されました。最新バージョンを確認してから編集してください。",
+    saveFailed: "ワークスペースノートを保存できません。",
+  },
 };

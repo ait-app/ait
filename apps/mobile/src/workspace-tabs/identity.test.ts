@@ -106,6 +106,18 @@ describe("workspace utility panel identity", () => {
   );
 });
 
+describe("workspace notebook identity", () => {
+  it("normalizes to one experimental singleton tab", () => {
+    const target = { kind: "notebook" } as const;
+
+    expect(normalizeWorkspaceTabTarget(target)).toEqual(target);
+    expect(buildDeterministicWorkspaceTabId(target)).toBe("notebook");
+    expect(workspaceTabTargetsEqual(target, target)).toBe(true);
+    expect(getPanelManifest("notebook").singleton).toBe(true);
+    expect(panelResourceKey(target)).toBe("notebook:notebook");
+  });
+});
+
 describe("commit diff tab identity", () => {
   it("keys a commit diff tab by its sha", () => {
     expect(buildDeterministicWorkspaceTabId({ kind: "commit_diff", sha: "abc123" })).toBe(

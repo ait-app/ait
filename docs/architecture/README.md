@@ -6,6 +6,8 @@
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
+客户端 Workspace 记事本由 `apps/mobile` 提供，内容使用 Workspace 文件系统中的 `.ait-notebook.md`，通过现有文件协议共享，不新增 daemon 能力。
+
 ## Rust 能力边界
 
 | Crate                       | 职责                                            | 生产代码的内部依赖                                                                                                                                                           |

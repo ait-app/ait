@@ -130,6 +130,14 @@ const manifests = {
     singleton: true,
     resourceKey: () => "schedule",
   },
+  notebook: {
+    kind: "notebook",
+    supportedHosts: ["main"],
+    showCloseButton: true,
+    singleton: true,
+    compactSheet: null,
+    resourceKey: () => "notebook",
+  },
   file: {
     kind: "file",
     supportedHosts: ["main", "explorer"],

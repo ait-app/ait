@@ -65,4 +65,18 @@ export const panels = {
     loadError: "No se pudieron cargar las diferencias",
     capabilityMissing: "Actualiza el host para ver las diferencias de los commits.",
   },
+  notebook: {
+    label: "Bloc de notas",
+    subtitle: "Notas compartidas del espacio de trabajo",
+    tooltip: "Notas compartidas del espacio de trabajo",
+    disabled: "Activa las funciones experimentales para usar el bloc de notas.",
+    loading: "Cargando las notas compartidas…",
+    placeholder: "Escribe notas y TODO para este espacio de trabajo…",
+    saved: "Guardado",
+    saving: "Guardando…",
+    unsaved: "Cambios sin guardar",
+    readOnly: "Las notas compartidas son de solo lectura para invitados.",
+    conflict: "Las notas del disco cambiaron. Comprueba la última versión antes de editar.",
+    saveFailed: "No se pudieron guardar las notas.",
+  },
 };
