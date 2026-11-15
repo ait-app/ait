@@ -531,6 +531,205 @@ interface UnknownDetail {
   output: unknown;
 }
 
+interface QuestionnaireOption {
+  label: string;
+  description?: string;
+  recommended: boolean;
+}
+
+interface QuestionnaireStep {
+  header?: string;
+  question: string;
+  options: QuestionnaireOption[];
+  selectionMode: "single" | "multiple";
+}
+
+interface QuestionnaireOutput {
+  waitingForUser: boolean;
+  message?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseQuestionnaireSteps(input: unknown): QuestionnaireStep[] | null {
+  if (!isRecord(input) || !Array.isArray(input.steps)) return null;
+
+  const steps = input.steps.flatMap((value): QuestionnaireStep[] => {
+    if (!isRecord(value) || typeof value.question !== "string") return [];
+    const options = Array.isArray(value.options)
+      ? value.options.flatMap((option): QuestionnaireOption[] => {
+          if (!isRecord(option) || typeof option.label !== "string") return [];
+          return [
+            {
+              label: option.label,
+              ...(typeof option.description === "string"
+                ? { description: option.description }
+                : {}),
+              recommended: option.recommended === true,
+            },
+          ];
+        })
+      : [];
+    return [
+      {
+        ...(typeof value.header === "string" && value.header.length > 0
+          ? { header: value.header }
+          : {}),
+        question: value.question,
+        options,
+        selectionMode: value.selectionMode === "multiple" ? "multiple" : "single",
+      },
+    ];
+  });
+
+  return steps.length > 0 ? steps : null;
+}
+
+function parseQuestionnaireOutput(output: unknown): QuestionnaireOutput {
+  let value = output;
+  if (typeof value === "string") {
+    const text = value;
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return { waitingForUser: false, message: text };
+    }
+  }
+  if (!isRecord(value)) return { waitingForUser: false };
+
+  const details = isRecord(value.details) ? value.details : null;
+  const waitingForUser = value.waiting_for_user === true || details?.waiting_for_user === true;
+  const message = Array.isArray(value.content)
+    ? value.content
+        .flatMap((item) => (isRecord(item) && typeof item.text === "string" ? [item.text] : []))
+        .join("\n")
+        .trim()
+    : undefined;
+
+  return {
+    waitingForUser,
+    ...(message && !waitingForUser && !/waiting for (?:the )?local user/i.test(message)
+      ? { message }
+      : {}),
+  };
+}
+
+function QuestionnaireDetailSection({
+  steps,
+  output,
+  ds,
+  waitingLabel,
+}: {
+  steps: QuestionnaireStep[];
+  output: unknown;
+  ds: DetailStyles;
+  waitingLabel: string;
+}) {
+  const result = parseQuestionnaireOutput(output);
+  return (
+    <View style={styles.section} testID="questionnaire-detail">
+      <ScrollView
+        style={ds.scrollAreaStyle}
+        contentContainerStyle={styles.questionnaireContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+      >
+        {steps.map((step, stepIndex) => (
+          <View key={`${step.header ?? "step"}-${stepIndex}`} style={styles.questionnaireStep}>
+            {step.header ? (
+              <Text selectable style={styles.questionnaireHeader}>
+                {step.header}
+              </Text>
+            ) : null}
+            <Text selectable style={styles.questionnaireQuestion}>
+              {step.question}
+            </Text>
+            {step.options.length > 0 ? (
+              <View style={styles.questionnaireOptions}>
+                {step.options.map((option, optionIndex) => (
+                  <View key={`${option.label}-${optionIndex}`} style={styles.questionnaireOption}>
+                    <View
+                      style={[
+                        styles.questionnaireOptionIndicator,
+                        step.selectionMode === "single" &&
+                          styles.questionnaireOptionIndicatorSingle,
+                      ]}
+                    >
+                      {option.recommended ? (
+                        <View style={styles.questionnaireRecommendedDot} />
+                      ) : null}
+                    </View>
+                    <View style={styles.questionnaireOptionText}>
+                      <Text selectable style={styles.questionnaireOptionLabel}>
+                        {option.label}
+                      </Text>
+                      {option.description ? (
+                        <Text selectable style={styles.questionnaireOptionDescription}>
+                          {option.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ))}
+        {result.waitingForUser || result.message ? (
+          <View style={styles.questionnaireStatus} testID="questionnaire-waiting-state">
+            {result.waitingForUser ? (
+              <Text style={styles.questionnaireStatusLabel}>{waitingLabel}</Text>
+            ) : null}
+            {result.message ? (
+              <Text selectable style={styles.questionnaireStatusMessage}>
+                {result.message}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function isQuestionnaireTool(toolName: string | undefined): boolean {
+  if (!toolName) return false;
+  const normalized = toolName
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return (
+    normalized === "ask_user" ||
+    normalized.endsWith(".ask_user") ||
+    normalized.endsWith(":ask_user") ||
+    normalized.endsWith("__ask_user") ||
+    normalized === "questionnaire" ||
+    normalized.endsWith(".questionnaire")
+  );
+}
+
+function buildQuestionnaireSections(
+  toolName: string | undefined,
+  detail: UnknownDetail,
+  ds: DetailStyles,
+  t: TFunction,
+): ReactNode[] | null {
+  if (!isQuestionnaireTool(toolName)) return null;
+  const steps = parseQuestionnaireSteps(detail.input);
+  if (!steps) return null;
+  return [
+    <QuestionnaireDetailSection
+      key="questionnaire"
+      steps={steps}
+      output={detail.output}
+      ds={ds}
+      waitingLabel={t("taskBoard.status.needs_input")}
+    />,
+  ];
+}
+
 function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles, t: TFunction): ReactNode[] {
   const plainInputText =
     typeof detail.input === "string" && detail.output === null ? detail.input : null;
@@ -691,7 +890,11 @@ function buildDetailSections(
     return [<ScrollablePlainTextSection key="plain-text" text={detail.text} ds={ds} />];
   }
   if (detail.type === "unknown") {
-    return buildPaseoUnknownSections(toolName, detail) ?? buildUnknownSections(detail, ds, t);
+    return (
+      buildQuestionnaireSections(toolName, detail, ds, t) ??
+      buildPaseoUnknownSections(toolName, detail) ??
+      buildUnknownSections(detail, ds, t)
+    );
   }
   return [];
 }
@@ -882,6 +1085,89 @@ const styles = StyleSheet.create((theme) => {
     },
     scrollContent: {
       padding: insets.padding,
+    },
+    questionnaireContent: {
+      gap: theme.spacing[3],
+      padding: theme.spacing[3],
+    },
+    questionnaireStep: {
+      gap: theme.spacing[2],
+    },
+    questionnaireHeader: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+    },
+    questionnaireQuestion: {
+      color: theme.colors.foreground,
+      fontSize: theme.fontSize.base,
+      lineHeight: Math.round(theme.fontSize.base * 1.5),
+      overflowWrap: "anywhere",
+    },
+    questionnaireOptions: {
+      gap: theme.spacing[1],
+    },
+    questionnaireOption: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing[2],
+      paddingVertical: theme.spacing[2],
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.base,
+      backgroundColor: theme.colors.surface1,
+    },
+    questionnaireOptionIndicator: {
+      width: 16,
+      height: 16,
+      marginTop: 2,
+      borderWidth: theme.borderWidth[1],
+      borderColor: theme.colors.foregroundExtraMuted,
+      borderRadius: theme.borderRadius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    questionnaireOptionIndicatorSingle: {
+      borderRadius: theme.borderRadius.full,
+    },
+    questionnaireRecommendedDot: {
+      width: 8,
+      height: 8,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.accent,
+    },
+    questionnaireOptionText: {
+      flex: 1,
+      minWidth: 0,
+      gap: theme.spacing[1],
+    },
+    questionnaireOptionLabel: {
+      color: theme.colors.foreground,
+      fontSize: theme.fontSize.base,
+      lineHeight: Math.round(theme.fontSize.base * 1.4),
+      overflowWrap: "anywhere",
+    },
+    questionnaireOptionDescription: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+      lineHeight: Math.round(theme.fontSize.sm * 1.5),
+      overflowWrap: "anywhere",
+    },
+    questionnaireStatus: {
+      gap: theme.spacing[1],
+      paddingTop: theme.spacing[2],
+      borderTopWidth: theme.borderWidth[1],
+      borderTopColor: theme.colors.border,
+    },
+    questionnaireStatusLabel: {
+      color: theme.colors.statusWarning,
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+    },
+    questionnaireStatusMessage: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+      lineHeight: Math.round(theme.fontSize.sm * 1.5),
+      overflowWrap: "anywhere",
     },
     scrollText: {
       fontFamily: theme.fontFamily.mono,

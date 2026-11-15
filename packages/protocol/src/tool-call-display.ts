@@ -126,6 +126,13 @@ function buildCanonicalDetailDisplay(input: ToolCallDisplayInput): DetailDisplay
 
 function buildUnknownDetailOverride(input: ToolCallDisplayInput): DetailDisplay {
   const lowerName = input.name.trim().toLowerCase();
+  if (input.detail.type === "unknown" && isQuestionnaireToolName(lowerName)) {
+    const summary = questionnaireSummary(input.detail.input);
+    return {
+      displayName: "Ask user",
+      ...(summary ? { summary } : {}),
+    };
+  }
   if (input.detail.type === "unknown" && lowerName === "task") {
     return {
       displayName: "Task",
@@ -144,6 +151,29 @@ function buildUnknownDetailOverride(input: ToolCallDisplayInput): DetailDisplay 
     };
   }
   return {};
+}
+
+function isQuestionnaireToolName(name: string): boolean {
+  const normalized = name.replace(/[\s-]+/g, "_");
+  return (
+    normalized === "ask_user" ||
+    normalized.endsWith(".ask_user") ||
+    normalized.endsWith(":ask_user") ||
+    normalized.endsWith("__ask_user") ||
+    normalized === "questionnaire" ||
+    normalized.endsWith(".questionnaire")
+  );
+}
+
+function questionnaireSummary(input: unknown): string | undefined {
+  if (!isRecord(input) || !Array.isArray(input.steps)) return undefined;
+  const question = input.steps.find(
+    (step): step is Record<string, unknown> =>
+      isRecord(step) && typeof step.question === "string" && step.question.trim().length > 0,
+  )?.question;
+  if (typeof question !== "string") return undefined;
+  const trimmed = question.trim();
+  return trimmed.length > 120 ? `${trimmed.slice(0, 119).trimEnd()}…` : trimmed;
 }
 
 export function buildToolCallDisplayModel(input: ToolCallDisplayInput): ToolCallDisplayModel {

@@ -190,4 +190,29 @@ describe("shared tool-call display mapping", () => {
       displayName: "Plan",
     });
   });
+
+  it("summarizes MiniMax ask-user questionnaires from their first step", () => {
+    const display = buildToolCallDisplayModel({
+      name: "Ask user",
+      status: "completed",
+      error: null,
+      detail: {
+        type: "unknown",
+        input: {
+          steps: [
+            {
+              question: "Which release option should be applied?",
+              options: [],
+            },
+          ],
+        },
+        output: null,
+      },
+    });
+
+    expect(display).toEqual({
+      displayName: "Ask user",
+      summary: "Which release option should be applied?",
+    });
+  });
 });
