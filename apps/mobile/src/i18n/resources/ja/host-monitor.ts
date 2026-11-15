@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "ディスク",
   network: "ネットワーク",
   networkHistory: "同じ期間のダウンロード速度とアップロード速度",
-  follow: "ワークスペースのホスト",
-  pinned: "ピン留めしたホスト",
   followWorkspace: "現在のワークスペースを追跡",
   selectHost: "ホストを監視",
   close: "閉じる",

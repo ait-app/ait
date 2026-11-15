@@ -7,6 +7,7 @@ import {
   networkHistory,
   newestHostSnapshot,
   percent,
+  rate,
   resolveMonitorHost,
 } from "./model";
 
@@ -55,6 +56,10 @@ describe("host monitor presentation", () => {
     expect(percent(110)).toBe("100%");
     expect(bytes(1024 ** 3)).toBe("1 GiB");
     expect(bytes(null)).toBe("—");
+    expect(rate(null)).toBe("—");
+    expect(rate(512)).toBe("512 B/s");
+    expect(rate(106_700)).toBe("104 KB/s");
+    expect(rate(1.25 * 1024 ** 2)).toBe("1.3 MB/s");
     expect(memoryPercent(sample)).toBe(50);
     expect(memoryPercent({ ...sample, memoryTotalBytes: 0 })).toBeNull();
   });

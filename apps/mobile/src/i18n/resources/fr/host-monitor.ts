@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "Disque",
   network: "Réseau",
   networkHistory: "Débits de téléchargement et d’envoi sur la même période",
-  follow: "Hôte de l’espace de travail",
-  pinned: "Hôte épinglé",
   followWorkspace: "Suivre l’espace de travail actuel",
   selectHost: "Surveiller l’hôte",
   close: "Fermer",

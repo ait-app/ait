@@ -2,11 +2,13 @@ import { useRef, useState } from "react";
 import type { HostSnapshot } from "@ait/protocol/host-monitor";
 import {
   Monitor,
-  ChevronRight,
   ChevronDown,
   ArrowDown,
   ArrowUp,
+  Cpu,
+  Globe,
   HardDrive,
+  MemoryStick,
   X,
 } from "lucide-react-native";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
@@ -25,6 +27,7 @@ import {
   memoryPercent,
   networkHistory,
   percent,
+  rate,
   type MonitorHost,
 } from "./model";
 
@@ -72,29 +75,28 @@ export function HostMonitorView(props: HostMonitorViewProps) {
           (hovered || expanded) && styles.triggerActive,
         ]}
       >
-        <View style={styles.row}>
-          <View style={[styles.dot, { backgroundColor: statusColor }]} />
-          <Text style={styles.host} numberOfLines={1}>
-            {host.label}
-          </Text>
-          <Text style={styles.small} numberOfLines={1}>
-            {!connected
-              ? t("hostMonitor.offline")
-              : t(props.picked ? "hostMonitor.pinned" : "hostMonitor.follow")}
-          </Text>
-          <ChevronRight size={12} color={theme.colors.foregroundMuted} />
-        </View>
+        <View style={[styles.dot, { backgroundColor: statusColor }]} />
+        <Text style={styles.host} numberOfLines={1}>
+          {host.label}
+        </Text>
         <View style={styles.summaryMetrics}>
           <SummaryMetric
+            icon={Cpu}
             label="CPU"
+            testID="sidebar-host-monitor-cpu"
             value={!stale && current ? current.cpuPercent : null}
-            color={theme.colors.terminal.blue}
+            alert={!stale && (current?.cpuPercent ?? 0) >= 90}
           />
-          <View style={styles.summaryDivider} />
+          <SummaryNetwork
+            up={!stale && current ? current.txBytesPerSecond : null}
+            down={!stale && current ? current.rxBytesPerSecond : null}
+          />
           <SummaryMetric
+            icon={MemoryStick}
             label={t("hostMonitor.memory")}
+            testID="sidebar-host-monitor-memory"
             value={!stale && current ? memoryPercent(current) : null}
-            color={theme.colors.foregroundMuted}
+            alert={false}
           />
         </View>
       </DropdownMenuTrigger>
@@ -159,26 +161,61 @@ export function HostMonitorView(props: HostMonitorViewProps) {
 }
 
 function SummaryMetric({
+  icon: Icon,
   label,
+  testID,
   value,
-  color,
+  alert,
 }: {
+  icon: typeof Cpu;
   label: string;
+  testID: string;
   value: number | null;
-  color: string;
+  alert: boolean;
 }) {
+  const { theme } = useUnistyles();
   return (
-    <View style={styles.summaryMetric}>
-      <Text style={styles.caption}>{label} </Text>
-      <Text style={styles.summaryValue}>{percent(value)}</Text>
-      <View style={styles.miniTrack}>
-        <View
-          style={[
-            styles.miniFill,
-            { backgroundColor: color, width: `${Math.min(100, Math.max(0, value ?? 0))}%` },
-          ]}
-        />
+    <View
+      style={styles.summaryMetric}
+      testID={testID}
+      accessible
+      accessibilityLabel={`${label} ${percent(value)}`}
+    >
+      <Icon size={15} strokeWidth={1.6} color={theme.colors.foregroundMuted} />
+      <Text style={[styles.summaryValue, alert && styles.summaryAlert]} numberOfLines={1}>
+        {percent(value)}
+      </Text>
+    </View>
+  );
+}
+
+function SummaryNetwork({ up, down }: { up: number | null; down: number | null }) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  return (
+    <View
+      style={styles.summaryNetwork}
+      testID="sidebar-host-monitor-network"
+      accessible
+      accessibilityLabel={`${t("hostMonitor.upload")} ${rate(up)}, ${t("hostMonitor.download")} ${rate(down)}`}
+    >
+      <Globe size={15} strokeWidth={1.6} color={theme.colors.foregroundMuted} />
+      <View style={styles.summaryRates}>
+        <SummaryRate icon={ArrowUp} value={up} />
+        <SummaryRate icon={ArrowDown} value={down} />
       </View>
+    </View>
+  );
+}
+
+function SummaryRate({ icon: Icon, value }: { icon: typeof ArrowUp; value: number | null }) {
+  const { theme } = useUnistyles();
+  return (
+    <View style={styles.summaryRate}>
+      <Icon size={8} strokeWidth={2.5} color={theme.colors.foregroundMuted} />
+      <Text style={styles.summaryRateValue} numberOfLines={1}>
+        {rate(value)}
+      </Text>
     </View>
   );
 }
@@ -515,7 +552,9 @@ function NetworkMetric({
 
 const styles = StyleSheet.create((theme) => ({
   trigger: {
-    gap: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -526,27 +565,48 @@ const styles = StyleSheet.create((theme) => ({
   row: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0 },
   grow: { flex: 1, minWidth: 0 },
   dot: { width: 6, height: 6, borderRadius: 3, flexShrink: 0 },
-  host: { flex: 1, color: theme.colors.foreground, fontSize: theme.fontSize.sm, fontWeight: "500" },
-  caption: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  small: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm - 1 },
-  summaryMetrics: { flexDirection: "row", alignItems: "center", gap: 12 },
-  summaryMetric: { flex: 1, flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0 },
-  summaryValue: {
+  host: {
+    flexShrink: 1,
+    minWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  caption: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  small: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm - 1 },
+  summaryMetrics: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  summaryMetric: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 },
+  summaryValue: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
     fontVariant: ["tabular-nums"],
   },
-  summaryDivider: { height: 12, width: 1, backgroundColor: theme.colors.border },
-  miniTrack: {
-    flex: 1,
-    maxWidth: 32,
-    height: 3,
-    backgroundColor: theme.colors.surface3,
-    borderRadius: 2,
-    marginLeft: 5,
-    overflow: "hidden",
+  summaryAlert: { color: theme.colors.destructive },
+  summaryNetwork: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 1,
+    minWidth: 0,
   },
-  miniFill: { height: 3, borderRadius: 2 },
+  summaryRates: { flexShrink: 1, minWidth: 0 },
+  summaryRate: { flexDirection: "row", alignItems: "center", gap: 2, minWidth: 0 },
+  summaryRateValue: {
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: 9,
+    lineHeight: 11,
+    fontVariant: ["tabular-nums"],
+  },
   detail: { padding: 14, gap: 10 },
   status: { flexDirection: "row", alignItems: "center", gap: 5 },
   close: { padding: 5, borderRadius: 6, marginRight: -5 },

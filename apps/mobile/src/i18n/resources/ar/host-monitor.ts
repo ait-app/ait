@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "القرص",
   network: "الشبكة",
   networkHistory: "معدلات التنزيل والرفع خلال الفترة الزمنية نفسها",
-  follow: "مضيف مساحة العمل",
-  pinned: "مضيف مثبّت",
   followWorkspace: "اتباع مساحة العمل الحالية",
   selectHost: "مراقبة المضيف",
   close: "إغلاق",

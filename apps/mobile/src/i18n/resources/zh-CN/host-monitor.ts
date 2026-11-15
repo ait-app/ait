@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "磁盘",
   network: "网络",
   networkHistory: "同一时间范围内的下载和上传速率",
-  follow: "工作区主机",
-  pinned: "固定主机",
   followWorkspace: "跟随当前工作区",
   selectHost: "监控主机",
   close: "关闭",

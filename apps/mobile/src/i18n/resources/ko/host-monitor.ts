@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "디스크",
   network: "네트워크",
   networkHistory: "같은 시간 범위의 다운로드 및 업로드 속도",
-  follow: "워크스페이스 호스트",
-  pinned: "고정된 호스트",
   followWorkspace: "현재 워크스페이스 따라가기",
   selectHost: "호스트 모니터링",
   close: "닫기",

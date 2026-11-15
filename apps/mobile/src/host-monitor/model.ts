@@ -50,6 +50,19 @@ export function bytes(value: number | null): string {
   return `${index === 0 ? Math.round(amount) : Number(amount.toFixed(1))} ${units[index]}`;
 }
 
+/** Compact transfer rate for the sidebar: whole numbers above 10 keep the width steady. */
+export function rate(value: number | null): string {
+  if (value === null) return "—";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let amount = Math.max(value, 0),
+    index = 0;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index++;
+  }
+  return `${amount < 10 && index > 0 ? Number(amount.toFixed(1)) : Math.round(amount)} ${units[index]}`;
+}
+
 /** Plot actual timestamps, breaking the path after pauses instead of inventing continuity. */
 export function historyPath(
   history: readonly HostSample[],

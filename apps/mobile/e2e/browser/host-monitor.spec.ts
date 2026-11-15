@@ -20,7 +20,7 @@ test("host monitor reads real daemon counters and opens beside the sidebar", asy
     await gotoWorkspace(page, workspace.workspaceId);
     const trigger = page.getByTestId("sidebar-host-monitor").filter({ visible: true });
     await expect(trigger).toBeVisible();
-    await expect(trigger).toContainText(/CPU\s+\d/);
+    await expect(trigger.getByTestId("sidebar-host-monitor-cpu")).toContainText(/\d%/);
     await trigger.click();
     const details = page.getByTestId("host-monitor-details").filter({ visible: true });
     await expect(details).toBeVisible();
@@ -69,7 +69,7 @@ test("host monitor reads real daemon counters and opens beside the sidebar", asy
       localStorage.setItem("@paseo:app-settings", JSON.stringify({ ...settings, theme: "dark" }));
     });
     await page.reload();
-    await expect(trigger).toContainText(/CPU\s+\d/);
+    await expect(trigger.getByTestId("sidebar-host-monitor-cpu")).toContainText(/\d%/);
     await trigger.click();
     await expect(details).toBeVisible();
     await expect(details.getByText("实时", { exact: true })).toBeVisible();
@@ -109,26 +109,27 @@ test("host selection stays pinned while offline and can resume following the wor
       .getByText("Monitor secondary", { exact: true })
       .click();
     await expect(trigger).toContainText("Monitor secondary");
-    await expect(trigger).toContainText("Pinned host");
+    const hostSelect = detail.getByRole("button", { name: "Monitor host", exact: true });
+    await expect(hostSelect).toContainText("Monitor secondary");
     await expect(detail).toContainText("linux");
     await secondary.close();
-    await expect(trigger).toContainText("Host offline");
+    await expect(detail.getByTestId("host-monitor-state")).toContainText("Host offline");
     await expect(trigger).toContainText("Monitor secondary");
-    await expect(trigger).not.toContainText(/CPU\s+\d/);
+    await expect(trigger.getByTestId("sidebar-host-monitor-cpu")).toHaveText("—");
     await expect(detail).toContainText("Last sample");
     const lastSample = await detail.getByTestId("host-monitor-footer").textContent();
     await page.keyboard.press("Escape");
     await expect(detail).not.toBeVisible();
     await trigger.click();
     await expect(detail.getByTestId("host-monitor-footer")).toHaveText(lastSample!);
-    await detail.getByRole("button", { name: "Monitor host", exact: true }).click();
+    await hostSelect.click();
     await page
       .getByTestId("combobox-desktop-container")
       .getByText("Follow current workspace", { exact: true })
       .click();
-    await expect(trigger).toContainText("Workspace host");
+    await expect(hostSelect).toContainText("Follow current workspace");
     await expect(trigger).not.toContainText("Monitor secondary");
-    await expect(trigger).toContainText(/CPU\s+\d/);
+    await expect(trigger.getByTestId("sidebar-host-monitor-cpu")).toContainText(/\d%/);
   } finally {
     await secondary.close();
     await workspace.cleanup();

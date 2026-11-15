@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "Disco",
   network: "Red",
   networkHistory: "Tasas de descarga y subida durante el mismo periodo",
-  follow: "Host del espacio de trabajo",
-  pinned: "Host fijado",
   followWorkspace: "Seguir el espacio de trabajo actual",
   selectHost: "Supervisar host",
   close: "Cerrar",

@@ -11,8 +11,6 @@ export const hostMonitor = {
   disk: "Диск",
   network: "Сеть",
   networkHistory: "Скорость загрузки и отправки за один и тот же период",
-  follow: "Хост рабочего пространства",
-  pinned: "Закреплённый хост",
   followWorkspace: "Следить за текущим рабочим пространством",
   selectHost: "Мониторинг хоста",
   close: "Закрыть",
