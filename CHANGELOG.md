@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.2.14 - 2026-11-16
+
+- A schedule that runs a new Agent each time now has an explicit "After each run" choice: keep the session in the Workspace so you can keep talking after the task finishes, or archive it (default). The choice is kept when the schedule is edited, when the execution target changes, and for older records that never set it.
+- The MiniMax provider answers the questionnaires of its native session: Ait's question form shows the choices, multi-select answers and custom values, and the answer is validated and sent back to the provider.
+- A recovered Agent is no longer reported as idle while it is still being admitted. The background recovery path now applies the same admission fence as foreground requests, so the wait for a recovered Agent no longer ends early or flakes.
+- The host monitor in the sidebar is now one compact row: a status dot, the host name, CPU, the network up/down rates and memory. The "Workspace host / Pinned host / Host offline" label, the trailing chevron and the mini progress bars are gone; an offline host reads as a muted dot with "—" values, and the pin/follow state stays in the details panel.
+
 ## 0.2.13 - 2026-11-15
 
 - Workspace rows in the status-grouped sidebar offer Share and "Open in file manager", as rows grouped by project already did.
