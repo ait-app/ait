@@ -22,7 +22,6 @@ import type {
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
   ProjectPlacementPayload,
-  WorkspaceProjectDescriptorPayload,
   RefreshProvidersSnapshotResponseMessage,
   SendAgentMessageRequest,
   SessionOutboundMessage,
@@ -48,6 +47,7 @@ export type {
 } from "./terminals/index.js";
 import type { PluginTimelineItem } from "@ait/protocol/agent-types";
 import type {
+  ConnectionState,
   FetchAgentsEntry,
   FetchAgentsOptions,
   FetchAgentsPageInfo,
@@ -55,6 +55,7 @@ import type {
   FetchAgentTimelineDirection,
   FetchAgentTimelinePayload,
   FetchAgentTimelineProjection,
+  Logger,
   WaitForFinishResult,
 } from "./daemon-client.js";
 
@@ -64,19 +65,8 @@ import type {
  */
 const DEFAULT_WAIT_FOR_FINISH_MS = 10 * 60_000;
 
-export type ConnectionState =
-  | { status: "idle" }
-  | { status: "connecting"; attempt: number }
-  | { status: "connected" }
-  | { status: "disconnected"; reason?: string }
-  | { status: "disposed" };
-
-export interface PaseoLogger {
-  debug(obj: object, msg?: string): void;
-  info(obj: object, msg?: string): void;
-  warn(obj: object, msg?: string): void;
-  error(obj: object, msg?: string): void;
-}
+export type { ConnectionState };
+export type PaseoLogger = Logger;
 
 export interface PaseoClientConfig {
   /** Optional raw platform transport; the SDK always owns the Rust v1 protocol. */
@@ -93,23 +83,16 @@ export interface PaseoClientConfig {
   suppressSendErrors?: boolean;
   logger?: PaseoLogger;
   connectTimeoutMs?: number;
-  e2ee?: {
-    enabled?: boolean;
-    daemonPublicKeyB64?: string;
-  };
   reconnect?: {
     enabled?: boolean;
     baseDelayMs?: number;
     maxDelayMs?: number;
   };
-  runtimeMetricsIntervalMs?: number;
-  runtimeMetricsWindowMs?: number;
 }
 
 export type PaseoWorkspace = WorkspaceDescriptorPayload;
 export type PaseoAgent = AgentSnapshotPayload;
 export type PaseoAgentListOptions = FetchAgentsOptions;
-export type PaseoProject = WorkspaceProjectDescriptorPayload;
 export type PaseoProjectListOptions = Omit<ProjectListRequestMessage, "type" | "requestId"> & {
   requestId?: string;
 };

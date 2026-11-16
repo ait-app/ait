@@ -287,10 +287,6 @@ export function resetReviewDraftStore(): void {
   useReviewDraftStore.setState({ drafts: {} });
 }
 
-export function useReviewCommentCount(key: string): number {
-  return useReviewDraftStore((state) => state.drafts[key]?.length ?? 0);
-}
-
 export function useReviewAttachmentSnapshot(input: {
   key: string;
   diffFiles: readonly ParsedDiffFile[];

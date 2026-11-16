@@ -5,7 +5,7 @@ use model::ErrorCode;
 use model::bot::Store;
 use serde_json::{Value, json};
 
-use crate::service::Bots;
+use crate::service::{Bots, Notified};
 use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 #[tokio::test]
@@ -348,7 +348,7 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     bots.shutdown().await.unwrap();
 }
 
-const PREFIX: &str = "<ait-bot-instructions>\n";
+const PREFIX: &str = "<ait-input kind=\"bot_instructions\">\n";
 
 fn session(created: bool, delivery: &str) -> Value {
     json!({"created":created,"instructionDelivery":delivery})
@@ -449,7 +449,7 @@ async fn turn_prefix_instructions_are_sent_on_every_turn() {
     ] {
         assert!(text.starts_with(PREFIX), "{text}");
         assert!(
-            text.ends_with(&format!("\n</ait-bot-instructions>\n\n{user}")),
+            text.ends_with(&format!("\n</ait-input>\n\n{user}")),
             "{text}"
         );
     }
@@ -518,4 +518,327 @@ async fn reset_required_rotates_the_conversation_and_retries_once() {
     );
     assert_eq!(sent_texts(&fixture).len(), 1);
     bots.shutdown().await.unwrap();
+}
+
+fn notification(id: &str, workspace: &str) -> domain::bot::notification::Notification {
+    serde_json::from_value(json!({
+        "id": id,
+        "workspaceId": workspace,
+        "scope": workspace,
+        "kind": "agent_finished",
+        "agentId": "agent-1",
+        "title": "Fix login",
+        "at": "2026-11-12T08:00:00Z"
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_notification_wakes_the_bot_once_and_an_unconfigured_workspace_stays_untouched() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    assert_eq!(
+        bots.notify(notification("ignored", WORKSPACE))
+            .await
+            .unwrap(),
+        Notified::Ignored
+    );
+    let conversation = open(&bots, WORKSPACE).await;
+
+    assert_eq!(
+        bots.notify(notification("a", WORKSPACE)).await.unwrap(),
+        Notified::Admitted
+    );
+    assert_eq!(
+        bots.notify(notification("a", WORKSPACE)).await.unwrap(),
+        Notified::Duplicate
+    );
+    assert_eq!(
+        bots.notify(notification("other", OTHER_WORKSPACE))
+            .await
+            .unwrap(),
+        Notified::Ignored
+    );
+    let turn = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let history = bots
+                .execute(
+                    "bot.history.get.request",
+                    json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+                )
+                .await
+                .unwrap();
+            if let Some(turn) = history["turns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|turn| turn["status"] == "completed")
+            {
+                return turn.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(turn["wake"]["notifications"][0]["id"], "a");
+    assert!(
+        turn["reply"]
+            .as_str()
+            .unwrap()
+            .starts_with("reply:<ait-input kind=\"bot_wake\">")
+    );
+    let listed = bots
+        .execute(
+            "bot.notifications.list.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["notifications"][0]["wake"]["turnId"], turn["id"]);
+    assert_eq!(fixture.store.notification_logs().unwrap().len(), 1);
+    bots.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_notification_offered_after_stop_is_kept_until_shutdown() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    open(&bots, WORKSPACE).await;
+
+    // Draining stops the Bots before schedules settle the runs it cancelled.
+    bots.stop();
+    bots.offer(
+        &tokio::runtime::Handle::current(),
+        notification("settled-at-shutdown", WORKSPACE),
+    );
+    bots.shutdown().await.unwrap();
+
+    let logs = fixture.store.notification_logs().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0].entries[0].notification.id, "settled-at-shutdown");
+    assert_eq!(
+        logs[0].entries[0].wake,
+        domain::bot::notification::WakeStatus::Pending
+    );
+    assert_eq!(
+        bots.notify(notification("after-shutdown", WORKSPACE)).await,
+        Err(ErrorCode::ServerDraining)
+    );
+}
+
+/// The Bot's notification log entries, newest first.
+async fn logged(bots: &Bots) -> Vec<Value> {
+    bots.execute(
+        "bot.notifications.list.request",
+        json!({"workspaceId":WORKSPACE}),
+    )
+    .await
+    .unwrap()["notifications"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn a_wake_turn_cut_short_by_shutdown_wakes_again_after_restart() {
+    let fixture = Fixture::new();
+    fixture.native.hold.store(true, Ordering::SeqCst);
+    let bots = fixture.bots();
+    open(&bots, WORKSPACE).await;
+    bots.notify(notification("a", WORKSPACE)).await.unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&bots).await.remove(0);
+            if entry["wake"]["state"] == "woke" {
+                return entry["wake"]["turnId"].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    wait(&bots, WORKSPACE, &first, "running").await;
+
+    bots.shutdown().await.unwrap();
+    fixture.native.hold.store(false, Ordering::SeqCst);
+    let restarted = fixture.bots();
+
+    let retried = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&restarted).await.remove(0);
+            if entry["wake"]["state"] == "woke" && entry["wake"]["turnId"] != first {
+                return entry["wake"]["turnId"].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    wait(&restarted, WORKSPACE, &retried, "completed").await;
+    let cancelled = restarted
+        .execute(
+            "bot.turn.get.request",
+            json!({"workspaceId":WORKSPACE,"turnId":first}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancelled["turn"]["status"], "cancelled");
+    restarted.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn ticket_entry_points_open_assign_report_and_wake_the_tickets_conversation() {
+    use domain::bot::ticket::{TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind};
+
+    use crate::tickets::{AssignTicket, OpenTicket, WorkerReport};
+
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let conversation = serde_json::from_value(open(&bots, WORKSPACE).await).unwrap();
+    let request = OpenTicket {
+        root: WORKSPACE.into(),
+        draft: TicketDraft {
+            conversation_id: Some(conversation),
+            key: "create-1".into(),
+            title: "Fix login".into(),
+            request: "The login page crashes".into(),
+        },
+    };
+
+    let opened = bots.open_ticket(request.clone()).await.unwrap();
+    let retried = bots.open_ticket(request).await.unwrap();
+    bots.assign_ticket(AssignTicket {
+        root: WORKSPACE.into(),
+        ticket_id: opened.ticket_id,
+        agent_id: "agent-1".into(),
+        workspace_id: WORKSPACE.into(),
+    })
+    .await
+    .unwrap();
+    let status = bots
+        .report_progress(WorkerReport {
+            root: WORKSPACE.into(),
+            ticket_id: opened.ticket_id,
+            agent_id: "agent-1".into(),
+            workspace_id: WORKSPACE.into(),
+            kind: WorkerReportKind::Done,
+            text: "Merged #12".into(),
+        })
+        .await
+        .unwrap();
+    let woke = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let entry = logged(&bots).await.remove(0);
+            if entry["wake"]["state"] == "woke" {
+                return entry;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let closed = bots
+        .update_ticket(
+            WORKSPACE.into(),
+            opened.ticket_id,
+            TicketUpdate {
+                status: Some(TicketStatus::Done),
+                outcome: Some("Merged #12".into()),
+                ..TicketUpdate::default()
+            },
+        )
+        .await
+        .unwrap();
+    let abandoned = bots
+        .abandon_ticket(WORKSPACE.into(), opened.ticket_id)
+        .await;
+
+    assert!(opened.created && !retried.created);
+    assert_eq!(retried.ticket_id, opened.ticket_id);
+    assert_eq!(status, TicketStatus::Open);
+    assert_eq!(woke["wake"]["conversationId"], json!(conversation));
+    assert_eq!(woke["notification"]["kind"], "ticket_done");
+    assert_eq!(woke["notification"]["ticketTitle"], "Fix login");
+    assert_eq!(closed["ticket"]["status"], "done");
+    assert_eq!(abandoned, Ok(()));
+    let listed = bots
+        .execute(
+            "bot.ticket.list.request",
+            json!({"workspaceId":WORKSPACE,"includeClosed":true}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["tickets"][0]["id"], json!(opened.ticket_id));
+    let reopened = bots
+        .reopen_ticket(WORKSPACE.into(), opened.ticket_id, "agent-1".into())
+        .await;
+    let reclosed = bots
+        .close_finished_ticket(WORKSPACE.into(), opened.ticket_id)
+        .await;
+    assert_eq!(reopened, Ok(true));
+    // The `done` came before the reopen, so it says nothing about the new work.
+    assert_eq!(reclosed, Ok(Some(TicketStatus::Cancelled)));
+    bots.shutdown().await.unwrap();
+    assert_eq!(
+        bots.abandon_ticket(WORKSPACE.into(), opened.ticket_id)
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
+}
+
+#[tokio::test]
+async fn reads_resolve_the_viewer_and_stop_with_the_service() {
+    use domain::ConversationId;
+
+    use crate::recall::{Origin, Read, Reader, Viewer};
+
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let owner: ConversationId = serde_json::from_value(open(&bots, WORKSPACE).await).unwrap();
+    let stranger = ConversationId::generate();
+    let read = |reader, resource: &str| Read {
+        root: WORKSPACE.into(),
+        reader,
+        resource: resource.into(),
+        offset: None,
+        limit: None,
+        agent: None,
+    };
+
+    let viewer = bots
+        .sight(WORKSPACE.into(), Origin::Conversation(owner))
+        .await
+        .map(|sight| sight.map(|sight| sight.viewer));
+    let foreign = bots
+        .sight(WORKSPACE.into(), Origin::Conversation(stranger))
+        .await
+        .map(|sight| sight.map(|sight| sight.viewer));
+    let conversations = bots
+        .read(read(Reader::Conversation(owner), "conversations"))
+        .await
+        .unwrap();
+    let refused = bots
+        .read(read(
+            Reader::Conversation(stranger),
+            &format!("conversation/{owner}"),
+        ))
+        .await;
+    let unconfigured = bots
+        .sight(OTHER_WORKSPACE.into(), Origin::Conversation(owner))
+        .await;
+
+    assert_eq!(viewer, Ok(Some(Viewer::Owner(owner))));
+    assert_eq!(foreign, Ok(Some(Viewer::External(stranger))));
+    assert_eq!(conversations["items"][0]["id"], json!(owner));
+    assert_eq!(conversations["items"][0]["label"], "Ait");
+    assert_eq!(refused, Err(ErrorCode::Forbidden));
+    assert_eq!(unconfigured, Err(ErrorCode::BotNotFound));
+    bots.shutdown().await.unwrap();
+    assert_eq!(
+        bots.read(read(Reader::Conversation(owner), "tickets"))
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
 }

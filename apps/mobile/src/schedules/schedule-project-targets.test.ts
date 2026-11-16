@@ -11,9 +11,6 @@ function makeProject(overrides: Partial<ProjectSummary>): ProjectSummary {
     viewKey: "proj",
     projectName: "Project",
     hosts: [],
-    totalWorkspaceCount: 0,
-    hostCount: 0,
-    onlineHostCount: 0,
     ...overrides,
   };
 }
@@ -27,7 +24,6 @@ function makeHost(overrides: Partial<ProjectSummary["hosts"][number]>) {
     serverName: "Host 1",
     isOnline: true,
     repoRoot: "/tmp/project",
-    workspaceCount: 0,
     workspaces: [],
     ...overrides,
   };

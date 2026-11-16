@@ -16,8 +16,9 @@ const HOME_SCOPE_CWD = "~";
 export function useAgentProfileFormCatalog(input: {
   serverId: string;
   model: AgentProfileFormModel;
-}): void {
-  const { entries } = useProvidersSnapshot(input.serverId, { cwd: null });
+}) {
+  const snapshot = useProvidersSnapshot(input.serverId, { cwd: null });
+  const { entries } = snapshot;
 
   useEffect(() => {
     if (!entries) {
@@ -25,6 +26,7 @@ export function useAgentProfileFormCatalog(input: {
     }
     input.model.applyProviderCatalog(entries);
   }, [entries, input.model]);
+  return snapshot;
 }
 
 export function useAgentProfileFormFeatures(input: {

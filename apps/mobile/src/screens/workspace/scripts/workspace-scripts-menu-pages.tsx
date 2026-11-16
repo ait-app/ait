@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
-import { openServiceUrl } from "@/utils/open-service-url";
+import { openServiceUrl } from "@/desktop/open-service-url";
 import { ExitCodeBadge, ScriptIcon } from "./script-marks";
 import { scriptToneColorMapping, summarizeScripts, type ScriptsSummary } from "./script-status";
 import {

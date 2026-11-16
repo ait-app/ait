@@ -17,7 +17,7 @@ const env = {
   AIT_SERVER_DATA_DIR: daemonHome,
 };
 delete env.ELECTRON_RUN_AS_NODE;
-delete env.AIT_SERVER_BIN;
+delete env.AITD_BIN;
 let app;
 try {
   app = await electron.launch({

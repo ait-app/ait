@@ -128,7 +128,7 @@ export class BrowserSnapshotEngine {
       return resolved;
     }
     const result = await input.page.executeJavaScript(buildScript(resolved.metadata));
-    return readActionResult(result, true);
+    return readActionResult(result);
   }
 
   private resolveRef(input: { browserId: string; ref: string }): BrowserRefResolveResult {
@@ -144,8 +144,8 @@ export class BrowserSnapshotEngine {
   }
 }
 
-function readActionResult(value: unknown, staleWhenFalse: boolean): BrowserRefActionResult {
-  if (value === false && staleWhenFalse) {
+function readActionResult(value: unknown): BrowserRefActionResult {
+  if (value === false) {
     return { ok: false, reason: "stale_ref" };
   }
   if (isActionFailure(value)) {

@@ -3,7 +3,6 @@ import { deriveStreamTurnTiming, type StreamTurnTiming } from "@/timeline/turn-t
 import type { StreamItem } from "@/types/stream";
 import { findMountedWindowStart, getMountedRecentStreamItems } from "./history-window";
 import { getWebPartialVirtualizationThreshold } from "./web-virtualization";
-import { orderHeadForStreamRenderStrategy, orderTailForStreamRenderStrategy } from "./strategy";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 
 export interface StreamRenderSegments {
@@ -160,21 +159,13 @@ export function buildAgentStreamRenderModel(
     cache: orderedTailCache,
     source: renderedTail,
     cacheKey: orderingCacheKey,
-    order: (items) =>
-      orderTailForStreamRenderStrategy({
-        strategy,
-        streamItems: items,
-      }),
+    order: strategy.orderTail,
   });
   const orderedHead = getOrderedItems({
     cache: orderedHeadCache,
     source: input.head,
     cacheKey: orderingCacheKey,
-    order: (items) =>
-      orderHeadForStreamRenderStrategy({
-        strategy,
-        streamHead: items,
-      }),
+    order: strategy.orderHead,
   });
   const splitHistory = splitOrderedTail({
     orderedTail,

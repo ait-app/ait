@@ -27,13 +27,6 @@ impl File {
         Self { path: path.into() }
     }
 
-    /// Read the complete file into owned bytes.
-    /// # Errors
-    /// Returns filesystem errors, including `NotFound` for an absent file.
-    pub(crate) fn read(&self) -> Result<Vec<u8>, Error> {
-        fs::read(&self.path).map_err(Into::into)
-    }
-
     /// Read at most `limit` bytes, rejecting larger files without loading their entire contents.
     /// # Errors
     /// Returns filesystem errors or `TooLarge` when the file exceeds `limit`.

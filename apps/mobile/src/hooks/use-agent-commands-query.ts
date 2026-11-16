@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/hooks/agent-commands-query";
+import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/data/agent-commands-query";
 
 const DRAFT_COMMANDS_STALE_TIME = Number.POSITIVE_INFINITY;
 const SESSION_COMMANDS_STALE_TIME = 60_000;
@@ -71,13 +71,9 @@ export function useAgentCommandsQuery({
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 
-  // isPending is true when the query has never run yet (no cached data and not fetching)
-  // isLoading is true when fetching and no data yet
-  const isLoading = query.isPending || query.isLoading;
-
   return {
     commands: query.data ?? [],
-    isLoading,
+    isLoading: query.isPending,
     isError: query.isError,
     error: query.error,
   };

@@ -1,0 +1,20 @@
+export const paneFind = {
+  searching: "Buscando…",
+  loading: "Cargando…",
+  failed: "Error",
+  retry: "Reintentar",
+
+  title: "Buscar",
+  placeholder: "Buscar en el panel",
+  close: "Cerrar búsqueda",
+  matches: "Coincidencias",
+  previous: "Coincidencia anterior",
+  next: "Siguiente coincidencia",
+  toggleReplace: "Mostrar reemplazo",
+  replaceWith: "Reemplazar con",
+  replace: "Reemplazar",
+  replaceAll: "Reemplazar todo",
+  noMatches: "Sin coincidencias",
+  position: "{{current}} de {{total}}",
+  total: "{{total}} coincidencias",
+};

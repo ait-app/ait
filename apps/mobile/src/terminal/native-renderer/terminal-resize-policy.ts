@@ -1,11 +1,11 @@
-export interface TerminalSize {
+interface TerminalSize {
   rows: number;
   cols: number;
 }
 
 export type TerminalResizeSource = "measure" | "claim";
 
-export interface TerminalResizePolicyState {
+interface TerminalResizePolicyState {
   measuredSize: TerminalSize;
   claimedSize: TerminalSize | null;
   lastClaimToken: number | null;
@@ -13,17 +13,17 @@ export interface TerminalResizePolicyState {
   pendingForceClaim: boolean;
 }
 
-export interface TerminalResizeClaim extends TerminalSize {
+interface TerminalResizeClaim extends TerminalSize {
   force: boolean;
 }
 
-export interface TerminalResizePolicyInput {
+interface TerminalResizePolicyInput {
   source: TerminalResizeSource;
   size: TerminalSize | null;
   claimToken?: number;
 }
 
-export interface TerminalResizePolicyResult {
+interface TerminalResizePolicyResult {
   state: TerminalResizePolicyState;
   measuredSize: TerminalSize;
   resizeClaim: TerminalResizeClaim | null;

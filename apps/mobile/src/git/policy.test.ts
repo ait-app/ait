@@ -61,6 +61,7 @@ function createInput(
     githubFeaturesEnabled: true,
     forgeBrandLabel: "GitHub",
     forgeChangeRequestNoun: "PR",
+    forgeChangeRequestContext: undefined,
     githubAutoMergeActionsEnabled: true,
     hasPullRequest: false,
     pullRequestUrl: null,
@@ -232,6 +233,45 @@ describe("git-actions-policy", () => {
       }),
     );
     expect(actions.primary).toMatchObject({ id: "pr", label: "View PR", disabled: false });
+  });
+
+  it("uses merge request wording for every change-request action on GitLab", () => {
+    const gitlab = { forgeChangeRequestNoun: "MR", forgeChangeRequestContext: "mr" } as const;
+    const openRequest = buildGitActions(
+      createInput({
+        ...gitlab,
+        hasRemote: true,
+        isOnBaseBranch: false,
+        aheadCount: 1,
+        hasNewWork: false,
+        hasPullRequest: true,
+        pullRequestUrl: "https://example.com/mr/1",
+        pullRequestState: "open",
+        pullRequestMergeable: "MERGEABLE",
+        pullRequestGithub: githubStatus(),
+      }),
+    );
+    expect(openRequest.primary).toMatchObject({
+      id: "pr",
+      label: "View MR",
+      pendingLabel: "View MR",
+      successLabel: "View MR",
+    });
+    expect(openRequest.secondary.find((action) => action.id === "merge-pr-squash")).toMatchObject({
+      label: "Merge MR (squash)",
+      pendingLabel: "Merging MR...",
+      successLabel: "MR merged",
+    });
+
+    const newWork = buildGitActions(
+      createInput({ ...gitlab, hasRemote: true, isOnBaseBranch: false, aheadCount: 1 }),
+    );
+    expect(newWork.primary).toMatchObject({
+      id: "pr",
+      label: "Create MR",
+      pendingLabel: "Creating MR...",
+      successLabel: "MR Created",
+    });
   });
 
   it("shows only remote sync actions on the base branch", () => {
@@ -516,7 +556,7 @@ describe("git-actions-policy", () => {
   it("hides Git actions for a non-Git workspace", () => {
     const directory = buildGitActions(createInput({ isGit: false }));
 
-    expect(directory).toEqual({ primary: null, secondary: [], menu: [] });
+    expect(directory).toEqual({ primary: null, secondary: [] });
   });
 
   it("offers archive workspace for Git checkouts and worktrees", () => {
@@ -670,10 +710,8 @@ describe("git-actions-policy", () => {
       }),
     );
 
-    const createPrAction = [...createActions.secondary, ...createActions.menu].find(
-      (action) => action.id === "pr",
-    );
-    const viewPrAction = [viewActions.primary, ...viewActions.secondary, ...viewActions.menu].find(
+    const createPrAction = createActions.secondary.find((action) => action.id === "pr");
+    const viewPrAction = [viewActions.primary, ...viewActions.secondary].find(
       (action) => action?.id === "pr",
     );
 

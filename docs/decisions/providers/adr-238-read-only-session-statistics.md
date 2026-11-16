@@ -6,7 +6,8 @@ amends:
   - providers/adr-091-independent-session-execution.md
   - bot/adr-221-read-only-bot-session-inspection.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
+  - crates/provider/omp
   - crates/api/src/guest
   - packages/protocol
   - packages/client
@@ -20,9 +21,9 @@ paths:
 PR #612 的原生统计结果通过字符串 JSON 猜测字段。不同 Provider 的计数口径不同，不能把
 最新 `AgentUsage` 当作整场会话总量，也不能累加重复快照。
 
-当前 Codex 映射取原生 `last` 用量（`crates/provider/src/local/usage.rs`），Pi 取 assistant
-message 的 usage（`crates/provider/src/local/pi/streaming.rs`），Claude 取原生 result 报告。
-OMP 的 `stream::add_usage` 累计原生消息用量；缺失缓存/费用会令对应累计字段保持未知，
+当前 Codex 映射取原生 `last` 用量（`crates/provider/native/src/usage.rs`），Pi 取 assistant
+message 的 usage（`crates/provider/pi/src/streaming.rs`），Claude 取原生 result 报告。
+OMP 读取原生统计，并在统计不可用时回退到原生消息用量；缺失缓存/费用会令对应字段保持未知，
 不能把缺失当零或把部分费用展示成完整累计费用，明确报告的零仍然保留。
 现有 `AgentUsage` 没有跨 Provider 的统一 turn/session 计数口径或每项观察时间。
 
@@ -31,6 +32,9 @@ OMP 的 `stream::add_usage` 累计原生消息用量；缺失缓存/费用会令
 1. 增加唯一的 `agent.statistics.get.request`，参数为 `agentId`。复用 runtime directory 和
    registry 的已提交读取端口，归 `Operation::Statistics` / `Access::Read`。不恢复原生会话、
    不占用 writer、不发 prompt、不取消当前轮次、不写 Timeline。扩展 ADR-091 的独立读取清单。
+   查询 DTO 仅由 `provider` runtime 的投影使用，保持 crate 私有；直接复用 `provider-core`
+   的既有 `AgentUsage`。查询和执行分类归 runtime，OMP 用量解释及测试归 `provider-omp`，
+   沿用 ADR-270/273 的 crate 边界。
 2. 响应区分配置模型与原生 runtime 最后确认的有效模型，状态来自持久 runtime record。
    `updatedAt` 是记录时间，不冒充每项指标的采样时间。用量只解码既有 `lastUsage` 类型，
    `usageScope` 固定为 `provider_snapshot`；不根据 Provider 名字推断统一累计口径。

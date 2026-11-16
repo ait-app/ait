@@ -1,5 +1,5 @@
 import { queryClient } from "@/data/query-client";
-import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
+import { isAgentArchiving, setAgentArchiving } from "@/data/archive-agent-pending";
 import { defaultHostAppearance } from "@/hosts/appearance";
 import { bindHostRuntimeAppState } from "@/navigation/host-runtime-bootstrap";
 import type { DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
@@ -3356,49 +3356,6 @@ describe("HostRuntimeStore", () => {
     };
     expectHosts(store.getHosts());
     expectHosts(JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]"));
-    store.syncHosts([]);
-  });
-
-  it("tracks connection status transitions independently of agent panels", async () => {
-    useHostRuntimeClock();
-    const host = makeHost({
-      connections: [
-        {
-          id: "direct:lan:6767",
-          type: "directTcp",
-          endpoint: "lan:6767",
-        },
-      ],
-    });
-    const fakeClient = new FakeDaemonClient();
-    fakeClient.setConnectionState({ status: "connected" });
-    const store = new HostRuntimeStore({
-      deps: {
-        createClient: () => fakeClient as unknown as DaemonClient,
-        connectToDaemon: async ({ host: hostProfile }) => ({
-          client: fakeClient as unknown as DaemonClient,
-          serverId: hostProfile.serverId,
-          hostname: hostProfile.label ?? null,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-    });
-
-    store.syncHosts([host]);
-    await waitForHostOnline(store, host.serverId);
-    await vi.advanceTimersByTimeAsync(1_500);
-
-    const outageStartedAt = Date.now();
-    fakeClient.setConnectionState({ status: "disconnected", reason: "transport closed" });
-    expect(store.getConnectionStatusSince(host.serverId)).toBe(outageStartedAt);
-
-    await vi.advanceTimersByTimeAsync(500);
-    expect(store.getConnectionStatusSince(host.serverId)).toBe(outageStartedAt);
-
-    const reconnectStartedAt = Date.now();
-    fakeClient.setConnectionState({ status: "connected" });
-    expect(store.getConnectionStatusSince(host.serverId)).toBe(reconnectStartedAt);
-
     store.syncHosts([]);
   });
 

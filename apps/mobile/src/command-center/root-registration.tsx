@@ -14,17 +14,18 @@ import {
   PanelLeft,
   Plus,
   Settings,
+  type LucideIcon,
 } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { usePanelStore } from "@/stores/panel-store";
+import { useToggleAgentList } from "@/components/use-toggle-agent-list";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import {
@@ -35,86 +36,34 @@ import {
   buildSettingsRoute,
 } from "@/utils/host-routes";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import type { CommandCenterContribution, CommandCenterIconProps } from "./contributions";
+import type {
+  CommandCenterContribution,
+  CommandCenterIcon,
+  CommandCenterIconProps,
+} from "./contributions";
 import { useCommandCenterActions } from "./provider";
 import { buildGroupingContribution } from "./root-contributions";
 
-const ThemedPlus = withUnistyles(Plus, (theme) => ({ color: theme.colors.foregroundMuted }));
-const ThemedFolderPlus = withUnistyles(FolderPlus, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedHistory = withUnistyles(History, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedCalendarClock = withUnistyles(CalendarClock, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedTasks = withUnistyles(LayoutDashboard, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedKeyboard = withUnistyles(Keyboard, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedSettings = withUnistyles(Settings, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedHome = withUnistyles(Home, (theme) => ({ color: theme.colors.foregroundMuted }));
-const ThemedImport = withUnistyles(Import, (theme) => ({ color: theme.colors.foregroundMuted }));
-const ThemedFolder = withUnistyles(Folder, (theme) => ({ color: theme.colors.foregroundMuted }));
-const ThemedCircleDashed = withUnistyles(CircleDashed, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedPanelLeft = withUnistyles(PanelLeft, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-
-function PlusIcon({ size }: CommandCenterIconProps) {
-  return <ThemedPlus size={size} strokeWidth={2.4} />;
+/** A muted lucide glyph at the given stroke, as a Command Center row icon. */
+function strokedIcon(Icon: LucideIcon, strokeWidth: number): CommandCenterIcon {
+  const ThemedIcon = withUnistyles(Icon, (theme) => ({ color: theme.colors.foregroundMuted }));
+  return function StrokedCommandCenterIcon({ size }: CommandCenterIconProps) {
+    return <ThemedIcon size={size} strokeWidth={strokeWidth} />;
+  };
 }
 
-function AddProjectIcon({ size }: CommandCenterIconProps) {
-  return <ThemedFolderPlus size={size} strokeWidth={2.2} />;
-}
-
-function SettingsIcon({ size }: CommandCenterIconProps) {
-  return <ThemedSettings size={size} strokeWidth={2.2} />;
-}
-
-function HistoryIcon({ size }: CommandCenterIconProps) {
-  return <ThemedHistory size={size} strokeWidth={2.2} />;
-}
-
-function SchedulesIcon({ size }: CommandCenterIconProps) {
-  return <ThemedCalendarClock size={size} strokeWidth={2.2} />;
-}
-
-function TasksIcon({ size }: CommandCenterIconProps) {
-  return <ThemedTasks size={size} strokeWidth={2.2} />;
-}
-
-function KeyboardIcon({ size }: CommandCenterIconProps) {
-  return <ThemedKeyboard size={size} strokeWidth={2.2} />;
-}
-
-function HomeIcon({ size }: CommandCenterIconProps) {
-  return <ThemedHome size={size} strokeWidth={2.2} />;
-}
-
-function ImportIcon({ size }: CommandCenterIconProps) {
-  return <ThemedImport size={size} strokeWidth={2.2} />;
-}
-
-function FolderIcon({ size }: CommandCenterIconProps) {
-  return <ThemedFolder size={size} strokeWidth={2.2} />;
-}
-
-function CircleDashedIcon({ size }: CommandCenterIconProps) {
-  return <ThemedCircleDashed size={size} strokeWidth={2.2} />;
-}
-
-function PanelLeftIcon({ size }: CommandCenterIconProps) {
-  return <ThemedPanelLeft size={size} strokeWidth={2.2} />;
-}
+const PlusIcon = strokedIcon(Plus, 2.4);
+const AddProjectIcon = strokedIcon(FolderPlus, 2.2);
+const SettingsIcon = strokedIcon(Settings, 2.2);
+const HistoryIcon = strokedIcon(History, 2.2);
+const SchedulesIcon = strokedIcon(CalendarClock, 2.2);
+const TasksIcon = strokedIcon(LayoutDashboard, 2.2);
+const KeyboardIcon = strokedIcon(Keyboard, 2.2);
+const HomeIcon = strokedIcon(Home, 2.2);
+const ImportIcon = strokedIcon(Import, 2.2);
+const FolderIcon = strokedIcon(Folder, 2.2);
+const CircleDashedIcon = strokedIcon(CircleDashed, 2.2);
+const PanelLeftIcon = strokedIcon(PanelLeft, 2.2);
 
 export function CommandCenterRootActions() {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
@@ -133,9 +82,7 @@ export function CommandCenterRootActions() {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const isCompact = useIsCompactFormFactor();
-  const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
-  const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
-  const toggleAgentList = isCompact ? toggleMobileAgentList : toggleDesktopAgentList;
+  const toggleAgentList = useToggleAgentList(isCompact);
   const shortcutPlatform = useMemo(
     () => ({ isMac: getShortcutOs() === "mac", isDesktop: getIsElectronRuntime() }),
     [],

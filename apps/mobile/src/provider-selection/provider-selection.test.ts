@@ -6,9 +6,7 @@ import {
   buildProviderQualifiedDescription,
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
-  buildSelectedTriggerLabel,
   filterAndRankModelRows,
-  matchesModelSearch,
   resolveSelectedModelLabel,
   resolveAgentCreationReadiness,
 } from "./provider-selection";
@@ -49,6 +47,7 @@ describe("combined model selector data", () => {
       {
         id: "codex",
         label: "Codex",
+        modelDefinitions: [codexModel],
         modelSelection: {
           kind: "models",
           rows: [
@@ -98,6 +97,7 @@ describe("combined model selector data", () => {
       {
         id: "codewhale",
         label: "CodeWhale",
+        modelDefinitions: [],
         modelSelection: {
           kind: "models",
           rows: [
@@ -150,15 +150,44 @@ describe("combined model selector data", () => {
       {
         id: "loading-provider",
         label: "loading-provider",
+        modelDefinitions: [],
         modelSelection: { kind: "loading" },
       },
       {
         id: "error-provider",
         label: "error-provider",
+        modelDefinitions: [],
         modelSelection: { kind: "error", message: "boom" },
       },
     ]);
   });
+
+  it.each(["error", "unavailable"] as const)(
+    "keeps cached models selectable and exposes the %s failure",
+    (status) => {
+      const [provider] = buildSelectableProviderSelectorProviders([
+        snapshotEntry({
+          provider: "codex",
+          status,
+          error: "Discovery failed",
+          models: [codexModel],
+        }),
+      ]);
+      expect(provider?.modelSelection).toMatchObject({
+        kind: "models",
+        error: "Discovery failed",
+        rows: [{ modelId: codexModel.id }],
+      });
+      expect(
+        resolveSelectedModelLabel({
+          providers: provider ? [provider] : [],
+          selectedProvider: "codex",
+          selectedModel: codexModel.id,
+          isLoading: false,
+        }),
+      ).toBe(codexModel.label);
+    },
+  );
 
   it("builds selector providers from an already-curated provider list", () => {
     const providerDefinitions: AgentProviderDefinition[] = [
@@ -180,6 +209,7 @@ describe("combined model selector data", () => {
       {
         id: "codex",
         label: "Codex",
+        modelDefinitions: [codexModel],
         modelSelection: {
           kind: "models",
           rows: [
@@ -205,10 +235,10 @@ describe("combined model selector data", () => {
       description: "OpenCode Zen - kimi",
     };
 
-    expect(matchesModelSearch(row, "kimi zen")).toBe(true);
-    expect(matchesModelSearch(row, "zen kimi")).toBe(true);
-    expect(matchesModelSearch(row, "k2.5 zen")).toBe(true);
-    expect(matchesModelSearch(row, "kimi gemini")).toBe(false);
+    expect(filterAndRankModelRows([row], "kimi zen")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "zen kimi")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "k2.5 zen")).toEqual([row]);
+    expect(filterAndRankModelRows([row], "kimi gemini")).toEqual([]);
   });
 
   it("ranks model search results by fuzzy match quality", () => {
@@ -237,10 +267,6 @@ describe("combined model selector data", () => {
     ];
 
     expect(filterAndRankModelRows(rows, "gpt54").map((row) => row.modelId)).toEqual(["gpt-5.4"]);
-  });
-
-  it("keeps the selected trigger label model-only", () => {
-    expect(buildSelectedTriggerLabel("GPT-5.4")).toBe("GPT-5.4");
   });
 
   it("names the provider first when a model row is shown outside its provider", () => {
@@ -308,7 +334,7 @@ describe("combined model selector data", () => {
     ).toBe("Select model");
   });
 
-  it("keeps a loading remembered provider from taking over the model picker label", () => {
+  it("keeps a remembered model visible while its provider loads", () => {
     const providers = buildSelectableProviderSelectorProviders([
       snapshotEntry({ provider: "omp", status: "loading", models: [] }),
       snapshotEntry({ provider: "codex", models: [codexModel] }),
@@ -322,7 +348,7 @@ describe("combined model selector data", () => {
         selectedModel: "remembered-model",
         isLoading: true,
       }),
-    ).toBe("Select model");
+    ).toBe("remembered-model");
     expect(
       resolveSelectedModelLabel({
         providers,

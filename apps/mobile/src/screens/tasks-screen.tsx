@@ -3,9 +3,21 @@ import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
-import { Folder, LayoutDashboard, Plus, RefreshCw } from "lucide-react-native";
+import {
+  Folder,
+  LayoutDashboard,
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+  GitFork,
+  PanelRight,
+  ChevronsLeft,
+  ChevronsRight,
+  type LucideIcon,
+} from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { MenuHeader } from "@/components/headers/menu-header";
+import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -13,10 +25,12 @@ import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
 import { SelectField } from "@/components/ui/select-field";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { COMPACT_LARGE_ICON_BUTTON_SIZE } from "@/components/ui/icon-button-chrome";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { useTaskBoard } from "@/task-board/use-task-board";
 import {
   filterTaskBoard,
+  laneStatusBucket,
   TASK_LANES,
   taskKey,
   taskLane,
@@ -25,16 +39,54 @@ import {
 } from "@/task-board/model";
 import { TaskCard } from "@/task-board/task-card";
 import { TaskDetail } from "@/task-board/task-detail";
+import { TaskStatusIcon } from "@/task-board/task-status";
+import { useProjectIcons } from "@/projects/icons";
 
 const MIN_LANE_WIDTH = 240;
 const DETAIL_WIDTH = 348;
+const COLLAPSED_LANE_WIDTH = 40;
+
+function BoardButton({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+  active = false,
+  disabled = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  testID: string;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  const { theme } = useUnistyles();
+  return (
+    <HeaderToggleButton
+      tooltipLabel={label}
+      tooltipKeys={[]}
+      tooltipSide="bottom"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      aria-pressed={active}
+      disabled={disabled}
+      testID={testID}
+      style={active ? styles.activeControl : undefined}
+    >
+      <Icon size={16} color={active ? theme.colors.accent : theme.colors.foregroundMuted} />
+    </HeaderToggleButton>
+  );
+}
 
 export function TasksScreen() {
   const focused = useIsFocused();
   return focused ? <TasksScreenContent /> : <View style={styles.container} />;
 }
 
-export function TasksScreenContent() {
+function TasksScreenContent() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const {
@@ -56,13 +108,33 @@ export function TasksScreenContent() {
   const [sort, setSort] = useState<TaskSort>("recent");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [mobileLane, setMobileLane] = useState<TaskLane>("needs_action");
+  const [collapsedLanes, setCollapsedLanes] = useState<TaskLane[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showChildren, setShowChildren] = useState(true);
   const selected = selectedKey ? byKey.get(selectedKey) : undefined;
   const compact = width > 0 && width < 700;
   const minimumBoardWidth =
-    TASK_LANES.length * MIN_LANE_WIDTH + (TASK_LANES.length + 1) * theme.spacing[3];
-  const inlineDetail = width >= minimumBoardWidth + DETAIL_WIDTH;
+    (TASK_LANES.length - collapsedLanes.length) * MIN_LANE_WIDTH +
+    collapsedLanes.length * COLLAPSED_LANE_WIDTH +
+    (TASK_LANES.length + 1) * theme.spacing[2];
+  const inlineDetail = !compact && width >= minimumBoardWidth + DETAIL_WIDTH;
   const lanesWidth = compact ? boardWidth : Math.max(boardWidth, minimumBoardWidth);
   const closeDetail = useCallback(() => setSelectedKey(null), []);
+  const toggleLane = useCallback(
+    (lane: TaskLane) =>
+      setCollapsedLanes((current) =>
+        current.includes(lane) ? current.filter((value) => value !== lane) : [...current, lane],
+      ),
+    [],
+  );
+  const iconTargets = useMemo(
+    () =>
+      [...byKey.values()].flatMap((task) =>
+        task.projectIconTarget ? [task.projectIconTarget] : [],
+      ),
+    [byKey],
+  );
+  const projectIcons = useProjectIcons({ projects: iconTargets });
   const selectHost = useCallback((id: string) => {
     setHostId(id);
     setProjectKey("");
@@ -116,6 +188,24 @@ export function TasksScreenContent() {
     value: value as TaskSort,
     label: t(`taskBoard.sort.${value as TaskSort}`),
   }));
+  const hostFilter =
+    hostId === ALL_HOSTS_OPTION_ID ? undefined : hosts.find((host) => host.serverId === hostId);
+  const scope = [hostFilter?.label, project.value ? project.label : undefined]
+    .filter(Boolean)
+    .join(" / ");
+  const scopeTitle = scope
+    ? t("taskBoard.scopedTaskCount", { scope, count: visible.length })
+    : t("taskBoard.totalTaskCount", { count: visible.length });
+  const filtered = Boolean(scope) || sort !== "recent";
+  const searchField = (
+    <SearchField
+      value={search}
+      onChangeText={setSearch}
+      placeholder={t("taskBoard.search")}
+      clearAccessibilityLabel={t("taskBoard.clearSearch")}
+      testID="task-board-search"
+    />
+  );
   const offlineHosts = unavailableHosts.filter(
     (host) => hostId === ALL_HOSTS_OPTION_ID || host.serverId === hostId,
   );
@@ -143,77 +233,116 @@ export function TasksScreenContent() {
       <MenuHeader title={t("taskBoard.title")} />
       <View style={styles.body}>
         <View style={styles.main}>
-          <View style={[styles.intro, compact && styles.compactPadding]}>
-            <View style={styles.introText}>
-              <Text style={styles.title}>{t("taskBoard.title")}</Text>
-              <Text style={styles.subtitle}>
-                {t("taskBoard.summary", {
-                  count: visible.length,
-                  needsAction: lanes.needs_action.length,
-                })}
+          <View style={styles.toolbar} testID="task-board-toolbar">
+            <Pressable
+              onPress={() => setFiltersOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`${scopeTitle}, ${t("taskBoard.filters")}`}
+              accessibilityState={{ selected: filtered }}
+              aria-pressed={filtered}
+              style={({ hovered, pressed }) => [
+                styles.scopeButton,
+                (Boolean(hovered) || pressed) && styles.scopeButtonHovered,
+              ]}
+              testID="task-board-filters"
+            >
+              <Text style={styles.taskCount} numberOfLines={1}>
+                {scopeTitle}
               </Text>
-            </View>
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={Plus}
-              onPress={() => router.push(buildNewWorkspaceRoute())}
-              testID="task-board-new"
-            >
-              {t("taskBoard.newTask")}
-            </Button>
-          </View>
-          <View style={[styles.filters, compact && styles.compactPadding]}>
-            <View style={styles.search}>
-              <SearchField
-                value={search}
-                onChangeText={setSearch}
-                placeholder={t("taskBoard.search")}
-                clearAccessibilityLabel={t("taskBoard.clearSearch")}
-                testID="task-board-search"
+              <SlidersHorizontal
+                size={14}
+                color={filtered ? theme.colors.accent : theme.colors.foregroundMuted}
+              />
+            </Pressable>
+            {compact ? null : <View style={styles.searchSlot}>{searchField}</View>}
+            <View style={styles.toolbarActions}>
+              <BoardButton
+                icon={GitFork}
+                label={t("taskBoard.showSubtasks")}
+                onPress={() => setShowChildren(!showChildren)}
+                testID="task-board-subtasks"
+                active={showChildren}
+              />
+              <BoardButton
+                icon={PanelRight}
+                label={t("taskBoard.details")}
+                onPress={() => (selected ? closeDetail() : setSelectedKey(visible[0]?.key ?? null))}
+                testID="task-board-details-toggle"
+                active={Boolean(selected)}
+                disabled={!visible.length}
+              />
+              <BoardButton
+                icon={Plus}
+                label={t("taskBoard.newTask")}
+                onPress={() => router.push(buildNewWorkspaceRoute())}
+                testID="task-board-new"
               />
             </View>
-            <View style={styles.filterControls}>
-              {hosts.length > 1 ? (
-                <HostFilter
-                  hosts={hosts}
-                  selectedHost={hostId}
-                  onSelectHost={selectHost}
-                  triggerTestID="task-board-host-filter"
+          </View>
+          {compact ? <View style={styles.compactSearchRow}>{searchField}</View> : null}
+          <AdaptiveModalSheet
+            visible={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            header={{ title: t("taskBoard.filters") }}
+            desktopMaxWidth={460}
+            snapPoints={["50%", "85%"]}
+            testID="task-board-filter-sheet"
+          >
+            <View style={styles.filterSheet}>
+              <View style={styles.filterControls}>
+                {hosts.length > 1 ? (
+                  <HostFilter
+                    hosts={hosts}
+                    selectedHost={hostId}
+                    onSelectHost={selectHost}
+                    triggerTestID="task-board-host-filter"
+                  />
+                ) : null}
+                <SelectField
+                  field={false}
+                  size="sm"
+                  value={project.value}
+                  selectedDisplay={project}
+                  options={projects}
+                  onChange={setProjectKey}
+                  label={t("taskBoard.project")}
+                  placeholder={t("taskBoard.allProjects")}
+                  emptyText={t("taskBoard.noMatches")}
+                  triggerLeading={<Folder size={14} color={theme.colors.foregroundMuted} />}
+                  triggerTestID="task-board-project-filter"
                 />
-              ) : null}
-              <SelectField
-                field={false}
+                <SelectField
+                  field={false}
+                  size="sm"
+                  value={sort}
+                  selectedDisplay={sortOptions.find((option) => option.value === sort)!}
+                  options={sortOptions}
+                  onChange={setSort}
+                  label={t("taskBoard.sortLabel")}
+                  placeholder={t("taskBoard.sort.recent")}
+                  emptyText={t("taskBoard.noMatches")}
+                  triggerTestID="task-board-sort"
+                />
+              </View>
+
+              <Button
                 size="sm"
-                value={project.value}
-                selectedDisplay={project}
-                options={projects}
-                onChange={setProjectKey}
-                label={t("taskBoard.project")}
-                placeholder={t("taskBoard.allProjects")}
-                emptyText={t("taskBoard.noMatches")}
-                triggerLeading={<Folder size={14} color={theme.colors.foregroundMuted} />}
-                triggerTestID="task-board-project-filter"
-              />
-              <SelectField
-                field={false}
-                size="sm"
-                value={sort}
-                selectedDisplay={sortOptions.find((option) => option.value === sort)!}
-                options={sortOptions}
-                onChange={setSort}
-                label={t("taskBoard.sortLabel")}
-                placeholder={t("taskBoard.sort.recent")}
-                emptyText={t("taskBoard.noMatches")}
-                triggerTestID="task-board-sort"
-              />
+                variant="ghost"
+                onPress={() => {
+                  selectHost(ALL_HOSTS_OPTION_ID);
+                  setSort("recent");
+                  setSearch("");
+                }}
+              >
+                {t("taskBoard.resetFilters")}
+              </Button>
+              <Button onPress={() => setFiltersOpen(false)}>
+                {t("taskBoard.showTasks", { count: visible.length })}
+              </Button>
             </View>
-          </View>
+          </AdaptiveModalSheet>
           {offlineHosts.length ? (
-            <View
-              style={[styles.notice, compact && styles.compactPadding]}
-              testID="task-board-notice"
-            >
+            <View style={styles.notice} testID="task-board-notice">
               <Text style={styles.noticeText}>
                 {t("taskBoard.hostsUnavailable", {
                   hosts: offlineHosts.map((host) => host.label).join(", "),
@@ -275,6 +404,7 @@ export function TasksScreenContent() {
                         onPress={() => setMobileLane(lane)}
                         testID={`task-tab-${lane}`}
                       >
+                        <TaskStatusIcon bucket={laneStatusBucket(lane)} size={10} />
                         <Text style={[styles.tabText, mobileLane === lane && styles.activeTabText]}>
                           {t(`taskBoard.lanes.${lane}`)} {lanes[lane].length}
                         </Text>
@@ -296,50 +426,79 @@ export function TasksScreenContent() {
                   {(compact ? [mobileLane] : TASK_LANES).map((lane) => (
                     <View
                       key={lane}
-                      style={[styles.lane, compact && styles.compactLane]}
+                      style={[
+                        styles.lane,
+                        compact && styles.compactLane,
+                        !compact && collapsedLanes.includes(lane) && styles.collapsedLane,
+                      ]}
                       testID={`task-lane-${lane}`}
                     >
-                      <View style={styles.laneHeader}>
-                        <View
-                          style={[
-                            styles.dot,
-                            {
-                              backgroundColor:
-                                lane === "needs_action"
-                                  ? theme.colors.statusWarning
-                                  : lane === "running"
-                                    ? theme.colors.statusDotRunning
-                                    : theme.colors.statusSuccess,
-                            },
-                          ]}
-                        />
-                        <Text style={styles.laneTitle}>{t(`taskBoard.lanes.${lane}`)}</Text>
-                        <Text style={styles.count}>{lanes[lane].length}</Text>
-                      </View>
-                      <FlatList
-                        data={lanes[lane]}
-                        keyExtractor={(task) => task.key}
-                        style={styles.list}
-                        contentContainerStyle={styles.listContent}
-                        initialNumToRender={8}
-                        windowSize={5}
-                        keyboardShouldPersistTaps="handled"
-                        renderItem={({ item }) => (
-                          <TaskCard
-                            task={item}
-                            selected={item.key === selectedKey}
-                            online={statuses.get(item.agent.serverId) === "online"}
-                            onSelect={setSelectedKey}
+                      {!compact && collapsedLanes.includes(lane) ? (
+                        <Pressable
+                          style={styles.collapsedHeader}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("taskBoard.expandLane", {
+                            lane: t(`taskBoard.lanes.${lane}`),
+                          })}
+                          accessibilityState={{ expanded: false }}
+                          onPress={() => toggleLane(lane)}
+                          testID={`task-expand-${lane}`}
+                        >
+                          <TaskStatusIcon bucket={laneStatusBucket(lane)} />
+                          <ChevronsRight size={14} color={theme.colors.foregroundMuted} />
+                          <Text style={styles.collapsedTitle}>
+                            {t(`taskBoard.lanes.${lane}`)} {lanes[lane].length}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <>
+                          {!compact ? (
+                            <View style={styles.laneHeader}>
+                              <TaskStatusIcon bucket={laneStatusBucket(lane)} />
+                              <Text style={styles.laneTitle}>{t(`taskBoard.lanes.${lane}`)}</Text>
+                              <Text style={styles.count}>{lanes[lane].length}</Text>
+                              <View style={styles.collapseControl}>
+                                <BoardButton
+                                  icon={ChevronsLeft}
+                                  label={t("taskBoard.collapseLane", {
+                                    lane: t(`taskBoard.lanes.${lane}`),
+                                  })}
+                                  onPress={() => toggleLane(lane)}
+                                  testID={`task-collapse-${lane}`}
+                                />
+                              </View>
+                            </View>
+                          ) : null}
+                          <FlatList
+                            data={lanes[lane]}
+                            keyExtractor={(task) => task.key}
+                            style={styles.list}
+                            contentContainerStyle={styles.listContent}
+                            initialNumToRender={8}
+                            windowSize={5}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => (
+                              <TaskCard
+                                task={item}
+                                selected={item.key === selectedKey}
+                                online={statuses.get(item.agent.serverId) === "online"}
+                                showChildren={showChildren}
+                                iconDataUri={projectIcons.get(item.projectKey)}
+                                onSelect={setSelectedKey}
+                              />
+                            )}
+                            ListEmptyComponent={
+                              <View style={styles.emptyLane}>
+                                <Text style={styles.subtitle}>
+                                  {t(
+                                    visible.length ? "taskBoard.emptyLane" : "taskBoard.noMatches",
+                                  )}
+                                </Text>
+                              </View>
+                            }
                           />
-                        )}
-                        ListEmptyComponent={
-                          <View style={styles.emptyLane}>
-                            <Text style={styles.subtitle}>
-                              {t(visible.length ? "taskBoard.emptyLane" : "taskBoard.noMatches")}
-                            </Text>
-                          </View>
-                        }
-                      />
+                        </>
+                      )}
                     </View>
                   ))}
                 </ScrollView>
@@ -373,40 +532,57 @@ const styles = StyleSheet.create((theme) => ({
   container: { flex: 1, minWidth: 0, minHeight: 0, backgroundColor: theme.colors.surface0 },
   body: { flex: 1, flexDirection: "row", minWidth: 0, minHeight: 0 },
   main: { flex: 1, minWidth: 0, minHeight: 0 },
-  intro: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-  },
-  introText: { flex: 1, gap: theme.spacing[1] },
-  title: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize["2xl"],
-    fontWeight: theme.fontWeight.semibold,
-  },
-  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, lineHeight: 18 },
-  filters: {
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[3],
-    flexDirection: "row",
-    flexWrap: "wrap",
+  toolbar: {
+    minHeight: 48,
+    paddingHorizontal: theme.spacing[3],
     gap: theme.spacing[2],
+    flexDirection: "row",
     alignItems: "center",
   },
-  search: { minWidth: 220, maxWidth: 420, flexGrow: 1, flexDirection: "row" },
+  scopeButton: {
+    flexShrink: 1,
+    maxWidth: "45%",
+    minHeight: COMPACT_LARGE_ICON_BUTTON_SIZE,
+    paddingHorizontal: theme.spacing[2],
+    marginLeft: -theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  scopeButtonHovered: { backgroundColor: theme.colors.surface2 },
+  searchSlot: { flex: 1, minWidth: 120, flexDirection: "row", alignItems: "center" },
+  compactSearchRow: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  toolbarActions: {
+    flexShrink: 0,
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing[1],
+  },
+  taskCount: {
+    flexShrink: 1,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+  },
+  activeControl: { backgroundColor: theme.colors.surface2 },
+  filterSheet: { padding: theme.spacing[4], gap: theme.spacing[4] },
+  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, lineHeight: 18 },
   filterControls: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing[2],
     alignItems: "center",
   },
-  compactPadding: { paddingHorizontal: theme.spacing[4] },
   notice: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
@@ -440,7 +616,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   board: { flex: 1, minWidth: 0, minHeight: 0 },
   boardScroll: { flex: 1 },
-  lanes: { flexDirection: "row", padding: theme.spacing[3], gap: theme.spacing[3] },
+  lanes: { flexDirection: "row", padding: theme.spacing[2], gap: theme.spacing[2] },
   lane: {
     flex: 1,
     minWidth: 0,
@@ -453,7 +629,25 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     padding: theme.spacing[3],
   },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  collapseControl: { marginLeft: "auto" },
+  collapsedLane: { flex: 0, width: COLLAPSED_LANE_WIDTH, minWidth: COLLAPSED_LANE_WIDTH },
+  collapsedHeader: {
+    height: 190,
+    alignItems: "center",
+    paddingTop: theme.spacing[3],
+    gap: theme.spacing[2],
+  },
+  collapsedTitle: {
+    position: "absolute",
+    top: 110,
+    left: -50,
+    width: 140,
+    textAlign: "center",
+    transform: [{ rotate: "90deg" }],
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
+  },
   laneTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
@@ -461,8 +655,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   count: {
     color: theme.colors.foregroundMuted,
-    backgroundColor: theme.colors.surface2,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.base,
     fontSize: theme.fontSize.sm,
   },
@@ -482,11 +675,14 @@ const styles = StyleSheet.create((theme) => ({
   tab: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
   activeTab: { borderBottomColor: theme.colors.accent },
-  tabText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.base },
+  tabText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   activeTabText: { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
   compactLanes: { padding: theme.spacing[3] },
   compactLane: { minWidth: 0 },

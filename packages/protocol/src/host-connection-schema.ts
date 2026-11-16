@@ -9,4 +9,3 @@ export const DirectTcpHostConnectionSchema = z.object({
 });
 
 export type DirectTcpHostConnection = z.input<typeof DirectTcpHostConnectionSchema>;
-export type NormalizedDirectTcpHostConnection = z.output<typeof DirectTcpHostConnectionSchema>;

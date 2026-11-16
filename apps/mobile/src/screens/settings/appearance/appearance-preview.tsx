@@ -15,8 +15,8 @@ import { CHANGED_LINE_INDICES, PREVIEW_AFTER, PREVIEW_BEFORE } from "./preview-s
 const PREVIEW_EXTENSION = "ts";
 
 // GitHub diff tints, matching git/diff-pane.tsx (addLineContainer /
-// removeLineContainer). Hardcoded rgba is the documented diff exception to the
-// "no raw hex outside the palette" rule (docs/design.md §13).
+// removeLineContainer). Hardcoded rgba is the diff exception to the
+// "no raw hex outside the palette" rule.
 const REMOVED_TINT = "rgba(248, 81, 73, 0.1)";
 const ADDED_TINT = "rgba(46, 160, 67, 0.15)";
 
@@ -60,7 +60,7 @@ function buildCodeOverride(overrides: PreviewOverrides | undefined): TextStyle {
     // doesn't clip while the user is still typing it.
     style.lineHeight = Math.round(fontSize * 1.5);
   }
-  // High-churn draft values bypass the Unistyles CSS registry (docs/unistyles.md).
+  // High-churn draft values bypass the Unistyles CSS registry.
   return inlineUnistylesStyle(style);
 }
 

@@ -2,7 +2,7 @@ import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import { getAssistantBlockSpacing, getGapBetweenStreamItems } from "./spacing";
 import type { StreamFrameChildOrder, StreamStrategy } from "./strategy";
-import { continuesResponse, continuesTurn, isResponseBoundary } from "./turn-membership";
+import { continuesResponse, continuesTurn, isResponseBoundary } from "@/types/turn-membership";
 
 export type StreamToolSequence = "single" | "first" | "middle" | "last" | "none";
 

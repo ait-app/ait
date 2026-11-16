@@ -1,13 +1,11 @@
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
-  FileTransferOpcode,
-} from "@ait/protocol/binary-frames/index";
-import {
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
+  FileTransferOpcode,
   TerminalStreamOpcode,
-} from "@ait/protocol/terminal-stream-protocol";
+} from "@ait/protocol/binary-frames/index";
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -610,42 +608,6 @@ test("timeline observation consumes broadcasts from a host without selective del
   expect(updates).toEqual([expect.objectContaining({ type: "agent.stream" })]);
   await observation.release();
   expect(mock.sent).toEqual([]);
-});
-
-test("normalizes legacy and dedicated agent attention notifications", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "attention_normalization",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connect = client.connect();
-  mock.triggerOpen();
-  await connect;
-  const notifications: unknown[] = [];
-  client.onAgentAttentionRequired((notification) => notifications.push(notification));
-  const payload = {
-    agentId: "agent-a",
-    reason: "finished",
-    timestamp: "2026-07-12T00:00:00.000Z",
-    shouldNotify: true,
-  } as const;
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "agent.stream",
-      payload: {
-        agentId: payload.agentId,
-        timestamp: payload.timestamp,
-        event: { type: "attention_required", provider: "codex", ...payload },
-      },
-    }),
-  );
-  mock.triggerMessage(wrapSessionMessage({ type: "agent.attention.required", payload }));
-
-  expect(notifications).toEqual([payload, payload]);
 });
 
 const noopLogger: Logger = {
@@ -1818,52 +1780,6 @@ test("honors explicit fetchAgents timeout below the session RPC default", async 
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1200ms)");
 });
 
-test("honors explicit shutdownServer timeout below the session RPC default", async () => {
-  useHeartbeatClock();
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.shutdownServer({
-    requestId: "req-shutdown-1",
-    timeout: 1_500,
-  });
-  let settled = false;
-  void responsePromise.then(
-    () => {
-      settled = true;
-      return undefined;
-    },
-    () => {
-      settled = true;
-      return undefined;
-    },
-  );
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "server.shutdown.request",
-    requestId: "req-shutdown-1",
-  });
-
-  await vi.advanceTimersByTimeAsync(1_499);
-  expect(settled).toBe(false);
-
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
 test("honors explicit getDaemonStatus timeout below the session RPC default", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -1908,65 +1824,6 @@ test("honors explicit getDaemonStatus timeout below the session RPC default", as
 
   await vi.advanceTimersByTimeAsync(1);
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
-test("gates config reload on the daemon capability", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  await expect(client.reloadDaemonConfig("reload-old-host")).rejects.toThrow(
-    "Update the host to reload daemon configuration.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
-test("sends and parses daemon config reload", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { daemonConfigReload: true } });
-  await connectPromise;
-
-  const response = client.reloadDaemonConfig("reload-new-host");
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "daemon.config.reload.request",
-    requestId: "reload-new-host",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "daemon.config.reload.response",
-      payload: {
-        requestId: "reload-new-host",
-        appliedPaths: ["daemon.browserTools.enabled"],
-        restartRequiredPaths: ["daemon.listen"],
-        overrideControlledPaths: [],
-      },
-    }),
-  );
-
-  await expect(response).resolves.toEqual({
-    requestId: "reload-new-host",
-    appliedPaths: ["daemon.browserTools.enabled"],
-    restartRequiredPaths: ["daemon.listen"],
-    overrideControlledPaths: [],
-  });
 });
 
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
@@ -3864,51 +3721,6 @@ test("omitting workspace.worktree.create.request worktree base-ref fields preser
   });
 });
 
-test("sends explicit server.shutdown.request via shutdownServer", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  expect(typeof client.shutdownServer).toBe("function");
-  const promise = client.shutdownServer({ requestId: "req-shutdown-1" });
-
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request).toEqual({
-    type: "server.shutdown.request",
-    requestId: "req-shutdown-1",
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "status",
-      payload: {
-        status: "shutdown_requested",
-        clientId: "clsk_unit_test",
-        requestId: "req-shutdown-1",
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    status: "shutdown_requested",
-    clientId: "clsk_unit_test",
-    requestId: "req-shutdown-1",
-  });
-});
-
 test("restartServer remains restart-only and sends server.restart.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -4229,59 +4041,6 @@ test("subscribes to checkout diff updates via RPC handshake", async () => {
   });
 });
 
-test("getCheckoutDiff reads a snapshot without creating a subscription", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.getCheckoutDiff("/tmp/project", { mode: "base", baseRef: "main" });
-
-  expect(mock.sent).toHaveLength(1);
-  const subscribeRequest = parseSentFrame(mock.sent[0]);
-  expect(subscribeRequest.type).toBe("checkout.diff.get.request");
-  expect(subscribeRequest.cwd).toBe("/tmp/project");
-  expect(subscribeRequest.compare).toEqual({
-    mode: "base",
-    baseRef: "main",
-  });
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.diff.get.response",
-        payload: {
-          cwd: "/tmp/project",
-          files: [],
-          error: null,
-          requestId: subscribeRequest.requestId,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    cwd: "/tmp/project",
-    files: [],
-    error: null,
-    requestId: subscribeRequest.requestId,
-  });
-
-  expect(mock.sent).toHaveLength(1);
-});
-
 test("requests branch suggestions via RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -4500,60 +4259,6 @@ test("requests directory suggestions via RPC", async () => {
     entries: [{ path: "README.md", kind: "file" }],
     error: null,
     requestId: "req-directories",
-  });
-});
-
-test("requests checkout merge from base via RPC", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.checkoutMergeFromBase(
-    "/tmp/project",
-    { baseRef: "main", requireCleanTarget: true },
-    "req-merge-from-base",
-  );
-
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout.merge_from_base.request");
-  expect(request.cwd).toBe("/tmp/project");
-  expect(request.baseRef).toBe("main");
-  expect(request.requireCleanTarget).toBe(true);
-  expect(request.requestId).toBe("req-merge-from-base");
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.merge_from_base.response",
-        payload: {
-          cwd: "/tmp/project",
-          requestId: "req-merge-from-base",
-          success: true,
-          error: null,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    cwd: "/tmp/project",
-    requestId: "req-merge-from-base",
-    success: true,
-    error: null,
   });
 });
 
@@ -4845,119 +4550,6 @@ test("requests checkout pull via RPC", async () => {
     requestId: "req-pull",
     success: true,
     error: null,
-  });
-});
-
-test("renames a branch via RPC", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.renameBranch({
-    cwd: "/tmp/project",
-    branch: "feature/new-name",
-    requestId: "req-rename-branch",
-  });
-
-  expect(mock.sent).toHaveLength(1);
-  const request = JSON.parse(assertStr(mock.sent[0])) as {
-    type: "session";
-    message: {
-      type: "checkout.rename_branch.request";
-      cwd: string;
-      branch: string;
-      requestId: string;
-    };
-  };
-  expect(request.message.type).toBe("checkout.rename_branch.request");
-  expect(request.message.cwd).toBe("/tmp/project");
-  expect(request.message.branch).toBe("feature/new-name");
-  expect(request.message.requestId).toBe("req-rename-branch");
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.rename_branch.response",
-        payload: {
-          requestId: "req-rename-branch",
-          success: true,
-          cwd: "/tmp/project",
-          currentBranch: "feature/new-name",
-          error: null,
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    requestId: "req-rename-branch",
-    success: true,
-    cwd: "/tmp/project",
-    currentBranch: "feature/new-name",
-    error: null,
-  });
-});
-
-test("returns renameBranch business failures", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.renameBranch({
-    cwd: "/tmp/project",
-    branch: "already-exists",
-    requestId: "req-rename-branch-fail",
-  });
-
-  expect(mock.sent).toHaveLength(1);
-
-  mock.triggerMessage(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "checkout.rename_branch.response",
-        payload: {
-          requestId: "req-rename-branch-fail",
-          success: false,
-          cwd: "/tmp/project",
-          currentBranch: null,
-          error: { code: "NOT_ALLOWED", message: "Branch already exists" },
-        },
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    requestId: "req-rename-branch-fail",
-    success: false,
-    cwd: "/tmp/project",
-    currentBranch: null,
-    error: { code: "NOT_ALLOWED", message: "Branch already exists" },
   });
 });
 
@@ -6929,6 +6521,66 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
   });
 });
 
+test("sends provider.usage.ledger.request and resolves provider.usage.ledger.response", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const ledgerPromise = client.listUsageLedger({
+    requestId: "ledger-1",
+    from: 1_762_560_000_000,
+    to: 1_762_646_400_000,
+    groupBy: ["provider", "day"],
+  });
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "provider.usage.ledger.request",
+      requestId: "ledger-1",
+      from: 1_762_560_000_000,
+      to: 1_762_646_400_000,
+      groupBy: ["provider", "day"],
+    },
+  });
+
+  const payload = {
+    requestId: "ledger-1",
+    rows: [
+      {
+        key: { provider: "codex", day: "2025-11-08" },
+        calls: 3,
+        failedCalls: 1,
+        requests: 5,
+        inputTokens: 100,
+        outputTokens: 200,
+        cacheReadTokens: 300,
+        cacheWriteTokens: 40,
+        reportedCostUsd: 0,
+        costReportedRequests: 0,
+        lowerBoundCalls: 1,
+        missingCalls: 0,
+      },
+    ],
+    since: 1_762_000_000_000,
+  };
+  mock.triggerMessage(wrapSessionMessage({ type: "provider.usage.ledger.response", payload }));
+
+  await expect(ledgerPromise).resolves.toEqual(payload);
+});
+
 test("sends agent.items.close.request and resolves agent.items.close.response", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -7441,6 +7093,76 @@ test("Bot requests validate params, correlate results and release errors", async
   await rejection;
 });
 
+test("Bot ticket requests validate the user's status and resolve the full ticket", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "bot-ticket-test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const ticketId = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    client.botRequest("bot.ticket.update.request", {
+      workspaceId: "workspace-a",
+      ticketId,
+      status: "waiting" as never,
+    }),
+  ).rejects.toThrow();
+  expect(mock.sent).toHaveLength(0);
+  const pending = client.botRequest("bot.ticket.update.request", {
+    workspaceId: "workspace-a",
+    ticketId,
+    status: "done",
+    outcome: "Shipped",
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "bot.ticket.update.request",
+    workspaceId: "workspace-a",
+    ticketId,
+    status: "done",
+    outcome: "Shipped",
+  });
+  const at = "2026-11-13T08:00:00Z";
+  const ticket = {
+    id: ticketId,
+    title: "Fix login",
+    status: "done",
+    waiting: null,
+    conversationId: null,
+    createdAt: at,
+    updatedAt: at,
+    closedAt: at,
+    outcome: "Shipped",
+    assignments: [],
+    request: "Fix the login form",
+    reports: [
+      {
+        sequence: 1,
+        at,
+        source: "user",
+        kind: "status",
+        agentId: null,
+        text: "Shipped",
+        status: "done",
+      },
+    ],
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.ticket.update.response",
+      payload: { requestId: request.requestId, ticket, changed: true },
+    }),
+  );
+  await expect(pending).resolves.toEqual({ requestId: request.requestId, ticket, changed: true });
+});
+
 test.each(["retry", "close", "reject"])(
   "bounds liveness recovery and ignores stale completion (%s)",
   async (action) => {
@@ -7494,8 +7216,302 @@ test.each(["retry", "close", "reject"])(
   },
 );
 
+test("side-question calls refuse an old host that does not advertise the feature", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-absent",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  expect(client.supportsSideQuestions()).toBe(false);
+  await expect(client.askSideQuestion({ agentId: "agent", question: "why?" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  await expect(client.cancelSideQuestion({ agentId: "agent" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  await expect(client.listSideQuestions({ agentId: "agent" })).rejects.toThrow(
+    "This host does not support side questions",
+  );
+  // No half-sent RPC may leak to a host that cannot serve it.
+  expect(mock.sent).toHaveLength(0);
+});
+
+test("side-question ask correlates the receipt and forwards the idempotency key", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-ask",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+  expect(client.supportsSideQuestions()).toBe(true);
+
+  const pending = client.askSideQuestion({
+    agentId: "agent",
+    question: "why?",
+    recordId: "topic-1",
+    requestId: "ask-1",
+  });
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "agent.side_question.ask.request",
+    agentId: "agent",
+    question: "why?",
+    recordId: "topic-1",
+    requestId: "ask-1",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: {
+        requestId: "ask-1",
+        receipt: "accepted",
+        recordId: "topic-1",
+        strategy: "native",
+      },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({
+    receipt: "accepted",
+    recordId: "topic-1",
+    strategy: "native",
+  });
+});
+
+test("side-question ask surfaces rejection reasons and the durable uncertain receipt", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-receipts",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+
+  const rejected = client.askSideQuestion({ agentId: "agent", question: "q", requestId: "ask-1" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: { requestId: "ask-1", receipt: "rejected", reason: "busy" },
+    }),
+  );
+  await expect(rejected).resolves.toMatchObject({ receipt: "rejected", reason: "busy" });
+
+  // Acceptance could not be confirmed: the receipt is returned as a durable
+  // state so the caller reconciles instead of retrying or reporting success.
+  const uncertain = client.askSideQuestion({
+    agentId: "agent",
+    question: "q",
+    requestId: "ask-2",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.ask.response",
+      payload: { requestId: "ask-2", receipt: "uncertain" },
+    }),
+  );
+  await expect(uncertain).resolves.toMatchObject({ receipt: "uncertain" });
+});
+
+test("side-question cancel reports only a confirmed cancellation and history stays bounded", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-questions-cancel",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+
+  const cancelled = client.cancelSideQuestion({ agentId: "agent", recordId: "topic-1" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.side_question.cancel.request",
+    recordId: "topic-1",
+  });
+  const cancelRequest = parseSentFrame(mock.sent.at(-1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.cancel.response",
+      payload: { requestId: cancelRequest.requestId, cancelled: false },
+    }),
+  );
+  await expect(cancelled).resolves.toBe(false);
+
+  const history = client.listSideQuestions({ agentId: "agent" });
+  const historyRequest = parseSentFrame(mock.sent.at(-1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.history.response",
+      payload: {
+        requestId: historyRequest.requestId,
+        records: [
+          {
+            id: "topic-1",
+            question: "why?",
+            answer: "",
+            status: "running",
+            createdAt: 1,
+            updatedAt: 1,
+            leafId: null,
+            strategy: "native",
+            truncated: false,
+          },
+        ],
+        omitted: 2,
+        runningId: "topic-1",
+      },
+    }),
+  );
+  await expect(history).resolves.toMatchObject({
+    omitted: 2,
+    runningId: "topic-1",
+    records: [{ id: "topic-1", status: "running" }],
+  });
+});
+
+test("side-question transfer correlates the full frozen bundle without asking a model", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "side-question-transfer",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { sideQuestions: true } });
+  await connected;
+  const pending = client.transferSideQuestion({
+    agentId: "agent",
+    recordId: "topic-1",
+    requestId: "transfer-1",
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.side_question.transfer.request",
+    agentId: "agent",
+    recordId: "topic-1",
+    requestId: "transfer-1",
+  });
+  const topic = {
+    id: "topic-1",
+    question: "first",
+    answer: "answer",
+    status: "complete",
+    createdAt: 1,
+    updatedAt: 2,
+    leafId: null,
+    strategy: "isolated",
+    truncated: false,
+    followUps: Array.from({ length: 12 }, (_, index) => ({
+      question: `q${index}`,
+      answer: `a${index}`,
+      status: "complete",
+      createdAt: index + 10,
+      updatedAt: index + 11,
+    })),
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.side_question.transfer.response",
+      payload: {
+        requestId: "transfer-1",
+        topic,
+        snapshot: {
+          v: 1,
+          agentId: "agent",
+          provider: "pi",
+          model: "selected/model",
+          capturedAt: 1,
+          entries: [{ role: "user", text: "frozen parent" }],
+          truncated: false,
+        },
+      },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({
+    topic: {
+      followUps: expect.arrayContaining([
+        { question: "q11", answer: "a11", status: "complete", createdAt: 21, updatedAt: 22 },
+      ]),
+    },
+  });
+  expect(mock.sent).toHaveLength(1);
+});
+
 // These tests cover SDK business behavior; protocol tests use real Rust wire frames.
 vi.mock("./protocol/connection.js", async () => {
   const { createProtocolStub } = await import("./test-support/protocol-stub.js");
   return { createDaemonConnection: createProtocolStub };
+});
+
+test("host resource statistics gate old hosts and correlate a typed snapshot", async () => {
+  for (const supported of [false, true]) {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "host-stats",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { hostStats: supported } });
+    await connected;
+    if (!supported) {
+      await expect(client.getHostStats()).rejects.toThrow("Update the host");
+      expect(mock.sent).toEqual([]);
+      continue;
+    }
+    const pending = client.getHostStats(true);
+    const request = parseSentFrame(mock.sent[0]);
+    expect(request).toMatchObject({ type: "daemon.host_stats.request", includeHistory: true });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "daemon.host_stats.response",
+        payload: {
+          requestId: request.requestId,
+          platform: "linux",
+          cpuCount: 4,
+          uptimeSeconds: 100,
+          current: {
+            at: 123,
+            cpuPercent: null,
+            memoryUsedBytes: 1,
+            memoryTotalBytes: 2,
+            rxBytesPerSecond: null,
+            txBytesPerSecond: 0,
+          },
+          history: [],
+          disks: [],
+        },
+      }),
+    );
+    await expect(pending).resolves.toMatchObject({
+      platform: "linux",
+      current: { cpuPercent: null, txBytesPerSecond: 0 },
+    });
+  }
 });

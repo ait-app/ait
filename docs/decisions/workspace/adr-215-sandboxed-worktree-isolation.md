@@ -3,15 +3,28 @@ id: ADR-215
 status: accepted
 date: 2026-11-06
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/domain
+  - crates/provider/native
+  - crates/provider/core
+  - crates/provider/minimax
+  - crates/provider/antigravity
+  - crates/provider/claude
+  - crates/provider/deepseek-harness
+  - crates/provider/opencode
+  - crates/provider/pi
+  - crates/provider/codex
 ---
 
 # ADR-215：沙箱化 Worktree 隔离级别
 
 - Linux 扩展：[ADR-223](adr-223-linux-worktree-sandbox.md) 自 2026-11-08 起补充 Linux 后端；Linux 差异与部署要求以该 ADR 为准。
+- OMP 修订：[ADR-248](../providers/adr-248-omp-paseo-native-rpc.md) 第 11 条起，Oh My Pi 增加
+  `PI_CODING_AGENT_DIR` 可写目录，并保护其设置、模型、MCP、`.env`、扩展、hooks、工具、插件、
+  原生 addon 与 Python 环境；下文 Oh My Pi 一行和受保护路径清单以该条为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
+- 沙箱适配器现位于 `crates/provider-native`（[ADR-270](../providers/adr-270-provider-crate-family.md)）。
 
 ## 背景
 

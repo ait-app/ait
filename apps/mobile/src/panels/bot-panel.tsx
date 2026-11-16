@@ -1,14 +1,13 @@
 import React, { lazy, Suspense } from "react";
 import { BotLoadingSpinner } from "@/bots/loading";
 import { Text, View } from "react-native";
-import { Bot } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { botStyles } from "@/bots/styles";
 import { useAppSettings } from "@/hooks/use-settings";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
-import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
+import { definePanel } from "@/panels/panel-registry";
+import { botPanelPresentation } from "@/panels/panel-presentations";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
@@ -16,14 +15,6 @@ import { useWorkspaceFields } from "@/stores/session-store-hooks";
 const WorkspaceBotTab = lazy(() =>
   import("@/bots/workspace-bot-tab").then((module) => ({ default: module.WorkspaceBotTab })),
 );
-
-const ThemedBot = withUnistyles(Bot);
-const presentation = {
-  label: (t) => t("bots.title"),
-  subtitle: (t) => t("bots.title"),
-  tooltip: (t) => t("bots.title"),
-  icon: ThemedBot,
-} satisfies PanelPresentation;
 
 function BotPanel() {
   const { t } = useTranslation();
@@ -75,17 +66,5 @@ function BotPanel() {
 
 export const botPanelRegistration = definePanel("bot", {
   component: BotPanel,
-  presentation,
-  useDescriptor() {
-    const { t } = useTranslation();
-    const label = t("bots.title");
-    return {
-      label,
-      subtitle: label,
-      tooltip: label,
-      titleState: "ready",
-      icon: ThemedBot,
-      statusBucket: null,
-    };
-  },
+  presentation: botPanelPresentation,
 });

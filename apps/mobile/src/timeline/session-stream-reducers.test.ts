@@ -4175,13 +4175,22 @@ describe("processAgentStreamEvent", () => {
     expect(result.sideEffects).toEqual([]);
   });
 
-  it("publishes task snapshots only from accepted timeline events", () => {
+  it.each([
+    "codex",
+    "claude",
+    "opencode",
+    "deepseek-harness",
+    "antigravity",
+    "pi",
+    "omp",
+    "minimax",
+  ] as const)("publishes %s task snapshots only from accepted timeline events", (provider) => {
     const tasks = [
       { id: "inspect", text: "Inspect", status: "in_progress" as const, completed: false },
     ];
     const event: AgentStreamEventPayload = {
       type: "timeline",
-      provider: "codex",
+      provider,
       item: {
         type: "todo",
         items: tasks,
@@ -4227,6 +4236,48 @@ describe("processAgentStreamEvent", () => {
     expect(wrongEpoch.taskSnapshot).toBeUndefined();
     expect(gapped.taskSnapshot).toBeUndefined();
   });
+
+  it.each(["TodoWrite", "update_plan"])(
+    "publishes compatible %s snapshots for the capsule",
+    (name) => {
+      const input =
+        name === "TodoWrite"
+          ? { todos: [{ content: "Verify", activeForm: "Verifying", status: "in_progress" }] }
+          : { plan: [{ step: "Verify", status: "in_progress" }] };
+      const event: AgentStreamEventPayload = {
+        type: "timeline",
+        provider: "pi",
+        item: {
+          type: "tool_call",
+          callId: "task-tool",
+          name,
+          status: "completed",
+          error: null,
+          detail: { type: "unknown", input, output: null },
+        },
+      };
+      const accepted = processAgentStreamEvent({ ...baseStreamInput, event });
+      expect(accepted.taskSnapshot).toEqual([
+        {
+          text: "Verify",
+          status: "in_progress",
+          completed: false,
+          ...(name === "TodoWrite" ? { activeForm: "Verifying" } : {}),
+        },
+      ]);
+      if (event.item.type !== "tool_call") throw new Error("Expected tool call");
+      const failed = processAgentStreamEvent({
+        ...baseStreamInput,
+        event: { ...event, item: { ...event.item, status: "failed", error: "Rejected" } },
+      });
+      expect(failed.taskSnapshot).toBeUndefined();
+      const canceled = processAgentStreamEvent({
+        ...baseStreamInput,
+        event: { ...event, item: { ...event.item, status: "canceled", error: null } },
+      });
+      expect(canceled.taskSnapshot).toBeUndefined();
+    },
+  );
 
   it("detects gap and emits catch-up side effect", () => {
     const existingCursor: TimelineCursor = {
@@ -5079,5 +5130,87 @@ describe("createAgentStreamReducerQueue", () => {
 
     expect(commits).toEqual(["agent-1:queued"]);
     expect(scheduler.size).toBe(0);
+  });
+});
+
+describe("TODO snapshot sequencing while browsing historical windows", () => {
+  it("applies complete canonical TODOs independently without moving the transcript", () => {
+    const currentTail = [
+      createUserMessage({ id: "historical", text: "Historical message", timestamp: new Date(0) }),
+    ];
+    const currentHead: StreamItem[] = [];
+    const currentCursor = { epoch: "epoch-1", startSeq: 20, endSeq: 40 };
+    const items = [{ text: "Current task", completed: false }];
+    const canonicalTodo: AgentStreamEventPayload = {
+      type: "timeline",
+      provider: "omp",
+      item: { type: "todo", items },
+    };
+    const event = (seq: number, epoch = "epoch-1"): AgentStreamReducerEvent => ({
+      event: canonicalTodo,
+      seq,
+      epoch,
+      timestamp: new Date(seq),
+    });
+    const result = processAgentStreamEvents({
+      currentTail,
+      currentHead,
+      currentCursor,
+      currentTaskCursor: { epoch: "epoch-1", seq: 100 },
+      isDetached: true,
+      events: [event(99), event(120), event(121, "old-epoch"), event(119)],
+    });
+
+    expect(result.tail).toBe(currentTail);
+    expect(result.head).toBe(currentHead);
+    expect(result.cursor).toBe(currentCursor);
+    expect(result.cursorChanged).toBe(false);
+    expect(result.taskSnapshot).toEqual(items);
+    expect(result.taskSnapshotCursor).toEqual({ epoch: "epoch-1", seq: 120 });
+    expect(result.sideEffects).toEqual([]);
+  });
+
+  it("ignores unsequenced task updates while detached and accepts explicit canonical clears", () => {
+    const result = processAgentStreamEvents({
+      currentTail: [],
+      currentHead: [],
+      currentCursor: { epoch: "epoch-1", startSeq: 20, endSeq: 40 },
+      currentTaskCursor: { epoch: "epoch-1", seq: 100 },
+      isDetached: true,
+      events: [
+        {
+          event: { type: "timeline", provider: "codex", item: { type: "todo", items: [] } },
+          seq: 101,
+          epoch: "epoch-1",
+          timestamp: new Date(101),
+        },
+        {
+          event: {
+            type: "timeline",
+            provider: "codex",
+            item: { type: "todo", items: [{ text: "Unknown ordering", completed: false }] },
+          },
+          seq: undefined,
+          epoch: undefined,
+          timestamp: new Date(102),
+        },
+      ],
+    });
+
+    expect(result.taskSnapshot).toEqual([]);
+    expect(result.taskSnapshotCursor).toEqual({ epoch: "epoch-1", seq: 101 });
+  });
+
+  it("clears the previous epoch checklist when a new live timeline begins without TODOs", () => {
+    const result = processAgentStreamEvent({
+      ...baseStreamInput,
+      event: makeAssistantTimelineEvent("New session"),
+      epoch: "new-epoch",
+      seq: 1,
+      currentCursor: { epoch: "old-epoch", startSeq: 1, endSeq: 100 },
+    });
+
+    expect(result.taskSnapshot).toEqual([]);
+    expect(result.taskSnapshotCursor).toEqual({ epoch: "new-epoch", seq: 1 });
   });
 });

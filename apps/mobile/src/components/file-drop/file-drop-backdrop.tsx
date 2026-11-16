@@ -32,7 +32,7 @@ export function FileDropBackdrop() {
 
   // Animated.View keeps only plain-RN positioning; theme-dependent paint lives on the
   // non-animated children (applying themed Unistyles styles to an Animated.View crashes
-  // on theme change — see docs/unistyles.md).
+  // on theme change).
   return (
     <Animated.View style={overlayStyle} pointerEvents="none">
       <View style={styles.backdrop} />

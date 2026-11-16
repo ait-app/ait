@@ -5,7 +5,9 @@ pub mod agent_runtime;
 pub mod bot;
 pub mod creation;
 pub mod directory_sync;
+pub mod input_envelope;
 pub mod pagination;
+pub mod preset;
 pub mod schedule;
 pub mod session;
 pub mod storage;
@@ -69,6 +71,10 @@ identity!(BotId, "Stable identity of a workspace Bot.");
 identity!(ChannelId, "Identity of a Bot-owned channel instance.");
 identity!(ConversationId, "Identity of an isolated Bot conversation.");
 identity!(BotTurnId, "Identity of a durable Bot turn.");
+identity!(
+    TicketId,
+    "Identity of a unit of work a Bot delegated to Agents."
+);
 
 #[cfg(test)]
 mod tests;

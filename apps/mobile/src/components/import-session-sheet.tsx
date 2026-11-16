@@ -20,7 +20,6 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostProjects } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
-import { i18n } from "@/i18n/i18next";
 import {
   aggregateSessionEntries,
   ALL_FILTER_VALUE,
@@ -109,7 +108,7 @@ function buildSessionsQueriesConfig(args: {
   cwd: string | null;
   query: string;
   limit: number;
-  hostDisconnectedMessage?: string;
+  hostDisconnectedMessage: string;
 }): SessionsQueryConfig[] {
   const {
     serverId,
@@ -130,7 +129,7 @@ function buildSessionsQueriesConfig(args: {
     placeholderData: keepPreviousData,
     queryFn: async () => {
       if (!client) {
-        throw new Error(hostDisconnectedMessage ?? i18n.t("workspace.terminal.hostDisconnected"));
+        throw new Error(hostDisconnectedMessage);
       }
       return await client.fetchRecentProviderSessions({
         ...(cwd ? { cwd } : {}),
@@ -722,7 +721,6 @@ export function ImportSessionSheet({
     [handleRefresh, handleShowAll, hostLabel, isRefreshing, scopeCwd, supportsSearch, t, visible],
   );
 
-  const isSnapshotUnsupported = requiresHostUpgrade;
   const isWaitingForSnapshot =
     supportsSnapshot && !requiresHostUpgrade && providersToFetch === null;
   const hasNoImportableProviders = providersToFetch !== null && providersToFetch.length === 0;
@@ -771,7 +769,9 @@ export function ImportSessionSheet({
             style={filterTriggerStyle}
             testID="import-session-filter-trigger"
             accessibilityRole="button"
-            accessibilityLabel={`Filter: ${selectedProviderLabel}`}
+            accessibilityLabel={t("importSession.filters.label", {
+              provider: selectedProviderLabel,
+            })}
           >
             {selectedProvider === ALL_FILTER_VALUE ? (
               <Layers size={14} color={theme.colors.foregroundMuted} />
@@ -792,18 +792,17 @@ export function ImportSessionSheet({
             onSelect={handleFilterSelect}
             renderOption={renderFilterOption}
             searchable={false}
-            title="Filter by provider"
+            title={t("importSession.filters.title")}
             open={isFilterOpen}
             onOpenChange={setIsFilterOpen}
             anchorRef={filterAnchorRef}
             desktopPlacement="bottom-start"
-            desktopPreventInitialFlash
           />
         </View>
       ) : null}
       <SheetStatusMessages
         isClientReady={Boolean(client)}
-        isSnapshotUnsupported={isSnapshotUnsupported}
+        isSnapshotUnsupported={requiresHostUpgrade}
         hasNoImportableProviders={hasNoImportableProviders}
         isLoadingSessions={isLoadingSessions}
         hasRows={visibleEntries.length > 0}
@@ -970,7 +969,7 @@ const styles = StyleSheet.create((theme) => ({
   errorText: {
     flexShrink: 1,
     minWidth: 0,
-    color: theme.colors.palette.red[300],
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.sm,
   },
   emptyState: {

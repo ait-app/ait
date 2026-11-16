@@ -5,7 +5,7 @@ date: 2026-10-28
 amends:
   - workspace/adr-043-daemon-skills.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - skills/ait-orchestration
 ---
 

@@ -105,7 +105,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "axum",
@@ -120,6 +120,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-builtin",
  "relay",
  "reqwest",
  "schedule",
@@ -391,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "bot"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "axum",
@@ -404,6 +405,8 @@ dependencies = [
  "persistence",
  "prost",
  "provider",
+ "provider-core",
+ "pulldown-cmark",
  "reqwest",
  "ring",
  "secrecy",
@@ -422,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
@@ -756,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "daemon"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "anyhow",
  "api",
@@ -777,6 +780,7 @@ dependencies = [
  "model",
  "persistence",
  "provider",
+ "provider-builtin",
  "reqwest",
  "ring",
  "rustix",
@@ -878,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -978,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "filesystem"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1254,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "host-link"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1791,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "metadata"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1803,6 +1807,7 @@ dependencies = [
  "persistence",
  "serde",
  "serde_json",
+ "sysinfo",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1857,7 +1862,7 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1959,6 +1964,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2015,6 +2029,16 @@ name = "objc2-core-services"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "583300ad934cba24ff5292aee751ecc070f7ca6b39a574cc21b7b5e588e06a0b"
+dependencies = [
+ "libc",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
 dependencies = [
  "libc",
  "objc2-core-foundation",
@@ -2125,7 +2149,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "persistence"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "chrono",
  "domain",
@@ -2251,7 +2275,101 @@ dependencies = [
 
 [[package]]
 name = "provider"
-version = "0.2.7"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider-codex",
+ "provider-core",
+ "pulldown-cmark",
+ "regex",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "provider-antigravity"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-builtin"
+version = "0.2.14"
+dependencies = [
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-antigravity",
+ "provider-claude",
+ "provider-codex",
+ "provider-deepseek-harness",
+ "provider-minimax",
+ "provider-omp",
+ "provider-opencode",
+ "provider-pi",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "provider-claude"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "unicode-normalization",
+ "uuid",
+]
+
+[[package]]
+name = "provider-codex"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "axum",
@@ -2263,28 +2381,187 @@ dependencies = [
  "nix 0.31.3",
  "opus2",
  "persistence",
- "pulldown-cmark",
- "regex",
- "reqwest",
+ "provider",
+ "provider-core",
+ "provider-native",
  "rtc",
- "rusqlite",
  "secrecy",
  "serde",
  "serde_json",
- "serde_yaml_ng",
  "sha2",
  "tempfile",
- "thiserror 2.0.20",
  "tokio",
- "tokio-tungstenite",
  "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
- "unicode-normalization",
- "url",
  "uuid",
  "webrtc",
+]
+
+[[package]]
+name = "provider-core"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "domain",
+ "futures-util",
+ "model",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "provider-deepseek-harness"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-minimax"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-native"
+version = "0.2.14"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "nix 0.31.3",
+ "provider-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "provider-omp"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-opencode"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "reqwest",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "provider-pi"
+version = "0.2.14"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "domain",
+ "futures-util",
+ "model",
+ "persistence",
+ "provider",
+ "provider-core",
+ "provider-native",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -2526,7 +2803,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relay"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -3021,7 +3298,7 @@ checksum = "c62751faa8bc286982334a082fe125184a29fc89d17775766e4f891b7d726980"
 
 [[package]]
 name = "schedule"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3379,6 +3656,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e8a3edbe0394ce115f3917a00349dd242be09eb5a091ed509eaf67b55cfb8a8"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows",
+]
+
+[[package]]
 name = "tar"
 version = "0.4.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3404,7 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "chrono",
  "domain",
@@ -3899,7 +4190,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice"
-version = "0.2.7"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "axum",
@@ -4130,6 +4421,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "windows"
+version = "0.62.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
+dependencies = [
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-numerics",
+]
+
+[[package]]
+name = "windows-collections"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
+dependencies = [
+ "windows-core",
+]
+
+[[package]]
 name = "windows-core"
 version = "0.62.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4140,6 +4452,17 @@ dependencies = [
  "windows-link",
  "windows-result",
  "windows-strings",
+]
+
+[[package]]
+name = "windows-future"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1d6f90251fe18a279739e78025bd6ddc52a7e22f921070ccdc67dde84c605cb"
+dependencies = [
+ "windows-core",
+ "windows-link",
+ "windows-threading",
 ]
 
 [[package]]
@@ -4169,6 +4492,16 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
+name = "windows-numerics"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
+dependencies = [
+ "windows-core",
+ "windows-link",
+]
 
 [[package]]
 name = "windows-result"
@@ -4220,6 +4553,15 @@ dependencies = [
  "windows_x86_64_gnu",
  "windows_x86_64_gnullvm",
  "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows-threading"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

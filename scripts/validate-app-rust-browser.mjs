@@ -86,7 +86,7 @@ try {
   await once(frontend, "listening");
   const origin = `http://127.0.0.1:${frontend.address().port}`;
   backend = spawn(
-    process.env.AIT_SERVER_BIN ?? path.join(root, "target/debug/daemon"),
+    process.env.AITD_BIN ?? path.join(root, "target/debug/daemon"),
     ["--data-dir", path.join(work, "server"), "--listen", "127.0.0.1:0", "--web-origin", origin],
     { env: { ...process.env, AIT_SERVER_TOKEN: token }, stdio: ["ignore", "ignore", "pipe"] },
   );

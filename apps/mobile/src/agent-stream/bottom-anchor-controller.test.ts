@@ -116,9 +116,7 @@ function createDriverHarness(input?: {
       contentMeasuredForKey: "scroll-view",
     });
   const context = {
-    agentId: "agent-1",
     authoritativeReady: input?.authoritativeReady ?? true,
-    renderStrategy: "forward-stream",
     transportBehavior: input?.transportBehavior ?? {
       verificationDelayFrames: 0,
       verificationRetryMode: "rescroll",
@@ -137,9 +135,7 @@ function createDriverHarness(input?: {
   };
   const modeChanges: BottomAnchorMode[] = [];
   const driver = __private__.createBottomAnchorControllerDriver({
-    getAgentId: () => context.agentId,
     getIsAuthoritativeHistoryReady: () => context.authoritativeReady,
-    getRenderStrategy: () => context.renderStrategy,
     getTransportBehavior: () => context.transportBehavior,
     getMeasurementState: () => context.measurementState,
     isNearBottom: () => context.nearBottom,

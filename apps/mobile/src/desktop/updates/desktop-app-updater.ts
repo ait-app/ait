@@ -54,7 +54,7 @@ export interface DesktopAppUpdaterDeps {
 export interface DesktopAppUpdater {
   getSnapshot(): DesktopAppUpdaterSnapshot;
   subscribe(listener: () => void): () => void;
-  checkForUpdates(options?: {
+  checkForUpdates(options: {
     releaseChannel: DesktopReleaseChannel;
     intent?: DesktopAppUpdateCheckIntent;
     silent?: boolean;
@@ -282,14 +282,11 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
     };
   }
 
-  async function checkForUpdates(options?: {
+  async function checkForUpdates(options: {
     releaseChannel: DesktopReleaseChannel;
     intent?: DesktopAppUpdateCheckIntent;
     silent?: boolean;
   }): Promise<DesktopAppUpdateCheckResult | null> {
-    if (!options) {
-      return null;
-    }
     const { releaseChannel, intent = "manual", silent = false } = options;
     // A check must not replace an install in progress, and a background check must not
     // replace the "installed, restart to apply" state.

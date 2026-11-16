@@ -15,6 +15,13 @@ export const botKeys = {
     workspaceId,
     builtinChannelId,
   ],
+  /** Every conversation of the Bot, for viewing the other channels' conversations. */
+  conversations: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-conversations",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
   history: (serverId: string, workspaceId: string, conversationId?: string) => [
     "bot-history",
     serverId,
@@ -22,6 +29,25 @@ export const botKeys = {
     conversationId,
   ],
   memory: (serverId: string, workspaceId: string) => ["bot-memory", serverId, workspaceId],
+  notifications: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-notifications",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
+  /** Every ticket list of a Bot, open-only or with closed ones. */
+  tickets: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-tickets",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
+  ticket: (serverId: string, workspaceId: string, ticketId: string) => [
+    "bot-ticket",
+    serverId,
+    workspaceId,
+    ticketId,
+  ],
   channels: (serverId: string, workspaceId: string, builtinChannelId: string) => [
     "bot-channels",
     serverId,
@@ -30,9 +56,14 @@ export const botKeys = {
   ],
 };
 
+/** Whether a Bot request failed with the host error `code`, such as `bot_conflict`. */
+export function hasBotErrorCode(cause: unknown, code: string): boolean {
+  return cause instanceof Error && "code" in cause && cause.code === code;
+}
+
 /** Whether a Bot request failed with the host's `BotConflict` error. */
 export function isBotConflict(cause: unknown): boolean {
-  return cause instanceof Error && "code" in cause && cause.code === "bot_conflict";
+  return hasBotErrorCode(cause, "bot_conflict");
 }
 
 export function isBotTurnPending(turn: BotTurn): boolean {

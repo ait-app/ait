@@ -11,17 +11,15 @@ import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
  *
  */
 export function getSidebarRowBackdrop({
-  isDragging = false,
   isPressed = false,
   selected = false,
   isHovered = false,
 }: {
-  isDragging?: boolean;
   isPressed?: boolean;
   selected?: boolean;
   isHovered?: boolean;
 }): SidebarSurfaceBackdrop {
-  if (isDragging || isPressed) return "surface2";
+  if (isPressed) return "surface2";
   if (selected) return "surfaceSidebarSelected";
   if (isHovered) return "surfaceSidebarHover";
   return "surfaceSidebar";

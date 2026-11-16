@@ -1,0 +1,162 @@
+//! Resolve CLI installations and desktop-bundled runtimes without opening the desktop UI.
+mod npm;
+mod npm_config;
+
+use std::path::{Path, PathBuf};
+
+use tokio::process::Command;
+
+use super::DeepSeekHarnessClient;
+use provider_native::configuration::executable;
+
+#[derive(Debug, Clone)]
+pub(super) struct Desktop {
+    pub(super) entrypoint: PathBuf,
+    electron: bool,
+}
+
+impl DeepSeekHarnessClient {
+    /// Prefer the installed CLI, then a desktop bundle, then an existing npx installation.
+    /// Returns an unavailable `dsh` launcher when no installation can be resolved.
+    #[must_use]
+    pub fn installed() -> Self {
+        let mut paths: Vec<_> = std::env::var_os("PATH")
+            .as_deref()
+            .map(std::env::split_paths)
+            .into_iter()
+            .flatten()
+            .filter(|path| path.is_absolute())
+            .collect();
+        if let Some(program) = path_cli(&paths) {
+            return Self::new(program);
+        }
+        let npm = npm_config::read(&paths);
+        if let Some(configuration) = &npm {
+            paths.push(configuration.prefix.join("bin"));
+        }
+        let mut bundles = Vec::new();
+        for path in &paths {
+            if let Ok(program) = path.join("deepseek-harness").canonicalize()
+                && let Some(parent) = program.parent()
+            {
+                bundles.push(parent.to_path_buf());
+            }
+        }
+        if cfg!(target_os = "linux") {
+            bundles
+                .extend(["/opt/dsh-desktop-linux-bin", "/opt/deepseek-harness"].map(PathBuf::from));
+        }
+        if cfg!(target_os = "macos") {
+            applications(Path::new("/Applications"), &mut bundles);
+            if let Some(home) = std::env::var_os("HOME") {
+                applications(&PathBuf::from(home).join("Applications"), &mut bundles);
+            }
+        }
+        resolve(
+            &paths,
+            &bundles,
+            npm.as_ref()
+                .map(|configuration| configuration.cache.as_path()),
+        )
+    }
+
+    pub(super) fn command(&self) -> Command {
+        let mut command = Command::new(&self.program);
+        command.envs(self.environment.entries());
+        if let Some(desktop) = &self.desktop {
+            command.arg(&desktop.entrypoint);
+            if desktop.electron {
+                command.env("ELECTRON_RUN_AS_NODE", "1");
+            }
+        }
+        command
+    }
+}
+
+fn resolve(
+    paths: &[PathBuf],
+    bundles: &[PathBuf],
+    npm_cache: Option<&Path>,
+) -> DeepSeekHarnessClient {
+    if let Some(program) = path_cli(paths) {
+        return DeepSeekHarnessClient::new(program);
+    }
+    bundles
+        .iter()
+        .find_map(|bundle| desktop(bundle))
+        .or_else(|| {
+            npm_cache
+                .and_then(npm::cached_cli)
+                .map(DeepSeekHarnessClient::new)
+        })
+        .unwrap_or_else(|| DeepSeekHarnessClient::new("dsh".into()))
+}
+
+fn path_cli(paths: &[PathBuf]) -> Option<PathBuf> {
+    let name = if cfg!(windows) { "dsh.exe" } else { "dsh" };
+    paths
+        .iter()
+        .map(|path| path.join(name))
+        .find(|path| executable(path))
+}
+
+fn applications(directory: &Path, bundles: &mut Vec<PathBuf>) {
+    if let Ok(entries) = directory.read_dir() {
+        bundles.extend(
+            entries
+                .take(256)
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|extension| extension == "app"))
+                .map(|path| path.join("Contents")),
+        );
+    }
+}
+
+fn desktop(bundle: &Path) -> Option<DeepSeekHarnessClient> {
+    let mac = bundle.file_name().is_some_and(|name| name == "Contents");
+    let resources = bundle.join(if mac { "Resources" } else { "resources" });
+    let package = resources.join("app/package.json");
+    // Inspect only the known DSH desktop package, never an arbitrary Electron application.
+    if package.metadata().ok()?.len() > 64 * 1024 {
+        return None;
+    }
+    let identity: serde_json::Value = serde_json::from_slice(&std::fs::read(package).ok()?).ok()?;
+    if identity["name"] != "@deepseek-ai/dsh-desktop" {
+        return None;
+    }
+    let entrypoint = resources.join("app/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js");
+    if !entrypoint.is_file() {
+        return None;
+    }
+    let node = resources.join("runtime/primary-runtime/dependencies/node/bin/node");
+    let (program, electron) = if executable(&node) {
+        (node, false)
+    } else if mac {
+        // Packaged macOS apps have one main executable; do not guess among several binaries.
+        let mut executables = bundle
+            .join("MacOS")
+            .read_dir()
+            .ok()?
+            .take(16)
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| executable(path));
+        let program = executables.next()?;
+        if executables.next().is_some() {
+            return None;
+        }
+        (program, true)
+    } else {
+        return None;
+    };
+    let mut client = DeepSeekHarnessClient::new(program);
+    client.desktop = Some(Desktop {
+        entrypoint,
+        electron,
+    });
+    Some(client)
+}
+
+#[cfg(test)]
+mod tests;

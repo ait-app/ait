@@ -113,6 +113,27 @@ async fn streams_relay_download_messages_within_the_peer_window_then_closes_done
 }
 
 #[tokio::test]
+async fn acknowledged_download_stays_done_when_the_peer_immediately_disconnects() {
+    let (address, local_task) = local_file(200).await;
+    let mut download = start(address, &json!({"token":"scoped-token"}), None, None);
+    download.receive(None).await;
+    let Download {
+        inbound,
+        mut output,
+    } = download;
+    inbound
+        .try_send(Frame::Text(r#"{"type":"download.complete"}"#.into()))
+        .unwrap();
+    drop(inbound);
+    let (_, closed) = timeout(Duration::from_secs(3), output.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(closed, Output::Closed("done"));
+    local_task.await.unwrap();
+}
+
+#[tokio::test]
 async fn guest_downloads_name_their_visitor_and_accept_bridged_requests() {
     let (address, local_task) = local_file(200).await;
     let visitor = model::share::Visitor {

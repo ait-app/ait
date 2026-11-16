@@ -6,7 +6,7 @@ amends:
   - daemon/adr-106-concrete-file-persistence.md
   - workspace/adr-081-directory-change-push.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-210：Agent 目录共享已提交的不可变记录

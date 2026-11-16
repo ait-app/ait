@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WorkspaceLayoutPersistedStateSchema } from "./workspace-layout-storage";
 
-describe("Bot layout persistence", () => {
+describe("Workspace layout persistence", () => {
   it.each([
     { kind: "bot" },
     { kind: "bot", view: "settings" },
@@ -9,6 +9,7 @@ describe("Bot layout persistence", () => {
     { kind: "bot", view: "create" },
     { kind: "bot", botId: "bot-a" },
     { kind: "bot", botId: "bot-a", view: "settings" },
+    { kind: "notebook" },
   ])("restores %j alongside existing tabs", (target) => {
     const saved = {
       layoutByWorkspace: {

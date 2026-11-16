@@ -22,8 +22,6 @@ export const TERMINAL_VIRTUAL_KEY_BUTTONS = {
   left: { id: "left", label: "←", key: "ArrowLeft" },
   right: { id: "right", label: "→", key: "ArrowRight" },
   enter: { id: "enter", label: "Enter", key: "Enter" },
-  backspace: { id: "backspace", label: "⌫", key: "Backspace" },
-  space: { id: "space", label: "Space", key: " " },
 } as const;
 
 export function createTerminalKeyInput(input: {

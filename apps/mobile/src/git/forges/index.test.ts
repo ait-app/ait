@@ -57,3 +57,15 @@ describe("forge logic and view registries stay paired", () => {
     expect(logicIds).toEqual(viewIds);
   });
 });
+
+describe("GitHub native PR surfaces", () => {
+  it("shows a merge queue badge only when the PR is queued", () => {
+    const github = CLIENT_FORGE_VIEW_MODULES.find((module) => module.id === "github");
+    const contribution = github?.paneContributions?.[0];
+
+    expect(
+      contribution?.renderHeaderMeta({ forge: "github", isInMergeQueue: true }),
+    ).not.toBeNull();
+    expect(contribution?.renderHeaderMeta({ forge: "github", isInMergeQueue: false })).toBeNull();
+  });
+});

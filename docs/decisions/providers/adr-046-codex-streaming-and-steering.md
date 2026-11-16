@@ -3,13 +3,16 @@ id: ADR-046
 status: accepted
 date: 2026-09-25
 paths:
-  - crates/provider
+  - crates/provider/runtime
+  - crates/provider/core
+  - crates/provider/codex
 ---
 
 # ADR-046：Codex 增量显示历史与运行中追加输入
 
 - 延续：ADR-039、ADR-040、ADR-041；遵循 ADR-001 v4
 - 范围：独立 server 的 `provider`，不连接旧 daemon 的领域 Run/Message
+- Codex 适配器现位于 `crates/provider-codex`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 决策
 

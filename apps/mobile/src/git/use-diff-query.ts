@@ -1,6 +1,6 @@
 import { shareCheckoutDiff } from "./diff-sharing";
 import { useMemo } from "react";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useReplicaQuery } from "@/data/query";
 import { checkoutDiffPushRoute } from "@/data/push-router";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -23,7 +23,6 @@ type CheckoutDiffQueryPayload = Omit<SubscribeCheckoutDiffResponse["payload"], "
 export type { ParsedDiffFile };
 export type DiffHunk = ParsedDiffFile["hunks"][number];
 export type DiffLine = DiffHunk["lines"][number];
-export type HighlightToken = NonNullable<DiffLine["tokens"]>[number];
 
 function normalizeCheckoutDiffCompare(compare: {
   mode: "uncommitted" | "base";

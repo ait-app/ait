@@ -4,6 +4,99 @@
 
 - View selected-session statistics from the context-details control, even when context usage is unavailable. See configured and reported models, execution state, and the latest provider-reported token, cache, cost and context facts without sending a prompt or interrupting a turn. Unknown values stay unavailable; snapshots are not summed or presented as guaranteed session totals. Account quotas and child sessions remain separate, and older hosts show statistics as unavailable.
 
+## 0.2.14 - 2026-11-16
+
+- A schedule that runs a new Agent each time now has an explicit "After each run" choice: keep the session in the Workspace so you can keep talking after the task finishes, or archive it (default). The choice is kept when the schedule is edited, when the execution target changes, and for older records that never set it.
+- The MiniMax provider answers the questionnaires of its native session: Ait's question form shows the choices, multi-select answers and custom values, and the answer is validated and sent back to the provider.
+- A recovered Agent is no longer reported as idle while it is still being admitted. The background recovery path now applies the same admission fence as foreground requests, so the wait for a recovered Agent no longer ends early or flakes.
+- The host monitor in the sidebar is now one compact row: a status dot, the host name, CPU, the network up/down rates and memory. The "Workspace host / Pinned host / Host offline" label, the trailing chevron and the mini progress bars are gone; an offline host reads as a muted dot with "—" values, and the pin/follow state stays in the details panel.
+
+## 0.2.13 - 2026-11-15
+
+- Workspace rows in the status-grouped sidebar offer Share and "Open in file manager", as rows grouped by project already did.
+- A project folder opened from the desktop shell that cannot be added now shows an error instead of failing silently.
+- Creating or editing a schedule no longer changes the isolation choice the new-workspace form remembers.
+- Ait agent tool calls in a conversation show the target agent's title, and their details list "Internal" next to "Notify on finish".
+- An agent tab shows "Agent not found" only when the agent is missing; other load failures show the error with Retry.
+- A desktop update that fails to download or install shows the failure with Retry instead of "Up to date".
+- A failed copy in the file explorer shows an error, and the copy buttons in the workspace hover card and Bot webhook setup return to their idle state after a moment.
+- Text that appeared in English under every language is now translated, including the workspace screen, the new-workspace form, the pull request panel, the terminal and sidebar menus. About 1,600 mistranslated strings, mostly Arabic, Spanish and French, are corrected.
+- Configuration that would grow past the size its own reader accepts is now refused instead of being written as a file that can no longer be loaded: a daemon `config.json` beyond 4 MiB, a project `ait.json` beyond 4 MiB, and a registry file beyond 32 MiB. Writing a project `ait.json` keeps the mode the file already had, so a shared checkout stays readable.
+- One schedule whose occurrence cannot be saved no longer holds back every other schedule; the others keep running.
+- A hub download the peer already completed is reported as done instead of as cancelled.
+- A provider that exits right after its last frame no longer loses that frame: the frame is delivered and the closed stream is reported as closed instead of as a protocol error.
+- Resuming an ACP session that answers with another session id is rejected instead of addressing a session the agent does not have.
+- Reading the DeepSeek Harness environment skips a variable that is not valid Unicode instead of aborting the session, and its summary commands now end with the client's deadline instead of waiting for a wedged native process.
+- Test feature: the Workspace Bot can look up its own records by id instead of guessing: a task's full request and report history, an earlier turn of a conversation, a notification's full text, the agent behind a task, and in your Ait conversation what happened in its other chats, such as a task handed over in Telegram. Long text in the Bot's overview and wake-ups is cut short with a pointer to the whole of it. Each external chat can read only itself and the tasks it started, and can see, direct or stop only the agents of those tasks, as can the agents it starts, so one person's conversation and results never reach another's chat; the Workspace memory, schedules, terminals and scripts stay shared by all chats. Agents working on a task can read that task, including what the other agents on it reported. The Bot tab can show the Bot's conversations in other channels read-only, to the owner and to guests (guests could already read them through the Host API). The Host daemon must be upgraded.
+
+## 0.2.12 - 2026-11-14
+
+0.2.11 was tagged but never released, so its changes ship in 0.2.12.
+
+- The Task overview keeps its search box visible, and the task count heading opens the filters. It shows the active Host and project scope, such as "mba.local / ait 12 tasks", and the filter icon is highlighted while any filter or sort is set.
+- Usage history shows reported tokens and costs without the "≥" lower-bound marker, and large numbers use K, M and B in every language, such as `12.3K` or `2.5B`.
+- When an Agent turn finishes or fails, the Host refreshes that checkout's status, at most once a minute per directory, so the Changes panel switches between uncommitted changes and the base comparison without a manual refresh.
+- Provider task lists appear as a `TODO 1/3` capsule above the input, opening a shared task card with phases, numbering and status. Claude, Codex, OMP, Pi, DeepSeek Harness, OpenCode and ACP agents use the same view, and the current list survives reloads and scrolling back through history.
+- Messages Ait sends on your behalf, such as schedule and heartbeat runs and Bot instructions or wake notifications, show their origin instead of raw tags, and schedule prompts can no longer break out of their envelope.
+- The workspace sidebar no longer spins forever because of child agents left marked as running by a closed session.
+- Oh My Pi model roles come from the installed OMP's live profile, and only assignments that the live catalog resolves are accepted.
+- Test feature: Workspace Bots can connect to international Lark through manual setup in Bot settings, separately from China's Feishu.
+
+- Manage named model presets in Provider settings and select them below the default models in the model picker when the Provider supports model roles. A preset applies its model, thinking level and complete role assignments together, preserving permissions and tools. Oh My Pi uses its native preset library, with project overrides kept read-only; other Providers store presets in Ait. Unavailable models remain editable in settings and cannot be applied by mistake. The Host daemon must be upgraded.
+- `/btw` opens an independent floating conversation above the main input with streamed answers, continued follow-ups, saved history and separate cancellation. The window follows the input's height and stays clear of it. Expand a settled side conversation into a full session draft with its frozen parent context and question/answer history, then continue working there. Main and side conversations run independently through a shared provider interface; support depends on the installed provider adapter and runtime. The Host daemon must be upgraded.
+- Mathematical formulas render in the shared Markdown engine, including BTW windows and expanded conversations. Web and desktop use local MathML with Ait theme sizing and colors; native apps need a new build to enable the math module.
+
+- Test feature: the Workspace Bot keeps a list of tasks. Every agent the Bot starts belongs to a task, and agents report progress, report when they are blocked on you, and report when they are done or give up. The Bot no longer waits inside a turn for long-running work: it hands the work to an agent, tells you it has started and ends its turn, then wakes in the same conversation when an agent finishes, fails, needs permission or reports, and closes the task after telling you the result. In the Bot tab, a Tasks button above the message box shows how many tasks are open and how many are waiting on you. It lists them with tasks waiting on you first, why each one waits, its agents and the latest report, and shows recently closed tasks on request. Opening a task shows the request, the full report history and the outcome; the Host owner can mark it done, cancel it or reopen it, and guests can only read it. Workspace updates that belong to a task link to it. A Bot keeps at most 32 open tasks and the 64 most recently closed; at the limit, tasks whose agents are all archived are closed automatically before a new one opens. Giving an agent more work reopens its task, and an agent that reports its result and then ends its turn wakes the Bot once, not twice. Claude agents send their reports without asking for approval; a Codex agent in a mode that asks before using tools, and agents on other providers, may ask you to approve the report first. Closing a task does not stop its agents. The Host daemon must be upgraded; once an agent has reported on a task, downgrading to 0.2.10 or earlier means removing the Bot data.
+
+- Opening a model picker, the profile editor, a schedule form or provider settings now refreshes that Host's model catalog in the background, sharing one refresh across every open picker instead of re-querying per picker. Providers already being discovered are not refreshed again. If discovery fails, the last usable models stay selectable with a visible error and retry, and remembered model/mode/thinking choices are kept instead of being silently replaced. Host changes, same-client reconnects and working-directory changes fence late refresh results. This changes internal UI refresh/open callbacks and their consumers; public SDK, daemon protocol, saved configuration and native provider interfaces are unchanged.
+
+- Building the desktop app from source: the daemon binary override is now `AITD_BIN`. `AIT_SERVER_BIN` is still read until 2027-05-14; "Ait server" now names the separate server project.
+
+## 0.2.10 - 2026-11-12
+
+- Test feature: Workspace notifications wake the Workspace Bot. When an Agent it started finishes, fails or waits for permission, or one of its schedule runs settles, the Bot answers in the conversation that asked for the work, such as the Telegram chat. Updates for one conversation are grouped, limited to 12 wake turns per hour, and the Bot may stay silent. Bot settings add a Notifications card to choose between the Bot's own work (default) and every Workspace notification, with a recent list showing why any were skipped. Paused Bots and Workspaces without a Bot make no model calls.
+- Keep Claude Code background tasks marked as background across restarts and task updates, and stop their output from opening phantom new turns. Cancelling a Claude session still ends its background tasks.
+- Show a quick merge button beside the pull request or merge request action whenever a direct merge is allowed, for both GitHub and GitLab; squash, merge and rebase stay in the menu. A pull request already in GitHub's merge queue shows its queue status.
+- Task overview polish: long permission summaries wrap inside the card and stop after three lines, the details panel matches the cards' styling and no longer repeats a project name that equals the workspace name, and the details header lines up with the toolbar.
+- The sidebar no longer shows a workspace as still being created after the Host has reported it finished.
+- Web and desktop tooltips are removed as soon as they close instead of waiting for an exit animation, which could leave small grey shapes behind. Tooltips on the web no longer fade.
+- Test feature: Telegram Bot replies include the quoted passage or the replied-to message, or its media caption, so the agent sees what a reply refers to.
+- Stable releases attach the Google-signed Android APK: the release check now reads every certificate `apksigner` reports instead of matching its signer labels.
+- Native apps display host CPU and memory statistics correctly with React Native’s cancellation signals.
+
+- Native apps keep the current page and task details when folding or unfolding a device, keep conversations readable beside side panels, prevent messages from showing through the chat header, and keep dropdown options readable and clear of the keyboard.
+
+- Build: the enabled React Compiler now skips `packages/protocol` sources (schemas and generated validators contain no React components), so desktop startup and protocol hot reload no longer pay for compiling their large control-flow graphs. Windows and POSIX paths are both normalized; application components are still compiled.
+
+- Add `npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]` as an alias for the existing `node scripts/release-assets.mjs daemon` standalone-daemon archive command; no new packaging path.
+
+- Test feature: a Workspace Bot now reports back on its own. When an agent it started finishes, fails or waits for permission, or a schedule it created runs, the Bot wakes and replies in the conversation that started the work, so a task handed over in Telegram reports back in Telegram. Updates arriving close together are combined into one turn, a conversation wakes at most 12 times an hour, the Bot is not woken again for an agent it already checked in that conversation, and it stays quiet when there is nothing worth saying. A wake-up cut short by a daemon restart runs again after the restart. In the Bot tab these turns show what happened, with links to the agent or schedule, instead of a user message. Settings can widen the wake-ups to every agent, schedule and terminal event in the workspace, which uses more model calls, and list recent notifications, including ones that were not delivered. The Host daemon must be upgraded. Once a workspace has had any activity on the new daemon, older daemons generally cannot load its Bot data, so downgrading means removing the Bot data.
+
+- OMP sessions can now assign its native model roles (director, worker and the rest of the installed profile) from a catalog read out of OMP's own metadata instead of a fixed table. Assignments ride a private `--config` overlay, an assignment change relaunches the process, and inheriting a role writes no file. A new assignment the live catalog cannot resolve is rejected rather than stored.
+
+- Desktop passes provider launch overrides (`AIT_SERVER_CODEX_BIN`, `AIT_SERVER_CLAUDE_BIN`, `AIT_SERVER_ANTIGRAVITY_BIN`, `AIT_SERVER_OPENCODE_BIN`, `AIT_SERVER_DEEPSEEK_HARNESS_BIN`, `AIT_SERVER_PI_BIN`, `AIT_SERVER_OMP_BIN`, `AIT_SERVER_MINIMAX_CODE_BIN`, plus `AIT_SERVER_DEEPSEEK_HARNESS_PROFILE` and `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT`) through to its built-in daemon instead of stripping them. All other `AIT_SERVER_*` settings stay isolated to the desktop runtime.
+- Bold text in Chinese, Japanese and Korean now renders as bold when the `**` sits next to punctuation, such as `**…。**后文` or `种**“…”**只`, instead of showing the asterisks.
+- A command approval in a conversation shows the command and its working directory instead of the raw request, and the primary choice is highlighted. Requests that carry arguments Ait does not recognize still show the full input.
+- Error text is readable in light themes; it used a pale red meant for dark surfaces. History rows keep their title in a narrow pane, such as a foldable's inner screen or a small window, and the History empty state and the turn duration label follow the app language.
+
+## 0.2.9 - 2026-11-12
+
+- Rewrite the Oh My Pi (OMP) Provider to run one `omp --mode rpc-ui` process per session and use OMP's native RPC directly, matching real OMP 18.18.8. Tool approvals offer OMP's scope options, questions use OMP's form, and `/compact`, `/autocompact`, `/handoff`, `/steer` and `/follow-up` are built in. History, session listing, background subagent transcripts and usage all come from OMP. Resuming a session whose saved model is no longer available now fails instead of switching models.
+- Remove the `aitd omp-acp` subcommand along with the OMP ACP bridge. External ACP clients that started OMP through it need another entry point.
+- Sandboxed workspaces can no longer modify OMP's config, models, MCP and `.env` files, its extensions, hooks, tools and plugins, or its native addon.
+- Stable releases attach the Google-signed Android APK again: the release check now accepts the key-rotation signatures Google Play uses for this app.
+
+## 0.2.8 - 2026-11-11
+
+- Show a Host resource monitor at the bottom of the sidebar: a CPU and memory summary that opens to Host status, recent history, disk capacity and upload and download speeds. It follows the current workspace's Host or can be pinned to one, keeps the last sample time when a Host is offline, and stops refreshing while hidden. The Host daemon must be upgraded; workspace and project share guests see a permission notice instead.
+- Act on Task overview cards directly: approve, stop, mark as reviewed, archive or open the conversation without opening the details, and answer questions through the existing form. The toolbar fits on one row, desktop columns can collapse, phones use status tabs with counts, and failed tasks move to To review.
+- Settle observed OpenCode subagents from OpenCode's saved final state, so finished or failed children are no longer shown as canceled when the parent closes. While such a child is running, the subagent list refreshes every 15 seconds to catch missed completion events.
+- Test feature: Telegram Bot channels react with 👀 when a message is accepted, edit a single reply as the answer grows instead of sending separate messages, and render Markdown through Telegram's HTML mode. A warning appears when group access is on but Telegram Privacy Mode keeps ordinary mentions from reaching the bot.
+- Show pull requests for workspace branches that were pushed under a different remote name, such as `git push -u origin HEAD:refs/heads/fix/...`, in the sidebar and PR panel, including merge actions. Branches pushed without an upstream are still not recognized.
+- Test feature: QQ Bot channels with group chats enabled now also receive ordinary group messages when the group grants full message access, not only messages that mention the bot. They pass through the same sender allowlist and pairing.
+- Stable releases now attach a Google-signed Android APK, `Ait-VERSION-android.apk`, to the GitHub Release. It shares the Google Play signing key, so it installs over the Play version and vice versa; 0.1.x GitHub APKs used a different key and must be uninstalled first.
+- Add a per-Host usage ledger. Each daemon records its provider calls and, where the provider reports them, token usage per model request in `agents/usage.sqlite3`, and the Usage dialog has a new History tab (24 hours, 7 days or 30 days) that adds all connected Hosts together and shows the totals by provider and model or by day; unreachable Hosts are listed separately, and a Host's settings page shows its 30-day totals. Providers that do not report usage (OpenCode, ACP, DeepSeek, and summary calls) show call counts only, and figures that may be incomplete are marked "≥". Call details are kept for 90 days and daily totals indefinitely; prompts, outputs, file paths and credentials are never recorded and the data stays on the Host. The Host daemon must be upgraded for its history to appear.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.
@@ -409,8 +502,6 @@
 - Reconnect desktop clients after a failed local daemon transport closes.
 - Preserve Markdown whitespace across streamed message chunks.
 - Reflect configured models in the composer and explain model switches deferred until the current turn finishes.
-- Preview PDFs, open external files explicitly, and handle folder drops as directory attachments.
-- Transfer large messages in bounded chunks and serialize file uploads with progress and acknowledgements.
 - Synchronize the built-in desktop daemon after sign-in and simplify online host controls.
 - Fix workspace fork project resolution and accept workspace creation without an initial agent.
 - Improve provider auxiliary generation, native session previews, DeepSeek Harness model discovery, and permission compatibility.

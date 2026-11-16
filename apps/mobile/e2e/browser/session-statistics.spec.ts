@@ -11,7 +11,10 @@ import { buildHostAgentDetailRoute } from "../../src/utils/host-routes";
 
 test.use({
   e2eDaemonEnvironment: {
-    AIT_SERVER_CODEX_BIN: path.join(repoRoot, "crates/provider/tests/fixtures/codex_app_server.py"),
+    AIT_SERVER_CODEX_BIN: path.join(
+      repoRoot,
+      "crates/provider/codex/tests/fixtures/codex_app_server.py",
+    ),
   },
 });
 

@@ -1,4 +1,4 @@
-import type { AgentAttachment, CompactionTimelineItemPayload } from "./messages.js";
+import type { CompactionTimelineItemPayload } from "./messages.js";
 
 export type AgentProvider = string;
 
@@ -188,19 +188,6 @@ export interface AgentPersistenceHandle {
   metadata?: AgentMetadata;
 }
 
-export type AgentPromptContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string }
-  | AgentAttachment;
-
-export type AgentPromptInput = string | AgentPromptContentBlock[];
-
-export interface AgentRunOptions {
-  outputSchema?: unknown;
-  resumeFrom?: AgentPersistenceHandle;
-  maxThinkingTokens?: number;
-}
-
 export interface AgentUsage {
   inputTokens?: number;
   cachedInputTokens?: number;
@@ -377,6 +364,8 @@ export interface AgentTaskItem {
   id?: string;
   status?: "pending" | "in_progress" | "completed";
   activeForm?: string;
+  /** Native phase identity and title, preserving provider task groups and their order. */
+  group?: { id: string; title: string };
 }
 
 /** Ordered speech within a single provider handoff, separate from text turns. */
@@ -396,6 +385,17 @@ export type VoiceTimelineItem = { type: "voice"; id: string; sessionId: string }
   | { kind: "session"; status: "started" | "ended" | "failed" }
 );
 
+/** The Ait component that wrote an input instead of the user typing it. */
+export type UserMessageOrigin =
+  | {
+      kind: "schedule";
+      scheduleId: string;
+      runId: string;
+      name?: string;
+    }
+  | { kind: "bot_instructions" }
+  | { kind: "bot_wake" };
+
 export type AgentTimelineItem =
   | VoiceTimelineItem
   | {
@@ -406,6 +406,8 @@ export type AgentTimelineItem =
       /** Provider image URLs or host paths, resolved through the connected daemon. */
       imageSources?: string[];
       voiceTranscript?: VoiceTranscriptEntry[];
+      /** Set when Ait generated this input; `text` then holds only the message a person reads. */
+      origin?: UserMessageOrigin;
     }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }
@@ -419,63 +421,6 @@ export type AgentTimelineItem =
     }
   | CompactionTimelineItem
   | PluginTimelineItem;
-
-export type AgentStreamEvent =
-  | { type: "thread_started"; sessionId: string; provider: AgentProvider }
-  | { type: "turn_started"; provider: AgentProvider; turnId?: string }
-  | { type: "turn_completed"; provider: AgentProvider; usage?: AgentUsage; turnId?: string }
-  | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
-  | {
-      type: "mode_changed";
-      provider: AgentProvider;
-      currentModeId: string | null;
-      availableModes: AgentMode[];
-    }
-  | { type: "model_changed"; provider: AgentProvider; runtimeInfo: AgentRuntimeInfo }
-  | {
-      type: "thinking_option_changed";
-      provider: AgentProvider;
-      thinkingOptionId: string | null;
-    }
-  | {
-      type: "turn_failed";
-      provider: AgentProvider;
-      error: string;
-      code?: string;
-      diagnostic?: string;
-      turnId?: string;
-    }
-  | { type: "turn_canceled"; provider: AgentProvider; reason: string; turnId?: string }
-  | {
-      type: "timeline";
-      item: AgentTimelineItem;
-      provider: AgentProvider;
-      turnId?: string;
-      timestamp?: string;
-    }
-  | {
-      type: "permission_requested";
-      provider: AgentProvider;
-      request: AgentPermissionRequest;
-      turnId?: string;
-    }
-  | {
-      type: "permission_resolved";
-      provider: AgentProvider;
-      requestId: string;
-      resolution: AgentPermissionResponse;
-      turnId?: string;
-    }
-  | {
-      type: "attention_required";
-      provider: AgentProvider;
-      reason: "finished" | "error" | "permission";
-      timestamp: string;
-    };
-
-export function getAgentStreamEventTurnId(event: AgentStreamEvent): string | undefined {
-  return "turnId" in event ? event.turnId : undefined;
-}
 
 export type AgentPermissionRequestKind = "tool" | "plan" | "question" | "mode" | "other";
 
@@ -516,14 +461,6 @@ export type AgentPermissionResponse =
       message?: string;
       interrupt?: boolean;
     };
-
-export interface AgentRunResult {
-  sessionId: string;
-  finalText: string;
-  usage?: AgentUsage;
-  timeline: AgentTimelineItem[];
-  canceled?: boolean;
-}
 
 export type JsonValue =
   | null

@@ -31,7 +31,7 @@ let deadline;
 app.whenReady().then(async () => {
   try {
     daemon = spawn(
-      process.env.AIT_SERVER_BIN ?? path.join(root, "target/debug/daemon"),
+      process.env.AITD_BIN ?? path.join(root, "target/debug/daemon"),
       ["--data-dir", path.join(temporary, "daemon"), "--listen", "127.0.0.1:0"],
       { env: { ...process.env, AIT_SERVER_TOKEN: token }, stdio: ["ignore", "pipe", "pipe"] },
     );

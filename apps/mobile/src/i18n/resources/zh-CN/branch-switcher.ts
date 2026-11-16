@@ -1,0 +1,18 @@
+export const branchSwitcher = {
+  triggerTooltip: "切换工作区分支",
+  currentBranch: "当前分支：{{branchName}}。按下以切换分支。",
+  placeholder: "切换分支...",
+  searchPlaceholder: "筛选分支...",
+  empty: "没有找到分支。",
+  title: "切换分支",
+  uncommittedTitle: "未提交的变更",
+  uncommittedMessage: "你有未提交的变更。切换分支前要先贮藏吗？",
+  stashAndSwitch: "贮藏并切换",
+  failedToStash: "贮藏变更失败",
+  failedToSwitch: "切换分支失败",
+  restoreStashTitle: "恢复贮藏的变更？",
+  restoreStashMessage: "此分支有上一会话贮藏的变更。要恢复它们吗？",
+  restore: "恢复",
+  later: "稍后",
+  stashRestored: "贮藏的变更已恢复",
+};

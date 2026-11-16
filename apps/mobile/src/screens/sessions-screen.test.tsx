@@ -13,13 +13,12 @@ const history = vi.hoisted(() => ({
   isError: true,
   isSearchSupported: false,
   isSearchTruncated: false,
-  hostErrors: [{ serverId: "offline", serverName: "Offline Host" }],
   loadMore: vi.fn(),
   refreshAll: vi.fn(async () => {}),
 }));
 vi.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
 vi.mock("@/hooks/use-agent-history", () => ({ useAgentHistory: () => history }));
-vi.mock("@/hooks/use-import-session", () => ({
+vi.mock("@/components/use-import-session", () => ({
   useImportSession: () => ({ open: vi.fn(), sheet: null }),
 }));
 vi.mock("@/runtime/host-runtime", () => ({

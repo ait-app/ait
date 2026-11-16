@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use ::bot::mcp::Scopes;
 use ::bot::ports::{Credentials, Executor};
@@ -18,7 +19,6 @@ use persistence::storage::bot::FileStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use provider::Providers;
 use provider::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
 use provider::service::agent_execution::ExecutionDependencies;
 use provider::service::agent_manager::AgentManager;
@@ -36,14 +36,48 @@ use crate::connection::rpc;
 /// Hidden native session identity the simulated Bot conversation was opened with.
 pub(super) const BOT_SESSION: &str = "bot-hidden-session";
 
-/// Bot conversations and schedules never run in these tests.
+/// Schedules never run in these tests, and Bot conversations only once a test lets them.
 #[derive(Debug)]
 struct Idle;
 
+/// Bot native sessions: without [`Turns::run`] every turn fails to open; with it, turns stay
+/// running until [`Turns::release`] and then complete with a reply.
+#[derive(Debug, Default)]
+pub(super) struct Turns {
+    run: AtomicBool,
+    released: AtomicBool,
+}
+
+impl Turns {
+    /// Let Bot turns open and run, holding each one running until [`Turns::release`].
+    pub(super) fn run(&self) {
+        self.run.store(true, Ordering::SeqCst);
+    }
+
+    /// Let every running and later Bot turn complete.
+    pub(super) fn release(&self) {
+        self.released.store(true, Ordering::SeqCst);
+    }
+}
+
 #[async_trait::async_trait]
-impl Executor for Idle {
-    async fn execute(&self, _: SessionOwner, _: Action) -> Result<Value, model::ErrorCode> {
-        Ok(json!({"status":"idle","lastMessage":null}))
+impl Executor for Turns {
+    async fn execute(&self, _: SessionOwner, action: Action) -> Result<Value, model::ErrorCode> {
+        if !self.run.load(Ordering::SeqCst) {
+            return Ok(json!({"status":"idle","lastMessage":null}));
+        }
+        Ok(match action {
+            Action::Create { .. } => json!({"created":true,"instructionDelivery":"system_prompt"}),
+            Action::Status { .. } | Action::Poll { .. } if self.released.load(Ordering::SeqCst) => {
+                json!({"status":"idle","lastMessage":"reported"})
+            }
+            Action::Status { .. } | Action::Poll { .. } => json!({"status":"running"}),
+            Action::Send { .. }
+            | Action::Release { .. }
+            | Action::Close { .. }
+            | Action::Cancel { .. }
+            | Action::Permission { .. } => json!({}),
+        })
     }
 }
 
@@ -151,6 +185,10 @@ impl terminal::ports::Process for Shell {
 pub(super) struct Scoped {
     pub(super) fixture: Fixture,
     pub(super) scopes: Arc<Scopes>,
+    /// The served Bot service, for feeding notifications as the daemon does.
+    pub(super) bots: Bots,
+    /// The Bot service's native sessions.
+    pub(super) turns: Arc<Turns>,
     store: Arc<FileStore>,
     pub(super) workspace: String,
     pub(super) cwd: PathBuf,
@@ -286,14 +324,14 @@ fn provider(base: &std::path::Path, registries: &Registries) -> provider::Servic
     let codex = base.join("codex");
     symlink(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../provider/tests/fixtures/codex_app_server.py"),
+            .join("../provider/codex/tests/fixtures/codex_app_server.py"),
         &codex,
     )
     .unwrap();
     let mut manager = AgentManager::new(Box::new(registries.agents.clone())).with_timeline(
         provider::storage::timeline::Timeline::open(&data.join("timeline.sqlite3")).unwrap(),
     );
-    Providers::configured(&data, |name| {
+    provider_builtin::configured(&data, |name| {
         (name == "AIT_SERVER_CODEX_BIN").then(|| codex.clone().into_os_string())
     })
     .register(&mut manager)
@@ -361,11 +399,12 @@ impl Scoped {
         let (workspace, other) = (open(&cwd), open(&other_cwd));
         let scopes = Scopes::new();
         let store = Arc::new(FileStore::new(data.join("bots")));
+        let turns = Arc::new(Turns::default());
         let bots = Bots::spawn(Dependencies {
             store: store.clone(),
             workspaces: Arc::new(registries.workspaces.clone()),
             projects: Arc::new(registries.projects.clone()),
-            executor: Arc::new(Idle),
+            executor: turns.clone(),
             credentials: Arc::new(Idle),
             scopes: scopes.clone(),
         })
@@ -389,7 +428,7 @@ impl Scoped {
             "instance".to_owned(),
             TOKEN.into(),
             Services {
-                bot: Some(bots),
+                bot: Some(bots.clone()),
                 filesystem: Some(chunks::filesystem_service::service(&data)),
                 metadata: Some(metadata(&data, &registries, directory)),
                 provider: Some(provider(&base, &registries)),
@@ -404,6 +443,8 @@ impl Scoped {
         Self {
             fixture: Fixture::serve(listener, api),
             scopes,
+            bots,
+            turns,
             store,
             workspace,
             cwd,
@@ -441,8 +482,31 @@ impl Scoped {
             .await;
     }
 
-    /// Simulate opening the current Bot's hidden conversation session.
+    /// Simulate opening the current Bot's hidden session of a conversation it does not have,
+    /// which reads and reaches only what it started, like an external conversation (ADR-280).
     pub(super) fn bot_credential(&self) -> String {
+        self.bot_credential_in(ConversationId::generate())
+    }
+
+    /// Open the owner's conversation and simulate opening its hidden session, which reaches
+    /// every Agent in scope.
+    pub(super) async fn owner_credential(&self) -> String {
+        self.bot_credential_in(self.conversation().await)
+    }
+
+    /// Open the current Bot's `owner` conversation and return its id.
+    pub(super) async fn conversation(&self) -> ConversationId {
+        let opened = self
+            .rpc(
+                "bot.conversation.open.request",
+                json!({"workspaceId":self.workspace}),
+            )
+            .await;
+        serde_json::from_value(opened["conversation"]["id"].clone()).unwrap()
+    }
+
+    /// Simulate opening the current Bot's hidden session of `conversation`.
+    pub(super) fn bot_credential_in(&self, conversation: ConversationId) -> String {
         let bot = self
             .store
             .catalog()
@@ -455,7 +519,7 @@ impl Scoped {
             .unwrap();
         let owner = serde_json::to_value(SessionOwner {
             bot_id: bot.id,
-            conversation_id: ConversationId::generate(),
+            conversation_id: conversation,
             workspace_id: self.workspace.clone(),
         })
         .unwrap();
@@ -465,6 +529,17 @@ impl Scoped {
     /// Simulate opening the native session of Bot-scoped Agent `agent_id`.
     pub(super) fn subtree_credential(&self, agent_id: &str) -> String {
         let labels = BTreeMap::from([(BOT_SCOPE_LABEL.to_owned(), self.workspace.clone())]);
+        self.issue(agent_id, false, None, &labels)
+    }
+
+    /// Simulate opening the native session of Agent `agent_id` with the labels it was created
+    /// with, as the provider does when it starts the session.
+    pub(super) async fn session_credential(&self, agent_id: &str) -> String {
+        let agent = self
+            .rpc("agent.get.request", json!({"agentId":agent_id}))
+            .await;
+        let labels: BTreeMap<String, String> =
+            serde_json::from_value(agent["agent"]["labels"].clone()).unwrap();
         self.issue(agent_id, false, None, &labels)
     }
 

@@ -1,8 +1,8 @@
 import type { SubscribeTerminalRequest } from "@ait/protocol/messages";
 
-export const TERMINAL_VISIBLE_RESTORE_SCROLLBACK_LINES = 200;
+const TERMINAL_VISIBLE_RESTORE_SCROLLBACK_LINES = 200;
 
-export interface ResolveTerminalRestoreOptionsInput {
+interface ResolveTerminalRestoreOptionsInput {
   supportsTerminalRestoreModes: boolean;
   canClaimSize: boolean;
   size: { rows: number; cols: number } | null;

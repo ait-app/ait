@@ -1,4 +1,4 @@
-export interface Pcm16Wav {
+interface Pcm16Wav {
   sampleRate: number;
   samples: Int16Array;
 }

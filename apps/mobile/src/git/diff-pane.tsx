@@ -61,7 +61,6 @@ import { GitActionsSplitButton } from "@/git/actions-split-button";
 import type { GitActions } from "@/git/policy";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { useGitActions } from "@/git/use-actions";
-import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
 import { parseGitRemoteLocation } from "@ait/protocol/git-remote";
 import type { ForgeAuthState } from "@ait/protocol/messages";
@@ -100,8 +99,6 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
-
-export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
 export function resolveDiffLayout(
   layout: "unified" | "split",
@@ -233,19 +230,12 @@ const DIFF_OPTIONS_CHANGES_TAB_ICON = (
 interface DiffLayoutToggleProps {
   layout: "unified" | "split";
   isMobile: boolean;
-  testID?: string;
-  toggleStyle?: PressableStyleFn;
+  testID: string;
   onToggle: () => void;
 }
-export function DiffLayoutToggle({
-  layout,
-  isMobile,
-  testID = "changes-toggle-layout",
-  toggleStyle,
-  onToggle,
-}: DiffLayoutToggleProps) {
-  const defaultToggleStyle = useMemo(
-    () => buildToggleButtonStyle(false, undefined, isMobile),
+export function DiffLayoutToggle({ layout, isMobile, testID, onToggle }: DiffLayoutToggleProps) {
+  const toggleStyle = useCallback<PressableStyleFn>(
+    (state) => paneContentToolbarIconButtonStyle(state, false, isMobile),
     [isMobile],
   );
   const { t } = useTranslation();
@@ -261,7 +251,7 @@ export function DiffLayoutToggle({
           accessibilityLabel={label}
           testID={testID}
           onPress={onToggle}
-          style={toggleStyle ?? defaultToggleStyle}
+          style={toggleStyle}
         >
           {layout === "unified" ? (
             <ThemedColumns2 size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
@@ -283,15 +273,13 @@ export function DiffLayoutToggle({
 interface DiffModeMenuProps {
   diffMode: "uncommitted" | "base";
   committedDescription?: string;
-  testIDPrefix?: string;
   onSelectUncommitted: () => void;
   onSelectBase: () => void;
 }
 
-export function DiffModeMenu({
+function DiffModeMenu({
   diffMode,
   committedDescription,
-  testIDPrefix = "changes-diff",
   onSelectUncommitted,
   onSelectBase,
 }: DiffModeMenuProps) {
@@ -301,7 +289,7 @@ export function DiffModeMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        testID={`${testIDPrefix}-status-trigger`}
+        testID="changes-diff-status-trigger"
         style={toolbarLabelTriggerStyle}
         accessibilityRole="button"
         accessibilityLabel={t("workspace.git.diff.diffMode")}
@@ -320,9 +308,9 @@ export function DiffModeMenu({
           );
         }}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" width={260} testID={`${testIDPrefix}-status-menu`}>
+      <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
         <DropdownMenuItem
-          testID={`${testIDPrefix}-mode-uncommitted`}
+          testID="changes-diff-mode-uncommitted"
           selected={diffMode === "uncommitted"}
           onSelect={onSelectUncommitted}
         >
@@ -330,7 +318,7 @@ export function DiffModeMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          testID={`${testIDPrefix}-mode-committed`}
+          testID="changes-diff-mode-committed"
           selected={diffMode === "base"}
           description={committedDescription}
           onSelect={onSelectBase}
@@ -1132,12 +1120,6 @@ function DiffBodyContent({
   return children;
 }
 
-function computeBaseRefLabel(baseRef: string | undefined, fallbackLabel: string): string {
-  if (!baseRef) return fallbackLabel;
-  const trimmed = baseRef.replace(/^refs\/(heads|remotes)\//, "").trim();
-  return trimmed.startsWith("origin/") ? trimmed.slice("origin/".length) : trimmed;
-}
-
 function computeCommittedDiffDescription(
   branchLabel: string,
   baseRefLabel: string,
@@ -1200,18 +1182,9 @@ function computeForgeSetupAction(input: {
   if (input.forge !== "github" && !input.forgeProvidersSupported) {
     return null;
   }
-  switch (input.authState) {
-    case "cli_missing":
-      return "install_cli";
-    case "unauthenticated":
-      return "sign_in";
-    case "authenticated":
-    case "no_remote":
-    case "error":
-      return null;
-    default:
-      return null;
-  }
+  if (input.authState === "cli_missing") return "install_cli";
+  if (input.authState === "unauthenticated") return "sign_in";
+  return null;
 }
 
 function parseForgeHost(url: string | null | undefined): string | null {
@@ -1239,14 +1212,6 @@ function buildForgeSetupMessage(input: {
   }
   const command = buildForgeSignInCommand(input.forge, input.host);
   return input.t("workspace.git.forgeSetup.signIn", { command, brand: brandLabel });
-}
-
-function buildToggleButtonStyle(
-  selected: boolean,
-  baseStyles?: StyleProp<ViewStyle> | StyleProp<ViewStyle>[],
-  isMobile = false,
-): PressableStyleFn {
-  return (state) => [baseStyles, paneContentToolbarIconButtonStyle(state, selected, isMobile)];
 }
 
 interface JumpToFileVisibility {
@@ -1540,7 +1505,6 @@ export function ChangesSurface({
     isGit,
     notGit,
     statusErrorMessage,
-    baseRef,
     currentBranchName,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
@@ -1759,15 +1723,7 @@ export function ChangesSurface({
   );
   const diffErrorMessage = diffPayloadError?.message ?? null;
   const prErrorMessage = computePrErrorMessage(githubFeaturesEnabled, prPayloadError);
-  const baseRefLabel = useMemo(
-    () => computeBaseRefLabel(baseRef, t("workspace.git.diff.base")),
-    [baseRef, t],
-  );
-  const { gitActions, branchLabel } = useGitActions({
-    serverId,
-    cwd,
-    icons: GIT_ACTION_ICONS,
-  });
+  const { gitActions, branchLabel, baseRefLabel } = useGitActions({ serverId, cwd });
   const committedDiffDescription = useMemo(
     () => computeCommittedDiffDescription(branchLabel, baseRefLabel),
     [baseRefLabel, branchLabel],
@@ -2000,9 +1956,6 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "flex-end",
     flexShrink: 0,
   },
-  diffStatusIconHidden: {
-    opacity: 0,
-  },
   actionErrorText: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[1],
@@ -2024,11 +1977,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   diffContainer: {
-    flex: 1,
-    minHeight: 0,
-    position: "relative",
-  },
-  scrollContainer: {
     flex: 1,
     minHeight: 0,
     position: "relative",

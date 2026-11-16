@@ -1,11 +1,14 @@
 import {
   BOT_FEISHU_SETUP_METHODS,
+  BOT_LARK_SETUP_METHODS,
   BOT_IMESSAGE_SETUP_METHODS,
   BOT_WEBHOOK_SETUP_METHODS,
   BOT_METHODS,
+  BOT_NOTIFICATION_METHODS,
   BOT_PERMISSION_METHODS,
   BOT_QQ_SETUP_METHODS,
   BOT_TELEGRAM_SETUP_METHODS,
+  BOT_TICKET_METHODS,
   BOT_WEIXIN_SETUP_METHODS,
 } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
@@ -93,10 +96,22 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_PERMISSION_METHODS.every(has),
+      workspaceBotNotifications:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_NOTIFICATION_METHODS.every(has),
+      workspaceBotTickets:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_TICKET_METHODS.every(has),
       workspaceBotFeishuSetup:
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_FEISHU_SETUP_METHODS.every(has),
+      workspaceBotLarkSetup:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_LARK_SETUP_METHODS.every(has),
       workspaceBotTelegramSetup:
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
@@ -124,8 +139,20 @@ export function serverInfo(
       importSessionSearch: has("provider.sessions.recent.list.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
+      providerPresets:
+        !scopedGuest &&
+        [
+          "provider.presets.describe.request",
+          "provider.presets.list.request",
+          "provider.presets.save.request",
+          "provider.presets.delete.request",
+        ].every(has),
+      sideQuestions: ["ask", "cancel", "history", "transfer"].every((operation) =>
+        has(`agent.side_question.${operation}.request`),
+      ),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
+      hostStats: !scopedGuest && has("daemon.host_stats.request"),
       onlineServiceSync: [
         "relay.status.request",
         "relay.start.request",
@@ -151,6 +178,7 @@ export function serverInfo(
       checkoutForgeSetAutoMerge: has("checkout.forge.set_auto_merge.request"),
       checkoutRefresh: has("checkout.refresh.request"),
       providerUsageList: has("provider.usage.list.request"),
+      providerUsageLedger: has("provider.usage.ledger.request"),
       agentHistorySearch: has("agent.history.get.request"),
       agentStatisticsGet: has("agent.statistics.get.request"),
       agentForkContext: has("agent.fork_context.request"),

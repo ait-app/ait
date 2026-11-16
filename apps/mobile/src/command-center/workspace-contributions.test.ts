@@ -122,7 +122,6 @@ describe("workspace command center contributions", () => {
     const fixture = source({
       primary,
       secondary: [gitAction("push", "Push")],
-      menu: [],
     });
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
@@ -139,7 +138,6 @@ describe("workspace command center contributions", () => {
     const fixture = source({
       primary,
       secondary: [primary, gitAction("push", "Push")],
-      menu: [],
     });
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
@@ -151,7 +149,6 @@ describe("workspace command center contributions", () => {
     const fixture = source({
       primary: gitAction("commit", "Commit"),
       secondary: [],
-      menu: [],
     });
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
@@ -180,7 +177,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits browser and split actions when their existing capabilities are unavailable", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     fixture.value.capabilities = {
       canSplitPanes: false,
       canOpenBrowserTabs: false,
@@ -202,7 +199,7 @@ describe("workspace command center contributions", () => {
   it.each([null, "file"] as const)(
     "dispatches tab and pane commands with active tab %s",
     (kind) => {
-      const fixture = source({ primary: null, secondary: [], menu: [] });
+      const fixture = source({ primary: null, secondary: [] });
       fixture.value.activeTabKind = kind;
       fixture.value.activeTabIndex = kind === "file" ? 0 : -1;
       fixture.value.activeTabCount = kind === "file" ? 1 : 0;
@@ -233,7 +230,7 @@ describe("workspace command center contributions", () => {
   );
 
   it("keeps workspace creation commands available outside Git", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -246,7 +243,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("dispatches rename to the workspace scope", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
     const rename = contributions.find((item) => item.id === "workspace:rename");
@@ -257,7 +254,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("copies the workspace path without going through the dispatcher", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
     contributions.find((item) => item.id === "workspace:copy-path")?.run();
@@ -267,14 +264,14 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits Copy branch name when the workspace has no branch, and copies when it does", () => {
-    const withoutBranch = source({ primary: null, secondary: [], menu: [] });
+    const withoutBranch = source({ primary: null, secondary: [] });
     expect(
       buildWorkspaceCommandCenterContributions(withoutBranch.value).some(
         (item) => item.id === "workspace:copy-branch-name",
       ),
     ).toBe(false);
 
-    const withBranch = source({ primary: null, secondary: [], menu: [] });
+    const withBranch = source({ primary: null, secondary: [] });
     withBranch.value.currentBranch = "feature/login";
     const contribution = buildWorkspaceCommandCenterContributions(withBranch.value).find(
       (item) => item.id === "workspace:copy-branch-name",
@@ -286,7 +283,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("flips the pin label on pinned state and omits the entry when the host cannot pin", () => {
-    const unpinned = source({ primary: null, secondary: [], menu: [] });
+    const unpinned = source({ primary: null, secondary: [] });
     unpinned.value.capabilities.canPin = true;
     const pinContribution = buildWorkspaceCommandCenterContributions(unpinned.value).find(
       (item) => item.id === "workspace:pin",
@@ -296,7 +293,7 @@ describe("workspace command center contributions", () => {
     pinContribution?.run();
     expect(unpinned.dispatched).toEqual([{ id: "workspace.pin", scope: "sidebar" }]);
 
-    const pinned = source({ primary: null, secondary: [], menu: [] });
+    const pinned = source({ primary: null, secondary: [] });
     pinned.value.capabilities.canPin = true;
     pinned.value.isPinned = true;
     expect(
@@ -305,7 +302,7 @@ describe("workspace command center contributions", () => {
       )?.presentation,
     ).toMatchObject({ title: "Unpin" });
 
-    const unsupported = source({ primary: null, secondary: [], menu: [] });
+    const unsupported = source({ primary: null, secondary: [] });
     expect(
       buildWorkspaceCommandCenterContributions(unsupported.value).some(
         (item) => item.id === "workspace:pin",
@@ -314,14 +311,14 @@ describe("workspace command center contributions", () => {
   });
 
   it("lists Show setup only when the workspace has setup to show", () => {
-    const withoutSetup = source({ primary: null, secondary: [], menu: [] });
+    const withoutSetup = source({ primary: null, secondary: [] });
     expect(
       buildWorkspaceCommandCenterContributions(withoutSetup.value).some(
         (item) => item.id === "workspace:show-setup",
       ),
     ).toBe(false);
 
-    const withSetup = source({ primary: null, secondary: [], menu: [] });
+    const withSetup = source({ primary: null, secondary: [] });
     withSetup.value.capabilities.canShowSetup = true;
     buildWorkspaceCommandCenterContributions(withSetup.value)
       .find((item) => item.id === "workspace:show-setup")
@@ -334,7 +331,7 @@ describe("workspace command center contributions", () => {
   // behind `enabled: isRouteFocused && ...`, so they must be built here rather than in the global
   // root set, where they would silently no-op off a workspace route.
   it("builds the Explorer sidebar and focus toggles in the workspace set", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     fixture.value.capabilities.canSplitPanes = false;
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -354,7 +351,7 @@ describe("workspace command center contributions", () => {
   // panes are available, so the standalone entry must step aside there — otherwise the palette
   // lists "Toggle focus mode" twice for the one `workspace.focus.toggle` action.
   it("omits the standalone focus toggle when the pane set already covers it", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     fixture.value.capabilities.canSplitPanes = true;
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -367,7 +364,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("omits the labels group when the catalog hasn't loaded", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
@@ -375,7 +372,7 @@ describe("workspace command center contributions", () => {
   });
 
   it("lists a choice per catalog label, ticked when assigned, and toggles the opposite state on run", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
+    const fixture = source({ primary: null, secondary: [] });
     fixture.value.labelCatalog = [
       { name: "bug", assigned: true },
       { name: "urgent", assigned: false },

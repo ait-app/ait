@@ -17,16 +17,11 @@ import {
 } from "./app-update-service.js";
 import {
   bucketFromStagingUserId,
-  rolloutManifestSchema,
-  shouldAdmitAppUpdate,
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
 } from "./app-update-rollout.js";
 
 export {
-  bucketFromStagingUserId,
-  rolloutManifestSchema,
-  shouldAdmitAppUpdate,
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
   type AppUpdateCheckResult,
@@ -86,16 +81,6 @@ function isUpdateChannelNotPublished(error: unknown): boolean {
     "code" in error &&
     error.code === UPDATE_CHANNEL_NOT_PUBLISHED_CODE
   );
-}
-
-export function shouldAdmitToRollout(args: {
-  channel: AppReleaseChannel;
-  rolloutHours: number | undefined;
-  releaseDate: string | undefined;
-  now: number;
-  bucket: number;
-}): boolean {
-  return shouldAdmitAppUpdate({ ...args, intent: "automatic" });
 }
 
 export async function resolveStagingUserId(filePath: string): Promise<string> {

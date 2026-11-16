@@ -146,13 +146,19 @@ export function adaptWebContents(contents: BrowserAutomationWebContents): TabCon
     getConsoleMessages: () => consoleMessagesByContentsId.get(contentsId) ?? [],
     captureDialogs: (task) => dialogMonitor.capture(task),
     sendDebugCommand: (command: string, params?: Record<string, unknown>) =>
-      cdpQueue.run(async () => {
-        if (!contents.debugger.isAttached()) {
-          contents.debugger.attach("1.3");
-        }
-        return contents.debugger.sendCommand(command, params ?? {});
-      }),
+      cdpQueue.run(async () => sendAttachedDebugCommand(contents, command, params)),
   };
+}
+
+function sendAttachedDebugCommand(
+  contents: BrowserAutomationWebContents,
+  command: string,
+  params?: Record<string, unknown>,
+): Promise<unknown> {
+  if (!contents.debugger.isAttached()) {
+    contents.debugger.attach("1.3");
+  }
+  return contents.debugger.sendCommand(command, params ?? {});
 }
 
 function captureViewportFrame(
@@ -371,12 +377,7 @@ class DialogMonitor {
     command: string,
     params?: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.cdpQueue.run(async () => {
-      if (!this.contents.debugger.isAttached()) {
-        this.contents.debugger.attach("1.3");
-      }
-      return this.contents.debugger.sendCommand(command, params ?? {});
-    });
+    return this.cdpQueue.run(async () => sendAttachedDebugCommand(this.contents, command, params));
   }
 
   private async sendDialogResponseCommand(
@@ -385,10 +386,7 @@ class DialogMonitor {
   ): Promise<unknown> {
     // Dialogs can block the CDP command that opened them, so the unblocker must not wait behind
     // the per-tab command queue.
-    if (!this.contents.debugger.isAttached()) {
-      this.contents.debugger.attach("1.3");
-    }
-    return this.contents.debugger.sendCommand(command, params ?? {});
+    return sendAttachedDebugCommand(this.contents, command, params);
   }
 }
 

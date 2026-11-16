@@ -23,25 +23,21 @@ import type { SessionEventSubscription } from "@ait/protocol/messages";
 export type { AgentSessionStatistics } from "@ait/protocol/messages";
 import type {
   ShareAudience,
-  ShareGroupsListResponse,
   ShareListResponse,
   ShareRemoveResponse,
   ShareResourceKind,
   ShareSetResponse,
 } from "@ait/protocol/messages";
 import type { ClientCapability } from "@ait/protocol/client-capabilities";
-import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentSessionStatisticsSchema,
   type AgentSessionStatistics,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
-  CheckoutRenameBranchResponseSchema,
   parseServerInfoStatusPayload,
   RenameTerminalResponseSchema,
   RestartRequestedStatusPayloadSchema,
-  ShutdownRequestedStatusPayloadSchema,
   DaemonUpdateResponseSchema,
   SessionInboundMessageSchema,
   type ActiveTurnBehavior,
@@ -68,7 +64,6 @@ import type {
   ParsedDiffFile,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
-  CheckoutMergeFromBaseResponse,
   CheckoutResetWorkspaceResponse,
   CheckoutPullResponse,
   CheckoutPushResponse,
@@ -86,7 +81,6 @@ import type {
   StashSaveResponse,
   StashPopResponse,
   StashListResponse,
-  ValidateBranchResponse,
   BranchSuggestionsResponse,
   ForgeSearchResponse,
   ForgeSearchRequest,
@@ -114,11 +108,19 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
+  ProviderPreset,
+  ProviderPresetsDescribeResponseMessage,
+  ProviderPresetsListResponseMessage,
+  ProviderPresetsMutationResponseMessage,
   ProviderUsageListResponseMessage,
+  ProviderUsageLedgerResponseMessage,
+  UsageLedgerGroup,
   DaemonGetStatusResponse,
-  DaemonConfigReloadResponse,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
+  SideAskResponseMessage,
+  SideHistoryResponseMessage,
+  SideTransferResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
   SubscribeTerminalResponse,
@@ -158,7 +160,6 @@ import {
   encodeFileTransferFrame,
   decodeTerminalStreamFrame,
   FileTransferOpcode,
-  TerminalStreamOpcode,
   type FileTransferFrame,
 } from "@ait/protocol/binary-frames/index";
 import {
@@ -169,7 +170,6 @@ import {
   type DaemonTransportFactory,
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
-import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import { describeValidationIssues, formatDiagnosticFields } from "./diagnostic-log.js";
 import {
   normalizeListProviderModelsPayload,
@@ -177,10 +177,7 @@ import {
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
-import type {
-  BrowserAutomationExecuteRequest,
-  BrowserAutomationExecuteResponse,
-} from "@ait/protocol/browser-automation/rpc-schemas";
+import type { BrowserAutomationExecuteResponse } from "@ait/protocol/browser-automation/rpc-schemas";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -327,8 +324,6 @@ export type DaemonEvent =
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
-export type BrowserAutomationExecuteRequestMessage = BrowserAutomationExecuteRequest;
-export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteResponse;
 
 export interface DaemonClientConfig {
   /** Deliver compact bodies/hash references to a caller-owned snapshot cache.
@@ -353,8 +348,6 @@ export interface DaemonClientConfig {
     baseDelayMs?: number;
     maxDelayMs?: number;
   };
-  runtimeMetricsIntervalMs?: number;
-  runtimeMetricsWindowMs?: number;
   trace?: DaemonClientTrace;
   capabilities?: Partial<Record<ClientCapability, unknown>>;
 }
@@ -370,14 +363,6 @@ export interface SendMessageOptions {
   activeTurnBehavior?: ActiveTurnBehavior;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
-}
-
-export interface AgentAttentionRequiredNotification {
-  agentId: string;
-  reason: "finished" | "error" | "permission";
-  timestamp: string;
-  shouldNotify: boolean;
-  notification?: AgentAttentionNotificationPayload;
 }
 
 type AgentConfigOverrides = Partial<Omit<AgentSessionConfig, "provider" | "cwd">>;
@@ -438,10 +423,8 @@ type SubscribeCheckoutDiffPayload = Extract<
   SessionOutboundMessage,
   { type: "checkout.diff.subscribe.response" }
 >["payload"];
-type CheckoutDiffPayload = Omit<SubscribeCheckoutDiffPayload, "subscriptionId">;
 type CheckoutCommitPayload = CheckoutCommitResponse["payload"];
 type CheckoutMergePayload = CheckoutMergeResponse["payload"];
-type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
 type CheckoutResetWorkspacePayload = CheckoutResetWorkspaceResponse["payload"];
 type CheckoutPullPayload = CheckoutPullResponse["payload"];
 type CheckoutPushPayload = CheckoutPushResponse["payload"];
@@ -455,11 +438,9 @@ type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsRespons
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
 type CheckoutSwitchBranchPayload = CheckoutSwitchBranchResponse["payload"];
-export type RenameBranchResult = z.infer<typeof CheckoutRenameBranchResponseSchema>["payload"];
 type StashSavePayload = StashSaveResponse["payload"];
 type StashPopPayload = StashPopResponse["payload"];
 type StashListPayload = StashListResponse["payload"];
-type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
 type ForgeSearchPayload = ForgeSearchResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
@@ -503,7 +484,12 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
+type ProviderPresetDescriptorPayload = ProviderPresetsDescribeResponseMessage["payload"];
+type ProviderPresetListPayload = ProviderPresetsListResponseMessage["payload"];
+type ProviderPresetMutationPayload = ProviderPresetsMutationResponseMessage["payload"];
+type ProviderPresetInput = ProviderPreset;
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
+type ProviderUsageLedgerPayload = ProviderUsageLedgerResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -559,10 +545,6 @@ type ScheduleListPayload = Extract<
 type ScheduleInspectPayload = Extract<
   SessionOutboundMessage,
   { type: "schedule.inspect.response" }
->["payload"];
-type ScheduleLogsPayload = Extract<
-  SessionOutboundMessage,
-  { type: "schedule.logs.response" }
 >["payload"];
 type SchedulePausePayload = Extract<
   SessionOutboundMessage,
@@ -684,11 +666,6 @@ export interface AgentContextCompactOptions {
 
 type AgentRefreshedStatusPayload = z.infer<typeof AgentRefreshedStatusPayloadSchema>;
 type RestartRequestedStatusPayload = z.infer<typeof RestartRequestedStatusPayloadSchema>;
-type ShutdownRequestedStatusPayload = z.infer<typeof ShutdownRequestedStatusPayloadSchema>;
-export interface ShutdownServerOptions {
-  requestId?: string;
-  timeout?: number;
-}
 export interface DaemonStatusOptions {
   requestId?: string;
   timeout?: number;
@@ -743,8 +720,6 @@ export type FetchWorkspacesOptions = Omit<FetchWorkspacesRequest, "type" | "requ
   signal?: AbortSignal;
   requestId?: string;
 };
-export type FetchWorkspacesEntry = FetchWorkspacesPayload["entries"][number];
-export type FetchWorkspacesPageInfo = FetchWorkspacesPayload["pageInfo"];
 export type WorkspaceLabelListPayload = Extract<
   SessionOutboundMessage,
   { type: "workspace.label.list.response" }
@@ -809,11 +784,6 @@ export interface UpdateScheduleOptions {
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
-  requestId?: string;
-}
-export interface RenameBranchInput {
-  cwd: string;
-  branch: string;
   requestId?: string;
 }
 export interface RenameTerminalInput {
@@ -1168,8 +1138,6 @@ export class DaemonClient {
   private readonly logClientIdHash: string;
   private readonly logGeneration: number | null;
   private lastServerInfoMessage: ServerInfoStatusPayload | null = null;
-  private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
-  private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
   private readonly pingProbes = new Map<"shared" | "verification", PingProbe>();
   private connectionVerification: DaemonConnection | null = null;
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1200,28 +1168,6 @@ export class DaemonClient {
       Number.isFinite(this.config.runtimeGeneration)
         ? this.config.runtimeGeneration
         : null;
-    const runtimeMetricsIntervalMs =
-      typeof config.runtimeMetricsIntervalMs === "number" && config.runtimeMetricsIntervalMs > 0
-        ? config.runtimeMetricsIntervalMs
-        : 0;
-    if (runtimeMetricsIntervalMs > 0) {
-      const runtimeMetricsWindowMs =
-        typeof config.runtimeMetricsWindowMs === "number" && config.runtimeMetricsWindowMs > 0
-          ? Math.max(config.runtimeMetricsWindowMs, runtimeMetricsIntervalMs)
-          : undefined;
-      this.runtimeMetrics = new DaemonClientRuntimeMetrics(
-        this.logger,
-        {
-          connectionPath: "direct",
-          serverId: this.logServerId,
-          getConnectionStatus: () => this.connectionState.status,
-        },
-        runtimeMetricsWindowMs ? { windowMs: runtimeMetricsWindowMs } : undefined,
-      );
-      this.runtimeMetricsInterval = setInterval(() => {
-        this.runtimeMetrics?.flush();
-      }, runtimeMetricsIntervalMs);
-    }
   }
 
   // ============================================================================
@@ -1445,12 +1391,6 @@ export class DaemonClient {
     this.rejectPingProbe(new Error("Daemon client closed"));
     this.terminalStreams.clearSlots();
     this.lastServerInfoMessage = null;
-    if (this.runtimeMetricsInterval) {
-      clearInterval(this.runtimeMetricsInterval);
-      this.runtimeMetricsInterval = null;
-      this.runtimeMetrics?.flush({ final: true });
-      this.runtimeMetrics = null;
-    }
     this.updateConnectionState(
       { status: "disposed" },
       { event: "DISPOSE", reason: "Client closed", reasonCode: "disposed" },
@@ -1591,31 +1531,6 @@ export class DaemonClient {
       if (handlers.size === 0) {
         this.messageHandlers.delete(type);
       }
-    };
-  }
-
-  onAgentAttentionRequired(
-    handler: (notification: AgentAttentionRequiredNotification) => void,
-  ): () => void {
-    const unsubscribeLegacy = this.on("agent.stream", (message) => {
-      if (message.payload.event.type !== "attention_required") {
-        return;
-      }
-      const event = message.payload.event;
-      handler({
-        agentId: message.payload.agentId,
-        reason: event.reason,
-        timestamp: event.timestamp,
-        shouldNotify: event.shouldNotify,
-        ...(event.notification ? { notification: event.notification } : {}),
-      });
-    });
-    const unsubscribeDedicated = this.on("agent.attention.required", (message) => {
-      handler(message.payload);
-    });
-    return () => {
-      unsubscribeLegacy();
-      unsubscribeDedicated();
     };
   }
 
@@ -1829,13 +1744,9 @@ export class DaemonClient {
       throw err;
     }
 
-    try {
-      const result = await promise;
-      if (result.kind === "error") throw result.error;
-      return result.value;
-    } finally {
-      await wire.finish();
-    }
+    const result = await promise;
+    if (result.kind === "error") throw result.error;
+    return result.value;
   }
 
   private async sendCorrelatedRequest<
@@ -2580,12 +2491,6 @@ export class DaemonClient {
     });
   }
 
-  listShareGroups(): Promise<ShareGroupsListResponse["payload"]> {
-    return this.sendNamespacedCorrelatedSessionRequest({
-      message: { type: "share.groups.list.request" },
-    });
-  }
-
   setShare(input: {
     resourceKind: ShareResourceKind;
     resourceKey: string;
@@ -2723,34 +2628,6 @@ export class DaemonClient {
       requestId,
       message: { type: "workspace.script.list.request", workspaceId },
       responseType: "workspace.script.list.response",
-    });
-  }
-
-  async startWorkspaceScriptWithStatus(
-    workspaceId: string,
-    scriptName: string,
-    requestId?: string,
-  ): Promise<
-    Extract<SessionOutboundMessage, { type: "workspace.script.start.response" }>["payload"]
-  > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "workspace.script.start.request", workspaceId, scriptName },
-      responseType: "workspace.script.start.response",
-    });
-  }
-
-  async stopWorkspaceScript(
-    workspaceId: string,
-    scriptName: string,
-    requestId?: string,
-  ): Promise<
-    Extract<SessionOutboundMessage, { type: "workspace.script.stop.response" }>["payload"]
-  > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "workspace.script.stop.request", workspaceId, scriptName },
-      responseType: "workspace.script.stop.response",
     });
   }
 
@@ -3640,6 +3517,139 @@ export class DaemonClient {
     }
   }
 
+  /** Whether the host advertises the typed BTW surface (`sideQuestions`). */
+  supportsSideQuestions(): boolean {
+    return this.lastServerInfoMessage?.features?.sideQuestions === true;
+  }
+
+  /**
+   * Ask a side question, or follow up an existing topic via `recordId`.
+   *
+   * The returned receipt is durable: replaying the same `requestId` returns the
+   * stored receipt instead of executing again, `rejected` carries a stable
+   * `reason`, and `uncertain` means acceptance could not be confirmed. Callers
+   * reconcile an uncertain receipt; it must never be retried automatically.
+   */
+  async askSideQuestion(options: {
+    agentId: string;
+    question: string;
+    recordId?: string;
+    requestId?: string;
+  }): Promise<SideAskResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.ask.request",
+      agentId: options.agentId,
+      question: options.question,
+      ...(options.recordId === undefined ? {} : { recordId: options.recordId }),
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.ask.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+  }
+
+  /**
+   * Cancel one topic, or the running topic when `recordId` is absent.
+   *
+   * Returns `true` only when the daemon confirmed a cancellation; a failed
+   * cancel never reports success.
+   */
+  async cancelSideQuestion(options: {
+    agentId: string;
+    recordId?: string;
+    requestId?: string;
+  }): Promise<boolean> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.cancel.request",
+      agentId: options.agentId,
+      ...(options.recordId === undefined ? {} : { recordId: options.recordId }),
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.cancel.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+    return payload.cancelled;
+  }
+
+  /** Return fixed context and every BTW turn for a new editable session; never runs inference. */
+  async transferSideQuestion(options: {
+    agentId: string;
+    recordId: string;
+    requestId?: string;
+  }): Promise<SideTransferResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.transfer.request",
+      agentId: options.agentId,
+      recordId: options.recordId,
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) =>
+        msg.type === "agent.side_question.transfer.response" && msg.payload.requestId === requestId
+          ? msg.payload
+          : null,
+    });
+  }
+
+  /** Read the bounded side-question projection without starting inference. */
+  async listSideQuestions(options: {
+    agentId: string;
+    requestId?: string;
+  }): Promise<SideHistoryResponseMessage["payload"]> {
+    this.requireSideQuestionsSupport();
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.side_question.history.request",
+      agentId: options.agentId,
+      requestId,
+    });
+    return this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.side_question.history.response") {
+          return null;
+        }
+        if (msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+  }
+
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
@@ -3824,33 +3834,6 @@ export class DaemonClient {
           return null;
         }
         return restarted.data;
-      },
-    });
-  }
-
-  async shutdownServer(options?: ShutdownServerOptions): Promise<ShutdownRequestedStatusPayload> {
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "server.shutdown.request",
-      requestId: resolvedRequestId,
-    });
-    return this.sendRequest({
-      requestId: resolvedRequestId,
-      message,
-      timeout: options?.timeout,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const shutdown = ShutdownRequestedStatusPayloadSchema.safeParse(msg.payload);
-        if (!shutdown.success) {
-          return null;
-        }
-        if (shutdown.data.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return shutdown.data;
       },
     });
   }
@@ -4213,22 +4196,6 @@ export class DaemonClient {
       : { mode: "base", baseRef: trimmedBaseRef };
   }
 
-  async getCheckoutDiff(
-    cwd: string,
-    compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
-    requestId?: string,
-  ): Promise<CheckoutDiffPayload> {
-    return this.sendCorrelatedSessionRequest({
-      message: {
-        type: "checkout.diff.get.request",
-        cwd,
-        compare: this.normalizeCheckoutDiffCompare(compare),
-      },
-      responseType: "checkout.diff.get.response",
-      requestId,
-    });
-  }
-
   observeCheckoutDiff(
     cwd: string,
     compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
@@ -4277,23 +4244,6 @@ export class DaemonClient {
         requireCleanTarget: input.requireCleanTarget,
       },
       responseType: "checkout.merge.response",
-    });
-  }
-
-  async checkoutMergeFromBase(
-    cwd: string,
-    input: { baseRef?: string; requireCleanTarget?: boolean },
-    requestId?: string,
-  ): Promise<CheckoutMergeFromBasePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout.merge_from_base.request",
-        cwd,
-        baseRef: input.baseRef,
-        requireCleanTarget: input.requireCleanTarget,
-      },
-      responseType: "checkout.merge_from_base.response",
     });
   }
 
@@ -4546,18 +4496,6 @@ export class DaemonClient {
     });
   }
 
-  async renameBranch(input: RenameBranchInput): Promise<RenameBranchResult> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "checkout.rename_branch.request",
-        cwd: input.cwd,
-        branch: input.branch,
-      },
-      responseType: "checkout.rename_branch.response",
-    });
-  }
-
   async stashSave(
     cwd: string,
     options?: { branch?: string },
@@ -4705,21 +4643,6 @@ export class DaemonClient {
           : {}),
       },
       responseType: "workspace.create.response",
-    });
-  }
-
-  async validateBranch(
-    options: { cwd: string; branchName: string },
-    requestId?: string,
-  ): Promise<ValidateBranchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout.branch.validate.request",
-        cwd: options.cwd,
-        branchName: options.branchName,
-      },
-      responseType: "checkout.branch.validate.response",
     });
   }
 
@@ -5272,6 +5195,20 @@ export class DaemonClient {
     });
   }
 
+  /** Read this daemon host's shared resource snapshot. History is opt-in. */
+  async getHostStats(
+    includeHistory = false,
+  ): Promise<import("@ait/protocol/host-monitor").HostSnapshot> {
+    if (this.lastServerInfoMessage?.features?.hostStats !== true) {
+      throw new Error("Update the host to read resource statistics.");
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "daemon.host_stats.request", includeHistory },
+      responseType: "daemon.host_stats.response",
+      timeout: 5_000,
+    });
+  }
+
   async getDaemonStatus(options?: DaemonStatusOptions): Promise<DaemonStatusPayload> {
     if (!this.lastServerInfoMessage) throw new DaemonConnectionError("Transport not connected");
     if (this.lastServerInfoMessage?.features?.daemonStatusRpc !== true) {
@@ -5293,18 +5230,6 @@ export class DaemonClient {
     });
   }
 
-  async connectOnlineService(grant: import("@ait/protocol/relay").RelayControlGrant) {
-    return this.sendNamespacedCorrelatedSessionRequest<"relay.start.response">({
-      message: { type: "relay.start.request", ...grant },
-    });
-  }
-
-  async disconnectOnlineService() {
-    return this.sendNamespacedCorrelatedSessionRequest<"relay.stop.response">({
-      message: { type: "relay.stop.request" },
-    });
-  }
-
   async getPublicationStatus() {
     return this.sendNamespacedCorrelatedSessionRequest<"publication.status.response">({
       message: { type: "publication.status.request" },
@@ -5323,14 +5248,6 @@ export class DaemonClient {
   async disconnectPublication() {
     return this.sendNamespacedCorrelatedSessionRequest<"publication.stop.response">({
       message: { type: "publication.stop.request" },
-    });
-  }
-
-  async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
-    this.requireDaemonConfigReloadSupport();
-    return this.sendNamespacedCorrelatedSessionRequest({
-      requestId,
-      message: { type: "daemon.config.reload.request" },
     });
   }
 
@@ -5417,6 +5334,80 @@ export class DaemonClient {
     });
   }
 
+  /** Describe the store behind one provider's presets and what it supports. */
+  async describeProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetDescriptorPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.describe.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.describe.response",
+      timeout: 120000,
+    });
+  }
+
+  async listProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.list.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.list.response",
+      timeout: 180000,
+    });
+  }
+
+  async saveProviderPreset(
+    provider: AgentProvider,
+    preset: ProviderPresetInput,
+    cwd?: string,
+    options?: { requestId?: string; original?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.save.request",
+        provider,
+        preset,
+        ...(cwd ? { cwd } : {}),
+        ...(options?.original ? { original: options.original } : {}),
+      },
+      responseType: "provider.presets.save.response",
+      timeout: 660000,
+    });
+  }
+
+  async deleteProviderPreset(
+    provider: AgentProvider,
+    name: string,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.delete.request",
+        provider,
+        name,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.delete.response",
+      timeout: 660000,
+    });
+  }
+
   async listProviderUsage(options?: {
     requestId?: string;
     agentId?: string;
@@ -5430,6 +5421,27 @@ export class DaemonClient {
         ...(options?.agentId ? { agentId: options.agentId } : {}),
         ...(options?.providerId ? { providerId: options.providerId } : {}),
         ...(options?.forceRefresh ? { forceRefresh: true } : {}),
+      },
+    });
+  }
+
+  /**
+   * Summarize this host's harness usage ledger over `[from, to)` (Unix ms, UTC), grouped by
+   * `groupBy`. Requires `features.providerUsageLedger`.
+   */
+  async listUsageLedger(options: {
+    from: number;
+    to: number;
+    groupBy: UsageLedgerGroup[];
+    requestId?: string;
+  }): Promise<ProviderUsageLedgerPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "provider.usage.ledger.request",
+        from: options.from,
+        to: options.to,
+        groupBy: options.groupBy,
       },
     });
   }
@@ -5981,17 +5993,6 @@ export class DaemonClient {
     });
   }
 
-  async scheduleLogs(options: InspectScheduleOptions): Promise<ScheduleLogsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule.logs.request",
-        scheduleId: options.id,
-      },
-      responseType: "schedule.logs.response",
-    });
-  }
-
   async schedulePause(options: InspectScheduleOptions): Promise<SchedulePausePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
@@ -6060,27 +6061,6 @@ export class DaemonClient {
     return this.terminalStreams.onEvent(handler);
   }
 
-  async waitForTerminalStreamEvent(
-    predicate: (event: TerminalStreamEvent) => boolean,
-    timeout = 5000,
-  ): Promise<TerminalStreamEvent> {
-    return new Promise<TerminalStreamEvent>((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
-        unsubscribe();
-        reject(new Error(`Timeout waiting for terminal stream event (${timeout}ms)`));
-      }, timeout);
-
-      const unsubscribe = this.onTerminalStreamEvent((event) => {
-        if (!predicate(event)) {
-          return;
-        }
-        clearTimeout(timeoutHandle);
-        unsubscribe();
-        resolve(event);
-      });
-    });
-  }
-
   // ============================================================================
   // Internals
   // ============================================================================
@@ -6093,10 +6073,12 @@ export class DaemonClient {
     return this.lastServerInfoMessage;
   }
 
-  private requireDaemonConfigReloadSupport(): void {
-    // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
-    if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
-      throw new Error("Update the host to reload daemon configuration.");
+  private requireSideQuestionsSupport(): void {
+    // COMPAT(sideQuestions): added in v0.2.11, remove gate after 2027-11-11.
+    // A new client talking to an older host must say the host lacks the feature
+    // rather than surfacing a generic "method not implemented" failure.
+    if (this.lastServerInfoMessage?.features?.sideQuestions !== true) {
+      throw new Error("This host does not support side questions. Update the host and retry.");
     }
   }
 
@@ -6179,7 +6161,6 @@ export class DaemonClient {
         ? data
         : { type: "session", message: data };
     const bytes = metrics?.bytes ?? 0;
-    const startMs = perfNow() - (metrics?.decodeMs ?? 0);
     const parsed = validateWSOutboundMessage(parsedJson);
     if (!parsed.success) {
       const responseIdentity = extractCorrelatedResponseIdentity(parsedJson);
@@ -6231,7 +6212,6 @@ export class DaemonClient {
         messageType: "connection.pong",
       });
       this.resolvePingProbe();
-      this.runtimeMetrics?.recordMessage("connection.pong", bytes, perfNow() - startMs);
       return;
     }
 
@@ -6240,11 +6220,6 @@ export class DaemonClient {
       messageType: parsed.data.message.type,
     });
     this.handleSessionMessage(parsed.data.message);
-    const msgType = parsed.data.message.type;
-    this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
-    if (parsed.data.message.type === "agent.stream") {
-      this.runtimeMetrics?.recordAgentStream(parsed.data.message.payload);
-    }
   }
 
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
@@ -6257,7 +6232,6 @@ export class DaemonClient {
       });
       this.consecutiveLivenessFailures = 0;
       this.handleFileTransferFrame(fileFrame);
-      this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
       return true;
     }
 
@@ -6271,21 +6245,7 @@ export class DaemonClient {
       opcode: String(frame.opcode),
     });
     this.consecutiveLivenessFailures = 0;
-    const binaryStartMs = perfNow();
     this.terminalStreams.handleFrame(frame);
-    let frameKind: "output" | "snapshot" | "other" = "other";
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      frameKind = "output";
-    } else if (frame.opcode === TerminalStreamOpcode.Snapshot) {
-      frameKind = "snapshot";
-    } else if (frame.opcode === TerminalStreamOpcode.Restore) {
-      frameKind = "output";
-    }
-    this.runtimeMetrics?.recordBinaryFrame(
-      frameKind,
-      rawBytes.byteLength,
-      perfNow() - binaryStartMs,
-    );
     return true;
   }
 

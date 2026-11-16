@@ -172,6 +172,11 @@ fn write_atomic(path: &Path, value: &Value) -> Result<(), DaemonConfigStoreError
     let mut bytes =
         serde_json::to_vec_pretty(value).map_err(|_| DaemonConfigStoreError::Invalid)?;
     bytes.push(b'\n');
+    // The read path rejects a larger document, so a write beyond the limit is refused
+    // instead of leaving a configuration file that can no longer be loaded.
+    if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_CONFIG_BYTES) {
+        return Err(DaemonConfigStoreError::Invalid);
+    }
     crate::File::new(path)
         .write(&bytes)
         .map_err(|_| DaemonConfigStoreError::Io)
@@ -187,7 +192,7 @@ fn validate_config(value: &Value) -> Result<(), DaemonConfigStoreError> {
     let providers = object_field(config, "providers")?;
     if providers
         .iter()
-        .any(|(id, provider)| id.is_empty() || !provider.is_object())
+        .any(|(id, provider)| id.is_empty() || !provider.is_object() || invalid_presets(provider))
     {
         return Err(DaemonConfigStoreError::Invalid);
     }
@@ -232,6 +237,21 @@ fn validate_config(value: &Value) -> Result<(), DaemonConfigStoreError> {
         return Err(DaemonConfigStoreError::Invalid);
     }
     Ok(())
+}
+
+/// Whether one provider entry carries Ait-managed presets the domain record rejects.
+///
+/// The storage layer owns durability, so it enforces the same bounds the editor does rather
+/// than trusting every caller to validate first.
+fn invalid_presets(provider: &Value) -> bool {
+    provider.get("modelPresets").is_some_and(|presets| {
+        let Ok(presets) =
+            serde_json::from_value::<Vec<domain::preset::ProviderPreset>>(presets.clone())
+        else {
+            return true;
+        };
+        domain::preset::validate_presets(&presets).is_err()
+    })
 }
 
 fn object_field<'a>(

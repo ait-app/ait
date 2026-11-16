@@ -30,6 +30,7 @@ export function useDraftAgentFeatures(input: {
   const [localFeatureValues, setLocalFeatureValues] = useState<Record<string, unknown>>(
     () => initialFeatureValues ?? {},
   );
+  const [snapshotProvider, setSnapshotProvider] = useState<AgentProvider | undefined>();
   const client = useHostRuntimeClient(serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
   const { preferences, updatePreferences } = useFormPreferences();
@@ -82,12 +83,21 @@ export function useDraftAgentFeatures(input: {
   const availableFeatures = useMemo(() => availableFeaturesRaw ?? [], [availableFeaturesRaw]);
   const featureValues = useMemo(
     () =>
-      resolveFeatureValues({
-        features: availableFeatures,
-        persistedFeatureValues,
-        localFeatureValues,
-      }),
-    [availableFeatures, localFeatureValues, persistedFeatureValues],
+      snapshotProvider === normalizedProvider && availableFeaturesRaw === undefined
+        ? localFeatureValues
+        : resolveFeatureValues({
+            features: availableFeatures,
+            persistedFeatureValues,
+            localFeatureValues,
+          }),
+    [
+      availableFeatures,
+      availableFeaturesRaw,
+      localFeatureValues,
+      normalizedProvider,
+      persistedFeatureValues,
+      snapshotProvider,
+    ],
   );
 
   const features = useMemo(() => {
@@ -102,6 +112,7 @@ export function useDraftAgentFeatures(input: {
     }
     if (previousProvider !== normalizedProvider) {
       setLocalFeatureValues({});
+      setSnapshotProvider(undefined);
     }
   }, [normalizedProvider]);
 
@@ -110,6 +121,7 @@ export function useDraftAgentFeatures(input: {
       return;
     }
     const next = pruneFeatureValues(localFeatureValues, availableFeatures);
+    setSnapshotProvider(undefined);
     if (next !== localFeatureValues) {
       setLocalFeatureValues(next);
     }
@@ -145,9 +157,16 @@ export function useDraftAgentFeatures(input: {
     [provider, updatePreferences],
   );
 
-  const applyProfileFeatureValues = useCallback((values: Record<string, unknown>) => {
-    setLocalFeatureValues(values);
-  }, []);
+  const applyProfileFeatureValues = useCallback(
+    (values: Record<string, unknown>, targetProvider?: AgentProvider) => {
+      // A snapshot may switch provider in the same render. That deliberate replacement must not
+      // be mistaken for an ordinary provider switch and cleared by the reset effect above.
+      if (targetProvider) previousProviderRef.current = targetProvider;
+      setSnapshotProvider(targetProvider);
+      setLocalFeatureValues(values);
+    },
+    [],
+  );
 
   return {
     features,

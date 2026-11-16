@@ -1,9 +1,5 @@
-import type { AgentMessage } from "./agent-message.js";
 import type { ToolCallTimelineItem } from "./agent-types.js";
-import {
-  buildAgentMessageDisplay,
-  buildPaseoToolDisplay,
-} from "./paseo-tool-presentation/index.js";
+import { buildPaseoToolDisplay } from "./paseo-tool-presentation/index.js";
 import { stripCwdPrefix } from "./path-utils.js";
 
 export type ToolCallDisplayInput = Pick<
@@ -13,7 +9,6 @@ export type ToolCallDisplayInput = Pick<
   cwd?: string;
   /** Title of the agent a Paseo call targets, when the caller knows it. */
   targetAgentTitle?: string;
-  agentMessage?: AgentMessage;
 };
 
 export interface ToolCallDisplayModel {
@@ -131,6 +126,13 @@ function buildCanonicalDetailDisplay(input: ToolCallDisplayInput): DetailDisplay
 
 function buildUnknownDetailOverride(input: ToolCallDisplayInput): DetailDisplay {
   const lowerName = input.name.trim().toLowerCase();
+  if (input.detail.type === "unknown" && isQuestionnaireToolName(lowerName)) {
+    const summary = questionnaireSummary(input.detail.input);
+    return {
+      displayName: "Ask user",
+      ...(summary ? { summary } : {}),
+    };
+  }
   if (input.detail.type === "unknown" && lowerName === "task") {
     return {
       displayName: "Task",
@@ -151,15 +153,36 @@ function buildUnknownDetailOverride(input: ToolCallDisplayInput): DetailDisplay 
   return {};
 }
 
+function isQuestionnaireToolName(name: string): boolean {
+  const normalized = name.replace(/[\s-]+/g, "_");
+  return (
+    normalized === "ask_user" ||
+    normalized.endsWith(".ask_user") ||
+    normalized.endsWith(":ask_user") ||
+    normalized.endsWith("__ask_user") ||
+    normalized === "questionnaire" ||
+    normalized.endsWith(".questionnaire")
+  );
+}
+
+function questionnaireSummary(input: unknown): string | undefined {
+  if (!isRecord(input) || !Array.isArray(input.steps)) return undefined;
+  const question = input.steps.find(
+    (step): step is Record<string, unknown> =>
+      isRecord(step) && typeof step.question === "string" && step.question.trim().length > 0,
+  )?.question;
+  if (typeof question !== "string") return undefined;
+  const trimmed = question.trim();
+  return trimmed.length > 120 ? `${trimmed.slice(0, 119).trimEnd()}…` : trimmed;
+}
+
 export function buildToolCallDisplayModel(input: ToolCallDisplayInput): ToolCallDisplayModel {
   const errorText = input.status === "failed" ? formatErrorText(input.error) : undefined;
-  const paseoDisplay = input.agentMessage
-    ? buildAgentMessageDisplay(input.agentMessage)
-    : buildPaseoToolDisplay({
-        toolName: input.name,
-        detail: input.detail,
-        targetAgentTitle: input.targetAgentTitle,
-      });
+  const paseoDisplay = buildPaseoToolDisplay({
+    toolName: input.name,
+    detail: input.detail,
+    targetAgentTitle: input.targetAgentTitle,
+  });
   if (paseoDisplay) {
     return {
       displayName: paseoDisplay.displayName,

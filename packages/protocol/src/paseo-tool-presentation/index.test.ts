@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildAgentMessageDisplay,
   buildPaseoToolDisplay,
   getPaseoToolTargetAgentId,
   MAX_SUMMARY_CHARS,
@@ -118,37 +117,5 @@ describe("Paseo tool display", () => {
     for (const name of PASEO_TOOL_NAMES) {
       expect(name).toMatch(/^[a-z_]+$/);
     }
-  });
-});
-
-describe("agent message display", () => {
-  it.each([
-    ["message", "Message received"],
-    ["finished", "Agent finished"],
-    ["errored", "Agent errored"],
-    ["permission-required", "Agent needs permission"],
-    ["closed", "Agent closed"],
-  ] as const)("labels %s noun-first with the sender as context", (event, label) => {
-    const result = buildAgentMessageDisplay({
-      event,
-      sender: { id: "srv::agt_1", title: "QA messenger" },
-      text: "Done.",
-    });
-    expect(result.displayName).toBe(label);
-    expect(result.summary).toBe("QA messenger");
-    expect(result.detail).toEqual({ type: "plain_text", text: "From agent: srv::agt_1\n\nDone." });
-  });
-
-  it("falls back to the sender ID and truncates a long title", () => {
-    expect(
-      buildAgentMessageDisplay({ event: "finished", sender: { id: "srv::agt_1" }, text: "" })
-        .summary,
-    ).toBe("srv::agt_1");
-    const summary = buildAgentMessageDisplay({
-      event: "finished",
-      sender: { id: "a", title: "t".repeat(500) },
-      text: "",
-    }).summary;
-    expect(summary).toHaveLength(MAX_SUMMARY_CHARS);
   });
 });

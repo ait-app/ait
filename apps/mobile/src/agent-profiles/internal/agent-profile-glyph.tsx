@@ -102,12 +102,6 @@ const COLOR_MAPPINGS: Record<AgentProfileColor, (theme: Theme) => { color: strin
   return byColor;
 })();
 
-export function agentProfileColorMapping(
-  color: AgentProfileColor,
-): (theme: Theme) => { color: string } {
-  return COLOR_MAPPINGS[color];
-}
-
 /**
  * How a profile is drawn everywhere it appears — settings list, model picker,
  * and the picker grid's own cells. One component so the three can't drift.

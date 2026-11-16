@@ -10,20 +10,19 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Dimensions,
   Modal,
   Platform,
   Pressable,
   StatusBar,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { Keyframe, runOnJS } from "react-native-reanimated";
+import { Keyframe } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
-import type { KeyboardFocusScope } from "@/keyboard/actions";
 import {
   getOverlayRoot,
   OverlayLayerProvider,
@@ -41,17 +40,13 @@ import {
 } from "./menu-anchor";
 
 const SCROLL_CONTENT_STYLE = { flexGrow: 1 } as const;
+const SURFACE_DATA_SET = { menuSurface: "true" } as const;
 const CONTENT_ENTERING_DURATION_MS = 150;
 
 const contentEntering = new Keyframe({
   0: { opacity: 0, transform: [{ scale: 0.97 }] },
   100: { opacity: 1, transform: [{ scale: 1 }] },
 }).duration(CONTENT_ENTERING_DURATION_MS);
-
-const contentExiting = new Keyframe({
-  0: { opacity: 1, transform: [{ scale: 1 }] },
-  100: { opacity: 0, transform: [{ scale: 0.97 }] },
-}).duration(100);
 
 function releaseFixedMenuHeight(surfaceNativeID: string): void {
   if (!isWeb) return;
@@ -105,7 +100,7 @@ function useReleaseFixedMenuHeight({
  * the two through `computePosition`. Returns nulls until both measurements have landed, which is
  * why the surface renders off-screen at -9999 rather than at 0,0 on its first frame.
  */
-export function useAnchoredPosition({
+function useAnchoredPosition({
   open,
   anchorRect,
   anchorRef,
@@ -124,6 +119,7 @@ export function useAnchoredPosition({
   scrollable: boolean;
   maxHeight?: number;
 }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [triggerRect, setTriggerRect] = useState<Rect | null>(null);
   const [contentSize, setContentSize] = useState<Size | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -133,7 +129,6 @@ export function useAnchoredPosition({
     if (!contentSize) return null;
     if (!scrollable) return contentSize;
 
-    const { height: screenHeight } = Dimensions.get("window");
     const viewportMaxHeight = Math.max(screenHeight - 16, 0);
     const resolvedMaxHeight =
       typeof maxHeight === "number" ? Math.min(maxHeight, viewportMaxHeight) : viewportMaxHeight;
@@ -142,7 +137,7 @@ export function useAnchoredPosition({
       width: contentSize.width,
       height: Math.min(contentSize.height, resolvedMaxHeight),
     };
-  }, [contentSize, scrollable, maxHeight]);
+  }, [contentSize, scrollable, maxHeight, screenHeight]);
 
   useEffect(() => {
     if (!open) {
@@ -178,12 +173,11 @@ export function useAnchoredPosition({
     return () => {
       cancelled = true;
     };
-  }, [anchorRect, anchorRef, open]);
+  }, [anchorRect, anchorRef, open, screenWidth, screenHeight]);
 
   useEffect(() => {
     if (!triggerRect || !visibleContentSize) return;
 
-    const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
     // measureInWindow and Modal both use full-screen coordinates, so the display area starts at 0.
     const result = computePosition({
       triggerRect,
@@ -196,7 +190,7 @@ export function useAnchoredPosition({
 
     setPosition({ x: result.x, y: result.y });
     setActualPlacement(result.actualPlacement);
-  }, [triggerRect, visibleContentSize, side, align, offset]);
+  }, [triggerRect, visibleContentSize, side, align, offset, screenWidth, screenHeight]);
 
   const onContentLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
@@ -215,7 +209,6 @@ export function useAnchoredPosition({
 export interface AnchoredSurfaceProps {
   open: boolean;
   onClose: () => void;
-  onExited?: () => void;
   anchorRect: Rect | null;
   anchorRef: React.RefObject<View | null>;
   side?: Placement;
@@ -225,21 +218,18 @@ export interface AnchoredSurfaceProps {
   minWidth?: number;
   maxWidth?: number;
   maxHeight?: number;
-  fullWidth?: boolean;
-  horizontalPadding?: number;
   scrollable?: boolean;
   /** Bump when the rendered content changes identity, so the height snapshot is released. */
   revision?: string | number;
   /** A submenu sits inside its parent's overlay and must not paint a second backdrop. */
   backdrop?: boolean;
   /**
-   * Hover tracking for the surface box, per docs/hover.md: plain View, pointer events, never
-   * a Pressable. Web-only by nature, which is all a flyout needs.
+   * Hover tracking for the surface box: plain View, pointer events, never a Pressable. Web-only
+   * by nature, which is all a flyout needs.
    */
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
   testID?: string;
-  keyboardFocusScope?: KeyboardFocusScope;
   children: ReactElement;
 }
 
@@ -250,7 +240,6 @@ export interface AnchoredSurfaceProps {
 export function AnchoredSurface({
   open,
   onClose,
-  onExited,
   anchorRect,
   anchorRef,
   side = "bottom",
@@ -260,15 +249,12 @@ export function AnchoredSurface({
   minWidth = 180,
   maxWidth,
   maxHeight,
-  fullWidth = false,
-  horizontalPadding = 16,
   scrollable = false,
   revision,
   backdrop = true,
   onPointerEnter,
   onPointerLeave,
   testID,
-  keyboardFocusScope,
   children,
 }: AnchoredSurfaceProps): ReactElement | null {
   const { t } = useTranslation();
@@ -311,46 +297,26 @@ export function AnchoredSurface({
     return () => cancelAnimationFrame(frame);
   }, [open, placed, surfaceNativeID]);
 
-  const frameStyle = useMemo<StyleProp<ViewStyle>>(() => {
-    const { width: screenWidth } = Dimensions.get("window");
-    const resolvedWidthStyle: ViewStyle = fullWidth
-      ? { width: screenWidth - horizontalPadding * 2 }
-      : {
-          ...(typeof width === "number" ? { width } : null),
-          ...(typeof minWidth === "number" ? { minWidth } : null),
-          ...(typeof maxWidth === "number" ? { maxWidth } : null),
-        };
-    return [
-      resolvedWidthStyle,
+  const frameStyle = useMemo<StyleProp<ViewStyle>>(
+    () => [
+      {
+        ...(typeof width === "number" ? { width } : null),
+        ...(typeof minWidth === "number" ? { minWidth } : null),
+        ...(typeof maxWidth === "number" ? { maxWidth } : null),
+      },
       {
         position: "absolute" as const,
         top: position?.y ?? -9999,
-        left: fullWidth ? horizontalPadding : (position?.x ?? -9999),
+        left: position?.x ?? -9999,
         transformOrigin: getTransformOrigin(actualPlacement, align),
       },
-    ];
-  }, [
-    fullWidth,
-    horizontalPadding,
-    width,
-    minWidth,
-    maxWidth,
-    position?.x,
-    position?.y,
-    actualPlacement,
-    align,
-  ]);
+    ],
+    [width, minWidth, maxWidth, position?.x, position?.y, actualPlacement, align],
+  );
 
   const scrollViewportStyle = useMemo(
     () => [visibleContentSize ? { height: visibleContentSize.height } : null],
     [visibleContentSize],
-  );
-  const surfaceDataSet = useMemo(
-    () => ({
-      menuSurface: "true",
-      ...(keyboardFocusScope ? { keyboardScope: keyboardFocusScope } : null),
-    }),
-    [keyboardFocusScope],
   );
 
   if (!open) return null;
@@ -384,20 +350,10 @@ export function AnchoredSurface({
         tabIndex={-1}
         nativeID={surfaceNativeID}
         testID={testID}
-        dataSet={surfaceDataSet}
+        dataSet={SURFACE_DATA_SET}
         style={styles.content}
         frameStyle={frameStyle}
         entering={placed ? contentEntering : undefined}
-        exiting={
-          !placed || isWeb || !onExited
-            ? undefined
-            : contentExiting.withCallback((finished) => {
-                "worklet";
-                if (finished) {
-                  runOnJS(onExited)();
-                }
-              })
-        }
       >
         {scrollable ? (
           <FloatingScrollView

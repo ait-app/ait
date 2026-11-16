@@ -41,11 +41,7 @@ export class ConnectionSubscriptions extends OwnedSubscriptions {
         clientCapabilities[CLIENT_CAPS.ownedSubscriptions] === true;
       this.legacy = null;
       if (!owned) {
-        this.legacy = new LegacySubscriptions(
-          info,
-          this.connection.send,
-          capabilities?.[CLIENT_CAPS.browserHost],
-        );
+        this.legacy = new LegacySubscriptions(info, capabilities?.[CLIENT_CAPS.browserHost]);
       }
     }
     super.restore();
@@ -117,7 +113,6 @@ export class ConnectionSubscriptions extends OwnedSubscriptions {
       this.legacy?.prepareRequest(message) ?? {
         message,
         receive: (value: SessionOutboundMessage) => value,
-        finish: async () => {},
       }
     );
   }

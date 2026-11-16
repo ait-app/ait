@@ -19,44 +19,6 @@ function expectedBenchmarkLine(index: number): string {
 }
 
 describe("native headless terminal state", () => {
-  test("exposes application cursor key mode from headless xterm", async () => {
-    const terminal = createNativeHeadlessTerminal({ rows: 5, cols: COLS });
-
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: false,
-      bracketedPaste: false,
-    });
-    await terminal.write("\x1b[?1h");
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: true,
-      bracketedPaste: false,
-    });
-    await terminal.write("\x1b[?1l");
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: false,
-      bracketedPaste: false,
-    });
-  });
-
-  test("exposes bracketed paste mode from headless xterm", async () => {
-    const terminal = createNativeHeadlessTerminal({ rows: 5, cols: COLS });
-
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: false,
-      bracketedPaste: false,
-    });
-    await terminal.write("\x1b[?2004h");
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: false,
-      bracketedPaste: true,
-    });
-    await terminal.write("\x1b[?2004l");
-    expect(terminal.getInputModeState()).toEqual({
-      applicationCursorKeys: false,
-      bracketedPaste: false,
-    });
-  });
-
   test("reads a scrollback window from the active buffer without extracting full scrollback", async () => {
     const terminal = createNativeHeadlessTerminal({ rows: 5, cols: COLS, scrollbackLines: 100 });
 

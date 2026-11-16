@@ -138,10 +138,8 @@ describe("native inverted history under a floating header", () => {
         isLoadingOlderHistory: false,
         hasOlderHistory: false,
         olderHistoryProgressKey: null,
-        scrollEnabled: true,
         listStyle: { flex: 1 },
         baseListContentContainerStyle: { flexGrow: 1 },
-        forwardListContentContainerStyle: null,
         contentMaxWidth: 390,
       };
       const render = async (inset: number) => {

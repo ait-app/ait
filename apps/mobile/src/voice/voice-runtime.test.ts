@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonServerInfo } from "@/stores/session-store";
 import type { AudioEngine } from "@/voice/audio-engine-types";
 import { createVoiceRuntime, type VoiceSessionAdapter } from "@/voice/voice-runtime";
-import { REALTIME_VOICE_VAD_CONFIG } from "@/voice/realtime-voice-config";
 
 function createAudioEngineMock(): AudioEngine {
   return {
@@ -26,7 +25,6 @@ function createSessionAdapter(serverId = "server-1"): VoiceSessionAdapter {
     sendVoiceAudioChunk: vi.fn().mockResolvedValue(undefined),
     audioPlayed: vi.fn().mockResolvedValue(undefined),
     abortRequest: vi.fn().mockResolvedValue(undefined),
-    setAssistantAudioPlaying: vi.fn(),
   };
 }
 
@@ -204,7 +202,6 @@ describe("voice runtime", () => {
     runtime.onAssistantAudioStarted("server-1");
 
     expect(runtime.getSnapshot().phase).toBe("playing");
-    expect(adapter.setAssistantAudioPlaying).toHaveBeenCalledWith(true);
   });
 
   it("starts playback on the first chunk before isLastChunk arrives", async () => {
@@ -337,7 +334,6 @@ describe("voice runtime", () => {
     send("second");
     expect(engine.play).toHaveBeenCalledTimes(2);
     expect(adapter.audioPlayed).not.toHaveBeenCalled();
-    expect(adapter.setAssistantAudioPlaying).toHaveBeenCalledTimes(1);
     finish[0](0.08);
     await vi.waitFor(() => expect(adapter.audioPlayed).toHaveBeenCalledWith("first"));
     expect(runtime.getSnapshot().phase).toBe("playing");
@@ -459,7 +455,7 @@ describe("voice runtime", () => {
     vi.mocked(engine.stop).mockClear();
     vi.mocked(engine.clearQueue).mockClear();
 
-    runtime.handleCaptureVolume(REALTIME_VOICE_VAD_CONFIG.volumeThreshold + 0.05);
+    runtime.handleCaptureVolume(0.17);
     runtime.handleCaptureVolume(0);
 
     expect(engine.stop).not.toHaveBeenCalled();
@@ -538,7 +534,6 @@ describe("voice runtime", () => {
 
     expect(engine.stop).toHaveBeenCalled();
     expect(engine.clearQueue).toHaveBeenCalled();
-    expect(adapter.setAssistantAudioPlaying).toHaveBeenCalledWith(false);
     expect(runtime.getTelemetrySnapshot().isSpeaking).toBe(true);
   });
 

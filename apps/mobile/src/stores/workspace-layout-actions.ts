@@ -168,23 +168,6 @@ interface RetargetTabInLayoutResult {
   tabId: string;
 }
 
-interface ConvertDraftToAgentInLayoutInput {
-  explorerSidebarPaneId: string | null;
-  layout: WorkspaceLayout;
-  tabId: string;
-  agentId: string;
-}
-
-interface ConvertDraftToAgentInLayoutResult {
-  layout: WorkspaceLayout;
-  tabId: string;
-}
-
-interface ReorderFocusedPaneTabsInLayoutInput {
-  layout: WorkspaceLayout;
-  tabIds: string[];
-}
-
 interface CloseTabInLayoutInput {
   layout: WorkspaceLayout;
   tabId: string;
@@ -1810,72 +1793,6 @@ export function setTabStateInLayout(input: {
       nextTabId: tab.tabId,
       target: tab.target,
       state: input.state,
-    }),
-    focusedPaneId: layout.focusedPaneId,
-    parentTabIdByTabId: input.layout.parentTabIdByTabId,
-  });
-}
-
-export function convertDraftToAgentInLayout(
-  input: ConvertDraftToAgentInLayoutInput,
-): ConvertDraftToAgentInLayoutResult | null {
-  const layout = asInternalLayout(input.layout);
-  const currentTab = collectAllTabs(layout.root).find((tab) => tab.tabId === input.tabId) ?? null;
-  if (!currentTab || currentTab.target.kind !== "draft") {
-    return null;
-  }
-
-  const target: WorkspaceTabTarget = {
-    kind: "agent",
-    agentId: input.agentId,
-  };
-  const canonicalTabId = buildDeterministicWorkspaceTabId(target);
-  const existingCanonicalTab =
-    collectAllTabs(layout.root).find((tab) => tab.tabId === canonicalTabId) ?? null;
-
-  if (existingCanonicalTab && existingCanonicalTab.tabId !== input.tabId) {
-    const nextLayout =
-      closeTabInLayout({
-        layout: input.layout,
-        tabId: input.tabId,
-        explorerSidebarPaneId: input.explorerSidebarPaneId,
-      }) ?? input.layout;
-    return {
-      layout:
-        focusTabInLayout({
-          layout: nextLayout,
-          tabId: canonicalTabId,
-        }) ?? nextLayout,
-      tabId: canonicalTabId,
-    };
-  }
-
-  return {
-    tabId: canonicalTabId,
-    layout: withNormalizedParentTabMap({
-      root: replaceTabInTree(layout.root, {
-        tabId: input.tabId,
-        nextTabId: canonicalTabId,
-        target,
-      }),
-      focusedPaneId: layout.focusedPaneId,
-      parentTabIdByTabId: input.layout.parentTabIdByTabId,
-    }),
-  };
-}
-
-export function reorderFocusedPaneTabsInLayout(
-  input: ReorderFocusedPaneTabsInLayoutInput,
-): WorkspaceLayout | null {
-  const layout = asInternalLayout(input.layout);
-  if (!layout.focusedPaneId || !findPaneById(layout.root, layout.focusedPaneId)) {
-    return null;
-  }
-
-  return withNormalizedParentTabMap({
-    root: updatePaneInTree(layout.root, {
-      paneId: layout.focusedPaneId,
-      updater: (pane) => reorderTabsForPane({ pane, tabIds: input.tabIds }),
     }),
     focusedPaneId: layout.focusedPaneId,
     parentTabIdByTabId: input.layout.parentTabIdByTabId,

@@ -5,7 +5,7 @@ import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { markWorkspaceUnread } from "@/workspace/mark-unread";
 
-export interface WorkspaceReadStateController {
+interface WorkspaceReadStateController {
   hasClearableAttention: boolean;
   canMarkUnread: boolean;
   clearAttention: () => Promise<void>;

@@ -1,10 +1,12 @@
-//! Repository-wide remote refreshes owned by active workspace directory observations.
+//! Repository-wide remote refreshes owned by active workspace directory observations, and
+//! local checkout status reads after Agent turns end.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::session::protocol::SessionEventKind;
 use model::Runtime;
 use model::session::SessionEvents;
@@ -16,12 +18,23 @@ use tokio_util::sync::CancellationToken;
 
 use crate::git::ports::git_fetch::{GitFetchError, GitFetchRuntime};
 
+mod turn_end;
+
 const FETCH_INTERVAL: Duration = Duration::from_secs(180);
 
 /// Background remote refresh capability; adapters perform blocking Git work outside the reactor.
 #[derive(Debug)]
 pub struct GitFetch {
     backend: Arc<dyn GitFetchRuntime>,
+    agents: Option<Arc<dyn AgentRuntimeRegistry>>,
+}
+
+/// Publishes checkout status snapshots, suppressing any equal to the last one published for
+/// the same path, whichever background read produced it.
+#[derive(Debug, Clone)]
+struct StatusPublisher {
+    events: SessionEvents,
+    published: Arc<Mutex<BTreeMap<String, serde_json::Value>>>,
 }
 
 #[derive(Debug, Default)]
@@ -49,7 +62,7 @@ struct Worker {
 struct Resources {
     backend: Arc<dyn GitFetchRuntime>,
     runtime: Arc<Runtime>,
-    events: SessionEvents,
+    publisher: StatusPublisher,
     jobs: Arc<Semaphore>,
 }
 
@@ -57,7 +70,18 @@ impl GitFetch {
     /// Compose a background fetch service with an independently shared Git adapter.
     #[must_use]
     pub fn new(backend: Arc<dyn GitFetchRuntime>) -> Self {
-        Self { backend }
+        Self {
+            backend,
+            agents: None,
+        }
+    }
+
+    /// Also read the local status of an Agent's checkout when one of its turns ends, at most
+    /// once a minute per checkout, resolving each Agent's directory through `agents`.
+    #[must_use]
+    pub fn with_agent_turns(mut self, agents: Arc<dyn AgentRuntimeRegistry>) -> Self {
+        self.agents = Some(agents);
+        self
     }
 
     /// Start tracked observation coordination using the process cancellation and event bus.
@@ -70,18 +94,67 @@ impl GitFetch {
     ) -> Arc<dyn WorkspaceGitObserver> {
         let observers = Arc::new(Observers::default());
         let source = Arc::new(Source(observers.clone()));
+        // Subscribe before admission so no turn that ends during start-up is missed.
+        let turn_ends = self
+            .agents
+            .map(|agents| (agents, events.subscribe_committed_attention()));
+        let publisher = StatusPublisher {
+            events,
+            published: Arc::default(),
+        };
         let admission = runtime
             .admission
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !runtime.cancellation.is_cancelled() {
-            runtime
-                .tasks
-                .spawn(coordinate(observers, self.backend, runtime.clone(), events));
+            if let Some((agents, attention)) = turn_ends {
+                runtime.tasks.spawn(turn_end::refresh_after_turns(
+                    attention,
+                    agents,
+                    self.backend.clone(),
+                    publisher.clone(),
+                    runtime.cancellation.clone(),
+                ));
+            }
+            runtime.tasks.spawn(coordinate(
+                observers,
+                self.backend,
+                runtime.clone(),
+                publisher,
+            ));
         }
         drop(admission);
         source
     }
+}
+
+impl StatusPublisher {
+    /// Publish `snapshot` for `path` unless it equals the last snapshot published for it.
+    fn publish(&self, path: String, snapshot: serde_json::Value) {
+        let mut published = self
+            .published
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if published.get(&path) != Some(&snapshot) {
+            self.events
+                .publish(SessionEventKind::CheckoutStatus, &snapshot);
+            published.insert(path, snapshot);
+        }
+    }
+
+    /// Forget `path`, so its next snapshot is published even when unchanged.
+    fn forget(&self, path: &str) {
+        self.published
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(path);
+    }
+}
+
+/// The status event payload for `path`, or None when its status cannot be read.
+fn status_snapshot(backend: &dyn GitFetchRuntime, path: &str) -> Option<serde_json::Value> {
+    let status = backend.status(path).ok()?;
+    serde_json::to_value(crate::git::rpc::protocol_status(path, Ok(status))).ok()
 }
 
 impl WorkspaceGitObserver for Source {
@@ -137,12 +210,12 @@ async fn coordinate(
     observers: Arc<Observers>,
     backend: Arc<dyn GitFetchRuntime>,
     runtime: Arc<Runtime>,
-    events: SessionEvents,
+    publisher: StatusPublisher,
 ) {
     let resources = Resources {
         backend: backend.clone(),
         runtime: runtime.clone(),
-        events,
+        publisher,
         jobs: Arc::new(Semaphore::new(2)),
     };
     let mut repositories = BTreeMap::new();
@@ -251,7 +324,7 @@ async fn reconcile(
             paths.clone(),
             resources.backend.clone(),
             cancellation.clone(),
-            resources.events.clone(),
+            resources.publisher.clone(),
             resources.jobs.clone(),
         ));
         workers.insert(
@@ -270,12 +343,12 @@ async fn fetch_repository(
     paths: Arc<RwLock<BTreeSet<String>>>,
     backend: Arc<dyn GitFetchRuntime>,
     cancellation: CancellationToken,
-    events: SessionEvents,
+    publisher: StatusPublisher,
     jobs: Arc<Semaphore>,
 ) {
     let mut interval = tokio::time::interval(FETCH_INTERVAL);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut previous = BTreeMap::new();
+    let mut previous = BTreeSet::<String>::new();
     loop {
         tokio::select! {
             biased;
@@ -302,12 +375,16 @@ async fn fetch_repository(
             break;
         }
         if let Ok(snapshots) = snapshots {
-            previous.retain(|path, _| snapshots.contains_key(path));
+            // A path that left this worker or failed to read is republished once it returns.
+            for path in previous
+                .iter()
+                .filter(|path| !snapshots.contains_key(path.as_str()))
+            {
+                publisher.forget(path);
+            }
+            previous = snapshots.keys().cloned().collect();
             for (path, snapshot) in snapshots {
-                if previous.get(&path) != Some(&snapshot) {
-                    events.publish(SessionEventKind::CheckoutStatus, &snapshot);
-                    previous.insert(path, snapshot);
-                }
+                publisher.publish(path, snapshot);
             }
         }
     }
@@ -339,13 +416,7 @@ fn fetch_snapshots(
     observed
         .into_iter()
         .take_while(|_| !cancellation.is_cancelled())
-        .filter_map(|path| {
-            let status = backend.status(&path).ok()?;
-            let payload = crate::git::rpc::protocol_status(&path, Ok(status));
-            serde_json::to_value(payload)
-                .ok()
-                .map(|payload| (path, payload))
-        })
+        .filter_map(|path| status_snapshot(backend, &path).map(|snapshot| (path, snapshot)))
         .collect()
 }
 

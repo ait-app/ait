@@ -152,13 +152,6 @@ function kebabTriggerStyle({
   return [styles.kebabButton, hovered && styles.kebabButtonHovered];
 }
 
-function refreshButtonStyle(
-  { hovered, pressed }: PressableStateCallbackType & { hovered?: boolean },
-  isCompact: boolean,
-) {
-  return paneContentToolbarIconButtonStyle({ hovered, pressed }, false, isCompact);
-}
-
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreHorizontal
@@ -202,7 +195,8 @@ export function PullRequestPane({
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const toolbarRefreshButtonStyle = useCallback(
-    (state: PressableStateCallbackType) => refreshButtonStyle(state, isCompact),
+    (state: PressableStateCallbackType) =>
+      paneContentToolbarIconButtonStyle(state, false, isCompact),
     [isCompact],
   );
   const toast = useToast();
@@ -569,7 +563,7 @@ export function PullRequestPane({
         <View style={styles.divider} />
 
         <Section
-          title="Activity"
+          title={t("workspace.git.pr.sections.activity")}
           open={activityOpen}
           onToggle={handleToggleActivity}
           summary={
@@ -593,13 +587,13 @@ export function PullRequestPane({
                 onPress={handleAddAllToChat}
                 disabled={activityLoading}
               >
-                Add all to chat
+                {t("workspace.git.pr.actions.addAllToChat")}
               </Button>
             </View>
           ) : null}
           {activityLoading ? <PrActivitySkeleton /> : null}
           {!activityLoading && visibleEntries.length === 0 ? (
-            <Text style={sectionKitStyles.emptyText}>No activity yet</Text>
+            <Text style={sectionKitStyles.emptyText}>{t("workspace.git.pr.empty.noActivity")}</Text>
           ) : null}
           {!activityLoading
             ? visibleEntries.map(({ entry, collapsed }) => (
@@ -703,19 +697,19 @@ function ActivityKebab({
         <DropdownMenuTrigger
           hitSlop={8}
           style={kebabTriggerStyle}
-          accessibilityLabel="Comment actions"
+          accessibilityLabel={t("workspace.git.pr.accessibility.commentActions")}
         >
           {renderKebabTriggerIcon}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" width={200}>
           {attachEnabled && canAddPullRequestActivityToChat(activity) ? (
             <DropdownMenuItem leading={ADD_TO_CHAT_MENU_ICON} onSelect={handleAddToChat}>
-              Add to chat
+              {t("workspace.fileActions.addToChat")}
             </DropdownMenuItem>
           ) : null}
           {activity.body.trim() !== "" ? (
             <DropdownMenuItem leading={COPY_MENU_ICON} onSelect={handleCopy}>
-              Copy
+              {t("common.actions.copy")}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem leading={OPEN_MENU_ICON} onSelect={handleOpen}>
@@ -816,6 +810,7 @@ function SingleActivityCard({
   entry: Extract<PrTimelineEntry, { kind: "single" }>;
   collapsed: boolean;
 }) {
+  const { t } = useTranslation();
   const { activity } = entry;
   const { actionsVisible, handlePointerEnter, handlePointerLeave, setMenuOpen } =
     useRevealOnHover();
@@ -829,33 +824,9 @@ function SingleActivityCard({
     void openExternalUrl(activity.url);
   }, [activity.url, collapsed, entry.id, hasBody, onToggleCollapsed]);
 
-  if (!hasBody) {
-    return (
-      <View
-        style={styles.eventRow}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        testID="pr-pane-activity-row"
-      >
-        <Pressable onPress={handleHeaderPress} style={entryHeaderPressableStyle}>
-          <ActivityHeader activity={activity} avatarSize={20}>
-            <ActivityKebab
-              activity={activity}
-              visible={actionsVisible}
-              attachEnabled={attachEnabled}
-              brandLabel={brandLabel}
-              onMenuOpenChange={setMenuOpen}
-              onAddToChat={onAddToChat}
-            />
-          </ActivityHeader>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
     <View
-      style={styles.card}
+      style={hasBody ? styles.card : styles.eventRow}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       testID="pr-pane-activity-row"
@@ -872,7 +843,7 @@ function SingleActivityCard({
           />
         </ActivityHeader>
       </Pressable>
-      {collapsed ? null : (
+      {collapsed || !hasBody ? null : (
         <>
           <View style={styles.cardBody}>
             <MarkdownRenderer text={activity.body} compact onLinkPress={handleMarkdownLinkPress} />
@@ -885,7 +856,7 @@ function SingleActivityCard({
                 leftIcon={MessageSquarePlus}
                 onPress={handleAddToChat}
               >
-                Add to chat
+                {t("workspace.fileActions.addToChat")}
               </Button>
             </View>
           ) : null}
@@ -936,6 +907,7 @@ function ReviewCard({
   collapsed: boolean;
   collapsedEntryIds: ReadonlySet<string>;
 }) {
+  const { t } = useTranslation();
   const { review, threads } = entry;
   const { actionsVisible, handlePointerEnter, handlePointerLeave, setMenuOpen } =
     useRevealOnHover();
@@ -962,7 +934,7 @@ function ReviewCard({
               onPress={handleAddToChat}
               style={styles.checkAddButton}
             >
-              Add to chat
+              {t("workspace.fileActions.addToChat")}
             </Button>
           ) : null}
           {collapsed ? (
@@ -996,7 +968,7 @@ function ReviewCard({
                 leftIcon={MessageSquarePlus}
                 onPress={handleAddToChat}
               >
-                Add to chat
+                {t("workspace.fileActions.addToChat")}
               </Button>
             </View>
           ) : null}
@@ -1064,8 +1036,12 @@ function ThreadBlock({
             ? formatPullRequestThreadPath(thread.location)
             : t("workspace.git.pr.thread.discussion")}
         </Text>
-        {thread.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
-        {thread.location?.isOutdated ? <StatusBadge label="Outdated" /> : null}
+        {thread.isResolved ? (
+          <StatusBadge label={t("workspace.git.pr.thread.resolved")} variant="success" />
+        ) : null}
+        {thread.location?.isOutdated ? (
+          <StatusBadge label={t("workspace.git.pr.thread.outdated")} />
+        ) : null}
         <View style={styles.headerTrailing}>
           {collapsed ? (
             <View style={styles.threadCount}>
@@ -1081,7 +1057,7 @@ function ThreadBlock({
               <DropdownMenuTrigger
                 hitSlop={8}
                 style={kebabTriggerStyle}
-                accessibilityLabel="Thread actions"
+                accessibilityLabel={t("workspace.git.pr.accessibility.threadActions")}
               >
                 {renderKebabTriggerIcon}
               </DropdownMenuTrigger>
@@ -1125,7 +1101,7 @@ function ThreadBlock({
                 leftIcon={MessageSquarePlus}
                 onPress={handleAddThreadToChat}
               >
-                Add to chat
+                {t("workspace.fileActions.addToChat")}
               </Button>
             </View>
           ) : null}
@@ -1194,9 +1170,6 @@ const styles = StyleSheet.create((theme) => ({
   scroll: {
     flex: 1,
     minHeight: 0,
-  },
-  invisible: {
-    opacity: 0,
   },
   hoverable: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1294,18 +1267,6 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
     paddingRight: theme.spacing[3],
     paddingBottom: theme.spacing[2],
-  },
-  toolbarTrailing: {
-    marginLeft: "auto",
-  },
-  filterTriggerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  filterHiddenCount: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foregroundMuted,
   },
   eventRow: {
     marginHorizontal: theme.spacing[3],

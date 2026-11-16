@@ -17,15 +17,14 @@ export interface TerminalLinkSuffix {
   suffix: TerminalLinkPartialRange;
 }
 
-export interface TerminalLinkPartialRange {
+interface TerminalLinkPartialRange {
   index: number;
   text: string;
 }
 
-const linkSuffixRegexEol = generateLinkSuffixRegex(true);
-const linkSuffixRegex = generateLinkSuffixRegex(false);
+const linkSuffixRegex = generateLinkSuffixRegex();
 
-function generateLinkSuffixRegex(eolOnly: boolean): RegExp {
+function generateLinkSuffixRegex(): RegExp {
   let rowIndex = 0;
   let colIndex = 0;
   let rowEndIndex = 0;
@@ -34,19 +33,14 @@ function generateLinkSuffixRegex(eolOnly: boolean): RegExp {
   const col = () => `(?<col${colIndex++}>\\d+)`;
   const rowEnd = () => `(?<rowEnd${rowEndIndex++}>\\d+)`;
   const colEnd = () => `(?<colEnd${colEndIndex++}>\\d+)`;
-  const eolSuffix = eolOnly ? "$" : "";
 
   const clauses = [
-    `(?::|#| |['"],|, )${row()}([:.]${col()}(?:-(?:${rowEnd()}\\.)?${colEnd()})?)?${eolSuffix}`,
-    `['"]?(?:,? |: ?| on )lines? ${row()}(?:-${rowEnd()})?(?:,? (?:col(?:umn)?|characters?) ${col()}(?:-${colEnd()})?)?${eolSuffix}`,
-    `:? ?[\\[\\(]${row()}(?:(?:, ?|:)${col()})?[\\]\\)]${eolSuffix}`,
+    `(?::|#| |['"],|, )${row()}([:.]${col()}(?:-(?:${rowEnd()}\\.)?${colEnd()})?)?`,
+    `['"]?(?:,? |: ?| on )lines? ${row()}(?:-${rowEnd()})?(?:,? (?:col(?:umn)?|characters?) ${col()}(?:-${colEnd()})?)?`,
+    `:? ?[\\[\\(]${row()}(?:(?:, ?|:)${col()})?[\\]\\)]`,
   ];
 
-  return new RegExp(`(${clauses.join("|").replace(/ /g, "[\u00A0 ]")})`, eolOnly ? undefined : "g");
-}
-
-export function getTerminalLinkSuffix(link: string): TerminalLinkSuffix | null {
-  return toLinkSuffix(linkSuffixRegexEol.exec(link));
+  return new RegExp(`(${clauses.join("|").replace(/ /g, "[\u00A0 ]")})`, "g");
 }
 
 function detectLinkSuffixes(line: string): TerminalLinkSuffix[] {

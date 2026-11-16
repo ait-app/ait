@@ -3,10 +3,7 @@ import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { SplitDropZoneHover, SplitDropZonePosition } from "./split-drop-zone-geometry";
 
-export { resolveSplitDropPosition } from "./split-drop-zone-geometry";
-export type { SplitDropZoneHover, SplitDropZonePosition } from "./split-drop-zone-geometry";
-
-export interface SplitDropZoneProps {
+interface SplitDropZoneProps {
   paneId: string;
   active: boolean;
   preview: SplitDropZoneHover | null;

@@ -9,7 +9,7 @@ import { promptTickMagnification } from "./model";
 import type { ChatOutlineRailProps } from "./rail";
 
 // Hover tracking lives on the rail and the slots, never on the Pressable inside them:
-// magnifying a slot must not move the box the pointer is resting on. See docs/hover.md.
+// magnifying a slot must not move the box the pointer is resting on.
 const RAIL_WIDTH = 36;
 const SLOT_HEIGHT = 8;
 const MIN_PANEL_WIDTH = 918;

@@ -41,6 +41,7 @@ struct State {
     connections: BTreeMap<String, Weak<Mutex<Presence>>>,
     listeners: Vec<Weak<Listener>>,
     attention: Option<broadcast::Sender<(SessionEventKind, Value)>>,
+    committed_attention: Option<broadcast::Sender<(SessionEventKind, Value)>>,
     publisher: Option<Arc<dyn crate::hub::EventPublisher>>,
 }
 
@@ -132,6 +133,24 @@ impl SessionEvents {
             .subscribe()
     }
 
+    /// Observe every committed attention event, before focus or center filtering.
+    ///
+    /// Unlike [`Self::subscribe_attention`], events stay visible while a client looks at their
+    /// Agent or terminal and when the center already notified, so Host-side consumers that act
+    /// on the event itself (the Workspace Bot) see all of them. The bounded channel retains at
+    /// most 64 events; lagging consumers must recover from durable state.
+    #[must_use]
+    pub fn subscribe_committed_attention(&self) -> broadcast::Receiver<(SessionEventKind, Value)> {
+        let mut state = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state
+            .committed_attention
+            .get_or_insert_with(|| broadcast::channel(64).0)
+            .subscribe()
+    }
+
     /// Return tokens whose fresh visible connections handle notifications locally.
     /// Tokens are opaque secrets and must never be logged.
     #[must_use]
@@ -201,6 +220,19 @@ impl SessionEvents {
         publisher.is_some_and(|publisher| publisher.publish(kind.method(), payload))
     }
 
+    /// Feed the unfiltered committed-attention tap, if anyone subscribed to it.
+    fn publish_committed(&self, kind: SessionEventKind, payload: &Value) {
+        let committed = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .committed_attention
+            .clone();
+        if let Some(committed) = committed {
+            let _ = committed.send((kind, payload.clone()));
+        }
+    }
+
     fn publish_at(&self, kind: SessionEventKind, payload: &Value, now: i64) {
         if !payload.is_object() {
             return;
@@ -209,6 +241,9 @@ impl SessionEvents {
             kind,
             SessionEventKind::AgentAttention | SessionEventKind::TerminalAttention
         );
+        if attention {
+            self.publish_committed(kind, payload);
+        }
         let center_notification = self.publish_to_center(kind, payload);
         let (listeners, presence, push) = {
             let mut state = self

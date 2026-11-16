@@ -1,0 +1,274 @@
+use super::*;
+use provider::storage::timeline::Timeline;
+use provider::testing::MAX_TIMELINE_ENTRY_BYTES;
+
+#[test]
+fn extension_notifications_survive_timeline_reopen_with_bounded_payloads() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&database).unwrap();
+    let mut stream = streaming::Stream::default();
+    stream.begin("turn".into());
+    let message = "\"".repeat(96 * 1024);
+    stream
+        .consume(&json!({"type":"extension_ui_request", "method":"notify",
+            "notifyType":"warning", "message":message}))
+        .unwrap();
+    let Some(AgentTurnEvent::Timeline(entry)) = stream.pop() else {
+        panic!("expected notification timeline entry");
+    };
+    assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+    let expected = entry.clone();
+    provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
+    drop(timeline);
+
+    let reopened = Timeline::open(&database).unwrap();
+    let (_, rows) = provider::testing::timeline_entries(&reopened, "agent").unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0], expected);
+    assert_eq!(rows[0].item["type"], "notification");
+    assert_eq!(rows[0].item["message"], message);
+    assert_eq!(rows[0].item["metadata"]["transient"], true);
+}
+
+#[test]
+fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
+    for kind in ["text", "thinking"] {
+        let timeline = provider::testing::memory_timeline().unwrap();
+        let mut stream = streaming::Stream::default();
+        stream.begin(uuid::Uuid::new_v4().to_string());
+        stream.admission = true;
+        let text = "\u{0001}".repeat(96 * 1024);
+        for part in text.as_bytes().chunks(1024) {
+            stream
+                .consume(&json!({"type":"message_update","assistantMessageEvent":{
+                    "type":format!("{kind}_delta"),"contentIndex":0,
+                    "delta":std::str::from_utf8(part).unwrap()
+                }}))
+                .unwrap();
+        }
+        assert_eq!(stream.events().len(), 1);
+        let AgentTurnEvent::Progress { observation, entry } = stream.pop().unwrap() else {
+            panic!("expected coalesced progress");
+        };
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+        provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
+            .unwrap();
+        stream.end_admission();
+        stream
+            .consume(&json!({"type":"message_end","message":{"role":"assistant",
+                "content":[{"type":kind,kind:text}]
+            }}))
+            .unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.pop().unwrap() else {
+            panic!("expected completed text");
+        };
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+        provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
+        let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].item["text"], text);
+        assert_eq!(rows[1].item["text"], "");
+    }
+}
+
+#[test]
+fn published_deltas_require_an_ordered_prefix_at_completion() {
+    for complete in ["first second tail", "second first tail"] {
+        let timeline = provider::testing::memory_timeline().unwrap();
+        let mut stream = streaming::Stream::default();
+        stream.begin("turn".into());
+        stream.admission = true;
+        for delta in ["first ", "second "] {
+            stream
+                .consume(&json!({"type":"message_update","assistantMessageEvent":{
+                    "type":"text_delta","contentIndex":0,"delta":delta
+                }}))
+                .unwrap();
+            let AgentTurnEvent::Progress { observation, entry } = stream.pop().unwrap() else {
+                panic!("expected progress");
+            };
+            provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
+                .unwrap();
+            stream.end_admission();
+        }
+        stream
+            .consume(&json!({"type":"message_end","message":{"role":"assistant",
+                "content":[{"type":"text","text":complete}]
+            }}))
+            .unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.pop().unwrap() else {
+            panic!("expected completion");
+        };
+        let result = provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]);
+        if complete.starts_with("first ") {
+            result.unwrap();
+            let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
+            assert_eq!(rows[2].item["text"], "tail");
+        } else {
+            assert_eq!(result, Err(model::ErrorCode::IdempotencyConflict));
+        }
+    }
+}
+
+#[test]
+fn admission_chunk_rollover_preserves_order_and_observation_identity() {
+    let mut stream = streaming::Stream::default();
+    stream.begin("turn".into());
+    stream.admission = true;
+    let first = "a".repeat(96 * 1024);
+    for delta in [first.as_str(), "second", " third"] {
+        stream
+            .consume(&json!({"type":"message_update","assistantMessageEvent":{
+                "type":"text_delta","contentIndex":0,"delta":delta
+            }}))
+            .unwrap();
+    }
+    assert_eq!(stream.events().len(), 2);
+    let timeline = provider::testing::memory_timeline().unwrap();
+    while let Some(AgentTurnEvent::Progress { observation, entry }) = stream.pop() {
+        provider::testing::progress_timeline(&timeline, "agent", "pi", &observation, &entry)
+            .unwrap();
+    }
+    let (_, rows) = provider::testing::timeline_entries(&timeline, "agent").unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].key, rows[1].key);
+    assert_eq!(rows[0].item["text"], first);
+    assert_eq!(rows[1].item["text"], "second third");
+}
+
+#[test]
+fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("images");
+    let images = provider_native::images::ImageStore::new(directory.clone());
+    let prompt = AgentPrompt {
+        client_message_id: Some("client".into()),
+        images: vec![provider_core::protocol::prompt::PromptImage {
+            data: "aGVsbG8=".into(),
+            mime_type: "image/png".into(),
+        }],
+        ..AgentPrompt::default()
+    };
+    let text = "\u{0001}".repeat(192 * 1024);
+    let events = streaming::Stream::submitted(&images, "turn", &prompt, &text).unwrap();
+    let timeline = provider::testing::memory_timeline().unwrap();
+    let mut restored = String::new();
+    let mut message_ids = std::collections::BTreeSet::new();
+    for event in events {
+        let AgentTurnEvent::Timeline(entry) = event else {
+            panic!("expected submitted timeline entry");
+        };
+        if restored.is_empty() {
+            assert_eq!(entry.item["clientMessageId"], "client");
+            assert_eq!(entry.item["messageId"], "native:pi:turn:user");
+            let sources = entry.item["imageSources"].as_array().unwrap();
+            assert_eq!(sources.len(), 1);
+            assert_eq!(
+                std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+                b"hello"
+            );
+        } else {
+            assert!(entry.item.get("clientMessageId").is_none());
+            assert!(entry.item.get("imageSources").is_none());
+        }
+        assert!(message_ids.insert(entry.item["messageId"].as_str().unwrap().to_owned()));
+        assert_eq!(entry.turn_id.as_deref(), Some("turn"));
+        assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_TIMELINE_ENTRY_BYTES);
+        restored.push_str(entry.item["text"].as_str().unwrap());
+        provider::testing::append_timeline(&timeline, "agent", "pi", &[entry]).unwrap();
+    }
+    assert_eq!(restored, text);
+    assert_eq!(
+        provider::testing::timeline_entries(&timeline, "agent")
+            .unwrap()
+            .1
+            .len(),
+        2
+    );
+    let files: Vec<_> = std::fs::read_dir(directory).unwrap().collect();
+    assert_eq!(files.len(), 1);
+    assert_eq!(
+        std::fs::read(files[0].as_ref().unwrap().path()).unwrap(),
+        b"hello"
+    );
+}
+
+#[test]
+fn submitted_chunks_without_client_identity_preserve_multibyte_text() {
+    let text = format!("{}é尾", "a".repeat(96 * 1024 - 1));
+    let events = streaming::Stream::submitted(
+        &provider_native::images::ImageStore::default(),
+        "turn",
+        &AgentPrompt::default(),
+        &text,
+    )
+    .unwrap();
+    let mut restored = String::new();
+    let mut message_ids = std::collections::BTreeSet::new();
+    for event in events {
+        let AgentTurnEvent::Timeline(entry) = event else {
+            panic!("expected submitted timeline entry");
+        };
+        assert!(entry.item.get("clientMessageId").is_none());
+        assert!(message_ids.insert(entry.item["messageId"].as_str().unwrap().to_owned()));
+        restored.push_str(entry.item["text"].as_str().unwrap());
+    }
+    assert_eq!(message_ids.len(), 2);
+    assert_eq!(restored, text);
+}
+
+#[tokio::test]
+async fn submitted_image_only_session_is_materialized_for_timeline_display() {
+    let (directory, client, spec) = fixture("");
+    let image_directory = directory.path().join("images");
+    let client = client.with_image_directory(image_directory.clone());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let prompt = AgentPrompt {
+        images: vec![provider_core::protocol::prompt::PromptImage {
+            data: "aGVsbG8=".into(),
+            mime_type: "image/png".into(),
+        }],
+        ..AgentPrompt::default()
+    };
+
+    session.start_input(&prompt, &spec.config).await.unwrap();
+    let events = terminal(session.as_mut()).await;
+
+    assert!(events.iter().any(|event| matches!(event,
+        AgentTurnEvent::Timeline(entry)
+            if entry.item["type"] == "user_message"
+                && entry.item["text"] == ""
+                && entry.item["imageSources"].as_array().is_some_and(|sources|
+                    sources.len() == 1
+                        && std::fs::read(sources[0].as_str().unwrap()).unwrap() == b"hello")
+    )));
+    let files: Vec<_> = std::fs::read_dir(image_directory).unwrap().collect();
+    assert_eq!(files.len(), 1);
+    assert_eq!(
+        std::fs::read(files[0].as_ref().unwrap().path()).unwrap(),
+        b"hello"
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn rejected_input_is_not_published_and_handled_input_is_retained() {
+    let (_directory, client, spec) = fixture("");
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(matches!(
+        session.start_turn("reject", &spec.config).await,
+        Err(AgentSessionError::Rejected)
+    ));
+    assert!(session.poll_turn().unwrap().is_none());
+    session.start_turn("handled", &spec.config).await.unwrap();
+    let events = terminal(session.as_mut()).await;
+    assert!(matches!(&events[0], AgentTurnEvent::Timeline(entry)
+        if entry.item["type"] == "user_message" && entry.item["text"] == "handled"));
+    assert!(matches!(
+        events.last(),
+        Some(AgentTurnEvent::Completed(None))
+    ));
+    session.close().await.unwrap();
+}

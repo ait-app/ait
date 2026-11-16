@@ -36,10 +36,6 @@ export interface NotificationPermissionRequest {
   metadata?: Record<string, unknown>;
 }
 
-export type AssistantTimelineItem =
-  | { type: "assistant_message"; text: string }
-  | { type: string; text?: string };
-
 const normalizeNotificationText = (text: string): string => text.replace(/\s+/g, " ").trim();
 
 const truncateNotificationText = (text: string, limit: number): string => {
@@ -135,39 +131,6 @@ const buildPermissionDetails = (
 
   return request.name?.trim() || request.kind;
 };
-
-export function findLatestAssistantMessageFromTimeline(
-  timeline: readonly AssistantTimelineItem[],
-): string | null {
-  // Providers may stream assistant content in consecutive chunks.
-  const chunks: string[] = [];
-  for (let i = timeline.length - 1; i >= 0; i -= 1) {
-    const item = timeline[i];
-    if (item.type !== "assistant_message" || typeof item.text !== "string") {
-      if (chunks.length > 0) {
-        break;
-      }
-      continue;
-    }
-    chunks.push(item.text);
-  }
-
-  if (chunks.length === 0) {
-    return null;
-  }
-
-  return chunks.toReversed().join("");
-}
-
-export function findLatestPermissionRequest(
-  pendingPermissions: ReadonlyMap<string, NotificationPermissionRequest>,
-): NotificationPermissionRequest | null {
-  let latest: NotificationPermissionRequest | null = null;
-  for (const request of pendingPermissions.values()) {
-    latest = request;
-  }
-  return latest;
-}
 
 function resolveAgentAttentionTitle(reason: AgentAttentionReason): string {
   if (reason === "permission") return "Agent needs permission";

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { mergeProviderPreferences } from "@/hooks/use-form-preferences";
 import {
   resolveAgentForm,
   resolveFormState,
   resolveEffectiveModel,
   resolveThinkingOptionId,
-  mergeSelectedComposerPreferences,
   buildProviderDefinitionMap,
   buildProviderDefinitionMapForStatuses,
   resolveDefaultModel,
@@ -236,17 +236,17 @@ describe("resolveThinkingOptionId", () => {
     ).toBe("low");
   });
 
-  it("falls back to defaultThinkingOptionId when requested option is invalid", () => {
+  it("preserves a requested option absent from the current catalog", () => {
     expect(
       resolveThinkingOptionId({
         availableModels: CODEX_MODELS,
         modelId: "gpt-5.3-codex",
         requestedThinkingOptionId: "invalid",
       }),
-    ).toBe("xhigh");
+    ).toBe("invalid");
   });
 
-  it("falls back to first option when no default and requested is invalid", () => {
+  it("falls back to the first option when no preference or default exists", () => {
     const modelsNoDefault: AgentModelDefinition[] = [
       {
         provider: "codex",
@@ -269,10 +269,10 @@ describe("resolveThinkingOptionId", () => {
   });
 });
 
-describe("mergeSelectedComposerPreferences", () => {
+describe("mergeProviderPreferences", () => {
   it("stores the selected model for the selected provider", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {},
         provider: "codex",
         updates: { model: "gpt-5.4" },
@@ -285,7 +285,7 @@ describe("mergeSelectedComposerPreferences", () => {
 
   it("preserves existing provider preferences when the selected model changes", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {
           provider: "claude",
           providerPreferences: {
@@ -316,7 +316,7 @@ describe("mergeSelectedComposerPreferences", () => {
 
   it("stores mode and thinking preferences without dropping the selected model", () => {
     expect(
-      mergeSelectedComposerPreferences({
+      mergeProviderPreferences({
         preferences: {
           provider: "codex",
           providerPreferences: {
@@ -441,7 +441,7 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("xhigh");
   });
 
-  it("falls back to the OpenCode default when the saved model is no longer available", () => {
+  it("preserves the saved OpenCode model when it is no longer available", () => {
     const models = [{ ...CODEX_MODELS[0], provider: "opencode" }];
     const resolved = resolveFormState(
       undefined,
@@ -456,8 +456,8 @@ describe("resolveFormState", () => {
       makeProviderMap(TEST_OPENCODE_DEFINITION),
     );
 
-    expect(resolved.model).toBe("gpt-5.3-codex");
-    expect(resolved.thinkingOptionId).toBe("xhigh");
+    expect(resolved.model).toBe("retired-model");
+    expect(resolved.thinkingOptionId).toBe("");
   });
 
   it.each([null, []])(
@@ -1336,4 +1336,51 @@ it("owns input readiness, reopening and user edits in the reducer", () => {
   expect(state.resolution.status).toBe("pending");
   state = resolveAgentForm(state, { ...inputs, isPreferencesLoading: false, hasSnapshot: true });
   expect(state.form).toMatchObject({ provider: "codex", model: "astra" });
+});
+
+describe("APPLY_MODEL_PRESET_FROM_USER", () => {
+  it("replaces model and thinking atomically while preserving the running draft permission mode", () => {
+    const next = resolveAgentForm(
+      makeState({
+        provider: "codex",
+        model: "old",
+        thinkingOptionId: "low",
+        modeId: "full-access",
+      }),
+      {
+        type: "APPLY_MODEL_PRESET_FROM_USER",
+        provider: "codex",
+        modelId: "gpt-5.3-codex",
+        thinkingOptionId: null,
+        providerDef: TEST_CODEX_DEFINITION,
+        providerModels: CODEX_MODELS,
+      },
+    );
+    expect(next.form).toEqual({
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      thinkingOptionId: "xhigh",
+      modeId: "full-access",
+    });
+  });
+
+  it("uses the target provider's own mode when the draft changes provider", () => {
+    const next = resolveAgentForm(
+      makeState({ provider: "claude", modeId: "bypassPermissions", thinkingOptionId: "old" }),
+      {
+        type: "APPLY_MODEL_PRESET_FROM_USER",
+        provider: "codex",
+        modelId: "gpt-5.3-codex",
+        thinkingOptionId: "low",
+        providerDef: TEST_CODEX_DEFINITION,
+        providerModels: CODEX_MODELS,
+      },
+    );
+    expect(next.form).toEqual({
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      thinkingOptionId: "low",
+      modeId: "auto",
+    });
+  });
 });

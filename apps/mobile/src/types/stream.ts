@@ -5,6 +5,7 @@ import type {
   CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
+  UserMessageOrigin,
   VoiceTranscriptEntry,
   VoiceTimelineItem,
 } from "@ait/protocol/agent-types";
@@ -114,6 +115,7 @@ export interface UserMessageItem {
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
   voiceTranscript?: VoiceTranscriptEntry[];
+  origin?: UserMessageOrigin;
   attachments?: AgentAttachment[];
 }
 
@@ -128,6 +130,7 @@ export interface UserMessageInput {
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
   voiceTranscript?: VoiceTranscriptEntry[];
+  origin?: UserMessageOrigin;
   attachments?: AgentAttachment[];
 }
 
@@ -148,6 +151,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
     ...(input.imageSources?.length ? { imageSources: input.imageSources } : {}),
     ...(input.voiceTranscript?.length ? { voiceTranscript: input.voiceTranscript } : {}),
+    ...(input.origin ? { origin: input.origin } : {}),
     ...(input.attachments && input.attachments.length > 0
       ? { attachments: input.attachments }
       : {}),
@@ -276,6 +280,7 @@ function produceUserMessage(
   const useIncoming =
     presentationPolicy === "incoming" ||
     Boolean(incoming.voiceTranscript?.length) ||
+    Boolean(incoming.origin) ||
     (Boolean(incoming.imageSources?.length) &&
       !existing.images?.length &&
       !existing.attachments?.length);
@@ -296,6 +301,7 @@ function produceUserMessage(
     existing.images === merged.images &&
     existing.imageSources === merged.imageSources &&
     existing.voiceTranscript === merged.voiceTranscript &&
+    existing.origin === merged.origin &&
     existing.attachments === merged.attachments
   ) {
     return { items, index, message: existing, matched: true };
@@ -880,6 +886,7 @@ export interface TodoEntry {
   id?: string;
   status?: "pending" | "in_progress" | "completed";
   activeForm?: string;
+  group?: { id: string; title: string };
 }
 
 export type TaskActivity =
@@ -954,6 +961,7 @@ function appendUserMessage(
   turnId?: string,
   imageSources?: string[],
   voiceTranscript?: VoiceTranscriptEntry[],
+  origin?: UserMessageOrigin,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
   if (!hasContent && !imageSources?.length && !voiceTranscript?.length) {
@@ -970,6 +978,7 @@ function appendUserMessage(
     text: chunk,
     imageSources,
     voiceTranscript,
+    origin,
     timestamp,
   });
   return upsertUserMessage(state, nextItem);
@@ -1371,6 +1380,7 @@ function appendTodoList(
     ...(item.id ? { id: item.id } : {}),
     ...(item.status ? { status: item.status } : {}),
     ...(item.activeForm ? { activeForm: item.activeForm } : {}),
+    ...(item.group ? { group: item.group } : {}),
   }));
 
   const previousIndex = state.findLastIndex(
@@ -1381,7 +1391,20 @@ function appendTodoList(
   const activities = deriveTaskActivities(previousItems, normalizedItems);
 
   if (activities.length === 0) {
-    if (!previous || previous.kind !== "todo_list") return state;
+    if (!previous || previous.kind !== "todo_list") {
+      return [
+        ...state,
+        {
+          kind: "todo_list",
+          id: createUniqueTimelineId(state, "todo", provider, timestamp),
+          ...(timelineCursor ? { timelineCursor } : {}),
+          timestamp,
+          provider,
+          items: normalizedItems,
+          activity: { type: "created", count: 0 },
+        },
+      ];
+    }
     const next = [...state];
     next[previousIndex] = {
       ...previous,
@@ -1483,17 +1506,11 @@ function reduceTimelineToolCall(
     event.provider === "claude" &&
     (normalizedToolName === "todowrite" || normalizedToolName === "todo_write")
   ) {
-    const tasks = extractTaskEntriesFromToolCall(item.name, inputFromUnknownDetail(item.detail));
+    const tasks = taskSnapshotFromStreamEvent(event);
     if (!tasks) {
       return state;
     }
-    return appendTodoList(
-      state,
-      event.provider,
-      tasks.map((entry) => ({ text: entry.text, completed: entry.completed })),
-      timestamp,
-      timelineCursor,
-    );
+    return appendTodoList(state, event.provider, tasks, timestamp, timelineCursor);
   }
 
   if (
@@ -1505,15 +1522,9 @@ function reduceTimelineToolCall(
     return state;
   }
 
-  const tasks = extractTaskEntriesFromToolCall(item.name, inputFromUnknownDetail(item.detail));
+  const tasks = taskSnapshotFromStreamEvent(event);
   if (tasks) {
-    return appendTodoList(
-      state,
-      event.provider,
-      tasks.map((entry) => ({ text: entry.text, completed: entry.completed })),
-      timestamp,
-      timelineCursor,
-    );
+    return appendTodoList(state, event.provider, tasks, timestamp, timelineCursor);
   }
 
   return appendAgentToolCall({
@@ -1531,6 +1542,24 @@ function reduceTimelineToolCall(
     timelineCursor,
     turnId: event.turnId,
   });
+}
+
+/** Read canonical snapshots and compatible native task tools through the same provider-neutral path. */
+export function taskSnapshotFromStreamEvent(
+  event: AgentStreamEventPayload,
+): TodoEntry[] | undefined {
+  if (event.type !== "timeline") return undefined;
+  if (event.item.type === "todo") return event.item.items;
+  if (
+    event.item.type !== "tool_call" ||
+    event.item.status === "failed" ||
+    event.item.status === "canceled"
+  )
+    return undefined;
+  return (
+    extractTaskEntriesFromToolCall(event.item.name, inputFromUnknownDetail(event.item.detail)) ??
+    undefined
+  );
 }
 
 function reduceTimelineCompaction(
@@ -1630,6 +1659,7 @@ function reduceTimelineEvent(
           event.turnId,
           item.imageSources,
           item.voiceTranscript,
+          item.origin,
         ),
       );
     case "assistant_message":
@@ -1657,6 +1687,7 @@ function reduceTimelineEvent(
         id: todo.id,
         status: todo.status,
         activeForm: todo.activeForm,
+        group: todo.group,
       }));
       return finalizeActiveThoughts(
         appendTodoList(state, event.provider, items, timestamp, timelineCursor),
@@ -2019,6 +2050,7 @@ function applyCanonicalUserMessageEvent(params: {
     text: normalized.chunk,
     imageSources: event.item.imageSources,
     voiceTranscript: event.item.voiceTranscript,
+    origin: event.item.origin,
     timestamp,
   });
   if (unmatchedInsert === "head") {

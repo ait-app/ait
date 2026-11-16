@@ -62,8 +62,3 @@ export function highlightCode(code: string, filename: string): HighlightToken[][
 
   return result;
 }
-
-export function highlightLine(line: string, filename: string): HighlightToken[] {
-  const result = highlightCode(line, filename);
-  return result[0] ?? [{ text: line, style: null }];
-}

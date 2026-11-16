@@ -3,7 +3,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
-export type SegmentedControlSize = "xs" | "sm" | "md";
+export type SegmentedControlSize = "xs" | "sm";
 export type ControlInteractionPhase = "rest" | "hover" | "active";
 
 export interface ControlInteractionState {
@@ -28,7 +28,6 @@ const FIELD_CONTROL_HEIGHT = 44;
 export const HEADER_CONTROL_HEIGHT = 26;
 const SEGMENTED_TIGHT_INSET = 2;
 const SEGMENTED_COMPACT_INSET = 2;
-const SEGMENTED_FIELD_INSET = 3;
 const SWITCH_TRACK_WIDTH = 34;
 const SWITCH_TRACK_HEIGHT = 20;
 const SWITCH_THUMB_SIZE = 16;
@@ -65,7 +64,6 @@ export const buttonIconSize: Record<ButtonControlSize, number> = {
 export const segmentedIconSize: Record<SegmentedControlSize, number> = {
   xs: ICON_SIZE.xs,
   sm: ICON_SIZE.sm,
-  md: ICON_SIZE.md,
 };
 
 export const switchGeometry = {
@@ -179,18 +177,6 @@ export function createControlGeometry(theme: Theme) {
     buttonTextXs: {
       fontSize: theme.fontSize.sm,
     },
-    formTextInputSm: {
-      ...fieldControlSm,
-      ...fieldTextSm,
-    },
-    formTextInputMd: {
-      ...fieldControlMd,
-      ...fieldTextMd,
-    },
-    formTextInput: {
-      ...fieldControlMd,
-      ...fieldTextMd,
-    },
     fieldControlSm,
     fieldControlMd,
     fieldTextSm,
@@ -226,10 +212,6 @@ export function createControlGeometry(theme: Theme) {
       minHeight: CONTROL_HEIGHTS.compact,
       padding: 0,
     },
-    segmentedContainerMd: {
-      minHeight: CONTROL_HEIGHTS.field,
-      padding: 0,
-    },
     segmentedSegmentXs: {
       minHeight: CONTROL_HEIGHTS.tight - SEGMENTED_TIGHT_INSET * 2,
       paddingHorizontal: theme.spacing[2],
@@ -240,18 +222,10 @@ export function createControlGeometry(theme: Theme) {
       paddingHorizontal: theme.spacing[2],
       borderRadius: theme.borderRadius.md,
     },
-    segmentedSegmentMd: {
-      minHeight: CONTROL_HEIGHTS.field - SEGMENTED_FIELD_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.lg,
-    },
     segmentedLabelXs: {
       fontSize: theme.fontSize.sm,
     },
     segmentedLabelSm: {
-      fontSize: theme.fontSize.base,
-    },
-    segmentedLabelMd: {
       fontSize: theme.fontSize.base,
     },
   };

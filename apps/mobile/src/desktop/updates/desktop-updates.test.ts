@@ -39,62 +39,6 @@ describe("desktop-updates helpers", () => {
     expect(formatVersionWithPrefix(null)).toBe("\u2014");
   });
 
-  it("parses valid local daemon version result", async () => {
-    const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
-
-    expect(parseLocalDaemonVersionResult({ version: "0.1.15", error: null })).toEqual({
-      version: "0.1.15",
-      error: null,
-    });
-  });
-
-  it("parses local daemon version error result", async () => {
-    const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
-
-    expect(
-      parseLocalDaemonVersionResult({ version: null, error: "paseo command not found in PATH" }),
-    ).toEqual({
-      version: null,
-      error: "paseo command not found in PATH",
-    });
-  });
-
-  it("parses unexpected local daemon version result", async () => {
-    const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
-
-    expect(parseLocalDaemonVersionResult(null)).toEqual({
-      version: null,
-      error: "Unexpected response from version check.",
-    });
-
-    expect(parseLocalDaemonVersionResult("not an object")).toEqual({
-      version: null,
-      error: "Unexpected response from version check.",
-    });
-  });
-
-  it("trims whitespace in parsed version", async () => {
-    const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
-
-    expect(parseLocalDaemonVersionResult({ version: " 0.1.15 ", error: null })).toEqual({
-      version: "0.1.15",
-      error: null,
-    });
-  });
-
-  it("builds copyable daemon update diagnostics", async () => {
-    const { buildDaemonUpdateDiagnostics } = await loadModuleForPlatform("web");
-    const diagnostics = buildDaemonUpdateDiagnostics({
-      exitCode: 1,
-      stdout: "stdout text",
-      stderr: "stderr text",
-    });
-
-    expect(diagnostics).toContain("Exit code: 1");
-    expect(diagnostics).toContain("STDOUT:\nstdout text");
-    expect(diagnostics).toContain("STDERR:\nstderr text");
-  });
-
   it("parses runtime info defensively", async () => {
     const { parseDesktopRuntimeInfo } = await loadModuleForPlatform("web");
 

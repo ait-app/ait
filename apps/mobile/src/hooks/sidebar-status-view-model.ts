@@ -4,8 +4,6 @@ import { compareSidebarWorkspaces } from "@/utils/sidebar-workspace-order";
 
 export type StatusBucket = SidebarWorkspaceEntry["statusBucket"];
 
-export { STATUS_BUCKET_ORDER };
-
 export const STATUS_BUCKET_LABELS: Record<StatusBucket, string> = {
   needs_input: "Needs input",
   failed: "Failed",
@@ -47,17 +45,4 @@ export function buildStatusGroups(
   }
 
   return groups;
-}
-
-export function buildStatusShortcutIndex(groups: StatusGroup[]): Map<string, number> {
-  const index = new Map<string, number>();
-  let shortcutNumber = 1;
-  for (const group of groups) {
-    for (const row of group.rows) {
-      if (shortcutNumber > 9) return index;
-      index.set(row.workspaceKey, shortcutNumber);
-      shortcutNumber += 1;
-    }
-  }
-  return index;
 }

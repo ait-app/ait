@@ -27,17 +27,6 @@ export interface DesktopRuntimeInfo {
 export type DesktopReleaseChannel = "stable" | "beta";
 export type DesktopAppUpdateCheckIntent = "automatic" | "manual";
 
-export interface LocalDaemonUpdateResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
-export interface LocalDaemonVersionResult {
-  version: string | null;
-  error: string | null;
-}
-
 const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/ait-app/ait/releases/download";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,32 +42,8 @@ function toStringOrNull(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function toStringOrEmpty(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function toNumberOr(defaultValue: number, value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : defaultValue;
-}
-
 export function shouldShowDesktopUpdateSection(): boolean {
   return isWeb && isElectronRuntime();
-}
-
-export function parseLocalDaemonVersionResult(raw: unknown): LocalDaemonVersionResult {
-  if (!isRecord(raw)) {
-    return { version: null, error: "Unexpected response from version check." };
-  }
-
-  return {
-    version: toStringOrNull(raw.version),
-    error: toStringOrNull(raw.error),
-  };
-}
-
-export async function getLocalDaemonVersion(): Promise<LocalDaemonVersionResult> {
-  const result = await invokeDesktopCommand<unknown>("get_local_daemon_version");
-  return parseLocalDaemonVersionResult(result);
 }
 
 export function parseDesktopRuntimeInfo(raw: unknown): DesktopRuntimeInfo {
@@ -143,19 +108,6 @@ export async function installDesktopAppUpdate({
   };
 }
 
-export async function runLocalDaemonUpdate(): Promise<LocalDaemonUpdateResult> {
-  const result = await invokeDesktopCommand<unknown>("run_local_daemon_update");
-  if (!isRecord(result)) {
-    throw new Error("Unexpected response while updating local daemon.");
-  }
-
-  return {
-    exitCode: toNumberOr(1, result.exitCode),
-    stdout: toStringOrEmpty(result.stdout),
-    stderr: toStringOrEmpty(result.stderr),
-  };
-}
-
 export function normalizeVersionForComparison(version: string | null | undefined): string | null {
   const value = version?.trim();
   if (!value) {
@@ -196,11 +148,4 @@ export function buildMacAppleSiliconDownloadUrl(version: string | null | undefin
   }
 
   return `${RELEASE_DOWNLOAD_BASE_URL}/v${normalizedVersion}/Ait-${normalizedVersion}-arm64.dmg`;
-}
-
-export function buildDaemonUpdateDiagnostics(result: LocalDaemonUpdateResult): string {
-  const stdout = result.stdout.length > 0 ? result.stdout : "(empty)";
-  const stderr = result.stderr.length > 0 ? result.stderr : "(empty)";
-
-  return [`Exit code: ${result.exitCode}`, "", "STDOUT:", stdout, "", "STDERR:", stderr].join("\n");
 }

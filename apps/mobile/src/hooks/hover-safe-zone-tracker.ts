@@ -5,14 +5,14 @@ export interface RectLike {
   bottom: number;
 }
 
-export interface HoverSafeZoneTrackerInput {
+interface HoverSafeZoneTrackerInput {
   getTriggerRect: () => RectLike | null;
   getContentRect: () => RectLike | null;
   onEnterSafeZone: () => void;
   onLeaveSafeZone: () => void;
 }
 
-export interface HoverSafeZoneTracker {
+interface HoverSafeZoneTracker {
   pointerMoved(x: number, y: number): void;
   pointerLeftWindow(): void;
   windowBlurred(): void;

@@ -1,0 +1,30 @@
+{
+  "id": "S3",
+  "title": "Reuse daemon packaging entry point",
+  "priority": 36,
+  "depends_on": ["00"],
+  "donor_sections": [21],
+  "donor_paths": ["package.json"],
+  "implementation": "Added root package:daemon alias resolving the existing node scripts/release-assets.mjs daemon implementation (platform linux|mac, VERSION, BINARY, DEST, optional --dev LABEL). No new packager, no release performed, root package version untouched (0.2.7 stays). Donor scripts/release-assets.test.mjs hunk (OMP runtime bundling assertions) belongs to the OMP boundary tasks and was not imported. Existing release-assets tests stay unchanged; the alias is proven by a throwaway actual npm run package:daemon fixture smoke (release and --dev forms, real tar archive inspection), removed after proof — no permanent wiring/source-copy test. Additive CLI alias only: existing direct script invocations and CI are unchanged; documented in docs/operations/releasing.md and CHANGELOG.md. No new ADR (entry-point alias within existing release ownership).",
+  "acceptance": "Script resolves the existing daemon implementation and archive expectations; focused release-assets checks pass without releasing artifacts. Verified by actual npm run package:daemon invocations against fixture binaries with real tar archive inspection (throwaway smoke), plus the unchanged existing release-assets suite.",
+  "status": "in_review",
+  "branch": "fix/pr612-s3-package-daemon-alias",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "commit": "cdae0123f0da22636792763fb6545fd64faf5d07",
+  "pr_url": "https://github.com/ait-app/ait/pull/654",
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      "throwaway actual smoke: npm run package:daemon -- linux 0.0.7 <fixture> <dest> → exit 0, 'Ait-0.0.7-daemon-linux-x64.tar.gz'; tar -tvzf → aitd -rwxr-xr-x + LICENSE",
+      "throwaway actual smoke: npm run package:daemon -- mac 0.0.7 <dev fixture> <dest> --dev abcdef01-2026-10-08 → exit 0, 'Ait-abcdef01-2026-10-08-daemon-macos-arm64.tar.gz'; tar -tvzf → aitd -rwxr-xr-x + LICENSE; fixtures/archives removed after proof",
+      "node --test scripts/release-assets.test.mjs (unchanged suite) — 21 tests, 21 pass, 0 fail",
+      "oxfmt (package.json, CHANGELOG.md, releasing.md) — clean; npm run check:docs — 558 docs / 222 ADRs; git diff --check — clean",
+      "no release performed; root version 0.2.7 unchanged; no Rust changes or tests"
+    ]
+  },
+  "blockers": []
+}

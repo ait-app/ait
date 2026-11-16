@@ -56,11 +56,15 @@ const snapshot: AgentSessionStatistics = {
 let root: Root;
 let container: HTMLDivElement;
 let client: QueryClient;
-async function render() {
+async function render({ fallbackSessionCost }: { fallbackSessionCost?: string } = {}) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <SessionStatistics serverId="host" agentId="selected" />
+        <SessionStatistics
+          serverId="host"
+          agentId="selected"
+          fallbackSessionCost={fallbackSessionCost}
+        />
       </QueryClientProvider>,
     );
   });
@@ -86,8 +90,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 it("shows distinct models, null versus zero, and replaces repeated snapshots without summing", async () => {
-  await render();
+  await render({ fallbackSessionCost: "$0.42" });
   await vi.waitFor(() => expect(container.textContent).toContain("Input tokens: 12"));
+  expect(container.querySelector('[data-testid="session-statistics-legacy-cost"]')).toBeNull();
   expect(host.getAgentStatistics).toHaveBeenCalledWith("selected");
   expect(container.textContent).toContain("Configured model: requested");
   expect(container.textContent).toContain("Actual model: actual");
@@ -139,4 +144,36 @@ it("ignores a late response from a previous connection epoch", async () => {
   });
   expect(container.textContent).not.toContain("Input tokens: 12");
   expect(container.textContent).toContain("Input tokens: 7");
+});
+
+it.each([
+  ["initializing", "Initializing"],
+  ["idle", "Idle"],
+  ["running", "Running"],
+  ["error", "Error"],
+  ["closed", "Closed"],
+] as const)("localizes the %s lifecycle status", async (status, label) => {
+  host.getAgentStatistics.mockResolvedValue({ ...snapshot, status });
+  await render();
+  await vi.waitFor(() =>
+    expect(container.querySelector('[data-testid="session-statistics-status"]')?.textContent).toBe(
+      `Execution status: ${label}`,
+    ),
+  );
+});
+
+it("preserves existing cost on an old host without dispatching statistics", async () => {
+  host.supported = false;
+  await render({ fallbackSessionCost: "$0.42" });
+  expect(container.textContent).toContain("Session cost $0.42");
+  expect(container.textContent).toContain("Session statistics unavailable");
+  expect(host.getAgentStatistics).not.toHaveBeenCalled();
+});
+
+it("falls back to existing cost when the statistics RPC fails", async () => {
+  host.getAgentStatistics.mockRejectedValue(new Error("Host disconnected"));
+  await render({ fallbackSessionCost: "$0.42" });
+  await vi.waitFor(() => expect(container.textContent).toContain("Session statistics unavailable"));
+  expect(container.textContent).toContain("Session cost $0.42");
+  expect(container.querySelector('[data-testid="session-statistics-totalCostUsd"]')).toBeNull();
 });

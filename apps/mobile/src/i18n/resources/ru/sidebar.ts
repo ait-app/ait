@@ -1,0 +1,148 @@
+export const sidebar = {
+  display: {
+    trigger: "Настройки отображения",
+    heading: "Отображение",
+    grouping: {
+      label: "Группировка",
+      project: "Проект",
+      status: "Статус",
+    },
+    titleSource: {
+      label: "Заголовок",
+      title: "Заголовок",
+      branch: "Имя ветки",
+    },
+    show: {
+      label: "Показывать",
+      branch: "Ветка",
+      project: "Проект",
+      host: "Хост",
+      changeRequest: "PR",
+      checks: "Проверки",
+      services: "Сервисы",
+      labels: "Метки",
+      diff: "Статистика изменений",
+      timestamp: "Последняя активность",
+    },
+    checks: {
+      iconAndText: "Значок и текст",
+      icon: "Только значок",
+      none: "Скрыто",
+    },
+    hostFilter: {
+      label: "Хост",
+      all: "Все хосты",
+    },
+    projectFilter: {
+      label: "Проект",
+      all: "Все проекты",
+    },
+  },
+  filterEmpty: {
+    title: "Нет подходящих рабочих пространств",
+    description:
+      "Измените или очистите фильтры боковой панели, чтобы увидеть рабочие пространства.",
+    clear: "Очистить фильтры",
+  },
+  pinned: {
+    title: "Закреплённые",
+  },
+  statusGroup: {
+    accessibilityLabel: "Группа {{label}}",
+  },
+  actions: {
+    addProject: "Добавить проект",
+    newWorkspace: "Новое рабочее пространство",
+    hosts: "Хосты",
+    settings: "Настройки",
+    closeSidebar: "Закрыть боковую панель",
+  },
+  help: {
+    trigger: "Помощь и поддержка",
+    sectionHelp: "Помощь",
+    diagnostics: "Запустить диагностику",
+    shortcuts: "Сочетания клавиш",
+    reportIssue: "Сообщить о проблеме",
+    github: "Создать issue на GitHub",
+    whatsNew: "Что нового",
+    appName: "Ait",
+  },
+  sections: {
+    usage: "Использование",
+    workspaces: "Рабочие пространства",
+    sessions: "История",
+    search: "Поиск",
+    schedules: "Расписания",
+  },
+  project: {
+    actions: {
+      menu: "Действия проекта",
+      openSettings: "Открыть настройки проекта",
+      openNewWindow: "Открыть в новом окне",
+      openNewWindowFailed: "Не удалось открыть новое окно",
+      openFolder: "Открыть в файловом менеджере",
+      openFolderFailed: "Не удалось открыть папку",
+      remove: "Удалить проект",
+      removing: "Удаление...",
+    },
+    confirmations: {
+      removeTitle: "Удалить проект?",
+      removeMessage:
+        "Удалить проект «{{projectName}}» с боковой панели?\n\nФайлы на диске не будут изменены.",
+      removeConfirm: "Удалить",
+      cancel: "Отмена",
+    },
+    toasts: {
+      hostDisconnected: "Хост не подключён",
+      removeFailed: "Не удалось удалить некоторые рабочие пространства.",
+      updateHostToRemove: "Обновите хост, чтобы удалять проекты.",
+    },
+    empty: {
+      title: "Пока нет проектов",
+      description: "Добавьте проект, чтобы начать работу",
+    },
+  },
+  workspace: {
+    status: {
+      serviceRunning: "Сервис {{name}} запущен",
+      serviceUnhealthy: "Сервис {{name}} работает некорректно",
+    },
+    checks: {
+      passed: "Успешные: {{count}}",
+      failed: "Ошибки: {{count}}",
+      warning: "Предупреждения: {{count}}",
+      actionRequired: "Требуется действие: {{count}}",
+      manual: "Вручную: {{count}}",
+      pending: "Ожидают: {{count}}",
+    },
+    actions: {
+      menu: "Действия рабочего пространства",
+      newWorkspace: "Новое рабочее пространство",
+      showMore: "Показать ещё",
+      showLess: "Показать меньше",
+      createWorkspaceFor: "Создать новое рабочее пространство для {{projectName}}",
+      copyPath: "Копировать путь",
+      copyBranchName: "Скопировать имя ветки",
+      rename: "Переименовать рабочее пространство",
+      pin: "Закрепить вверху",
+      unpin: "Открепить",
+      markAsRead: "Отметить как прочитанное",
+      markAsUnread: "Отметить как непрочитанное",
+      archive: "Архивировать",
+      archiving: "Архивирование...",
+    },
+    rename: {
+      title: "Переименовать рабочее пространство",
+      submit: "Переименовать",
+    },
+    toasts: {
+      workspacePathUnavailable: "Путь к рабочему пространству недоступен",
+      pathCopied: "Путь скопирован",
+      branchNameCopied: "Имя ветки скопировано",
+      hostDisconnected: "Хост не подключён",
+      archiveFailed: "Не удалось архивировать рабочее пространство",
+      markAsReadFailed: "Не удалось отметить рабочее пространство как прочитанное",
+      markAsUnreadFailed: "Не удалось отметить рабочее пространство как непрочитанное",
+    },
+  },
+};

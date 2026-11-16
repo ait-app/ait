@@ -1,0 +1,32 @@
+{
+  "id": "S2",
+  "title": "React Compiler schema exclusion",
+  "priority": 35,
+  "depends_on": ["00"],
+  "donor_sections": [21],
+  "donor_paths": ["apps/mobile/babel.config.js"],
+  "implementation": "Migrated the donor babel.config.js react-compiler sources filter into the expo preset options: sources(filename) excludes normalized /packages/protocol/ paths (backslashes replaced before matching) while app.config.js keeps experiments.reactCompiler enabled. Only the compile configuration changed; no protocol source, runtime or type behavior touched. Added apps/mobile/babel.config.test.cjs (node --test) that runs the real babel-preset-expo + babel-plugin-react-compiler pipeline with the Metro caller contract (supportsReactCompiler) and asserts: an application component is still compiler-transformed (react/compiler-runtime memo cache), protocol sources are excluded on POSIX, Windows and mixed-separator paths, and lookalike paths outside packages/protocol stay compiled. Internal build filter only: no wire/SDK/UI interface change, no runtime behavior change, no downgrade concern; documented in apps/mobile/README.md and CHANGELOG.md. No new ADR (build configuration within existing client build ownership).",
+  "acceptance": "Unix/Windows normalized protocol paths are excluded, application sources still compile, and schema runtime/typecheck behavior is preserved (no protocol files changed). Verified with the real Babel pipeline, not config-source copies or wiring assertions.",
+  "status": "in_review",
+  "branch": "fix/pr612-s2-react-compiler-protocol-exclusion",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "commit": "94e048ea0b6308f06665a83fe862ea360e9762e9",
+  "pr_url": "https://github.com/ait-app/ait/pull/653",
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      "node --test apps/mobile/babel.config.test.cjs — 5 pass, 0 fail (real babel-preset-expo + babel-plugin-react-compiler, Metro caller supportsReactCompiler)",
+      "red proof: sources filter removed — 3 protocol-exclusion tests fail (hook-bearing fixture); filter restored — 5 pass",
+      "npm run build:web --workspace=@ait/mobile — real expo export succeeded: 'React Compiler enabled', Metro bundle complete, 'Exported: dist' (220s)",
+      "oxfmt (babel.config.js, babel.config.test.cjs, README.md, CHANGELOG.md) + oxlint (config, test) — clean",
+      "npm run check:docs — 558 Markdown documents, 222 ADR metadata verified",
+      "git diff --check — clean; no protocol source/runtime/typecheck changes (build filter only)",
+      "Rust: no Rust changes; no Rust tests run (per contract)"
+    ]
+  },
+  "blockers": []
+}

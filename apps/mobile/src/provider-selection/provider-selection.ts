@@ -9,6 +9,7 @@ import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { i18n } from "@/i18n/i18next";
 import { compareMatchScores, scoreTextFields } from "@ait/protocol/search/text-match";
 import { filterSelectableModels } from "./model-catalog";
+import { resolveDefaultModelId } from "./resolve-agent-form";
 
 export interface ProviderSelectionModelRow {
   /**
@@ -30,13 +31,15 @@ function buildModelRowKey(provider: string, modelId: string): string {
 }
 
 export type ProviderModelSelection =
-  | { kind: "models"; rows: ProviderSelectionModelRow[] }
+  | { kind: "models"; rows: ProviderSelectionModelRow[]; error?: string }
   | { kind: "loading" }
   | { kind: "error"; message: string };
 
 export interface ProviderSelectorProvider {
   id: string;
   label: string;
+  /** The original catalog retains aliases and thinking choices needed to validate presets. */
+  modelDefinitions?: AgentModelDefinition[];
   modelSelection: ProviderModelSelection;
 }
 
@@ -105,7 +108,17 @@ function buildEntryModelSelection(
   label: string,
 ): ProviderModelSelection {
   if ((entry.models?.length ?? 0) > 0) {
-    return buildModelSelection(entry.provider, label, entry.models ?? null);
+    const selection = buildModelSelection(entry.provider, label, entry.models ?? null);
+    if (
+      selection.kind === "models" &&
+      (entry.status === "error" || entry.status === "unavailable")
+    ) {
+      return {
+        ...selection,
+        error: entry.error ?? i18n.t("providerSelection.unknownError"),
+      };
+    }
+    return selection;
   }
   if (entry.status === "ready") {
     return buildModelSelection(entry.provider, label, entry.models ?? null);
@@ -130,6 +143,7 @@ export function buildProviderSelectorProviders(input: {
   return input.providerDefinitions.map((definition) => ({
     id: definition.id,
     label: definition.label,
+    modelDefinitions: input.modelsByProvider.get(definition.id) ?? [],
     modelSelection: buildModelSelection(
       definition.id,
       definition.label,
@@ -144,12 +158,13 @@ export function buildSelectableProviderSelectorProviders(
   entries: ProviderSnapshotEntry[] | undefined,
 ): ProviderSelectorProvider[] {
   return (entries ?? [])
-    .filter((entry) => entry.enabled && entry.status !== "unavailable")
+    .filter((entry) => entry.enabled && (entry.status !== "unavailable" || !!entry.models?.length))
     .map((entry) => {
       const label = entry.label ?? entry.provider;
       return {
         id: entry.provider,
         label,
+        modelDefinitions: entry.models ?? [],
         modelSelection: buildEntryModelSelection(entry, label),
       };
     });
@@ -180,14 +195,14 @@ export function resolveSelectedModelLabel(input: {
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
   if (!provider) {
-    return i18n.t("providerSelection.selectModel");
+    return input.selectedModel.trim() || selectedProvider;
   }
   if (provider.modelSelection.kind === "loading") {
     // Loading belongs to the provider row; the entry point remains a model picker.
-    return i18n.t("providerSelection.selectModel");
+    return input.selectedModel.trim() || i18n.t("providerSelection.selectModel");
   }
   if (provider.modelSelection.kind === "error") {
-    return i18n.t("providerSelection.error");
+    return input.selectedModel.trim() || i18n.t("providerSelection.error");
   }
   if (provider.modelSelection.kind !== "models") {
     return i18n.t("providerSelection.selectModel");
@@ -207,10 +222,6 @@ export function resolveSelectedModelLabel(input: {
   );
 }
 
-export function buildSelectedTriggerLabel(modelLabel: string): string {
-  return modelLabel;
-}
-
 /**
  * Cross-provider result rows need the provider named up front: the same model
  * label ships on several providers at once.
@@ -219,18 +230,11 @@ export function buildProviderQualifiedDescription(row: ProviderSelectionModelRow
   return row.description ? `${row.providerLabel} · ${row.description}` : row.providerLabel;
 }
 
-export function matchesModelSearch(
-  row: ProviderSelectionModelRow,
-  normalizedQuery: string,
-): boolean {
-  return scoreModelRow(row, normalizedQuery) !== null;
-}
-
 function getModelRowSearchFields(row: ProviderSelectionModelRow): string[] {
   return [row.modelLabel, row.modelId, row.providerLabel, row.description ?? ""];
 }
 
-export function scoreModelRow(row: ProviderSelectionModelRow, normalizedQuery: string) {
+function scoreModelRow(row: ProviderSelectionModelRow, normalizedQuery: string) {
   return scoreTextFields(normalizedQuery, getModelRowSearchFields(row));
 }
 
@@ -258,15 +262,7 @@ export function filterAndRankModelRows(
 }
 
 export function resolveEffectiveComposerModelId(selection: ProviderSelectionState): string {
-  const selectedModelId = selection.modelId.trim();
-  if (selectedModelId) {
-    return selectedModelId;
-  }
-  return (
-    selection.availableModels.find((model) => model.isDefault)?.id ??
-    selection.availableModels[0]?.id ??
-    ""
-  );
+  return selection.modelId.trim() || resolveDefaultModelId(selection.availableModels);
 }
 
 export function resolveEffectiveComposerThinkingOptionId(

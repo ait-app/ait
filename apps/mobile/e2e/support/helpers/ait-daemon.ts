@@ -51,7 +51,7 @@ export async function prepareAitE2E(): Promise<void> {
   } else {
     await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build:ui-deps"]);
   }
-  const configuredBinary = process.env.E2E_AIT_SERVER_BIN;
+  const configuredBinary = process.env.E2E_AITD_BIN;
   if (!configuredBinary) {
     await run("cargo", [
       "build",
@@ -69,5 +69,5 @@ export async function prepareAitE2E(): Promise<void> {
       path.join("target", "debug", process.platform === "win32" ? "daemon.exe" : "daemon"),
   );
   await access(binary);
-  process.env.E2E_AIT_SERVER_BIN = binary;
+  process.env.E2E_AITD_BIN = binary;
 }

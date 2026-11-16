@@ -227,7 +227,12 @@ pub(crate) fn run_bounded_tapping(
             }
         }
         if let Some(tap) = stderr_tap.as_mut() {
-            tap_stderr(&stderr, &mut tapped, &mut tap_buffer, &mut **tap)?;
+            // A failed tap ends the run like every other failure, so the child does not
+            // outlive the command that started it.
+            if let Err(error) = tap_stderr(&stderr, &mut tapped, &mut tap_buffer, &mut **tap) {
+                terminate(&mut child);
+                return Err(error);
+            }
         }
         let failure = if cancellation.is_some_and(CancellationToken::is_cancelled) {
             Some(RunError::Cancelled)

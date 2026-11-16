@@ -1,0 +1,42 @@
+[package]
+name = "provider-claude"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, sandbox, diagnostics.
+provider-native.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+# Read-only OAuth usage inspection; the credential never enters public snapshots.
+reqwest.workspace = true
+reqwest.features = ["rustls-tls"]
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Recognize Claude Code's synthetic interrupt and local-command records in history.
+regex.workspace = true
+# Stable identities for workflow results replayed into observed subagents.
+sha2.workspace = true
+# Private MCP configuration files and atomic transcript rewrites.
+tempfile.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Drive the adapter through the runtime's execution worker and AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Match Claude Agent SDK's NFC normalization of native session directory names.
+unicode-normalization.workspace = true

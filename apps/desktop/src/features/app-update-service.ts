@@ -417,30 +417,19 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       return buildDeferredInstallResult(currentVersion);
     }
 
-    if (isReadyToInstallVersion(readyVersion)) {
-      await performQuitAndInstall(deps.runtime, {
-        targetVersion: readyVersion,
-        onBeforeQuit,
-        restart,
-      });
-      return {
-        installed: true,
-        version: readyVersion,
-        message: "Update downloaded. The app will restart shortly.",
-      };
-    }
-
     try {
-      const preparation = await ensureUpdateDownloaded(readyVersion, signal);
-      if (preparation === "aborted") {
-        return buildDeferredInstallResult(currentVersion);
-      }
-      if (preparation === "superseded") {
-        return {
-          installed: false,
-          version: currentVersion,
-          message: "A newer update was found and will be installed later.",
-        };
+      if (!isReadyToInstallVersion(readyVersion)) {
+        const preparation = await ensureUpdateDownloaded(readyVersion, signal);
+        if (preparation === "aborted") {
+          return buildDeferredInstallResult(currentVersion);
+        }
+        if (preparation === "superseded") {
+          return {
+            installed: false,
+            version: currentVersion,
+            message: "A newer update was found and will be installed later.",
+          };
+        }
       }
       await performQuitAndInstall(deps.runtime, {
         targetVersion: readyVersion,
@@ -454,13 +443,10 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         message: "Update downloaded. The app will restart shortly.",
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      deps.reportInstallError?.(message);
-      return {
-        installed: false,
-        version: currentVersion,
-        message: `Update failed: ${message}`,
-      };
+      // Reject whether or not the update was already downloaded: the renderer shows a rejected
+      // install as a failure, while an `installed: false` result reads as "up to date".
+      deps.reportInstallError?.(getErrorMessage(error));
+      throw error;
     }
   }
 

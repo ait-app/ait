@@ -9,28 +9,20 @@ const ThemedChevronDown = withUnistyles(ChevronDown);
 
 interface DropdownTriggerProps extends Omit<DropdownMenuTriggerProps, "children"> {
   children?: ReactNode;
-  chevron?: ReactNode | null;
 }
 
 const chevronColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 
-export function DropdownTrigger({
-  children,
-  chevron,
-  ...props
-}: DropdownTriggerProps): ReactElement {
+export function DropdownTrigger({ children, ...props }: DropdownTriggerProps): ReactElement {
   return (
     <DropdownMenuTrigger {...props}>
       <View style={styles.row}>
         {children}
-        {chevron !== null &&
-          (chevron ?? (
-            <View style={styles.chevronContainer}>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronColorMapping} />
-            </View>
-          ))}
+        <View style={styles.chevronContainer}>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronColorMapping} />
+        </View>
       </View>
     </DropdownMenuTrigger>
   );

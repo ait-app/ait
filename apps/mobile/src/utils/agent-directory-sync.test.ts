@@ -5,7 +5,7 @@ import { PARENT_AGENT_ID_LABEL } from "@ait/protocol/agent-labels";
 import type { AgentPermissionRequest } from "@ait/protocol/agent-types";
 import { useSessionStore } from "@/stores/session-store";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
-import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
+import { isAgentArchiving, setAgentArchiving } from "@/data/archive-agent-pending";
 import { queryClient } from "@/data/query-client";
 import { createUserMessage } from "@/types/stream";
 import { AgentStoreProjection } from "@/runtime/directory-sync/internal/agent-store";

@@ -14,7 +14,7 @@ import {
 import { ViewportToolbar } from "./toolbar";
 import type { ZoomableViewportProps } from "./types";
 
-const DEFAULT_MAX_SCALE = 8;
+const MAX_SCALE = 8;
 const DEFAULT_MIN_SCALE = 0.25;
 
 export function ZoomableViewport({
@@ -23,7 +23,6 @@ export function ZoomableViewport({
   actions = [],
   accessibilityLabel,
   fit,
-  maxScale = DEFAULT_MAX_SCALE,
   minScale = DEFAULT_MIN_SCALE,
   onPressOutsideContent,
   style,
@@ -99,7 +98,7 @@ export function ZoomableViewport({
             pinchFocalY.value = event.focalY;
             pinchReady.value = true;
           }
-          const nextScale = Math.min(maxScale, Math.max(minScale, startScale.value * event.scale));
+          const nextScale = Math.min(MAX_SCALE, Math.max(minScale, startScale.value * event.scale));
           const centerX = viewport.width / 2;
           const centerY = viewport.height / 2;
           const contentPointX = (pinchFocalX.value - centerX - startX.value) / startScale.value;
@@ -118,7 +117,6 @@ export function ZoomableViewport({
         }),
     [
       fittedContent,
-      maxScale,
       minScale,
       pinchFocalX,
       pinchFocalY,
@@ -180,14 +178,14 @@ export function ZoomableViewport({
         focalPoint: { x: viewport.width / 2, y: viewport.height / 2 },
         fittedContent,
         viewport,
-        limits: { minScale, maxScale },
+        limits: { minScale, maxScale: MAX_SCALE },
       });
       scale.value = next.scale;
       translateX.value = next.x;
       translateY.value = next.y;
       setToolbarScale(next.scale);
     },
-    [fittedContent, maxScale, minScale, scale, translateX, translateY, viewport],
+    [fittedContent, minScale, scale, translateX, translateY, viewport],
   );
   const zoomIn = useCallback(() => zoomFromCenter(1.25), [zoomFromCenter]);
   const zoomOut = useCallback(() => zoomFromCenter(0.8), [zoomFromCenter]);
@@ -227,7 +225,7 @@ export function ZoomableViewport({
       </GestureDetector>
       <ViewportToolbar
         actions={actions}
-        maxScale={maxScale}
+        maxScale={MAX_SCALE}
         minScale={minScale}
         onReset={reset}
         onZoomIn={zoomIn}

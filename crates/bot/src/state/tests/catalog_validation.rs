@@ -16,6 +16,98 @@ fn push_bot(catalog: &mut domain::bot::Catalog, state: BotState) {
 }
 
 #[test]
+fn lark_accounts_are_exclusive_within_their_region_and_survive_reload() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let mut request = json!({
+        "workspaceId":WORKSPACE, "channelId":ChannelId::generate(),
+        "config":{"kind":"lark", "appId":"same-app-id",
+            "secretRef":"env:AIT_SERVER_CREDENTIAL_LARK", "allowedSenders":["ou_alice"]}
+    });
+    let created = state
+        .execute("bot.channel.create.request", request.clone())
+        .unwrap();
+    assert_eq!(created["channel"]["config"]["kind"], "lark");
+    assert_eq!(created["channel"]["config"]["allowGroups"], false);
+    assert_eq!(
+        state
+            .execute("bot.channel.create.request", request.clone())
+            .unwrap()["created"],
+        false
+    );
+    let channel_id = request["channelId"].clone();
+
+    request["channelId"] = json!(ChannelId::generate());
+    assert_eq!(
+        state.execute("bot.channel.create.request", request.clone()),
+        Err(ErrorCode::BotConflict)
+    );
+    request["config"]["kind"] = json!("feishu");
+    assert_eq!(
+        state
+            .execute("bot.channel.create.request", request.clone())
+            .unwrap()["created"],
+        true
+    );
+    assert_eq!(
+        state.execute(
+            "bot.channel.update.request",
+            json!({
+                "workspaceId":WORKSPACE, "channelId":channel_id, "enabled":false,
+                "config":request["config"],
+            })
+        ),
+        Err(ErrorCode::BotConflict)
+    );
+
+    let mut reloaded = fixture.state();
+    let listed = reloaded
+        .execute("bot.channel.list.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    assert!(
+        listed["channels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|channel| { channel["id"] == channel_id && channel["config"]["kind"] == "lark" })
+    );
+}
+
+#[test]
+fn lark_configuration_requires_valid_credentials_and_allowed_senders() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let config = json!({"kind":"lark", "appId":"app-1",
+        "secretRef":"env:AIT_SERVER_CREDENTIAL_LARK", "allowedSenders":["ou_alice"]});
+    for patch in [
+        json!({"appId":""}),
+        json!({"secretRef":"raw-secret"}),
+        json!({"allowedSenders":[]}),
+    ] {
+        let mut invalid = config.clone();
+        invalid
+            .as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        assert_eq!(
+            state.execute(
+                "bot.channel.create.request",
+                json!({
+                    "workspaceId":WORKSPACE, "channelId":ChannelId::generate(), "config":invalid,
+                })
+            ),
+            Err(ErrorCode::InvalidMessage)
+        );
+    }
+}
+
+#[test]
 fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configuration() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

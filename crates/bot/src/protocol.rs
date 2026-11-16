@@ -1,6 +1,7 @@
 use domain::bot::permissions::BotPermissions;
-use domain::bot::{ChannelConfig, ExecutionConfig};
-use domain::{BotTurnId, ChannelId, ConversationId};
+use domain::bot::ticket::TicketStatus;
+use domain::bot::{ChannelConfig, ExecutionConfig, WakeScope};
+use domain::{BotTurnId, ChannelId, ConversationId, TicketId};
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -18,6 +19,8 @@ pub(crate) struct Setup {
     pub(crate) clear_memory: bool,
     #[serde(default)]
     pub(crate) permissions: Option<BotPermissions>,
+    #[serde(default)]
+    pub(crate) wake_scope: Option<WakeScope>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -28,7 +31,12 @@ pub(crate) struct WorkspaceRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Update {
     pub(crate) workspace_id: String,
-    pub(crate) execution: ExecutionConfig,
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub(crate) execution: Option<ExecutionConfig>,
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub(crate) wake_scope: Option<WakeScope>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -78,7 +86,7 @@ pub(crate) struct ScanRequest {
     pub(crate) workspace_id: String,
     pub(crate) scan_id: Uuid,
 }
-/// Manually entered Feishu credentials; deliberately not `Debug` because it holds a secret.
+/// Feishu or Lark credentials; deliberately not `Debug` because it holds a secret.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct FeishuConnect {
@@ -185,6 +193,42 @@ pub(crate) struct WebhookAck {
     pub(crate) workspace_id: String,
     pub(crate) turn_id: BotTurnId,
     pub(crate) status: WebhookDelivery,
+}
+/// A page of the Workspace Bot's notification log.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct NotificationsList {
+    pub(crate) workspace_id: String,
+    /// Only entries this conversation has not had in front of it in a completed turn.
+    #[serde(default)]
+    pub(crate) unseen_by: Option<ConversationId>,
+    pub(crate) limit: Option<usize>,
+}
+/// A page of the Workspace Bot's tickets.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketList {
+    pub(crate) workspace_id: String,
+    /// Also list closed tickets, after the open ones.
+    #[serde(default)]
+    pub(crate) include_closed: bool,
+    pub(crate) limit: Option<usize>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) ticket_id: TicketId,
+}
+/// The user closes, cancels or reopens a ticket; titles and notes are the Bot's.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketUserUpdate {
+    pub(crate) workspace_id: String,
+    pub(crate) ticket_id: TicketId,
+    pub(crate) status: TicketStatus,
+    #[serde(default)]
+    pub(crate) outcome: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

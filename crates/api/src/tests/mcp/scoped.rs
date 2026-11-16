@@ -2,13 +2,16 @@
 
 use std::collections::BTreeSet;
 
-use domain::bot::permissions::{BotPermissions, ToolGroup};
+use domain::bot::permissions::{BotPermissions, Holder, ToolGroup};
 
 use super::*;
 
 mod confinement;
+mod notifications;
+mod recall;
 mod schedules;
 mod support;
+mod tickets;
 
 use support::{BOT_SESSION, Scoped, codex_modes, rejected, structured, succeeded};
 
@@ -26,6 +29,9 @@ async fn scoped_credential_lists_only_granted_tools() {
         "workspace_overview",
         "bot_memory_read",
         "bot_memory_update",
+        "bot_tickets",
+        "bot_ticket_update",
+        "bot_read",
     ] {
         assert!(bot.contains(granted), "{granted}: {bot:?}");
     }
@@ -36,15 +42,24 @@ async fn scoped_credential_lists_only_granted_tools() {
         "rename_workspace",
         "list_workspaces",
         "create_terminal",
+        "report_progress",
+        "ticket_read",
     ] {
         assert!(!bot.contains(withheld), "{withheld}");
     }
     let defaults = BotPermissions::default();
-    let bot_only = ["bot_memory_read", "bot_memory_update", "workspace_overview"];
+    let bot_only = [
+        "bot_memory_read",
+        "bot_memory_update",
+        "workspace_overview",
+        "bot_tickets",
+        "bot_ticket_update",
+        "bot_read",
+    ];
     assert!(bot_only.iter().all(|tool| !host.contains(*tool)));
     let expected: BTreeSet<_> = host
         .iter()
-        .filter(|tool| defaults.allows(tool, true))
+        .filter(|tool| defaults.allows(tool, Holder::Bot))
         .cloned()
         .chain(bot_only.map(str::to_owned))
         .collect();
@@ -231,7 +246,11 @@ async fn scoped_credential_is_limited_to_the_mcp_route() {
     let host = scoped.tools(TOKEN).await;
     let remaining = scoped.tools(&subtree).await;
     assert!(!remaining.is_empty());
-    assert!(remaining.iter().all(|tool| observe.allows(tool, false)));
+    assert!(
+        remaining
+            .iter()
+            .all(|tool| observe.allows(tool, Holder::Subtree))
+    );
     assert_eq!(
         remaining,
         host.iter()
@@ -312,13 +331,19 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
     assert_eq!(overview["memory"]["revision"], second.as_str());
     assert_eq!(overview["memory"]["bytes"], 20);
     assert_eq!(overview["botAgents"], json!([]));
-    assert!(overview["notifications"].is_null());
+    assert!(overview["notifications"].is_null(), "no such conversation");
     let child = scoped.subtree_agent().await;
     let other = scoped
         .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)
         .await;
-    let overview = scoped
+    // A conversation that is not the owner's sees only the Agents of its own tasks (ADR-280).
+    let stranger = scoped
         .call(&credential, None, "workspace_overview", json!({}))
+        .await;
+    assert_eq!(structured(&stranger)["botAgents"], json!([]));
+    let owner = scoped.owner_credential().await;
+    let overview = scoped
+        .call(&owner, None, "workspace_overview", json!({}))
         .await;
     let overview = structured(&overview);
     let listed: Vec<_> = overview["botAgents"]
@@ -344,7 +369,14 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
 }
 
 fn bot_only_names() -> BTreeSet<String> {
-    ["bot_memory_read", "bot_memory_update", "workspace_overview"]
-        .map(str::to_owned)
-        .into()
+    [
+        "bot_memory_read",
+        "bot_memory_update",
+        "workspace_overview",
+        "bot_tickets",
+        "bot_ticket_update",
+        "bot_read",
+    ]
+    .map(str::to_owned)
+    .into()
 }

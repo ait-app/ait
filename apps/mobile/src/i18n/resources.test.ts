@@ -2,15 +2,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { i18n } from "./i18next";
-import { ar } from "./resources/ar";
-import { en } from "./resources/en";
-import { es } from "./resources/es";
-import { fr } from "./resources/fr";
-import { ja } from "./resources/ja";
-import { ko } from "./resources/ko";
-import { ptBR } from "./resources/pt-BR";
-import { ru } from "./resources/ru";
-import { zhCN } from "./resources/zh-CN";
+import { en, resources, type TranslationResources } from "./translation-resources";
+
+const { ar, es, fr, ja, ko, ru } = resources;
+const ptBR = resources["pt-BR"];
+const zhCN = resources["zh-CN"];
+const allResources: [locale: string, resource: TranslationResources][] = Object.entries(resources);
+const nativeResources = allResources.filter(([locale]) => locale !== "en");
+const resourceDirectory = join(__dirname, "resources");
 
 function flattenKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) {
@@ -143,34 +142,111 @@ function findUntranslatedConnectionErrors(): string[] {
 describe("translation resources", () => {
   it("keeps all supported language keys in sync with English", () => {
     const englishKeys = flattenKeys(en).sort();
-    expect(withoutLocalePluralVariants(flattenKeys(ar), "ar").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(es), "es").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(fr), "fr").sort()).toEqual(englishKeys);
-    expect(flattenKeys(ja).sort()).toEqual(englishKeys);
-    expect(flattenKeys(ko).sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(ptBR), "pt-BR").sort()).toEqual(englishKeys);
-    expect(withoutLocalePluralVariants(flattenKeys(ru), "ru").sort()).toEqual(englishKeys);
-    expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
+    for (const [locale, resource] of nativeResources) {
+      expect(withoutLocalePluralVariants(flattenKeys(resource), locale).sort(), locale).toEqual(
+        englishKeys,
+      );
+    }
+  });
+
+  it("lists every English component module in each locale's index", () => {
+    const components = readdirSync(join(resourceDirectory, "en"))
+      .filter((file) => file !== "index.ts")
+      .map((file) => file.replace(/\.ts$/, ""))
+      .sort();
+    for (const [locale] of allResources) {
+      const index = readFileSync(join(resourceDirectory, locale, "index.ts"), "utf8");
+      const listed = [...index.matchAll(/^export \* from "\.\/(.+)";$/gm)].map((match) => match[1]);
+      expect(listed, locale).toEqual(components);
+    }
+  });
+
+  it("resolves every fixed provider preset UI key from real resources in each supported language", () => {
+    const keys = new Set(
+      [
+        "provider-preset-editor.tsx",
+        "provider-preset-form.ts",
+        "provider-presets-section.tsx",
+      ].flatMap((file) =>
+        [
+          ...readFileSync(join(appSourceRoot, "components", file), "utf8").matchAll(
+            /"((?:settings\.providers\.presets|providerControl)\.[A-Za-z0-9_.]+)"/g,
+          ),
+        ].map((match) => match[1]!),
+      ),
+    );
+    expect(keys.has("settings.providers.presets.title")).toBe(true);
+    expect(keys.has("providerControl.roleNative")).toBe(true);
+    for (const [locale, resource] of allResources) {
+      const strings = flattenStrings(resource);
+      const translate = i18n.getFixedT(locale);
+      for (const key of keys) {
+        expect(strings[key], `${locale}: ${key}`).toBeTypeOf("string");
+        expect(strings[key], `${locale}: ${key}`).not.toBe(key);
+        const translated = translate(key, { name: "Review", provider: "OMP", model: "Model" });
+        expect(translated, `${locale}: ${key}`).not.toBe(key);
+        expect(translated, `${locale}: ${key}`).not.toMatch(/\{\{/);
+      }
+    }
   });
 
   it("keeps non-English supported languages translated beyond fallback labels", () => {
     const totalStrings = Object.keys(flattenStrings(en)).length;
     const maxFallbackStrings = Math.floor(totalStrings * 0.25);
-    expect(countMatchingEnglishStrings(ar)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(es)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(fr)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ja)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ko)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ptBR)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(ru)).toBeLessThan(maxFallbackStrings);
-    expect(countMatchingEnglishStrings(zhCN)).toBeLessThan(maxFallbackStrings);
+    for (const [locale, resource] of nativeResources) {
+      expect(countMatchingEnglishStrings(resource), locale).toBeLessThan(maxFallbackStrings);
+    }
   });
 
   it("localizes the pull request empty state in every supported language", () => {
-    for (const resource of [ar, es, fr, ja, ko, ptBR, ru, zhCN]) {
+    for (const [, resource] of nativeResources) {
       expect(resource.panels.pullRequest.emptyTitle).not.toBe(en.panels.pullRequest.emptyTitle);
       expect(resource.panels.pullRequest.emptyDescription).not.toBe(
         en.panels.pullRequest.emptyDescription,
+      );
+    }
+  });
+
+  it.each(nativeResources)("translates side conversation messages in %s", (_locale, resource) => {
+    const translated = flattenStrings(resource.btw);
+    const untranslated = Object.entries(flattenStrings(en.btw))
+      .filter(([key, value]) => !translated[key]?.trim() || translated[key] === value)
+      .map(([key]) => key);
+    expect(untranslated).toEqual([]);
+  });
+
+  it("keeps the native high-traffic surfaces out of the English resource", () => {
+    for (const [, resource] of nativeResources) {
+      expect(resource.hostMonitor.title).not.toBe(en.hostMonitor.title);
+      expect(resource.onlineService.title).not.toBe(en.onlineService.title);
+      expect(resource.sharing.title).not.toBe(en.sharing.title);
+      expect(resource.btw.title).not.toBe(en.btw.title);
+      expect(resource.addProjectFlow.titles.host).not.toBe(en.addProjectFlow.titles.host);
+      expect(resource.settings.layout.openInSidePane.title).not.toBe(
+        en.settings.layout.openInSidePane.title,
+      );
+    }
+  });
+
+  it("keeps schedule template prompts and topic fields native", () => {
+    const templateKeys = [
+      "nightly-test-heal",
+      "pr-gatekeeper",
+      "domain-radar",
+      "weekly-work-draft",
+      "docs-freshness",
+    ] as const;
+    for (const [, resource] of nativeResources) {
+      for (const key of templateKeys) {
+        expect(resource.schedules.templates.items[key].prompt).not.toBe(
+          en.schedules.templates.items[key].prompt,
+        );
+      }
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.label).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.label,
+      );
+      expect(resource.schedules.templates.items["domain-radar"].params.topic.placeholder).not.toBe(
+        en.schedules.templates.items["domain-radar"].params.topic.placeholder,
       );
     }
   });
@@ -225,8 +301,6 @@ describe("translation resources", () => {
     const tKo = i18n.getFixedT("ko");
     expect(tJa("schedules.cadence.minutes", { count: 5 })).toBe("5 分ごと");
     expect(tKo("schedules.cadence.minutes", { count: 5 })).toBe("5분마다");
-    expect(tJa("schedules.product.heartbeat")).toBe("ハートビート");
-    expect(tKo("schedules.product.heartbeat")).toBe("하트비트");
     const english = flattenStrings(en.schedules);
     for (const resource of [ja, ko]) {
       const translated = flattenStrings(resource.schedules);
@@ -238,14 +312,9 @@ describe("translation resources", () => {
   });
 
   it("preserves interpolation placeholders in every language", () => {
-    expect(findInterpolationMismatches(ar)).toEqual([]);
-    expect(findInterpolationMismatches(es)).toEqual([]);
-    expect(findInterpolationMismatches(fr)).toEqual([]);
-    expect(findInterpolationMismatches(ja)).toEqual([]);
-    expect(findInterpolationMismatches(ko)).toEqual([]);
-    expect(findInterpolationMismatches(ptBR)).toEqual([]);
-    expect(findInterpolationMismatches(ru)).toEqual([]);
-    expect(findInterpolationMismatches(zhCN)).toEqual([]);
+    for (const [locale, resource] of nativeResources) {
+      expect(findInterpolationMismatches(resource), locale).toEqual([]);
+    }
   });
 
   it("keeps reported Spanish settings and scripts labels clean", () => {
@@ -339,7 +408,6 @@ describe("translation resources", () => {
     expect(en.composer.github.title).toBe("Attach issue or PR");
     expect(en.composer.github.title_mr).toBe("Attach issue or MR");
     expect(en.composer.github.searchPlaceholder_mr).toBe("Search issues and MRs...");
-    expect(en.agentControls.provider.fallback).toBe("Provider");
     expect(en.agentControls.hints.model).toBe("Change model");
     expect(en.agentControls.hints.mode).toBe("Change mode");
     expect(en.agentControls.features.title).toBe("Features");
@@ -361,7 +429,6 @@ describe("translation resources", () => {
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
-    expect(en.settings.integrations.commandLine.title).toBe("Command line");
     expect(en.settings.notifications.playSound).toBe("Play sound");
     expect(en.settings.notifications.permission).toBe("Notification permission");
     expect(en.settings.notifications.sentTitle).toBe("Test notification sent");
@@ -424,16 +491,6 @@ describe("translation resources", () => {
     expect(en.workspace.git.pr.empty.pipelineJobsLoadFailed).toBe("Could not load pipeline jobs");
     expect(en.workspace.git.pr.empty.allowedToFail).toBe("allowed to fail");
     expect(en.workspace.git.pr.approvals).toBe("{{given}} of {{required}} approvals");
-    expect(en.workspace.git.pr.accessibility.checkStatus).toEqual({
-      passed: "Passed",
-      failed: "Failed",
-      warning: "Warning",
-      actionRequired: "Action required",
-      manual: "Manual",
-      pending: "Pending",
-      skipped: "Skipped",
-      cancelled: "Cancelled",
-    });
     expect(en.review.comment.placeholder).toBe("Leave a comment");
   });
 
@@ -451,9 +508,7 @@ describe("translation resources", () => {
   it("includes provider selector and pairing keys for the Batch 4D migration", () => {
     expect(en.modelSelector.title).toBe("Select provider");
     expect(en.modelSelector.profiles).toBe("Profiles");
-    expect(en.providerCatalog.title).toBe("Add provider");
     expect(en.providerCatalog.actions.installInstructions).toBe("Install instructions");
-    expect(en.pairing.link.title).toBe("Paste pairing link");
     expect(en.pairing.connectionMethods.direct.title).toBe("Direct connection");
   });
 
@@ -462,8 +517,6 @@ describe("translation resources", () => {
     expect(en.onboarding.actions.settings).toBe("Settings");
     expect(en.pairing.direct.title).toBe("Direct connection");
     expect(en.pairing.direct.fields.host).toBe("Host");
-    expect(en.pairing.scan.title).toBe("Scan QR");
-    expect(en.pairing.device.copy).toBe("Copy");
   });
 
   it("includes shared utility chrome keys for the Batch 4F migration", () => {
@@ -492,11 +545,8 @@ describe("translation resources", () => {
     expect(en.agentList.fallbackTitle).toBe("New session");
     expect(en.agentList.dateSections.today).toBe("Today");
     expect(en.agentList.dateSections.older).toBe("Older");
-    expect(en.agentList.status.initializing).toBe("Starting");
-    expect(en.agentList.status.running).toBe("Running");
     expect(en.agentList.badges.archived).toBe("Archived");
     expect(en.agentList.badges.pending).toBe("{{count}} pending");
-    expect(en.agentList.badges.attention).toBe("Attention");
     expect(en.agentList.archiveSheet.hostOffline).toBe("Host offline");
     expect(en.agentList.archiveSheet.runningAgent).toBe(
       "This agent is still running. Archiving it will stop the agent.",
@@ -513,7 +563,6 @@ describe("translation resources", () => {
     expect(en.message.attachments.closeImage).toBe("Close image");
     expect(en.message.attachments.imageLoadFailed).toBe("Couldn't load image");
     expect(en.message.attachments.imageUnavailable).toBe("Image unavailable");
-    expect(en.message.dictation.start).toBe("Start voice dictation");
     expect(en.message.dictation.cancel).toBe("Cancel dictation");
     expect(en.message.dictation.retry).toBe("Retry dictation");
     expect(en.message.dictation.insert).toBe("Insert transcription");
@@ -548,9 +597,6 @@ describe("translation resources", () => {
   });
 
   it("includes sidebar project list keys for the Batch 4K migration", () => {
-    expect(en.sidebar.host.noHost).toBe("No host");
-    expect(en.sidebar.host.switchTitle).toBe("Switch host");
-    expect(en.sidebar.host.searchPlaceholder).toBe("Search hosts...");
     expect(en.sidebar.actions.addProject).toBe("Add project");
     expect(en.sidebar.actions.hosts).toBe("Hosts");
     expect(en.sidebar.actions.settings).toBe("Settings");
@@ -576,10 +622,6 @@ describe("translation resources", () => {
   });
 
   it("includes picker, file pane, and tool detail keys for the Batch 4L migration", () => {
-    expect(en.projectPicker.placeholder).toBe("Type to search...");
-    expect(en.projectPicker.opening).toBe("Opening project...");
-    expect(en.projectPicker.searching).toBe("Searching...");
-    expect(en.projectPicker.empty).toBe("Start typing a path");
     expect(en.branchSwitcher.currentBranch).toBe(
       "Current branch: {{branchName}}. Press to switch branch.",
     );
@@ -590,7 +632,6 @@ describe("translation resources", () => {
     expect(en.panels.file.loading).toBe("Loading file...");
     expect(en.panels.file.noPreview).toBe("No preview available");
     expect(en.panels.file.binaryPreviewUnavailable).toBe("Preview unavailable");
-    expect(en.panels.file.failedToLoad).toBe("Failed to load file");
     expect(en.toolCallDetails.error).toBe("Error");
     expect(en.toolCallDetails.empty).toBe("No additional details available");
     expect(en.message.actions.openFile).toBe("Open file");
@@ -618,9 +659,6 @@ describe("translation resources", () => {
     );
     expect(en.common.connectionStatus.online).toBe("Online");
     expect(en.common.connectionStatus.connecting).toBe("Connecting");
-    expect(en.common.connectionStatus.offline).toBe("Offline");
-    expect(en.common.connectionStatus.idle).toBe("Idle");
-    expect(en.agentList.dateSections.recent).toBe("Recent");
     expect(en.message.attachments.imagePreviewUnavailable).toBe("Image preview unavailable.");
     expect(en.message.attachments.imagePreviewLoadFailed).toBe("Unable to load image preview.");
     expect(en.workspace.tabs.explorerSidebar.changes).toBe("Changes");
@@ -635,15 +673,8 @@ describe("translation resources", () => {
     expect(en.branchSwitcher.stashAndSwitch).toBe("Stash & Switch");
     expect(en.branchSwitcher.failedToStash).toBe("Failed to stash changes");
     expect(en.branchSwitcher.failedToSwitch).toBe("Failed to switch branch");
-    expect(en.workspaceSetup.errors.failedCreateWorktree).toBe("Failed to create worktree");
-    expect(en.workspaceSetup.errors.failedOpenProject).toBe("Failed to open project");
     expect(en.workspaceSetup.errors.selectModel).toBe("Select a model");
     expect(en.workspaceSetup.errors.hostDisconnected).toBe("Host is not connected");
-    expect(en.workspaceSetup.errors.pendingRequired).toBe("No workspace setup is pending");
-    expect(en.workspaceSetup.errors.composerStateRequired).toBe(
-      "Workspace setup composer state is required",
-    );
-    expect(en.workspaceSetup.title).toBe("Create workspace");
     expect(en.workspace.git.pr.errors.statusLoadFailed).toBe("Unable to load pull request status");
     expect(en.workspace.git.pr.errors.activityLoadFailed).toBe(
       "Unable to load pull request activity",
@@ -686,17 +717,14 @@ describe("translation resources", () => {
     expect(en.agentPanel.archived.unarchive).toBe("Unarchive");
     expect(en.desktop.quitting.title).toBe("Quitting Ait...");
     expect(en.desktop.quitting.detail).toBe("Stopping the local daemon.");
-    expect(en.composer.attachments.dropImagesHere).toBe("Drop images here");
   });
 
   it("includes provider selection utility keys for the Batch 4P migration", () => {
     expect(en.providerSelection.defaultModel).toBe("Default");
     expect(en.providerSelection.selectModel).toBe("Select model");
-    expect(en.providerSelection.loading).toBe("Loading...");
     expect(en.providerSelection.error).toBe("Error");
     expect(en.providerSelection.unavailable).toBe("Unavailable");
     expect(en.providerSelection.unknownError).toBe("Unknown error");
-    expect(en.providerSelection.readiness.initialPromptRequired).toBe("Initial prompt is required");
     expect(en.providerSelection.readiness.noProviders).toBe(
       "No available providers on the selected host",
     );
@@ -794,7 +822,6 @@ describe("translation resources", () => {
       "Failed to fetch daemon status: {{message}}",
     );
     expect(en.desktop.daemon.loadFailed).toBe("Unable to load desktop daemon status.");
-    expect(en.desktop.integrations.cli.installFailed).toBe("Unable to install the Ait CLI.");
   });
 
   it("includes remaining utility chrome keys for the Batch 4T migration", () => {
@@ -810,7 +837,6 @@ describe("translation resources", () => {
     expect(en.agentAutocomplete.noCommands).toBe("No commands found");
     expect(en.agentAutocomplete.failedToLoad).toBe("Failed to load");
     expect(en.loadOlderHistory.failed).toBe("Couldn't load older history");
-    expect(en.agentControls.thinking.extraHigh).toBe("Extra high");
     expect(en.agentControls.model.unknown).toBe("Unknown model");
     expect(en.panels.draft.creatingAgent).toBe("Creating agent");
   });

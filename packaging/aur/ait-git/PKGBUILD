@@ -36,7 +36,7 @@ _build_env() {
   export ELECTRON_CACHE="$srcdir/electron-cache"
   export ELECTRON_BUILDER_CACHE="$srcdir/electron-builder-cache"
   export CARGO_TARGET_DIR="$srcdir/target"
-  export AIT_SERVER_BIN="$CARGO_TARGET_DIR/release/daemon"
+  export AITD_BIN="$CARGO_TARGET_DIR/release/daemon"
   export AIT_BUILD_VERSION="git-$(git show -s --format=%cs HEAD)-$(git rev-parse --short=8 HEAD)"
   export EXPO_PUBLIC_AIT_BUILD_VERSION="$AIT_BUILD_VERSION"
   export CI=1 EXPO_NO_TELEMETRY=1

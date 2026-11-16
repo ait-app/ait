@@ -1,0 +1,717 @@
+#!/usr/bin/env python3
+"""Offline stdio peer; the optional MCP probe calls only the injected local daemon."""
+import json
+import os
+from pathlib import Path
+import sys
+import time
+import subprocess
+import threading
+import uuid
+import urllib.request
+from urllib.parse import urlsplit
+
+# Diagnostic calls use the host cwd; their test-specific override is data beside the launcher link.
+cwd_override = Path(sys.argv[0]).with_suffix(".cwd")
+root = Path(cwd_override.read_text()) if cwd_override.exists() else Path.cwd()
+if (root / "capture-environment").exists():
+    with (root / "native-environment.jsonl").open("a") as output:
+        output.write(json.dumps({"value": os.environ.get("AIT_TEST_AGENT_ENV")}) + "\n")
+mode = (root / "behavior").read_text() if (root / "behavior").exists() else "normal"
+output_lock = threading.Lock()
+pending = None
+replayed_usage = None
+thread_id = None
+ephemeral = False
+turn_text = ""
+turn_content = []
+history_lock = threading.Lock()
+stream_items = []
+steered_inputs = []
+voice_history = []
+agent_mcp = None
+
+def agent_mcp_client():
+    assert urlsplit(agent_mcp["url"]).hostname in ("127.0.0.1", "::1", "localhost")
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+               "MCP-Protocol-Version": "2025-11-25", **agent_mcp.get("http_headers", {})}
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def rpc(method, params, notification=False):
+        message = {"jsonrpc": "2.0", "method": method, "params": params}
+        if not notification:
+            message["id"] = "native-mcp-probe"
+        request = urllib.request.Request(agent_mcp["url"], data=json.dumps(message).encode(), headers=headers)
+        with opener.open(request, timeout=10) as response:
+            body = response.read()
+        return json.loads(body) if body else {}
+    rpc("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
+                       "clientInfo": {"name": "offline-native", "version": "1"}})
+    rpc("notifications/initialized", {}, notification=True)
+    return headers, rpc
+
+def tool(name, arguments):
+    return ("tools/call", {"name": name, "arguments": arguments})
+
+CHILD = {"provider": "codex/offline-model", "title": "Bot child", "initialPrompt": "child task"}
+# Each probe records the session's own identity and raw credential, then one response per call.
+SCOPE_PROBES = {
+    "ait-bot-probe": ("bot-probe", [
+        ("tools/list", {}),
+        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("create_agent", CHILD),
+        tool("create_schedule", {"provider": "codex/offline-model", "prompt": "scheduled task",
+                                 "cron": "0 9 * * *"}),
+    ]),
+    "ait-scope-probe": ("scope-probe", [
+        tool("respond_to_permission", {"agentId": "agent", "requestId": "request", "response": {}}),
+        tool("archive_workspace", {"workspaceId": "workspace"}),
+        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("list_agents", {}),
+    ]),
+}
+
+def probe_scope(text):
+    if agent_mcp is None:
+        return "mcp-not-injected"
+    name, calls = SCOPE_PROBES[text]
+    headers, rpc = agent_mcp_client()
+    with (root / (name + ".jsonl")).open("a") as output:
+        output.write(json.dumps({"self": {"agentId": headers["X-Ait-Agent-Id"],
+                                          "authorization": headers["Authorization"]}}) + "\n")
+        for method, params in calls:
+            output.write(json.dumps(rpc(method, params)) + "\n")
+    return name + "-ok"
+
+def probe_agent_mcp():
+    if agent_mcp is None:
+        return "mcp-not-injected"
+    headers, rpc = agent_mcp_client()
+    catalog = rpc("tools/list", {})
+    assert any(tool["name"] == "rename_workspace" for tool in catalog["result"]["tools"])
+    renamed = rpc("tools/call", {"name": "rename_workspace", "arguments": {"title": "Renamed through injected MCP"}})
+    assert renamed["result"]["isError"] is False, renamed
+    child_path = root / "mcp-injection-child.json"
+    if not child_path.exists():
+        created = rpc("tools/call", {"name": "create_agent", "arguments": {
+            "provider": "codex/offline-model", "title": "Injected MCP child", "initialPrompt": "child task"}})
+        assert created["result"]["isError"] is False, created
+        child = created["result"]["structuredContent"]
+        waited = rpc("tools/call", {"name": "wait_for_agent", "arguments": {"agentId": child["agentId"]}})
+        assert waited["result"]["isError"] is False, waited
+        assert waited["result"]["structuredContent"]["lastMessage"] == "Echo: child task", waited
+        child_path.write_text(json.dumps(child))
+    with (root / "mcp-injection-probes.jsonl").open("a") as output:
+        output.write(json.dumps({"url": agent_mcp["url"], "caller": headers["X-Ait-Agent-Id"]}) + "\n")
+    return "mcp-injection-ok"
+
+def voice_item(item, completed=True):
+    item = {"realtimeSessionId":"realtime-fixture", **item}
+    if completed:
+        voice_history.append({"type":"realtime","position":len(voice_history),"item":item})
+        (root / "timeline-pages.json").write_text(json.dumps({"first":{"data":voice_history,"nextCursor":None,"activeRealtimeSessionAtPageStart":None}}))
+    emit({"method":"thread/realtime/item/" + ("completed" if completed else "started"),"params":{"threadId":thread_id,"item":item}})
+
+def emit(value):
+    with output_lock:
+        sys.stdout.write(json.dumps(value) + "\n")
+        sys.stdout.flush()
+
+def history_path():
+    return root / ("native-history-" + thread_id + ".json")
+
+def usage_path():
+    return root / ("native-usage-" + thread_id + ".json")
+
+def token_usage(params):
+    emit({"method":"thread/tokenUsage/updated", "params":params})
+    if params["threadId"] == thread_id and not ephemeral:
+        usage_path().write_text(json.dumps(params["tokenUsage"]))
+
+def resumed_usage():
+    # Like Codex 0.166, a resume re-reports the thread's last usage under its latest turn.
+    turns = load_history()
+    if not turns or not usage_path().exists():
+        return None
+    return {"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+        "turnId":turns[-1]["id"], "tokenUsage":json.loads(usage_path().read_text())}}
+
+def load_history():
+    path = history_path()
+    return json.loads(path.read_text()) if path.exists() else []
+
+def thread_metadata(identifier):
+    path = root / ("native-session-" + identifier + ".json")
+    defaults = {"id": identifier, "cwd": str(root), "createdAt": 1700000000,
+                "updatedAt": 1700000000, "status": {"type": "idle"},
+                "model": "offline-model", "reasoningEffort": "high", "preview": "Offline prompt"}
+    if path.exists():
+        defaults.update(json.loads(path.read_text()))
+    return defaults
+
+def save_turn(turn_id, text, status):
+    if ephemeral:
+        return
+    with history_lock:
+        turns = [turn for turn in load_history() if turn["id"] != turn_id]
+        items = [{"type": "userMessage", "id": turn_id + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": turn_text}]}]
+        items.extend(stream_items)
+        items.extend(steered_inputs)
+        if text is not None:
+            items.append({"type": "agentMessage", "id": turn_id + "-assistant", "text": "Echo: " + text})
+        turns.append({"id": turn_id, "status": status, "startedAt": 1700000000, "items": items})
+        history_path().write_text(json.dumps(turns))
+
+def complete(turn_id, text):
+    global pending
+    if pending != turn_id:
+        return
+    save_turn(turn_id, text, "failed" if text == "fail" else "completed")
+    emit({"method": "item/completed", "params": {
+        "threadId": thread_id, "turnId": turn_id,
+        "item": {"type": "agentMessage", "id": turn_id + "-assistant", "text": "Echo: " + text}}})
+    emit({"method": "turn/completed", "params": {
+        "threadId": thread_id, "turn": {"id": turn_id, "status": "failed" if text == "fail" else "completed"}}})
+    pending = None
+
+for line in sys.stdin:
+    request = json.loads(line)
+    with (root / "native-requests.jsonl").open("a") as log:
+        log.write(json.dumps({"pid": os.getpid(), "argv":sys.argv[1:], **request}) + "\n")
+    method = request.get("method")
+    if method is None and "result" in request:
+        if pending:
+            approved = (request["result"].get("decision") == "accept"
+                        or request["result"].get("action") == "accept"
+                        or request["result"].get("answers"))
+            complete(pending, "approved" if approved else "denied")
+        continue
+    if method == "initialized" or method is None:
+        continue
+    params = request.get("params", {})
+    archived_path = root / ("native-archived-" + params.get("threadId", "none"))
+    if method == "thread/resume" and archived_path.exists():
+        identifier = params["threadId"]
+        emit({"id": request["id"], "error": {"code": -32600,
+              "message": f"session {identifier} is archived. Run `codex unarchive {identifier}` to unarchive it first."}})
+        continue
+    if method == "thread/unarchive":
+        if mode == "unarchive-denied":
+            emit({"id":request["id"], "error":{"code":-32600,"message":"Access denied"}})
+            continue
+        archived_path.unlink(missing_ok=True)
+        if mode == "unarchive-raced":
+            emit({"id":request["id"], "error":{"code":-32600,
+                "message":f"no archived rollout found for thread id {params['threadId']}"}})
+            continue
+    if mode == "interrupt-completed" and method == "turn/interrupt":
+        complete(params["turnId"], "raced")
+        emit({"id": request["id"], "error": {"code": -32600, "message": "no active turn to interrupt"}})
+        continue
+    if mode == "timeout" or (mode == "slow-quota" and method == "account/rateLimits/read"):
+        time.sleep(60)
+    if mode == "malformed":
+        print("not json", flush=True)
+        continue
+    if mode == "oversize":
+        print("x" * (2 * 1024 * 1024), flush=True)
+        continue
+    if mode == "wrong-id":
+        emit({"id": 999999, "result": {}})
+        continue
+    if mode == "error" or (mode == "reject-first-input" and method == "turn/start"):
+        emit({"id": request["id"], "error": {"message": "sensitive native error"}})
+        continue
+    if method == "thread/realtime/start" and mode == "realtime-rejected":
+        emit({"id":request["id"],"error":{"code":-32600,"message":"native realtime requires authentication"}})
+        continue
+    if method == "thread/realtime/start" and mode == "realtime-delayed":
+        (root / "realtime-started").write_text("ready")
+        while not (root / "release-realtime").exists():
+            time.sleep(0.01)
+    if method == "turn/start" and any(item.get("text") == "reject-before-admission" for item in params.get("input", [])):
+        emit({"id":request["id"],"error":{"code":-32600,"message":"Offline input rejected before admission"}})
+        continue
+    result = {}
+    if method == "thread/timeline/list":
+        error_file = root / "timeline-error.json"
+        if error_file.exists():
+            emit({"id": request["id"], "error": json.loads(error_file.read_text())})
+            continue
+        pages_file = root / "timeline-pages.json"
+        if not pages_file.exists():
+            emit({"id": request["id"], "error": {"code": -32601, "message": "Method not found"}})
+            continue
+        pages = json.loads(pages_file.read_text())
+        page = pages[params.get("cursor") or "first"]
+        projection_check = root / "timeline-projection-check.json"
+        if params.get("cursor") and projection_check.exists():
+            directory = Path(json.loads(projection_check.read_text())["directory"])
+            if not directory.exists() or not any(directory.iterdir()):
+                emit({"id": request["id"], "error": {"code": -32603, "message": "Previous page images were not projected"}})
+                continue
+        if isinstance(page, dict) and "rpcError" in page:
+            emit({"id": request["id"], "error": page["rpcError"]})
+        else:
+            emit({"id": request["id"], "result": page})
+        continue
+    if method == "initialize":
+        result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
+    elif method == "thread/items/read" and mode == "realtime-canonical":
+        result = {"data":[{"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"},"startedAtMs":None,"completedAtMs":None}]}
+    elif method == "config/read":
+        config_path = root / "native-config.json"
+        result = {"config": json.loads(config_path.read_text()) if config_path.exists() else {}}
+    elif method == "collaborationMode/list":
+        result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
+            {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
+    elif method in ("thread/start", "thread/resume", "thread/read"):
+        agent_mcp = params.get("config", {}).get("mcp_servers", {}).get("ait")
+        if method == "thread/resume" and mode == "realtime-writer-busy":
+            emit({"id": request["id"], "error": {"code": -32600, "message": "thread " + params["threadId"] + " already has an active writer"}})
+            continue
+        if method == "thread/resume" and mode == "delayed-resume":
+            (root / "resume-started").write_text("ready")
+            while not (root / "release-resume").exists():
+                time.sleep(0.01)
+        if method == "thread/start" and mode == "delayed-create":
+            deadline = time.monotonic() + 10
+            while not (root / "release-create").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+        thread_id = params.get("threadId", str(uuid.uuid4()))
+        if mode == "wrong-thread":
+            thread_id = "wrong-thread"
+        if thread_id == "missing-session":
+            emit({"id": request["id"], "error": {"message": "sensitive missing session path"}})
+            continue
+        metadata = thread_metadata(thread_id)
+        if method == "thread/start":
+            ephemeral = params.get("ephemeral", False)
+        if method == "thread/start" and not ephemeral:
+            (root / ("native-session-" + thread_id + ".json")).write_text(json.dumps(metadata))
+        result = {"thread": {**metadata, "turns": load_history() if params.get("includeTurns") else []}, "model": "offline-model"}
+        sandbox_path = root / "native-sandbox.json"
+        if method != "thread/read" and sandbox_path.exists():
+            result["sandbox"] = json.loads(sandbox_path.read_text())[params.get("sandbox", "read-only")]
+        if mode == "missing-thread":
+            result = {}
+    elif method == "thread/fork":
+        source = params["threadId"]
+        turns_path = root / ("native-history-" + source + ".json")
+        turns = json.loads(turns_path.read_text()) if turns_path.exists() else []
+        if "lastTurnId" in params and mode != "rollback-removed":
+            turns = turns[:next(index + 1 for index, turn in enumerate(turns) if turn["id"] == params["lastTurnId"])]
+        if "beforeTurnId" in params and mode != "legacy-fork":
+            turns = turns[:next(index for index, turn in enumerate(turns) if turn["id"] == params["beforeTurnId"])]
+        thread_id = source if mode == "fork-same-id" else str(uuid.uuid4())
+        metadata = {**thread_metadata(source), "id": thread_id}
+        (root / ("native-session-" + thread_id + ".json")).write_text(json.dumps(metadata))
+        history_path().write_text(json.dumps(turns))
+        result = {"thread": {**metadata, "turns": turns}}
+    elif method == "thread/rollback":
+        if mode == "rollback-removed":
+            emit({"id": request["id"], "error": {"code": -32600, "message": "unknown variant thread/rollback"}})
+            continue
+        thread_id = params["threadId"]
+        turns = load_history()[:-params["numTurns"]]
+        history_path().write_text(json.dumps(turns))
+        result = {"thread": {**thread_metadata(thread_id), "turns": turns}}
+    elif method == "account/read":
+        result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
+    elif method == "account/rateLimits/read":
+        if (root / "hold-usage").exists():
+            (root / "usage-entered").write_text("")
+            deadline = time.monotonic() + 30
+            while not (root / "release-usage").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+        result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": int(os.environ.get("AIT_TEST_USAGE_PERCENT", "25")), "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
+    elif method == "skills/list":
+        result = {"data": [{"cwd": params["cwds"][0], "errors": [], "skills": [
+            {"name": "review", "description": "Offline review", "enabled": True, "path": str(root / "review" / "SKILL.md")},
+            {"name": "disabled", "description": "Disabled", "enabled": False, "path": str(root / "disabled" / "SKILL.md")}
+        ]}]}
+    elif method == "thread/list":
+        pages = root / "session-pages.json"
+        if pages.exists():
+            result = json.loads(pages.read_text())[params.get("cursor") or "first"]
+        else:
+            sessions = [thread_metadata(path.name[len("native-session-"):-5])
+                        for path in root.glob("native-session-*.json")]
+            if params.get("sourceKinds") == ["subAgentThreadSpawn"]:
+                sessions = [entry for entry in sessions if entry.get("parentThreadId") or isinstance(entry.get("source"), dict)]
+            sessions.sort(key=lambda entry: entry["updatedAt"], reverse=True)
+            result = {"data": sessions, "nextCursor": None}
+    elif method == "model/list":
+        if mode == "delayed-discovery":
+            (root / "discovery-entered").write_text("")
+            deadline = time.monotonic() + 8
+            while not (root / "release-discovery").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+        result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": "high", "description": "High effort"}], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
+        if (root / "speed-models.json").exists():
+            result = json.loads((root / "speed-models.json").read_text())
+    elif method == "turn/start":
+        if mode == "delayed-voice-admission":
+            while not (root / "release-voice-admission").exists():
+                time.sleep(0.01)
+        pending = str(uuid.uuid4())
+        stream_items = []
+        steered_inputs = []
+        result = {"turn": {"id": pending}}
+    elif method == "turn/steer":
+        if mode == "steer-completed":
+            complete(pending, "raced")
+        if mode in ("steer-reject", "steer-completed") or (root / "reject-steer").exists() or params["expectedTurnId"] != pending:
+            emit({"id": request["id"], "error": {"code": -32600, "message": "no active turn to steer"}})
+            continue
+        if mode == "steer-ambiguous":
+            emit({"id": request["id"], "error": {"code": -32603, "message": "uncertain internal failure"}})
+            continue
+        if mode == "steer-exit":
+            sys.exit(0)
+        result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
+    emit({"id": request["id"], "result": result})
+    if method == "thread/resume" and mode == "replay-usage":
+        replayed_usage = resumed_usage()
+    if method == "turn/start" and replayed_usage:
+        # The replay arrives after the next turn starts, the latest a host can first read it.
+        emit(replayed_usage)
+        replayed_usage = None
+    if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
+        emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
+    if method == "thread/realtime/start":
+        emit({"method":"thread/realtime/started","params":{"threadId":thread_id,"realtimeSessionId":"realtime-fixture","version":"v2"}})
+        if mode == "realtime-canonical":
+            voice_item({"type":"realtimeSessionStarted","id":"start"})
+            voice_item({"type":"transcriptSegment","id":"user","role":"user","text":""}, False)
+            emit({"method":"thread/realtime/item/transcript/delta","params":{"threadId":thread_id,"itemId":"user","delta":"hello"}})
+            voice_item({"type":"transcriptSegment","id":"user","role":"user","text":"Hello!"})
+            voice_item({"type":"transcriptSegment","id":"assistant","role":"assistant","text":""}, False)
+            emit({"method":"thread/realtime/item/transcript/delta","params":{"threadId":thread_id,"itemId":"assistant","delta":"I can hear"}})
+            voice_history.append({"type":"item","position":len(voice_history),"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"}})
+            voice_item({"type":"bemItemPromoted","id":"promotion","turnId":"delegated","itemId":"rich","presentation":{"type":"inlineMarkdown"}})
+    if method == "thread/realtime/appendAudio":
+        # A different thread's audio must never reach this connection.
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":"unrelated","audio":params["audio"]}})
+        emit({"method":"thread/realtime/transcript/delta","params":{"threadId":thread_id,"role":"user","delta":"hello"}})
+        emit({"method":"thread/realtime/transcript/done","params":{"threadId":thread_id,"role":"user","text":"hello"}})
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":thread_id,"audio":params["audio"]}})
+        if mode == "realtime-closed":
+            emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"finished"}})
+        if mode == "realtime-error":
+            emit({"method":"thread/realtime/error","params":{"threadId":thread_id,"message":"private upstream diagnostic"}})
+    if method == "thread/realtime/stop":
+        if mode == "realtime-canonical":
+            voice_item({"type":"transcriptSegment","id":"assistant","role":"assistant","text":"I can hear you."})
+            voice_item({"type":"realtimeSessionClosed","id":"end","outcome":"ended"})
+        emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"stopped"}})
+    if method == "thread/compact/start":
+        if mode == "legacy-compaction":
+            emit({"method":"thread/compacted","params":{"threadId":thread_id,"turnId":None}})
+            continue
+        compact_turn = pending or str(uuid.uuid4())
+        if pending is None:
+            emit({"method":"turn/started","params":{"threadId":thread_id,"turn":{"id":compact_turn}}})
+        item = {"type":"contextCompaction","id":"compact-" + compact_turn}
+        emit({"method":"item/started","params":{"threadId":thread_id,"turnId":compact_turn,"item":item}})
+        stream_items.append(item)
+        emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":compact_turn,"item":item}})
+        if pending is None:
+            emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":compact_turn,"status":"completed"}}})
+    if method == "thread/goal/set" and params.get("objective") == "autonomous fixture":
+        time.sleep(0.1)
+        pending = str(uuid.uuid4())
+        turn_text = "native goal continuation"
+        emit({"method":"turn/started","params":{"threadId":thread_id,"turn":{"id":pending}}})
+        complete(pending, "Goal completed")
+    if method == "turn/start" and ephemeral and (root / "metadata-response.json").exists():
+        response = (root / "metadata-response.json").read_text()
+        if mode == "metadata-retry":
+            for error_turn, retry in [(pending, True), ("old-turn", False)]:
+                emit({"method":"error", "params":{"threadId":thread_id,"turnId":error_turn,
+                    "willRetry":retry,"error":{"message":"Transient failure"}}})
+        if (root / "metadata-tool.json").exists():
+            emit({"method":"item/started","params":{"threadId":thread_id,"turnId":pending,
+                "item":json.loads((root / "metadata-tool.json").read_text())}})
+        emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":pending,
+            "item":{"type":"agentMessage","id":"metadata-output","text":response}}})
+        emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"completed"}}})
+        pending = None
+        continue
+    if method == "turn/start":
+        text = next((item["text"] for item in params["input"] if item["type"] == "text"), "skill-only")
+        turn_text = text
+        turn_content = params["input"]
+        if text == "ait-mcp-probe":
+            complete(pending, probe_agent_mcp())
+            continue
+        if text in SCOPE_PROBES:
+            complete(pending, probe_scope(text))
+            continue
+        if text == "usage":
+            token_usage({"threadId":thread_id,
+                "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}})
+        if text == "request-usage":
+            for total, turn in ((107, pending), (107, pending), (50, pending), (150, None)):
+                token_usage({"threadId":thread_id,
+                    **({"turnId":turn} if turn else {}), "tokenUsage":{"total":{"totalTokens":total},
+                    "last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,
+                    "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}})
+        save_turn(pending, None, "inProgress")
+        emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
+            "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
+        if text in ("upstream-error", "upstream-error-result"):
+            error = json.loads((root / "native-error.json").read_text())
+            if text == "upstream-error":
+                for retry in (True, False):
+                    emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                        "error":error,"willRetry":retry}})
+            save_turn(pending, None, "failed")
+            emit({"method":"turn/completed","params":{"threadId":thread_id,
+                "turn":{"id":pending,"status":"failed","error":error}}})
+            pending = None
+            continue
+        if text in ("auth-error", "quota-error", "retry-success"):
+            message = {"auth-error": "invalid_api_key token=secret", "quota-error": "insufficient_quota secret", "retry-success": "stream disconnected secret"}[text]
+            emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                "error":{"message":message},"willRetry":text == "retry-success"}})
+            if text == "retry-success":
+                complete(pending, "recovered")
+            else:
+                emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"failed"}}})
+            pending = None
+            continue
+        if text == "capacity":
+            emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                "error":{"message":"Selected model is at capacity. Please try a different model."},
+                "willRetry":False}})
+            save_turn(pending, None, "failed")
+            emit({"method":"turn/completed","params":{"threadId":thread_id,
+                "turn":{"id":pending,"status":"failed"}}})
+            pending = None
+            continue
+        if text == "exit":
+            sys.exit(0)
+        if text == "terminal-input":
+            tool = {"id":"interactive-command", "type":"commandExecution", "command":"interactive", "processId":"42", "status":"inProgress"}
+            emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":tool}})
+            emit({"method":"item/commandExecution/terminalInteraction", "params":{
+                "threadId":thread_id, "turnId":pending, "itemId":"interactive-command", "processId":"42", "stdin":"confirm\n"}})
+            tool = {**tool, "status":"completed", "aggregatedOutput":"Confirmed"}
+            stream_items.append(tool)
+            emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":tool}})
+            complete(pending, text)
+            continue
+        if text == "large-generated-image":
+            image = {"type": "imageGeneration", "id": pending + "-image", "status": "completed",
+                     "result": "a" * (3 * 1024 * 1024), "savedPath": str(root / "generated.png")}
+            stream_items.append(image)
+            emit({"method": "codex/event/item_completed", "params": {"item": image}})
+            emit({"method": "item/completed", "params": {
+                "threadId": thread_id, "turnId": pending, "item": image}})
+            complete(pending, text)
+            continue
+        if text == "large-mcp-result":
+            tool = {"type": "mcpToolCall", "id": pending + "-mcp", "status": "inProgress",
+                    "server": "codex_apps", "tool": "github.fetch", "arguments": {"url": "https://example.test/compare"},
+                    "result": None}
+            emit({"method": "item/started", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
+            tool = {**tool, "status": "completed", "result": {
+                "content": [{"type": "text", "text": "Success"}],
+                "structuredContent": {"diff": "x" * (1024 * 1024)}, "isError": False}}
+            stream_items.append(tool)
+            emit({"method": "item/completed", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
+            complete(pending, text)
+            continue
+        if text == "propose-plan":
+            plan = {"type":"plan","id":pending+"-plan","text":"1. Implement the fix\n2. Verify the result"}
+            stream_items.append(plan)
+            emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":pending,"item":plan}})
+            complete(pending, "Plan ready")
+            continue
+        if text == "plan-progress":
+            emit({"method":"turn/plan/updated","params":{"threadId":thread_id,"turnId":pending,
+                "plan":[{"step":"First step","status":"completed"},{"step":"Second step","status":"inProgress"}]}})
+            complete(pending, "Progress reported")
+            continue
+        if text == "auto-compaction":
+            item = {"type":"contextCompaction","id":"compact-" + pending}
+            stream_items.append(item)
+            methods = ("item/started",) if mode == "compaction-without-final-item" else ("item/started", "item/completed")
+            for method_name in methods:
+                emit({"method":method_name,"params":{"threadId":thread_id,"turnId":pending,"item":item}})
+            complete(pending, "Compaction finished")
+            continue
+        if text in ("async-question", "async-question-running", "async-question-after-answer"):
+            if text == "async-question-after-answer":
+                answer = {"type": "agentMessage", "id": pending + "-answer", "text": "Final answer"}
+                stream_items.append(answer)
+                emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": answer}})
+            question = {"type": "agentMessage", "id": pending + "-question", "delivery": "async",
+                "questions": [{"title": "Which runtime?", "options": ["Rust", "Python"]}]}
+            stream_items.append(question)
+            emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": question}})
+            if text == "async-question":
+                complete(pending, "Work continued")
+            elif text == "async-question-after-answer":
+                save_turn(pending, None, "completed")
+                emit({"method": "turn/completed", "params": {
+                    "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
+                pending = None
+            continue
+        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity", "subagent-usage"):
+            child = "child-" + thread_id
+            spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
+                "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
+                "agentsStates":{child:{"status":"running"}}}
+            if text not in ("live-subagent", "background-subagent"):
+                spawn = {"type":"subAgentActivity", "id":"spawn-child", "kind":"started",
+                    "agentThreadId":child, "agentPath":"/root/code_reviewer",
+                    "model":"offline-model", "reasoningEffort":"high"}
+                emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":spawn}})
+            stream_items.append(spawn)
+            emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":spawn}})
+            (root / ("native-session-" + child + ".json")).write_text(json.dumps({"parentThreadId":thread_id}))
+            if text == "modern-subagent-return":
+                reply = {"type":"subAgentActivity", "id":"child-return", "kind":"interacted",
+                    "agentThreadId":thread_id, "agentPath":"/root"}
+                emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":reply}})
+            emit({"method":"item/agentMessage/delta","params":{"threadId":child,"turnId":"child-turn","itemId":"child-answer","delta":"Independent child"}})
+            def child_usage(total, turn="child-turn", child=child):
+                token_usage({"threadId":child, **({"turnId":turn} if turn else {}),
+                    "tokenUsage":{"total":{"totalTokens":total},"last":{"inputTokens":20,
+                    "cachedInputTokens":5,"outputTokens":3,"totalTokens":23}}})
+            if text == "subagent-usage":
+                for total, turn in ((40, "child-turn"), (40, "child-turn"), (70, None)):
+                    child_usage(total, turn)
+            def finish_child(child=child):
+                child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
+                (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
+                emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":child_item}})
+                emit({"method":"turn/completed", "params":{"threadId":child,"turn":{"id":"child-turn","status":"completed"}}})
+            if text == "background-subagent":
+                def finish_after_release(child=child, finish_child=finish_child):
+                    deadline = time.monotonic() + 20
+                    while not (root / ("release-" + child)).exists() and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    finish_child()
+                complete(pending, "Parent only")
+                threading.Thread(target=finish_after_release, daemon=True).start()
+            else:
+                finish_child()
+                if text in ("modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity"):
+                    activity = {"type":"subAgentActivity", "id":"subagent-completed-child-turn",
+                        "kind":"unknown" if text == "unknown-subagent-activity" else "completed",
+                        "agentThreadId":None if text == "invalid-subagent-activity" else child,
+                        "agentPath":"/root/code_reviewer",
+                        "model":None, "reasoningEffort":None}
+                    stream_items.append(activity)
+                    if text == "unknown-subagent-activity":
+                        emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
+                    emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
+                if text == "unknown-subagent-activity":
+                    state = {"type":"collabAgentToolCall", "id":"unknown-child-state",
+                        "senderThreadId":thread_id, "receiverThreadIds":[child], "tool":"wait",
+                        "status":"completed", "agentsStates":{child:{"status":"unknown"}}}
+                    stream_items.append(state)
+                    emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
+                    emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
+                if text == "subagent-usage":
+                    child_usage(90)
+                complete(pending, "Parent only")
+                if text == "subagent-usage":
+                    child_usage(120, None)
+            continue
+        if text == "approval":
+            emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})
+        elif text == "permit-cua-app":
+            emit({"id": "approval-1", "method": "mcpServer/elicitation/request", "params": {
+                "threadId": thread_id, "turnId": pending, "serverName": "cua_repl",
+                "mode": "form", "message": 'Allow Computer Use to use "Ait"?',
+                "requestedSchema": {"type": "object", "properties": {}},
+                "_meta": {"callId": "cua-app-call", "codex_approval_kind": "mcp_tool_call",
+                    "connector_id": "computer-use", "connector_name": "Computer Use",
+                    "persist": ["session", "always"], "riskLevel": "low",
+                    "tool_name": "get_app_state", "tool_params": {"app": "dev.ait.desktop"},
+                    "tool_params_display": [{"display_name": "App", "name": "app", "value": "Ait"}],
+                    "x-codex-turn-metadata": {"auto_review_enabled": True,
+                        "codex_version": "0.162.1", "node_repl_auto_review_required": True,
+                        "sandbox_mode": "workspace-write", "thread_id": thread_id,
+                        "turn_id": pending}}}})
+        elif text in ("permit-command", "permit-file", "permit-question", "permit-cua"):
+            approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput", "permit-cua": "item/tool/requestUserInput"}[text]
+            approval = {"threadId": thread_id, "turnId": pending, "itemId": "approval-item", "command": "offline command", "cwd": str(root)}
+            if text == "permit-question":
+                approval["questions"] = [{"id": "choice", "header": "Choice", "question": "Select one", "options": [{"label": "first", "description": "First choice"}]}]
+                if mode == "legacy-question":
+                    approval_method = "tool/requestUserInput"
+            elif text == "permit-cua":
+                approval = {"threadId": thread_id, "turnId": pending, "itemId": "cua-call",
+                    "isBlocking": True, "autoResolutionMs": None, "questions": [{
+                        "id": "cua-approval", "header": "cua_repl.js",
+                        "question": "Allow this computer use operation?", "isOther": False,
+                        "isSecret": False, "options": [
+                            {"label": "Accept", "description": "Run this operation"},
+                            {"label": "Decline", "description": "Skip this operation"},
+                            {"label": "Cancel", "description": "Cancel this operation"}]}]}
+            emit({"id": "approval-1", "method": approval_method, "params": approval})
+        elif text == "child":
+            child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            (root / "child.pid").write_text(str(child.pid))
+        elif text == "stream":
+            for method_name, item_id, delta, extra in [
+                ("item/reasoning/summaryTextDelta", "thought", "Think", {"summaryIndex": 0}),
+                ("item/reasoning/summaryTextDelta", "thought", "ing", {"summaryIndex": 0}),
+            ]:
+                emit({"method": method_name, "params": {"threadId": thread_id, "turnId": pending,
+                    "itemId": item_id, "delta": delta, **extra}})
+            reasoning = {"type": "reasoning", "id": "thought", "summary": ["Thinking"]}
+            stream_items.append(reasoning)
+            emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": reasoning}})
+            tool = {"type": "commandExecution", "id": "command", "command": "offline", "status": "inProgress"}
+            emit({"method": "item/started", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
+            emit({"method": "item/commandExecution/outputDelta", "params": {"threadId": thread_id,
+                "turnId": pending, "itemId": "command", "delta": "offline output"}})
+            tool = {**tool, "status": "completed", "aggregatedOutput": "offline output"}
+            stream_items.append(tool)
+            emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
+            for source_thread, source_turn, delta in [("foreign", pending, "FOREIGN"),
+                    (thread_id, "stale", "STALE"), (thread_id, pending, "Echo: ")]:
+                emit({"method": "item/agentMessage/delta", "params": {"threadId": source_thread,
+                    "turnId": source_turn, "itemId": pending + "-assistant", "delta": delta}})
+        elif text == "command-actions":
+            tool = {"type": "commandExecution", "id": "command", "status": "inProgress",
+                "command": "/bin/zsh -lc 'cat file; echo done'", "cwd": str(root),
+                "commandActions": [
+                    {"type": "read", "command": "cat file", "path": "file", "name": "file"},
+                    {"type": "unknown", "command": "echo done"}]}
+            emit({"method": "item/started", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
+            emit({"method": "item/commandExecution/outputDelta", "params": {"threadId": thread_id,
+                "turnId": pending, "itemId": "command", "delta": "offline output"}})
+            tool = {**tool, "status": "completed", "aggregatedOutput": "offline output", "exitCode": 0}
+            stream_items.append(tool)
+            emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
+            complete(pending, text)
+        elif text != "hang":
+            timer = threading.Timer(0.05, complete, args=(pending, text))
+            timer.daemon = True
+            timer.start()
+    elif method == "turn/steer":
+        text = params["input"][0]["text"]
+        user = {"type": "userMessage", "id": str(uuid.uuid4()), "content": [{"type": "text", "text": text}]}
+        steered_inputs.append(user)
+        emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": user}})
+        if text == "request-usage":
+            token_usage({"threadId":thread_id,
+                "turnId":pending, "tokenUsage":{"total":{"totalTokens":200},
+                "last":{"inputTokens":40,"cachedInputTokens":10,"outputTokens":5,"totalTokens":45},
+                "modelContextWindow":200000}})
+        if mode != "steer-wrong-id":
+            complete(pending, "stream + " + text if turn_text == "stream" else text)
+    elif method == "turn/interrupt":
+        save_turn(params["turnId"], None, "interrupted")
+        pending = None
+        emit({"method": "turn/completed", "params": {
+            "threadId": thread_id, "turn": {"id": params["turnId"], "status": "interrupted"}}})

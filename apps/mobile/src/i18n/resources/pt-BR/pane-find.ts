@@ -1,0 +1,20 @@
+export const paneFind = {
+  searching: "Buscando…",
+  loading: "Carregando…",
+  failed: "Falhou",
+  retry: "Tentar novamente",
+
+  title: "Buscar",
+  placeholder: "Buscar no painel",
+  close: "Fechar busca",
+  matches: "Correspondências",
+  previous: "Correspondência anterior",
+  next: "Próxima correspondência",
+  toggleReplace: "Mostrar substituição",
+  replaceWith: "Substituir por",
+  replace: "Substituir",
+  replaceAll: "Substituir tudo",
+  noMatches: "Nenhuma correspondência",
+  position: "{{current}} de {{total}}",
+  total: "{{total}} correspondências",
+};

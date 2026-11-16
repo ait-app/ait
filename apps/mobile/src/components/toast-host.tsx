@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import {
-  Platform,
-  Pressable,
-  StyleSheet as NativeStyleSheet,
-  Text,
-  ToastAndroid,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet as NativeStyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -30,14 +23,12 @@ export interface ToastShowOptions {
   icon?: ReactNode;
   variant?: ToastVariant;
   durationMs?: number | null;
-  nativeAndroid?: boolean;
   testID?: string;
 }
 
 export interface ToastState {
   id: number;
   content: ReactNode;
-  nativeMessage: string | null;
   icon?: ReactNode;
   variant: ToastVariant;
   durationMs: number | null;
@@ -77,19 +68,7 @@ export function useToastHost(): {
   const idRef = useRef(0);
 
   const show = useCallback((content: ReactNode, options?: ToastShowOptions) => {
-    const nativeMessage = typeof content === "string" ? content.trim() : null;
-    if (!content || nativeMessage === "") {
-      return;
-    }
-
-    const variant = options?.variant ?? "default";
-    const durationMs = options?.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
-    const nativeAndroid = options?.nativeAndroid ?? false;
-
-    if (Platform.OS === "android" && nativeAndroid && nativeMessage) {
-      const duration =
-        durationMs !== null && durationMs <= 2500 ? ToastAndroid.SHORT : ToastAndroid.LONG;
-      ToastAndroid.showWithGravity(nativeMessage, duration, ToastAndroid.TOP);
+    if (!content || (typeof content === "string" && content.trim() === "")) {
       return;
     }
 
@@ -97,10 +76,9 @@ export function useToastHost(): {
     setToast({
       id,
       content,
-      nativeMessage,
       icon: options?.icon,
-      variant,
-      durationMs,
+      variant: options?.variant ?? "default",
+      durationMs: options?.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs,
       testID: options?.testID,
     });
     return () => setToast((current) => (current?.id === id ? null : current));

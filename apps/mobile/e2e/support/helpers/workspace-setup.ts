@@ -130,10 +130,6 @@ export async function getCurrentWorkspaceIdFromRoute(page: Page): Promise<string
   return workspaceId;
 }
 
-function workspaceSetupDialog(page: Page) {
-  return page.getByTestId("workspace-setup-dialog");
-}
-
 export async function createChatAgentFromWorkspaceSetup(
   page: Page,
   input: { message: string },
@@ -142,35 +138,6 @@ export async function createChatAgentFromWorkspaceSetup(
   await expect(messageInput).toBeVisible({ timeout: 15_000 });
   await messageInput.fill(input.message);
   await messageInput.press("Enter");
-}
-
-/**
- * @deprecated The new workspace screen no longer has a standalone terminal button.
- * Use the daemon API to create a workspace, then open a terminal from the launcher.
- */
-export async function createStandaloneTerminalFromWorkspaceSetup(page: Page): Promise<void> {
-  await workspaceSetupDialog(page)
-    .getByRole("button", { name: /^Terminal Create the workspace/i })
-    .click();
-}
-
-export async function waitForWorkspaceSetupDialogToClose(
-  page: Page,
-  timeoutMs = 45_000,
-): Promise<void> {
-  const dialog = workspaceSetupDialog(page);
-
-  try {
-    await expect(dialog).toHaveCount(0, { timeout: timeoutMs });
-  } catch (error) {
-    const dialogText = (await dialog.textContent().catch(() => null))?.replace(/\s+/g, " ").trim();
-    throw new Error(
-      dialogText
-        ? `Workspace setup dialog stayed open. Visible text: ${dialogText}`
-        : `Workspace setup dialog did not close within ${timeoutMs}ms`,
-      { cause: error },
-    );
-  }
 }
 
 export async function expectSetupPanel(page: Page): Promise<void> {

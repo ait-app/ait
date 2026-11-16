@@ -139,7 +139,7 @@ Pi's 2 MiB native frame limit also applies. See
 The installed-Pi command contract test uses temporary resources and a loopback model only:
 
 ```sh
-cargo test -p provider local::pi::tests::installed::commands --lib -- --ignored
+cargo test -p provider-pi tests::installed::commands --lib -- --ignored
 ```
 
 ## Reasoning controls
@@ -369,8 +369,8 @@ and remain cancelled by this adapter.
 Focused deterministic tests:
 
 ```sh
-cargo test -p provider local::pi --lib
-cargo test -p provider composition::tests --lib
+cargo test -p provider-pi --lib
+cargo test -p provider-builtin --lib
 ```
 
 Pi follows the same CI convention as other providers: fixture tests run in the shared Rust
@@ -381,7 +381,7 @@ Optional installed-Pi tests (isolated temporary configuration and a loopback fak
 no real model service or user credentials):
 
 ```sh
-cargo test -p provider local::pi::tests::installed --lib -- --ignored
+cargo test -p provider-pi tests::installed --lib -- --ignored
 ```
 
 The control-only contract test checks model-reset notification ordering and compares native

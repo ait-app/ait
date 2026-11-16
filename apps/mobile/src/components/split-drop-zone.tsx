@@ -4,23 +4,16 @@ import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { SplitDropZoneHover, SplitDropZonePosition } from "./split-drop-zone-geometry";
 
-export { resolveSplitDropPosition } from "./split-drop-zone-geometry";
-export type { SplitDropZoneHover, SplitDropZonePosition } from "./split-drop-zone-geometry";
-
-export interface SplitDropZoneProps {
+interface SplitDropZoneProps {
   paneId: string;
   active: boolean;
   preview: SplitDropZoneHover | null;
 }
 
-export function buildSplitDropZoneId(paneId: string): string {
-  return `split-pane-drop:${paneId}`;
-}
-
 export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
   const { theme } = useUnistyles();
   const { setNodeRef } = useDroppable({
-    id: buildSplitDropZoneId(paneId),
+    id: `split-pane-drop:${paneId}`,
     disabled: !active,
     data: {
       kind: "split-pane-drop",
@@ -35,7 +28,7 @@ export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
     return {
       overlay: [
         styles.previewOverlay,
-        getPreviewOverlayStyle(preview.position),
+        getPreviewPositionStyle(preview.position),
         {
           backgroundColor: theme.colors.accent,
           opacity: 0.6,
@@ -43,7 +36,7 @@ export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
       ],
       frame: [
         styles.previewFrame,
-        getPreviewFrameStyle(preview.position),
+        getPreviewPositionStyle(preview.position),
         {
           borderColor: theme.colors.accent,
         },
@@ -67,7 +60,7 @@ export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
   );
 }
 
-function getPreviewOverlayStyle(position: SplitDropZonePosition) {
+function getPreviewPositionStyle(position: SplitDropZonePosition) {
   if (position === "left") {
     return styles.previewLeft;
   }
@@ -80,23 +73,7 @@ function getPreviewOverlayStyle(position: SplitDropZonePosition) {
   if (position === "bottom") {
     return styles.previewBottom;
   }
-  return styles.previewCenterOverlay;
-}
-
-function getPreviewFrameStyle(position: SplitDropZonePosition) {
-  if (position === "left") {
-    return styles.previewLeft;
-  }
-  if (position === "right") {
-    return styles.previewRight;
-  }
-  if (position === "top") {
-    return styles.previewTop;
-  }
-  if (position === "bottom") {
-    return styles.previewBottom;
-  }
-  return styles.previewCenterFrame;
+  return styles.previewCenter;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -137,13 +114,7 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     height: "50%",
   },
-  previewCenterOverlay: {
-    left: theme.spacing[2],
-    top: theme.spacing[2],
-    right: theme.spacing[2],
-    bottom: theme.spacing[2],
-  },
-  previewCenterFrame: {
+  previewCenter: {
     left: theme.spacing[2],
     top: theme.spacing[2],
     right: theme.spacing[2],

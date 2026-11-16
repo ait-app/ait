@@ -51,7 +51,6 @@ export interface VoiceSessionAdapter {
   sendVoiceAudioChunk(audioData: string, mimeType: string): Promise<void>;
   audioPlayed(chunkId: string): Promise<void>;
   abortRequest(): Promise<void>;
-  setAssistantAudioPlaying(isPlaying: boolean): void;
 }
 
 export interface VoiceRuntimeDeps {
@@ -65,11 +64,6 @@ export interface VoiceRuntimeDeps {
 interface RuntimeSessionState {
   adapter: VoiceSessionAdapter;
   connected: boolean;
-}
-
-interface ContinuousVoiceUploader {
-  reset(): void;
-  pushPcmChunk(chunk: Uint8Array): void;
 }
 
 interface RuntimeState {
@@ -542,26 +536,23 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     playNext();
   }
 
-  const uploader: ContinuousVoiceUploader = {
-    reset() {},
-    pushPcmChunk(chunk) {
-      const activeSession = getActiveSession();
-      if (
-        !activeSession ||
-        !state.transportReady ||
-        !state.snapshot.isVoiceMode ||
-        chunk.byteLength === 0
-      ) {
-        return;
-      }
+  function pushPcmChunk(chunk: Uint8Array): void {
+    const activeSession = getActiveSession();
+    if (
+      !activeSession ||
+      !state.transportReady ||
+      !state.snapshot.isVoiceMode ||
+      chunk.byteLength === 0
+    ) {
+      return;
+    }
 
-      const base64 = Buffer.from(chunk).toString("base64");
+    const base64 = Buffer.from(chunk).toString("base64");
 
-      void activeSession.adapter.sendVoiceAudioChunk(base64, PCM_MIME_TYPE).catch((error) => {
-        console.error(`[VoiceRuntime#${instanceId}] Failed to send audio chunk:`, error);
-      });
-    },
-  };
+    void activeSession.adapter.sendVoiceAudioChunk(base64, PCM_MIME_TYPE).catch((error) => {
+      console.error(`[VoiceRuntime#${instanceId}] Failed to send audio chunk:`, error);
+    });
+  }
 
   function resetToDisabledState(): void {
     state.nativeRealtime = false;
@@ -569,7 +560,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     state.turnInProgress = false;
     state.serverSpeechDetected = false;
     state.lastDisplayVolumePublishMs = 0;
-    uploader.reset();
     resetCaptureTelemetry();
     patchSnapshot({ ...INITIAL_SNAPSHOT });
   }
@@ -600,12 +590,10 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     const generation = state.generation;
     patchSnapshot((prev) => ({ ...prev, isVoiceSwitching: true, phase: "stopping" }));
     stopCue();
-    uploader.reset();
     state.transportReady = false;
     resetPlaybackState();
     deps.engine.stop();
     deps.engine.clearQueue();
-    getActiveSession()?.adapter.setAssistantAudioPlaying(false);
     await deps.engine.stopCapture().catch(() => undefined);
     await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
     if (state.generation === generation) resetToDisabledState();
@@ -703,7 +691,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       if (!state.snapshot.isVoiceMode || state.snapshot.isMuted) {
         return;
       }
-      uploader.pushPcmChunk(chunk);
+      pushPcmChunk(chunk);
     },
 
     handleCaptureVolume(level) {
@@ -822,7 +810,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         ) {
           const previousSession = sessions.get(previousServerId);
           if (previousSession) {
-            previousSession.adapter.setAssistantAudioPlaying(false);
             await previousSession.adapter.setVoiceMode(false);
           }
           await deps.engine.stopCapture();
@@ -861,7 +848,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
 
         state.transportReady = true;
         state.turnInProgress = false;
-        uploader.reset();
         resetCaptureTelemetry();
         patchSnapshot((prev) => ({
           ...prev,
@@ -910,7 +896,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     toggleMute() {
       const nextMuted = deps.engine.toggleMute();
       if (nextMuted) {
-        uploader.reset();
         resetCaptureTelemetry();
         patchSnapshot((prev) => ({
           ...prev,
@@ -945,7 +930,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         return;
       }
       stopCue();
-      getActiveSession()?.adapter.setAssistantAudioPlaying(true);
       patchSnapshot((prev) => ({ ...prev, phase: "playing" }));
     },
 
@@ -954,7 +938,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         return;
       }
 
-      getActiveSession()?.adapter.setAssistantAudioPlaying(false);
       if (!state.snapshot.isVoiceMode) {
         return;
       }
@@ -1005,7 +988,6 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
           deps.engine.stop();
           deps.engine.clearQueue();
         }
-        getActiveSession()?.adapter.setAssistantAudioPlaying(false);
       }
       patchTelemetry((prev) => ({
         ...prev,

@@ -1,0 +1,28 @@
+[package]
+name = "provider-antigravity"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, diagnostics.
+provider-native.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+# Drive the adapter through the runtime's AgentManager and timeline test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true

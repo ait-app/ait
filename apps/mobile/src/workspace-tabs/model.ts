@@ -48,6 +48,7 @@ export type WorkspaceTabTarget =
       filter?: "upcoming" | "paused" | "completed";
     }
   | { kind: "bot"; view?: "settings" }
+  | { kind: "notebook" }
   | WorkspaceFileTabTarget
   | WorkspaceWorkingDiffTabTarget
   | PluginWorkspaceTabTarget

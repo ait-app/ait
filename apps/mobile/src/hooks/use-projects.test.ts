@@ -22,7 +22,6 @@ function runtimeState(input: Partial<ProjectHostRuntimeState> & { serverId: stri
     serverId: input.serverId,
     isOnline: input.isOnline ?? true,
     isLoading: input.isLoading ?? false,
-    isFetching: input.isFetching ?? false,
     error: input.error ?? null,
   };
 }
@@ -57,7 +56,7 @@ describe("deriveProjectsFromReplica", () => {
       serverId: "laptop",
       projectId: "prj_alpha",
       repoRoot: "/repo/alpha",
-      workspaceCount: 0,
+      workspaces: [],
     });
   });
 
@@ -75,14 +74,12 @@ describe("deriveProjectsFromReplica", () => {
         runtimeState({
           serverId: "local",
           isLoading: true,
-          isFetching: true,
           error: "unavailable",
         }),
       ],
     });
 
     expect(result.isLoading).toBe(true);
-    expect(result.isFetching).toBe(true);
     expect(result.hostErrors).toEqual([
       { serverId: "local", serverName: "Local", message: "unavailable" },
     ]);

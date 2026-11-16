@@ -1,6 +1,48 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { i18n } from "@/i18n/i18next";
+import {
+  formatAgentPanelSubtitle,
+  formatProviderSubagentSubtitle,
+} from "@/panels/agent-panel-subtitle";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
+
+describe("formatAgentPanelSubtitle", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("names the provider", () => {
+    expect(formatAgentPanelSubtitle("claude-code")).toBe("Claude Code agent");
+  });
+
+  it("reads as the plain fallback when the provider is empty", () => {
+    expect(formatAgentPanelSubtitle("")).toBe("Agent");
+  });
+
+  it("uses the active language for the fallback", async () => {
+    await i18n.changeLanguage("es");
+    expect(formatAgentPanelSubtitle("")).toBe(i18n.t("workspace.tabs.fallback.agent"));
+  });
+});
+
+describe("formatProviderSubagentSubtitle", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("names the provider", () => {
+    expect(formatProviderSubagentSubtitle("claude-code")).toBe("Claude Code subagent");
+  });
+
+  it("reads as the plain fallback when the provider is empty", () => {
+    expect(formatProviderSubagentSubtitle("")).toBe("Subagent");
+  });
+
+  it("uses the active language for the fallback", async () => {
+    await i18n.changeLanguage("es");
+    expect(formatProviderSubagentSubtitle("")).toBe(i18n.t("panels.providerSubagent.label"));
+  });
+});
 
 function TestIcon() {
   return null;

@@ -16,8 +16,8 @@ const record = path.join(serverHome, "desktop-daemon.json");
 const env = {
   ...process.env,
   AIT_SERVER_DATA_DIR: serverHome,
-  AIT_SERVER_BIN:
-    process.env.AIT_SERVER_BIN ||
+  AITD_BIN:
+    process.env.AITD_BIN ||
     path.join(root, "target/debug", process.platform === "win32" ? "daemon.exe" : "daemon"),
   AIT_ELECTRON_USER_DATA_DIR: path.join(temporary, "electron"),
 };

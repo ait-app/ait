@@ -1,0 +1,27 @@
+export const sessionStatistics = {
+  title: "Estatísticas da sessão selecionada",
+  scope:
+    "Último retrato informado pelo provedor — não é o total acumulado nem necessariamente o último turno.",
+  children: "O uso de sessões filhas é excluído; consulte-as separadamente.",
+  unavailable: "Estatísticas indisponíveis neste host ou conexão.",
+  account: "Cota da conta — separada do uso da sessão",
+  agentId: "Sessão",
+  provider: "Provedor",
+  status: "Estado de execução",
+  configuredModel: "Modelo configurado",
+  effectiveModel: "Modelo efetivo",
+  updatedAt: "Atualizado",
+  inputTokens: "Tokens de entrada",
+  cachedInputTokens: "Tokens de entrada em cache",
+  outputTokens: "Tokens de saída",
+  totalCostUsd: "Custo informado (USD)",
+  contextWindowUsedTokens: "Tokens de contexto usados",
+  contextWindowMaxTokens: "Limite de tokens de contexto",
+  statuses: {
+    initializing: "Inicializando",
+    idle: "Ocioso",
+    running: "Em execução",
+    error: "Erro",
+    closed: "Fechado",
+  },
+};

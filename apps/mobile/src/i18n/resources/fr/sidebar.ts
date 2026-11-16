@@ -1,0 +1,148 @@
+export const sidebar = {
+  display: {
+    trigger: "Préférences d'affichage",
+    heading: "Affichage",
+    grouping: {
+      label: "Regroupement",
+      project: "Projet",
+      status: "Statut",
+    },
+    titleSource: {
+      label: "Titre",
+      title: "Titre",
+      branch: "Nom de branche",
+    },
+    show: {
+      label: "Afficher",
+      branch: "Branche",
+      project: "Projet",
+      host: "Hôte",
+      changeRequest: "Demande de fusion",
+      checks: "Vérifications",
+      services: "Services",
+      labels: "Libellés",
+      diff: "Statistiques de diff",
+      timestamp: "Dernière activité",
+    },
+    checks: {
+      iconAndText: "Icône et texte",
+      icon: "Icône seule",
+      none: "Masqué",
+    },
+    hostFilter: {
+      label: "Hôte",
+      all: "Tous les hôtes",
+    },
+    projectFilter: {
+      label: "Projet",
+      all: "Tous les projets",
+    },
+  },
+  filterEmpty: {
+    title: "Aucun espace de travail ne correspond",
+    description:
+      "Modifiez ou effacez les filtres de la barre latérale pour afficher les espaces de travail.",
+    clear: "Effacer les filtres",
+  },
+  pinned: {
+    title: "Épinglés",
+  },
+  statusGroup: {
+    accessibilityLabel: "Groupe {{label}}",
+  },
+  actions: {
+    addProject: "Ajouter un projet",
+    newWorkspace: "Nouvel espace de travail",
+    hosts: "Hôtes",
+    settings: "Paramètres",
+    closeSidebar: "Fermer la barre latérale",
+  },
+  help: {
+    trigger: "Aide et assistance",
+    sectionHelp: "Aide",
+    diagnostics: "Lancer le diagnostic",
+    shortcuts: "Raccourcis clavier",
+    reportIssue: "Signaler un problème",
+    github: "Créer un ticket GitHub",
+    whatsNew: "Nouveautés",
+    appName: "Ait",
+  },
+  sections: {
+    usage: "Utilisation",
+    workspaces: "Espaces de travail",
+    sessions: "Historique",
+    search: "Rechercher",
+    schedules: "Planifications",
+  },
+  project: {
+    actions: {
+      menu: "Actions du projet",
+      openSettings: "Ouvrir les paramètres du projet",
+      openNewWindow: "Ouvrir dans une nouvelle fenêtre",
+      openNewWindowFailed: "Impossible d'ouvrir une nouvelle fenêtre",
+      openFolder: "Ouvrir dans le gestionnaire de fichiers",
+      openFolderFailed: "Impossible d'ouvrir le dossier",
+      remove: "Supprimer le projet",
+      removing: "Suppression...",
+    },
+    confirmations: {
+      removeTitle: "Supprimer le projet ?",
+      removeMessage:
+        "Supprimer « {{projectName}} » de la barre latérale ?\n\nLes fichiers sur le disque ne seront pas modifiés.",
+      removeConfirm: "Retirer",
+      cancel: "Annuler",
+    },
+    toasts: {
+      hostDisconnected: "L'hôte n'est pas connecté",
+      removeFailed: "Échec de la suppression de certains espaces de travail",
+      updateHostToRemove: "Mettez à jour l'hôte pour supprimer des projets.",
+    },
+    empty: {
+      title: "Aucun projet pour l'instant",
+      description: "Ajoutez un projet pour commencer",
+    },
+  },
+  workspace: {
+    status: {
+      serviceRunning: "Service {{name}} en cours",
+      serviceUnhealthy: "Service {{name}} en échec",
+    },
+    checks: {
+      passed: "Réussis : {{count}}",
+      failed: "Échecs : {{count}}",
+      warning: "Avertissements : {{count}}",
+      actionRequired: "Action requise : {{count}}",
+      manual: "Manuels : {{count}}",
+      pending: "En attente : {{count}}",
+    },
+    actions: {
+      menu: "Actions de l'espace de travail",
+      newWorkspace: "Nouvel espace de travail",
+      showMore: "Afficher plus",
+      showLess: "Afficher moins",
+      createWorkspaceFor: "Créer un nouvel espace de travail pour {{projectName}}",
+      copyPath: "Copier le chemin",
+      copyBranchName: "Copier le nom de la branche",
+      rename: "Renommer l'espace de travail",
+      pin: "Épingler en haut",
+      unpin: "Désépingler",
+      markAsRead: "Marquer comme lu",
+      markAsUnread: "Marquer comme non lu",
+      archive: "Archiver",
+      archiving: "Archivage...",
+    },
+    rename: {
+      title: "Renommer l'espace de travail",
+      submit: "Renommer",
+    },
+    toasts: {
+      workspacePathUnavailable: "Chemin de l'espace de travail non disponible",
+      pathCopied: "Chemin copié",
+      branchNameCopied: "Nom de la branche copié",
+      hostDisconnected: "L'hôte n'est pas connecté",
+      archiveFailed: "Échec de l'archivage de l'espace de travail",
+      markAsReadFailed: "Échec du marquage de l'espace de travail comme lu",
+      markAsUnreadFailed: "Échec du marquage de l'espace de travail comme non lu",
+    },
+  },
+};

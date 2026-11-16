@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Bot } from "lucide-react-native";
+import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { AgentProfilePicker, AgentProfileSeed } from "@/agent-profiles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -33,6 +34,7 @@ interface CompactModelSheetProps {
   isLoading: boolean;
   profiles?: AgentProfilePicker | null;
   onApplyProfile?: (profileId: string) => void;
+  modelPresets?: ModelPresetControls;
   onEditProfiles?: () => void;
   onCreateProfile?: (seed: AgentProfileSeed) => void;
   onEditProfile?: (profileId: string) => void;
@@ -85,6 +87,7 @@ export function CompactModelSheet({
   isLoading,
   profiles = null,
   onApplyProfile,
+  modelPresets,
   onEditProfiles,
   onCreateProfile,
   onEditProfile,
@@ -120,6 +123,7 @@ export function CompactModelSheet({
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
     serverId,
+    cwd: modelPresets?.cwd,
   });
   const modelBrowser = useModelBrowser({
     providers: availableProviders,
@@ -129,6 +133,7 @@ export function CompactModelSheet({
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
     serverId,
+    cwd: modelPresets?.cwd,
   });
   const ProviderIcon =
     selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider, serverId) : null;
@@ -162,6 +167,16 @@ export function CompactModelSheet({
     modelBrowser.reset();
     onClose?.();
   }, [modelBrowser, onClose, rootBrowser]);
+
+  const presetControls = modelPresets
+    ? {
+        cwd: modelPresets.cwd,
+        apply: (provider: string, configuration: ModelPresetConfiguration) => {
+          modelPresets.apply(provider, configuration);
+          close();
+        },
+      }
+    : undefined;
 
   const handleSearchSelect = useCallback(
     (provider: string, modelId: string) => {
@@ -314,6 +329,7 @@ export function CompactModelSheet({
             state={rootBrowser}
             onSelect={usesBottomSheet ? handleSearchSelect : handleDesktopSelect}
             onApplyProfile={handleApplyProfile}
+            modelPresets={presetControls}
             onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
             onCreateProfile={profileActions.create}
             onEditProfile={profileActions.edit}
@@ -358,6 +374,7 @@ export function CompactModelSheet({
             <ModelBrowser
               state={modelBrowser}
               onSelect={handleBrowserSelect}
+              modelPresets={presetControls}
               onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
               onCreateProfile={profileActions.create}
               onEditProfile={profileActions.edit}

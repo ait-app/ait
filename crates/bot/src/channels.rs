@@ -199,9 +199,9 @@ async fn attempt(
         ChannelConfig::Telegram { token_ref, .. } | ChannelConfig::Weixin { token_ref, .. } => {
             token_ref
         }
-        ChannelConfig::Feishu { secret_ref, .. } | ChannelConfig::Qq { secret_ref, .. } => {
-            secret_ref
-        }
+        ChannelConfig::Feishu { secret_ref, .. }
+        | ChannelConfig::Lark { secret_ref, .. }
+        | ChannelConfig::Qq { secret_ref, .. } => secret_ref,
         ChannelConfig::PhotonImessage { key_ref, .. } => key_ref,
     };
     let secret = credentials.resolve(reference)?;
@@ -210,7 +210,9 @@ async fn attempt(
         ChannelConfig::Telegram { .. } => {
             telegram::run(bots, channel, client, &secret, cancel).await
         }
-        ChannelConfig::Feishu { .. } => feishu::run(bots, channel, client, &secret, cancel).await,
+        ChannelConfig::Feishu { .. } | ChannelConfig::Lark { .. } => {
+            feishu::run(bots, channel, client, &secret, cancel).await
+        }
         ChannelConfig::Weixin { .. } => weixin::run(bots, channel, client, &secret, cancel).await,
         ChannelConfig::Qq { .. } => qq::run(bots, channel, client, &secret, cancel).await,
         ChannelConfig::PhotonImessage { .. } => {

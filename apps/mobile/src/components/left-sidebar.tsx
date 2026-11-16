@@ -1,3 +1,4 @@
+import { HostMonitorSidebar } from "@/host-monitor/sidebar-item";
 import { UsageSidebarRoot, UsageSidebarItem } from "@/usage/sidebar-item";
 import { router } from "expo-router";
 import { FolderPlus, GitBranch, Import, Server, Settings, X } from "lucide-react-native";
@@ -30,7 +31,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useTrackedRefresh } from "@/hooks/use-tracked-refresh";
 import {
@@ -40,12 +41,13 @@ import {
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import { RetainedPanelActivity } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
 import { type SidebarGroupMode, useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useHosts } from "@/runtime/host-runtime";
 import { usePanelStore } from "@/stores/panel-store";
-import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
+import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/desktop/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
@@ -87,7 +89,6 @@ interface SidebarLabels {
   hosts: string;
   importSession: string;
   settings: string;
-  searchHosts: string;
   closeSidebar: string;
 }
 
@@ -181,7 +182,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       hosts: t("sidebar.actions.hosts"),
       importSession: t("importSession.title"),
       settings: t("sidebar.actions.settings"),
-      searchHosts: t("sidebar.host.searchPlaceholder"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
     }),
     [t],
@@ -313,20 +313,13 @@ function SidebarHostPicker({
   const triggerRef = useRef<View | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleSelect = useCallback(
-    (id: string) => {
-      onOpenHostSettings(id);
-    },
-    [onOpenHostSettings],
-  );
-
   const handleOpen = useCallback(() => setIsOpen(true), []);
 
   return (
     <HostPicker
       hosts={hosts}
       value=""
-      onSelect={handleSelect}
+      onSelect={onOpenHostSettings}
       open={isOpen}
       onOpenChange={setIsOpen}
       anchorRef={triggerRef}
@@ -386,7 +379,6 @@ function SidebarFooter({
     hosts: string;
     importSession: string;
     settings: string;
-    searchHosts: string;
   };
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
@@ -459,12 +451,9 @@ function MobileSidebar({
   insetsBottom,
   closeSidebar,
 }: MobileSidebarProps) {
+  const active = useRetainedPanelActive();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
-
-  const handleWorkspacePress = useCallback(() => {
-    closeSidebar();
-  }, [closeSidebar]);
 
   const mobileSidebarInsetStyle = useMemo(
     () => ({
@@ -521,7 +510,7 @@ function MobileSidebar({
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh}
             onRefresh={handleRefresh}
-            onWorkspacePress={handleWorkspacePress}
+            onWorkspacePress={closeSidebar}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
             parentGestureRef={closeGestureRef}
@@ -530,6 +519,7 @@ function MobileSidebar({
         )}
 
         <UsageSidebarItem />
+        <HostMonitorSidebar active={active} />
         <SidebarFooter
           theme={theme}
           handleOpenProject={handleOpenProject}
@@ -707,6 +697,7 @@ function DesktopSidebar({
         <SidebarCalloutSlot />
 
         <UsageSidebarItem />
+        <HostMonitorSidebar active={active} />
         <SidebarFooter
           theme={theme}
           handleOpenProject={handleOpenProject}

@@ -6,7 +6,16 @@ import { getHostRuntimeStore, useHostRuntimeSnapshot } from "@/runtime/host-runt
 import { useSessionStore } from "@/stores/session-store";
 
 /** Read-only latest provider snapshot; never accumulate snapshots or include child usage. */
-export function SessionStatistics({ serverId, agentId }: { serverId: string; agentId: string }) {
+export function SessionStatistics({
+  serverId,
+  agentId,
+  fallbackSessionCost,
+}: {
+  serverId: string;
+  agentId: string;
+  /** Existing lastUsage cost remains visible when the typed statistics read is unavailable. */
+  fallbackSessionCost?: string | null;
+}) {
   const { t } = useTranslation();
   const runtime = useHostRuntimeSnapshot(serverId);
   const connected = runtime?.connectionStatus === "online";
@@ -44,18 +53,25 @@ export function SessionStatistics({ serverId, agentId }: { serverId: string; age
       <Text style={styles.detail}>{t("sessionStatistics.scope")}</Text>
       <Text style={styles.detail}>{t("sessionStatistics.children")}</Text>
       {!data ? (
-        <Text style={styles.detail} testID="session-statistics-state">
-          {connected && supported && query.isPending
-            ? t("providerUsage.loading")
-            : t("sessionStatistics.unavailable")}
-        </Text>
+        <>
+          <Text style={styles.detail} testID="session-statistics-state">
+            {connected && supported && query.isPending
+              ? t("providerUsage.loading")
+              : t("sessionStatistics.unavailable")}
+          </Text>
+          {fallbackSessionCost ? (
+            <Text style={styles.detail} testID="session-statistics-legacy-cost">
+              {t("contextWindow.sessionCost", { cost: fallbackSessionCost })}
+            </Text>
+          ) : null}
+        </>
       ) : (
         <>
           {(
             [
               ["agentId", data.agentId],
               ["provider", data.provider],
-              ["status", t(`agentList.status.${data.status}`)],
+              ["status", t(`sessionStatistics.statuses.${data.status}`)],
               ["configuredModel", data.configuredModel],
               ["effectiveModel", data.effectiveModel],
               ["updatedAt", data.updatedAt],

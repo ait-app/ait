@@ -5,7 +5,6 @@ import {
   buildWorkspaceTabSnapshot,
   createWorkspaceAgentVisibilitySelector,
   deriveWorkspaceAgentVisibility,
-  shouldPruneWorkspaceAgentTab,
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
 
@@ -211,50 +210,6 @@ describe("workspace agent visibility", () => {
     });
 
     expect(result.activeAgentIds).toEqual(new Set(["active-agent"]));
-  });
-
-  it("prunes archived agent tabs so archiving on one client closes tabs on all clients", () => {
-    const activeAgentIds = new Set<string>();
-
-    expect(
-      shouldPruneWorkspaceAgentTab({
-        agentId: "archived-agent",
-        agentsHydrated: true,
-        activeAgentIds,
-      }),
-    ).toBe(true);
-  });
-
-  it("prunes pinned archived agent tabs because archive state is authoritative", () => {
-    expect(
-      shouldPruneWorkspaceAgentTab({
-        agentId: "archived-agent",
-        agentsHydrated: true,
-        activeAgentIds: new Set<string>(),
-      }),
-    ).toBe(true);
-  });
-
-  it("does not prune active agent tabs", () => {
-    const activeAgentIds = new Set(["active-agent"]);
-
-    expect(
-      shouldPruneWorkspaceAgentTab({
-        agentId: "active-agent",
-        agentsHydrated: true,
-        activeAgentIds,
-      }),
-    ).toBe(false);
-  });
-
-  it("prunes agent tabs once agents are hydrated and the agent is missing from activeAgentIds", () => {
-    expect(
-      shouldPruneWorkspaceAgentTab({
-        agentId: "missing-agent",
-        agentsHydrated: true,
-        activeAgentIds: new Set<string>(),
-      }),
-    ).toBe(true);
   });
 
   it("matches agents by workspaceId regardless of cwd", () => {

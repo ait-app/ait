@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
 
 export const CHANGES_PREFERENCES_STORAGE_KEY = "@paseo:changes-preferences";
-export const LEGACY_WRAP_LINES_STORAGE_KEY = "diff-wrap-lines";
+const LEGACY_WRAP_LINES_STORAGE_KEY = "diff-wrap-lines";
 export const CHANGES_PREFERENCES_QUERY_KEY = ["changes-preferences"];
 
 const changesPreferencesSchema = z.strictObject({

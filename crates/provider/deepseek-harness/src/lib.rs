@@ -1,0 +1,333 @@
+//! `DeepSeek` Harness native interactive Host, with explicit legacy ACP compatibility.
+
+mod config;
+mod launcher;
+mod metadata;
+mod native;
+mod session;
+mod transport;
+
+use std::path::PathBuf;
+use std::time::Duration;
+
+use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
+use serde_json::{Value, json};
+
+use provider_core::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+};
+use provider_core::ports::environment::AgentEnvironment;
+use provider_core::protocol::provider::Details;
+
+/// Stable provider identity used by creation, discovery and durable resume handles.
+const PROVIDER: &str = "deepseek-harness";
+
+/// Local Harness launcher; native profiles own credentials, tools and durable sessions.
+#[derive(Debug, Clone)]
+pub struct DeepSeekHarnessClient {
+    program: PathBuf,
+    desktop: Option<launcher::Desktop>,
+    interactive: bool,
+    native_profile: std::ffi::OsString,
+    deadline: Duration,
+    environment: AgentEnvironment,
+    images: provider_native::images::ImageStore,
+}
+
+impl DeepSeekHarnessClient {
+    /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
+    /// Control operations have a thirty-second deadline; prompts have no duration limit.
+    #[must_use]
+    pub fn new(program: PathBuf) -> Self {
+        Self {
+            program,
+            desktop: None,
+            interactive: true,
+            native_profile: "web".into(),
+            deadline: Duration::from_secs(30),
+            environment: AgentEnvironment::default(),
+            images: provider_native::images::ImageStore::default(),
+        }
+    }
+
+    /// Select the Web Host profile whose plugins and presets discovery and sessions use.
+    /// `profile` is passed as one CLI argument; DSH validates the profile and its Host support.
+    /// Returns this configured client without initializing or changing the native profile.
+    #[must_use]
+    pub fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
+        self.native_profile = profile;
+        self
+    }
+
+    /// Retain the automation-only ACP profile for older Harness installations.
+    /// ACP does not expose permission presets or interactive user questions.
+    #[must_use]
+    pub fn with_acp_profile(mut self) -> Self {
+        self.interactive = false;
+        self
+    }
+
+    /// Materialize native image output in `directory` for live display and saved timelines.
+    #[must_use]
+    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+        self.images = provider_native::images::ImageStore::new(directory);
+        self
+    }
+
+    async fn probe(&self, spec: &AgentSessionSpec) -> Result<Details, AgentSessionError> {
+        if self.interactive {
+            let mut session = native::session::open(self, spec, None).await?;
+            let details = session.details();
+            let closed = session.close().await;
+            let details = details?;
+            closed?;
+            return Ok(details);
+        }
+        let mut session = session::open(self, spec, None).await?;
+        let details = config::details(&session.options);
+        let closed = session.close().await;
+        let details = details?;
+        closed?;
+        Ok(details)
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentClient for DeepSeekHarnessClient {
+    /// ACP sessions receive `mcpServers`; each native session's private Web Host loads the
+    /// servers as `dsh-mcp-client` plugins from a `--patch` overlay, not the user's profile.
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
+    async fn usage(&self) -> Result<Value, AgentSessionError> {
+        if !self.interactive {
+            return Ok(native::quota::acp_unavailable());
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        native::quota::read(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
+    }
+
+    async fn prepare_usage(
+        &self,
+    ) -> Result<provider_core::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        if !self.interactive {
+            return Ok(provider_core::ports::account_usage::PreparedUsage {
+                identity: None,
+                report: Box::pin(async { Ok(native::quota::acp_unavailable()) }),
+            });
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        native::quota::prepare_host(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
+    }
+
+    fn supports_summary_generation(&self) -> bool {
+        true
+    }
+
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
+        let mut selection = provider_native::summary_model::select(
+            self.provider(),
+            models,
+            &["deepseek-flash", "haiku", "mini", "flash"],
+        )?;
+        // The headless profile only exposes a reasoning override for the official
+        // DeepSeek adapter. Other adapters retain their native defaults.
+        let model: Vec<String> = serde_json::from_str(selection.model.as_deref()?).ok()?;
+        if model
+            .first()
+            .is_none_or(|provider| provider != "deepseek-official")
+        {
+            selection.thinking_option_id = None;
+        }
+        Some(selection)
+    }
+
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        self.metadata(spec, prompt, schema).await
+    }
+
+    fn supports_session_import(&self) -> bool {
+        self.interactive
+    }
+
+    async fn list_sessions(
+        &self,
+        options: &provider_core::ports::native_history::ListOptions,
+    ) -> Result<Vec<provider_core::ports::native_history::SessionDescriptor>, AgentSessionError>
+    {
+        native::native_sessions::list(self, options).await
+    }
+
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<provider_core::ports::native_history::SessionHistory, AgentSessionError> {
+        native::native_sessions::inspect(self, handle, cwd).await
+    }
+
+    fn provider(&self) -> &'static str {
+        PROVIDER
+    }
+
+    fn supports_history_replay(&self) -> bool {
+        self.interactive
+    }
+
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<provider_core::protocol::timeline::NativeItem>, AgentSessionError> {
+        if !self.interactive {
+            return Err(AgentSessionError::Unavailable);
+        }
+        native::history::read(self, handle, cwd).await
+    }
+
+    fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        if self.interactive {
+            native::config::validate(config)
+        } else {
+            config::validate(config)
+        }
+    }
+
+    fn settings(&self, _config: &StoredAgentConfig) -> Value {
+        if self.interactive {
+            return json!({"availableModes":[],"features":[],"capabilities":{
+                "supportsMcpServers":false,"supportsStreaming":true,"supportsReasoningStream":true,
+                "supportsDynamicModes":true,"supportsSessionListing":true,
+                "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}});
+        }
+        json!({"availableModes":[],"features":[],"capabilities":{
+            "supportsMcpServers":true,"supportsStreaming":true,"supportsReasoningStream":true,
+            "supportsDynamicModes":false,"supportsSessionListing":false,
+            "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}})
+    }
+
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        self.validate_config(&spec.config)?;
+        if !self.interactive {
+            return Ok(Vec::new());
+        }
+        let mut details = native::discovery::discover(self, &spec.cwd).await?;
+        if let Some(value) = spec
+            .config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get("permission_preset"))
+        {
+            details.features[0]["value"] = value.clone();
+        }
+        Ok(details.features)
+    }
+
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(provider_native::configuration::executable(&self.program)
+            && self
+                .desktop
+                .as_ref()
+                .is_none_or(|desktop| desktop.entrypoint.is_file()))
+    }
+
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !self.is_available().await? {
+            return Ok("DeepSeek Harness executable is unavailable".to_owned());
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        let details = self
+            .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
+            .await?;
+        Ok(format!(
+            "DeepSeek Harness {} ready; {} models",
+            if self.interactive {
+                "native Host"
+            } else {
+                "ACP v1"
+            },
+            details.models.len()
+        ))
+    }
+
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        if self.interactive {
+            return native::discovery::discover(self, cwd).await;
+        }
+        self.probe(&AgentSessionSpec {
+            provider: PROVIDER.to_owned(),
+            cwd: cwd.to_owned(),
+            config: StoredAgentConfig::default(),
+            confinement: None,
+        })
+        .await
+    }
+
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        if self.interactive {
+            self.validate_config(&spec.config)?;
+            let details = native::discovery::discover(self, &spec.cwd).await?;
+            return native::presets::validate_selection(&details, &spec.config);
+        }
+        self.probe(spec).await.map(|_| ())
+    }
+
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if self.interactive {
+            Ok(Box::new(native::session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        } else {
+            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        }
+    }
+
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        let mut client = self.clone();
+        client.environment = environment.clone();
+        client.create_session(spec).await
+    }
+
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
+        purpose: AgentResumePurpose,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        if self.interactive {
+            Ok(
+                Box::new(native::session::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>,
+            )
+        } else {
+            if handle
+                .metadata
+                .as_ref()
+                .is_some_and(|metadata| metadata.get("transport").is_some())
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests;

@@ -153,11 +153,8 @@ function findBrowserWebview(browserId: string, ownerDocument: Document): HTMLEle
 }
 
 function dimensionsForBrowser(browserId: string | null): { width: number; height: number } {
-  if (!browserId) {
-    return { width: RESIDENT_VIEWPORT_WIDTH, height: RESIDENT_VIEWPORT_HEIGHT };
-  }
   return (
-    residentWebviewSizesByBrowserId.get(browserId) ?? {
+    (browserId ? residentWebviewSizesByBrowserId.get(browserId) : undefined) ?? {
       width: RESIDENT_VIEWPORT_WIDTH,
       height: RESIDENT_VIEWPORT_HEIGHT,
     }
@@ -366,12 +363,7 @@ export function takeResidentBrowserWebview(browserId: string): HTMLElement | nul
     return null;
   }
 
-  const webview = residentWebviewsByBrowserId.get(normalizedBrowserId) ?? null;
-  if (!webview) {
-    return null;
-  }
-
-  return webview;
+  return residentWebviewsByBrowserId.get(normalizedBrowserId) ?? null;
 }
 
 export function releaseResidentBrowserWebview(browserId: string, webview: HTMLElement): void {

@@ -6,7 +6,7 @@ amends:
   - providers/adr-089-provider-owned-composition.md
   - providers/adr-101-provider-summary-generator.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
   - crates/model
 ---
 

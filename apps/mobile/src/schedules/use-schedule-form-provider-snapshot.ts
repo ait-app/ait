@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { normalizeProvidersSnapshotCwd } from "@/data/providers-snapshot";
 import type { ScheduleFormModel, ScheduleFormState } from "./schedule-form-model";
 
 export function useScheduleFormProviderSnapshot(
@@ -18,8 +19,15 @@ export function useScheduleFormProviderSnapshot(
     if (!enabled || !serverId || !snapshot.entries) {
       return;
     }
+    const current = model.getState();
+    if (
+      current.selectedServerId !== serverId ||
+      normalizeProvidersSnapshotCwd(current.workingDir) !== normalizeProvidersSnapshotCwd(cwd)
+    ) {
+      return;
+    }
     model.applyProviderSnapshot(serverId, { entries: snapshot.entries });
-  }, [enabled, model, serverId, snapshot.entries]);
+  }, [cwd, enabled, model, serverId, snapshot.entries]);
 
   return snapshot;
 }

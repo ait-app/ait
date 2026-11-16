@@ -9,7 +9,7 @@ import type {
   ForgeSearchItem,
   TerminalProfile,
 } from "@ait/protocol/messages";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";
@@ -92,7 +92,6 @@ import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import type { WorkspaceIsolation } from "@/create-agent-preferences/preferences";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { toErrorMessage } from "@/utils/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
@@ -188,13 +187,6 @@ function resolveVisibleDraftContextScopeKeys(input: {
     return [];
   }
   return [input.draftContextScopeKey];
-}
-
-function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | "terminal" | "voice" | null;
-  isDraftHandoffActive: boolean;
-}): boolean {
-  return input.pendingAction !== null || input.isDraftHandoffActive;
 }
 
 function buildFirstAgentContext(input: {
@@ -350,6 +342,7 @@ function ProjectPickerTrigger({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(label);
   const placeholderInitial = displayInitial(placeholderLabel) || "?";
   return (
@@ -363,7 +356,7 @@ function ProjectPickerTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="Workspace project"
+          accessibilityLabel={t("newWorkspace.projectPicker.accessibilityLabel")}
         >
           <View style={styles.badgeIconBox}>
             {projectViewKey ? (
@@ -696,6 +689,7 @@ function IsolationPickerTrigger({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
@@ -707,7 +701,7 @@ function IsolationPickerTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="Workspace isolation"
+          accessibilityLabel={t("newWorkspace.isolation.accessibilityLabel")}
         >
           <View style={styles.badgeIconBox}>
             <IsolationIcon isolation={isolation} iconSize={iconSize} iconColor={iconColor} />
@@ -981,20 +975,6 @@ function buildWorkspaceDraftSetupForCreatedWorkspace(input: {
   });
 }
 
-function buildComposerInitialValues(input: {
-  initialSetup?: WorkspaceDraftTabSetup | null;
-}): CreateAgentInitialValues | undefined {
-  if (input.initialSetup) {
-    return {
-      provider: input.initialSetup.provider,
-      modeId: input.initialSetup.modeId,
-      model: input.initialSetup.model,
-      thinkingOptionId: input.initialSetup.thinkingOptionId,
-    };
-  }
-  return undefined;
-}
-
 const pendingWorkspaceSubmissions = new Map<string, Promise<SubmitOutcome>>();
 function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOutcome> {
   const key = JSON.stringify([input.serverId, input.draftId]);
@@ -1017,16 +997,12 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
   if (!provider) {
     throw new Error(input.labels.selectModel);
   }
-  const attachmentSubmitFormat = resolveComposerAttachmentSubmitFormat({
-    supportsForgeAttachments: input.supportsForgeSearch,
-  });
-  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments, {
-    format: attachmentSubmitFormat,
-  });
-  const workspaceNamingAttachments = getWorkspaceNamingAttachments(reviewAttachments);
   const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
-    format: attachmentSubmitFormat,
+    format: resolveComposerAttachmentSubmitFormat({
+      supportsForgeAttachments: input.supportsForgeSearch,
+    }),
   });
+  const workspaceNamingAttachments = getWorkspaceNamingAttachments(wirePayload.attachments);
   const images = await encodeImages(wirePayload.images, {
     text,
     attachments: wirePayload.attachments,
@@ -1121,7 +1097,14 @@ function buildComposerConfig(input: {
   const workingDir = workspaceDirectory || sourceDirectory || undefined;
   return {
     initialServerId: serverId || null,
-    initialValues: buildComposerInitialValues({ initialSetup }),
+    initialValues: initialSetup
+      ? {
+          provider: initialSetup.provider,
+          modeId: initialSetup.modeId,
+          model: initialSetup.model,
+          thinkingOptionId: initialSetup.thinkingOptionId,
+        }
+      : undefined,
     initialFeatureValues: initialSetup?.featureValues,
     isVisible: true,
     lockedWorkingDir: workingDir,
@@ -1325,10 +1308,6 @@ function useNewWorkspaceHostSelector(input: {
     [routeServerId],
   );
 
-  const handleHostPickerOpenChange = useCallback((open: boolean) => {
-    setHostPickerOpen(open);
-  }, []);
-
   const openHostPicker = useCallback(() => {
     setHostPickerOpen(true);
   }, []);
@@ -1337,7 +1316,7 @@ function useNewWorkspaceHostSelector(input: {
     selectedServerId,
     hostPickerOpen,
     handleSelectHost,
-    handleHostPickerOpenChange,
+    handleHostPickerOpenChange: setHostPickerOpen,
     openHostPicker,
   };
 }
@@ -1501,7 +1480,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
   const selectedHostLabel =
-    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
+    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? t("hostPicker.host");
   const showHostControl = groupHosts(host.allHosts).length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
@@ -1544,14 +1523,14 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         value={project.selectedOptionId}
         onSelect={project.onSelect}
         searchable
-        searchPlaceholder="Search projects"
-        title="Project"
+        searchPlaceholder={t("newWorkspace.projectPicker.searchPlaceholder")}
+        title={t("newWorkspace.projectPicker.title")}
         open={project.openState}
         onOpenChange={project.onOpenChange}
         desktopPlacement="bottom-start"
         desktopMinWidth={360}
         anchorRef={project.anchorRef}
-        emptyText="No projects available."
+        emptyText={t("newWorkspace.projectPicker.empty")}
         renderOption={project.renderOption}
         footer={addProjectAction}
       />
@@ -1568,7 +1547,6 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         onOpenChange={host.onOpenChange}
         anchorRef={host.anchorRef}
         searchable={false}
-        title="Host"
         desktopPlacement="bottom-start"
         desktopMinWidth={200}
         hostOptionTestID={newWorkspaceHostOptionTestID}
@@ -1578,7 +1556,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
             <Pressable
               ref={host.anchorRef}
               accessibilityRole="button"
-              accessibilityLabel="Host"
+              accessibilityLabel={t("hostPicker.host")}
               onPress={host.open}
               disabled={isPending || host.allHosts.length === 0}
               style={badgePressableStyle}
@@ -1673,10 +1651,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
 
   return isCompact ? (
     <View testID="new-workspace-ref-picker-row" style={styles.formStack} pointerEvents="box-none">
-      <FormRow>{projectControl}</FormRow>
       {hostControl ? <FormRow>{hostControl}</FormRow> : null}
-      {isolationControl ? <FormRow>{isolationControl}</FormRow> : null}
+      <FormRow>{projectControl}</FormRow>
       {baseControl ? <FormRow>{baseControl}</FormRow> : null}
+      {isolationControl ? <FormRow>{isolationControl}</FormRow> : null}
       <FormRow>{launchControl}</FormRow>
       {/* Keep fixed stack height without separating the visible controls. */}
       {isolationControl ? null : <View style={styles.baseSpacer} pointerEvents="none" />}
@@ -1688,10 +1666,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
       style={styles.formStackDesktop}
       pointerEvents="box-none"
     >
-      {projectControl}
       {hostControl}
-      {isolationControl}
+      {projectControl}
       {baseControl}
+      {isolationControl}
       <View style={styles.launchSpacer} pointerEvents="none" />
       {launchControl}
     </View>
@@ -1895,7 +1873,7 @@ export function NewWorkspaceScreen({
   const worktreeSupport = selectedProject
     ? getWorktreeSupportForHostProject({ project: selectedProject, serverId: selectedServerId })
     : "unsupported";
-  const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
+  const isPending = pendingAction !== null || isDraftHandoffActive;
   const { effectiveIsolation, setIsolation, canCreateWorktree, canSandboxWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
@@ -2065,10 +2043,6 @@ export function NewWorkspaceScreen({
     setIsolationPickerOpen(true);
   }, []);
 
-  const handleIsolationPickerOpenChange = useCallback((nextOpen: boolean) => {
-    setIsolationPickerOpen(nextOpen);
-  }, []);
-
   // Worktree levels are omitted entirely (not disabled) when the project isn't a
   // git checkout, and the sandboxed level when the host cannot confine writes.
   const isolationOptions = useMemo<ComboboxOptionType[]>(
@@ -2120,19 +2094,11 @@ export function NewWorkspaceScreen({
     [isPending, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
-  const handleClearDraft = useCallback(() => {
-    // No-op: screen navigates away on success, text should stay for retry on error
-  }, []);
-
   const handlePickerOpenChange = useCallback((nextOpen: boolean) => {
     setPickerOpen(nextOpen);
     if (!nextOpen) {
       setPickerSearchQuery("");
     }
-  }, []);
-
-  const handleProjectPickerOpenChange = useCallback((nextOpen: boolean) => {
-    setProjectPickerOpen(nextOpen);
   }, []);
 
   const ensureWorkspace = useCallback(
@@ -2145,10 +2111,10 @@ export function NewWorkspaceScreen({
       onEvent?: (snapshot: CreationSnapshot) => void;
     }) => {
       if (!selectedProject) {
-        throw new Error("Choose a project");
+        throw new Error(t("newWorkspace.errors.chooseProject"));
       }
       if (!selectedSourceDirectory) {
-        throw new Error("Choose a host for this project");
+        throw new Error(t("newWorkspace.errors.chooseHost"));
       }
       const isolation = supportsWorkspaceMultiplicity ? effectiveIsolation : "worktree";
       const requestKey = buildWorkspaceCreationRequestKey({
@@ -2493,7 +2459,7 @@ export function NewWorkspaceScreen({
       onSelect: handleSelectProjectOption,
       onAddProject: handleAddProject,
       openState: projectPickerOpen,
-      onOpenChange: handleProjectPickerOpenChange,
+      onOpenChange: setProjectPickerOpen,
       renderOption: renderProjectOption,
     },
     host: {
@@ -2512,7 +2478,7 @@ export function NewWorkspaceScreen({
       options: isolationOptions,
       onSelect: handleSelectIsolationOption,
       openState: isolationPickerOpen,
-      onOpenChange: handleIsolationPickerOpenChange,
+      onOpenChange: setIsolationPickerOpen,
       renderOption: renderIsolationOption,
       canCreateWorktree,
     },
@@ -2598,7 +2564,8 @@ export function NewWorkspaceScreen({
       onForgeChangeRequestDetected={handleForgeChangeRequestDetected}
       onForgeChangeRequestAutoAttach={handleForgeChangeRequestAutoAttach}
       cwd={selectedSourceDirectory ?? ""}
-      clearDraft={handleClearDraft}
+      // The screen navigates away on success; text stays for a retry on error.
+      clearDraft={noopClearDraft}
       autoFocus
       autoFocusKey={launchFocusKey}
       commandDraftConfig={composerState?.commandDraftConfig}
@@ -2798,10 +2765,5 @@ const styles = StyleSheet.create((theme) => ({
     height: theme.iconSize.md,
     alignItems: "center",
     justifyContent: "center",
-  },
-  hostStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
 }));

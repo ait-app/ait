@@ -1,0 +1,657 @@
+//! Transport-independent agent runtime request handling.
+
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("agent.list.request"),
+    MethodSpec::request("agent.history.get.request"),
+    MethodSpec::request("agent.get.request"),
+    MethodSpec::request("agent.statistics.get.request"),
+    MethodSpec::request("agent.update.request"),
+    MethodSpec::request("agent.archive.request"),
+    MethodSpec::request("agent.delete.request"),
+    MethodSpec::request("agent.detach.request"),
+    MethodSpec::request("agent.attention.clear.request"),
+    MethodSpec::request("agent.items.close.request"),
+];
+
+use std::collections::BTreeSet;
+
+use model::methods::MethodSpec;
+
+pub(crate) mod listing;
+pub(crate) mod statistics;
+
+use chrono::{SecondsFormat, Utc};
+use domain::agent_runtime::{
+    AgentAttentionReason as DomainAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
+};
+use domain::workspace::protocol::workspace::ProjectCheckoutLitePayload;
+use domain::workspace::protocol::workspace::ProjectPlacementPayload;
+use serde_json::Value;
+
+use crate::protocol::agent_lifecycle::{
+    AgentActionResult, AgentArchiveResult, AgentAttentionClearRequest, AgentAttentionClearResult,
+    AgentCapabilityFlags, AgentDeleteResult, AgentDirectoryEntry, AgentDirectoryFilter,
+    AgentDirectoryResult, AgentGetRequest, AgentGetResult, AgentHistoryRequest, AgentIdRequest,
+    AgentIdSelection, AgentItemsCloseRequest, AgentItemsCloseResult, AgentListRequest,
+    AgentPageInfo, AgentPersistenceHandle, AgentRuntimeInfo, AgentSnapshotPayload, AgentSort,
+    AgentSortKey, AgentStatus, AgentUpdateRequest, ClosedAgentResult, SortDirection,
+};
+use crate::rpc::ErrorCode;
+use crate::service::agent_runtime::{
+    AgentDirectoryEntry as ApplicationEntry, AgentDirectoryPage as ApplicationPage,
+    AgentDirectoryQuery, AgentPlacement, AgentRuntimeDirectory, AgentRuntimeError,
+    AgentSort as ApplicationSort, AgentSortKey as ApplicationSortKey, ResolvedAgent,
+    SortDirection as ApplicationSortDirection, ThinkingOptionFilter, effective_thinking_option_id,
+    resolved_updated_at,
+};
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
+use provider_core::protocol::agent_config::NullableSetting;
+
+/// Decode and execute a business request.
+///
+/// # Errors
+/// Returns stable business failures for invalid or unsuccessful requests.
+pub(crate) fn execute(
+    directory: &mut AgentRuntimeDirectory,
+    method: &str,
+    params: Value,
+) -> Result<Value, ErrorCode> {
+    match method {
+        "agent.list.request" => list(directory, decode(params)?),
+        "agent.history.get.request" => history(directory, decode(params)?),
+        "agent.get.request" => get(directory, &decode(params)?),
+        "agent.statistics.get.request" => statistics::get(directory, &decode(params)?),
+        "agent.update.request" => update(directory, decode(params)?),
+        "agent.archive.request" => archive(directory, decode(params)?),
+        "agent.delete.request" => delete(directory, decode(params)?),
+        "agent.detach.request" => detach(directory, decode(params)?),
+        "agent.attention.clear.request" => clear_attention(directory, decode(params)?),
+        "agent.items.close.request" => close_items(directory, &decode(params)?),
+        _ => Err(ErrorCode::MethodNotFound),
+    }
+}
+
+fn list(directory: &AgentRuntimeDirectory, request: AgentListRequest) -> Result<Value, ErrorCode> {
+    if request
+        .scope
+        .as_deref()
+        .is_some_and(|scope| scope != "active")
+    {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    if request.subscribe.is_some() {
+        return Err(ErrorCode::UnsupportedCapability);
+    }
+    if let Some(cursor) = request.sync.clone() {
+        let include_observed = request.include_observed;
+        let snapshot = sync_snapshot(directory, request)?;
+        return synchronize(directory, snapshot, &cursor, include_observed);
+    }
+    let mut query = query(
+        request.filter,
+        request.sort,
+        request.page,
+        if request.scope.as_deref() == Some("active") {
+            QueryScope::Active
+        } else {
+            QueryScope::All
+        },
+        None,
+    )?;
+    query.include_observed = request.include_observed;
+    encode(
+        page(&directory.list(&query).map_err(|error| map_error(&error))?),
+        ErrorCode::AgentIo,
+    )
+}
+
+pub(crate) fn sync_snapshot(
+    directory: &AgentRuntimeDirectory,
+    request: AgentListRequest,
+) -> Result<Value, ErrorCode> {
+    if request.scope.as_deref() != Some("active") || request.filter.is_some() {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    if request
+        .page
+        .as_ref()
+        .is_some_and(|page| !(1..=200).contains(&page.limit))
+    {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let mut query = query(None, request.sort, None, QueryScope::Active, None)?;
+    query.include_observed = request.include_observed;
+    let entries = directory
+        .matching_entries(&query)
+        .map_err(|error| map_error(&error))?;
+    encode(
+        AgentDirectoryResult {
+            entries: entries.iter().map(entry).collect(),
+            page_info: AgentPageInfo {
+                next_cursor: None,
+                prev_cursor: None,
+                has_more: false,
+            },
+        },
+        ErrorCode::AgentIo,
+    )
+}
+
+pub(crate) fn synchronize(
+    directory: &AgentRuntimeDirectory,
+    mut snapshot: Value,
+    cursor: &domain::directory_sync::Cursor,
+    include_observed: bool,
+) -> Result<Value, ErrorCode> {
+    let Value::Array(rows) = snapshot["entries"].take() else {
+        return Err(ErrorCode::AgentIo);
+    };
+    let rows = rows.into_iter().map(|row| {
+        let id = row["agent"]["id"].as_str().unwrap_or_default().to_owned();
+        (id, row)
+    });
+    let mut scoped_cursor = cursor.clone();
+    if include_observed {
+        scoped_cursor.generation = cursor
+            .generation
+            .as_deref()
+            .and_then(|generation| generation.strip_suffix(":observed"))
+            .map(str::to_owned);
+    }
+    let mut read = directory.sync.synchronize(
+        if include_observed {
+            "agents:observed"
+        } else {
+            "agents"
+        },
+        rows,
+        &scoped_cursor,
+    );
+    if include_observed {
+        read.sync.generation.push_str(":observed");
+    }
+    snapshot["entries"] = Value::Array(read.values);
+    snapshot["sync"] = encode(read.sync, ErrorCode::AgentIo)?;
+    Ok(snapshot)
+}
+
+fn history(
+    directory: &AgentRuntimeDirectory,
+    request: AgentHistoryRequest,
+) -> Result<Value, ErrorCode> {
+    let mut query = query(
+        request.filter,
+        request.sort,
+        request.page,
+        QueryScope::History,
+        request.search,
+    )?;
+    query.include_observed = request.include_observed;
+    encode(
+        page(
+            &directory
+                .history(&query)
+                .map_err(|error| map_error(&error))?,
+        ),
+        ErrorCode::AgentIo,
+    )
+}
+
+fn get(directory: &AgentRuntimeDirectory, request: &AgentGetRequest) -> Result<Value, ErrorCode> {
+    let resolved = if request.public_only {
+        directory.get(&request.agent_id)
+    } else {
+        directory.get_readable(&request.agent_id)
+    };
+    let result = match resolved {
+        Ok(resolved) => get_result(&resolved),
+        Err(error @ (AgentRuntimeError::NotFound(_) | AgentRuntimeError::Ambiguous(_))) => {
+            AgentGetResult {
+                agent: None,
+                project: None,
+                error: Some(error.to_string()),
+            }
+        }
+        Err(error) => return Err(map_error(&error)),
+    };
+    encode(result, ErrorCode::AgentIo)
+}
+
+fn update(
+    directory: &AgentRuntimeDirectory,
+    request: AgentUpdateRequest,
+) -> Result<Value, ErrorCode> {
+    let agent_id = request.agent_id;
+    let result = match directory.update(
+        &agent_id,
+        request.name.as_deref(),
+        request.labels.as_ref(),
+        &now_timestamp(),
+    ) {
+        Ok(_) => AgentActionResult {
+            agent_id,
+            accepted: true,
+            error: None,
+        },
+        Err(AgentRuntimeError::InvalidRequest | AgentRuntimeError::NotFound(_)) => {
+            AgentActionResult {
+                agent_id,
+                accepted: false,
+                error: Some("Nothing to update or Agent not found".to_owned()),
+            }
+        }
+        Err(error) => return Err(map_error(&error)),
+    };
+    encode(result, ErrorCode::AgentIo)
+}
+
+fn archive(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
+    let agent_id = request.agent_id;
+    let record = directory
+        .archive(&agent_id, &now_timestamp())
+        .map_err(|error| map_error(&error))?;
+    encode(
+        AgentArchiveResult {
+            agent_id,
+            archived_at: record.archived_at.ok_or(ErrorCode::AgentIo)?,
+        },
+        ErrorCode::AgentIo,
+    )
+}
+
+fn delete(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
+    directory
+        .delete(&request.agent_id)
+        .map_err(|error| map_error(&error))?;
+    encode(
+        AgentDeleteResult {
+            agent_id: request.agent_id,
+        },
+        ErrorCode::AgentIo,
+    )
+}
+
+fn detach(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
+    let agent_id = request.agent_id;
+    let result = match directory.detach(&agent_id, &now_timestamp()) {
+        Ok(_) => AgentActionResult {
+            agent_id,
+            accepted: true,
+            error: None,
+        },
+        Err(error) => AgentActionResult {
+            agent_id,
+            accepted: false,
+            error: Some(error.to_string()),
+        },
+    };
+    encode(result, ErrorCode::AgentIo)
+}
+
+fn clear_attention(
+    directory: &AgentRuntimeDirectory,
+    request: AgentAttentionClearRequest,
+) -> Result<Value, ErrorCode> {
+    let ids = match &request.agent_id {
+        AgentIdSelection::One(agent_id) => vec![agent_id.clone()],
+        AgentIdSelection::Many(agent_ids) => agent_ids.clone(),
+    };
+    if ids.is_empty() {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let records = directory
+        .clear_attention(&ids, &now_timestamp())
+        .map_err(|error| map_error(&error))?;
+    encode(
+        AgentAttentionClearResult {
+            agent_id: request.agent_id,
+            agents: records.iter().map(snapshot).collect(),
+        },
+        ErrorCode::AgentIo,
+    )
+}
+
+fn close_items(
+    directory: &AgentRuntimeDirectory,
+    request: &AgentItemsCloseRequest,
+) -> Result<Value, ErrorCode> {
+    if !request.terminal_ids.is_empty() {
+        return Err(ErrorCode::UnsupportedCapability);
+    }
+    let archived_at = now_timestamp();
+    let agents = request
+        .agent_ids
+        .iter()
+        .filter_map(|agent_id| {
+            directory
+                .archive(agent_id, &archived_at)
+                .ok()
+                .and_then(|record| {
+                    record.archived_at.map(|archived_at| ClosedAgentResult {
+                        agent_id: agent_id.clone(),
+                        archived_at,
+                    })
+                })
+        })
+        .collect();
+    encode(
+        AgentItemsCloseResult {
+            agents,
+            terminals: Vec::new(),
+        },
+        ErrorCode::AgentIo,
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+enum QueryScope {
+    Active,
+    All,
+    History,
+}
+
+fn query(
+    filter: Option<AgentDirectoryFilter>,
+    sort: Option<Vec<AgentSort>>,
+    page: Option<crate::protocol::agent_lifecycle::AgentPageRequest>,
+    scope: QueryScope,
+    search: Option<String>,
+) -> Result<AgentDirectoryQuery, ErrorCode> {
+    let filter = filter.unwrap_or_default();
+    if filter.workspace_ids.as_ref().is_some_and(|ids| {
+        ids.len() > 200 || ids.iter().any(|id| id.trim().is_empty() || id.len() > 256)
+    }) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let (cursor, limit) = match page {
+        Some(page) if (1..=200).contains(&page.limit) => (page.cursor, page.limit),
+        Some(_) => return Err(ErrorCode::InvalidMessage),
+        None => (None, 200),
+    };
+    Ok(AgentDirectoryQuery {
+        include_observed: false,
+        active_scope: matches!(scope, QueryScope::Active),
+        include_archived: filter
+            .include_archived
+            .unwrap_or(matches!(scope, QueryScope::History)),
+        labels: filter.labels.unwrap_or_default(),
+        project_keys: filter.project_keys.and_then(|keys| {
+            let keys = keys
+                .into_iter()
+                .filter(|key| !key.trim().is_empty())
+                .collect::<BTreeSet<_>>();
+            (!keys.is_empty()).then_some(keys)
+        }),
+        workspace_ids: filter.workspace_ids.map(|ids| ids.into_iter().collect()),
+        statuses: filter.statuses.and_then(|statuses| {
+            let statuses = statuses
+                .into_iter()
+                .map(domain_status)
+                .collect::<BTreeSet<_>>();
+            (!statuses.is_empty()).then_some(statuses)
+        }),
+        requires_attention: filter.requires_attention,
+        thinking_option_id: match filter.thinking_option_id {
+            NullableSetting::Unchanged => None,
+            NullableSetting::Clear => Some(ThinkingOptionFilter::ProviderDefault),
+            NullableSetting::Set(id) => Some(ThinkingOptionFilter::Selected(id)),
+        },
+        search,
+        sort: sort
+            .unwrap_or_default()
+            .into_iter()
+            .map(application_sort)
+            .collect(),
+        cursor,
+        limit,
+    })
+}
+
+fn page(page: &ApplicationPage) -> AgentDirectoryResult {
+    AgentDirectoryResult {
+        entries: page.entries.iter().map(entry).collect(),
+        page_info: AgentPageInfo {
+            next_cursor: page.next_cursor.clone(),
+            prev_cursor: page.prev_cursor.clone(),
+            has_more: page.has_more,
+        },
+    }
+}
+
+fn entry(entry: &ApplicationEntry) -> AgentDirectoryEntry {
+    AgentDirectoryEntry {
+        agent: snapshot(&entry.agent),
+        project: project(&entry.placement),
+    }
+}
+
+fn get_result(resolved: &ResolvedAgent) -> AgentGetResult {
+    AgentGetResult {
+        agent: Some(snapshot(&resolved.agent)),
+        project: resolved.placement.as_ref().map(project),
+        error: None,
+    }
+}
+
+pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPayload {
+    let configured_thinking = record
+        .config
+        .as_ref()
+        .and_then(|config| config.thinking_option_id.clone());
+    let runtime_info = record.runtime_info.as_ref().map(|info| AgentRuntimeInfo {
+        provider: info.provider.clone(),
+        session_id: info.session_id.clone(),
+        model: info.model.clone(),
+        thinking_option_id: info.thinking_option_id.clone(),
+        mode_id: info.mode_id.clone(),
+        extra: info.extra.clone(),
+    });
+    let effective_thinking_option_id = effective_thinking_option_id(record).map(str::to_owned);
+    AgentSnapshotPayload {
+        id: record.id.clone(),
+        management: if record.observation.is_some() {
+            "observed"
+        } else {
+            "managed"
+        },
+        parent_agent_id: record
+            .observation
+            .as_ref()
+            .map(|source| source.parent_agent_id.clone())
+            .or_else(|| record.labels.get("paseo.parent-agent-id").cloned()),
+        observation: record.observation.as_ref().map(|source| {
+            serde_json::json!({
+            "revision":source.revision,"rootAgentId":source.root_agent_id,"nativeId":source.native_id,
+                "status":source.status,"health":source.health,"observedAt":source.observed_at,
+                "description":source.description,"subtitle":source.subtitle
+            })
+        }),
+        provider: record.provider.clone(),
+        cwd: record.cwd.clone(),
+        workspace_id: record
+            .workspace_id
+            .clone()
+            .filter(|workspace_id| !workspace_id.is_empty()),
+        model: record
+            .config
+            .as_ref()
+            .and_then(|config| config.model.clone()),
+        features: Vec::new(),
+        thinking_option_id: configured_thinking,
+        effective_thinking_option_id,
+        created_at: wire_timestamp(&record.created_at),
+        updated_at: wire_timestamp(resolved_updated_at(record)),
+        last_user_message_at: record.last_user_message_at.as_deref().map(wire_timestamp),
+        status: protocol_status(record.last_status),
+        active_turn: None,
+        capabilities: stored_capabilities(record),
+        current_mode_id: record.last_mode_id.clone(),
+        available_modes: Vec::new(),
+        pending_permissions: Vec::new(),
+        persistence: None::<AgentPersistenceHandle>,
+        runtime_info,
+        last_usage: statistics::last_usage(record),
+        last_error: None,
+        // A hidden session never gets a generated title; its tab still needs a name.
+        title: record
+            .title
+            .clone()
+            .or_else(|| record.internal.then(|| "Bot session".to_owned())),
+        labels: record.labels.clone(),
+        // A hidden session is inspected, never tracked: clients focus Agents that report attention.
+        requires_attention: record.requires_attention && !record.internal,
+        attention_reason: record
+            .attention_reason
+            .filter(|_| !record.internal)
+            .map(protocol_attention),
+        attention_timestamp: record
+            .attention_timestamp
+            .clone()
+            .filter(|_| !record.internal),
+        archived_at: record.archived_at.clone(),
+        provider_unavailable: true,
+        // Persisted records have no live side-question runner; the projection
+        // is attached only by the live manager snapshot path.
+        provider_ui: None,
+    }
+}
+
+fn project(placement: &AgentPlacement) -> ProjectPlacementPayload {
+    ProjectPlacementPayload {
+        project_key: placement.project_key.clone(),
+        project_name: placement.project_name.clone(),
+        workspace_name: Some(placement.workspace_name.clone()),
+        checkout: ProjectCheckoutLitePayload {
+            cwd: placement.cwd.clone(),
+            is_git: placement.is_git,
+            current_branch: placement.current_branch.clone(),
+            remote_url: None,
+            worktree_root: placement.worktree_root.clone(),
+            is_paseo_owned_worktree: placement.is_paseo_owned_worktree,
+            main_repo_root: placement.main_repo_root.clone(),
+        },
+    }
+}
+
+/// Controls withheld from a hidden session opened for inspection.
+pub(crate) const READ_ONLY_SESSION_FLAGS: [&str; 5] = [
+    "supportsMessageSend",
+    "supportsCancel",
+    "supportsConfiguration",
+    "supportsDetach",
+    "supportsArchive",
+];
+
+fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityFlags {
+    let mut flags: AgentCapabilityFlags = [
+        ("supportsStreaming", false),
+        ("supportsSessionPersistence", true),
+        ("supportsDynamicModes", false),
+        ("supportsMcpServers", false),
+        ("supportsReasoningStream", false),
+        ("supportsToolInvocations", true),
+        ("supportsRewindConversation", false),
+        ("supportsRewindFiles", false),
+        ("supportsRewindBoth", false),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value))
+    .collect();
+    if let Some(source) = &record.observation {
+        for flag in [
+            "supportsSessionPersistence",
+            "supportsMessageSend",
+            "supportsCancel",
+            "supportsConfiguration",
+            "supportsDetach",
+        ] {
+            flags.insert(flag.to_owned(), false);
+        }
+        flags.insert("supportsArchive".to_owned(), source.status.is_terminal());
+        flags.insert("supportsStreaming".to_owned(), true);
+    }
+    if record.internal {
+        for flag in READ_ONLY_SESSION_FLAGS {
+            flags.insert(flag.to_owned(), false);
+        }
+    }
+    flags
+}
+
+const fn domain_status(status: AgentStatus) -> AgentRuntimeStatus {
+    match status {
+        AgentStatus::Initializing => AgentRuntimeStatus::Initializing,
+        AgentStatus::Idle => AgentRuntimeStatus::Idle,
+        AgentStatus::Running => AgentRuntimeStatus::Running,
+        AgentStatus::Error => AgentRuntimeStatus::Error,
+        AgentStatus::Closed => AgentRuntimeStatus::Closed,
+    }
+}
+
+const fn protocol_status(status: AgentRuntimeStatus) -> AgentStatus {
+    match status {
+        AgentRuntimeStatus::Initializing => AgentStatus::Initializing,
+        AgentRuntimeStatus::Idle => AgentStatus::Idle,
+        AgentRuntimeStatus::Running => AgentStatus::Running,
+        AgentRuntimeStatus::Error => AgentStatus::Error,
+        AgentRuntimeStatus::Closed => AgentStatus::Closed,
+    }
+}
+
+const fn protocol_attention(
+    reason: DomainAttentionReason,
+) -> crate::protocol::agent_lifecycle::AgentAttentionReason {
+    match reason {
+        DomainAttentionReason::Finished => {
+            crate::protocol::agent_lifecycle::AgentAttentionReason::Finished
+        }
+        DomainAttentionReason::Error => {
+            crate::protocol::agent_lifecycle::AgentAttentionReason::Error
+        }
+        DomainAttentionReason::Permission => {
+            crate::protocol::agent_lifecycle::AgentAttentionReason::Permission
+        }
+    }
+}
+
+const fn application_sort(sort: AgentSort) -> ApplicationSort {
+    ApplicationSort {
+        key: match sort.key {
+            AgentSortKey::StatusPriority => ApplicationSortKey::StatusPriority,
+            AgentSortKey::CreatedAt => ApplicationSortKey::CreatedAt,
+            AgentSortKey::UpdatedAt => ApplicationSortKey::UpdatedAt,
+            AgentSortKey::Title => ApplicationSortKey::Title,
+        },
+        direction: match sort.direction {
+            SortDirection::Asc => ApplicationSortDirection::Asc,
+            SortDirection::Desc => ApplicationSortDirection::Desc,
+        },
+    }
+}
+
+const fn map_error(error: &AgentRuntimeError) -> ErrorCode {
+    match error {
+        AgentRuntimeError::InvalidRequest | AgentRuntimeError::Ambiguous(_) => {
+            ErrorCode::InvalidMessage
+        }
+        AgentRuntimeError::NotFound(_) => ErrorCode::AgentNotFound,
+        AgentRuntimeError::AgentRegistry => ErrorCode::AgentIo,
+        AgentRuntimeError::WorkspaceRegistry => ErrorCode::RegistryIo,
+    }
+}
+
+fn wire_timestamp(value: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(value).map_or_else(
+        |_| value.to_owned(),
+        |timestamp| {
+            timestamp
+                .with_timezone(&Utc)
+                .to_rfc3339_opts(SecondsFormat::Millis, true)
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests;

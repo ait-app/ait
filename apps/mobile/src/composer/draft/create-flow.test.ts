@@ -12,7 +12,7 @@ import { requestWorkspaceDraftAgent } from "./create-agent-request";
 import { useSessionStore } from "@/stores/session-store";
 import { validateDraftCreation } from "./workspace-tab-core";
 
-vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn(async () => undefined) }));
+vi.mock("@/attachments/encode-images", () => ({ encodeImages: vi.fn(async () => undefined) }));
 
 describe("useDraftAgentCreateFlow", () => {
   beforeEach(() => {

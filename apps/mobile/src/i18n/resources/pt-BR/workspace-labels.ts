@@ -1,0 +1,48 @@
+import { labelDeletePluralForms } from "./helpers";
+
+export const workspaceLabels = {
+  title: "Etiquetas",
+  unlabelled: "Sem etiqueta",
+  create: "Criar etiqueta",
+  createConfirm: "Criar",
+  creating: "Criando…",
+  name: "Nome da etiqueta",
+  updateHostUse: "Atualize este host para usar etiquetas.",
+  errors: {
+    update: "Não foi possível atualizar a etiqueta",
+    load: "Não foi possível carregar as etiquetas",
+  },
+  colors: {
+    violet: "Violeta",
+    sky: "Azul-céu",
+    emerald: "Esmeralda",
+    orange: "Laranja",
+    pink: "Rosa",
+    indigo: "Índigo",
+    teal: "Verde-azulado",
+    red: "Vermelho",
+    amber: "Âmbar",
+    blue: "Azul",
+  },
+  filter: {
+    clear: "Limpar filtro",
+  },
+  manage: {
+    open: "Gerenciar etiquetas…",
+    title: "Gerenciar etiquetas",
+    search: "Buscar etiquetas",
+    empty: "Não há etiquetas neste host.",
+    edit: "Editar etiqueta",
+    editLabel: "Editar {{name}}",
+    name: "Nome",
+    color: "Cor",
+    save: "Salvar",
+    delete: "Excluir",
+    deleteTitle: "Excluir {{name}}?",
+    deleteMessage_one: "Isso remove a etiqueta de {{count}} workspace neste host.",
+    ...labelDeletePluralForms,
+    deleteMessage_other: "Isso remove a etiqueta de {{count}} workspaces neste host.",
+    offline: "Este host está offline.",
+    updateHost: "Atualize este host para gerenciar etiquetas.",
+  },
+};

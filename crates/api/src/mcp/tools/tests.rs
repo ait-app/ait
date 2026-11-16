@@ -141,3 +141,108 @@ fn key_tokens_translate_special_keys_and_preserve_literal_text() {
         assert_eq!(key_token(token), text);
     }
 }
+
+#[test]
+fn only_reads_of_a_settled_agent_count_as_observations() {
+    let at = "2026-11-12T08:00:00.000Z";
+    let snapshot = json!({"id":"agent-1","updatedAt":at});
+    let expected = Some((
+        "agent-1".to_owned(),
+        DateTime::parse_from_rfc3339(at)
+            .unwrap()
+            .with_timezone(&Utc),
+    ));
+    for status in SETTLED {
+        assert_eq!(
+            settled("wait_for_agent", &json!({"status":status,"final":snapshot})),
+            expected
+        );
+    }
+    assert_eq!(
+        settled(
+            "get_agent_status",
+            &json!({"status":"idle","snapshot":snapshot})
+        ),
+        expected
+    );
+    assert_eq!(
+        settled(
+            "get_agent_activity",
+            &json!({"agentId":"agent-1","status":"error","updatedAt":at})
+        ),
+        expected
+    );
+    for (tool, result) in [
+        (
+            "wait_for_agent",
+            json!({"status":"timeout","final":snapshot}),
+        ),
+        (
+            "wait_for_agent",
+            json!({"status":"running","final":snapshot}),
+        ),
+        (
+            "get_agent_status",
+            json!({"status":"initializing","snapshot":snapshot}),
+        ),
+        (
+            "get_agent_status",
+            json!({"status":"idle","snapshot":{"id":"agent-1"}}),
+        ),
+        ("list_agents", json!({"status":"idle","snapshot":snapshot})),
+    ] {
+        assert_eq!(settled(tool, &result), None, "{tool} {result}");
+    }
+}
+
+#[test]
+fn a_read_counts_the_attention_its_snapshot_shows() {
+    let updated = "2026-11-12T08:00:00.000Z";
+    let attention = "2026-11-12T08:05:00.000Z";
+    let parsed = |at: &str| {
+        DateTime::parse_from_rfc3339(at)
+            .unwrap()
+            .with_timezone(&Utc)
+    };
+    // A permission request raises attention without changing `updatedAt`.
+    let snapshot = json!({"id":"agent-1","updatedAt":updated,"attentionTimestamp":attention});
+    let permission = Some(("agent-1".to_owned(), parsed(attention)));
+
+    assert_eq!(
+        settled(
+            "wait_for_agent",
+            &json!({"status":"permission","final":snapshot})
+        ),
+        permission
+    );
+    assert_eq!(
+        settled(
+            "get_agent_status",
+            &json!({"status":"idle","snapshot":snapshot})
+        ),
+        permission
+    );
+    // Older attention, absent attention and an activity read that shows none keep `updatedAt`.
+    for (tool, result) in [
+        (
+            "wait_for_agent",
+            json!({"status":"idle","final":{"id":"agent-1","updatedAt":attention,
+                "attentionTimestamp":updated}}),
+        ),
+        (
+            "get_agent_status",
+            json!({"status":"idle","snapshot":{"id":"agent-1","updatedAt":attention,
+                "attentionTimestamp":null}}),
+        ),
+        (
+            "get_agent_activity",
+            json!({"agentId":"agent-1","status":"idle","updatedAt":attention}),
+        ),
+    ] {
+        assert_eq!(
+            settled(tool, &result),
+            Some(("agent-1".to_owned(), parsed(attention))),
+            "{tool} {result}"
+        );
+    }
+}

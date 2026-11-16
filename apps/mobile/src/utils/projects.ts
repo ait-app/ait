@@ -24,10 +24,8 @@ export interface ProjectHostEntry {
   serverName: string;
   isOnline: boolean;
   repoRoot: string;
-  workspaceCount: number;
   workspaces: WorkspaceSummary[];
   gitRuntime?: WorkspaceDescriptor["gitRuntime"];
-  githubRuntime?: WorkspaceDescriptor["githubRuntime"];
   customIconRevision?: string | null;
   iconRevision?: string;
 }
@@ -37,10 +35,6 @@ export interface ProjectSummary {
   projectName: string;
   projectCustomName?: string | null;
   hosts: ProjectHostEntry[];
-  totalWorkspaceCount: number;
-  hostCount: number;
-  onlineHostCount: number;
-  githubUrl?: string;
 }
 
 export interface ProjectHost {
@@ -51,11 +45,11 @@ export interface ProjectHost {
   projects: ProjectDescriptor[];
 }
 
-export interface BuildProjectsInput {
+interface BuildProjectsInput {
   hosts: ProjectHost[];
 }
 
-export interface BuildProjectsResult {
+interface BuildProjectsResult {
   projects: ProjectSummary[];
 }
 
@@ -179,10 +173,8 @@ function toHostEntry(group: HostGroup): ProjectHostEntry {
     serverName: group.serverName,
     isOnline: group.isOnline,
     repoRoot,
-    workspaceCount: group.workspaces.length,
     workspaces: group.workspaces.map(toWorkspaceSummary),
     gitRuntime: canonical?.gitRuntime,
-    githubRuntime: canonical?.githubRuntime,
     customIconRevision: canonical?.projectCustomIconRevision ?? group.customIconRevision,
     iconRevision: group.iconRevision,
   };
@@ -198,16 +190,11 @@ function compareHosts(left: ProjectHostEntry, right: ProjectHostEntry): number {
 
 function toProjectSummary(draft: ProjectGroup): ProjectSummary {
   const hosts = Array.from(draft.hostsByServerId.values()).map(toHostEntry).sort(compareHosts);
-  const totalWorkspaceCount = hosts.reduce((sum, host) => sum + host.workspaceCount, 0);
-  const onlineHostCount = hosts.filter((host) => host.isOnline).length;
   return {
     viewKey: draft.viewKey,
     projectName: draft.projectName,
     projectCustomName: draft.projectCustomName,
     hosts,
-    totalWorkspaceCount,
-    hostCount: hosts.length,
-    onlineHostCount,
   };
 }
 

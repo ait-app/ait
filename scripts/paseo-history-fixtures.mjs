@@ -118,7 +118,7 @@ const source = {
     ]),
   ),
 };
-const destination = "crates/provider/tests/fixtures/paseo-history-search.json";
+const destination = "crates/provider/runtime/tests/fixtures/paseo-history-search.json";
 const content = `${JSON.stringify({ source, cases, distances }, null, 2)}\n`;
 if (process.argv.includes("--check")) {
   assert.equal(fs.readFileSync(destination, "utf8"), content, `${destination} drifted`);

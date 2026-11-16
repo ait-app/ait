@@ -141,7 +141,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   secondary: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   whisper: { color: theme.colors.foregroundExtraMuted, fontSize: theme.fontSize.sm },
-  error: { color: theme.colors.palette.red[300], fontSize: theme.fontSize.sm },
+  error: { color: theme.colors.statusDanger, fontSize: theme.fontSize.sm },
   dirtyDot: {
     width: 6,
     height: 6,

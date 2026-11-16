@@ -1,0 +1,55 @@
+[package]
+name = "provider-codex"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, diagnostics.
+provider-native.workspace = true
+# Realtime voice endpoints the upstream media peer serves.
+model.workspace = true
+domain.workspace = true
+# Codex owns the upstream peer and converts its Opus media to connection-local PCM.
+webrtc.workspace = true
+rtc.workspace = true
+opus2.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Respect Codex credential storage mode before reusing a native account.
+toml.workspace = true
+secrecy.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+# Encode the large native history fixture; only `test-support` enables it.
+base64 = { workspace = true, optional = true }
+
+[features]
+# The offline Codex fixture for the runtime's execution suite; never enabled by production dependents.
+test-support = ["dep:base64"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Drive the adapter through the runtime's execution worker and AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+persistence.workspace = true
+# Encode image payloads in history fixtures.
+base64.workspace = true
+# Offline native provider fixtures, without credentials or a model API.
+axum.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+# Probe that a closed native query process was killed and reaped.
+nix = { workspace = true, features = ["signal"] }

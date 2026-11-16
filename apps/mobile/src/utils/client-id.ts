@@ -10,7 +10,7 @@ export interface ClientIdStorage {
   removeItem(key: string): Promise<void>;
 }
 
-export interface ClientIdResolver {
+interface ClientIdResolver {
   getOrCreate(): Promise<string>;
 }
 

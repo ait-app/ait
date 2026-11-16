@@ -251,7 +251,10 @@ describe("task board", () => {
       result
         .filter((item) => taskLane(item.bucket) === "needs_action")
         .map((item) => item.agent.id),
-    ).toEqual(["input", "failed"]);
+    ).toEqual(["input"]);
+    expect(
+      result.filter((item) => taskLane(item.bucket) === "review").map((item) => item.agent.id),
+    ).toEqual(["failed"]);
     expect(
       result.filter((item) => taskLane(item.bucket) === "done").map((item) => item.agent.id),
     ).toEqual(["new", "old"]);

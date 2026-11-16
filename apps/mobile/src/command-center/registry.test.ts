@@ -70,4 +70,38 @@ describe("Command Center registry", () => {
       }),
     ).toThrow("Duplicate Command Center contribution id: duplicate:same");
   });
+
+  it("leaves the registry unchanged when a registration collides with another source", () => {
+    const registry = createCommandCenterRegistry();
+    registry.replace({ owner: owner("a"), contributions: [action("b:c", 0)] });
+    const snapshot = registry.getSnapshot();
+
+    expect(() =>
+      registry.replace({ owner: owner("a:b"), contributions: [action("c", 0)] }),
+    ).toThrow("Duplicate Command Center contribution id: a:b:c");
+    expect(registry.getSnapshot()).toBe(snapshot);
+
+    registry.replace({ owner: owner("other"), contributions: [action("ok", 1)] });
+    expect(registry.getSnapshot().contributions.map((item) => item.id)).toEqual([
+      "a:b:c",
+      "other:ok",
+    ]);
+  });
+
+  it("keeps a source's previous contributions when its replacement collides", () => {
+    const registry = createCommandCenterRegistry();
+    const source = owner("a:b");
+    registry.replace({ owner: owner("a"), contributions: [action("b:c", 0)] });
+    registry.replace({ owner: source, contributions: [action("d", 1)] });
+
+    expect(() => registry.replace({ owner: source, contributions: [action("c", 1)] })).toThrow(
+      "Duplicate Command Center contribution id: a:b:c",
+    );
+    registry.replace({ owner: owner("other"), contributions: [action("ok", 2)] });
+    expect(registry.getSnapshot().contributions.map((item) => item.id)).toEqual([
+      "a:b:c",
+      "a:b:d",
+      "other:ok",
+    ]);
+  });
 });

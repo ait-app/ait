@@ -5,10 +5,13 @@ date: 2026-10-04
 amends:
   - providers/adr-067-deepseek-harness-acp.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
+  - crates/provider/deepseek-harness
 ---
 
 # ADR-082：DeepSeek Harness 原生交互 Host
+
+- 适配器现位于 `crates/provider-deepseek-harness`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 

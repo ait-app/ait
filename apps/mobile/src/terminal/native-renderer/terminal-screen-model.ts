@@ -5,9 +5,9 @@ import type {
   TerminalViewportState,
 } from "./headless-terminal-state";
 
-export type TerminalScrollMode = "following" | "scrolled";
+type TerminalScrollMode = "following" | "scrolled";
 
-export interface TerminalScrollSnapshot {
+interface TerminalScrollSnapshot {
   mode: TerminalScrollMode;
   firstRow: number;
   visibleRows: number;
@@ -30,15 +30,15 @@ export interface TerminalScreenModel {
   reset(): void;
 }
 
-export interface TerminalScreenModelOptions {
+interface TerminalScreenModelOptions {
   terminal: NativeHeadlessTerminal;
 }
 
-export interface TerminalScreenSyncInput {
+interface TerminalScreenSyncInput {
   visibleRows: number;
 }
 
-export interface TerminalScreenScrollInput extends TerminalScreenSyncInput {
+interface TerminalScreenScrollInput extends TerminalScreenSyncInput {
   rows: number;
 }
 

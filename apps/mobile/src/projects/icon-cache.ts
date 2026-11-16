@@ -131,7 +131,7 @@ export class ProjectIconCache {
       ? { serverId: target.serverId, projectId: target.projectId, revision: target.iconRevision }
       : null;
     const cached = identity ? this.read(identity) : { hit: false as const };
-    const lookup = resolveLookup(target, supportsCustomIcons);
+    const lookup = resolveProjectIconLookup(target, supportsCustomIcons);
     let queryKey: readonly string[];
     if (!lookup) {
       queryKey = ["projectIcon", target.serverId, "pending", target.projectId];
@@ -199,7 +199,11 @@ export class ProjectIconCache {
 
 export const projectIconCache = new ProjectIconCache(projectIconCacheStorage);
 
-function resolveLookup(
+/**
+ * Daemons without custom-icon support only answer the legacy cwd lookup, which
+ * still serves their automatically discovered icons.
+ */
+export function resolveProjectIconLookup(
   target: Pick<ProjectIconTarget, "projectId" | "iconWorkingDir">,
   supportsCustomIcons: boolean | null,
 ): { kind: "project"; projectId: string } | { kind: "legacy"; cwd: string } | null {

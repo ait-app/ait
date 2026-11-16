@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentScreenMissingState } from "@/hooks/use-agent-screen-state-machine";
 import {
-  clearHistorySyncErrorAfterSuccessfulSync,
+  isAgentNotFoundErrorMessage,
   reconcileMissingAgentStateWithPresentAgent,
   shouldFetchAgentForLookup,
   shouldRetryLookupOnConnectionChange,
@@ -27,23 +27,6 @@ describe("reconcileMissingAgentStateWithPresentAgent", () => {
     };
 
     expect(reconcileMissingAgentStateWithPresentAgent(state)).toBe(state);
-  });
-});
-
-describe("clearHistorySyncErrorAfterSuccessfulSync", () => {
-  it("clears a sync error after a later successful refresh", () => {
-    expect(
-      clearHistorySyncErrorAfterSuccessfulSync({
-        kind: "error",
-        message: "Failed to get logs: session is archived",
-      }),
-    ).toEqual({ kind: "idle" });
-  });
-
-  it("leaves non-error states alone", () => {
-    const state: AgentScreenMissingState = { kind: "resolving" };
-
-    expect(clearHistorySyncErrorAfterSuccessfulSync(state)).toBe(state);
   });
 });
 
@@ -73,5 +56,21 @@ describe("shouldRetryLookupOnConnectionChange", () => {
         isConnected: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("isAgentNotFoundErrorMessage", () => {
+  it("recognizes the daemon's missing-agent lookup error", () => {
+    expect(isAgentNotFoundErrorMessage("Agent not found: agent-1")).toBe(true);
+  });
+
+  it("recognizes the daemon's RPC error text for a missing agent", () => {
+    expect(isAgentNotFoundErrorMessage("Agent was not found")).toBe(true);
+  });
+
+  it("leaves other not-found failures to the retryable error view", () => {
+    expect(isAgentNotFoundErrorMessage("Workspace not found: ws-1")).toBe(false);
+    expect(isAgentNotFoundErrorMessage("host not found")).toBe(false);
+    expect(isAgentNotFoundErrorMessage("Route not found")).toBe(false);
   });
 });

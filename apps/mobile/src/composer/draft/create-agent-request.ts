@@ -1,7 +1,7 @@
 import type { AgentSessionConfig } from "@ait/protocol/agent-types";
 import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@ait/protocol/messages";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import type { UserMessageImageAttachment } from "@/types/stream";
 
 export interface WorkspaceDraftAgentRequest {

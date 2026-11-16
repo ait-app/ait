@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import {
   DndContext,
   closestCenter,
@@ -26,6 +26,9 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => ({
 
 const DND_MODIFIERS: Modifier[] = [restrictToHorizontalAxis];
 
+// dnd-kit starts drags through the handle listeners; `drag` only matches the native API.
+function noopDrag() {}
+
 function computeDragOpacity(hasExternalContext: boolean, isDragging: boolean): number {
   if (!isDragging) return 1;
   return hasExternalContext ? 0.3 : 0.9;
@@ -37,7 +40,6 @@ function SortableItem<T>({
   index,
   renderItem,
   activeId,
-  useDragHandle,
   disabled,
   itemData,
   externalDndContext,
@@ -47,7 +49,6 @@ function SortableItem<T>({
   index: number;
   renderItem: (info: DraggableRenderItemInfo<T>) => ReactElement;
   activeId: string | null;
-  useDragHandle: boolean;
   disabled: boolean;
   itemData?: Record<string, unknown>;
   externalDndContext: boolean;
@@ -61,11 +62,6 @@ function SortableItem<T>({
     transition,
     isDragging,
   } = useSortable({ id, disabled, data: itemData });
-
-  const drag = useCallback(() => {
-    // dnd-kit handles drag initiation via listeners
-    // This is a no-op but matches the mobile API
-  }, []);
 
   // External DnD contexts render their own insertion affordance, so keep the
   // tab row static and let the DragOverlay carry the moving chip.
@@ -90,23 +86,17 @@ function SortableItem<T>({
   const info: DraggableRenderItemInfo<T> = {
     item,
     index,
-    drag,
+    drag: noopDrag,
     isActive: activeId === id,
-    dragHandleProps: useDragHandle
-      ? {
-          attributes: attributes as unknown as Record<string, unknown>,
-          listeners: listeners as unknown as Record<string, unknown>,
-          setActivatorNodeRef: setActivatorNodeRef as unknown as (node: unknown) => void,
-        }
-      : undefined,
+    dragHandleProps: {
+      attributes: attributes as unknown as Record<string, unknown>,
+      listeners: listeners as unknown as Record<string, unknown>,
+      setActivatorNodeRef: setActivatorNodeRef as unknown as (node: unknown) => void,
+    },
   };
 
-  const wrapperProps = useDragHandle
-    ? { ref: setNodeRef }
-    : { ref: setNodeRef, ...attributes, ...listeners };
-
   return (
-    <div {...wrapperProps} style={style}>
+    <div ref={setNodeRef} style={style}>
       {renderItem(info)}
     </div>
   );
@@ -117,10 +107,7 @@ export function SortableInlineList<T>({
   keyExtractor,
   renderItem,
   onDragEnd,
-  useDragHandle = false,
   disabled = false,
-  activationDistance = 8,
-  onDragBegin,
   externalDndContext = false,
   activeId: externalActiveId = null,
   getItemData,
@@ -129,10 +116,7 @@ export function SortableInlineList<T>({
   keyExtractor: (item: T, index: number) => string;
   renderItem: (info: DraggableRenderItemInfo<T>) => ReactElement;
   onDragEnd?: (data: T[]) => void;
-  useDragHandle?: boolean;
   disabled?: boolean;
-  activationDistance?: number;
-  onDragBegin?: () => void;
   externalDndContext?: boolean;
   activeId?: string | null;
   getItemData?: (item: T, index: number) => Record<string, unknown>;
@@ -145,7 +129,6 @@ export function SortableInlineList<T>({
     data,
     keyExtractor,
     onDragEnd,
-    onDragBegin,
     disabled,
   });
   const items = externalDndContext ? data : managedItems;
@@ -154,7 +137,7 @@ export function SortableInlineList<T>({
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: activationDistance,
+        distance: 8,
       },
     }),
     useSensor(TouchSensor, {
@@ -185,7 +168,6 @@ export function SortableInlineList<T>({
             index={index}
             renderItem={renderItem}
             activeId={activeId}
-            useDragHandle={useDragHandle}
             disabled={disabled}
             itemData={getItemData?.(item, index)}
             externalDndContext={externalDndContext}

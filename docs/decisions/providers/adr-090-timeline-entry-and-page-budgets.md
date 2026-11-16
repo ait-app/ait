@@ -5,7 +5,7 @@ date: 2026-10-06
 amends:
   - providers/adr-039-agent-timeline-provider-creation.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-090：Timeline 单项 768 KiB 与按字节分页

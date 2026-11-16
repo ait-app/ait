@@ -10,7 +10,7 @@ import {
   replaceWithCanonicalStream,
   type StreamItem,
 } from "./stream";
-import { continuesResponse, continuesTurn } from "@/agent-stream/turn-membership";
+import { continuesResponse, continuesTurn } from "@/types/turn-membership";
 
 function event(item: VoiceTimelineItem): AgentStreamEventPayload {
   return { type: "timeline", provider: "codex", item: AgentTimelineItemPayloadSchema.parse(item) };

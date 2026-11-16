@@ -1,0 +1,50 @@
+export const common = {
+  back: "Назад",
+  actions: {
+    save: "Сохранить",
+    back: "Назад",
+    cancel: "Отмена",
+    close: "Закрыть",
+    copy: "Копировать",
+    copyLine: "Копировать строку",
+    dismiss: "Отклонить",
+    reload: "Перезагрузить",
+    retry: "Повторить",
+    search: "Поиск",
+    select: "Выбрать",
+    selectAll: "Выбрать все",
+  },
+  placeholders: {
+    search: "Поиск...",
+  },
+  empty: {
+    noResults: "Ничего не найдено",
+    noOptionsMatchSearch: "Нет вариантов, соответствующих вашему запросу.",
+  },
+  states: {
+    loading: "Загрузка...",
+    starting: "Начало...",
+    copied: "Скопировано",
+    copiedLabel: "Скопировано {{label}}",
+    downloadComplete: "Загрузка завершена",
+    downloadFailed: "Загрузка не удалась",
+  },
+  errors: {
+    error: "Ошибка",
+    withMessage: "Ошибка: {{message}}",
+    unableToSave: "Не удалось сохранить",
+    unableToCopy: "Не удалось скопировать",
+    nameRequired: "Требуется имя",
+    daemonUnavailable: "Daemon недоступен",
+    daemonClientUnavailable: "Daemon клиента недоступен",
+    daemonClientDisconnected: "Daemon клиента отключен",
+    noFileFound: "Файл для {{token}} не найден",
+    unexpectedDictationError: "При обработке диктовки произошла непредвиденная ошибка.",
+  },
+  connectionStatus: {
+    online: "Онлайн",
+    connecting: "Подключение",
+  },
+
+  bottomSheetBackdrop: "Фон нижней панели",
+};

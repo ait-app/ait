@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
-import { buildAcpProviderConfigPatch, getAcpProviderCatalog } from "./use-acp-provider-catalog";
+import { buildAcpProviderConfigPatch } from "./use-acp-provider-catalog";
 
 function findProvider(id: string) {
-  const entry = getAcpProviderCatalog().find((provider) => provider.id === id);
+  const entry = ACP_PROVIDER_CATALOG.find((provider) => provider.id === id);
   if (!entry) {
     throw new Error(`Missing ACP provider catalog entry: ${id}`);
   }

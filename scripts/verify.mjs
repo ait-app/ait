@@ -31,6 +31,9 @@ const RUST_INPUTS = [
   [/^skills\/ait-orchestration\//, ["provider", "daemon"]],
   [/^scripts\/fixtures\//, ["api"]],
 ];
+// ADR-270: `--all-targets` enables these crates' `test-support` feature through dev-dependencies,
+// so their production configuration is linted again as a plain library.
+const LINTED_WITHOUT_TEST_SUPPORT = ["provider", "provider-codex"];
 
 const UI_WIDE = [
   /^package(?:-lock)?\.json$/,
@@ -45,7 +48,22 @@ const UI_RELEASE =
 const UI_TESTED_PACKAGES = ["protocol", "client", "highlight"];
 // Only these mobile suites are held green in CI; move additions here deliberately.
 const MOBILE_SUITES = [
+  "src/btw",
+  "src/components/provider-side-questions.test.tsx",
+  "src/components/markdown/math.test.ts",
+  "src/stores/btw-visibility-store.test.ts",
   "src/components/question-form-card-core.test.ts",
+  "src/agent-controls/model-presets.test.ts",
+  "src/components/model-browser.presets.test.tsx",
+  "src/components/model-selector-loading.test.tsx",
+  "src/components/provider-model-presets.test.tsx",
+  "src/components/provider-preset-form.test.ts",
+  "src/components/provider-presets-section.test.tsx",
+  "src/components/provider-diagnostic-models.test.ts",
+  "src/data/providers-snapshot.test.ts",
+  "src/hooks/use-draft-agent-features.presets.test.tsx",
+  "src/provider-selection/resolve-agent-form.test.ts",
+  "src/provider-selection/provider-selection.test.ts",
   "src/runtime/host-runtime.test.ts",
   "src/i18n/resources.test.ts",
   "src/runtime/daemon-transport",
@@ -145,6 +163,13 @@ function rustSteps({ changed, graph, scope, ci }) {
       "warnings",
     ),
   ];
+  const production = LINTED_WITHOUT_TEST_SUPPORT.filter((name) => wide || linted.includes(name));
+  if (production.length > 0) {
+    const packages = production.flatMap((name) => ["-p", name]);
+    steps.push(
+      step("rust", "cargo", "clippy", "--locked", ...packages, "--lib", "--", "-D", "warnings"),
+    );
+  }
   const notes = [];
   if (scope === "owners" && wide) {
     notes.push("Workspace-wide Rust inputs changed; run --scope all to test every crate.");
@@ -194,7 +219,7 @@ function classifyUi(changed, exists) {
       continue;
     }
     if (UI_RELEASE.test(file)) needs.touched = needs.release = true;
-    if (file.startsWith("crates/provider/tests/fixtures/")) {
+    if (/^crates\/provider\/[a-z-]+\/tests\/fixtures\//.test(file)) {
       needs.touched = true;
       for (const name of UI_TESTED_PACKAGES) needs.packages.add(name);
       typecheckClients();

@@ -6,10 +6,8 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink, PackagePlus, Search } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
-import {
-  useAcpProviderCatalog,
-  type AcpProviderCatalogItem,
-} from "@/hooks/use-acp-provider-catalog";
+import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
+import type { AcpProviderCatalogItem } from "@/hooks/use-acp-provider-catalog";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -126,7 +124,6 @@ export function ProviderCatalogList({
   onInstall,
 }: ProviderCatalogListProps) {
   const { t } = useTranslation();
-  const { entries: catalogEntries } = useAcpProviderCatalog();
   const { entries: providerEntries } = useProvidersSnapshot(serverId);
   const [search, setSearch] = useState("");
 
@@ -137,10 +134,10 @@ export function ProviderCatalogList({
 
   const availableEntries = useMemo(
     () =>
-      catalogEntries
-        .filter((entry) => !installedIds.has(entry.id))
-        .filter((entry) => matchesSearch(entry, search)),
-    [catalogEntries, installedIds, search],
+      ACP_PROVIDER_CATALOG.filter((entry) => !installedIds.has(entry.id)).filter((entry) =>
+        matchesSearch(entry, search),
+      ),
+    [installedIds, search],
   );
 
   return (

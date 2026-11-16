@@ -1,34 +1,10 @@
 import { useMemo, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import type { ProjectIcon } from "@ait/protocol/messages";
 import { useHostFeatureAvailabilityMap } from "@/runtime/host-features";
 import { projectIconCache } from "@/projects/icon-cache";
 import type { ProjectIconTarget } from "@/projects/icon-target";
-import {
-  getHostRuntimeStore,
-  isHostRuntimeConnected,
-  useHostRuntimeClient,
-  useHostRuntimeIsConnected,
-} from "@/runtime/host-runtime";
-
-/**
- * Daemons without custom-icon support only answer the legacy cwd lookup, which
- * still serves their automatically discovered icons.
- */
-export function resolveProjectIconLookup(
-  target: Pick<ProjectIconTarget, "projectId" | "iconWorkingDir">,
-  supportsCustomIcons: boolean | null,
-): { kind: "project"; projectId: string } | { kind: "legacy"; cwd: string } | null {
-  if (supportsCustomIcons === null) return null;
-  return supportsCustomIcons
-    ? { kind: "project", projectId: target.projectId }
-    : { kind: "legacy", cwd: target.iconWorkingDir };
-}
-
-function legacyIconQueryKey(serverId: string, cwd: string) {
-  return ["projectIcon", serverId, "legacy", cwd] as const;
-}
+import { getHostRuntimeStore, isHostRuntimeConnected } from "@/runtime/host-runtime";
 
 function iconDataUri(icon: ProjectIcon | null): string | null {
   if (!icon) return null;
@@ -41,35 +17,6 @@ function useStableIconData(data: (string | null)[], signature: string): readonly
     stableRef.current = { signature, data };
   }
   return stableRef.current.data;
-}
-
-export function useProjectIcon({ serverId, cwd }: { serverId: string; cwd: string }) {
-  const { t } = useTranslation();
-  const client = useHostRuntimeClient(serverId);
-  const isConnected = useHostRuntimeIsConnected(serverId);
-
-  const query = useQuery({
-    queryKey: legacyIconQueryKey(serverId, cwd),
-    queryFn: async (): Promise<ProjectIcon | null> => {
-      if (!client) {
-        throw new Error(t("common.errors.daemonClientUnavailable"));
-      }
-      const result = await client.requestProjectIcon(cwd);
-      return result.icon;
-    },
-    enabled: Boolean(client && isConnected && cwd),
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
-
-  return {
-    icon: query.data ?? null,
-    isLoading: query.isLoading,
-    isError: query.isError,
-  };
 }
 
 export function useProjectIcons(input: {

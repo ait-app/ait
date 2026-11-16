@@ -60,7 +60,6 @@ it("fetches every grant when History filters to one physical Host", async () => 
   expect(state.fetch.mock.calls.map(([serverId]) => serverId).sort()).toEqual(
     [workspace.serverId, project.serverId].sort(),
   );
-  expect(view.result.current.hostErrors).toEqual([]);
 
   // Selecting the other alias is the same physical filter, so it shares the cache.
   view.rerender({ serverId: workspace.serverId });

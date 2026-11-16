@@ -70,7 +70,7 @@ vi.mock("@/keyboard/shift", () => ({
   useKeyboardShiftStyle: () => ({ shift: { value: 0 }, style: {} }),
 }));
 vi.mock("@/hooks/use-app-visible", () => ({ useAppActivelyVisible: () => false }));
-vi.mock("@/components/retained-panel", () => ({ useRetainedPanelActive: () => true }));
+vi.mock("@/hooks/use-retained-panel-active", () => ({ useRetainedPanelActive: () => true }));
 vi.mock("@/mobile-panels/provider", () => ({ useBlockMobilePanelOpenGestures: vi.fn() }));
 vi.mock("react-native-reanimated", async () => ({
   default: { View: (await import("react-native")).View },

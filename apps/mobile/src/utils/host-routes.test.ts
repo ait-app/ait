@@ -5,8 +5,6 @@ import {
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
   buildNewWorkspaceRoute,
-  buildOpenProjectRoute,
-  resolveKnownHostRoute,
   buildSessionsRoute,
   buildSettingsAddHostRoute,
   buildProjectSettingsRoute,
@@ -18,21 +16,11 @@ import {
   isSettingsSectionSlug,
   normalizeHostSectionSlug,
   normalizeProjectSettingsRouteId,
-  parseHostAgentRouteFromPathname,
-  parseHostWorkspaceOpenIntentFromPathname,
+  getHostWorkspaceOpenParamFromPathname,
   parseHostWorkspaceRouteFromPathname,
   parseWorkspaceOpenIntent,
   stripHostWorkspaceRouteEchoSearch,
 } from "./host-routes";
-
-describe("parseHostAgentRouteFromPathname", () => {
-  it("continues parsing detail routes", () => {
-    expect(parseHostAgentRouteFromPathname("/h/local/agent/abc123")).toEqual({
-      serverId: "local",
-      agentId: "abc123",
-    });
-  });
-});
 
 describe("workspace route parsing", () => {
   it("keeps URL-safe workspace IDs unencoded", () => {
@@ -94,7 +82,9 @@ describe("workspace route parsing", () => {
 
   it("parses workspace open intent from pathname query", () => {
     expect(
-      parseHostWorkspaceOpenIntentFromPathname("/h/local/workspace/164?open=agent%3Aagent-1"),
+      parseWorkspaceOpenIntent(
+        getHostWorkspaceOpenParamFromPathname("/h/local/workspace/164?open=agent%3Aagent-1"),
+      ),
     ).toEqual({
       kind: "agent",
       agentId: "agent-1",
@@ -273,34 +263,5 @@ describe("settings section slugs", () => {
 
   it("no longer treats daemon as a valid app-level settings section", () => {
     expect(isSettingsSectionSlug("daemon")).toBe(false);
-  });
-});
-
-describe("resolveKnownHostRoute", () => {
-  it("renders when the route host is still saved", () => {
-    expect(
-      resolveKnownHostRoute({
-        routeServerId: "srv-current",
-        hosts: [{ serverId: "srv-current" }, { serverId: "srv-next" }],
-      }),
-    ).toEqual({ kind: "render" });
-  });
-
-  it("sends removed host routes to the host-agnostic open project screen", () => {
-    expect(
-      resolveKnownHostRoute({
-        routeServerId: "srv-removed",
-        hosts: [{ serverId: "srv-next" }],
-      }),
-    ).toEqual({ kind: "redirect", href: buildOpenProjectRoute() });
-  });
-
-  it("sends host routes to welcome when no hosts are saved", () => {
-    expect(
-      resolveKnownHostRoute({
-        routeServerId: "srv-removed",
-        hosts: [],
-      }),
-    ).toEqual({ kind: "redirect", href: "/welcome" });
   });
 });

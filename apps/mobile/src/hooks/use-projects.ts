@@ -31,26 +31,18 @@ export interface ProjectHostRuntimeState {
   serverId: string;
   isOnline: boolean;
   isLoading: boolean;
-  isFetching: boolean;
   error: string | null;
 }
 
-export interface DerivedProjectsResult {
+interface DerivedProjectsResult {
   projects: ProjectSummary[];
   hostErrors: ProjectHostError[];
   isLoading: boolean;
-  isFetching: boolean;
 }
 
-export interface UseProjectsResult {
-  projects: ProjectSummary[];
-  hostErrors: ProjectHostError[];
-  isLoading: boolean;
-  isFetching: boolean;
-  refetch: () => void;
-}
+export type UseProjectsResult = DerivedProjectsResult;
 
-export interface UseProjectsOptions {
+interface UseProjectsOptions {
   enabled?: boolean;
 }
 
@@ -61,14 +53,10 @@ function toProjectHostRuntimeState(
   serverId: string,
   snapshot: HostRuntimeSnapshot | null,
 ): ProjectHostRuntimeState {
-  const isFetching =
-    snapshot?.agentDirectoryStatus === "initial_loading" ||
-    snapshot?.agentDirectoryStatus === "revalidating";
   return {
     serverId,
     isOnline: snapshot?.connectionStatus === "online",
     isLoading: isHostRuntimeDirectoryLoading(snapshot),
-    isFetching,
     error: snapshot?.agentDirectoryError ?? null,
   };
 }
@@ -126,7 +114,6 @@ export function deriveProjectsFromReplica(input: {
     ...buildProjects({ hosts }),
     hostErrors,
     isLoading: input.runtimeStates.some((state) => state.isLoading),
-    isFetching: input.runtimeStates.some((state) => state.isFetching),
   };
 }
 
@@ -178,17 +165,8 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsResult
   );
   const replicas = useStoreWithEqualityFn(useSessionStore, replicaSelector, equal);
   const runtimeStates = useProjectHostRuntimeStates(serverIds, enabled);
-  const derived = useMemo(
+  return useMemo(
     () => deriveProjectsFromReplica({ replicas, runtimeStates }),
     [replicas, runtimeStates],
   );
-  const refetch = useCallback(() => {
-    if (!enabled) return;
-    for (const serverId of serverIds) void runtime.refreshDirectories(serverId);
-  }, [enabled, runtime, serverIds]);
-
-  return {
-    ...derived,
-    refetch,
-  };
 }

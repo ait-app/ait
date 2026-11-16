@@ -51,9 +51,9 @@ const workspace: SidebarWorkspaceEntry = {
   hasRunningScripts: false,
 };
 
-function Row({ id, isDragging = false }: { id: string; isDragging?: boolean }) {
+function Row({ id }: { id: string }) {
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+    <SidebarWorkspaceRowFrame workspace={workspace}>
       {({ isHovered, hoverHandlers, onContextMenuOpenChange }) => (
         <View {...hoverHandlers} testID={id}>
           <Text testID={`${id}-state`}>{isHovered ? "highlighted" : "idle"}</Text>
@@ -120,17 +120,6 @@ describe("sidebar workspace hover", () => {
     fireEvent.click(view.getByText("open menu"));
     expect(view.getByTestId("row-state").textContent).toBe("idle");
     fireEvent.click(view.getByText("close menu"));
-    expect(view.getByTestId("row-state").textContent).toBe("idle");
-  });
-
-  it("clears hover when dragging starts and keeps it cleared after release", () => {
-    const view = render(<Row id="row" />);
-    pointerEnter(view.getByTestId("row"), "mouse");
-    expect(view.getByTestId("row-state").textContent).toBe("highlighted");
-
-    view.rerender(<Row id="row" isDragging />);
-    expect(view.getByTestId("row-state").textContent).toBe("idle");
-    view.rerender(<Row id="row" />);
     expect(view.getByTestId("row-state").textContent).toBe("idle");
   });
 });

@@ -141,13 +141,13 @@ it.each([true, false])("advertises statistics only when implemented (%s)", (supp
         requestId: "statistics-1",
         agentId: "agent-1",
       });
-      expect(h.last(0)).toMatchObject({
+      expect(h.last(3)).toMatchObject({
         type: "request",
         request_id: "statistics-1",
         method: "agent.statistics.get.request",
         params: { agentId: "agent-1" },
       });
-      h.sockets[0].message({
+      h.sockets[3].message({
         type: "response",
         request_id: "statistics-1",
         result: { agentId: "agent-1", usageScope: "provider_snapshot" },
@@ -190,6 +190,90 @@ describe("Rust v1 connection", () => {
         capabilities: [...new Set(CHANNEL_CAPABILITIES.flat())],
         required_capabilities: ["connection.single.v1"],
       });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("negotiates provider preset CRUD and preserves role snapshots across Rust frames", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "provider-presets",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    const preset = {
+      name: "Review",
+      model: "test-model",
+      thinkingOptionId: "high",
+      featureValues: { "modelRole.advisor": "native", "modelRole.worker": "unset" },
+    };
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      expect(client.getLastServerInfoMessage()?.features?.providerPresets).toBe(true);
+
+      const descriptor = {
+        backend: "ait",
+        canCreate: true,
+        canEdit: true,
+        canDelete: true,
+        canRename: true,
+      };
+      const described = client.describeProviderPresets("omp", "/project", {
+        requestId: "describe",
+      });
+      expect(h.last(0)).toMatchObject({
+        type: "request",
+        method: "provider.presets.describe.request",
+        params: { provider: "omp", cwd: "/project" },
+        request_id: "describe",
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "describe",
+        result: { provider: "omp", descriptor },
+      });
+      expect((await described).descriptor).toEqual(descriptor);
+
+      const saved = client.saveProviderPreset("omp", preset, "/project", { requestId: "save" });
+      expect(h.last(0)).toMatchObject({
+        method: "provider.presets.save.request",
+        params: { provider: "omp", preset, cwd: "/project" },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "save",
+        result: { provider: "omp", saved: "Review" },
+      });
+      expect((await saved).saved).toBe("Review");
+
+      const listed = client.listProviderPresets("omp", "/project", { requestId: "list" });
+      expect(h.last(0)).toMatchObject({ method: "provider.presets.list.request" });
+      const entry = { ...preset, source: "ait", editable: true };
+      h.sockets[0].message({
+        type: "response",
+        request_id: "list",
+        result: { provider: "omp", presets: [entry] },
+      });
+      expect((await listed).presets).toEqual([entry]);
+
+      const deleted = client.deleteProviderPreset("omp", "Review", "/project", {
+        requestId: "delete",
+      });
+      expect(h.last(0)).toMatchObject({
+        method: "provider.presets.delete.request",
+        params: { provider: "omp", name: "Review", cwd: "/project" },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "delete",
+        result: { provider: "omp", deleted: "Review" },
+      });
+      expect((await deleted).deleted).toBe("Review");
     } finally {
       await client.close();
     }
@@ -271,7 +355,10 @@ describe("Rust v1 connection", () => {
       .filter(
         (method) =>
           method !== "bot.permissions.update.request" &&
+          method !== "bot.notifications.list.request" &&
+          !method.startsWith("bot.ticket.") &&
           !method.includes(".feishu.") &&
+          !method.includes(".lark.") &&
           !method.includes(".telegram.") &&
           !method.includes(".weixin.") &&
           !method.includes(".qq.") &&
@@ -284,7 +371,10 @@ describe("Rust v1 connection", () => {
     expect(object(object(oldInfo).payload).features).toMatchObject({
       workspaceBots: true,
       workspaceBotPermissions: false,
+      workspaceBotNotifications: false,
+      workspaceBotTickets: false,
       workspaceBotFeishuSetup: false,
+      workspaceBotLarkSetup: false,
       workspaceBotTelegramSetup: false,
       workspaceBotWeixinSetup: false,
       workspaceBotQqSetup: false,
@@ -297,7 +387,10 @@ describe("Rust v1 connection", () => {
     expect(object(object(info).payload).features).toMatchObject({
       workspaceBots: true,
       workspaceBotPermissions: true,
+      workspaceBotNotifications: true,
+      workspaceBotTickets: true,
       workspaceBotFeishuSetup: true,
+      workspaceBotLarkSetup: true,
       workspaceBotTelegramSetup: true,
       workspaceBotWeixinSetup: true,
       workspaceBotQqSetup: true,
@@ -664,72 +757,6 @@ describe("Rust v1 connection", () => {
       await client.close();
     }
   });
-  it("carries typed online service control through the SDK without replaying a grant", async () => {
-    const h = harness();
-    h.stopHello();
-    const client = new DaemonClient({
-      url: "ws://127.0.0.1:7316/v1/ws",
-      clientId: "online-service-test",
-      transportFactory: h.base,
-      reconnect: { enabled: false },
-    });
-    const result = {
-      serverId: "server",
-      instanceId: "instance",
-      platform: "linux",
-      status: { online: false, connecting: false, epoch: null, error: null },
-    };
-    try {
-      const connected = client.connect();
-      h.ready();
-      await connected;
-      expect(client.getLastServerInfoMessage()?.features?.onlineServiceSync).toBe(true);
-      const status = client.getOnlineServiceStatus();
-      const statusRequest = h.last(0);
-      expect(statusRequest.method).toBe("relay.status.request");
-      h.sockets[0].message({
-        type: "response",
-        request_id: statusRequest.request_id,
-        method: statusRequest.method,
-        result,
-      });
-      expect(await status).toMatchObject(result);
-      const grant = {
-        center_url: "https://example.test/api",
-        control_ticket: "a".repeat(64),
-        node_session_id: "00000000-0000-4000-8000-000000000001",
-      };
-      const start = client.connectOnlineService(grant);
-      const startRequest = h.last(0);
-      expect(startRequest).toMatchObject({ method: "relay.start.request", params: grant });
-      h.sockets[0].message({
-        type: "response",
-        request_id: startRequest.request_id,
-        method: startRequest.method,
-        result: { ...result, status: { ...result.status, connecting: true } },
-      });
-      expect((await start).status.connecting).toBe(true);
-      const stop = client.disconnectOnlineService();
-      const stopRequest = h.last(0);
-      expect(stopRequest.method).toBe("relay.stop.request");
-      h.sockets[0].message({
-        type: "response",
-        request_id: stopRequest.request_id,
-        method: stopRequest.method,
-        result,
-      });
-      expect((await stop).status.online).toBe(false);
-      await client.close();
-      await expect(client.connectOnlineService(grant)).rejects.toThrow();
-      expect(
-        h.sockets[0].send.mock.calls.filter(
-          ([message]) => JSON.parse(message).method === "relay.start.request",
-        ),
-      ).toHaveLength(1);
-    } finally {
-      await client.close();
-    }
-  });
   it("passes the connected server's software version to the SDK", async () => {
     const h = harness();
     h.stopHello();
@@ -967,9 +994,11 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(227);
+    expect(Object.keys(METHODS)).toHaveLength(242);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(227);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(
+      Object.keys(METHODS).length,
+    );
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

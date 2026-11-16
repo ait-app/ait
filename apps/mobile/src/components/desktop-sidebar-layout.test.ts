@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canDesktopAppSidebarShare,
+  shouldYieldExplorerToNavigation,
   resolveDesktopAppChromeLayout,
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
@@ -90,6 +91,28 @@ describe("desktop sidebar layout", () => {
     ).toBe(false);
   });
 
+  it("yields native navigation when two sidebars would squeeze the conversation", () => {
+    const minimum = resolveDesktopAppContentMinimum({
+      isSettingsRoute: false,
+      nativeExplorerOpen: true,
+    });
+    expect(minimum).toBe(640);
+    expect(
+      canDesktopAppSidebarShare({
+        contentMinimumWidth: minimum,
+        requestedSidebarWidth: 320,
+        viewportWidth: 852,
+      }),
+    ).toBe(false);
+    expect(
+      canDesktopAppSidebarShare({
+        contentMinimumWidth: minimum,
+        requestedSidebarWidth: 320,
+        viewportWidth: 960,
+      }),
+    ).toBe(true);
+  });
+
   it("imposes no content minimum outside settings", () => {
     expect(resolveDesktopAppContentMinimum({ isSettingsRoute: false })).toBe(0);
     expect(
@@ -99,5 +122,49 @@ describe("desktop sidebar layout", () => {
         viewportWidth: 751,
       }),
     ).toBe(true);
+  });
+});
+
+describe("explicit navigation beside native explorer", () => {
+  const foldedWorkspace = {
+    isCompact: false,
+    nativeWorkspaceActive: true,
+    explorerOpen: true,
+    requestedSidebarWidth: 320,
+    viewportWidth: 852,
+  };
+
+  it("yields explorer so opening navigation can make it visible", () => {
+    expect(shouldYieldExplorerToNavigation(foldedWorkspace)).toBe(true);
+    expect(
+      canDesktopAppSidebarShare({
+        contentMinimumWidth: resolveDesktopAppContentMinimum({
+          isSettingsRoute: false,
+          nativeExplorerOpen: false,
+        }),
+        requestedSidebarWidth: foldedWorkspace.requestedSidebarWidth,
+        viewportWidth: foldedWorkspace.viewportWidth,
+      }),
+    ).toBe(true);
+    // Reopening explorer restores its priority over navigation at this width.
+    expect(
+      canDesktopAppSidebarShare({
+        contentMinimumWidth: resolveDesktopAppContentMinimum({
+          isSettingsRoute: false,
+          nativeExplorerOpen: true,
+        }),
+        requestedSidebarWidth: foldedWorkspace.requestedSidebarWidth,
+        viewportWidth: foldedWorkspace.viewportWidth,
+      }),
+    ).toBe(false);
+  });
+
+  it.each([
+    { isCompact: true },
+    { nativeWorkspaceActive: false },
+    { explorerOpen: false },
+    { viewportWidth: 960 },
+  ])("retains normal toggling for %j", (override) => {
+    expect(shouldYieldExplorerToNavigation({ ...foldedWorkspace, ...override })).toBe(false);
   });
 });

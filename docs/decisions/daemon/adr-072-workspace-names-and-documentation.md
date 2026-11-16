@@ -13,6 +13,7 @@ paths:
 - 修订：此前 ADR 中的源码位置与包名统一遵循本决策；既有能力行为与依赖方向保持不变。
 - 后续：crate 集合由 [ADR-111](adr-111-domain-values-and-server-protocol.md)（移除 protocol）与
   [ADR-112](adr-112-persistence-crate.md)（file 改名 persistence）修订，并新增 relay；
+  provider 家族的目录由 [ADR-273](../providers/adr-273-provider-crate-directory.md) 修订，包名等于 `crates/` 之下的路径以连字符连接；
   当前 crate 列表以[当前架构](../../architecture/README.md)为准。
 
 ## 背景

@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { TextLink, useLiveSetup } from "./channel-setup";
@@ -25,13 +24,6 @@ const MANUAL_STEP_KEYS = [
   "bots.feishuManualStep4",
   "bots.feishuManualStep5",
 ] as const;
-
-/** Whether the host can run Feishu scan setup and store pasted secrets. */
-export function useFeishuSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotFeishuSetup === true,
-  );
-}
 
 export function FeishuScanSetup({
   serverId,
@@ -163,20 +155,32 @@ export function FeishuScanSetup({
   );
 }
 
-export function FeishuManualGuide({ onScanInstead }: { onScanInstead: () => void }) {
+export function FeishuManualGuide({
+  platform = "feishu",
+  onScanInstead,
+}: {
+  platform?: "feishu" | "lark";
+  onScanInstead?: () => void;
+}) {
   const { t } = useTranslation();
+  const values = {
+    platform: t(platform === "lark" ? "bots.lark" : "bots.feishu"),
+    developerUrl: platform === "lark" ? "open.larksuite.com/app" : "open.feishu.cn/app",
+  };
   return (
-    <View style={styles.permissionBlock} testID="bot-feishu-manual-guide">
+    <View style={styles.permissionBlock} testID={`bot-${platform}-manual-guide`}>
       {MANUAL_STEP_KEYS.map((key, index) => (
         <Text key={key} style={styles.hint}>
-          {`${index + 1}. ${t(key)}`}
+          {`${index + 1}. ${t(key, values)}`}
         </Text>
       ))}
-      <TextLink
-        label={t("bots.feishuScanInstead")}
-        onPress={onScanInstead}
-        testID="bot-feishu-scan-instead"
-      />
+      {onScanInstead ? (
+        <TextLink
+          label={t("bots.feishuScanInstead")}
+          onPress={onScanInstead}
+          testID="bot-feishu-scan-instead"
+        />
+      ) : null}
     </View>
   );
 }

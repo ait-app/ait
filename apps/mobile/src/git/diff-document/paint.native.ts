@@ -23,7 +23,6 @@ import {
 } from "@/git/file-header-presentation";
 import { DIFF_BODY_BORDER_HEIGHT, expandedBodyBorderTop, visibleRowRange } from "./model";
 import { nativeTextRuns } from "./native-text-runs";
-import { horizontalOffsetForPath, type DiffHorizontalOffsets } from "./horizontal-offsets";
 import { codeLineNumberTone } from "./palette";
 import { reviewBackgroundPaint, reviewDividerHeight, reviewGapTop } from "./review-paint";
 import {
@@ -240,19 +239,6 @@ function paint(color: string): SkPaint {
   return result;
 }
 
-export function paintNativeViewport(input: {
-  canvas: SkCanvas;
-  model: DiffDocumentModel;
-  viewportWidth: number;
-  viewportHeight: number;
-  scrollTop: number;
-  horizontalOffsets: Readonly<DiffHorizontalOffsets>;
-  textLayout: NativeTextLayout;
-  paints: NativePaints;
-}): void {
-  paintNativeRange({ ...input, layer: "all" });
-}
-
 export function recordNativeSlabPictures(input: {
   model: DiffDocumentModel;
   fileIndex: number;
@@ -277,7 +263,6 @@ export function recordNativeSlabPictures(input: {
     viewportWidth: input.viewportWidth,
     viewportHeight: input.height,
     scrollTop: input.top,
-    horizontalOffsets: {},
     textLayout: input.textLayout,
     paints: input.paints,
     layer: "fixed",
@@ -295,7 +280,6 @@ export function recordNativeSlabPictures(input: {
       viewportWidth: input.viewportWidth,
       viewportHeight: input.height,
       scrollTop: input.top,
-      horizontalOffsets: {},
       textLayout: input.textLayout,
       paints: input.paints,
       layer: "content",
@@ -368,18 +352,17 @@ interface PaintNativeRangeInput {
   viewportWidth: number;
   viewportHeight: number;
   scrollTop: number;
-  horizontalOffsets: Readonly<DiffHorizontalOffsets>;
   textLayout: NativeTextLayout;
   paints: NativePaints;
-  layer: "all" | "fixed" | "content";
+  layer: "fixed" | "content";
   contentCell?: "unified" | "left" | "right";
   fileIndex?: number;
 }
 
 function paintNativeRange(input: PaintNativeRangeInput): void {
   "worklet";
-  const paintsFixedContent = input.layer !== "content";
-  const paintsCodeContent = input.layer !== "fixed";
+  const paintsFixedContent = input.layer === "fixed";
+  const paintsCodeContent = input.layer === "content";
   if (paintsFixedContent) {
     input.canvas.drawRect(
       Skia.XYWHRect(0, 0, input.viewportWidth, input.viewportHeight),
@@ -407,7 +390,6 @@ function paintNativeRange(input: PaintNativeRangeInput): void {
     }
     const file = input.model.files[row.fileIndex];
     if (!file) continue;
-    const horizontalOffset = horizontalOffsetForPath(input.horizontalOffsets, row.path);
     const columnWidth = input.viewportWidth / row.cells.length;
     row.cells.forEach((cell, cellIndex) => {
       const columnX = cellIndex * columnWidth;
@@ -426,8 +408,6 @@ function paintNativeRange(input: PaintNativeRangeInput): void {
           cell,
           cellIndex,
           columnX,
-          columnWidth,
-          horizontalOffset,
           y,
         });
       }
@@ -457,7 +437,6 @@ function paintsNativeContentCell(
   columnCount: number,
   cellIndex: number,
 ): boolean {
-  if (input.layer !== "content") return true;
   if (columnCount === 1) return input.contentCell === "unified";
   return input.contentCell === (cellIndex === 0 ? "left" : "right");
 }
@@ -516,39 +495,21 @@ function paintNativeCodeCell(input: {
   cell: DiffCell;
   cellIndex: number;
   columnX: number;
-  columnWidth: number;
-  horizontalOffset: number;
   y: number;
 }): void {
   const textX = input.columnX + input.file.gutterWidth + CODE_LEFT_PADDING;
-  const clipsContent = input.input.layer === "all";
-  if (clipsContent) {
-    input.input.canvas.save();
-    input.input.canvas.clipRect(
-      Skia.XYWHRect(
-        textX,
-        input.y,
-        input.columnWidth - input.file.gutterWidth - CODE_LEFT_PADDING,
-        input.row.height,
-      ),
-      ClipOp.Intersect,
-      false,
-    );
-  }
-  const offset = input.input.model.wrapLines ? 0 : input.horizontalOffset;
   for (const [fragmentIndex, fragment] of input.cell.fragments.entries()) {
     const paragraph =
       input.input.textLayout.paragraphs[input.row.index]?.[input.cellIndex]?.[fragmentIndex];
     if (paragraph) {
-      paragraph.paint(input.input.canvas, textX - offset, input.y + fragment.top);
+      paragraph.paint(input.input.canvas, textX, input.y + fragment.top);
       continue;
     }
-    const fragmentX = textX - offset;
     const baseline = input.y + fragment.baseline;
     if (input.cell.tokens.length === 0 || input.cell.type === "header") {
       input.input.canvas.drawText(
         fragment.text,
-        fragmentX,
+        textX,
         baseline,
         input.cell.type === "header"
           ? input.input.paints.foregroundMuted
@@ -560,12 +521,11 @@ function paintNativeCodeCell(input: {
     for (const run of nativeTextRuns(input.cell, fragment)) {
       input.input.canvas.drawText(
         run.text,
-        fragmentX + run.left,
+        textX + run.left,
         baseline,
         input.input.paints.text[run.color] ?? input.input.paints.foreground,
         input.input.textLayout.font,
       );
     }
   }
-  if (clipsContent) input.input.canvas.restore();
 }

@@ -12,7 +12,7 @@ import {
   getDesktopWindowControlsPresentation,
   type DesktopWindowControlsPresentation,
 } from "@/desktop/window-chrome-presentation";
-import { useCustomDesktopWindowControls } from "@/utils/desktop-window";
+import { useCustomDesktopWindowControls } from "@/desktop/desktop-window";
 import type { Theme } from "@/styles/theme";
 
 type WindowControlKind = "minimize" | "maximize" | "restore" | "close";

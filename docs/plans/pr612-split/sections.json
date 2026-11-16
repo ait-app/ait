@@ -1,0 +1,338 @@
+[
+  {
+    "id": 1,
+    "title": "Provider 设置从模型选择器齿轮进入",
+    "body": "## 1. Provider 设置从模型选择器齿轮进入\n\n模型选择器保留模型和 Ait Profile 入口。点击齿轮收起模型弹层，进入 Provider 设置；主机、Provider、`cwd` 和当前配置持续同步。首页使用统一行式控件显示模型预设、模型角色与账号入口；预设管理、模型目录分别进入下一页，返回回到首页。搜索仅在模型目录出现，刷新为标题栏图标，诊断为次级入口。移除常驻解释小字、模糊“详情”及更新时间页脚；目录保留模型名称，不显示序列化数组 ID。Ait Profile 与 Provider 预设保持区分。\n\n```mermaid\nflowchart LR\n  A[\"模型选择器\"] --> B[\"齿轮 / 收起选择器\"] --> C[\"当前预设 / 模型角色\"]\n  C --> D[\"管理预设\"]\n  C --> E[\"模型目录 / 搜索\"]\n  B -. \"主机 / Provider / cwd\" .-> C\n```\n\n代码：[`model-browser.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/model-browser.tsx)。\n\n![当前设置首页：统一行式控件与独立管理入口](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-settings-mobile.png)\n\n",
+    "paths": ["apps/mobile/src/components/model-browser.tsx"],
+    "tasks": ["03", "21", "23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 2,
+    "title": "跨 Provider 的统一模型预设",
+    "body": "## 2. 跨 Provider 的统一模型预设\n\n各 Provider 共用列表、新建、编辑和删除界面。OMP 直接读写原生存储，其他 Provider 写入 daemon 配置；两种来源不叠加。Ait 维护的预设支持原子改名；OMP 缺少原生 rename，界面禁用改名并解释原因。预设应用将模型、思考档位和角色作为一次配置提交，下一轮生效。切换预设会覆盖当前角色配置，新预设没有指定的角色清除旧覆盖。模型角色页修改当前会话/草稿，不自动写回预设；手动修改后显示自定义配置，之后选择预设仍会覆盖这些修改。\n\n```mermaid\nflowchart LR\n  A[\"统一预设服务\"] --> B{\"原生预设能力\"}\n  B -->|OMP| C[\"原生存储\"]\n  B -->|其他 Provider| D[\"daemon 配置\"]\n  C --> E[\"一次配置提交\"]\n  D --> E\n```\n\n代码：[`service/presets.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/service/presets.rs)。\n\n![当前源码：GUI 创建并应用 Daily，真实外部 OMP 配置回执](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-settings-desktop.png)\n\n",
+    "paths": ["crates/provider/src/service/presets.rs"],
+    "tasks": ["03", "23"],
+    "disposition": "rewrite",
+    "decision": "Supersede donor cross-provider modelPresets store: use existing AgentProfile; OMP native presets remain separate with no same-name sync or rename."
+  },
+  {
+    "id": 3,
+    "title": "OMP 项目作用域与写入权限",
+    "body": "## 3. OMP 项目作用域与写入权限\n\n预设管理页保留项目目录和每项的全局/项目来源；项目同名预设覆盖全局，不用常驻段落解释内部存储。列表同一响应返回来源和可编辑状态；来源未知、失败、刷新中或项目覆盖时禁止修改。已打开的编辑器同步禁用保存，提交前重新读取来源；后端在探测前和真正写入前再次拒绝项目覆盖，避免误改全局同名项。\n\n```mermaid\nflowchart LR\n  A[\"列表附来源与权限\"] --> B{\"来源确认且可写？\"}\n  B -->|否| C[\"禁用编辑 / 删除 / 保存\"]\n  B -->|是| D[\"提交前回读\"] --> E[\"后端写前校验\"]\n```\n\n代码：[`presets/management.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/roles/presets/management.rs)。\n\n![当前预设管理：项目目录与原生全局来源；项目覆盖分支由回归验证](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-presets-mobile.png)\n\n",
+    "paths": ["crates/provider/src/local/omp/roles/presets/management.rs"],
+    "tasks": ["23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 4,
+    "title": "预设编辑器：模型、思考档位与角色",
+    "body": "## 4. 预设编辑器：模型、思考档位与角色\n\n设置首页编辑当前会话/草稿配置，预设编辑器编辑可复用模板。编辑器按固定“角色 → 模型 → 思考等级”表列出 DEFAULT、SMOL、PLAN、TASK、ADVISOR；点击模型和等级下拉修改，添加角色只选择未列出的角色，删除行移除覆盖。默认继承显示可解析的实际模型；别名、特殊值和思考后缀由程序转换，不要求手写 JSON。编辑时自动解析存储并回填，未知但已存储的模型值保留。窄屏将思考等级放到模型下一行，保持模型名可读与保存按钮固定。角色显示友好名称及用途：DEFAULT 主对话、SMOL 快速 worker、TASK 实现 worker、PLAN 规划、ADVISOR 咨询；移除表旁整段路由说明和模糊“详情”，移除导致文字错位的装饰图标，表头、角色名、模型及思考控件按列对齐。OMP 名称使用 `TeamDefault` 示例并即时校验，错误输入禁用保存。OMP 不可改名原因紧邻名称，保存会物化当前默认模型，重新打开以实际存储为准。\n\n```mermaid\nflowchart LR\n  A[\"固定角色 → 模型 / 思考下拉\"] --> B[\"程序转换原生记录\"] --> C[\"保存预设\"] --> D[\"重新打开回填\"]\n```\n\n代码：[`provider-preset-editor.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-preset-editor.tsx)。\n\n![当前 390px 编辑器：角色表对齐、模型与思考下拉](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-editor-mobile.png)\n\n",
+    "paths": ["apps/mobile/src/components/provider-preset-editor.tsx"],
+    "tasks": ["21", "23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 5,
+    "title": "Draft 与 Ait Profile 的配置一致性",
+    "body": "## 5. Draft 与 Ait Profile 的配置一致性\n\nProfile 缓存只在相同 Provider 上下文复用，切换立即移除旧选项，查询迟到或失败也不能恢复其他 Provider 的预设。Ait 合成预设的 `__custom__` 只表示界面状态，在 Profile、草稿和已有会话入口均被消费，不写入原生配置；OMP 原生 feature 语义保留。目录后台刷新保留同 Provider 的已选值，Profile 列表优先显示名称。\n\n应用预设时，未指定的思考档位显式清除，未点名角色补为 unset；预设匹配使用同一展开规则，手动启用额外角色后显示自定义配置。对应 [`model-presets.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/agent-controls/model-presets.ts)。\n\n```mermaid\nflowchart LR\n  A[\"切换 Provider\"] --> B[\"立即清除旧选项\"] --> C[\"只接受同 Provider 查询\"]\n  C --> D[\"草稿 / Profile / 会话配置\"]\n```\n\n代码：[`profile-form-model.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/agent-profiles/internal/profile-form-model.ts)。\n\n",
+    "paths": [
+      "apps/mobile/src/agent-controls/model-presets.ts",
+      "apps/mobile/src/agent-profiles/internal/profile-form-model.ts"
+    ],
+    "tasks": ["03", "05", "23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 6,
+    "title": "模型目录按访问刷新",
+    "body": "## 6. 模型目录按访问刷新\n\n模型选择器、Profile、定时任务、Bot、诊断、元数据设置和命令中心共用快照刷新路径。后台仅更新候选，不清空缓存列表、不阻塞输入。截图只覆盖目录入口与候选，刷新本身由测试验证。\n\n```mermaid\nflowchart LR\n  A[\"访问模型入口\"] --> B[\"共享快照后台刷新\"] --> C[\"更新候选\"]\n  B -. \"保留缓存与选择\" .-> D[\"输入继续\"]\n```\n\n代码：[`providers-snapshot.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/data/providers-snapshot.ts)。\n\n",
+    "paths": ["apps/mobile/src/data/providers-snapshot.ts"],
+    "tasks": ["02"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 7,
+    "title": "Claude advisor 角色",
+    "body": "## 7. Claude advisor 角色\n\nClaude 的 advisor 作为统一 `modelRole.advisor` 暴露，支持 native、unset 和具名模型，复用预设与角色配置。已知模型档位在写入前校验；未知别名交给 CLI 判定并降级告警。启动参数下一轮生效，完整切换仍遵循 Claude 新对话或 compact 的限制。\n\n```mermaid\nflowchart LR\n  A[\"advisor 选择\"] --> B{\"native / unset / 模型\"}\n  B --> C[\"档位校验\"] --> D[\"下一轮启动参数与环境\"]\n```\n\n代码：[`claude/config.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/claude/config.rs)。这是配置与启动行为，本小节不将旧模型弹层截图作为新设置入口的证据；相关角色管理见第 4 节。\n",
+    "paths": ["crates/provider/src/local/claude/config.rs"],
+    "tasks": ["22"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 8,
+    "title": "原生命令按实际来源发现与执行",
+    "body": "## 8. 原生命令按实际来源发现与执行\n\n命令目录按主机、Provider、工作目录和原生会话隔离。内置模型、预设、角色等 GUI 配置命令与终端专属命令从菜单和补全移除；手输给简短拒绝，不导航、不执行、不发送给模型。有效来源为插件、技能、模板或项目命令时保留原生所有权，特殊的 btw/vibe/goal 路由也检查来源。同名插件不能被内置黑名单误伤。草稿列表与补全可携带合法 draftConfig，不创建 Agent。完整处置与未完成项见[逐项表](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/archive/reports/providers/pr612-omp-command-dispositions-2026-11-10.tsv)。\n\n```mermaid\nflowchart LR\n A[\"有效原生目录\"] --> B{\"实际来源\"}\n B -->|内置| C[\"任务 / GUI 屏蔽 / 终端限制\"]\n B -->|插件或项目| D[\"保留原生参数与执行\"]\n```\n\n代码：[`commands.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/commands.rs)。\n\n![历史 Tai 验收：真实 Tai 项目中的公开扩展命令，显示原生来源](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-plugin-command-menu.png)\n",
+    "paths": [
+      "docs/archive/reports/providers/pr612-omp-command-dispositions-2026-11-10.tsv",
+      "crates/provider/src/local/omp/commands.rs"
+    ],
+    "tasks": ["06"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 9,
+    "title": "DSH Goal 状态卡",
+    "body": "## 9. DSH Goal 状态卡\n\n原生 Goal 状态投影为阶段、目标、轮次与动作，解析失败时降级为普通文本，不影响主时间线。本轮没有 DSH 后端的真实 Tai 推理截图；共享当前控制组件的 OMP 实景见第 32 节，不能将其计为 DSH 推理验收。\n\n```mermaid\nflowchart LR\n  A[\"原生 Goal 状态\"] --> B[\"结构化事实\"] --> C[\"阶段 / 目标 / 轮次 / 动作\"]\n  B -. \"解析失败\" .-> D[\"普通文本\"]\n```\n\n代码：[`provider-command-card.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-command-card.tsx)。\n\n",
+    "paths": ["apps/mobile/src/components/provider-command-card.tsx"],
+    "tasks": ["16", "19"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 10,
+    "title": "原生查询、状态与导出下载",
+    "body": "## 10. 原生查询、状态与导出下载\n\n`…` 按用途分组，搜索匹配界面显示名称；已知无参数查询单击执行并写入会话卡，不再进入空表单。普通插件从菜单回填主输入框，不根据名称猜查询或开关。预设管理只走齿轮页；Vibe/Goal/btw/handoff 的通用任务表单不再提供。运行状态按原生 key 更新与清除。HTML 导出保留宿主 token 与客户端流式下载。仍有部分历史/账号操作使用对象候选表单，不能称为全部对象入口已完成。\n\n```mermaid\nflowchart LR\n A[\"分组 / 中文搜索\"] --> B{\"已知查询？\"}\n B -->|是| C[\"单击执行 → 持久卡\"]\n B -->|任务或未知插件| D[\"填入主输入框\"]\n```\n\n代码：[`provider-native-actions.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-native-actions.tsx)。\n\n![历史 Tai 验收：真实 Tai 会话：输入中文“统计”可找到显示的操作](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-localized-query-search.png)\n",
+    "paths": ["apps/mobile/src/components/provider-native-actions.tsx"],
+    "tasks": ["04", "25", "26", "27", "29"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 11,
+    "title": "BTW",
+    "body": "## 11. BTW\n\nBTW 默认隐藏，仅由 `/btw` 查看历史或 `/btw 问题` 发起提问打开。面板内提供新问题、**Follow up（追问）**、**Branch（分支）**和**结束 BTW**；不在 `…` 中重复放一个历史入口，也不让用户填写话题 ID。\n\nFollow up 使用当前话题的原生 `recordId`，保留此前问答；新问题另建话题。Branch 从完整原生记录提升完成的单轮问答，带入当前会话上下文，创建并切换到新原生会话，原日志不变。成功后关闭 BTW，用户在主输入框继续工作；不会自动请求模型。主任务或 BTW 运行中、leaf 已变化时拒绝；已追问的多轮话题遵循 OMP 限制，不丢弃前面轮次来提升最后一条。未广告 Branch 能力的旧 daemon 不显示该入口。\n\nOMP 18.17.0 没有公开 BTW Branch RPC，Ait 用小型公开扩展的 `newSession(setup)` / `switchSession` 补齐，不内置 SDK/Bun，不直接修改原生日志。使用公开 new/switch hooks，未冒充 TUI 的私有 `reason: btw`。原生确认和 host 身份/历史提交完成后才返回成功，失败保留答案与草稿。\n\n胶囊收起保留草稿；“结束 BTW”移除窗口和胶囊，运行中的问题先单独取消，失败不关闭，不中止主任务。结束标识按主机/会话保存，刷新或迟到结果不重开；新的 `/btw` 可再次打开，原生历史不删除。追问框获得焦点时完整滚入面板视口，保留绿色焦点轮廓。\n\n```mermaid\nflowchart LR\n A[\"/btw 问题\"] --> B[\"BTW 话题\"]\n B --> C[\"Follow up → 同一话题\"]\n B --> D[\"Branch → 空闲 / 单轮 / leaf 校验\"] --> E[\"新原生会话 → 主输入框继续\"]\n B --> F[\"结束 BTW → 单独取消 → 移除窗口和胶囊\"]\n```\n\n代码：[界面](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-side-questions.tsx)、[原生准入](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/session/btw_branch.rs)、[公开扩展](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/btw/branch-extension.js)、[边界 ADR](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/decisions/providers/adr-243-omp-native-host-bridge.md)。\n\n![完成的 BTW：追问与分支；本地协议验收回复](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-branch-mobile.png)\n\n![Follow up：输入和焦点轮廓完整显示](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-followup-mobile.png)\n\n![同一话题的追问记录，多轮不提供单条提升](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-followup-result-mobile.png)\n\n![Branch：原上下文与提升问答进入新会话，BTW 收起](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-branch-result-mobile.png)\n",
+    "paths": [
+      "apps/mobile/src/components/provider-side-questions.tsx",
+      "crates/provider/src/local/omp/session/btw_branch.rs",
+      "crates/provider/src/local/omp/btw/branch-extension.js",
+      "docs/decisions/providers/adr-243-omp-native-host-bridge.md"
+    ],
+    "tasks": ["09", "14", "15"],
+    "disposition": "rewrite",
+    "decision": "Supersede donor native Branch promotion: transfer into a new nonrunning draft with no inference or session rebind; follow-ups retain original display-context snapshot."
+  },
+  {
+    "id": 12,
+    "title": "原生请求表单与工具审批",
+    "body": "## 12. 原生请求表单与工具审批\n\n问题、多选和审批采用结构化表单，审批显示工具、路径、内容及每个选项。保留空值、secret、换行编辑和取消语义；审批响应不被原生命令等待阻塞。\n\n```mermaid\nflowchart LR\n  A[\"原生请求\"] --> B[\"结构化问题与工具详情\"] --> C[\"回答 / 批准 / 拒绝 / 取消\"] --> D[\"原生响应\"]\n```\n\n代码：[`question-form-card.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/question-form-card.tsx)。\n\n",
+    "paths": ["apps/mobile/src/components/question-form-card.tsx"],
+    "tasks": ["07"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 13,
+    "title": "只读子 Agent 观测",
+    "body": "## 13. 只读子 Agent 观测\n\n复用 main 已有的统一只读子 Agent 树，接入真实原生 worker。条目提供“发送指导”和“停止任务”：目标名称可见，自动绑定父 writer 与原生 ID，指导为多行输入，停止先确认任务；无需先查询并抄写 ID。已完成任务可继续指导，只有活跃任务可停止。观测记录、当前父状态与 worker 归属共同约束入口，失效记录不开放控制。\n\n会话 header 的 parentSession 校验和当前父记录共同约束归属；只读观测不启动第二个 writer。\n\n```mermaid\nflowchart LR\n A[\"真实观测 / 校验父归属\"] --> B[\"统一只读条目\"] --> C[\"指导 / 停止确认\"]\n C --> D[\"自动携带目标 → 父 writer\"]\n```\n\n代码：[`native-controls.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/subagents/native-controls.tsx)、[`track.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/subagents/track.tsx)。\n\n![历史 Tai 验收：从共享 worker 条目发送真实 Tai 指导，目标名称固定，无需输入 Subagent ID](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-native-worker-guidance.png)\n",
+    "paths": [
+      "apps/mobile/src/subagents/native-controls.tsx",
+      "apps/mobile/src/subagents/track.tsx"
+    ],
+    "tasks": ["24"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 14,
+    "title": "外部 OMP 的真实 Vibe 调度",
+    "body": "## 14. 外部 OMP 的真实 Vibe 调度\n\n裸 `/vibe` 进入或退出 director，不调用模型；`/vibe <任务>` 形成真实 root turn。Rust coordinator 使用公开 RPC 与小型公开扩展，worker 运行用户安装的外部 OMP。按版本、host tools 与模型路由确认门控，每条原生日志只有一个 writer；恢复核对 parentSession。fast→SMOL、good→TASK，先清除父命名预设隐藏 thinking，再使用角色后缀或 worker 原生默认。本轮 Tai 场景由 good/High 写页面，在运行中主动退出取消；重进后由 fast/Low 独立浏览器验收完成，不能将前者写成正常完成。\n\n```mermaid\nflowchart LR\n A[\"主输入 /vibe 任务\"] --> B[\"能力确认 / Rust director\"] --> C[\"外部 OMP worker\"]\n C --> D[\"单 writer / 归属 / 真实 Tai 结果\"]\n```\n\n代码：[`host.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/vibe/host.rs)。\n\n![当前外部 OMP 原生回执：仅显示 Vibe ON，没有展开或退出按钮](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-controls-desktop.png)\n",
+    "paths": ["crates/provider/src/local/omp/vibe/host.rs"],
+    "tasks": ["33"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 15,
+    "title": "运行时交付边界与协议兼容",
+    "body": "## 15. 运行时交付边界与协议兼容\n\n最终实现不下载、修改、后台安装或打包私有 OMP/Bun。OMP RPC 会话使用用户安装的外部 `omp` 或明确配置的 `AIT_SERVER_OMP_BIN`。此前 PR 迭代中的私有交付链路已撤销，相关打包/安装文件相对 main 没有新增变更；不将这段迭代清理记作净新增功能。公开扩展不 import OMP SDK；这是 Ait 的应用层编排，不依赖 TUI 私有 sessionModes。原始 host-tool ACP 客户端保留自身工具所有权，不启用这层编排。\n\n```mermaid\nflowchart LR\n  A[\"桌面与 daemon\"] --> B[\"用户安装的外部 OMP\"]\n  B --> C[\"公开 RPC + Ait 扩展\"]\n  C --> D[\"可选协议字段与有界投影\"]\n```\n\n代码与边界：[`omp/transport.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/transport.rs)、[ADR-243](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/decisions/providers/adr-243-omp-native-host-bridge.md)。本节是启动、交付和协议行为，无独立 GUI。\n\n可选原生状态、有界缓存和命令卡持久化兼容旧客户端与快照；新增文案覆盖九语种。本轮没有新增顶层 RPC 方法，当前 Goal 使用已有原生操作接口。\n",
+    "paths": [
+      "crates/provider/src/local/omp/transport.rs",
+      "docs/decisions/providers/adr-243-omp-native-host-bridge.md"
+    ],
+    "tasks": ["01", "05"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 16,
+    "title": "DSH 插件命令与原生附件上传",
+    "body": "## 16. DSH 插件命令与原生附件上传\n\nDSH 从插件原生注册表发现命令和附件能力，支持目录失效后的后台更新；失败时保留旧目录，未知目录与空目录区分。命令走 `commands/execute`，不改写为普通 prompt。附件先统一验证：文件必须是普通文件、大小匹配且不超过 256 MiB；文件二进制流式上传并以原生 receipt 提交，不经 JSON/base64 搬运文件内容。等待原生问答或审批时不占住主 Agent 的处理路径。\n\n```mermaid\nflowchart LR\n  A[\"插件命令目录\"] --> B[\"校验命令与全部附件\"] --> C[\"流式上传取得 receipt\"] --> D[\"原生 commands/execute\"]\n```\n\n代码：[`native/commands/attachments.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/deepseek_harness/native/commands/attachments.rs)、[`native/session.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/deepseek_harness/native/session.rs)。这是共用命令表单后的适配器行为，无新增专属 GUI。\n",
+    "paths": [
+      "crates/provider/src/local/deepseek_harness/native/commands/attachments.rs",
+      "crates/provider/src/local/deepseek_harness/native/session.rs"
+    ],
+    "tasks": ["28"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 17,
+    "title": "DSH ZIP 导出交付",
+    "body": "## 17. DSH ZIP 导出交付\n\nDSH 第一方导出命令成功后，Ait 实际下载 session tree 的 ZIP，再把文件元数据挂回同一个原生命令卡。流式下载限制为 1 GiB，检查 ZIP 首尾格式与长度；临时文件放在项目之外的私有目录，成功后才发布，失败或取消清理未完成文件。历史重放只装饰实际已交付文件，不伪造下载成功。\n\n```mermaid\nflowchart LR\n  A[\"第一方导出命令成功\"] --> B[\"私有目录流式下载 ZIP\"] --> C[\"校验并发布文件\"] --> D[\"原命令卡下载入口\"]\n```\n\n代码：[`native/exports.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/deepseek_harness/native/exports.rs)。复用第 10 节下载通道；该节 HTML 截图仅证明共用操作样式，不作为 DSH ZIP 的实装取证。本轮未补拍 DSH ZIP GUI。\n",
+    "paths": ["crates/provider/src/local/deepseek_harness/native/exports.rs"],
+    "tasks": ["29"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 18,
+    "title": "DSH 只读历史与会话预览",
+    "body": "## 18. DSH 只读历史与会话预览\n\n历史、导入与最近会话预览使用非激活的 list/projections/page 路径，固定原生序列截面后分页，先校验 session、目录和根会话身份；避免只读查看把冷会话升级为活动 Agent。缺失权威投影接口时直接失败，不回退到会激活会话的 follow。原生命令、Goal 与导出卡同样参与实时/历史投影。\n\n```mermaid\nflowchart LR\n  A[\"只读查看 / 导入 / 预览\"] --> B[\"校验根身份与 cwd\"] --> C[\"固定投影序列\"] --> D[\"只读分页与投影\"]\n```\n\n代码：[`native/history.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/deepseek_harness/native/history.rs)。这是读取行为修正，没有独立 GUI 改版。\n",
+    "paths": ["crates/provider/src/local/deepseek_harness/native/history.rs"],
+    "tasks": ["30"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 19,
+    "title": "OpenCode ACP 命令目录与生命周期门控",
+    "body": "## 19. OpenCode ACP 命令目录与生命周期门控\n\n接入同一 ACP 会话的 `available_commands_update`，严格校验所属 session；非目录帧保留给原 reader，不创建第二个 writer。草稿发现只使用可删除的临时原生会话，结束后清理，且不发送模型 prompt。OpenCode 2.1.3 对自定义命令会过早确认完成，因此未声明 `opencode/command-lifecycle = 1` 时明确拒绝其自定义命令，compact 保留原生路径，避免 Ait 提前显示空闲。\n\n```mermaid\nflowchart LR\n  A[\"ACP available_commands_update\"] --> B[\"校验 session 并更新目录\"] --> C{\"命令生命周期可靠？\"}\n  C -->|是| D[\"原生执行\"]\n  C -->|否| E[\"明确拒绝自定义命令\"]\n```\n\n代码：[`opencode/commands.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/opencode/commands.rs)、[`opencode/launcher.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/opencode/launcher.rs)。复用命令入口，本项没有新的专属界面。\n",
+    "paths": [
+      "crates/provider/src/local/opencode/commands.rs",
+      "crates/provider/src/local/opencode/launcher.rs"
+    ],
+    "tasks": ["31"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 20,
+    "title": "原生等待、owner 与子进程回收",
+    "body": "## 20. 原生等待、owner 与子进程回收\n\n原生操作返回独立 completion receipt，允许等待期间继续轮询、处理审批和问题。命令列表/补全在需要时读取当前 session owner 的目录；维护轮询也受 owner fencing 约束，观察、配置变化和回执持久化后再发布状态。ACP/OMP 关闭路径先关闭 stdin、短暂等待，再执行进程组终止与回收，保存组身份清理后代，避免组长先退出后遗留 writer。\n\n```mermaid\nflowchart LR\n  A[\"owner 接受原生操作\"] --> B[\"独立等待回执\"] --> C[\"继续审批与观察\"] --> D[\"提交并发布\"]\n  B -. \"取消或关闭\" .-> E[\"关闭 stdin / 回收进程组\"]\n```\n\n代码：[`ports/agent_session.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/ports/agent_session.rs)、[`acp_transport.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/acp_transport.rs)。本项为调度与生命周期支撑行为。\n",
+    "paths": [
+      "crates/provider/src/ports/agent_session.rs",
+      "crates/provider/src/local/acp_transport.rs"
+    ],
+    "tasks": ["01", "07", "08", "24"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 21,
+    "title": "桌面启动环境与构建支持",
+    "body": "## 21. 桌面启动环境与构建支持\n\n桌面启动 daemon 时保留 Provider 的二进制路径与 DSH profile/transport 等明确允许的 `AIT_SERVER_*` 配置，使外部安装选择真正传到适配器。Babel 的 React Compiler 排除不含 React 组件的大型协议 schema/生成校验器，避免无关编译拖慢启动与热更新；根脚本新增 `package:daemon`，调用既有发布脚本，不引入 OMP 运行时交付。\n\n```mermaid\nflowchart LR\n  A[\"桌面 Provider 启动配置\"] --> B[\"允许列表保留环境\"] --> C[\"daemon 适配器\"]\n  D[\"协议 schema\"] --> E[\"跳过无关 React 编译\"]\n```\n\n代码：[`rust-daemon.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/desktop/src/daemon/rust-daemon.ts)、[`babel.config.js`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/babel.config.js)。没有独立 GUI。\n",
+    "paths": ["apps/desktop/src/daemon/rust-daemon.ts", "apps/mobile/babel.config.js"],
+    "tasks": ["01", "S1", "S2", "S3"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 22,
+    "title": "协议、持久化与旧客户端回退",
+    "body": "## 22. 协议、持久化与旧客户端回退\n\n新增命令补全、原生操作和四个预设 RPC，扩展 providerUi 的可选有界状态；预设记录的域校验与 daemon 配置校验使用同一规则。命令卡按精确宿主 identity 保留并参与本地副本缓存；线上以已有 assistant text 变体附加 `providerCommand` 元数据，旧客户端仍读到文本，新客户端恢复结构化卡，避免旧封闭联合类型拒绝新 item。原生确认的 feature 变化经适配器校验后持久化，再进入下一轮配置。\n\n```mermaid\nflowchart LR\n  A[\"原生命令与配置事实\"] --> B[\"校验并持久化\"] --> C[\"text + providerCommand 元数据\"]\n  C --> D[\"旧客户端：可读文本\"]\n  C --> E[\"新客户端：结构化卡与本地缓存\"]\n```\n\n代码：[`timeline_projection.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/timeline_projection.rs)、[`messages.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/packages/protocol/src/messages.ts)。本项解释第 8、9、10 节界面的协议与历史支撑，不重复附同一张截图。\n",
+    "paths": ["crates/provider/src/timeline_projection.rs", "packages/protocol/src/messages.ts"],
+    "tasks": ["01", "04", "05", "06", "07", "08", "09", "16", "21", "24", "25", "26"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 23,
+    "title": "设置页刷新可恢复预设读取失败",
+    "body": "## 23. 设置页刷新可恢复预设读取失败\n\n刷新当前主机、Provider、目录下的模型、独立预设缓存和相关配置候选。角色读取等模型目录确认后执行，模型与预设分别显示结果；读取失败可原地重试。缓存失败、外部变化、等待状态和读取顺序均有回归验证。\n\n```mermaid\nflowchart LR\n A[\"刷新当前作用域\"] --> B[\"模型目录\"] --> D[\"角色候选\"]\n A --> C[\"重新读取预设\"]\n C --> E[\"独立成功 / 失败反馈\"]\n D --> E\n```\n\n代码：[`provider-presets.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/data/provider-presets.ts)。\n\n![当前设置标题栏刷新：模型与预设独立反馈](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-refresh-desktop.png)\n",
+    "paths": ["apps/mobile/src/data/provider-presets.ts"],
+    "tasks": ["02", "23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 24,
+    "title": "全局预设删除确认",
+    "body": "## 24. 全局预设删除确认\n\n垃圾桶先打开确认，明确预设名称、Provider 和全局作用域；确认后再次读取权限再发送删除。等待期间禁用重复操作，成功反馈名称，错误保留在确认页。项目覆盖和来源未知仍不可写。\n\n```mermaid\nflowchart LR\n A[\"删除入口\"] --> B[\"名称 / Provider / 全局作用域确认\"] --> C[\"重新校验来源\"] --> D[\"删除中与结果反馈\"]\n```\n\n代码：[`provider-presets-section.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-presets-section.tsx)。\n\n![当前 Daily 全局预设删除确认，本次选择取消](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-delete-mobile.png)\n",
+    "paths": ["apps/mobile/src/components/provider-presets-section.tsx"],
+    "tasks": ["23"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 25,
+    "title": "单击统计与持久结果",
+    "body": "## 25. 单击统计与持久结果\n\n会话统计显示 token、费用、上下文占用；原始数据放详情。点击一次即执行，关闭菜单、切页或重载后仍能查看。数字属于 director 会话，不冒充含所有 worker 的总计；这也不是 OMP 完整 `/stats` 仪表盘。导出保留文件名与下载操作。\n\n```mermaid\nflowchart LR\n A[\"单击查看统计\"] --> B[\"原生回执 / 写入时间线\"] --> C[\"摘要 / 折叠详情\"]\n C --> D[\"重载后保留\"]\n```\n\n代码：[`provider-native-result.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-native-result.tsx)。\n\n![历史 Tai 验收：真实 Tai 用量卡；已验证页面重载后仍保留](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-session-statistics-history-card.png)\n",
+    "paths": ["apps/mobile/src/components/provider-native-result.tsx"],
+    "tasks": ["04"],
+    "disposition": "rewrite",
+    "decision": "Read existing typed AgentUsage/run/Timeline/account values only; defer full native statistics/status dashboards."
+  },
+  {
+    "id": 26,
+    "title": "Vibe 状态与 Goal / BTW 胶囊",
+    "body": "## 26. Vibe 状态与 Goal / BTW 胶囊\n\n复用既有 composer 胶囊。`Vibe ON` 的 ON 大写加粗，仅表示原生 enabled，没有展开或退出按钮，使用 `/vibe` 切换。BTW 未触发时完全隐藏；显式打开后，胶囊收起保留草稿，面板的“结束 BTW”同时移除窗口和胶囊。Goal 仍沿用自己的展开状态。\n\n```mermaid\nflowchart LR\n A[\"原生 enabled\"] --> B[\"Vibe ON / 仅显示\"]\n C[\"/btw\"] --> D[\"BTW 窗口与胶囊\"]\n D --> E[\"收起 / 保留草稿\"]\n D --> F[\"结束 / 两者移除 / 重载保持\"]\n F --> C\n```\n\n代码：[dock](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-control-dock.tsx)、[BTW 结束状态](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/stores/btw-visibility-store.ts)、[Vibe](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-vibe.tsx)。\n\n![未输入 /btw：窗口和胶囊均隐藏](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-hidden-mobile.png)\n\n![结束 BTW 后窗口和胶囊同时移除，原生历史保留](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/ui-btw-ended-mobile.png)\n",
+    "paths": [
+      "apps/mobile/src/components/provider-control-dock.tsx",
+      "apps/mobile/src/stores/btw-visibility-store.ts",
+      "apps/mobile/src/components/provider-vibe.tsx"
+    ],
+    "tasks": ["14", "16", "18", "33"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 27,
+    "title": "任务在主输入框完成，参数提示不进入草稿",
+    "body": "## 27. 任务在主输入框完成，参数提示不进入草稿\n\n选中任务或普通插件只填入 `/name ` 并聚焦主输入框，等待用户填写和发送。灰色提示取自实际命令元数据，不进入提交、复制、历史或草稿。当前公开桥接提供的 guided-goal 提示为 `[rough objective]`；没有元数据的插件不编造提示。多行文本框的方向键与组合输入优先于菜单键盘导航。Vibe 的 spawn/send/wait 等原始 API 保留供 director/对象操作使用，不再面向普通用户生成总参数表单。\n\n```mermaid\nflowchart LR\n A[\"选择任务或插件\"] --> B[\"主输入框 /name 空格\"] --> C[\"原生参数提示\"] --> D[\"用户填写并发送\"]\n```\n\n代码：[`inline-command-hint.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/composer/inline-command-hint.tsx)。\n\n![历史 Tai 验收：同一真实 Tai 会话：行内灰色提示；实际草稿仅为命令与空格](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-guided-goal-inline-hint.png)\n",
+    "paths": ["apps/mobile/src/composer/inline-command-hint.tsx"],
+    "tasks": ["06", "20", "33"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 28,
+    "title": "历史目标按内容选择",
+    "body": "## 28. 历史目标按内容选择\n\n分支、跳转、标记选择原生条目标题，自动携带 ID，分支仅列出官方支持的用户消息。加载、失败与重试都有状态；无有效选项时禁止提交。主轮次运行或 Vibe 启用期间，历史变更给出明确阻止原因。\n\n真实长会话原有回执截断了 JSON，额外修复为最近最多 128 条、24KiB 编码预算的有界摘要，并显示省略数量；完整消息保留在原生日志，内部协调读取不变。同一会话重读得到可解析的 45 项摘要。截图仅完成选择，没有实际创建分支；快捷选择器不是无限历史树。\n\n```mermaid\nflowchart LR\n A[\"原生历史\"] --> B[\"有界有效摘要 / 省略数\"] --> C[\"按正文选择目标\"] --> D[\"自动 ID / 当前状态校验\"]\n```\n\n代码：[`choices.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/actions/choices.rs)、[`provider-native-field.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-native-field.tsx)。\n\n![历史 Tai 验收：同一真实 Tai 长会话：按用户消息选择分支目标，自动绑定，无手填 Entry ID](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-native-history-target.png)\n",
+    "paths": [
+      "crates/provider/src/local/omp/actions/choices.rs",
+      "apps/mobile/src/components/provider-native-field.tsx"
+    ],
+    "tasks": ["25"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 29,
+    "title": "账号与话题的对象入口",
+    "body": "## 29. 账号与话题的对象入口\n\nProvider 账号操作放在齿轮后的设置，先选择原生 Provider，再读取可用账号选择；切换 Provider 立即清空账号，迟到响应不能回填旧账号。读取失败可重试，不再要求手填 Account ID。`/btw` 打开话题面板，追问/分支/取消绑定所选话题，不另建 Topic ID 表单。共享 worker 操作见第 13 节。\n\n```mermaid\nflowchart LR\n A[\"Provider 设置\"] --> B[\"选择 Provider\"] --> C[\"读取该 Provider 账号\"] --> D[\"选择账号并执行\"]\n E[\"/btw\"] --> F[\"已有话题 → 追问 / 分支 / 取消\"]\n```\n\n代码：[`provider-native-field.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-native-field.tsx)、[`provider-side-questions.tsx`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/components/provider-side-questions.tsx)。账号迟到、切换、失败由组件测试验证，未对真实账号登录或退出；没有用虚构账号截图冒充验收。当前 BTW GUI 见第 11 节；该组图使用本地模型协议夹具验证 GUI，非 Tai 推理。\n",
+    "paths": [
+      "apps/mobile/src/components/provider-native-field.tsx",
+      "apps/mobile/src/components/provider-side-questions.tsx"
+    ],
+    "tasks": ["25", "32"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 30,
+    "title": "本轮真实交接卡与独立验收",
+    "body": "## 30. 本轮真实交接卡与独立验收\n\n设计任务为离线中文三人交接卡：事项、甲/乙/丙名册、状态切换、localStorage、键盘和 390px。真实 Tai 访谈、确认 Goal 后，good worker 写出 9755 字节单文件页面；为验证活跃退出主动取消，再由 fast worker 完成独立检查并写出 7085 字节报告。作者另开实际页面验证 Enter 添加、Space 切换、刷新保留、390px 无溢出与无外部请求。产物是场景结果，不是 Ait 新界面；原生会话、thinking、用量与 SHA-256 见[实景报告](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/archive/reports/providers/pr612-command-ownership-and-tai-2026-11-10.md)。\n\n```mermaid\nflowchart LR\n A[\"真实 Tai 访谈 / Goal\"] --> B[\"good 实现 / 活跃退出\"] --> C[\"fast 独立校验\"] --> D[\"作者浏览器复核\"]\n```\n\n代码：[`host.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/vibe/host.rs)。\n\n![历史 Tai 验收：真实 Tai 生成的离线交接卡，390px 浏览器实测；不是 Ait 原生软键盘验收](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-real-task-artifact-390.png)\n",
+    "paths": [
+      "docs/archive/reports/providers/pr612-command-ownership-and-tai-2026-11-10.md",
+      "crates/provider/src/local/omp/vibe/host.rs"
+    ],
+    "tasks": ["00", "33"],
+    "disposition": "reference",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 31,
+    "title": "插件启动前交互与草稿恢复",
+    "body": "## 31. 插件启动前交互与草稿恢复\n\n标准 select/confirm/input/editor/ask 由原生事件触发 GUI，保留空字符串、取消和拒绝语义。初始化前出现问题时，先公布可回答的 provisional session，同一 writer 完成后再释放首条输入，不重放取消的请求。普通元数据探测使用无界面模式但仍加载插件。插件回填编辑器时提供同会话原草稿恢复，widget 与状态按 key 更新。官方 18.17.0 实测未回答启动问题约 30 秒会被原生取消，不能承诺无限等待；纯 TUI 方法仍需插件回退。\n\n```mermaid\nflowchart LR\n A[\"原生初始化 / 标准问题\"] --> B[\"提前显示 GUI\"] --> C[\"同 writer 回答\"] --> D[\"初始化完成 / 单次释放输入\"]\n```\n\n代码：[`bootstrap.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/bootstrap.rs)。\n\n![历史 Tai 验收：官方外部 OMP 在首条真实 Tai 请求受理前发出启动选择，回答后请求完成](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-plugin-startup-question.png)\n",
+    "paths": ["crates/provider/src/local/omp/bootstrap.rs"],
+    "tasks": ["07", "08"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 32,
+    "title": "当前 Goal 操作与 guided goal",
+    "body": "## 32. 当前 Goal 操作与 guided goal\n\n`/goal <目标>` 通过公开 RPC 建立原生目标，已有目标不会被新输入悄悄覆盖；`/guided-goal` 在主会话澄清，确认前不显示 Goal on。当前 Goal 卡常驻输入框上方，可折叠，创建前通过公开扩展确认并启用原生 Goal 工具；原生完成后移除当前控制，历史保留完成回执。暂停/恢复/清除不发送普通提示词；OMP 写入前核对展示的 Goal ID，拒绝陈旧目标。原生确认快照覆盖此前缓冲的旧 Goal 状态，保留无关轮次帧。DSH 也从原生事实提供当前 Goal。预算修改、已有目标 set 和其余模式的缺失接口仍未完成。\n\n```mermaid\nflowchart LR\n A[\"访谈 / 目标输入\"] --> B[\"原生 Goal 确认\"] --> C[\"当前控制区\"]\n C --> D[\"核对 ID → 暂停 / 恢复 / 清除\"]\n```\n\n代码：[`tasks.rs`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/crates/provider/src/local/omp/session/tasks.rs)。\n\n![历史 Tai 验收：真实 Tai 交接卡：输入框上方的当前 Goal 与原生操作](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-goal-dock-expanded.png)\n\n[真实 Tai 调用 Goal complete 的完成回执](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-goal-completed-receipt.png)。\n",
+    "paths": ["crates/provider/src/local/omp/session/tasks.rs"],
+    "tasks": ["16", "18", "20"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  },
+  {
+    "id": 33,
+    "title": "开关原生确认、模型同步与键盘",
+    "body": "## 33. 开关原生确认、模型同步与键盘\n\n保留现有图标，只改变开启/关闭状态的呈现：开启图标有持续颜色，关闭弱化；没有常驻圆圈边框，hover/按下背景只表示交互。提交期间显示等待，原生拒绝保留原值；成功后更新持久配置和可访问 pressed/busy。插件变更模型/thinking 经原生 get_state 回读、统一校验与保存，不只修改 runtime 标签。多行表单浏览器实测上下键正常移动光标。\n\n```mermaid\nflowchart LR\n A[\"开关选择\"] --> B[\"等待原生确认\"] --> C{\"成功？\"}\n C -->|是| D[\"保存 / 同步持续状态\"]\n C -->|否| E[\"保留原值 / 提示错误\"]\n```\n\n代码：[`runtime-features.ts`](https://github.com/ait-app/ait/blob/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/apps/mobile/src/composer/agent-controls/runtime-features.ts)。\n\n![历史 Tai 验收：真实 Tai 会话中的开启状态：原图标着色，没有常驻圆圈边框](https://raw.githubusercontent.com/ait-app/ait/fd2798e46aa90a8dea48dd8a15e84028dbb981b4/docs/assets/providers/omp/tai-toggle-enabled-state.png)\n",
+    "paths": ["apps/mobile/src/composer/agent-controls/runtime-features.ts"],
+    "tasks": ["05", "06", "21", "33"],
+    "disposition": "rewrite",
+    "decision": "Execute only the mapped typed slices under the supplied product constraints; donor screenshots/test claims remain historical, not current acceptance."
+  }
+]

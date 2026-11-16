@@ -13,7 +13,7 @@ test("preserves the optional cached read preference without changing older reque
   }
 });
 
-test("preserves native revalidation hints in both response validators", () => {
+test("preserves native revalidation hints and current task snapshots in both response validators", () => {
   const payload = {
     requestId: "read",
     agentId: "agent",
@@ -32,16 +32,38 @@ test("preserves native revalidation hints in both response validators", () => {
     entries: [],
     error: null,
   };
-  for (const historyNeedsRefresh of [undefined, false, true]) {
-    const message = {
-      type: "agent.timeline.get.response",
-      payload: {
-        ...payload,
-        ...(historyNeedsRefresh === undefined ? {} : { historyNeedsRefresh }),
-      },
-    };
-    expect(FetchAgentTimelineResponseMessageSchema.parse(message)).toEqual(message);
-    const envelope = { type: "session", message };
-    expect(validateWSOutboundMessage(envelope)).toMatchObject({ success: true, data: envelope });
+  for (const taskSnapshot of [
+    undefined,
+    null,
+    { epoch: "epoch", seq: 4, items: [] },
+    { epoch: "epoch", seq: 4, entrySeq: 4 },
+    {
+      epoch: "epoch",
+      seq: 5,
+      items: [
+        {
+          id: "1",
+          text: "Verify",
+          status: "in_progress",
+          completed: false,
+          activeForm: "Verifying",
+          group: { id: "phase:0", title: "Verification" },
+        },
+      ],
+    },
+  ]) {
+    for (const historyNeedsRefresh of [undefined, false, true]) {
+      const message = {
+        type: "agent.timeline.get.response",
+        payload: {
+          ...payload,
+          ...(historyNeedsRefresh === undefined ? {} : { historyNeedsRefresh }),
+          ...(taskSnapshot === undefined ? {} : { taskSnapshot }),
+        },
+      };
+      expect(FetchAgentTimelineResponseMessageSchema.parse(message)).toEqual(message);
+      const envelope = { type: "session", message };
+      expect(validateWSOutboundMessage(envelope)).toMatchObject({ success: true, data: envelope });
+    }
   }
 });

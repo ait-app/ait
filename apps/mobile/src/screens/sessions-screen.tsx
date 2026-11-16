@@ -16,7 +16,7 @@ import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker-constants";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useImportSession } from "@/components/use-import-session";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 
@@ -33,7 +33,7 @@ function resolveEmptyText(input: {
 }): string {
   if (input.isSearching) return input.t("sessions.noMatches");
   if (input.isAllHosts) return input.t("sessions.empty");
-  return "No sessions for this host";
+  return input.t("sessions.emptyForHost");
 }
 
 export function SessionsScreen() {
@@ -163,7 +163,7 @@ function SessionsScreenContent() {
             </Button>
           ) : (
             <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
-              Back
+              {t("common.actions.back")}
             </Button>
           )}
           <Button variant="ghost" leftIcon={Import} onPress={importSession.open}>
@@ -183,11 +183,9 @@ function SessionsScreenContent() {
       {!isInitialLoad && agents.length > 0 ? (
         <AgentList
           agents={agents}
-          showCheckoutInfo={false}
           isRefreshing={isManualRefresh}
           onRefresh={handleRefresh}
           listFooterComponent={listFooterComponent}
-          showAttentionIndicator={false}
           showHostColumn
           search={isSearching ? search : undefined}
         />

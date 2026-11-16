@@ -12,7 +12,7 @@ import {
   markDeliveredSendError,
   rejectMessageSubmission,
   type MessageSubmissionRecord,
-} from "@/composer/submission/model";
+} from "@/stores/message-submission-model";
 import {
   appendSubmittedUserMessage,
   removeSubmittedUserMessage,

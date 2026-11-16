@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { validateDraftCreation } from "./workspace-tab-core";
+import { resolveDraftModeId, validateDraftCreation } from "./workspace-tab-core";
 
 const baseComposerState = {
   providerDefinitions: [{ id: "codewhale" }],
@@ -45,5 +45,45 @@ describe("workspace draft agent model validation", () => {
         },
       }),
     ).toBe("No model is available for the selected provider");
+  });
+});
+
+describe("workspace draft agent mode", () => {
+  const modeOptionIds = ["build", "plan"];
+
+  test("uses the auto-submit mode when the setup names one", () => {
+    expect(
+      resolveDraftModeId({
+        autoSubmitConfig: { modeId: "plan" },
+        modeOptionIds,
+        selectedMode: "build",
+      }),
+    ).toBe("plan");
+  });
+
+  test("falls back to the form's mode when the auto-submit setup names none", () => {
+    expect(
+      resolveDraftModeId({
+        autoSubmitConfig: { modeId: null },
+        modeOptionIds,
+        selectedMode: "plan",
+      }),
+    ).toBe("plan");
+  });
+
+  test("shows the mode the picker displays when the remembered mode is gone", () => {
+    expect(
+      resolveDraftModeId({ autoSubmitConfig: null, modeOptionIds, selectedMode: "review" }),
+    ).toBe("build");
+  });
+
+  test("leaves the mode unset when the provider exposes no modes", () => {
+    expect(
+      resolveDraftModeId({
+        autoSubmitConfig: { modeId: null },
+        modeOptionIds: [],
+        selectedMode: "",
+      }),
+    ).toBeNull();
   });
 });

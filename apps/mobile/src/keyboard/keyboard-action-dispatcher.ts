@@ -50,7 +50,6 @@ export type KeyboardActionId =
   | "sidebar.toggle.both"
   | "workspace.new"
   | "workspace.project.pick"
-  | "worktree.new"
   | "workspace.archive"
   | "workspace.pin"
   // Command-center only: no keybind, so these are absent from route-shortcut.ts.
@@ -109,7 +108,6 @@ export type KeyboardActionDefinition =
   | { id: "sidebar.toggle.both"; scope: KeyboardActionScope }
   | { id: "workspace.new"; scope: KeyboardActionScope }
   | { id: "workspace.project.pick"; scope: KeyboardActionScope }
-  | { id: "worktree.new"; scope: KeyboardActionScope }
   | { id: "workspace.archive"; scope: KeyboardActionScope }
   | { id: "workspace.pin"; scope: KeyboardActionScope }
   | { id: "workspace.rename"; scope: KeyboardActionScope }

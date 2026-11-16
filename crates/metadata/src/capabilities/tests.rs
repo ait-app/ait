@@ -8,7 +8,8 @@ use super::*;
 fn installation_selects_the_entire_crate() {
     let declared: Vec<_> = implemented_methods().collect();
     let names: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
-    assert_eq!(declared.len(), 49);
+    assert_eq!(declared.len(), 50);
+    assert!(names.contains("daemon.host_stats.request"));
     assert!(!names.contains("daemon.get_pairing_offer.request"));
     let workspace_target = declared
         .iter()

@@ -8,6 +8,7 @@ import {
   type TargetedEvent,
 } from "react-native";
 import { ChevronDown } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
@@ -46,6 +47,7 @@ export interface SelectFieldProps<TValue> {
   selectedDisplay: SelectFieldDisplay | null;
   options: SelectFieldOption<TValue>[];
   onChange: (value: TValue, display: SelectFieldDisplay) => void;
+  onOpen?: () => void;
   placeholder: string;
   emptyText: string;
   loading?: boolean;
@@ -56,7 +58,6 @@ export interface SelectFieldProps<TValue> {
   searchPlaceholder?: string;
   title?: string;
   size?: FieldControlSize;
-  getValueKey?: (value: TValue) => string;
   renderOption?: (input: SelectFieldRenderOptionInput<TValue>) => ReactElement;
   triggerLeading?: ReactNode;
   field?: boolean;
@@ -89,14 +90,9 @@ const foregroundMutedMapping = (theme: Theme) => ({
 function getSelectedOptionId<TValue>(
   options: readonly SelectFieldOption<TValue>[],
   value: TValue | null,
-  getValueKey: ((value: TValue) => string) | undefined,
 ): string {
   if (value === null) {
     return "";
-  }
-  if (getValueKey) {
-    const selectedKey = getValueKey(value);
-    return options.find((option) => getValueKey(option.value) === selectedKey)?.id ?? "";
   }
   return options.find((option) => Object.is(option.value, value))?.id ?? "";
 }
@@ -176,6 +172,7 @@ export function SelectField<TValue>({
   selectedDisplay,
   options,
   onChange,
+  onOpen,
   placeholder,
   emptyText,
   loading = false,
@@ -186,20 +183,20 @@ export function SelectField<TValue>({
   searchPlaceholder,
   title,
   size = "md",
-  getValueKey,
   renderOption,
   triggerLeading,
   field = true,
   testID,
   triggerTestID,
 }: SelectFieldProps<TValue>): ReactElement {
+  const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
   const [open, setOpen] = useState(false);
   const [triggerFocused, setTriggerFocused] = useState(false);
   const visibleOptions = useVisibleSelectOptions(options, loading);
   const selectedOptionId = useMemo(
-    () => getSelectedOptionId(visibleOptions, value, getValueKey),
-    [getValueKey, value, visibleOptions],
+    () => getSelectedOptionId(visibleOptions, value),
+    [value, visibleOptions],
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -232,8 +229,9 @@ export function SelectField<TValue>({
     if (disabled) {
       return;
     }
-    setOpen((current) => !current);
-  }, [disabled]);
+    if (!open) onOpen?.();
+    setOpen(!open);
+  }, [disabled, onOpen, open]);
   const handleTriggerFocus = useCallback((_event: NativeSyntheticEvent<TargetedEvent>) => {
     setTriggerFocused(true);
   }, []);
@@ -253,19 +251,8 @@ export function SelectField<TValue>({
       active: boolean;
       onPress: () => void;
     }) => {
-      const selectOption = optionById.get(option.id);
-      if (!selectOption) {
-        return (
-          <ComboboxItem
-            label={option.label}
-            description={option.description}
-            kind={option.kind}
-            selected={selected}
-            active={active}
-            onPress={onPress}
-          />
-        );
-      }
+      // Every combobox option is built from `visibleOptions`, so the lookup always hits.
+      const selectOption = optionById.get(option.id)!;
       if (renderOption) {
         return renderOption({ option: selectOption, selected, active, onPress });
       }
@@ -320,7 +307,7 @@ export function SelectField<TValue>({
         onSelect={handleSelect}
         searchable={searchable}
         searchPlaceholder={searchPlaceholder}
-        emptyText={loading && visibleOptions.length === 0 ? "Loading..." : emptyText}
+        emptyText={loading && visibleOptions.length === 0 ? t("common.states.loading") : emptyText}
         title={title ?? label}
         open={open}
         onOpenChange={setOpen}

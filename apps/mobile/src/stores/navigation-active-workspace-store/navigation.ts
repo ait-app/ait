@@ -12,7 +12,10 @@ import {
 } from "@/utils/workspace-identity";
 import type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
-import { prepareWorkspaceTab, type PrepareWorkspaceTabDeps } from "@/utils/prepare-workspace-tab";
+import {
+  prepareWorkspaceTab,
+  type PrepareWorkspaceTabDeps,
+} from "@/workspace-tabs/prepare-workspace-tab";
 import type { WorkspaceTabPlacement } from "@/stores/workspace-layout-actions";
 
 export interface RouteSelectionInput {

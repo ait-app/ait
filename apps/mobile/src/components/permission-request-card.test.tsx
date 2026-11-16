@@ -2,8 +2,9 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import { i18n } from "@/i18n/i18next";
 import type { PendingPermission } from "@/types/shared";
 import { PermissionRequestCard } from "./permission-request-card";
 
@@ -66,21 +67,91 @@ const permission: PendingPermission = {
   },
 };
 
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
-function mount(client: unknown, request = permission) {
+function mount(
+  client: unknown,
+  request = permission,
+  options: { panel?: boolean; compact?: boolean; onOpenDetails?: () => void } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PermissionRequestCard panel permission={request} client={client as DaemonClient | null} />
+      <PermissionRequestCard
+        panel
+        permission={request}
+        client={client as DaemonClient | null}
+        {...options}
+      />
     </QueryClientProvider>,
   );
 }
 
 describe("shared permission card", () => {
+  it("opens the full question from a compact card without approving it", () => {
+    const onOpenDetails = vi.fn();
+    const respondToPermissionAndWait = vi.fn();
+    mount(
+      { respondToPermissionAndWait },
+      { ...permission, request: { ...permission.request, kind: "question" } },
+      { compact: true, onOpenDetails },
+    );
+    fireEvent.click(screen.getByTestId("task-answer"));
+    expect(onOpenDetails).toHaveBeenCalledOnce();
+    expect(respondToPermissionAndWait).not.toHaveBeenCalled();
+  });
+
+  it("keeps additional command arguments visible in the compact request summary", () => {
+    mount(
+      null,
+      {
+        ...permission,
+        request: {
+          ...permission.request,
+          name: "commandExecution",
+          input: { command: "npm test", env: { TARGET: "production" } },
+        },
+      },
+      { compact: true },
+    );
+    expect(screen.getByText(/TARGET.*production/)).toBeTruthy();
+    expect((screen.getByText("Allow once") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("locks the card and detail actions together while the same request is pending", async () => {
+    let finish!: (value: unknown) => void;
+    const respondToPermissionAndWait = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const queryClient = new QueryClient();
+    const client = { respondToPermissionAndWait } as unknown as DaemonClient;
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PermissionRequestCard compact permission={permission} client={client} />
+        <PermissionRequestCard panel permission={permission} client={client} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getAllByText("Allow once")[0]);
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("Deny").every((button) => (button as HTMLButtonElement).disabled),
+      ).toBe(true),
+    );
+    expect(respondToPermissionAndWait).toHaveBeenCalledOnce();
+    finish({});
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  });
+
   it("sends the provider action ID and locks duplicate responses until resolution", async () => {
     let finish!: (value: unknown) => void;
     const respondToPermissionAndWait = vi.fn(
@@ -159,6 +230,59 @@ describe("shared permission card", () => {
       request: { ...permission.request, name: "commandExecution", input },
     });
     expect(JSON.parse(screen.getByTestId("tool-detail").textContent!).input).toEqual(input);
+  });
+
+  it("names a chat command request and shows its command and directory without transport IDs", () => {
+    mount(
+      null,
+      {
+        ...permission,
+        request: {
+          ...permission.request,
+          name: "commandExecution",
+          title: undefined,
+          input: {
+            command: "npm test",
+            cwd: "/repo",
+            threadId: "thread-1",
+            turnId: "turn-1",
+            itemId: "approval-item",
+          },
+        },
+      },
+      { panel: false },
+    );
+    expect(screen.getByText("Run command")).toBeTruthy();
+    expect(screen.queryByText("commandExecution")).toBeNull();
+    expect(JSON.parse(screen.getByTestId("tool-detail").textContent!)).toEqual({
+      type: "shell",
+      command: "npm test",
+      cwd: "/repo",
+    });
+    expect(screen.getByTestId("permission-request-cwd").textContent).toBe("/repo");
+  });
+
+  it("fills only the primary chat action and keeps the provider's action order", () => {
+    mount(null, permission, { panel: false });
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["Allow once", "Deny"]);
+    expect(buttons[0].style.backgroundColor).toBe("rgb(37, 99, 235)");
+    expect(buttons[1].style.backgroundColor).not.toBe("rgb(37, 99, 235)");
+  });
+
+  it("keeps additional command arguments visible in the chat request", () => {
+    const input = { command: "npm test", cwd: "/repo", env: { TARGET: "production" } };
+    mount(
+      null,
+      { ...permission, request: { ...permission.request, name: "commandExecution", input } },
+      { panel: false },
+    );
+    expect(JSON.parse(screen.getByTestId("tool-detail").textContent!)).toEqual({
+      type: "unknown",
+      input,
+      output: null,
+    });
+    expect(screen.queryByTestId("permission-request-cwd")).toBeNull();
   });
 
   it("retains question answers and uses the bounded question response deadline", async () => {

@@ -123,45 +123,12 @@ function ensureSetupStatus(client: WorkspaceSetupStatusClient) {
 describe("workspace-setup-store", () => {
   beforeEach(() => {
     useWorkspaceSetupStore.setState({
-      pendingWorkspaceSetup: null,
       snapshots: {},
       summaries: {},
       serverGenerations: {},
       requestedKeys: new Set(),
       surfacedFailedSetupKeys: new Set(),
     });
-  });
-
-  it("tracks deferred workspace setup by source directory and optional workspace id", () => {
-    useWorkspaceSetupStore.getState().beginWorkspaceSetup({
-      serverId: "server-1",
-      sourceDirectory: "/Users/test/project",
-      sourceWorkspaceId: "42",
-      displayName: "project",
-      creationMethod: "open_project",
-    });
-
-    expect(useWorkspaceSetupStore.getState().pendingWorkspaceSetup).toEqual({
-      serverId: "server-1",
-      sourceDirectory: "/Users/test/project",
-      sourceWorkspaceId: "42",
-      displayName: "project",
-      creationMethod: "open_project",
-      creationId: expect.any(String),
-      worktreeSlug: expect.any(String),
-    });
-  });
-
-  it("clears pending setup state", () => {
-    useWorkspaceSetupStore.getState().beginWorkspaceSetup({
-      serverId: "server-1",
-      sourceDirectory: "/Users/test/project",
-      creationMethod: "create_worktree",
-    });
-
-    useWorkspaceSetupStore.getState().clearWorkspaceSetup();
-
-    expect(useWorkspaceSetupStore.getState().pendingWorkspaceSetup).toBeNull();
   });
 
   it("hides empty successful setup snapshots", () => {

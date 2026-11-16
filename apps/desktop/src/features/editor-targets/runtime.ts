@@ -14,12 +14,6 @@ interface SpawnedProcess {
   unref(): void;
 }
 
-export interface RecordedEditorLaunch {
-  command: string;
-  args: string[];
-  options: SpawnOptions;
-}
-
 export interface EditorTargetRuntimeOptions {
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;

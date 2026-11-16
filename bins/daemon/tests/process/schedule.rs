@@ -150,15 +150,15 @@ async fn assert_automatic_existing_run(socket: &mut Socket, agent: &Value, works
     .await;
     let schedule_id = existing_id.as_str().unwrap();
     let run_id = record["schedule"]["runs"][0]["id"].as_str().unwrap();
-    let expected = format!(
-        "<ait-system>\nSchedule \"Named existing agent job\" fired (id={schedule_id}, run={run_id}).\nexisting scheduled hello\n</ait-system>"
-    );
+    let origin = json!({"kind":"schedule","scheduleId":schedule_id,"runId":run_id,
+        "name":"Named existing agent job"});
     assert!(
         timeline["entries"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|entry| entry["item"]["text"] == expected),
+            .any(|entry| entry["item"]["text"] == "existing scheduled hello"
+                && entry["item"]["origin"] == origin),
         "{timeline}"
     );
 }

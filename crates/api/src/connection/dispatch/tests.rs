@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use super::*;
 use crate::{Api, Services};
 
+mod side_questions;
 mod subscription_admission;
 
 #[tokio::test]
@@ -48,6 +49,10 @@ const OWNED_METHODS: &[&str] = &[
     "connection.ping",
     "agent.skills.get_status.request",
     "agent.list.request",
+    "agent.side_question.ask.request",
+    "agent.side_question.cancel.request",
+    "agent.side_question.history.request",
+    "agent.side_question.transfer.request",
     "terminal.list.request",
 ];
 

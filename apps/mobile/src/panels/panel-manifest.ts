@@ -10,7 +10,7 @@ export interface CompactSheetPolicy {
 }
 
 /** Facts about a target that live outside the layout, resolved lazily by the workspace. */
-export interface PanelTargetFacts {
+interface PanelTargetFacts {
   isWorkspaceRootAgent(agentId: string): boolean;
 }
 
@@ -129,6 +129,14 @@ const manifests = {
     showCloseButton: true,
     singleton: true,
     resourceKey: () => "schedule",
+  },
+  notebook: {
+    kind: "notebook",
+    supportedHosts: ["main"],
+    showCloseButton: true,
+    singleton: true,
+    compactSheet: null,
+    resourceKey: () => "notebook",
   },
   file: {
     kind: "file",

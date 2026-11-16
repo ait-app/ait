@@ -86,7 +86,6 @@ export interface WorkspaceCommandCenterIcons {
   unpin?: CommandCenterIcon;
   showSetup?: CommandCenterIcon;
   toggleFocusMode?: CommandCenterIcon;
-  label?: CommandCenterIcon;
   git?(action: GitAction): CommandCenterIcon | undefined;
 }
 

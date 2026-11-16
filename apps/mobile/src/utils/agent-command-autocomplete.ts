@@ -16,7 +16,7 @@ interface InlineSkillCommandEntry extends CommandAutocompleteEntry {
   source: "provider" | "client";
 }
 
-export type SlashCommandPosition = "start" | "inline";
+type SlashCommandPosition = "start" | "inline";
 
 export interface SlashCommandRange {
   start: number;

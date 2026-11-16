@@ -33,6 +33,9 @@ pub(super) fn allows(method: &str, kind: InboundKind) -> bool {
                 | "bot.history.get.request"
                 | "bot.turn.get.request"
                 | "bot.memory.get.request"
+                | "bot.notifications.list.request"
+                | "bot.ticket.list.request"
+                | "bot.ticket.get.request"
         )
     {
         return false;

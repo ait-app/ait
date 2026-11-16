@@ -1,3 +1,6 @@
+import { resolveBtwCommand, type BtwCommand } from "@/btw";
+import { BtwPanel } from "@/components/provider-side-questions";
+import { useBtwPanelState } from "@/btw/use-panel";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import {
   useComposerEditingSession,
@@ -70,7 +73,6 @@ import {
   DraftAgentControls,
   type DraftAgentControlsProps,
 } from "@/composer/agent-controls";
-import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { droppedItemsToSelectedFiles } from "@/composer/attachments/drop";
 import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
@@ -111,7 +113,7 @@ import {
 } from "@/runtime/host-runtime";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { RenderProfile } from "@/utils/render-profiler";
 import { focusWithRetries } from "@/utils/web-focus";
@@ -142,7 +144,6 @@ import {
   useState,
   useSyncExternalStore,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -187,37 +188,9 @@ type AttachmentListUpdater =
 const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
 
 function noop() {}
-const noopCallback = () => {};
-
-function resolveComposerButtonIconSize(): number {
-  return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
-}
-
-function resolveIsComposerLocked(
-  submitBehavior: "clear" | "preserve-and-lock",
-  isSubmitLoading: boolean,
-): boolean {
-  return submitBehavior === "preserve-and-lock" && isSubmitLoading;
-}
-
-function resolveIsVoiceModeForAgent(
-  voice: ReturnType<typeof useVoiceOptional>,
-  serverId: string,
-  agentId: string,
-): boolean {
-  return voice?.isVoiceModeForAgent(serverId, agentId) ?? false;
-}
-
-function resolveKeyboardPriority(isMessageInputFocused: boolean): number {
-  return isMessageInputFocused ? 200 : 100;
-}
 
 function resolveIsDesktopWebBreakpoint(isMobile: boolean): boolean {
   return isWeb && !isMobile;
-}
-
-function resolveCompactLayout(override: boolean | undefined, formFactor: boolean): boolean {
-  return override ?? formFactor;
 }
 
 function resolveMessagePlaceholder(
@@ -238,20 +211,6 @@ function resolveMessagePlaceholder(
   return isDesktopWebBreakpoint
     ? t("composer.placeholders.desktop")
     : t("composer.placeholders.mobile");
-}
-
-function resolveGithubSearchEnabled(
-  isGithubPickerOpen: boolean,
-  isConnected: boolean,
-  cwd: string,
-): boolean {
-  return isGithubPickerOpen && isConnected && cwd.trim().length > 0;
-}
-
-function resolveCheckoutRemoteUrl(
-  checkoutStatus: ReturnType<typeof useCheckoutStatusQuery>["status"],
-): string | null {
-  return checkoutStatus?.remoteUrl ?? null;
 }
 
 function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean): object[] {
@@ -279,6 +238,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       status: agent?.status ?? null,
       contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
       contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
+      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
       supportsRealtimeVoice: agent?.capabilities?.supportsRealtimeVoice === true,
@@ -289,7 +249,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
 function renderContextWindowMeter(
   contextWindowMaxTokens: number | null,
   contextWindowUsedTokens: number | null,
-  showPercentage: boolean,
+  totalCostUsd: number | null,
   serverId: string,
   agentId: string | null,
   glyphSize: number,
@@ -301,19 +261,12 @@ function renderContextWindowMeter(
     <ContextWindowMeter
       maxTokens={contextWindowMaxTokens}
       usedTokens={contextWindowUsedTokens}
-      showPercentage={showPercentage}
+      totalCostUsd={totalCostUsd}
       serverId={serverId}
       agentId={agentId ?? ""}
       glyphSize={glyphSize}
     />
   );
-}
-
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  reserveSlot: boolean,
-): ReactNode {
-  return reserveSlot ? <View style={styles.contextWindowMeterSlot}>{meter}</View> : null;
 }
 
 interface RenderLeftContentArgs {
@@ -328,7 +281,7 @@ interface RenderLeftContentArgs {
 function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
   const { agentControls, agentId, serverId, focusInput, isCompactLayout } = args;
   if (!args.showAgentControls) return null;
-  if (resolveAgentControlsMode(agentControls) === "draft" && agentControls) {
+  if (agentControls) {
     return <DraftAgentControls {...agentControls} isCompactLayout={isCompactLayout} />;
   }
   return (
@@ -614,7 +567,7 @@ function ComposerKeyboardRegistration({
       "message-input.voice-mute-toggle",
     ],
     enabled: isActiveComposer,
-    priority: resolveKeyboardPriority(isMessageInputFocused),
+    priority: isMessageInputFocused ? 200 : 100,
     isActive: () => isActiveComposer,
     handle: handleKeyboardAction,
   });
@@ -809,7 +762,7 @@ function FileAttachmentPill({
   return (
     <AttachmentPill
       testID="composer-file-attachment-pill"
-      onOpen={noopCallback}
+      onOpen={noop}
       onRemove={handleRemove}
       openAccessibilityLabel={fileName}
       removeAccessibilityLabel={removeLabel}
@@ -846,7 +799,7 @@ function WorkspaceFileAttachmentPill({
   return (
     <AttachmentPill
       testID="composer-workspace-file-attachment-pill"
-      onOpen={noopCallback}
+      onOpen={noop}
       onRemove={handleRemove}
       openAccessibilityLabel={fileName}
       removeAccessibilityLabel={removeLabel}
@@ -1275,7 +1228,7 @@ function ComposerContentImpl({
 }: ComposerContentProps) {
   const mode = resolveComposerInputMode(inputMode);
   const { t } = useTranslation();
-  const buttonIconSize = resolveComposerButtonIconSize();
+  const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
@@ -1303,7 +1256,7 @@ function ComposerContentImpl({
   const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
 
   const isCompactFormFactor = useIsCompactFormFactor();
-  const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);
+  const isCompactLayout = isCompactLayoutOverride ?? isCompactFormFactor;
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isCompactFormFactor);
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
   const messagePlaceholder = resolveMessagePlaceholder(inputMode, isDesktopLayout, t, placeholder);
@@ -1312,7 +1265,6 @@ function ComposerContentImpl({
     () => textSource.getSnapshot().trim().length > 0,
     () => textSource.getSnapshot().trim().length > 0,
   );
-  const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
   const {
     selectedAttachments,
@@ -1339,7 +1291,7 @@ function ComposerContentImpl({
   const [isForgeResolving, setIsForgeResolving] = useState(false);
   const forgeConfiguration = useMemo(
     () => ({
-      remoteUrl: resolveCheckoutRemoteUrl(checkoutStatusQuery.status),
+      remoteUrl: checkoutStatusQuery.status?.remoteUrl ?? null,
       attachments,
       client,
       isConnected,
@@ -1382,9 +1334,19 @@ function ComposerContentImpl({
   const [isGithubPickerOpen, setIsGithubPickerOpen] = useState(false);
   const [githubSearchQuery, setGithubSearchQuery] = useState("");
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
+  const {
+    opened: btwOpened,
+    request: btwRequest,
+    open: openBtwPanel,
+    consume: consumeBtwRequest,
+    onOpenedChange: setBtwOpened,
+  } = useBtwPanelState({ serverId, agentId });
+  const hasBtwSource = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.has(agentId) ?? false,
+  );
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
-  const isComposerLocked = resolveIsComposerLocked(submitBehavior, isSubmitLoading);
+  const isComposerLocked = submitBehavior === "preserve-and-lock" && isSubmitLoading;
   const keyboardHandlerIdRef = useRef(
     `message-input:${serverId}:${agentId}:${Math.random().toString(36).slice(2)}`,
   );
@@ -1468,13 +1430,7 @@ function ComposerContentImpl({
 
   const focusInput = useCallback(() => {
     if (isNative) return;
-    focusWithRetries({
-      focus: () => messageInputRef.current?.focus(),
-      isFocused: () => {
-        const el = messageInputRef.current?.getNativeElement?.() ?? null;
-        return el != null && document.activeElement === el;
-      },
-    });
+    focusMessageInputWithPlatformStrategy(messageInputRef);
   }, []);
 
   const handleDirectoryPathsDropped = useCallback(
@@ -1571,13 +1527,12 @@ function ComposerContentImpl({
     onSubmitMessageRef.current = onSubmitMessage;
   }, [onSubmitMessage]);
 
-  const hasActiveTurn = useSessionStore(
+  const isAgentRunning = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
   );
   const isCancellingAgent = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isCancelling,
   );
-  const isAgentRunning = hasActiveTurn;
   // Queueing behind a permission prompt would strand the message: the turn is
   // parked until the request is answered.
   const hasPendingPermission = useSessionStore((state) => {
@@ -1691,30 +1646,58 @@ function ComposerContentImpl({
     ],
   );
 
-  const handleSubmit = useCallback(
-    (payload: MessagePayload) => {
+  const openBtw = useCallback(
+    (command: BtwCommand) => {
+      if (command.attachmentsUnsupported) {
+        setSendError(t("btw.attachmentsUnsupported"));
+        return;
+      }
+      if (!hasBtwSource) {
+        setSendError(t("btw.requiresConversation"));
+        return;
+      }
+      openBtwPanel(command.question);
+      replaceUserInput("");
+      clearDraft("sent");
+    },
+    [clearDraft, hasBtwSource, openBtwPanel, replaceUserInput, t],
+  );
+
+  // `/btw` and immediate client slash commands run instead of sending or queueing.
+  // Returns the outgoing attachments when the payload should go through.
+  const resolveOutgoingAttachments = useCallback(
+    (payload: MessagePayload): ComposerAttachment[] | null => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const btw = resolveBtwCommand({
+        text: payload.text,
+        hasAttachments: outgoingAttachments.length > 0,
+      });
+      if (btw && inputMode === "chat") {
+        openBtw(btw);
+        return null;
+      }
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
-        return;
+        return null;
       }
+      return outgoingAttachments;
+    },
+    [attachments, buildOutgoingAttachments, inputMode, openBtw, runClientSlashCommand],
+  );
 
+  const handleSubmit = useCallback(
+    (payload: MessagePayload) => {
+      const outgoingAttachments = resolveOutgoingAttachments(payload);
+      if (!outgoingAttachments) return;
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
       void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
     },
-    [
-      attachments,
-      blurOnSubmit,
-      buildOutgoingAttachments,
-      runClientSlashCommand,
-
-      sendMessageWithContent,
-    ],
+    [blurOnSubmit, resolveOutgoingAttachments, sendMessageWithContent],
   );
 
   const handlePickImage = useCallback(async () => {
@@ -1923,7 +1906,7 @@ function ComposerContentImpl({
     focusMessageInputWithPlatformStrategy(messageInputRef);
   }, []);
 
-  const isVoiceModeForAgent = resolveIsVoiceModeForAgent(voice, serverId, agentId);
+  const isVoiceModeForAgent = voice?.isVoiceModeForAgent(serverId, agentId) ?? false;
 
   const hasSendableContent = hasText || selectedAttachments.length > 0 || hasExternalContent;
   const canCreateVoiceAgent = Boolean(onCreateVoiceAgent) && !hasSendableContent;
@@ -1998,23 +1981,11 @@ function ComposerContentImpl({
 
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
-      const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
-        hasAttachments: outgoingAttachments.length > 0,
-      });
-      if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
-        return;
-      }
+      const outgoingAttachments = resolveOutgoingAttachments(payload);
+      if (!outgoingAttachments) return;
       queueMessage(payload.text, outgoingAttachments);
     },
-    [
-      attachments,
-      buildOutgoingAttachments,
-
-      queueMessage,
-      runClientSlashCommand,
-    ],
+    [queueMessage, resolveOutgoingAttachments],
   );
 
   // Handle keyboard navigation for command autocomplete.
@@ -2106,7 +2077,7 @@ function ComposerContentImpl({
       renderContextWindowMeter(
         contextWindowMaxTokens,
         contextWindowUsedTokens,
-        false,
+        agentState.totalCostUsd,
         serverId,
         agentId,
         contextWindowMeterGlyphSize,
@@ -2114,13 +2085,15 @@ function ComposerContentImpl({
     [
       contextWindowMaxTokens,
       contextWindowUsedTokens,
+      agentState.totalCostUsd,
       serverId,
       agentId,
       contextWindowMeterGlyphSize,
     ],
   );
   const beforeVoiceContent = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, hasAgent),
+    () =>
+      hasAgent ? <View style={styles.contextWindowMeterSlot}>{contextWindowMeter}</View> : null,
     [contextWindowMeter, hasAgent],
   );
 
@@ -2151,7 +2124,7 @@ function ComposerContentImpl({
     cwd,
     query: githubSearchQueryTrimmed,
     supportsForgeSearch,
-    enabled: resolveGithubSearchEnabled(isGithubPickerOpen, isConnected, cwd),
+    enabled: isGithubPickerOpen && isConnected && cwd.trim().length > 0,
   });
 
   const githubSearchItemsRaw = githubSearchResultsQuery.data?.items;
@@ -2406,6 +2379,11 @@ function ComposerContentImpl({
     ],
   );
   const messageInputContainerRef = useRef<View>(null);
+  const [btwAnchorLayoutVersion, setBtwAnchorLayoutVersion] = useState(0);
+  const handleBtwAnchorLayout = useCallback(
+    () => setBtwAnchorLayoutVersion((version) => version + 1),
+    [],
+  );
 
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isStartingVoice || isUploadingFile || pendingImagePastes > 0;
@@ -2463,8 +2441,27 @@ function ComposerContentImpl({
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
+            {!isFullscreen && inputMode === "chat" && !readOnly && hasBtwSource ? (
+              <BtwPanel
+                anchorRef={messageInputContainerRef}
+                anchorLayoutVersion={btwAnchorLayoutVersion}
+                key={`${serverId}:${agentId}`}
+                serverId={serverId}
+                agentId={agentId}
+                workspaceId={workspaceId}
+                disabled={readOnly || !isConnected}
+                opened={btwOpened}
+                request={btwRequest}
+                onRequestConsumed={consumeBtwRequest}
+                onOpenedChange={setBtwOpened}
+              />
+            ) : null}
 
-            <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
+            <View
+              ref={messageInputContainerRef}
+              onLayout={handleBtwAnchorLayout}
+              style={messageInputContainerStyle}
+            >
               <ComposerAutocompleteBinding
                 text={textSource}
                 cursor={cursor}
@@ -2488,7 +2485,7 @@ function ComposerContentImpl({
                   editingSession={editingSession}
                   submissionError={sendErrorNode}
                   value={textSource.getSnapshot()}
-                  onChangeText={setUserInput}
+                  onChangeText={onChangeText}
                   onSubmit={handleSubmit}
                   hasExternalContent={hasExternalContent}
                   allowEmptySubmit={allowEmptySubmit}
@@ -2578,10 +2575,6 @@ const animatedStaticStyles = RNStyleSheet.create({
 });
 
 const styles = StyleSheet.create((theme: Theme) => ({
-  borderSeparator: {
-    height: theme.borderWidth[1],
-    backgroundColor: theme.colors.border,
-  },
   inputAreaContainer: {
     flexShrink: 1,
     position: "relative",
@@ -2650,10 +2643,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   realtimeVoiceButtonCompactReserve: {
     marginLeft: theme.spacing[1],
-  },
-  realtimeVoiceButtonActive: {
-    backgroundColor: theme.colors.palette.green[600],
-    borderColor: theme.colors.palette.green[800],
   },
   iconButtonHovered: {
     backgroundColor: theme.colors.surface2,

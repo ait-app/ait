@@ -23,8 +23,8 @@ const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMute
  * ("Grouping  Project ›"). Selecting it navigates rather than acting, so it never closes the
  * menu.
  *
- * Hover lives on a plain `View` wrapping the item's `Pressable`, per docs/hover.md — a
- * `Pressable` tracking its own hover would fight the one inside it. Hover only fires on web,
+ * Hover lives on a plain `View` wrapping the item's `Pressable` — a `Pressable` tracking its
+ * own hover would fight the one inside it. Hover only fires on web,
  * which is exactly where flyouts exist; every other platform opens the page by pressing.
  */
 export function MenuSubTrigger({
@@ -43,9 +43,8 @@ export function MenuSubTrigger({
   /** Marks the branch as holding a non-default setting, e.g. an active filter. */
   indicator?: boolean;
   /**
-   * A mark for the leading slot. Root rows go without one — see docs/menus.md — but a trigger
-   * standing in a list of options has to keep their rail, or it reads as a row that slipped out
-   * of the column.
+   * A mark for the leading slot. Root rows go without one, but a trigger standing in a list of
+   * options has to keep their rail, or it reads as a row that slipped out of the column.
    */
   leading?: ReactElement | null;
   disabled?: boolean;

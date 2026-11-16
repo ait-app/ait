@@ -38,7 +38,7 @@ Catalog 普通快照立即返回缓存或 loading，发现按 Provider/scope 合
 
 测试使用内存/临时存储、可控制的 Provider gate 和原生协议 fixture，未连接真实模型服务或使用账户凭据。新并发测试通过通知和 semaphore 控制阻塞点，timeout 只作测试保险或验证 wait deadline；没有用固定 sleep 推断提速。
 
-新增行为证据位于 [执行器并发测试](../../../../crates/provider/src/service/agent_execution/tests/concurrency.rs)、[Catalog 并发测试](../../../../crates/provider/src/service/provider_catalog/tests/concurrency.rs)、[身份与屏障测试](../../../../crates/provider/src/service/agent_manager/ownership/tests.rs)和[客户端快照测试](../../../../apps/mobile/src/data/providers-snapshot.test.ts)。覆盖的关键交错包括：
+新增行为证据位于 [执行器并发测试](../../../../crates/provider/runtime/src/service/agent_execution/tests/concurrency.rs)、[Catalog 并发测试](../../../../crates/provider/runtime/src/service/provider_catalog/tests/concurrency.rs)、[身份与屏障测试](../../../../crates/provider/runtime/src/service/agent_manager/ownership/tests.rs)和[客户端快照测试](../../../../apps/mobile/src/data/providers-snapshot.test.ts)。覆盖的关键交错包括：
 
 - 慢 create 时另一条会话能读取、发送、完成；慢 discovery 时目录读取和 native 事件继续。
 - 重复 resume 只有一个 writer；恢复中的 wait 保持未完成，重复冷历史只读取一次原生历史。

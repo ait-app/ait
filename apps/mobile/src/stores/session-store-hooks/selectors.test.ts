@@ -4,14 +4,12 @@ import { createProjectViewKey } from "@/projects/workspace-structure";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import {
   createWorkspaceStructureProjectsSelector,
-  selectHasWorkspaces,
   selectHydratedWorkspaceServerIds,
   selectWorkspaceDirectoryServerIds,
   selectRecommendedProjectPaths,
   selectWorkspace,
   selectWorkspaceDirectory,
   selectWorkspaceFields,
-  selectWorkspaceKeys,
   selectWorkspaceStatusesForBadges,
   selectWorkspaceStructureProjects,
   workspaceEqualityFns,
@@ -458,38 +456,6 @@ describe("workspace structure composition", () => {
   });
 });
 
-describe("selectWorkspaceKeys", () => {
-  it("changes for reorder updates but not content-only updates", () => {
-    const workspaceA = createWorkspace({ id: "workspace-a", name: "A" });
-    const workspaceB = createWorkspace({ id: "workspace-b", name: "B" });
-    initializeWorkspaces([workspaceA, workspaceB]);
-
-    const tracked = trackSelector(
-      useSessionStore,
-      (state) => selectWorkspaceKeys(state, SERVER_ID),
-      workspaceEqualityFns.deep,
-    );
-    const before = tracked.current;
-    expect(before).toEqual(["workspace-a", "workspace-b"]);
-
-    useSessionStore.getState().setWorkspaces(
-      SERVER_ID,
-      new Map([
-        [workspaceB.id, workspaceB],
-        [workspaceA.id, workspaceA],
-      ]),
-    );
-    const afterReorder = tracked.current;
-    expect(afterReorder).not.toBe(before);
-    expect(afterReorder).toEqual(["workspace-b", "workspace-a"]);
-
-    useSessionStore.getState().mergeWorkspaces(SERVER_ID, [{ ...workspaceA, status: "running" }]);
-    expect(tracked.current).toBe(afterReorder);
-
-    tracked.stop();
-  });
-});
-
 describe("selectRecommendedProjectPaths", () => {
   it("updates when an existing workspace project root changes", () => {
     const workspace = createWorkspace({ id: "workspace-a", projectRootPath: "/repo/a" });
@@ -516,26 +482,6 @@ describe("selectRecommendedProjectPaths", () => {
     const before = tracked.current;
 
     useSessionStore.getState().mergeWorkspaces(SERVER_ID, [{ ...workspace, status: "running" }]);
-    expect(tracked.current).toBe(before);
-
-    tracked.stop();
-  });
-});
-
-describe("selectHasWorkspaces", () => {
-  it("stays stable when workspace membership changes without flipping the boolean", () => {
-    const workspaceA = createWorkspace({ id: "workspace-a" });
-    const workspaceB = createWorkspace({ id: "workspace-b" });
-    initializeWorkspaces([workspaceA]);
-
-    const tracked = trackSelector(
-      useSessionStore,
-      (state) => selectHasWorkspaces(state, SERVER_ID),
-      workspaceEqualityFns.identity,
-    );
-    const before = tracked.current;
-
-    useSessionStore.getState().mergeWorkspaces(SERVER_ID, [workspaceB]);
     expect(tracked.current).toBe(before);
 
     tracked.stop();

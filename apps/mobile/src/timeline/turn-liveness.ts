@@ -25,13 +25,6 @@ export const TURN_LIVENESS_IDLE: TurnLiveness = {
   cancellationRequestId: null,
 };
 
-export function readTurnLiveness(
-  turns: ReadonlyMap<string, TurnLiveness>,
-  agentId: string,
-): TurnLiveness {
-  return turns.get(agentId) ?? TURN_LIVENESS_IDLE;
-}
-
 export interface TurnPresentation {
   isActive: boolean;
   isCancelling: boolean;

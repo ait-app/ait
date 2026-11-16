@@ -1,0 +1,20 @@
+export const paneFind = {
+  searching: "جارٍ البحث…",
+  loading: "جارٍ التحميل…",
+  failed: "فشل",
+  retry: "إعادة المحاولة",
+
+  title: "بحث",
+  placeholder: "بحث في اللوحة",
+  close: "إغلاق البحث",
+  matches: "نتائج البحث",
+  previous: "التطابق السابق",
+  next: "التطابق التالي",
+  toggleReplace: "إظهار الاستبدال",
+  replaceWith: "استبدال بـ",
+  replace: "استبدال",
+  replaceAll: "استبدال الكل",
+  noMatches: "لا توجد تطابقات",
+  position: "{{current}} من {{total}}",
+  total: "{{total}} تطابقات",
+};

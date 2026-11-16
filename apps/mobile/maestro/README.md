@@ -129,7 +129,7 @@ AIT_MAESTRO_PROJECT_PATH=/path/to/git/repo
 
 ```sh
 npm run test --workspace=@ait/mobile -- maestro/support
-E2E_AIT_SERVER_BIN="$PWD/target/debug/daemon" npm run test:e2e --workspace=@ait/mobile -- e2e/browser/maestro-ait.spec.ts
+E2E_AITD_BIN="$PWD/target/debug/daemon" npm run test:e2e --workspace=@ait/mobile -- e2e/browser/maestro-ait.spec.ts
 ```
 
 The second command validates authentication, project preparation, opening and

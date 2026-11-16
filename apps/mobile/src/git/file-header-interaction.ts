@@ -1,18 +1,15 @@
 import { useCallback, useRef } from "react";
-import type { LayoutChangeEvent } from "react-native";
 
 interface FileHeaderInteractionInput {
   path: string;
   enabled: boolean;
   onSelect?: (path: string) => void;
   onActivate?: (path: string) => void;
-  onLayout?: (height: number) => void;
 }
 
 export interface FileHeaderInteraction {
   activate: () => void;
   select: () => void;
-  onLayout: (event: LayoutChangeEvent) => void;
   onPressIn: () => void;
   onLongPress: () => void;
 }
@@ -36,7 +33,7 @@ export function reduceFileHeaderPress(
 }
 
 export function useFileHeaderInteraction(input: FileHeaderInteractionInput): FileHeaderInteraction {
-  const { path, enabled, onSelect, onActivate, onLayout: notifyLayout } = input;
+  const { path, enabled, onSelect, onActivate } = input;
   const phaseRef = useRef<FileHeaderPressPhase>("idle");
 
   const select = useCallback(() => {
@@ -52,13 +49,6 @@ export function useFileHeaderInteraction(input: FileHeaderInteractionInput): Fil
     onActivate?.(path);
   }, [enabled, onActivate, path, select]);
 
-  const onLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      notifyLayout?.(event.nativeEvent.layout.height);
-    },
-    [notifyLayout],
-  );
-
   const onPressIn = useCallback(() => {
     phaseRef.current = reduceFileHeaderPress(phaseRef.current, { type: "press-in" }).phase;
   }, []);
@@ -69,5 +59,5 @@ export function useFileHeaderInteraction(input: FileHeaderInteractionInput): Fil
     if (transition.effect === "select") select();
   }, [select]);
 
-  return { activate, select, onLayout, onPressIn, onLongPress };
+  return { activate, select, onPressIn, onLongPress };
 }

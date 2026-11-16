@@ -112,16 +112,8 @@ export const FORGE_DEFINITIONS: ForgeDefinition[] = [
   },
 ];
 
-/** Forge definitions only present in dev builds (none today; mirrors providers). */
-export const DEV_FORGE_DEFINITIONS: ForgeDefinition[] = [];
-
-export const FORGE_IDS: string[] = FORGE_DEFINITIONS.map((definition) => definition.id);
-
-export function getForgeDefinition(
-  id: string,
-  definitions: ForgeDefinition[] = [...FORGE_DEFINITIONS, ...DEV_FORGE_DEFINITIONS],
-): ForgeDefinition | null {
-  return definitions.find((definition) => definition.id === id) ?? null;
+export function getForgeDefinition(id: string): ForgeDefinition | null {
+  return FORGE_DEFINITIONS.find((definition) => definition.id === id) ?? null;
 }
 
 /**

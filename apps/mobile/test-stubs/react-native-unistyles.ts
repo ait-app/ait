@@ -52,6 +52,7 @@ const testTheme = {
     medium: "500",
   },
   borderRadius: {
+    ...lightTheme.borderRadius,
     base: 4,
     md: 6,
     lg: 8,

@@ -1,7 +1,5 @@
-import { useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable } from "react-native";
-import { router } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ArrowLeft } from "lucide-react-native";
 import { ScreenHeader } from "./screen-header";
@@ -9,32 +7,19 @@ import { ScreenTitle } from "./screen-title";
 
 interface BackHeaderProps {
   title?: string;
-  titleAccessory?: ReactNode;
-  rightContent?: ReactNode;
-  onBack?: () => void;
+  onBack: () => void;
 }
 
-function goBack(): void {
-  router.back();
-}
-
-export function BackHeader({ title, titleAccessory, rightContent, onBack }: BackHeaderProps) {
+export function BackHeader({ title, onBack }: BackHeaderProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const handleBack = useCallback(() => {
-    if (onBack) {
-      onBack();
-      return;
-    }
-    goBack();
-  }, [onBack]);
 
   return (
     <ScreenHeader
       left={
         <>
           <Pressable
-            onPress={handleBack}
+            onPress={onBack}
             style={styles.backButton}
             accessibilityRole="button"
             accessibilityLabel={t("common.actions.back")}
@@ -42,10 +27,8 @@ export function BackHeader({ title, titleAccessory, rightContent, onBack }: Back
             <ArrowLeft size={theme.iconSize.lg} color={theme.colors.foregroundMuted} />
           </Pressable>
           {title && <ScreenTitle>{title}</ScreenTitle>}
-          {titleAccessory}
         </>
       }
-      right={rightContent}
       leftStyle={styles.left}
     />
   );

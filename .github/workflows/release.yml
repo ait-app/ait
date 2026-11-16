@@ -56,7 +56,7 @@ jobs:
       - &setup-node
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -65,6 +65,10 @@ jobs:
         run: node scripts/verify-release-version.mjs "$RELEASE_TAG"
 
       - run: npm ci
+
+      - &verify-translations
+        name: Verify UI translations
+        run: npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts
 
       - name: Build Windows desktop without daemon
         run: npm run build:windows
@@ -103,7 +107,7 @@ jobs:
   # ADR-188: the hosted browser client image is deployed at the site root by ait-server.
   web-client:
     name: Publish web client image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
@@ -117,11 +121,11 @@ jobs:
       - *verify-version
       - run: npm ci
 
-      - name: Export web client
-        run: npm run build:web-console --workspace=@ait/mobile
+      - *verify-translations
 
-      - name: Build and check image
+      - name: Build and check web client image
         run: |
+          npm run build:web-console --workspace=@ait/mobile
           source_commit=$(git rev-parse HEAD)
           docker build \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
@@ -151,7 +155,7 @@ jobs:
       matrix:
         include:
           - label: Linux x86_64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
             platform: linux
             artifact: ait-linux-x64
@@ -186,6 +190,8 @@ jobs:
       - *verify-version
       - run: npm ci
 
+      - *verify-translations
+
       - name: Validate release tooling
         run: node --test .tmp/release-tools/scripts/release-assets.test.mjs .tmp/release-tools/scripts/release-layout.test.mjs .tmp/release-tools/scripts/release-workflow.test.mjs .tmp/release-tools/scripts/prepare-desktop-daemon.test.mjs .tmp/release-tools/scripts/verify-packaged-resources.test.cjs
 
@@ -214,13 +220,19 @@ jobs:
       - name: Package Linux desktop
         if: matrix.platform == 'linux'
         env:
+          AITD_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # Old immutable tags rebuilt from this workflow still read the former name.
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
         run: npm run package:linux
 
       - name: Package, sign, and notarize macOS desktop
         if: matrix.platform == 'mac'
         env:
+          AITD_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # Old immutable tags rebuilt from this workflow still read the former name.
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          # The web bundle peaks near 2.7 GB; Node's default heap on the 7 GB macOS runner is too small.
+          NODE_OPTIONS: --max-old-space-size=4096
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -317,8 +329,12 @@ jobs:
     name: Release Android to Google Play internal testing
     if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 150
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      version_code: ${{ steps.plan.outputs.version_code }}
+      submitted: ${{ steps.submit.outcome }}
     # Serialize uploads across tags; each run and retry gets its own versionCode.
     # The default queue would cancel a tag's pending upload when a newer tag arrives.
     concurrency:
@@ -391,6 +407,8 @@ jobs:
 
       - name: Install workspace dependencies
         run: npm ci
+
+      - *verify-translations
 
       - name: Build shared UI dependencies
         run: npm run build:ui-deps
@@ -491,6 +509,7 @@ jobs:
           retention-days: 14
 
       - name: Submit this verified AAB to Google Play
+        id: submit
         uses: r0adkll/upload-google-play@v1
         timeout-minutes: 30
         with:
@@ -529,7 +548,7 @@ jobs:
     name: Start iOS internal TestFlight build
     if: ${{ !contains(inputs.tag || github.ref_name, '-') && !inputs.source_commit }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       # Xcode Cloud only compares native and package versions, so check the tag here.
@@ -556,11 +575,63 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: node .tmp/release-tools/scripts/xcode-cloud-release.mjs "$RELEASE_TAG"
 
+  # ADR-236: once Play accepts the bundle, attach Google's signed universal APK to the draft Release.
+  # Rerunning only this job retries the APK without rebuilding or resubmitting to Play.
+  android-apk:
+    name: Attach Google-signed Android APK
+    needs: [android-play, release]
+    if: needs.android-play.outputs.submitted == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.android-play.outputs.version }}
+      VERSION_CODE: ${{ needs.android-play.outputs.version_code }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+
+      - name: Download Google-signed universal APK
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          build_tools=$(ls -d "$ANDROID_HOME"/build-tools/* | grep -v -- -rc | sort -V | tail -n 1)
+          node .tmp/release-tools/scripts/android-play-apk.mjs --version "$VERSION" \
+            --version-code "$VERSION_CODE" --build-tools "$build_tools" --output-dir apk
+
+      - name: Attach APK and refresh checksums
+        run: |
+          set -euo pipefail
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          test -s "apk/$apk"
+          draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$draft" != true ]; then
+            echo "::warning::$RELEASE_TAG is already published; the APK was not attached"
+            exit 0
+          fi
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir sums
+          {
+            awk -v name="$apk" '$2 != name' sums/SHA256SUMS
+            (cd apk && sha256sum "$apk")
+          } | LC_ALL=C sort -k2,2 > SHA256SUMS
+          gh release upload "$RELEASE_TAG" "apk/$apk" SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
   release:
     name: Prepare GitHub Release
     needs: [build, windows]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.windows.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
@@ -571,7 +642,7 @@ jobs:
       - *checkout-tooling
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
       - uses: actions/download-artifact@v7
         with:
           pattern: ait-*
@@ -593,21 +664,19 @@ jobs:
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
 
+      # Reruns keep an APK attached earlier; fetch only it and the checksums that cover it.
       - name: Preserve previously published Android APK
         run: |
-          if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          if test -f "release-assets/$apk"; then
             exit 0
           fi
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            asset_count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
-            if [ "$asset_count" -gt 0 ]; then
-              mkdir -p previous-assets
-              gh release download "$RELEASE_TAG" --dir previous-assets --repo "$GITHUB_REPOSITORY"
-              if test -f "previous-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
-                (cd previous-assets && sha256sum --check SHA256SUMS)
-                cp "previous-assets/Ait-${RELEASE_TAG#v}-android.apk" release-assets/
-              fi
-            fi
+          names=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name') || exit 0
+          if grep -qxF "$apk" <<<"$names"; then
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$apk" --pattern SHA256SUMS --dir previous-assets
+            (cd previous-assets && sha256sum --check --ignore-missing SHA256SUMS)
+            cp "previous-assets/$apk" release-assets/
           fi
 
       - name: Verify assets and write checksums

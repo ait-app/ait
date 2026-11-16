@@ -40,6 +40,8 @@ let manager: RustDaemonManager | null = null;
 function getRustDaemon(): RustDaemonManager {
   manager ??= new RustDaemonManager({
     binary:
+      process.env.AITD_BIN ||
+      // COMPAT(daemonBinEnv): AIT_SERVER_BIN renamed to AITD_BIN in v0.2.12; remove after 2027-05-14.
       process.env.AIT_SERVER_BIN ||
       (app.isPackaged
         ? path.join(
@@ -230,17 +232,6 @@ async function getCliDaemonStatus(): Promise<string> {
   return JSON.stringify(await resolveDesktopDaemonStatus(), null, 2);
 }
 
-async function getLocalDaemonVersion(): Promise<{ version: string | null; error: string | null }> {
-  const status = await resolveDesktopDaemonStatus();
-  if (status.status !== "running") {
-    return { version: null, error: "Daemon is not running." };
-  }
-  return {
-    version: status.version,
-    error: status.version ? null : "Running daemon did not report a version.",
-  };
-}
-
 async function resolveRequestedReleaseChannel(
   args: Record<string, unknown> | undefined,
 ): Promise<AppReleaseChannel> {
@@ -336,7 +327,6 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
         },
       );
     },
-    get_local_daemon_version: () => getLocalDaemonVersion(),
     read_legacy_skill_selection: () => readLegacySkillSelection(),
     delete_legacy_skill_selection: () => deleteLegacySkillSelection(),
   };

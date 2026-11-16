@@ -10,15 +10,13 @@ import {
   type KeyValueStorage,
 } from "./storage";
 
-export { DEFAULT_CHANGES_PREFERENCES, type ChangesPreferences, type KeyValueStorage };
-
 const productionStorage: KeyValueStorage = AsyncStorage;
 
-export function loadChangesPreferencesFromStorage(): Promise<ChangesPreferences> {
+function loadChangesPreferencesFromStorage(): Promise<ChangesPreferences> {
   return loadChangesPreferencesFromStoragePure(productionStorage);
 }
 
-export interface UseChangesPreferencesReturn {
+interface UseChangesPreferencesReturn {
   preferences: ChangesPreferences;
   isLoading: boolean;
   updatePreferences: (updates: Partial<ChangesPreferences>) => Promise<void>;

@@ -28,11 +28,7 @@ const DAY_NAMES = [
   "saturday",
 ] as const;
 
-export function isNewAgentSchedule(schedule: ScheduleSummary): boolean {
-  return schedule.target.type === "new-agent";
-}
-
-export function scheduleProductName(_schedule: ScheduleSummary, t: TFunction = i18n.t): string {
+export function scheduleProductName(t: TFunction = i18n.t): string {
   return t("schedules.product.schedule");
 }
 
@@ -52,8 +48,7 @@ export function resolveScheduleTitle(schedule: ScheduleSummary, t: TFunction = i
     .map((line) => line.trim())
     .find((line) => line.length > 0);
   return (
-    firstPromptLine ||
-    t("schedules.untitled", { product: scheduleProductName(schedule, t).toLowerCase() })
+    firstPromptLine || t("schedules.untitled", { product: scheduleProductName(t).toLowerCase() })
   );
 }
 

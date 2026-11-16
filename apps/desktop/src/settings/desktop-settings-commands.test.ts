@@ -10,15 +10,6 @@ function createStoreMock(): DesktopSettingsStore {
       ...DEFAULT_DESKTOP_SETTINGS,
       releaseChannel: "beta",
     })),
-    migrateLegacyRendererSettings: vi.fn(async () => ({
-      ...DEFAULT_DESKTOP_SETTINGS,
-      releaseChannel: "beta",
-      daemon: {
-        manageBuiltInDaemon: false,
-        keepRunningAfterQuit: true,
-        listen: "127.0.0.1:0",
-      },
-    })),
   };
 }
 
@@ -40,30 +31,6 @@ describe("desktop-settings-commands", () => {
     expect(store.get).toHaveBeenCalledTimes(1);
     expect(store.patch).toHaveBeenCalledWith({
       daemon: { keepRunningAfterQuit: false },
-    });
-  });
-
-  it("accepts legacy renderer settings migration payloads", async () => {
-    const store = createStoreMock();
-    const handlers = createDesktopSettingsCommandHandlers({ settingsStore: store });
-
-    const result = await handlers.migrate_legacy_desktop_settings({
-      releaseChannel: "beta",
-      manageBuiltInDaemon: false,
-    });
-
-    expect(result).toEqual({
-      ...DEFAULT_DESKTOP_SETTINGS,
-      releaseChannel: "beta",
-      daemon: {
-        manageBuiltInDaemon: false,
-        keepRunningAfterQuit: true,
-        listen: "127.0.0.1:0",
-      },
-    });
-    expect(store.migrateLegacyRendererSettings).toHaveBeenCalledWith({
-      releaseChannel: "beta",
-      manageBuiltInDaemon: false,
     });
   });
 });

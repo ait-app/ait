@@ -43,8 +43,8 @@ export async function startIsolatedHostDaemon(
   label: string,
   options: IsolatedHostDaemonOptions = {},
 ): Promise<IsolatedHostDaemon> {
-  const binary = process.env.E2E_AIT_SERVER_BIN;
-  if (!binary) throw new Error("E2E_AIT_SERVER_BIN is required; run Playwright global setup first");
+  const binary = process.env.E2E_AITD_BIN;
+  if (!binary) throw new Error("E2E_AITD_BIN is required; run Playwright global setup first");
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated Ait server");
   let port = await getAvailablePort();

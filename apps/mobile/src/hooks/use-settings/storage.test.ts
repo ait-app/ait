@@ -3,7 +3,6 @@ import { QueryClient } from "@tanstack/react-query";
 import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
-  DEFAULT_APP_SETTINGS,
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_CONTENT_FONT_SIZE,
@@ -11,14 +10,13 @@ import {
   defaultUiBaseFontSize,
   defaultContentFontSize,
   loadAppSettingsFromStorage,
-  loadSettingsFromStorage,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
   resolveContentMaxWidth,
   saveAppSettings,
   type SettingsDeps,
 } from "./storage";
-import { createFakeDesktopBridge, createInMemoryKeyValueStorage } from "./fakes";
+import { createInMemoryKeyValueStorage } from "./fakes";
 import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
   SIDEBAR_ROW_ITEMS,
@@ -30,15 +28,12 @@ const LEGACY_SETTINGS_KEY = "@paseo:settings";
 function makeDeps(
   overrides: {
     storage?: ReturnType<typeof createInMemoryKeyValueStorage>;
-    desktop?: ReturnType<typeof createFakeDesktopBridge>;
   } = {},
 ): SettingsDeps & {
   storage: ReturnType<typeof createInMemoryKeyValueStorage>;
-  desktop: ReturnType<typeof createFakeDesktopBridge>;
 } {
   return {
     storage: overrides.storage ?? createInMemoryKeyValueStorage(),
-    desktop: overrides.desktop ?? createFakeDesktopBridge(),
   };
 }
 
@@ -483,112 +478,6 @@ describe("saveAppSettings", () => {
         { key: "history", visible: false },
         { key: "search", visible: true },
       ],
-    });
-  });
-});
-
-describe("loadSettingsFromStorage", () => {
-  it("defaults built-in daemon management to enabled when storage is empty", async () => {
-    const deps = makeDeps();
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result).toEqual(DEFAULT_APP_SETTINGS);
-  });
-
-  it("defaults release channel to stable when storage is empty", async () => {
-    const deps = makeDeps();
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result.releaseChannel).toBe("stable");
-  });
-
-  it("ignores renderer-owned daemon management state outside Electron", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({
-          theme: "light",
-          manageBuiltInDaemon: false,
-        }),
-      }),
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-    });
-  });
-
-  it("ignores renderer-owned release channel outside Electron", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ releaseChannel: "beta" }),
-      }),
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result.releaseChannel).toBe("stable");
-  });
-
-  it("migrates legacy desktop-owned settings through the bridge before reading effective settings", async () => {
-    const desktop = createFakeDesktopBridge({
-      isElectron: true,
-      settings: {
-        releaseChannel: "beta",
-        notifications: { playSound: true },
-        daemon: {
-          manageBuiltInDaemon: false,
-          keepRunningAfterQuit: true,
-          listen: "127.0.0.1:0",
-        },
-      },
-    });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({
-          theme: "light",
-          manageBuiltInDaemon: false,
-          releaseChannel: "beta",
-        }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([
-      { manageBuiltInDaemon: false, releaseChannel: "beta" },
-    ]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-      manageBuiltInDaemon: false,
-      releaseChannel: "beta",
-    });
-  });
-
-  it("does not call the desktop bridge outside Electron", async () => {
-    const desktop = createFakeDesktopBridge({ isElectron: false });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "light" }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
     });
   });
 });

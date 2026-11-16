@@ -18,18 +18,6 @@ export interface ProjectedTimelineAfterFetchPlan {
   projection: "projected";
 }
 
-export interface ProjectedTimelineBeforeFetchPlan {
-  direction: "before";
-  cursor: TimelineSyncCursor;
-  limit: number;
-  projection: "projected";
-}
-
-export type ProjectedTimelineFetchPlan =
-  | ProjectedTimelineTailFetchPlan
-  | ProjectedTimelineAfterFetchPlan
-  | ProjectedTimelineBeforeFetchPlan;
-
 export type ProjectedTimelineForwardFetchPlan =
   | ProjectedTimelineTailFetchPlan
   | ProjectedTimelineAfterFetchPlan;

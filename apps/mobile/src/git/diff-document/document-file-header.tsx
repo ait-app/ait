@@ -25,7 +25,6 @@ export const DocumentFileHeader = memo(function DocumentFileHeader({
   const activate = useCallback(
     (path: string) => {
       if (mode.kind !== "working") return;
-      mode.onFilePress?.(path);
       onToggleFile(path);
     },
     [mode, onToggleFile],
@@ -64,7 +63,6 @@ function documentFileHeaderPropsEqual(
   if (!documentFileHeaderIdentityMatches(previous, next)) return false;
   if (previous.mode.kind === "commit" || next.mode.kind === "commit") return true;
   return (
-    previous.mode.onFilePress === next.mode.onFilePress &&
     previous.mode.workspaceFileDragScope === next.mode.workspaceFileDragScope &&
     previous.mode.onOpenFile === next.mode.onOpenFile &&
     previous.mode.onOpenToSide === next.mode.onOpenToSide &&

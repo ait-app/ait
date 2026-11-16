@@ -201,7 +201,10 @@ function deriveEffectiveWorkspaceStatus(input: {
     workspaceId: input.workspace.id,
     pendingCreateAttempts: input.pendingCreateAttempts,
   });
-  if (pendingStartedAt) {
+  if (
+    pendingStartedAt &&
+    (!input.workspace.statusEnteredAt || pendingStartedAt > input.workspace.statusEnteredAt)
+  ) {
     return { status: "running", enteredAt: pendingStartedAt };
   }
 
@@ -442,22 +445,6 @@ function areSidebarWorkspaceEntriesEqual(
         leftHint.checksStatus === rightHint.checksStatus &&
         leftHint.reviewDecision === rightHint.reviewDecision)
     );
-  });
-}
-
-export function buildSidebarProjectsFromStructure(input: {
-  projects: WorkspaceStructureProject[];
-}): SidebarProjectEntry[] {
-  return buildSidebarProjectsFromHostProjects({
-    projects: input.projects.map((project) => ({
-      viewKey: project.viewKey,
-      projectKey: project.projectKey,
-      projectName: project.projectName,
-      projectKind: project.projectKind,
-      iconWorkingDir: project.iconWorkingDir,
-      hosts: project.hosts,
-      workspaceKeys: project.workspaceKeys,
-    })),
   });
 }
 

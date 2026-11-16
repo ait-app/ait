@@ -2,7 +2,6 @@ import { z } from "zod";
 import { AgentProviderSchema } from "../provider-manifest.js";
 
 export const ScheduleStatusSchema = z.enum(["active", "paused", "completed"]);
-export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;
 
 export const ScheduleCadenceSchema = z.discriminatedUnion("type", [
   z.object({
@@ -117,9 +116,4 @@ export interface UpdateScheduleInput {
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
-}
-
-export interface ScheduleExecutionResult {
-  agentId: string | null;
-  output: string | null;
 }

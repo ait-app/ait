@@ -14,7 +14,7 @@ import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geome
 
 export interface StatusRingProps {
   // The surface the ring is drawn on top of, named rather than resolved, because theme colours
-  // are only legible inside `StyleSheet.create` — see docs/unistyles.md. The frame fills itself
+  // are only legible inside `StyleSheet.create`. The frame fills itself
   // with this so the ring reads as a hole punched in whatever it overlaps: the agent icon under a
   // tab dot, the project tile under a sidebar badge. Leave it out where the ring sits on flat
   // background and has nothing to knock out.
@@ -62,7 +62,7 @@ function getBackdropStyle(backdrop: SurfaceBackdrop | null | undefined) {
 // The rotating quarter's geometry, deliberately plain React Native rather than Unistyles: on
 // native this style lands on a Reanimated `Animated.View`, and applying a theme-tracked style to
 // one crashes when the theme changes — Unistyles and Reanimated both mutate the same native node.
-// See docs/unistyles.md. The colour it needs lives on `styles.arc`, one level in, on a view
+// The colour it needs lives on `styles.arc`, one level in, on a view
 // Reanimated never touches.
 export const rotatorStyles = RNStyleSheet.create({
   rotator: {

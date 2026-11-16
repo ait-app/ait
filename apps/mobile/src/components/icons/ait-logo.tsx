@@ -4,13 +4,12 @@ import brand from "../../../../../assets/brand/ait-mark.json";
 
 interface AitLogoProps {
   size?: number;
-  color?: string;
   variant?: "mark" | "stacked";
   wordmarkColor?: string;
 }
 
 // The asset generator consumes this same geometry; never duplicate paths in a screen.
-export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: AitLogoProps) {
+export function AitLogo({ size = 64, variant = "mark", wordmarkColor }: AitLogoProps) {
   const { theme } = useUnistyles();
   const colors = theme.colorScheme === "dark" ? brand.darkColors : brand.colors;
   const stacked = variant === "stacked";
@@ -25,11 +24,8 @@ export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: A
               : brand.placements.icon
         }
       >
-        {color !== undefined || size < 32 ? (
-          <Path
-            d={size < 32 ? brand.smallSilhouette : brand.silhouette}
-            fill={color ?? colors.primary}
-          />
+        {size < 32 ? (
+          <Path d={brand.smallSilhouette} fill={colors.primary} />
         ) : (
           <>
             <Path d={brand.faces[0]} fill={colors.primary} />
@@ -41,7 +37,7 @@ export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: A
         <Path
           d={brand.wordmark}
           transform={brand.placements.stackedWordmark}
-          fill={wordmarkColor ?? color ?? colors.ink}
+          fill={wordmarkColor ?? colors.ink}
         />
       )}
     </Svg>

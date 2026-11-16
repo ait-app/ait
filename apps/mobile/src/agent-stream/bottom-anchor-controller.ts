@@ -92,9 +92,7 @@ interface BottomAnchorControllerDriver {
 }
 
 interface CreateBottomAnchorControllerDriverInput {
-  getAgentId: () => string;
   getIsAuthoritativeHistoryReady: () => boolean;
-  getRenderStrategy: () => string;
   getTransportBehavior: () => BottomAnchorTransportBehavior;
   getMeasurementState: () => ControllerMeasurementState;
   isNearBottom: () => boolean;
@@ -725,25 +723,20 @@ export function useBottomAnchorController(input: {
   agentId: string;
   routeRequest: BottomAnchorRouteRequest | null;
   isAuthoritativeHistoryReady: boolean;
-  renderStrategy: string;
   getTransportBehavior: () => BottomAnchorTransportBehavior;
   getMeasurementState: () => ControllerMeasurementState;
   isNearBottom: () => boolean;
   scrollToBottom: (animated: boolean) => void;
 }) {
   const [mode, setMode] = useState<BottomAnchorMode>("sticky-bottom");
-  const agentIdRef = useRef(input.agentId);
   const readinessRef = useRef(input.isAuthoritativeHistoryReady);
-  const renderStrategyRef = useRef(input.renderStrategy);
   const getTransportBehaviorRef = useRef(input.getTransportBehavior);
   const getMeasurementStateRef = useRef(input.getMeasurementState);
   const isNearBottomRef = useRef(input.isNearBottom);
   const scrollToBottomRef = useRef(input.scrollToBottom);
   const driverRef = useRef<BottomAnchorControllerDriver | null>(null);
 
-  agentIdRef.current = input.agentId;
   readinessRef.current = input.isAuthoritativeHistoryReady;
-  renderStrategyRef.current = input.renderStrategy;
   getTransportBehaviorRef.current = input.getTransportBehavior;
   getMeasurementStateRef.current = input.getMeasurementState;
   isNearBottomRef.current = input.isNearBottom;
@@ -751,9 +744,7 @@ export function useBottomAnchorController(input: {
 
   if (!driverRef.current) {
     driverRef.current = __private__.createBottomAnchorControllerDriver({
-      getAgentId: () => agentIdRef.current,
       getIsAuthoritativeHistoryReady: () => readinessRef.current,
-      getRenderStrategy: () => renderStrategyRef.current,
       getTransportBehavior: () => getTransportBehaviorRef.current(),
       getMeasurementState: () => getMeasurementStateRef.current(),
       isNearBottom: () => isNearBottomRef.current(),

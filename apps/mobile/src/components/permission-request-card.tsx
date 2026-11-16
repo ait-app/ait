@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Check, X } from "lucide-react-native";
+import { ArrowUpRight, Check, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { useMutation } from "@tanstack/react-query";
+import { useIsMutating, useMutation } from "@tanstack/react-query";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type {
   AgentPermissionAction,
@@ -13,10 +13,12 @@ import type {
 import { respondToQuestionWithTimeout } from "@/agent-stream/question-response";
 import { PlanCard } from "@/components/plan-card";
 import { QuestionFormCard } from "@/components/question-form-card";
+import { parseQuestionFormQuestions } from "@/components/question-form-card-core";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import type { PendingPermission } from "@/types/shared";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -26,7 +28,7 @@ const ThemedCheckIcon = withUnistyles(Check);
 const ThemedXIcon = withUnistyles(X);
 
 const primaryColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
+  color: theme.colors.accentForeground,
 });
 const mutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -38,6 +40,12 @@ const pressableStyle = ({
 }: PressableStateCallbackType & { hovered?: boolean }) => [
   permissionStyles.optionButton,
   hovered ? permissionStyles.optionButtonHovered : null,
+  pressed ? permissionStyles.optionButtonPressed : null,
+];
+// The primary action gets the same filled treatment as the panel's default Button.
+const primaryPressableStyle = ({ pressed }: PressableStateCallbackType) => [
+  permissionStyles.optionButton,
+  permissionStyles.optionButtonPrimary,
   pressed ? permissionStyles.optionButtonPressed : null,
 ];
 
@@ -69,7 +77,7 @@ function PermissionActionButton({
     <Pressable
       accessibilityRole="button"
       testID={testID}
-      style={pressableStyle}
+      style={isPrimary ? primaryPressableStyle : pressableStyle}
       onPress={handlePress}
       disabled={isResponding}
     >
@@ -89,8 +97,12 @@ export function PermissionRequestCard({
   permission,
   client,
   panel = false,
+  compact = false,
+  onOpenDetails,
 }: {
   panel?: boolean;
+  compact?: boolean;
+  onOpenDetails?: () => void;
   permission: PendingPermission;
   client: DaemonClient | null;
 }) {
@@ -99,7 +111,7 @@ export function PermissionRequestCard({
 
   const { request } = permission;
   const isPlanRequest = request.kind === "plan";
-  const isCommand = panel && request.name === "commandExecution";
+  const isCommand = request.name === "commandExecution";
   const title = isPlanRequest
     ? t("agentStream.permission.plan")
     : isCommand && (!request.title || request.title === request.name)
@@ -107,8 +119,8 @@ export function PermissionRequestCard({
       : (request.title ?? request.name ?? t("agentStream.permission.required"));
   const description = request.description ?? "";
   const resolvedToolCallDetail = useMemo<ToolCallDetail>(() => {
+    // Unrecognized command arguments fall through to the raw input so none are hidden.
     if (
-      panel &&
       request.name === "commandExecution" &&
       typeof request.input?.command === "string" &&
       Object.keys(request.input).every((key) =>
@@ -128,7 +140,7 @@ export function PermissionRequestCard({
         output: null,
       }
     );
-  }, [panel, request.name, request.detail, request.input]);
+  }, [request.name, request.detail, request.input]);
   const resolvedActions = useMemo((): AgentPermissionAction[] => {
     if (request.kind === "question") {
       return [];
@@ -156,9 +168,6 @@ export function PermissionRequestCard({
   }, [isPlanRequest, request, t]);
 
   const planMarkdown = useMemo(() => {
-    if (!request) {
-      return undefined;
-    }
     const planFromMetadata =
       typeof request.metadata?.planText === "string" ? request.metadata.planText : undefined;
     if (planFromMetadata) {
@@ -171,7 +180,10 @@ export function PermissionRequestCard({
     return undefined;
   }, [request]);
 
+  const mutationKey = ["permission-response", permission.agentId, request.id];
+  const pendingResponses = useIsMutating({ mutationKey });
   const permissionMutation = useMutation({
+    mutationKey,
     networkMode: "always",
     retry: false,
     mutationFn: async (input: {
@@ -196,8 +208,9 @@ export function PermissionRequestCard({
   const {
     reset: resetPermissionMutation,
     mutateAsync: respondToPermission,
-    isPending: isResponding,
+    isPending: isOwnResponsePending,
   } = permissionMutation;
+  const isResponding = isOwnResponsePending || pendingResponses > 0;
 
   const [respondingActionId, setRespondingActionId] = useState<string | null>(null);
 
@@ -244,6 +257,27 @@ export function PermissionRequestCard({
     [isMobile],
   );
 
+  if (compact && request.kind === "question") {
+    const questions = parseQuestionFormQuestions(request.input);
+    return (
+      <View style={permissionStyles.compact}>
+        <Text style={permissionStyles.compactSummary} numberOfLines={3}>
+          {questions?.map((question) => question.question).join(" · ") || description || title}
+        </Text>
+        <Button
+          size="xs"
+          variant="outline"
+          leftIcon={ArrowUpRight}
+          onPress={onOpenDetails}
+          testID="task-answer"
+          disabled={!client}
+        >
+          {t("taskBoard.answer")}
+        </Button>
+      </View>
+    );
+  }
+
   if (request.kind === "question") {
     return (
       <QuestionFormCard
@@ -261,7 +295,7 @@ export function PermissionRequestCard({
 
   const footer = (
     <>
-      {!panel ? (
+      {!panel && !compact ? (
         <Text testID="permission-request-question" style={permissionStyles.question}>
           {t("agentStream.permission.question")}
         </Text>
@@ -272,7 +306,7 @@ export function PermissionRequestCard({
           {toErrorMessage(permissionMutation.error)}
         </Text>
       ) : null}
-      <View style={optionsContainerStyle}>
+      <View style={compact ? permissionStyles.compactOptions : optionsContainerStyle}>
         {resolvedActions.map((action) => {
           const isPrimary = action.variant === "primary";
           const isRespondingAction = respondingActionId === action.id;
@@ -283,12 +317,27 @@ export function PermissionRequestCard({
             testID = "permission-request-accept";
           else testID = `permission-request-action-${action.id}`;
 
-          if (panel) {
+          if (panel || compact) {
             return (
               <Button
                 key={action.id}
-                variant={isPrimary ? "default" : "outline"}
-                size="sm"
+                variant={!compact && isPrimary ? "default" : "outline"}
+                size={compact && !isMobile ? "xs" : "sm"}
+                leftIcon={compact ? (action.behavior === "allow" ? Check : X) : undefined}
+                style={
+                  compact
+                    ? action.behavior === "allow"
+                      ? permissionStyles.allowButton
+                      : permissionStyles.denyButton
+                    : undefined
+                }
+                textStyle={
+                  compact
+                    ? action.behavior === "allow"
+                      ? permissionStyles.allowText
+                      : permissionStyles.denyText
+                    : undefined
+                }
                 testID={testID}
                 loading={isResponding && isRespondingAction}
                 disabled={!client || isResponding || permissionMutation.isSuccess}
@@ -314,6 +363,29 @@ export function PermissionRequestCard({
       </View>
     </>
   );
+
+  if (compact) {
+    const summary =
+      resolvedToolCallDetail.type === "shell"
+        ? resolvedToolCallDetail.command
+        : planMarkdown || description || (request.input ? JSON.stringify(request.input) : "");
+    return (
+      <View style={permissionStyles.compact}>
+        <Pressable
+          onPress={onOpenDetails}
+          accessibilityRole="button"
+          accessibilityLabel={t("taskBoard.details")}
+          style={permissionStyles.compactSummaryButton}
+        >
+          <Text style={permissionStyles.compactSummary} numberOfLines={3}>
+            <Text style={permissionStyles.compactTitle}>{title}</Text>
+            {summary && summary !== title ? ` · ${summary}` : ""}
+          </Text>
+        </Pressable>
+        {footer}
+      </View>
+    );
+  }
 
   if (isPlanRequest && planMarkdown) {
     return (
@@ -344,6 +416,13 @@ export function PermissionRequestCard({
         />
       ) : null}
 
+      {/* The shell detail renders only the command, so the chat card names the directory itself. */}
+      {!panel && resolvedToolCallDetail.type === "shell" && resolvedToolCallDetail.cwd ? (
+        <Text selectable testID="permission-request-cwd" style={permissionStyles.cwd}>
+          {resolvedToolCallDetail.cwd}
+        </Text>
+      ) : null}
+
       {!isPlanRequest ? (
         <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
       ) : null}
@@ -354,6 +433,27 @@ export function PermissionRequestCard({
 }
 
 const permissionStyles = StyleSheet.create((theme) => ({
+  compact: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingTop: theme.spacing[2],
+    gap: theme.spacing[2],
+    alignItems: "flex-start",
+  },
+  compactOptions: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[1.5] },
+  // Raw JSON and paths have no spaces; let them wrap inside the card instead of overflowing it.
+  compactSummaryButton: { alignSelf: "stretch", minWidth: 0 },
+  compactSummary: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+    ...(isWeb ? { overflowWrap: "anywhere" as const } : {}),
+  },
+  compactTitle: { fontWeight: theme.fontWeight.semibold },
+  allowButton: { borderColor: theme.colors.statusSuccess },
+  denyButton: { borderColor: theme.colors.statusDanger },
+  allowText: { color: theme.colors.statusSuccess },
+  denyText: { color: theme.colors.statusDanger },
   panel: { gap: theme.spacing[3] },
   error: { color: theme.colors.statusDanger, fontSize: theme.fontSize.base },
   container: {
@@ -373,6 +473,11 @@ const permissionStyles = StyleSheet.create((theme) => ({
   description: {
     fontSize: theme.fontSize.base,
     lineHeight: 20,
+    color: theme.colors.foregroundMuted,
+  },
+  cwd: {
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   section: {
@@ -409,6 +514,10 @@ const permissionStyles = StyleSheet.create((theme) => ({
   optionButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
+  optionButtonPrimary: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
   optionButtonPressed: {
     opacity: 0.9,
   },
@@ -423,6 +532,6 @@ const permissionStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   optionTextPrimary: {
-    color: theme.colors.foreground,
+    color: theme.colors.accentForeground,
   },
 }));

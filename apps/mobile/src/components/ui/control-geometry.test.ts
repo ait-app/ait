@@ -80,10 +80,6 @@ describe("control geometry", () => {
     expect(geometry.fieldTextSm.lineHeight).toBe(20);
     expect(geometry.fieldTextMd.fontSize).toBe(14);
     expect(geometry.fieldTextMd.lineHeight).toBe(20);
-    expect(geometry.formTextInputSm.fontSize).toBe(14);
-    expect(geometry.formTextInputSm.lineHeight).toBe(20);
-    expect(geometry.formTextInputMd.fontSize).toBe(14);
-    expect(geometry.formTextInputMd.lineHeight).toBe(20);
   });
 
   it("derives field padding from content and border without changing the control height", () => {
@@ -105,9 +101,6 @@ describe("control geometry", () => {
         geometry.fieldControlMd.paddingVertical * 2 +
         borderWidth * 2,
     ).toBe(geometry.fieldControlMd.minHeight);
-
-    expect(geometry.formTextInputSm.paddingVertical).toBe(5);
-    expect(geometry.formTextInputMd.paddingVertical).toBe(11);
   });
 
   it("keeps segmented controls ghost with button-radius segments in a button-sized track", () => {
@@ -115,16 +108,12 @@ describe("control geometry", () => {
 
     expect(geometry.segmentedContainerXs.padding).toBe(0);
     expect(geometry.segmentedContainerSm.padding).toBe(0);
-    expect(geometry.segmentedContainerMd.padding).toBe(0);
     expect(geometry.segmentedSegmentXs.borderRadius).toBe(geometry.buttonXs.borderRadius);
     expect(geometry.segmentedSegmentSm.borderRadius).toBe(geometry.buttonSm.borderRadius);
-    expect(geometry.segmentedSegmentMd.borderRadius).toBe(geometry.buttonMd.borderRadius);
     expect(geometry.segmentedContainerXs.minHeight).toBe(geometry.buttonXs.minHeight);
     expect(geometry.segmentedContainerSm.minHeight).toBe(geometry.buttonSm.minHeight);
-    expect(geometry.segmentedContainerMd.minHeight).toBe(geometry.buttonMd.minHeight);
     expect(geometry.segmentedSegmentXs.minHeight).toBe(24);
     expect(geometry.segmentedSegmentSm.minHeight).toBe(28);
-    expect(geometry.segmentedSegmentMd.minHeight).toBe(38);
   });
 
   it("keeps one size contract across buttons and segmented controls", () => {
@@ -143,7 +132,6 @@ describe("control geometry", () => {
     expect(geometry.segmentedLabelXs.fontSize).toBe(geometry.buttonTextXs.fontSize);
     expect(geometry.segmentedLabelSm.fontSize).toBe(14);
     expect(geometry.segmentedLabelSm.fontSize).toBe(geometry.buttonText.fontSize);
-    expect(geometry.segmentedLabelMd.fontSize).toBe(geometry.buttonText.fontSize);
 
     // Segments sit inside a track, so they run one padding step tighter than a
     // standalone button of the same size — the gap between segments reads as the padding.
@@ -152,9 +140,6 @@ describe("control geometry", () => {
     );
     expect(geometry.segmentedSegmentSm.paddingHorizontal).toBeLessThan(
       geometry.buttonSm.paddingHorizontal,
-    );
-    expect(geometry.segmentedSegmentMd.paddingHorizontal).toBeLessThan(
-      geometry.buttonMd.paddingHorizontal,
     );
   });
 });

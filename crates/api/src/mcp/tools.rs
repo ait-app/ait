@@ -1,5 +1,10 @@
 //! Translate the agent-facing Paseo tool vocabulary to existing Ait operations.
 
+use std::time::Instant;
+
+use bot::mcp::CallerKind;
+use bot::recall::Sight;
+use chrono::{DateTime, Utc};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
@@ -13,7 +18,9 @@ use super::scope::{self, Failure};
 pub(super) mod creation;
 mod overview;
 mod queries;
+pub(super) mod recall;
 mod schedules;
+mod tickets;
 
 /// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
 /// credentials and inheriting placement and parentage from the resolved `caller` Agent.
@@ -27,6 +34,8 @@ pub(super) async fn execute(
     scope: Option<&Scope>,
     caller: Option<&Value>,
 ) -> Result<Value, Failure> {
+    // Taken before anything awaits, so an observation belongs to the Bot turn that made the call.
+    let started = Instant::now();
     match scope {
         Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
         None if matches!(tool.name.as_str(), "create_agent" | "update_agent") => {
@@ -37,11 +46,82 @@ pub(super) async fn execute(
     if overview::handles(&tool.name) {
         return overview::execute(state, &tool.name, arguments, scope).await;
     }
+    if recall::handles(&tool.name) {
+        return recall::execute(state, &tool.name, &arguments, scope).await;
+    }
+    if tickets::handles(&tool.name) {
+        return tickets::execute(state, &tool.name, arguments, scope, caller).await;
+    }
+    if let Some(scope) = scope
+        && tool.name == "create_agent"
+    {
+        return tickets::create_agent(state, scope, arguments, caller).await;
+    }
+    let ticket_note = match scope {
+        Some(scope) if tool.name == "send_agent_prompt" => {
+            tickets::reopen_for_prompt(state, scope, &arguments).await
+        }
+        _ => None,
+    };
     let mut result = dispatch(state, tool, arguments, scope, caller).await?;
+    if let Some(note) = ticket_note
+        && let Some(result) = result.as_object_mut()
+    {
+        result.insert("ticketNote".to_owned(), Value::String(note));
+    }
     if let Some(scope) = scope {
+        observe(state, scope, &tool.name, &result, started).await;
         scope::filter(scope, &tool.name, &mut result);
     }
     Ok(result)
+}
+
+/// Agent statuses a read reports once the Agent no longer runs a turn.
+const SETTLED: [&str; 3] = ["idle", "error", "permission"];
+
+/// Tell the Bot service that a Bot conversation's turn read an Agent settled through a call that
+/// began at `started`, so the notification about what it read does not wake that conversation
+/// again (ADR-271).
+async fn observe(state: &Shared, scope: &Scope, tool: &str, result: &Value, started: Instant) {
+    let CallerKind::Bot {
+        conversation_id, ..
+    } = scope.caller.kind
+    else {
+        return;
+    };
+    let (Some(bots), Some((agent, at))) = (&state.bot.bots, settled(tool, result)) else {
+        return;
+    };
+    if let Err(error) = bots.observe(conversation_id, agent, at, started).await {
+        tracing::debug!(?error, "Bot observation was not recorded");
+    }
+}
+
+/// The Agent a successful `tool` `result` shows no longer running, with the latest time the
+/// read reflects: when the Agent last changed, or when it raised the attention its snapshot
+/// shows if later, since a permission request raises attention without changing the Agent.
+fn settled(tool: &str, result: &Value) -> Option<(String, DateTime<Utc>)> {
+    let snapshot = match tool {
+        "wait_for_agent" => &result["final"],
+        "get_agent_status" => &result["snapshot"],
+        "get_agent_activity" => result,
+        _ => return None,
+    };
+    if !SETTLED.contains(&result["status"].as_str()?) {
+        return None;
+    }
+    let agent = snapshot["id"]
+        .as_str()
+        .or_else(|| snapshot["agentId"].as_str())?;
+    let updated = timestamp(&snapshot["updatedAt"])?;
+    let at =
+        timestamp(&snapshot["attentionTimestamp"]).map_or(updated, |raised| raised.max(updated));
+    Some((agent.to_owned(), at))
+}
+
+fn timestamp(value: &Value) -> Option<DateTime<Utc>> {
+    let at = DateTime::parse_from_rfc3339(value.as_str()?).ok()?;
+    Some(at.with_timezone(&Utc))
 }
 
 async fn dispatch(
@@ -67,9 +147,15 @@ async fn dispatch(
             rpc::execute(state, "agent.message.send.request", arguments).await
         }
         "get_agent_status" => queries::status(state, arguments).await,
-        "list_agents" => queries::agents(state, &arguments, workspaces).await,
+        "list_agents" => {
+            let sight = reach(state, scope, caller).await?;
+            queries::agents(state, &arguments, workspaces, sight.as_ref()).await
+        }
         "list_workspaces" => queries::workspaces(state, &arguments).await,
-        "list_pending_permissions" => queries::permissions(state, workspaces).await,
+        "list_pending_permissions" => {
+            let sight = reach(state, scope, caller).await?;
+            queries::permissions(state, workspaces, sight.as_ref()).await
+        }
         "list_profiles" => queries::profiles(state).await,
         "get_agent_activity" => queries::activity(state, arguments).await,
         "inspect_provider" => queries::provider(state, arguments, caller).await,
@@ -115,6 +201,19 @@ async fn dispatch(
             schedules::operate(state, tool, arguments, caller).await
         }
         _ => rpc::execute(state, &tool.methods[0], arguments).await,
+    }
+}
+
+/// Which Agents a scoped caller may list (ADR-280 §4), with `caller` a subtree caller's own
+/// Agent record; `None` lists every Agent the Workspace scope allows.
+async fn reach(
+    state: &Shared,
+    scope: Option<&Scope>,
+    caller: Option<&Value>,
+) -> Result<Option<Sight>, ErrorCode> {
+    match scope {
+        Some(scope) => recall::sight(state, scope, caller).await,
+        None => Ok(None),
     }
 }
 

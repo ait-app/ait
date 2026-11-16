@@ -11,15 +11,14 @@ import {
   type ContextBridge,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import type { ToolCallIconComponent } from "@/utils/tool-call-icon";
+import type { ToolCallIconComponent } from "@/tool-calls/tool-call-icon";
 import { ToolCallDetailsContent } from "./tool-call-details";
 
 // ----- Types -----
 
-export interface ToolCallSheetData {
+interface ToolCallSheetData {
   toolName: string;
   displayName: string;
-  summary?: string;
   detail?: ToolCallDetail;
   errorText?: string;
   icon: ToolCallIconComponent;
@@ -28,7 +27,6 @@ export interface ToolCallSheetData {
 
 interface ToolCallSheetContextValue {
   openToolCall: (data: ToolCallSheetData) => void;
-  closeToolCall: () => void;
 }
 
 // ----- Context -----
@@ -115,10 +113,7 @@ export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) 
     setSheetData(null);
   }, [handleSheetDismiss]);
 
-  const contextValue = useMemo(
-    () => ({ openToolCall, closeToolCall }),
-    [openToolCall, closeToolCall],
-  );
+  const contextValue = useMemo(() => ({ openToolCall }), [openToolCall]);
 
   return (
     <ToolCallSheetContext.Provider value={contextValue}>

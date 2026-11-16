@@ -38,7 +38,7 @@ export function androidBuildArtifact(builds, plan) {
   return { id: build.id, url: url.href };
 }
 
-export function validateAndroidApk(badging, certificates, plan) {
+export function validateAndroidBadging(badging, plan) {
   const packageLine = badging.split("\n").find((line) => line.startsWith("package:"));
   assert(packageLine, "APK package metadata is missing");
   const attributes = Object.fromEntries(
@@ -58,6 +58,11 @@ export function validateAndroidApk(badging, certificates, plan) {
     ["arm64-v8a", "armeabi-v7a"].every((abi) => architectures.includes(abi)),
     "Universal APK is missing a required ARM architecture",
   );
+  return { architectures };
+}
+
+export function validateAndroidApk(badging, certificates, plan) {
+  const { architectures } = validateAndroidBadging(badging, plan);
   const signers = [
     ...certificates.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([\da-f]{64})\s*$/gim),
   ];

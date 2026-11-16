@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildGitHubAttachmentFromSearchItem,
+  buildForgeAttachmentFromSearchItem,
   buildLegacyGitHubAttachmentFromSearchItem,
 } from "./review-attachments";
 
-describe("buildGitHubAttachmentFromSearchItem", () => {
+describe("buildForgeAttachmentFromSearchItem", () => {
   it("builds a forge change request attachment for pull requests", () => {
-    const attachment = buildGitHubAttachmentFromSearchItem({
+    const attachment = buildForgeAttachmentFromSearchItem({
       kind: "change_request",
       number: 123,
       title: "Fix race in worktree setup",
@@ -33,7 +33,7 @@ describe("buildGitHubAttachmentFromSearchItem", () => {
   });
 
   it("builds a forge issue attachment for issues", () => {
-    const attachment = buildGitHubAttachmentFromSearchItem({
+    const attachment = buildForgeAttachmentFromSearchItem({
       kind: "issue",
       number: 55,
       title: "Improve startup error details",
@@ -55,7 +55,7 @@ describe("buildGitHubAttachmentFromSearchItem", () => {
   });
 
   it("returns null when no item is selected", () => {
-    expect(buildGitHubAttachmentFromSearchItem(null)).toBeNull();
+    expect(buildForgeAttachmentFromSearchItem(null)).toBeNull();
   });
 });
 

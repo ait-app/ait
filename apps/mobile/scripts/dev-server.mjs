@@ -20,7 +20,7 @@ delete env.AIT_WEB_PLATFORM;
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 for (const [command, args] of [
   [npm, ["run", "build:ui-deps"]],
-  ...(!process.env.AIT_SERVER_BIN
+  ...(!process.env.AITD_BIN
     ? [
         [
           "cargo",
@@ -66,7 +66,7 @@ function launch(command, args, options = {}) {
 process.once("SIGINT", () => stop(0));
 process.once("SIGTERM", () => stop(0));
 launch(
-  process.env.AIT_SERVER_BIN ??
+  process.env.AITD_BIN ??
     path.join(root, "target/debug", process.platform === "win32" ? "daemon.exe" : "daemon"),
   [
     "--data-dir",

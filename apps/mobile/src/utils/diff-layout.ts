@@ -4,7 +4,7 @@ import type { DiffLine } from "@/git/use-diff-query";
 type ReviewSide = "old" | "new";
 type ReviewableLineType = "add" | "remove" | "context";
 
-export interface ReviewableDiffTargetKeyInput {
+interface ReviewableDiffTargetKeyInput {
   filePath: string;
   side: ReviewSide;
   lineNumber: number;
@@ -28,7 +28,7 @@ export function buildReviewableDiffTargetKey(input: ReviewableDiffTargetKeyInput
   return `${input.filePath}:${input.side}:${input.lineNumber}`;
 }
 
-export interface NumberedDiffCell extends ReviewableDiffTarget {
+interface NumberedDiffCell extends ReviewableDiffTarget {
   line: DiffLine;
 }
 
@@ -46,7 +46,7 @@ export interface NumberedDiffLine {
   newCell: NumberedDiffCell | null;
 }
 
-export interface NumberedDiffHunk {
+interface NumberedDiffHunk {
   hunkIndex: number;
   hunkHeader: string;
   lines: NumberedDiffLine[];
@@ -63,7 +63,7 @@ export interface SplitDiffDisplayLine {
   side: "old" | "new";
 }
 
-export interface UnifiedDiffDisplayLine {
+interface UnifiedDiffDisplayLine {
   key: string;
   hunkIndex: number;
   lineIndex: number;
@@ -72,7 +72,7 @@ export interface UnifiedDiffDisplayLine {
   reviewTarget: ReviewableDiffTarget | null;
 }
 
-export type SplitDiffRow =
+type SplitDiffRow =
   | {
       kind: "header";
       content: string;

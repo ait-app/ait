@@ -8,7 +8,7 @@
  * surface and anything knocking out of it matches.
  *
  * A token name rather than a colour because theme colours are only legible inside
- * `StyleSheet.create` — see docs/unistyles.md. Each knockout maps the name to a style of its own.
+ * `StyleSheet.create`. Each knockout maps the name to a style of its own.
  * Add a token here when a knockout lands on a surface that isn't listed.
  */
 export type SurfaceBackdrop =

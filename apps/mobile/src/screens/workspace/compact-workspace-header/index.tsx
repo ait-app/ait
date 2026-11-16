@@ -61,7 +61,6 @@ export function CompactWorkspaceHeader({
 
   return (
     <CompactHeader
-      navigation="menu"
       title={title}
       titleTestID="workspace-header-title"
       subtitle={projectRow}

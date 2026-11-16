@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { requestWorkspaceDraftAgent } from "./create-agent-request";
 
-vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn() }));
+vi.mock("@/attachments/encode-images", () => ({ encodeImages: vi.fn() }));
 
 beforeEach(() => vi.clearAllMocks());
 

@@ -1,8 +1,7 @@
-export type TerminalGestureStatus = "idle" | "pressing" | "selecting";
+type TerminalGestureStatus = "idle" | "pressing" | "selecting";
 export type TerminalGestureIntent = "tap" | "pending" | "select" | "scroll";
-export type TerminalGestureScrollMode = "following" | "scrolled";
 
-export interface TerminalGestureMoveInput {
+interface TerminalGestureMoveInput {
   status: TerminalGestureStatus;
   dx: number;
   dy: number;
@@ -11,29 +10,27 @@ export interface TerminalGestureMoveInput {
   elapsedMs?: number;
 }
 
-export interface TerminalGestureReleaseInput {
+interface TerminalGestureReleaseInput {
   status: TerminalGestureStatus;
   startedWithSelection?: boolean;
   didScroll: boolean;
-  didNavigate: boolean;
   movedBeyondTapTolerance: boolean;
   pressDurationMs: number;
   longPressMs: number;
-  scrollMode: TerminalGestureScrollMode;
 }
 
-export interface TerminalScrollGestureState {
+interface TerminalScrollGestureState {
   lastDy: number;
   rowRemainder: number;
   didScroll: boolean;
 }
 
-export interface TerminalScrollGestureUpdate {
+interface TerminalScrollGestureUpdate {
   state: TerminalScrollGestureState;
   rowDelta: number;
 }
 
-export type TerminalGestureAction = "none" | "focus" | "select" | "clear";
+type TerminalGestureAction = "none" | "focus" | "select" | "clear";
 
 export const TERMINAL_GESTURE_TAP_TOLERANCE_PX = 8;
 export const TERMINAL_GESTURE_LONG_PRESS_MS = 450;
@@ -81,7 +78,7 @@ export function advanceTerminalScrollGesture(input: {
 export function resolveTerminalGestureReleaseAction(
   input: TerminalGestureReleaseInput,
 ): TerminalGestureAction {
-  if (input.didScroll || input.didNavigate) {
+  if (input.didScroll) {
     return "none";
   }
 

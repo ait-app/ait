@@ -151,13 +151,18 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
   }
 }
 
-function createService(input?: { now?: () => number; bucket?: () => Promise<number> }) {
+function createService(input?: {
+  now?: () => number;
+  bucket?: () => Promise<number>;
+  reportInstallError?: (message: string) => void;
+}) {
   const runtime = new FakeAppUpdateRuntime();
   const service = createAppUpdateService({
     runtime,
     isPackaged: () => true,
     now: input?.now ?? (() => Date.parse("2026-04-28T12:00:00.000Z")),
     bucket: input?.bucket ?? (async () => 0.99),
+    reportInstallError: input?.reportInstallError,
   });
   return { runtime, service };
 }
@@ -500,6 +505,42 @@ describe("app update service", () => {
       { targetVersion: "1.2.5", isSilent: false, isForceRunAfter: true },
     ]);
   });
+
+  it.each([
+    { label: "already downloaded", downloaded: true },
+    { label: "not yet downloaded", downloaded: false },
+  ])(
+    "rejects and reports a failed daemon stop the same way when the update is $label",
+    async ({ downloaded }) => {
+      const reported: string[] = [];
+      const { runtime, service } = createService({
+        reportInstallError: (message) => reported.push(message),
+      });
+      runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+      await service.checkForAppUpdate({
+        currentVersion: "1.2.3",
+        releaseChannel: "stable",
+        intent: "manual",
+      });
+      if (downloaded) {
+        runtime.finishUpdateDownload(rolledOutUpdate);
+      }
+      runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+      await expect(
+        service.downloadAndInstallUpdate(
+          { currentVersion: "1.2.3", releaseChannel: "stable" },
+          async () => {
+            throw new Error("daemon did not stop");
+          },
+        ),
+      ).rejects.toThrow("daemon did not stop");
+
+      expect(reported).toEqual(["daemon did not stop"]);
+      expect(runtime.requestedDownloadVersions).toEqual(downloaded ? [] : ["1.2.4"]);
+      expect(runtime.installedVersions).toEqual([]);
+    },
+  );
 
   it("waits for a stale active download before downloading and installing the rechecked version", async () => {
     const { runtime, service } = createService({ bucket: async () => 0 });

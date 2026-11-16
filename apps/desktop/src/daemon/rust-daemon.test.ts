@@ -60,10 +60,10 @@ it("rotates an oversized daemon log and leaves small logs in place", () => {
   expect(() => rotateDaemonLog(path.join(home, "missing.log"), 16)).not.toThrow();
 });
 
-describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => {
+describe.skipIf(!process.env.AITD_BIN)("real Rust child lifecycle", () => {
   it("reads saved settings on each start, applies fixed ports, and lets the environment override them", async () => {
     let listen = "0.0.0.0:0";
-    const manager = create(process.env.AIT_SERVER_BIN!, undefined, {
+    const manager = create(process.env.AITD_BIN!, undefined, {
       getListen: async () => listen,
     });
     const initial = await manager.start();
@@ -77,12 +77,12 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(restarted.listen).toBe(listen);
     expect(restarted.serverId).toBe(initial.serverId);
     await manager.stop();
-    const fresh = create(process.env.AIT_SERVER_BIN!, initial.home, {
+    const fresh = create(process.env.AITD_BIN!, initial.home, {
       getListen: async () => listen,
     });
     expect((await fresh.start()).listen).toBe(listen);
     await fresh.stop();
-    const overridden = create(process.env.AIT_SERVER_BIN!, initial.home, {
+    const overridden = create(process.env.AITD_BIN!, initial.home, {
       listen: "[::]:0",
       getListen: async () => listen,
     });
@@ -98,7 +98,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
       .flat()
       .find((item) => item && item.family === "IPv4" && !item.internal)?.address;
     if (!address) return skip();
-    const manager = create(process.env.AIT_SERVER_BIN!, undefined, {
+    const manager = create(process.env.AITD_BIN!, undefined, {
       listen: `${address}:0`,
     });
     const status = await manager.start();
@@ -110,13 +110,13 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 30000);
 
   it("serializes startup, authenticates readiness, restores credentials and cleans up on restart/stop", async () => {
-    const manager = create(process.env.AIT_SERVER_BIN!);
+    const manager = create(process.env.AITD_BIN!);
     const [a, b] = await Promise.all([manager.start(), manager.start()]);
     expect(a).toEqual(b);
     expect(a.status).toBe("running");
     expect(a.serverId).not.toBe("");
     // Source builds have a Git version; verify the handshake against the supplied binary.
-    const version = execFileSync(process.env.AIT_SERVER_BIN!, ["--version"], {
+    const version = execFileSync(process.env.AITD_BIN!, ["--version"], {
       encoding: "utf8",
     }).trim();
     expect(version).toBe(`aitd ${a.version}`);
@@ -148,7 +148,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
 
   it("uses a saved API token across Desktop restarts and honors an explicit environment override", async () => {
     vi.stubEnv("AIT_SERVER_TOKEN", undefined);
-    const manager = create(process.env.AIT_SERVER_BIN!);
+    const manager = create(process.env.AITD_BIN!);
     const initial = await manager.start();
     const token = readFileSync(path.join(initial.home, "local-api.token"), "utf8");
     expect(manager.authorization(`ws://${initial.connectAddress}/v1/ws`)).toBe(token);
@@ -165,7 +165,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 60000);
 
   it("disconnects the shared server authorization and requires a fresh login after restart", async () => {
-    const manager = create(process.env.AIT_SERVER_BIN!);
+    const manager = create(process.env.AITD_BIN!);
     await expect(manager.hubRequest("GET")).rejects.toThrow("The local runtime is not ready.");
     await manager.start();
     await expect(manager.hubRequest("GET")).resolves.toMatchObject({
@@ -193,9 +193,9 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 40000);
 
   it("does not adopt or stop another process using the same data directory", async () => {
-    const first = create(process.env.AIT_SERVER_BIN!);
+    const first = create(process.env.AITD_BIN!);
     const running = await first.start();
-    const second = create(process.env.AIT_SERVER_BIN!, running.home);
+    const second = create(process.env.AITD_BIN!, running.home);
     await expect(second.start()).rejects.toThrow();
     await second.stop();
     expect(() => process.kill(running.pid!, 0)).not.toThrow();
@@ -203,7 +203,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 30000);
 
   it("keeps a retained daemon running for the next session and stops it from there", async () => {
-    const first = create(process.env.AIT_SERVER_BIN!);
+    const first = create(process.env.AITD_BIN!);
     const running = await first.start();
     const token = first.authorization(`ws://${running.connectAddress}/v1/ws`);
     await expect(first.retainForNextSession()).resolves.toBe(true);
@@ -214,7 +214,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(statSync(path.join(running.home, "desktop-daemon.json")).mode & 0o077).toBe(0);
     expect(record).toContain(token!);
 
-    const next = create(process.env.AIT_SERVER_BIN!, running.home);
+    const next = create(process.env.AITD_BIN!, running.home);
     const reattached = await next.start();
     expect(reattached).toMatchObject({
       status: "running",
@@ -233,12 +233,12 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
 
   it("restarts a retained daemon whose listen setting changed while Ait was closed", async () => {
     let listen = "127.0.0.1:0";
-    const first = create(process.env.AIT_SERVER_BIN!, undefined, { getListen: async () => listen });
+    const first = create(process.env.AITD_BIN!, undefined, { getListen: async () => listen });
     const running = await first.start();
     await first.retainForNextSession();
     listen = "[::1]:0";
 
-    const next = create(process.env.AIT_SERVER_BIN!, running.home, {
+    const next = create(process.env.AITD_BIN!, running.home, {
       getListen: async () => listen,
     });
     const restarted = await next.start();

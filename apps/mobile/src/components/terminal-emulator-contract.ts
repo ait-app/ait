@@ -29,7 +29,6 @@ export interface TerminalEmulatorHandle {
 }
 
 export interface TerminalEmulatorProps {
-  dom?: unknown;
   ref: Ref<TerminalEmulatorHandle>;
   streamKey: string;
   supportsTerminalInputModeReplay: boolean;

@@ -29,7 +29,9 @@ vi.mock("@/assistant-image/acquisition-cache", () => ({
 }));
 vi.mock("@/attachments/service", () => ({}));
 vi.mock("@/attachments/gc-retention", () => ({}));
-vi.mock("@/utils/assistant-image-source", () => ({ resolveAssistantImageSource: () => ({}) }));
+vi.mock("@/assistant-image/assistant-image-source", () => ({
+  resolveAssistantImageSource: () => ({}),
+}));
 vi.mock("./image-source", () => ({ resolveMarkdownPreviewImageSource: () => "a.png" }));
 vi.mock("./image-decoding", () => ({
   decodeMarkdownImage: vi.fn(),

@@ -44,10 +44,6 @@ export function normalizeWorkspaceTabTarget(
 
 function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): WorkspaceTabTarget | null {
   switch (value.kind) {
-    case "agent": {
-      const agentId = trimNonEmpty(value.agentId);
-      return agentId ? { kind: "agent", agentId } : null;
-    }
     case "terminal": {
       const terminalId = trimNonEmpty(value.terminalId);
       return terminalId ? { kind: "terminal", terminalId } : null;
@@ -59,6 +55,7 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
     case "changes_tree":
     case "files":
     case "pull_request":
+    case "notebook":
       return { kind: value.kind };
     case "bot": {
       // Legacy persisted targets carried botId and list/create views; only settings survives.
@@ -88,9 +85,7 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
   }
 }
 
-export function normalizeWorkspaceDraftTabSetup(
-  value: unknown,
-): WorkspaceDraftTabSetup | undefined {
+function normalizeWorkspaceDraftTabSetup(value: unknown): WorkspaceDraftTabSetup | undefined {
   const record = isPlainRecord(value) ? value : null;
   if (!record) {
     return undefined;
@@ -103,9 +98,9 @@ export function normalizeWorkspaceDraftTabSetup(
   return {
     provider,
     cwd,
-    modeId: trimOptionalString(typeof record.modeId === "string" ? record.modeId : null),
-    model: trimOptionalString(typeof record.model === "string" ? record.model : null),
-    thinkingOptionId: trimOptionalString(
+    modeId: trimNonEmpty(typeof record.modeId === "string" ? record.modeId : null),
+    model: trimNonEmpty(typeof record.model === "string" ? record.model : null),
+    thinkingOptionId: trimNonEmpty(
       typeof record.thinkingOptionId === "string" ? record.thinkingOptionId : null,
     ),
     featureValues: isPlainRecord(record.featureValues) ? { ...record.featureValues } : {},
@@ -165,6 +160,9 @@ function secondaryWorkspaceTabTargetsEqual(
   if (left.kind === "pull_request" && right.kind === "pull_request") {
     return true;
   }
+  if (left.kind === "notebook" && right.kind === "notebook") {
+    return true;
+  }
   if (left.kind === "bot" && right.kind === "bot") {
     return left.view === right.view;
   }
@@ -219,9 +217,9 @@ function recordsShallowEqual(
   return true;
 }
 
-/** Bot and Cron tabs exist at most once per workspace, and their tab id is their kind. */
+/** Bot, Cron, and notebook tabs exist at most once per workspace, and their tab id is their kind. */
 export function isWorkspaceSingletonTabTarget(target: { kind: string }): boolean {
-  return target.kind === "bot" || target.kind === "schedule";
+  return target.kind === "bot" || target.kind === "schedule" || target.kind === "notebook";
 }
 
 export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): string {
@@ -254,6 +252,9 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   }
   if (target.kind === "schedule") {
     return "schedule";
+  }
+  if (target.kind === "notebook") {
+    return "notebook";
   }
   if (target.kind === "working_diff") {
     return "working_diff";
@@ -293,10 +294,6 @@ function normalizePositiveInteger(value: number | null | undefined): number | nu
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : null;
-}
-
-function trimOptionalString(value: string | null | undefined): string | null {
-  return value == null ? null : trimNonEmpty(value);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

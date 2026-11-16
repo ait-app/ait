@@ -87,6 +87,37 @@ fn push_attention_survives_disconnect_but_respects_focus_and_foreground_tokens()
     assert!(push.try_recv().is_err());
 }
 
+#[test]
+fn committed_attention_reaches_host_consumers_despite_focus_and_center_delivery() {
+    let events = SessionEvents::default();
+    events.set_publisher(Arc::new(Publisher {
+        received: Mutex::new(Vec::new()),
+        owns_notification: true,
+    }));
+    let mut push = events.subscribe_attention();
+    let mut committed = events.subscribe_committed_attention();
+    let connection = events.connect();
+    let now = Utc::now().timestamp_millis();
+    heartbeat(&connection, Some("agent"), true, now);
+    let agent = json!({"agentId":"agent","reason":"finished","timestamp":"t1"});
+    let terminal = json!({"terminalId":"terminal","workspaceId":"wks"});
+
+    events.publish_at(SessionEventKind::AgentAttention, &agent, now);
+    events.publish_at(SessionEventKind::TerminalAttention, &terminal, now);
+    events.publish_at(SessionEventKind::ServerInfo, &json!({}), now);
+
+    assert!(push.try_recv().is_err(), "focus and center suppress push");
+    assert_eq!(
+        committed.try_recv().unwrap(),
+        (SessionEventKind::AgentAttention, agent)
+    );
+    assert_eq!(
+        committed.try_recv().unwrap(),
+        (SessionEventKind::TerminalAttention, terminal)
+    );
+    assert!(committed.try_recv().is_err(), "only attention is tapped");
+}
+
 fn capture(connection: &SessionConnection, notifications: bool) -> (SessionSubscription, Captured) {
     let events = Arc::new(Mutex::new(Vec::new()));
     let captured = events.clone();

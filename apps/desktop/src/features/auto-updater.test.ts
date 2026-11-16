@@ -42,11 +42,13 @@ vi.mock("electron-log/main", () => ({
 
 import {
   bucketFromStagingUserId,
+  rolloutManifestSchema,
+  shouldAdmitAppUpdate,
+} from "./app-update-rollout";
+import {
   checkForAppUpdate,
   createAppUpdateLifecycleLogger,
   resolveStagingUserId,
-  rolloutManifestSchema,
-  shouldAdmitToRollout,
   shouldInstallAppUpdateOnQuit,
 } from "./auto-updater";
 
@@ -155,10 +157,11 @@ describe("shouldInstallAppUpdateOnQuit", () => {
   });
 });
 
-describe("shouldAdmitToRollout", () => {
+describe("automatic rollout admission", () => {
   it("admits beta, missing rollout hours, zero-hour rollout, and missing release date", () => {
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "beta",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -167,7 +170,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(true);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: undefined,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -176,7 +180,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(true);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 0,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -185,7 +190,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(true);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: undefined,
@@ -197,7 +203,8 @@ describe("shouldAdmitToRollout", () => {
 
   it("blocks future releases and respects the linear threshold mid-rollout", () => {
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T02:00:00.000Z",
@@ -206,7 +213,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(false);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -215,7 +223,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(true);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -227,7 +236,8 @@ describe("shouldAdmitToRollout", () => {
 
   it("blocks the bucket-zero client at exact release time, admits as soon as time advances", () => {
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -236,7 +246,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(false);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -249,7 +260,8 @@ describe("shouldAdmitToRollout", () => {
   it("admits the highest-bucket client at and past the rollout end", () => {
     const maxBucket = (0x100000000 - 1) / 0x100000000;
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -258,7 +270,8 @@ describe("shouldAdmitToRollout", () => {
       }),
     ).toBe(true);
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "2026-04-28T00:00:00.000Z",
@@ -270,7 +283,8 @@ describe("shouldAdmitToRollout", () => {
 
   it("admits when releaseDate is unparseable", () => {
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: 24,
         releaseDate: "not a date",
@@ -287,7 +301,8 @@ describe("shouldAdmitToRollout", () => {
     });
 
     expect(
-      shouldAdmitToRollout({
+      shouldAdmitAppUpdate({
+        intent: "automatic",
         channel: "stable",
         rolloutHours: parsed.rolloutHours,
         releaseDate: parsed.releaseDate,

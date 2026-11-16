@@ -25,7 +25,7 @@ import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tab
  * live context) and the session store's `Agent` record satisfy it without a
  * projection step.
  */
-export type ForkAgentSource = Pick<
+type ForkAgentSource = Pick<
   AgentScreenAgent,
   | "provider"
   | "cwd"
@@ -43,12 +43,9 @@ export type ForkAgentSource = Pick<
  * in-flight turn. `selectForkContextRows` projects the full timeline when
  * neither field is present, which is what makes mid-run forking work.
  */
-export type ForkAgentBoundary = Pick<
-  AgentForkContextOptions,
-  "boundaryCursor" | "boundaryMessageId"
->;
+type ForkAgentBoundary = Pick<AgentForkContextOptions, "boundaryCursor" | "boundaryMessageId">;
 
-export interface ForkAgentRequest {
+interface ForkAgentRequest {
   agentId: string;
   agent: ForkAgentSource;
   workspaceId?: string;
@@ -56,7 +53,7 @@ export interface ForkAgentRequest {
   boundary?: ForkAgentBoundary;
 }
 
-export interface UseForkAgentInput {
+interface UseForkAgentInput {
   serverId: string;
   toast?: ToastApi | null;
   /** Read-only surfaces (provider subagent panes) must never fork. */

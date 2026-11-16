@@ -6,14 +6,14 @@ import {
 } from "@xterm/headless";
 import type { TerminalCell, TerminalState } from "@ait/protocol/messages";
 
-export type NativeTerminalWriteData = Uint8Array | string;
+type NativeTerminalWriteData = Uint8Array | string;
 export interface NativeTerminalCell extends TerminalCell {
   width?: number;
 }
 
 export type TerminalCellRow = NativeTerminalCell[];
 
-export interface NativeHeadlessTerminalOptions {
+interface NativeHeadlessTerminalOptions {
   rows: number;
   cols: number;
   scrollbackLines?: number;
@@ -23,7 +23,6 @@ export interface NativeHeadlessTerminal {
   write(data: NativeTerminalWriteData): Promise<void>;
   getState(): TerminalState;
   getViewportState(input?: TerminalViewportStateInput): TerminalViewportState;
-  getInputModeState(): NativeHeadlessTerminalInputModeState;
   getBufferBounds(): TerminalBufferBounds;
   getBufferWindow(input: TerminalBufferWindowInput): TerminalBufferWindow;
   resize(input: { rows: number; cols: number }): void;
@@ -31,17 +30,12 @@ export interface NativeHeadlessTerminal {
   dispose(): void;
 }
 
-export interface NativeHeadlessTerminalInputModeState {
-  applicationCursorKeys: boolean;
-  bracketedPaste: boolean;
-}
-
-export interface TerminalBufferWindowInput {
+interface TerminalBufferWindowInput {
   startRow: number;
   rowCount: number;
 }
 
-export interface TerminalViewportStateInput {
+interface TerminalViewportStateInput {
   firstRow: number;
   rowCount: number;
 }
@@ -63,7 +57,7 @@ export interface TerminalBufferBounds {
   cursorCol: number;
 }
 
-export interface TerminalBufferWindow {
+interface TerminalBufferWindow {
   startRow: number;
   rows: TerminalCellRow[];
   wrappedRows: boolean[];
@@ -81,8 +75,6 @@ export interface TerminalViewportState {
 
 interface XtermCoreService {
   decPrivateModes?: {
-    applicationCursorKeys?: unknown;
-    bracketedPasteMode?: unknown;
     cursorStyle?: unknown;
     cursorBlink?: unknown;
   };
@@ -280,16 +272,6 @@ function extractCursorState(
   };
 }
 
-function extractInputModeState(
-  terminal: HeadlessTerminalInstance,
-): NativeHeadlessTerminalInputModeState {
-  const coreService = (terminal as unknown as HeadlessTerminalWithCore)._core?.coreService;
-  return {
-    applicationCursorKeys: coreService?.decPrivateModes?.applicationCursorKeys === true,
-    bracketedPaste: coreService?.decPrivateModes?.bracketedPasteMode === true,
-  };
-}
-
 function extractState(
   terminal: HeadlessTerminalInstance,
   options: { scrollbackLines?: number },
@@ -390,9 +372,6 @@ export function createNativeHeadlessTerminal(
         getActiveCoordinateStorage().oldestRow,
         input,
       );
-    },
-    getInputModeState(): NativeHeadlessTerminalInputModeState {
-      return extractInputModeState(terminal);
     },
     getBufferBounds(): TerminalBufferBounds {
       return extractBufferBounds(terminal, coordinateEpoch, getActiveCoordinateStorage().oldestRow);

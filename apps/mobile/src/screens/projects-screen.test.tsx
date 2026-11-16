@@ -195,7 +195,6 @@ function hostEntry(overrides: Partial<ProjectHostEntry> = {}): ProjectHostEntry 
     serverName: "alpha",
     isOnline: true,
     repoRoot: "/home/me/proj",
-    workspaceCount: 1,
     workspaces: [workspaceSummary()],
     ...overrides,
   };
@@ -203,17 +202,10 @@ function hostEntry(overrides: Partial<ProjectHostEntry> = {}): ProjectHostEntry 
 
 function project(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
   const hosts = overrides.hosts ?? [hostEntry()];
-  const totalWorkspaceCount =
-    overrides.totalWorkspaceCount ?? hosts.reduce((sum, host) => sum + host.workspaceCount, 0);
-  const onlineHostCount = overrides.onlineHostCount ?? hosts.filter((h) => h.isOnline).length;
   return {
     viewKey: "remote:github.com/acme/app",
     projectName: "acme/app",
     hosts,
-    totalWorkspaceCount,
-    hostCount: hosts.length,
-    onlineHostCount,
-    githubUrl: "https://github.com/acme/app",
     ...overrides,
   };
 }
@@ -223,8 +215,6 @@ function setProjectsState(overrides: Partial<UseProjectsResult>) {
     projects: [],
     hostErrors: [],
     isLoading: false,
-    isFetching: false,
-    refetch: vi.fn(),
     ...overrides,
   };
 }
@@ -273,7 +263,7 @@ describe("ProjectsScreen", () => {
       projects: [
         project({
           projectName: "acme/app",
-          hosts: [hostEntry({ projectName: "acme/app", serverName: "alpha", workspaceCount: 5 })],
+          hosts: [hostEntry({ projectName: "acme/app", serverName: "alpha" })],
         }),
       ],
     });
@@ -379,8 +369,8 @@ describe("ProjectsScreen", () => {
       projects: [
         project({
           hosts: [
-            hostEntry({ serverId: "a", serverName: "alpha", workspaceCount: 3 }),
-            hostEntry({ serverId: "b", serverName: "beta", workspaceCount: 2 }),
+            hostEntry({ serverId: "a", serverName: "alpha" }),
+            hostEntry({ serverId: "b", serverName: "beta" }),
           ],
         }),
       ],

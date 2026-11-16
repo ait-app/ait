@@ -158,3 +158,14 @@
 - 直连、SSH 和本机 daemon 先以 `connection.single.v1` 建立单连接，daemon 拒绝时回退四连接并按端点
   记住；Hub 会话始终为单连接（[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)，
   修订 [ADR-211](../decisions/clients/adr-211-sdk-native-daemon-protocol.md) 的“直连与 SSH 保留四通道”）。
+
+## 主机资源监控
+
+- `metadata::daemon` 拥有 `HostSampler` 端口、缓存和历史；Rust 本地适配器读取 OS 计数，
+  daemon 在阻塞执行路径上调用。鉴权 RPC `daemon.host_stats.request` 根据能力协商开放。
+- 按需采样最短间隔两秒，磁盘三十秒；历史最多九十点、最近三分钟，不持久化。
+  CPU 和网速首次观测、停采十秒后恢复时返回 null，下一次采样再给出速率。
+- 客户端按主机隔离缓存；默认跟随工作区，也可固定主机。离线或刷新失败时保留最后采样时间，
+  摘要不冒充实时读数；页面隐藏、侧栏关闭或主机离线时停刷。
+- 计数来自 daemon 所在 OS，容器不保证与配额一致；不枚举进程、不采集内存压力。
+  平台统计口径和权限、生命周期边界见 [ADR-247](../decisions/daemon/adr-247-host-resource-monitor.md)。

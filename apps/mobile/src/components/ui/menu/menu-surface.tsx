@@ -20,21 +20,18 @@ import {
   type ContextBridge,
 } from "@/components/ui/isolated-bottom-sheet-modal";
 import { SPACING, type Theme } from "@/styles/theme";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
 import { MenuPage } from "./menu-item";
-import { currentPageId, isSubPageOpen } from "./menu-navigation";
+import { currentPageId } from "./menu-navigation";
 import { AnchoredSurface, MenuOverlay } from "./menu-overlay";
-import { getMenuSheetBottomPadding } from "./menu-sheet-layout";
 import type { Alignment, Placement } from "./menu-anchor";
-import type { KeyboardFocusScope } from "@/keyboard/actions";
 
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 // `backgroundStyle` and `handleIndicatorStyle` are style-shaped props the Babel plugin does not
 // track, so the sheet is wrapped rather than reading the theme through a hook.
-// See docs/unistyles.md.
 const ThemedBottomSheetModal = withUnistyles(IsolatedBottomSheetModal, (theme) => ({
   backgroundStyle: {
     borderTopLeftRadius: theme.borderRadius.xl,
@@ -111,12 +108,8 @@ export interface MenuSurfaceProps {
   minWidth?: number;
   maxWidth?: number;
   maxHeight?: number;
-  fullWidth?: boolean;
-  horizontalPadding?: number;
   scrollable?: boolean;
   testID?: string;
-  /** Limits ordinary app shortcuts to the time this menu owns keyboard focus. */
-  keyboardFocusScope?: KeyboardFocusScope;
 }
 
 /**
@@ -200,11 +193,8 @@ function MenuPopoverSurface({
   minWidth = 180,
   maxWidth,
   maxHeight,
-  fullWidth = false,
-  horizontalPadding = 16,
   scrollable = false,
   testID,
-  keyboardFocusScope,
 }: MenuSurfaceProps): ReactElement | null {
   const menu = useMenuContext("MenuSurface");
   const { value: surfaceValue, getAnchor } = useSubAnchors();
@@ -256,11 +246,8 @@ function MenuPopoverSurface({
             minWidth={minWidth}
             maxWidth={maxWidth}
             maxHeight={maxHeight}
-            fullWidth={fullWidth}
-            horizontalPadding={horizontalPadding}
             scrollable={scrollable}
             testID={testID}
-            keyboardFocusScope={keyboardFocusScope}
           >
             <MenuPage depth={0}>{children}</MenuPage>
           </AnchoredSurface>
@@ -339,25 +326,16 @@ function MenuSheetSurface({
   pages = [],
   sheetTitle,
   testID,
-  keyboardFocusScope,
 }: MenuSurfaceProps): ReactElement | null {
   const { height: windowHeight } = useWindowDimensions();
   const menu = useMenuContext("MenuSurface");
   const { value: surfaceValue } = useSubAnchors();
   const safeAreaInsets = useSafeAreaInsets();
 
+  // Breathing room below the last row, after the system navigation inset.
   const sheetScrollContentStyle = useMemo(
-    () => ({
-      paddingBottom: getMenuSheetBottomPadding({
-        safeAreaBottom: safeAreaInsets.bottom,
-        breathingRoom: SPACING[1],
-      }),
-    }),
+    () => ({ paddingBottom: safeAreaInsets.bottom + SPACING[1] }),
     [safeAreaInsets.bottom],
-  );
-  const sheetDataSet = useMemo(
-    () => (keyboardFocusScope ? { keyboardScope: keyboardFocusScope } : undefined),
-    [keyboardFocusScope],
   );
 
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
@@ -404,7 +382,6 @@ function MenuSheetSurface({
       keyboardBlurBehavior="restore"
     >
       <BottomSheetScrollView
-        dataSet={sheetDataSet}
         contentContainerStyle={sheetScrollContentStyle}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -477,5 +454,3 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
   },
 }));
-
-export { isSubPageOpen };

@@ -9,7 +9,6 @@ import {
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
   archiveWorkspaceOptimistically,
-  archiveWorkspacesOptimistically,
   type WorkspaceArchiveTarget,
 } from "@/workspace/workspace-archive";
 
@@ -147,78 +146,5 @@ describe("archiveWorkspaceOptimistically", () => {
         workspaceId: archived.id,
       }),
     ).toBe(false);
-  });
-});
-
-describe("archiveWorkspacesOptimistically", () => {
-  it("returns failures and restores only the workspaces whose archive failed", async () => {
-    const first = workspace({ id: "workspace-1" });
-    const second = workspace({
-      id: "workspace-2",
-      workspaceDirectory: "/repo/project/workspace-2",
-      name: "workspace-2",
-    });
-    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [first, second]);
-    const client = createClient(
-      vi.fn(async (workspaceId) =>
-        archivePayload({
-          workspaceId,
-          error: workspaceId === second.id ? "failed" : null,
-        }),
-      ),
-    );
-
-    const failures = await archiveWorkspacesOptimistically({
-      getClient: () => client,
-      workspaces: [target({ workspaceId: first.id }), target({ workspaceId: second.id })],
-    });
-
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.workspaceId).toBe(second.id);
-    expect(storedWorkspace(first.id)).toBeUndefined();
-    expect(storedWorkspace(second.id)).toEqual(second);
-  });
-
-  it("archives each workspace through its own server client", async () => {
-    const first = workspace({ id: "workspace-1" });
-    const second = workspace({
-      id: "workspace-2",
-      workspaceDirectory: "/repo/project/workspace-2",
-      name: "workspace-2",
-    });
-    useSessionStore.getState().initializeSession(SECOND_SERVER_ID, {} as DaemonClient);
-    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [first]);
-    getHostRuntimeStore().acceptWorkspaceSnapshots(SECOND_SERVER_ID, [second]);
-
-    const archivedByServer = new Map<string, string[]>();
-    const clientFor = (serverId: string) =>
-      createClient(async (workspaceId) => {
-        archivedByServer.set(serverId, [...(archivedByServer.get(serverId) ?? []), workspaceId]);
-        return archivePayload({ workspaceId });
-      });
-
-    const failures = await archiveWorkspacesOptimistically({
-      getClient: (serverId) => clientFor(serverId),
-      workspaces: [
-        target({
-          serverId: SERVER_ID,
-          workspaceId: first.id,
-        }),
-        target({
-          serverId: SECOND_SERVER_ID,
-          workspaceId: second.id,
-        }),
-      ],
-    });
-
-    expect(failures).toEqual([]);
-    expect(archivedByServer).toEqual(
-      new Map([
-        [SERVER_ID, [first.id]],
-        [SECOND_SERVER_ID, [second.id]],
-      ]),
-    );
-    expect(storedWorkspaceOn(SERVER_ID, first.id)).toBeUndefined();
-    expect(storedWorkspaceOn(SECOND_SERVER_ID, second.id)).toBeUndefined();
   });
 });

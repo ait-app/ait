@@ -55,7 +55,6 @@ interface DownloadState {
   completeDownload: (id: string) => void;
   failDownload: (id: string, message: string) => void;
   dismissDownload: (id: string) => void;
-  dismissAllCompleted: () => void;
 }
 
 function generateDownloadId(): string {
@@ -353,22 +352,6 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       updated.delete(id);
       const newActiveId =
         state.activeDownloadId === id ? findMostRecentDownloadId(updated) : state.activeDownloadId;
-      return { downloads: updated, activeDownloadId: newActiveId };
-    });
-  },
-
-  dismissAllCompleted: () => {
-    set((state) => {
-      const updated = new Map(state.downloads);
-      for (const [id, download] of updated) {
-        if (download.status !== "downloading") {
-          updated.delete(id);
-        }
-      }
-      let newActiveId: string | null;
-      if (!state.activeDownloadId) newActiveId = null;
-      else if (updated.has(state.activeDownloadId)) newActiveId = state.activeDownloadId;
-      else newActiveId = findMostRecentDownloadId(updated);
       return { downloads: updated, activeDownloadId: newActiveId };
     });
   },

@@ -7,7 +7,6 @@
     "ait": {
       "extends": "production",
       "distribution": "store",
-      "node": "22.23.3",
       "env": {
         "EXPO_OWNER": "sd542927172s-team",
         "EXPO_SLUG": "ait",
@@ -17,6 +16,7 @@
       }
     },
     "development": {
+      "node": "26.13.1",
       "developmentClient": true,
       "distribution": "internal",
       "env": {
@@ -27,6 +27,7 @@
       }
     },
     "production": {
+      "node": "26.13.1",
       "env": {
         "APP_VARIANT": "production"
       },

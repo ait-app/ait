@@ -12,11 +12,11 @@ export interface TerminalSelectionRange {
   coordinateEpoch: number;
 }
 
-export interface TerminalSelectionSnapshot {
+interface TerminalSelectionSnapshot {
   range: TerminalSelectionRange | null;
 }
 
-export interface TerminalSelectionBounds {
+interface TerminalSelectionBounds {
   oldestRow: number;
   newestRow: number;
   coordinateEpoch: number;
@@ -30,22 +30,22 @@ export interface TerminalSelectionModel {
   getSnapshot(): TerminalSelectionSnapshot;
 }
 
-export interface TerminalSelectionUpdateInput {
+interface TerminalSelectionUpdateInput {
   coordinate: TerminalBufferCoordinate;
   bounds: TerminalSelectionBounds;
 }
 
-export interface TerminalSelectionSyncInput {
+interface TerminalSelectionSyncInput {
   bounds: TerminalSelectionBounds;
 }
 
-export interface TerminalSelectionNormalizeInput {
+interface TerminalSelectionNormalizeInput {
   anchor: TerminalBufferCoordinate;
   focus: TerminalBufferCoordinate;
   coordinateEpoch: number;
 }
 
-export interface TerminalSelectionPoint {
+interface TerminalSelectionPoint {
   x: number;
   y: number;
 }
@@ -56,13 +56,13 @@ export interface TerminalSelectionViewport {
   cols: number;
 }
 
-export interface TerminalSelectionHitTestInput {
+interface TerminalSelectionHitTestInput {
   point: TerminalSelectionPoint;
   metrics: TerminalGridCellMetrics;
   viewport: TerminalSelectionViewport;
 }
 
-export interface TerminalSelectionRect {
+interface TerminalSelectionRect {
   key: string;
   x: number;
   y: number;
@@ -70,18 +70,18 @@ export interface TerminalSelectionRect {
   height: number;
 }
 
-export interface TerminalSelectionRectsInput {
+interface TerminalSelectionRectsInput {
   selection: TerminalSelectionRange | null;
   viewport: TerminalSelectionViewport;
   metrics: TerminalGridCellMetrics;
 }
 
-export interface TerminalSelectedTextInput {
+interface TerminalSelectedTextInput {
   terminal: NativeHeadlessTerminal;
   selection: TerminalSelectionRange | null;
 }
 
-export interface TerminalWordSelectionInput {
+interface TerminalWordSelectionInput {
   terminal: NativeHeadlessTerminal;
   coordinate: TerminalBufferCoordinate;
 }
@@ -90,7 +90,7 @@ export interface TerminalClipboardWriter {
   writeText: (text: string) => Promise<void>;
 }
 
-export interface CopyTerminalSelectionInput extends TerminalSelectedTextInput {
+interface CopyTerminalSelectionInput extends TerminalSelectedTextInput {
   clipboard: TerminalClipboardWriter;
 }
 

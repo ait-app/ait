@@ -52,7 +52,6 @@ export interface FileHeaderProps {
   onDownload?: (path: string) => void;
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
-  onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
   canvasRendered?: boolean;
   onActiveChange?: (active: boolean) => void;
@@ -130,10 +129,6 @@ function fileHeaderNameStyle(showsBodyState: boolean, isHovered: boolean) {
   ];
 }
 
-function fileChange(file: ParsedDiffFile): "added" | "deleted" | "modified" {
-  return diffFileChangeKind(file);
-}
-
 function FileHeaderMenu({
   file,
   onOpenFile,
@@ -193,7 +188,6 @@ export const FileHeader = memo(function FileHeader({
   interactive = true,
   onActivate,
   onSelect,
-  onHeaderHeightChange,
   testID,
   canvasRendered = false,
   onActiveChange,
@@ -212,10 +206,6 @@ export const FileHeader = memo(function FileHeader({
     enabled: interactive,
     onSelect,
     onActivate,
-    onLayout: useCallback(
-      (height: number) => onHeaderHeightChange?.(file.path, height),
-      [file.path, onHeaderHeightChange],
-    ),
   });
   const pressableStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -249,7 +239,7 @@ export const FileHeader = memo(function FileHeader({
   );
   const fileName = fileNameForPath(file.path);
   const nameStyle = fileHeaderNameStyle(showsBodyState, hover.isHovered);
-  const changeIcon = <FileChangeIcon change={fileChange(file)} />;
+  const changeIcon = <FileChangeIcon change={diffFileChangeKind(file)} />;
   const content = (
     <View
       style={[styles.content, showsBodyState && styles.documentContent]}
@@ -338,7 +328,6 @@ export const FileHeader = memo(function FileHeader({
         fileHeaderContainerStyle(showsBodyState),
         canvasRendered && styles.canvasInteraction,
       ]}
-      onLayout={interaction.onLayout}
       onPointerEnter={hover.handlePointerEnter}
       onPointerLeave={hover.handlePointerLeave}
       testID={testID}

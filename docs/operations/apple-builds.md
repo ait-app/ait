@@ -17,7 +17,7 @@ AIT_DESKTOP_SMOKE=1 npm run build:dmg
 流程：共享 TypeScript 包 → Electron 专用 Web 导出 → Rust `daemon` release binary →
 Electron 主进程 → electron-builder DMG。当前命令只构建宿主架构：Apple Silicon 是 arm64，
 Intel 是 x64。Rust binary 和 Electron 必须同架构，不支持直接生成 universal 包。
-`AIT_SERVER_BIN` 可指定已有的同架构 binary；默认从当前仓库编译。
+`AITD_BIN` 可指定已有的同架构 binary；默认从当前仓库编译。
 
 输出：`apps/desktop/release/Ait-<version>-local-<arch>.dmg`，其中包含 `Ait.app`。
 Rust daemon 位于 App 的 `Contents/Resources/bin/aitd`，Web 页面位于 `app-dist`。
@@ -112,7 +112,7 @@ npm run build:ios:ipa
 
 ## Xcode Cloud 依赖安装
 
-`apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 22 和 Ruby 3.4，并使用
+`apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 26 和 Ruby 3.4，并使用
 `apps/mobile/ios/Gemfile.lock` 固定 Bundler、CocoaPods 及其 Ruby 依赖版本。
 CocoaPods 当前固定为 1.16.2，与 `Podfile.lock` 的 `COCOAPODS` 字段一致。
 Cloud 使用冻结的 Ruby 依赖和 `bundle exec pod install --deployment`，不采用 runner

@@ -107,4 +107,21 @@ describe("tool-call-parsers", () => {
     expect(tasks?.map((task) => task.text)).toEqual(["Task 1", "Task 2"]);
     expect(tasks?.map((task) => task.completed)).toEqual([false, true]);
   });
+
+  it("preserves the subject and active form separately for running task tools", () => {
+    expect(
+      extractTaskEntriesFromToolCall("TodoWrite", {
+        todos: [
+          { content: " Verify support ", activeForm: " Verifying support ", status: "in_progress" },
+        ],
+      }),
+    ).toEqual([
+      {
+        text: "Verify support",
+        activeForm: "Verifying support",
+        status: "in_progress",
+        completed: false,
+      },
+    ]);
+  });
 });

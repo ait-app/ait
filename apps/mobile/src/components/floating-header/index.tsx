@@ -5,8 +5,6 @@ import { EdgeFade } from "@/components/ui/edge-fade";
 
 /** How far the fade runs past the header's bottom edge, so content dissolves instead of clipping. */
 const FADE_OVERHANG = 48;
-/** Share of the fade that stays opaque, so the header's title and icons keep contrast. */
-const FADE_SOLID_FRACTION = 0.57;
 
 interface FloatingHeaderLayoutProps {
   header: ReactNode;
@@ -31,13 +29,8 @@ export function FloatingHeaderLayout({ header, floating, children }: FloatingHea
       <View style={styles.content}>{children(floating ? headerHeight : 0)}</View>
       {floating ? (
         <View style={styles.overlay} pointerEvents="box-none">
-          <EdgeFade
-            edge="top"
-            solidFraction={FADE_SOLID_FRACTION}
-            backdrop="surfaceWorkspace"
-            style={styles.fade}
-          />
-          <View pointerEvents="box-none" onLayout={handleHeaderLayout}>
+          <EdgeFade edge="top" solidFraction={0} backdrop="surfaceWorkspace" style={styles.fade} />
+          <View style={styles.header} pointerEvents="box-none" onLayout={handleHeaderLayout}>
             {header}
           </View>
         </View>
@@ -46,7 +39,7 @@ export function FloatingHeaderLayout({ header, floating, children }: FloatingHea
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
     minHeight: 0,
@@ -63,11 +56,16 @@ const styles = StyleSheet.create({
     // The fade's tail lives inside the overlay so Android does not clip it.
     paddingBottom: FADE_OVERHANG,
   },
+  // Paint the title and safe area with a real surface. Android SVG gradients can
+  // leak transcript glyphs through even the nominally opaque gradient stops.
+  header: {
+    backgroundColor: theme.colors.surfaceWorkspace,
+  },
   fade: {
     position: "absolute",
-    top: 0,
+    height: FADE_OVERHANG,
     left: 0,
     right: 0,
     bottom: 0,
   },
-});
+}));

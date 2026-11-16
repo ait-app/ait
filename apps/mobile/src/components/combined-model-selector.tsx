@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { AgentProfilePicker, AgentProfileSeed } from "@/agent-profiles";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -31,6 +32,7 @@ interface CombinedModelSelectorProps {
   isLoading: boolean;
   profiles?: AgentProfilePicker | null;
   onApplyProfile?: (profileId: string) => void;
+  modelPresets?: ModelPresetControls;
   onEditProfiles?: () => void;
   onCreateProfile?: (seed: AgentProfileSeed) => void;
   onEditProfile?: (profileId: string) => void;
@@ -73,6 +75,7 @@ export function CombinedModelSelector({
   isLoading,
   profiles = null,
   onApplyProfile,
+  modelPresets,
   onEditProfiles,
   onCreateProfile,
   onEditProfile,
@@ -101,6 +104,7 @@ export function CombinedModelSelector({
     isLoading,
     profiles,
     serverId,
+    cwd: modelPresets?.cwd,
   });
   const { prepareToOpen, reset } = browser;
 
@@ -192,11 +196,22 @@ export function CombinedModelSelector({
     [handleOpenChange, onEditProfile],
   );
 
+  const presetControls = modelPresets
+    ? {
+        cwd: modelPresets.cwd,
+        apply: (provider: string, configuration: ModelPresetConfiguration) => {
+          modelPresets.apply(provider, configuration);
+          handleOpenChange(false);
+        },
+      }
+    : undefined;
+
   const selectorBody = isContentReady ? (
     <ModelBrowser
       state={browser}
       onSelect={handleSelect}
       onApplyProfile={handleApplyProfile}
+      modelPresets={presetControls}
       onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
       onCreateProfile={onCreateProfile ? handleCreateProfile : undefined}
       onEditProfile={onEditProfile ? handleEditProfile : undefined}

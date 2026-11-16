@@ -3,12 +3,14 @@ import { create } from "zustand";
 interface ProviderSettingsTarget {
   serverId: string;
   provider: string;
+  cwd?: string;
   overlayParentLayer?: number;
 }
 
 interface ProviderSettingsStoreState {
   serverId: string | null;
   provider: string | null;
+  cwd: string | undefined;
   overlayParentLayer: number;
   visible: boolean;
   open: (target: ProviderSettingsTarget) => void;
@@ -18,10 +20,11 @@ interface ProviderSettingsStoreState {
 export const useProviderSettingsStore = create<ProviderSettingsStoreState>()((set) => ({
   serverId: null,
   provider: null,
+  cwd: undefined,
   overlayParentLayer: 0,
   visible: false,
-  open: ({ serverId, provider, overlayParentLayer = 0 }) => {
-    set({ serverId, provider, overlayParentLayer, visible: true });
+  open: ({ serverId, provider, cwd, overlayParentLayer = 0 }) => {
+    set({ serverId, provider, cwd, overlayParentLayer, visible: true });
   },
   close: () => {
     set({ visible: false });

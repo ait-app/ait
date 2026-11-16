@@ -9,6 +9,39 @@ import { botStyles as styles } from "./styles";
 const ThemedCheck = withUnistyles(Check);
 const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
+export function BotCheckbox({
+  checked,
+  disabled,
+  label,
+  onPress,
+  testID,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      style={[styles.row, disabled ? styles.disabled : null]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked, disabled }}
+      aria-checked={checked}
+      aria-disabled={disabled}
+      testID={testID}
+    >
+      <View style={[styles.checkbox, checked ? styles.checkboxChecked : null]}>
+        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+      </View>
+      <Text style={styles.text}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function AllowGroupsCheckbox({
   checked,
   disabled,
@@ -20,20 +53,12 @@ export function AllowGroupsCheckbox({
 }) {
   const { t } = useTranslation();
   return (
-    <Pressable
-      style={[styles.row, disabled ? styles.disabled : null]}
-      onPress={onToggle}
+    <BotCheckbox
+      checked={checked}
       disabled={disabled}
-      accessibilityRole="checkbox"
-      accessibilityLabel={t("bots.allowGroups")}
-      accessibilityState={{ checked, disabled }}
-      aria-checked={checked}
+      label={t("bots.allowGroups")}
+      onPress={onToggle}
       testID="bot-channel-allow-groups"
-    >
-      <View style={[styles.checkbox, checked ? styles.checkboxChecked : null]}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
-      </View>
-      <Text style={styles.text}>{t("bots.allowGroups")}</Text>
-    </Pressable>
+    />
   );
 }

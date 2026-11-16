@@ -3,25 +3,25 @@ export interface TerminalGridCellMetrics {
   cellHeight: number;
 }
 
-export interface TerminalGridCellMetricsInput {
+interface TerminalGridCellMetricsInput {
   measuredTextWidth: number;
   measuredTextHeight: number;
   measureTextLength: number;
   roundToNearestPixel: (value: number) => number;
 }
 
-export interface TerminalCursorOffsetInput {
+interface TerminalCursorOffsetInput {
   cursorCol: number;
   cursorRow: number;
   metrics: TerminalGridCellMetrics;
 }
 
-export interface TerminalCursorOffset {
+interface TerminalCursorOffset {
   x: number;
   y: number;
 }
 
-export interface TerminalCustomGlyphCellTransformInput {
+interface TerminalCustomGlyphCellTransformInput {
   cellOffset: number;
   cellWidth: number;
   cellHeight: number;

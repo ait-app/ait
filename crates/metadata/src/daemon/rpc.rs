@@ -15,6 +15,13 @@ use crate::daemon::service::{Daemon, DaemonError};
 use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HostStatsRequest {
+    #[serde(default)]
+    include_history: bool,
+}
+
 /// Response and associated host lifecycle intent.
 pub(crate) struct LifecycleRequest {
     /// Serialized acknowledgement.
@@ -84,6 +91,17 @@ pub(crate) fn execute(
     params: Value,
 ) -> Result<Executed, ErrorCode> {
     match method {
+        "daemon.host_stats.request" => {
+            if !params.is_object() {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            let request: HostStatsRequest = decode(params)?;
+            unchanged(
+                daemon
+                    .host_stats(request.include_history)
+                    .map_err(|_| ErrorCode::DaemonIo)?,
+            )
+        }
         "daemon.config.get.request" => {
             let _: EmptyRequest = decode(params)?;
             unchanged(DaemonConfigResult {

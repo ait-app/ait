@@ -27,7 +27,7 @@ interface TerminalRunBase {
   foregroundColor: string;
 }
 
-export interface TerminalTextRun extends TerminalRunBase {
+interface TerminalTextRun extends TerminalRunBase {
   renderKind: "text";
 }
 

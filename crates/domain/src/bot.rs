@@ -4,14 +4,25 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+use self::notification::Wake;
 use self::permissions::BotPermissions;
 
 use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 
+pub mod notification;
 pub mod permissions;
+pub mod ticket;
 
 /// Reserved label carrying the Bot scope of an Agent or schedule.
 pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
+
+/// Reserved label carrying the Bot conversation that started an Agent; notifications about the
+/// Agent wake the Bot in that conversation.
+pub const BOT_CONVERSATION_LABEL: &str = "ait.bot.conversation";
+
+/// Reserved label carrying the Bot ticket an Agent works on; notifications about the Agent and
+/// its worker reports attach to that ticket.
+pub const BOT_TICKET_LABEL: &str = "ait.bot.ticket";
 
 /// Label namespace no MCP caller or guest may write; `BOT_SCOPE_LABEL` lives in it.
 pub const BOT_LABEL_PREFIX: &str = "ait.bot.";
@@ -58,6 +69,25 @@ pub enum BotState {
     },
 }
 
+/// Which Workspace notifications wake a Bot; the others only enter its notification log.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WakeScope {
+    /// Only notifications about work started inside this Bot's scope.
+    #[default]
+    Own,
+    /// Every notification of the Bot's Workspace.
+    All,
+}
+
+impl WakeScope {
+    /// Whether this is the default scope, which stored records omit.
+    #[must_use]
+    pub fn is_own(&self) -> bool {
+        *self == Self::Own
+    }
+}
+
 /// A Workspace's Bot configuration, independent of any transport or native session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -81,6 +111,9 @@ pub struct Bot {
     /// stay in scope so the Agents already working there keep their access.
     #[serde(default)]
     pub workspaces: BTreeSet<String>,
+    /// Notifications that wake this Bot; omitted when `own` so older daemons still load it.
+    #[serde(default, skip_serializing_if = "WakeScope::is_own")]
+    pub wake_scope: WakeScope,
 }
 
 /// Transport-specific configuration; secret values are never part of this record.
@@ -117,6 +150,18 @@ pub enum ChannelConfig {
         /// Public application identity.
         app_id: String,
         /// Runtime environment reference to the application secret.
+        secret_ref: String,
+        /// Explicit tenant-scoped sender open IDs.
+        allowed_senders: Vec<String>,
+        /// Whether mentioned group messages are accepted.
+        #[serde(default)]
+        allow_groups: bool,
+    },
+    /// Lark international self-built application's persistent WebSocket connection.
+    Lark {
+        /// Public application identity in Lark's international region.
+        app_id: String,
+        /// Runtime reference to the application secret.
         secret_ref: String,
         /// Explicit tenant-scoped sender open IDs.
         allowed_senders: Vec<String>,
@@ -319,6 +364,16 @@ pub struct Turn {
     pub error: Option<String>,
     /// UTC admission timestamp.
     pub created_at: String,
+    /// Notifications that caused this turn; absent for user input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake: Option<Wake>,
+    /// Whether the Bot decided this wake-up needs no message, so nothing was delivered.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub silent: bool,
+    /// Newest notification log sequence when the turn started executing; absent while the
+    /// Bot's log is empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notification_cursor: Option<u64>,
 }
 
 /// Atomically persisted configuration catalog; histories live in separate files.

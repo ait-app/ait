@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { markDeliveredSendError } from "@/composer/submission/model";
+import { markDeliveredSendError } from "@/stores/message-submission-model";
 import { readLiveDraftText, runImmediateClientSlashCommand, submitAgentInput } from "./submit";
 
 function createDeferredPromise<T>() {

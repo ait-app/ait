@@ -15,19 +15,19 @@ import { resolveNativeTerminalKey, type NativeTerminalKey } from "./terminal-key
 export const TERMINAL_INPUT_CONTEXT_MENU_HIDDEN = true;
 export const TERMINAL_INPUT_HITBOX_SIZE = 1;
 
-export interface TerminalTextInputChange {
+interface TerminalTextInputChange {
   data: string;
   key?: NativeTerminalKey;
   shouldClear: boolean;
 }
 
-export interface TerminalTextInputState {
+interface TerminalTextInputState {
   receiveKeyPress: (key: string) => TerminalTextInputChange;
   receiveTextChange: (text: string) => TerminalTextInputChange;
   reset: () => void;
 }
 
-export type TerminalInputFocusRequest = "focus" | "refocus" | "none";
+type TerminalInputFocusRequest = "focus" | "refocus" | "none";
 
 export interface TerminalInputHandle {
   focus: () => void;

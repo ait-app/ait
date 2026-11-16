@@ -24,8 +24,8 @@ import { createPreviewAttachmentId, parseImageDataUrl } from "@/attachments/util
 import {
   getAssistantImageMetadata,
   setAssistantImageMetadata,
-} from "@/utils/assistant-image-metadata";
-import { resolveAssistantImageSource } from "@/utils/assistant-image-source";
+} from "@/assistant-image/assistant-image-metadata";
+import { resolveAssistantImageSource } from "@/assistant-image/assistant-image-source";
 import { createAssistantImageAcquisitionCache } from "./acquisition-cache";
 import {
   createAssistantImageFileAcquisition,

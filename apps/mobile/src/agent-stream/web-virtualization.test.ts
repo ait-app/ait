@@ -4,7 +4,7 @@ import type { StreamItem } from "@/types/stream";
 import {
   clearAssistantImageMetadataCache,
   setAssistantImageMetadata,
-} from "@/utils/assistant-image-metadata";
+} from "@/assistant-image/assistant-image-metadata";
 import {
   DEFAULT_WEB_MOUNTED_RECENT_STREAM_ITEMS,
   DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD,

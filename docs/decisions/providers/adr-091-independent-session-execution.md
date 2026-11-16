@@ -6,7 +6,7 @@ amends:
   - providers/adr-032-daemon-native-provider-execution.md
   - providers/adr-088-provider-catalog-startup-isolation.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-091：会话独立执行与 Provider 后台发现

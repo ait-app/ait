@@ -22,11 +22,11 @@ export interface LoadOlderAgentHistoryClient {
   ) => Promise<unknown>;
 }
 
-export interface LoadOlderAgentHistoryLogger {
+interface LoadOlderAgentHistoryLogger {
   warn: (...args: unknown[]) => void;
 }
 
-export interface LoadOlderAgentHistoryDeps {
+interface LoadOlderAgentHistoryDeps {
   client: LoadOlderAgentHistoryClient | null;
   cursor: AgentTimelineCursorState | undefined;
   hasOlder: boolean;

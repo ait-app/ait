@@ -2,32 +2,54 @@
 
 本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
 各能力当前生效的约束及其 ADR 见现行规格：[Provider](provider.md)、[Workspace](workspace.md)、
-[Bot](bot.md)、[连接与传输](connection.md)。ADR 被接受后，结论并入对应规格。
+[Bot](bot.md)、[连接与传输](connection.md)，以及 [Oh My Pi](omp.md)。ADR 被接受后，结论并入对应规格。
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
+客户端 Workspace 记事本由 `apps/mobile` 提供，内容使用 Workspace 文件系统中的 `.ait-notebook.md`，通过现有文件协议共享，不新增 daemon 能力。
+
 ## Rust 能力边界
 
-| Crate         | 职责                                          | 生产代码的内部依赖                                   |
-| ------------- | --------------------------------------------- | ---------------------------------------------------- |
-| `domain`      | 业务值、记录、不变量与纯投影                  | 无                                                   |
-| `model`       | 协作端口、协议、请求资源与共享协调            | `domain`                                             |
-| `persistence` | 原子文件、Registry、具体文件持久化适配器      | `model`、`domain`                                    |
-| `metadata`    | 基础连接、Project/Workspace、配置与生命周期   | `domain`、`model`                                    |
-| `filesystem`  | 文件、Git、Forge、worktree/clone 本地适配器   | `domain`、`model`                                    |
-| `provider`    | 原生 Agent、执行、历史、摘要、技能与 MCP 注入 | `domain`、`model`                                    |
-| `terminal`    | PTY、快照、活动与订阅                         | `domain`、`model`                                    |
-| `voice`       | 语音、听写、离线推理与媒体连接                | `model`                                              |
-| `bot`         | Workspace Bot、Channel、隐藏会话与消息协调    | `domain`、`model`、`provider`                        |
-| `schedule`    | 定时任务服务与协议                            | `domain`、`model`                                    |
-| `browser`     | 浏览器自动化与 TCP 隧道                       | `model`                                              |
-| `relay`       | Hub serve、下载 Relay、控制与传输             | `model`                                              |
-| `host-link`   | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
-| `api`         | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
-| `daemon`      | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
+| Crate                       | 职责                                            | 生产代码的内部依赖                                                                                                                                                           |
+| --------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `domain`                    | 业务值、记录、不变量与纯投影                    | 无                                                                                                                                                                           |
+| `model`                     | 协作端口、协议、请求资源与共享协调              | `domain`                                                                                                                                                                     |
+| `persistence`               | 原子文件、Registry、具体文件持久化适配器        | `model`、`domain`                                                                                                                                                            |
+| `metadata`                  | 基础连接、Project/Workspace、配置与生命周期     | `domain`、`model`                                                                                                                                                            |
+| `filesystem`                | 文件、Git、Forge、worktree/clone 本地适配器     | `domain`、`model`                                                                                                                                                            |
+| `provider-core`             | 适配器实现、运行时驱动的 Provider 端口与协议值  | `domain`、`model`                                                                                                                                                            |
+| `provider-native`           | 原生适配器共享的进程、沙箱、ACP 与媒体工具      | `provider-core`、`domain`                                                                                                                                                    |
+| `provider`                  | Agent 运行时、执行、历史、摘要、技能与 MCP 注入 | `provider-core`、`domain`、`model`                                                                                                                                           |
+| `provider-antigravity`      | Antigravity 官方 AGY CLI 适配器                 | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-claude`           | Claude Code 原生 CLI 适配器                     | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-codex`            | Codex app-server 原生适配器                     | `provider-core`、`provider-native`、`domain`、`model`                                                                                                                        |
+| `provider-deepseek-harness` | DeepSeek Harness 原生 Web Host 与 ACP 适配器    | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-minimax`          | MiniMax Code 官方 ACP 适配器                    | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-omp`              | Oh My Pi 原生 RPC 适配器                        | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-opencode`         | OpenCode 官方 ACP 适配器                        | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-pi`               | Pi 原生 JSONL RPC 适配器                        | `provider-core`、`provider-native`、`domain`                                                                                                                                 |
+| `provider-builtin`          | 内置 adapter 列表、可执行文件默认值与覆盖变量   | `provider`、`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` |
+| `terminal`                  | PTY、快照、活动与订阅                           | `domain`、`model`                                                                                                                                                            |
+| `voice`                     | 语音、听写、离线推理与媒体连接                  | `model`                                                                                                                                                                      |
+| `bot`                       | Workspace Bot、Channel、隐藏会话与消息协调      | `domain`、`model`、`provider`、`provider-core`                                                                                                                               |
+| `schedule`                  | 定时任务服务与协议                              | `domain`、`model`                                                                                                                                                            |
+| `browser`                   | 浏览器自动化与 TCP 隧道                         | `model`                                                                                                                                                                      |
+| `relay`                     | Hub serve、下载 Relay、控制与传输               | `model`                                                                                                                                                                      |
+| `host-link`                 | 机器授权、节点租约与发布协调                    | 无，通过 ports 调用适配器                                                                                                                                                    |
+| `api`                       | HTTP/WebSocket、鉴权、分发与跨能力协调          | `domain`、`model`、`host-link` 及上述功能 crate；`provider-builtin` 仅测试使用                                                                                               |
+| `daemon`                    | CLI/配置、进程锁、身份、服务组装与停机          | `api`、`domain`、`model`、`persistence`、`provider-builtin` 及功能 crate                                                                                                     |
 
 适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
 相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
+`provider-core` 只依赖 `domain` 与 `model`，`provider`、`provider-native`、`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `bot` 直接从它导入端口与协议值，
+不经 `provider` 转发（[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+这 12 个 `provider*` crate 的目录都在 `crates/provider/` 下，包名等于 `crates/` 之下的路径以连字符连接
+（`crates/provider/codex` 即 `provider-codex`），唯一的例外是运行时 `provider`，目录为 `crates/provider/runtime`；其余 crate 的目录与包名一致（[ADR-273](../decisions/providers/adr-273-provider-crate-directory.md)）。
+`provider-native` 只依赖 `provider-core` 与 `domain`，只供原生 adapter 共享，`provider` 不依赖它。
+`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider` 之间没有生产依赖；`provider-builtin` 是唯一注册内置 adapter 的 crate，
+daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。运行时仍有两份按 provider id 键控的部分副本需与它手工保持一致：
+`crates/provider/runtime/src/diagnostics.rs` 的诊断来源表（adapter 的覆盖变量与默认程序）和 `crates/provider/runtime/src/service/provider_catalog.rs` 的 Catalog 特例。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
+`provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。非 dev 边启用会被依赖守卫拒绝。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
 
@@ -43,10 +65,13 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
   连接 envelope、协议版本、错误码和预算归 `model::server`，方法元数据归 `model::methods`。
 - `persistence` 实现 Registry、配置、创建回执、push token、Agent runtime、Bot 和 schedule 的文件存储。
   功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
+- Provider 模型预设由 `provider-core` 定义端口、`provider` 协调：OMP 的原生库由 adapter 管理，
+  其余 Provider 的 Ait 预设存于 daemon 配置。设置页与模型卡片读取同一查询；应用时一次替换模型、
+  思考等级和整套角色分配（[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
 - `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
   本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
 - `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；沙箱 Workspace 的写入
-  confinement 由 agent manager 解析，`provider::local::sandbox` 负责生成平台命令（Linux bubblewrap 见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)，macOS Seatbelt 见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
+  confinement 由 agent manager 解析，`provider_native::sandbox` 负责生成平台命令（Linux bubblewrap 见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)，macOS Seatbelt 见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
   原生 Provider 的认证、工具和会话仍由各原生程序持有，不能合并为一个通用数据库入口。
 
 依赖与数据归属见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
@@ -57,8 +82,10 @@ metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protoco
 
 ## Provider 与工作区生命周期
 
-`provider::Providers` 组装 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、
-Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
+`provider_builtin::providers` 组装内置 adapter：从空容器 `provider::Providers::empty` 开始，
+通过 `Providers::with` 依次追加 `provider-codex` 的 Codex、`provider-antigravity` 的 Antigravity、
+`provider-claude` 的 Claude Code、`provider-deepseek-harness` 的 DeepSeek Harness、`provider-minimax` 的 MiniMax Code、`provider-omp` 的 Oh My Pi、`provider-opencode` 的 OpenCode 与 `provider-pi` 的 Pi；daemon 只调用这一入口（[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
+[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
 每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
 使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、
@@ -74,8 +101,15 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
-Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
-[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
+
+BTW 侧会话的共享端口和 DTO 归 `provider-core`，辅助执行归 adapter，冻结显示上下文、
+持久话题、收据与恢复归 `provider`。客户端浮窗调用同一协议，展开时将话题交给新会话草稿，
+不复用或切换原主 writer，见 [ADR-278](../decisions/providers/adr-278-shared-btw-sessions.md)。
+Provider 运行时行为测试归 `crates/provider/runtime`（执行与管理器测试驱动 `provider-codex` 的 Codex 假程序），共享工具的归 `crates/provider/native`，Antigravity 的归 `crates/provider/antigravity`，Claude Code 的归 `crates/provider/claude`，Codex 的归 `crates/provider/codex`，DeepSeek Harness 的归 `crates/provider/deepseek-harness`，MiniMax Code 的归 `crates/provider/minimax`，OMP 的归 `crates/provider/omp`，OpenCode 的归 `crates/provider/opencode`，Pi 的归 `crates/provider/pi`，
+需要多个真实 adapter 的装配测试归 `crates/provider/builtin`；daemon 测试覆盖宿主、
+传输和跨能力组合，见 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
+[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
+[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)。
 
 Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
@@ -87,8 +121,14 @@ Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
+飞书与国际版 Lark 共用消息传输实现，凭据验证、API、WebSocket 端点和账号独占按区域隔离，见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 中心托管的 Webhook Channel 使用现有 serve 链路和受限服务会话，daemon 只保存端点；见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
+Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。
+daemon 把 Agent／终端 attention（未经焦点过滤的提交后广播）与定时任务运行结果转成通知，来源对话由 `ait.bot.conversation` 标签与 `botConversation` 字段记录，
+见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)。
+Bot 交办的工作是工单（Ticket）：作用域 `create_agent` 打开或指派工单并写入 `ait.bot.ticket` 标签，Agent 经 `report_progress` 汇报，
+关于工单 Agent 的通知追加系统汇报；工单只由 Bot 或用户关闭，存储在每个工单一个文件中，见 [ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)。
 
 ## 主机、连接与客户端
 
@@ -133,6 +173,13 @@ macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Deskto
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 
+Provider 模型目录在客户端共享一份按 Host+目录键控的快照缓存：选择器、Profile 编辑、定时任务与
+设置入口打开时经同一单飞刷新触发原生重新发现，正在发现的不追加刷新；失败保留最近可用候选并可见
+重试，未知持久模型/mode/thinking 值保持原样。连接更换、同 client 的 epoch/generation 变化和
+cwd 切换中止旧刷新；generation/revision 单调保护不变。公开 SDK/daemon 接口未变，但打开入口、
+共享刷新和组件回调的内部契约有变化，明确迁移说明见
+[ADR-275](../decisions/providers/adr-275-shared-model-catalog-refresh.md)。
+
 群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
 node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
 创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，
@@ -148,3 +195,6 @@ node 分享允许更广的节点操作，分享和账号授权保留给所有者
 源码与产物使用 daemon 名称；`server.*`、`server_info`、`/v1/server/info`、`AIT_SERVER_*` 与已有数据目录
 保留协议兼容拼写。旧 CLI、独立 worker 和旧 Project SQLite 架构已退役，不属于当前 workspace。
 历史边界应按 ADR 的修订关系阅读；早期移植和已完成方案见[归档](../archive/README.md)。
+
+主机资源监控归 `metadata::daemon`，按需采样并由共享客户端侧栏展示；缓存、历史和停刷规则见
+[连接规格](connection.md#主机资源监控)与 [ADR-247](../decisions/daemon/adr-247-host-resource-monitor.md)。

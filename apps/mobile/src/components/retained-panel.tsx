@@ -1,11 +1,9 @@
-import React, { createContext, memo, type ReactNode, useContext } from "react";
+import React, { memo, type ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-
-const RetainedPanelActiveContext = createContext(true);
-
-export function useRetainedPanelActive(): boolean {
-  return useContext(RetainedPanelActiveContext);
-}
+import {
+  RetainedPanelActiveContext,
+  useRetainedPanelActive,
+} from "@/hooks/use-retained-panel-active";
 
 interface RetainedPanelProps {
   active: boolean;

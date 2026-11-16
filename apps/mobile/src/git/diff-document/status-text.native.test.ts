@@ -1,8 +1,7 @@
 import type { ParsedDiffFile } from "@ait/protocol/messages";
-import { Skia } from "@shopify/react-native-skia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildDiffDocumentModel } from "./model";
-import { createNativePaints, paintNativeViewport } from "./paint.native";
+import { createNativePaints, recordNativeSlabPictures } from "./paint.native";
 import {
   createNativeTextLayoutStore,
   disposeNativeTextLayout,
@@ -41,7 +40,10 @@ vi.mock("@shopify/react-native-skia", () => ({
     Color: (color: string) => color,
     Paint: () => ({ setColor: vi.fn() }),
     XYWHRect: (x: number, y: number, width: number, height: number) => ({ x, y, width, height }),
-    Surface: { MakeOffscreen: () => ({ getCanvas: () => graphics.canvas }) },
+    PictureRecorder: () => ({
+      beginRecording: () => graphics.canvas,
+      finishRecordingAsPicture: () => ({}),
+    }),
     ParagraphBuilder: {
       Make: () => {
         let text = "";
@@ -136,15 +138,12 @@ describe("native diff status text", () => {
     const document = model([file("image.png", status)], label, label);
     const textStore = store();
     const textLayout = prepareNativeTextLayout(textStore, document);
-    const surface = Skia.Surface.MakeOffscreen(400, 400);
-    if (!surface) throw new Error("Missing test surface");
-    paintNativeViewport({
-      canvas: surface.getCanvas(),
+    recordNativeSlabPictures({
       model: document,
+      fileIndex: 0,
+      top: 0,
+      height: 400,
       viewportWidth: 400,
-      viewportHeight: 400,
-      scrollTop: 0,
-      horizontalOffsets: {},
       textLayout,
       paints: createNativePaints(palette),
     });

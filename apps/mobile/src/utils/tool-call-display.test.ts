@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildToolCallDisplayModel } from "./tool-call-display";
+import { buildToolCallDisplayModel } from "@ait/protocol/tool-call-display";
 
 describe("tool-call-display", () => {
   it("builds display model from canonical shell detail", () => {

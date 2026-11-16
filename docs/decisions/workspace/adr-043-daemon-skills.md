@@ -3,7 +3,7 @@ id: ADR-043
 status: accepted
 date: 2026-09-25
 paths:
-  - crates/provider
+  - crates/provider/runtime
 ---
 
 # ADR-043：独立 server 的 Skills 选择与文件安装

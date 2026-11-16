@@ -19,16 +19,7 @@ import {
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 export {
-  buildSidebarProjectsFromHostProjects,
-  buildSidebarProjectsFromStructure,
-  createSidebarWorkspaceEntry,
-  buildSidebarWorkspacePlacementModel,
-  deriveProjectStatusBucket,
-  deriveSidebarLoadingState,
-  type SidebarLoadingState,
-  type SidebarStatusWorkspacePlacement,
   type SidebarWorkspacePlacement,
-  type SidebarWorkspacePlacementModel,
   type SidebarProjectEntry,
   type SidebarStateBucket,
   type SidebarWorkspaceEntry,

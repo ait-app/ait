@@ -156,12 +156,6 @@ export function parseWorkspaceOpenIntent(
   return null;
 }
 
-export function parseHostWorkspaceOpenIntentFromPathname(
-  pathname: string,
-): WorkspaceOpenIntent | null {
-  return parseWorkspaceOpenIntent(getHostWorkspaceOpenParamFromPathname(pathname));
-}
-
 export function getHostWorkspaceOpenParamFromPathname(pathname: string): string | null {
   const search = extractSearch(pathname);
   if (!search) {
@@ -246,29 +240,6 @@ export function parseServerIdFromPathname(pathname: string): string | null {
     return null;
   }
   return trimNonEmpty(safeDecodeURIComponent(raw));
-}
-
-export function parseHostAgentRouteFromPathname(
-  pathname: string,
-): { serverId: string; agentId: string } | null {
-  const pathOnly = stripSearchAndHash(pathname);
-  const match = pathOnly.match(/^\/h\/([^/]+)\/agent\/([^/]+)(?:\/|$)/);
-  if (!match) {
-    return null;
-  }
-
-  const [, encodedServerId, encodedAgentId] = match;
-  if (!encodedServerId || !encodedAgentId) {
-    return null;
-  }
-
-  const serverId = trimNonEmpty(safeDecodeURIComponent(encodedServerId));
-  const agentId = trimNonEmpty(safeDecodeURIComponent(encodedAgentId));
-  if (!serverId || !agentId) {
-    return null;
-  }
-
-  return { serverId, agentId };
 }
 
 export function parseHostWorkspaceRouteFromPathname(
@@ -441,27 +412,7 @@ export function buildNewWorkspaceRoute(options: NewWorkspaceRouteOptions = {}) {
   return `/new?${query}` as const;
 }
 
-export type KnownHostRouteResolution =
-  | { kind: "render" }
-  | { kind: "redirect"; href: ReturnType<typeof buildOpenProjectRoute> | "/welcome" };
-
-export function resolveKnownHostRoute(input: {
-  routeServerId: string | null | undefined;
-  hosts: readonly { serverId: string }[];
-}): KnownHostRouteResolution {
-  const routeServerId = trimNonEmpty(input.routeServerId);
-  if (routeServerId && input.hosts.some((host) => host.serverId === routeServerId)) {
-    return { kind: "render" };
-  }
-
-  if (input.hosts.length > 0) {
-    return { kind: "redirect", href: buildOpenProjectRoute() };
-  }
-
-  return { kind: "redirect", href: "/welcome" };
-}
-
-export const SETTINGS_SECTION_SLUGS = [
+const SETTINGS_SECTION_SLUGS = [
   "general",
   "online-service",
   "appearance",
@@ -480,7 +431,7 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
   return (SETTINGS_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
-export const HOST_SECTION_SLUGS = [
+const HOST_SECTION_SLUGS = [
   "projects",
   "connections",
   "agents",
@@ -499,7 +450,7 @@ const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
   daemon: "host",
 };
 
-export function isHostSectionSlug(value: string): value is HostSectionSlug {
+function isHostSectionSlug(value: string): value is HostSectionSlug {
   return (HOST_SECTION_SLUGS as readonly string[]).includes(value);
 }
 

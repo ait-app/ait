@@ -12,7 +12,7 @@ interface CheckoutStatusForOpenTarget {
   currentBranch?: string | null;
 }
 
-export interface PlannedDesktopOpenTarget {
+interface PlannedDesktopOpenTarget {
   source: "desktop";
   id: string;
   label: string;
@@ -21,7 +21,7 @@ export interface PlannedDesktopOpenTarget {
   openInput: OpenDesktopTargetInput;
 }
 
-export interface PlannedForgeOpenTarget {
+interface PlannedForgeOpenTarget {
   source: "forge";
   forge: Forge;
   id: Forge;
@@ -29,9 +29,9 @@ export interface PlannedForgeOpenTarget {
   url: string;
 }
 
-export type PlannedWorkspaceOpenTarget = PlannedDesktopOpenTarget | PlannedForgeOpenTarget;
+type PlannedWorkspaceOpenTarget = PlannedDesktopOpenTarget | PlannedForgeOpenTarget;
 
-export interface PlanWorkspaceOpenTargetsInput {
+interface PlanWorkspaceOpenTargetsInput {
   workspaceDirectory: string;
   directoryPath?: string | null;
   activeFile?: WorkspaceFileLocation | null;
@@ -73,45 +73,33 @@ function planDesktopOpenTargets(input: {
     return [];
   }
 
-  const resolvedDirectory =
-    input.directoryPath === undefined || input.directoryPath === null
-      ? null
-      : resolveWorkspaceFilePaths({
-          path: input.directoryPath,
-          workspaceRoot: input.workspaceDirectory,
-        });
+  let workspacePath = input.workspaceDirectory;
   if (input.directoryPath !== undefined && input.directoryPath !== null) {
+    const resolvedDirectory = resolveWorkspaceFilePaths({
+      path: input.directoryPath,
+      workspaceRoot: input.workspaceDirectory,
+    });
     if (!resolvedDirectory?.relativePath) {
       return [];
     }
+    workspacePath = resolvedDirectory.absolutePath;
   }
-  const workspacePath = resolvedDirectory?.absolutePath ?? input.workspaceDirectory;
 
-  return input.desktopTargets.map((target) => {
-    if (!input.resolvedFile) {
-      return {
-        source: "desktop",
-        id: target.id,
-        label: target.label,
-        editorId: target.id,
-        icon: target.icon,
-        openInput: { editorId: target.id, workspacePath },
-      };
-    }
-    return {
-      source: "desktop",
-      id: target.id,
-      label: target.label,
-      editorId: target.id,
-      icon: target.icon,
-      openInput: {
-        editorId: target.id,
-        workspacePath,
-        filePath: input.resolvedFile.absolutePath,
-        ...(input.activeFile?.lineStart ? { line: input.activeFile.lineStart } : {}),
-      },
-    };
-  });
+  return input.desktopTargets.map((target) => ({
+    source: "desktop",
+    id: target.id,
+    label: target.label,
+    editorId: target.id,
+    icon: target.icon,
+    openInput: input.resolvedFile
+      ? {
+          editorId: target.id,
+          workspacePath,
+          filePath: input.resolvedFile.absolutePath,
+          ...(input.activeFile?.lineStart ? { line: input.activeFile.lineStart } : {}),
+        }
+      : { editorId: target.id, workspacePath },
+  }));
 }
 
 function buildForgeWebUrl(

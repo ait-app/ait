@@ -9,6 +9,10 @@ export interface MethodSpec {
   response: string | null;
 }
 
+// Channel onboarding waits on an external platform. Rust runs it on the same lane as file work, and
+// moving it keeps the background channel within the 64 capabilities Rust accepts per connection.
+const EXTERNAL_PLATFORM_BOT_METHOD = /^bot\.channel\.(feishu|lark|telegram|weixin|qq|imessage)\./;
+
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
   ...RELAY_METHODS,
   "publication.status.request": {
@@ -59,7 +63,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
       {
         method,
         kind: "request" as const,
-        channel: 3,
+        channel: EXTERNAL_PLATFORM_BOT_METHOD.test(method) ? 2 : 3,
         response: method.replace(/\.request$/, ".response"),
       },
     ]),
@@ -69,6 +73,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 1,
     response: "workspace.get.response",
+  },
+  "daemon.host_stats.request": {
+    method: "daemon.host_stats.request",
+    kind: "request",
+    channel: 3,
+    response: "daemon.host_stats.response",
   },
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
@@ -358,10 +368,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.get.response",
   },
+  // Statistics reads use the background channel to keep split connections within 64 methods.
   "agent.statistics.get.request": {
     method: "agent.statistics.get.request",
     kind: "request",
-    channel: 0,
+    channel: 3,
     response: "agent.statistics.get.response",
   },
   "agent.history.get.request": {
@@ -598,11 +609,41 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.diagnostic.response",
   },
+  "provider.presets.describe.request": {
+    method: "provider.presets.describe.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.describe.response",
+  },
+  "provider.presets.list.request": {
+    method: "provider.presets.list.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.list.response",
+  },
+  "provider.presets.save.request": {
+    method: "provider.presets.save.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.save.response",
+  },
+  "provider.presets.delete.request": {
+    method: "provider.presets.delete.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.delete.response",
+  },
   "provider.usage.list.request": {
     method: "provider.usage.list.request",
     kind: "request",
     channel: 0,
     response: "provider.usage.list.response",
+  },
+  "provider.usage.ledger.request": {
+    method: "provider.usage.ledger.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.usage.ledger.response",
   },
   "provider.sessions.recent.list.request": {
     method: "provider.sessions.recent.list.request",
@@ -945,6 +986,32 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 1,
     response: "terminal.capture.response",
+  },
+  // Keep split-connection hellos within the daemon capability budget.
+  // BTW uses the background socket; daemon execution has its own independent side lane.
+  "agent.side_question.ask.request": {
+    method: "agent.side_question.ask.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.ask.response",
+  },
+  "agent.side_question.cancel.request": {
+    method: "agent.side_question.cancel.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.cancel.response",
+  },
+  "agent.side_question.history.request": {
+    method: "agent.side_question.history.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.history.response",
+  },
+  "agent.side_question.transfer.request": {
+    method: "agent.side_question.transfer.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.side_question.transfer.response",
   },
   "schedule.create.request": {
     method: "schedule.create.request",

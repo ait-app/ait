@@ -5,6 +5,7 @@ import {
   Modal,
   RefreshControl,
   FlatList,
+  type LayoutChangeEvent,
   type ListRenderItem,
   type PressableStateCallbackType,
 } from "react-native";
@@ -19,21 +20,18 @@ import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useSessionStore } from "@/stores/session-store";
 import { Archive, ChevronRight } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
+import { SPACING } from "@/styles/theme";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
-  showCheckoutInfo?: boolean;
   isRefreshing?: boolean;
   onRefresh?: () => void;
-  selectedAgentId?: string;
-  onAgentSelect?: () => void;
   listFooterComponent?: ReactElement | null;
-  showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
   search?: string;
 }
@@ -49,6 +47,25 @@ const DATE_SECTION_ORDER = [
 ] as const satisfies readonly DateSectionKey[];
 
 const HISTORY_MATCH_OPTIONS = { typoTolerant: true } as const;
+
+const META_COLUMN_WIDTH = 132;
+const TIME_COLUMN_WIDTH = 72;
+const HOST_COLUMN_WIDTH = 120;
+// Workspace name (~120), chevron and provider icon with their gaps (~50), and ~120 of title.
+const WIDE_ROW_TITLE_MIN_WIDTH = 290;
+
+/**
+ * The narrowest list that still leaves the wide row a readable title. Its trailing columns never
+ * shrink: project, branch and time with two gaps take 360, the host column adds 148 (width,
+ * margin and gap). The list and row padding add 72, so the list needs 722 without hosts and 870
+ * with them. Narrower lists, such as a split pane on a tablet, use the stacked row instead.
+ */
+function minWideRowListWidth(showHostColumn: boolean): number {
+  const columns = 2 * META_COLUMN_WIDTH + TIME_COLUMN_WIDTH + 2 * SPACING[3];
+  const hostColumn = showHostColumn ? HOST_COLUMN_WIDTH + SPACING[4] + SPACING[3] : 0;
+  const padding = 2 * SPACING[6] + 2 * SPACING[3];
+  return padding + columns + hostColumn + WIDE_ROW_TITLE_MIN_WIDTH;
+}
 
 type FlatListItem =
   | { type: "header"; key: string; section: DateSectionKey }
@@ -116,12 +133,10 @@ function SessionRowBadges({
   agent,
   archivedIcon,
   pendingPermissionCount,
-  showDesktopAttention,
 }: {
   agent: AggregatedAgent;
   archivedIcon: ReactElement;
   pendingPermissionCount: number;
-  showDesktopAttention: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -135,30 +150,7 @@ function SessionRowBadges({
           tone="warning"
         />
       ) : null}
-      {showDesktopAttention ? (
-        <SessionBadge label={t("agentList.badges.attention")} tone="danger" />
-      ) : null}
     </>
-  );
-}
-
-function SessionRowTrailingAttention({
-  isMobile,
-  showAttentionIndicator,
-  requiresAttention,
-}: {
-  isMobile: boolean;
-  showAttentionIndicator: boolean;
-  requiresAttention: boolean | undefined;
-}) {
-  const { t } = useTranslation();
-  if (!isMobile || !showAttentionIndicator || !requiresAttention) {
-    return null;
-  }
-  return (
-    <View style={styles.rowTrailing}>
-      <SessionBadge label={t("agentList.badges.attention")} tone="danger" />
-    </View>
   );
 }
 
@@ -166,8 +158,6 @@ function SessionRow({
   agent,
   search,
   isMobile,
-  selectedAgentId,
-  showAttentionIndicator,
   showHostColumn,
   onPress,
   onLongPress,
@@ -175,8 +165,6 @@ function SessionRow({
   agent: AggregatedAgent;
   search?: string;
   isMobile: boolean;
-  selectedAgentId?: string;
-  showAttentionIndicator: boolean;
   showHostColumn: boolean;
   onPress: (agent: AggregatedAgent) => void;
   onLongPress: (agent: AggregatedAgent) => void;
@@ -184,8 +172,6 @@ function SessionRow({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const timeAgo = formatTimeAgo(agent.lastActivityAt);
-  const agentKey = `${agent.serverId}:${agent.id}`;
-  const isSelected = selectedAgentId === agentKey;
   const projectName = agent.projectPlacement?.projectName ?? "";
   const branch = agent.projectPlacement?.checkout.currentBranch ?? "";
   const workspaceName = agent.projectPlacement?.workspaceName ?? "";
@@ -202,16 +188,6 @@ function SessionRow({
     [search, workspaceName, agent.title, branch, projectName],
   );
 
-  const pressableStyle = useCallback(
-    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.row,
-      isSelected && styles.rowSelected,
-      Boolean(hovered) && styles.rowHovered,
-      pressed && styles.rowPressed,
-    ],
-    [isSelected],
-  );
-
   const handlePress = useCallback(() => onPress(agent), [onPress, agent]);
   const handleLongPress = useCallback(() => onLongPress(agent), [onLongPress, agent]);
 
@@ -219,8 +195,11 @@ function SessionRow({
     () => <Archive size={theme.fontSize.sm} color={theme.colors.foregroundMuted} />,
     [theme.fontSize.sm, theme.colors.foregroundMuted],
   );
-  const showDesktopAttention =
-    !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
+  // A narrow list on a wide window stacks its rows while the breakpoint styles stay wide.
+  const workspaceTitleStyle = useMemo(
+    () => [styles.workspaceTitleText, isMobile && styles.workspaceTitleTextStacked],
+    [isMobile],
+  );
 
   const agentTitle = (
     <View style={styles.agentTitleRow}>
@@ -239,7 +218,7 @@ function SessionRow({
 
   return (
     <Pressable
-      style={pressableStyle}
+      style={rowPressableStyle}
       onPress={handlePress}
       onLongPress={handleLongPress}
       accessibilityRole="button"
@@ -250,7 +229,7 @@ function SessionRow({
           <HighlightedText
             text={workspaceName || projectName}
             ranges={workspaceName ? ranges.workspace : ranges.project}
-            style={styles.workspaceTitleText}
+            style={workspaceTitleStyle}
             numberOfLines={1}
             testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
           />
@@ -264,7 +243,6 @@ function SessionRow({
             agent={agent}
             archivedIcon={archivedIcon}
             pendingPermissionCount={pendingPermissionCount}
-            showDesktopAttention={showDesktopAttention}
           />
         </View>
         {isMobile ? agentTitle : null}
@@ -324,23 +302,22 @@ function SessionRow({
           </Text>
         </View>
       ) : null}
-      <SessionRowTrailingAttention
-        isMobile={isMobile}
-        showAttentionIndicator={showAttentionIndicator}
-        requiresAttention={agent.requiresAttention}
-      />
     </Pressable>
   );
+}
+
+function rowPressableStyle({
+  pressed,
+  hovered = false,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.row, Boolean(hovered) && styles.rowHovered, pressed && styles.rowPressed];
 }
 
 export function AgentList({
   agents,
   isRefreshing = false,
   onRefresh,
-  selectedAgentId,
-  onAgentSelect,
   listFooterComponent,
-  showAttentionIndicator = true,
   showHostColumn = false,
   search,
 }: AgentListProps) {
@@ -348,7 +325,12 @@ export function AgentList({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
-  const isMobile = useIsCompactFormFactor();
+  const [listWidth, setListWidth] = useState<number | null>(null);
+  const isCompactFormFactor = useIsCompactFormFactor();
+  // The list can be much narrower than the window, so the row layout follows the list's own
+  // width. The form factor only covers the first frame, before the list has been measured.
+  const isMobile =
+    listWidth === null ? isCompactFormFactor : listWidth < minWideRowListWidth(showHostColumn);
   const { archiveAgent } = useArchiveAgent();
 
   const actionClient = useSessionStore((state) =>
@@ -364,18 +346,14 @@ export function AgentList({
         return;
       }
 
-      const serverId = agent.serverId;
-      const agentId = agent.id;
-
-      onAgentSelect?.();
       navigateToAgent({
-        serverId,
-        agentId,
+        serverId: agent.serverId,
+        agentId: agent.id,
         workspaceId: agent.workspaceId,
         pin: true,
       });
     },
-    [isActionSheetVisible, onAgentSelect],
+    [isActionSheetVisible],
   );
 
   const handleAgentLongPress = useCallback(
@@ -446,27 +424,19 @@ export function AgentList({
           agent={item.agent}
           search={search}
           isMobile={isMobile}
-          selectedAgentId={selectedAgentId}
-          showAttentionIndicator={showAttentionIndicator}
           showHostColumn={showHostColumn}
           onPress={handleAgentPress}
           onLongPress={handleAgentLongPress}
         />
       );
     },
-    [
-      handleAgentLongPress,
-      handleAgentPress,
-      isMobile,
-      search,
-      selectedAgentId,
-      showAttentionIndicator,
-      showHostColumn,
-      t,
-    ],
+    [handleAgentLongPress, handleAgentPress, isMobile, search, showHostColumn, t],
   );
 
   const keyExtractor = useCallback((item: FlatListItem) => item.key, []);
+  const handleListLayout = useCallback((event: LayoutChangeEvent) => {
+    setListWidth(event.nativeEvent.layout.width);
+  }, []);
 
   const refreshColors = useMemo(
     () => [theme.colors.foregroundMuted],
@@ -499,6 +469,7 @@ export function AgentList({
       <FlatList
         data={flatItems}
         style={styles.list}
+        onLayout={handleListLayout}
         contentContainerStyle={styles.listContent}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
@@ -616,18 +587,16 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
+  workspaceTitleTextStacked: {
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
   rowMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[1],
     marginTop: 2,
-  },
-  rowTrailing: {
-    marginLeft: theme.spacing[2],
-  },
-  rowSelected: {
-    backgroundColor: theme.colors.surface2,
   },
   rowHovered: {
     backgroundColor: theme.colors.surface1,
@@ -662,20 +631,20 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 132,
+    width: META_COLUMN_WIDTH,
   },
   columnMetaFixed: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 72,
+    width: TIME_COLUMN_WIDTH,
     textAlign: "right" as const,
   },
   columnMetaHost: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
-    width: 120,
+    width: HOST_COLUMN_WIDTH,
     marginLeft: theme.spacing[4],
     textAlign: "right" as const,
   },

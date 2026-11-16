@@ -9,15 +9,14 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import { useShallow } from "zustand/shallow";
 import { useFetchQuery } from "@/data/query";
+import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import {
   getHostRuntimeStore,
   useHostRuntimeConnectionStatuses,
   useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { useSessionStore, type SessionState } from "@/stores/session-store";
 import { useUsageCopy, usageCopy } from "./copy";
 import {
   replaceReport,
@@ -132,10 +131,6 @@ async function listUsageReports(
   return { reports };
 }
 
-function supportsUsage(session: SessionState | undefined): boolean {
-  return session?.serverInfo?.features?.providerUsageList === true;
-}
-
 async function refreshReports(queryClient: QueryClient, serverId: string): Promise<void> {
   await queryClient.fetchQuery({
     queryKey: usageReportsQueryKey(serverId),
@@ -157,7 +152,7 @@ export function useHostUsage(serverId: string): { view: UsageView; refresh: () =
   const usageCopy = useUsageCopy();
   const queryClient = useQueryClient();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const isSupported = useSessionStore((state) => supportsUsage(state.sessions[serverId]));
+  const isSupported = useHostFeature(serverId, "providerUsageList");
   const query = useFetchQuery({
     queryKey: usageReportsQueryKey(serverId),
     queryFn: () => listReports(queryClient, serverId),
@@ -229,7 +224,7 @@ export function useAgentUsage(serverId: string, agentId: string): AgentUsageView
 /** Whether a host is connected and reports usage, read without fetching anything. */
 export function useHostReportsUsage(serverId: string): boolean {
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const isSupported = useSessionStore((state) => supportsUsage(state.sessions[serverId]));
+  const isSupported = useHostFeature(serverId, "providerUsageList");
   return isConnected && isSupported;
 }
 
@@ -239,18 +234,16 @@ export function useUsageHosts(): UsageHost[] {
   const hosts = useMemo(() => groupHosts(hostProfiles), [hostProfiles]);
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
-  const supportedServerIds = useSessionStore(
-    useShallow((state) => serverIds.filter((serverId) => supportsUsage(state.sessions[serverId]))),
-  );
+  const supported = useHostFeatureMap(serverIds, "providerUsageList");
   return useMemo(
     () =>
       hosts.map((host) => ({
         serverId: host.serverId,
         label: host.label,
         isConnected: connectionStatuses.get(host.serverId) === "online",
-        supportsUsage: supportedServerIds.includes(host.serverId),
+        supportsUsage: supported.get(host.serverId) === true,
       })),
-    [connectionStatuses, hosts, supportedServerIds],
+    [connectionStatuses, hosts, supported],
   );
 }
 

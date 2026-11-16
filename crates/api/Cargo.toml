@@ -40,6 +40,8 @@ workspace = true
 
 [dev-dependencies]
 persistence.workspace = true
+# The built-in adapter set, configured with offline native programs.
+provider-builtin.workspace = true
 # Advance write deadlines deterministically for in-process Hub sessions.
 tokio.workspace = true
 tokio.features = ["test-util"]

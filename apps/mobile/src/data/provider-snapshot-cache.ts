@@ -58,7 +58,11 @@ export interface CachedProviderSnapshot extends StoredProviderSnapshot {
 export interface ProviderSnapshotCache {
   read(serverId: string, cwd: string | null): Promise<CachedProviderSnapshot | null>;
   readHash(serverId: string, hash: string): Promise<CachedProviderSnapshot | null>;
-  materialize(serverId: string, snapshot: SnapshotPayload): Promise<SnapshotPayload>;
+  materialize(
+    serverId: string,
+    snapshot: SnapshotPayload,
+    signal?: AbortSignal,
+  ): Promise<SnapshotPayload>;
   write(input: {
     serverId: string;
     cwd: string | null;
@@ -337,13 +341,14 @@ export function createProviderSnapshotCache(
   }
 
   return {
-    async materialize(serverId, snapshot) {
+    async materialize(serverId, snapshot, signal) {
       const { snapshotHash: hash, compactSnapshot } = snapshot;
       if (!hash) return { ...snapshot, entries: normalizeCatalogs(snapshot.entries) };
       let body = await safely(async () => {
         const cached = await readBody(serverId, hash);
         if (cached) return cached;
         if (!compactSnapshot) throw new ProviderSnapshotCacheMissError();
+        if (signal?.aborted) return null;
         await writeRecord(bodyKey(serverId, hash), {
           version: CACHE_VERSION,
           hash,

@@ -26,7 +26,6 @@ import {
 } from "lucide-react-native";
 import { getIsElectron } from "@/constants/platform";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
-import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { useGitActionRunner, useGitActions } from "@/git/use-actions";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
@@ -210,7 +209,6 @@ export function useWorkspaceCommandCenterActions(): void {
   const { gitActions, isGit } = useGitActions({
     serverId: serverId ?? "",
     cwd: cwd ?? "",
-    icons: GIT_ACTION_ICONS,
   });
   const runGitAction = useGitActionRunner();
   const clipboard = useWorkspaceClipboardActions();

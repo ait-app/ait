@@ -34,8 +34,6 @@ export const BrowserAutomationHostCapabilitySchema = z
   })
   .passthrough();
 
-export type BrowserAutomationHostCapability = z.infer<typeof BrowserAutomationHostCapabilitySchema>;
-
 function isKnownBrowserAutomationCommandName(value: string): value is BrowserAutomationCommandName {
   return KNOWN_BROWSER_AUTOMATION_COMMAND_NAMES.has(value);
 }

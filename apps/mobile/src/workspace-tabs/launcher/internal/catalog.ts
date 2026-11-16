@@ -1,6 +1,7 @@
-export const PRIMARY_LAUNCH_ORDER = [
+const PRIMARY_LAUNCH_ORDER = [
   "agent",
   "bot",
+  "notebook",
   "terminal",
   "changes",
   "diff",
@@ -10,13 +11,14 @@ export const PRIMARY_LAUNCH_ORDER = [
   "schedule",
 ] as const;
 
-export const SUPPORTING_LAUNCH_ORDER = [
+const SUPPORTING_LAUNCH_ORDER = [
   "changes",
   "terminal",
   "diff",
   "files",
   "agent",
   "bot",
+  "notebook",
   "browser",
   "pullRequest",
   "schedule",

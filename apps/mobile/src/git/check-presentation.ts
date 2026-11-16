@@ -21,12 +21,6 @@ export const COUNTED_CHECK_PRESENTATIONS = [
 export type CountedCheckPresentation = (typeof COUNTED_CHECK_PRESENTATIONS)[number];
 export type CheckPresentation = CountedCheckPresentation | "ignored";
 
-export const ATTENTION_CHECK_PRESENTATIONS = [
-  "failure",
-  "warning",
-  "actionRequired",
-] as const satisfies readonly CountedCheckPresentation[];
-
 export type CheckPresentationCounts = Record<CountedCheckPresentation, number>;
 
 export function classifyCheck(check: PresentableCheck): CheckPresentation {

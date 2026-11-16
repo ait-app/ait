@@ -329,3 +329,39 @@ async fn repeated_fetch_failures_keep_runtime_ready_and_foreground_jobs_availabl
     .await;
     harness.stop().await;
 }
+
+#[test]
+fn shared_publisher_suppresses_only_the_last_snapshot_of_each_path() {
+    let events = SessionEvents::default();
+    let connection = events.connect();
+    let updates = Arc::new(Mutex::new(Vec::new()));
+    let captured = updates.clone();
+    let subscription = connection
+        .subscribe(
+            EventsRequest {
+                events: vec!["checkout_status_update".to_owned()],
+                notifications: false,
+            },
+            Arc::new(move |_, payload| {
+                captured.lock().unwrap().push(payload);
+                Ok(())
+            }),
+        )
+        .unwrap();
+    subscription.activate().unwrap();
+    let publisher = StatusPublisher {
+        events,
+        published: Arc::default(),
+    };
+    let dirty = serde_json::json!({"cwd": "feature", "isDirty": true});
+    let clean = serde_json::json!({"cwd": "feature", "isDirty": false});
+    // A fetch read, a turn-end read, then the fetch reading the first state again.
+    publisher.publish("feature".to_owned(), dirty.clone());
+    publisher.publish("feature".to_owned(), clean);
+    publisher.publish("feature".to_owned(), dirty.clone());
+    publisher.publish("feature".to_owned(), dirty.clone());
+    assert_eq!(updates.lock().unwrap().len(), 3);
+    publisher.forget("feature");
+    publisher.publish("feature".to_owned(), dirty);
+    assert_eq!(updates.lock().unwrap().len(), 4);
+}

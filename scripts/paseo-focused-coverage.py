@@ -20,9 +20,13 @@ SCOPES = [
         "service::agent_execution::", "service::agent_manager::", "service::agent_runtime::",
         "service::provider_catalog::", "service::workspace_attention::", "rpc::timeline::",
         "rpc::fork_context::", "rpc::agent_execution::", "rpc::agent_runtime::", "connection::",
-        "local::codex::", "local::claude::", "storage::timeline::", "ports::environment::",
-        "ports::agent_session::", "protocol::tests::",
+        "storage::timeline::", "protocol::tests::",
     ]),
+    # Every test of the adapter crate.
+    ("provider-codex", ["--lib"], []),
+    ("provider-core", ["--lib"], ["ports::environment::", "ports::agent_session::"]),
+    # Every test of the adapter crate.
+    ("provider-claude", ["--lib"], []),
     ("model", ["--lib"], [
         "pagination::", "directory_sync::", "polling::", "runtime::", "events::",
         "workspace::", "storage::", "session::", "creation::", "server::", "methods::",
@@ -49,7 +53,8 @@ SCOPES = [
         "pagination::", "schedule::", "storage::",
     ]),
 ]
-IGNORE = r"/(tests|test_support)(/|\.rs$)"
+# `testing` and Codex `offline` compile only under `cfg(test)` or the `test-support` feature.
+IGNORE = r"/(tests|test_support|testing)(/|\.rs$)|/provider/codex/src/realtime/media/offline\.rs$"
 
 
 def command(crate, target, filters):
@@ -123,6 +128,17 @@ def line_counts(lines):
     return {"covered": sum(count > 0 for count in lines.values()), "total": len(lines)}
 
 
+def owning_crate(path):
+    """Return the package that owns a repository-relative source path."""
+    parts = Path(path).parts
+    if parts[:2] == ("bins", "daemon"):
+        return "daemon"
+    # `crates/provider/<directory>` holds `provider-<directory>`; `runtime` holds `provider`.
+    if parts[:2] == ("crates", "provider"):
+        return "provider" if parts[2] == "runtime" else f"provider-{parts[2]}"
+    return parts[1]
+
+
 def report():
     raw = TEMP / "coverage.lcov"
     lines = parse_lcov(raw)
@@ -130,8 +146,7 @@ def report():
     selected = {crate for crate, _, _ in SCOPES}
     files = []
     for path, execution in sorted(lines.items()):
-        parts = Path(path).parts
-        crate = "daemon" if parts[:2] == ("bins", "daemon") else parts[1]
+        crate = owning_crate(path)
         if crate not in selected or re.search(IGNORE, "/" + path):
             continue
         changed_execution = {line: count for line, count in execution.items()
@@ -206,7 +221,7 @@ def report():
         value = summary[key]
         paragraphs.append(f"| {label} | {value['percent']}% | {value['covered']} / {value['total']} |")
     paragraphs += ["", "不是逐接口语义覆盖率，也不是 workspace 覆盖率。macOS arm64，默认 features。",
-                   "测试文件和 test_support 被排除；不可执行的类型定义、注释及未编译的平台代码不进入 LLVM 行分母。",
+                   "测试文件、test_support 与只由 test-support feature 编译的 testing 和 Codex offline 媒体被排除；不可执行的类型定义、注释及未编译的平台代码不进入 LLVM 行分母。",
                    f"Linux/Windows 和真实认证 Provider 未运行。{sum(result['ignored'] for result in results)} 个既有在线 Provider 测试保持 ignored。", "",
                    "复现：`python3 scripts/paseo-focused-coverage.py --run`。该脚本只运行下面列出的定向测试。",
                    "HTML 位于 `target/llvm-cov/html/index.html`；可评审的文件/行证据为 [coverage.json](coverage.json)。", "",

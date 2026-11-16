@@ -27,8 +27,17 @@ import { SubagentsTrack } from "@/subagents/track";
 import type { Theme } from "@/styles/theme";
 import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
+import {
+  BotConversationSwitch,
+  conversationChannel,
+  fetchBotConversations,
+  useBotConversations,
+} from "./bot-conversations";
+import { BotTicketSheet } from "./bot-ticket-sheet";
+import { BotTicketsTrack, useBotTicketsSupported } from "./bot-tickets";
+import { BotSilentNote, BotWakeHeader, visibleBotMessages } from "./bot-wake";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
 import { closeBotSessionTab } from "./session-tab";
@@ -48,39 +57,80 @@ const RUNNING_TURN: TurnLiveness = {
   cancellationRequestId: null,
 };
 
-/** One exchange: the prompt in a user bubble, then the Bot's reply as an assistant message. */
-function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string; cwd: string }) {
+/**
+ * Opens a Workspace target from the Bot chat beside it, as a session page opens its children.
+ * `pin` keeps a tab whose Agent the Agent directory does not list, such as the Bot's own session.
+ */
+function useOpenFromBot(serverId: string, workspaceId: string) {
+  const { tabId } = usePaneContext();
+  const openInSidePane = useSettings((settings) => settings.openInSidePane);
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  return useCallback(
+    (target: WorkspaceTabTarget, pin = false) => {
+      if (!workspaceKey) return;
+      openPreferredWorkspaceTarget({
+        workspaceKey,
+        target,
+        source: "subagents",
+        preferences: openInSidePane,
+        parentTabId: tabId,
+        ...(pin ? { pin } : {}),
+      });
+    },
+    [openInSidePane, tabId, workspaceKey],
+  );
+}
+
+/**
+ * One exchange: the prompt in a user bubble, or for a wake turn the notifications that started
+ * it, then the Bot's reply as an assistant message.
+ */
+function BotExchange({
+  turn,
+  serverId,
+  workspaceId,
+  cwd,
+  onOpen,
+  onOpenTicket,
+}: {
+  turn: BotTurn;
+  serverId: string;
+  workspaceId: string;
+  cwd: string;
+  onOpen: (target: WorkspaceTabTarget) => void;
+  onOpenTicket?: (ticketId: string) => void;
+}) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const createdAt = useMemo(() => new Date(turn.createdAt), [turn.createdAt]);
-  const messages = useMemo(
-    () =>
-      turn.messages.length > 0
-        ? turn.messages
-        : turn.reply
-          ? [{ id: "legacy", text: turn.reply, status: "completed" as const }]
-          : [],
-    [turn.messages, turn.reply],
-  );
+  const pending = isBotTurnPending(turn);
+  const messages = useMemo(() => visibleBotMessages(turn, pending), [turn, pending]);
   const getReply = useCallback(
     () => messages.map((message) => message.text).join("\n\n"),
     [messages],
   );
-  const pending = isBotTurnPending(turn);
   return (
     <View testID={`bot-turn-${turn.id}`}>
-      <UserMessage
-        serverId={serverId}
-        messageId={turn.messageId}
-        message={turn.text}
-        timestamp={createdAt.getTime()}
-        client={client}
-      />
+      {turn.wake ? (
+        <BotWakeHeader
+          turn={turn}
+          workspaceId={workspaceId}
+          onOpen={onOpen}
+          onOpenTicket={onOpenTicket}
+        />
+      ) : (
+        <UserMessage
+          serverId={serverId}
+          messageId={turn.messageId}
+          message={turn.text}
+          timestamp={createdAt.getTime()}
+          client={client}
+        />
+      )}
       {messages.map((message) => (
         <AssistantMessage
           key={message.id}
           message={message.text}
-          timestamp={createdAt.getTime()}
           serverId={serverId}
           client={client}
           workspaceRoot={cwd}
@@ -88,6 +138,7 @@ function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string;
           occurrenceKey={`${turn.id}:${message.id}`}
         />
       ))}
+      {turn.wake && turn.silent ? <BotSilentNote turnId={turn.id} /> : null}
       {pending ? (
         <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
           <ThemedSyncedLoader size={14} uniProps={foregroundColorMapping} />
@@ -125,10 +176,9 @@ function BotSessionTrack({
   busy: boolean;
 }) {
   const { t } = useTranslation();
-  const { tabId } = usePaneContext();
-  const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
   const opensInSheet = useSubagentOpensInSheet(workspaceKey);
+  const open = useOpenFromBot(serverId, workspaceId);
   const title = t("bots.session");
   const rows = useMemo<PaseoSubagentRow[]>(
     () => [
@@ -150,31 +200,19 @@ function BotSessionTrack({
     [busy, provider, sessionAgentId, title],
   );
   const openSession = useCallback(
-    (agentId: string) => {
-      if (!workspaceKey) return;
-      openPreferredWorkspaceTarget({
-        workspaceKey,
-        target: { kind: "agent", agentId },
-        source: "subagents",
-        preferences: openInSidePane,
-        parentTabId: tabId,
-        // The session never joins the Agent directory, which would otherwise prune its tab.
-        pin: true,
-      });
-    },
-    [openInSidePane, tabId, workspaceKey],
+    // The session never joins the Agent directory, which would otherwise prune its tab.
+    (agentId: string) => open({ kind: "agent", agentId }, true),
+    [open],
   );
   return (
-    <ComposerTrackBar>
-      <SubagentsTrack
-        serverId={serverId}
-        rows={rows}
-        onOpenSubagent={openSession}
-        onOpenProviderSubagent={NOOP}
-        opensInSheet={opensInSheet}
-        onArchiveSubagent={NOOP}
-      />
-    </ComposerTrackBar>
+    <SubagentsTrack
+      serverId={serverId}
+      rows={rows}
+      onOpenSubagent={openSession}
+      onOpenProviderSubagent={NOOP}
+      opensInSheet={opensInSheet}
+      onArchiveSubagent={NOOP}
+    />
   );
 }
 
@@ -216,8 +254,11 @@ export function BotChat({
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
       if (!writable) {
-        const { conversations } = await client.botRequest("bot.conversation.list.request", {
-          workspaceId,
+        // The switcher lists the same conversations, so both reads share one request.
+        const conversations = await queryClient.fetchQuery({
+          queryKey: botKeys.conversations(serverId, workspaceId, bot.builtinChannelId),
+          queryFn: () => fetchBotConversations(client, workspaceId),
+          staleTime: 1_000,
         });
         return conversations.find((item) => item.channelId === bot.builtinChannelId) ?? null;
       }
@@ -225,7 +266,34 @@ export function BotChat({
         .conversation;
     },
   });
-  const history = useBotHistory(serverId, workspaceId, conversation.data?.id, interactive);
+  // Another channel's conversation shown read-only, or the built-in one when none is chosen.
+  const conversations = useBotConversations(
+    serverId,
+    workspaceId,
+    bot.builtinChannelId,
+    interactive,
+  );
+  const [viewedId, setViewedId] = useState<string | null>(null);
+  const viewed = viewedId
+    ? (conversations.data?.find((item) => item.id === viewedId) ?? null)
+    : null;
+  const history = useBotHistory(
+    serverId,
+    workspaceId,
+    viewed?.id ?? conversation.data?.id,
+    interactive,
+  );
+  const openTarget = useOpenFromBot(serverId, workspaceId);
+  // A retired Bot has no tickets to read; older hosts serve none.
+  const ticketsShown = useBotTicketsSupported(serverId) && bot.state.kind !== "retired";
+  // The sheet stays mounted while it animates closed, then unmounts on dismiss.
+  const [ticketSheet, setTicketSheet] = useState<{ id: string; open: boolean } | null>(null);
+  const showTicket = useCallback((id: string) => setTicketSheet({ id, open: true }), []);
+  const hideTicket = useCallback(
+    () => setTicketSheet((sheet) => (sheet ? { ...sheet, open: false } : null)),
+    [],
+  );
+  const openTicket = ticketsShown ? showTicket : undefined;
   const refresh = () => {
     void history.refetch();
   };
@@ -341,15 +409,27 @@ export function BotChat({
   };
   const errors = [
     conversation.error,
+    conversations.error,
     history.error,
     send.error,
     reset.error,
     resume.error,
     cancel.error,
   ].filter(Boolean);
-  const paddingBottom = sessionAgentId ? resolveComposerTrackTailClearance(compact) : undefined;
+  const shownSession = viewed ? undefined : sessionAgentId;
+  const trackShown = Boolean(shownSession) || ticketsShown;
+  const paddingBottom = trackShown ? resolveComposerTrackTailClearance(compact) : undefined;
   const content = (
     <View style={chatStyles.transcript}>
+      <BotConversationSwitch
+        conversations={conversations.data ?? []}
+        builtinChannelId={bot.builtinChannelId}
+        value={viewed ? viewed.id : null}
+        onChange={(id) => {
+          atBottom.current = true;
+          setViewedId(id);
+        }}
+      />
       {conversation.isPending && !conversation.data && bot.state.kind !== "retired" ? (
         <BotLoadingSpinner />
       ) : null}
@@ -358,7 +438,16 @@ export function BotChat({
         data={turns}
         keyExtractor={(turn) => turn.id}
         contentContainerStyle={[chatStyles.listContent, paddingBottom ? { paddingBottom } : null]}
-        renderItem={({ item }) => <BotExchange turn={item} serverId={serverId} cwd={cwd} />}
+        renderItem={({ item }) => (
+          <BotExchange
+            turn={item}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            cwd={cwd}
+            onOpen={openTarget}
+            onOpenTicket={openTicket}
+          />
+        )}
         ListEmptyComponent={
           <View style={chatStyles.emptyChat}>
             <Text style={styles.hint}>{t("bots.emptyChat")}</Text>
@@ -376,20 +465,57 @@ export function BotChat({
           if (atBottom.current) list.current?.scrollToEnd({ animated: false });
         }}
       />
-      {sessionAgentId ? (
-        <BotSessionTrack
+      {trackShown ? (
+        <ComposerTrackBar>
+          {shownSession ? (
+            <BotSessionTrack
+              serverId={serverId}
+              workspaceId={workspaceId}
+              sessionAgentId={shownSession}
+              provider={bot.execution.provider}
+              busy={busy}
+            />
+          ) : null}
+          {ticketsShown ? (
+            <BotTicketsTrack
+              serverId={serverId}
+              workspaceId={workspaceId}
+              bot={bot}
+              interactive={interactive}
+              onOpenTicket={showTicket}
+            />
+          ) : null}
+        </ComposerTrackBar>
+      ) : null}
+      {ticketsShown && ticketSheet ? (
+        <BotTicketSheet
+          // Another task opened while this one animates closed starts with its own state.
+          key={ticketSheet.id}
           serverId={serverId}
           workspaceId={workspaceId}
-          sessionAgentId={sessionAgentId}
-          provider={bot.execution.provider}
-          busy={busy}
+          ticketId={ticketSheet.id}
+          visible={ticketSheet.open}
+          readOnly={readOnly}
+          onClose={hideTicket}
+          onDismiss={() => setTicketSheet(null)}
+          onOpenAgent={(agentId) => {
+            hideTicket();
+            openTarget({ kind: "agent", agentId });
+          }}
         />
       ) : null}
     </View>
   );
   const composer = (
     <View style={chatStyles.composerRail}>
-      {pausedMessage ? (
+      {viewed ? (
+        <View style={chatStyles.notice} testID="bot-conversation-read-only">
+          <Text style={[styles.hint, styles.grow]}>
+            {t("bots.conversationReadOnly", { channel: conversationChannel(viewed, t) })}
+          </Text>
+        </View>
+      ) : null}
+      {pausedMessage && !viewed ? (
         <View style={chatStyles.notice}>
           <Text style={[styles.hint, styles.grow]}>{pausedMessage}</Text>
           {!readOnly ? (
@@ -410,7 +536,7 @@ export function BotChat({
           {error?.message}
         </Text>
       ))}
-      {!readOnly ? (
+      {!readOnly && !viewed ? (
         <MessageInput
           ref={input}
           value=""

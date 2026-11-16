@@ -11,7 +11,7 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
 import { TaskListRow } from "@/components/task-list-row";
@@ -29,13 +29,13 @@ import { isRenderProfileEnabled } from "@/utils/render-profiler";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
-import { resolveToolCallIcon } from "@/utils/tool-call-icon";
+import { resolveToolCallIcon } from "@/tool-calls/tool-call-icon";
 import { useTargetAgentTitle } from "@/tool-calls/use-target-agent-title";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import type { AgentMessage } from "@ait/protocol/agent-message";
 import type {
   AgentCapabilityFlags,
   ToolCallDetail,
+  UserMessageOrigin,
   VoiceTranscriptEntry,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment } from "@ait/protocol/messages";
@@ -87,6 +87,10 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import {
+  getTurnDurationLabel,
+  getTurnFooterAccessibilityLabel,
+} from "./assistant-turn-footer-label";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { PlanCard } from "./plan-card";
@@ -103,6 +107,7 @@ interface UserMessageProps {
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
   voiceTranscript?: VoiceTranscriptEntry[];
+  origin?: UserMessageOrigin;
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -110,7 +115,6 @@ interface UserMessageProps {
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   isPending?: boolean;
-  disableOuterSpacing?: boolean;
 }
 
 const MessageOuterSpacingContext = createContext(false);
@@ -129,9 +133,8 @@ export function MessageOuterSpacingProvider({
   );
 }
 
-function useDisableOuterSpacing(disableOuterSpacing: boolean | undefined) {
-  const contextValue = useContext(MessageOuterSpacingContext);
-  return disableOuterSpacing ?? contextValue;
+function useDisableOuterSpacing() {
+  return useContext(MessageOuterSpacingContext);
 }
 
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_ID = "paseo-toolcall-shimmer-keyframes";
@@ -326,6 +329,11 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
   },
+  origin: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing[1],
+  },
   text: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.content,
@@ -395,6 +403,26 @@ function UserMessageImagePill({ image, onOpen, accessibilityLabel }: UserMessage
 
 const MESSAGE_TEXT_DATASET = { messageText: "true" };
 
+/** Names the Ait component that wrote an input instead of the user typing it. */
+function useUserMessageOriginLabel(origin?: UserMessageOrigin): string | null {
+  const { t } = useTranslation();
+  return useMemo(() => {
+    if (!origin) {
+      return null;
+    }
+    switch (origin.kind) {
+      case "schedule":
+        return origin.name
+          ? t("message.origin.scheduleNamed", { name: origin.name, runId: origin.runId })
+          : t("message.origin.scheduleUnnamed", { runId: origin.runId });
+      case "bot_wake":
+        return t("message.origin.botWake");
+      case "bot_instructions":
+        return t("message.origin.botInstructions");
+    }
+  }, [origin, t]);
+}
+
 export const UserMessage = memo(function UserMessage({
   serverId,
   agentId,
@@ -403,6 +431,7 @@ export const UserMessage = memo(function UserMessage({
   images = [],
   imageSources = [],
   voiceTranscript,
+  origin,
   attachments = [],
   timestamp,
   capabilities,
@@ -410,7 +439,6 @@ export const UserMessage = memo(function UserMessage({
   isFirstInGroup = true,
   isLastInGroup = true,
   isPending = false,
-  disableOuterSpacing,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
@@ -421,8 +449,9 @@ export const UserMessage = memo(function UserMessage({
     () => (lightboxMetadata ? { type: "attachment", metadata: lightboxMetadata } : null),
     [lightboxMetadata],
   );
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const resolvedDisableOuterSpacing = useDisableOuterSpacing();
   const hasText = message.trim().length > 0;
+  const originLabel = useUserMessageOriginLabel(origin);
   const hasImages = images.length > 0 || imageSources.length > 0;
   const hasAttachments = attachments.length > 0;
   const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
@@ -535,6 +564,11 @@ export const UserMessage = memo(function UserMessage({
               })}
             </View>
           ) : null}
+          {originLabel ? (
+            <Text style={userMessageStylesheet.origin} testID="user-message-origin">
+              {originLabel}
+            </Text>
+          ) : null}
           {hasText ? (
             <Text selectable style={userMessageStylesheet.text} dataSet={MESSAGE_TEXT_DATASET}>
               {message}
@@ -593,16 +627,23 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
   },
   labelWrapper: {
     position: "relative",
+    // Slack so sub-pixel differences between the sizer and overlay text
+    // measurements can never truncate or wrap the visible label.
+    paddingRight: 2,
   },
   labelSizer: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
     opacity: 0,
   },
+  labelSizerWidthOnly: {
+    height: 0,
+  },
   labelOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
+    right: 0,
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
@@ -621,6 +662,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   durationMs,
   onFork,
 }: AssistantTurnFooterProps) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [pressedReveal, setPressedReveal] = useState(false);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -636,10 +678,8 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
 
   const durationLabel = useMemo(
     () =>
-      durationMs !== undefined && durationMs !== null
-        ? `Worked for ${formatDuration(durationMs)}`
-        : "",
-    [durationMs],
+      durationMs !== undefined && durationMs !== null ? getTurnDurationLabel(durationMs, t) : "",
+    [durationMs, t],
   );
   const timestampLabel = useMemo(
     () => (completedAt ? formatMessageTimestamp(completedAt) : ""),
@@ -663,13 +703,6 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
       revealTimerRef.current = null;
     }, TIMESTAMP_REVEAL_MS);
   }, [canSwap]);
-  const handleFork = useCallback(
-    (target: AssistantForkTarget) => {
-      return onFork?.(target);
-    },
-    [onFork],
-  );
-  const canFork = Boolean(onFork);
 
   return (
     <View style={assistantTurnFooterStylesheet.container}>
@@ -677,22 +710,39 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         getContent={getContent}
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />
-      {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
+      {onFork ? <AssistantForkMenu onFork={onFork} /> : null}
       {primaryLabel ? (
         <Pressable
           onPress={handlePress}
           onHoverIn={handleHoverIn}
           onHoverOut={handleHoverOut}
           accessibilityRole={canSwap ? "button" : undefined}
-          accessibilityLabel={canSwap ? `${durationLabel}, ended ${timestampLabel}` : primaryLabel}
+          accessibilityLabel={
+            canSwap
+              ? getTurnFooterAccessibilityLabel(durationLabel, timestampLabel, t)
+              : primaryLabel
+          }
         >
           <View style={assistantTurnFooterStylesheet.labelWrapper}>
-            {/* Sizer reserves space for whichever label is longer so the
-                container width is stable across hover transitions. */}
-            <Text style={assistantTurnFooterStylesheet.labelSizer} aria-hidden>
-              {primaryLabel.length >= timestampLabel.length ? primaryLabel : timestampLabel}
+            {/* Invisible sizers reserve the width of both labels so the
+                container width is stable across hover transitions. The
+                second one has no height, so it adds width but no line. */}
+            <Text style={assistantTurnFooterStylesheet.labelSizer} numberOfLines={1} aria-hidden>
+              {primaryLabel}
             </Text>
-            <Text style={assistantTurnFooterStylesheet.labelOverlay}>
+            {canSwap ? (
+              <Text
+                style={[
+                  assistantTurnFooterStylesheet.labelSizer,
+                  assistantTurnFooterStylesheet.labelSizerWidthOnly,
+                ]}
+                numberOfLines={1}
+                aria-hidden
+              >
+                {timestampLabel}
+              </Text>
+            ) : null}
+            <Text style={assistantTurnFooterStylesheet.labelOverlay} numberOfLines={1}>
               {showTimestamp ? timestampLabel : primaryLabel}
             </Text>
           </View>
@@ -745,7 +795,6 @@ interface AssistantMessageProps {
   renderFullContent?: boolean;
   occurrenceKey: string;
   message: string;
-  timestamp: number;
   workspaceRoot?: string;
   serverId?: string;
   client?: DaemonClient | null;
@@ -753,7 +802,7 @@ interface AssistantMessageProps {
   phase: MarkdownPhase;
 }
 
-export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
+const assistantMessageStylesheet = StyleSheet.create((theme) => ({
   container: {
     paddingVertical: theme.spacing[3],
     ...(isWeb ? { userSelect: "text" as const } : {}),
@@ -827,14 +876,12 @@ interface TurnCopyButtonProps {
   getContent: () => string;
   containerStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
-  copiedAccessibilityLabel?: string;
 }
 
-export const TurnCopyButton = memo(function TurnCopyButton({
+const TurnCopyButton = memo(function TurnCopyButton({
   getContent,
   containerStyle,
   accessibilityLabel,
-  copiedAccessibilityLabel,
 }: TurnCopyButtonProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -878,9 +925,7 @@ export const TurnCopyButton = memo(function TurnCopyButton({
       style={pressableStyle}
       accessibilityRole="button"
       accessibilityLabel={
-        copied
-          ? (copiedAccessibilityLabel ?? t("message.actions.copied"))
-          : (accessibilityLabel ?? t("message.actions.copyTurn"))
+        copied ? t("message.actions.copied") : (accessibilityLabel ?? t("message.actions.copyTurn"))
       }
     >
       {({ hovered }) => {
@@ -1164,7 +1209,6 @@ export const AssistantMessage = memo(function AssistantMessage({
   renderFullContent = false,
   occurrenceKey,
   message,
-  timestamp: _timestamp,
   workspaceRoot,
   serverId,
   client,
@@ -1241,8 +1285,6 @@ export const AssistantMessage = memo(function AssistantMessage({
 
 interface SpeakMessageProps {
   message: string;
-  timestamp: number;
-  disableOuterSpacing?: boolean;
 }
 
 const speakMessageStylesheet = StyleSheet.create((theme) => ({
@@ -1272,13 +1314,9 @@ const speakMessageStylesheet = StyleSheet.create((theme) => ({
   },
 }));
 
-export const SpeakMessage = memo(function SpeakMessage({
-  message,
-  timestamp: _timestamp,
-  disableOuterSpacing,
-}: SpeakMessageProps) {
+export const SpeakMessage = memo(function SpeakMessage({ message }: SpeakMessageProps) {
   const { t } = useTranslation();
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const resolvedDisableOuterSpacing = useDisableOuterSpacing();
   const containerStyle = useMemo(
     () => [
       speakMessageStylesheet.container,
@@ -1301,7 +1339,6 @@ export const SpeakMessage = memo(function SpeakMessage({
 interface NotificationProps {
   level: "info" | "warning" | "error";
   message: string;
-  disableOuterSpacing?: boolean;
 }
 
 const notificationStylesheet = StyleSheet.create((theme) => ({
@@ -1345,12 +1382,8 @@ const notificationStylesheet = StyleSheet.create((theme) => ({
   },
 }));
 
-export const Notification = memo(function Notification({
-  level,
-  message,
-  disableOuterSpacing,
-}: NotificationProps) {
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+export const Notification = memo(function Notification({ level, message }: NotificationProps) {
+  const resolvedDisableOuterSpacing = useDisableOuterSpacing();
 
   const typeConfig = {
     info: {
@@ -1452,7 +1485,6 @@ export const CompactionMarker = memo(function CompactionMarker({
 interface TodoListCardProps {
   items: TodoEntry[];
   activity: TaskActivity;
-  disableOuterSpacing?: boolean;
 }
 
 function taskActivityIcon(activity: TaskActivity) {
@@ -1481,11 +1513,7 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
   },
 }));
 
-export const TodoListCard = memo(function TodoListCard({
-  items,
-  activity,
-  disableOuterSpacing,
-}: TodoListCardProps) {
+export const TodoListCard = memo(function TodoListCard({ items, activity }: TodoListCardProps) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const activityDisplay = useMemo(() => {
@@ -1521,6 +1549,9 @@ export const TodoListCard = memo(function TodoListCard({
     );
   }, [items, t]);
 
+  // An empty initial snapshot carries clearing state for history, without announcing new work.
+  if (items.length === 0 && activity.type === "created" && activity.count === 0) return null;
+
   return (
     <ExpandableBadge
       label={activityDisplay.label}
@@ -1529,7 +1560,6 @@ export const TodoListCard = memo(function TodoListCard({
       isExpanded={isExpanded}
       onToggle={handleToggle}
       renderDetails={renderDetails}
-      disableOuterSpacing={disableOuterSpacing}
     />
   );
 });
@@ -1539,14 +1569,12 @@ interface ExpandableBadgeProps {
   secondaryLabel?: string;
   icon?: ComponentType<{ size?: number; color?: string }>;
   isExpanded: boolean;
-  style?: StyleProp<ViewStyle>;
   onToggle?: () => void;
   onOpenFile?: () => void;
   renderDetails?: () => ReactNode;
   isLoading?: boolean;
   isError?: boolean;
   isLastInSequence?: boolean;
-  disableOuterSpacing?: boolean;
   borderlessWhenExpanded?: boolean;
   testID?: string;
 }
@@ -1898,7 +1926,6 @@ function buildShimmerTextStyle(input: {
 
 export const ExpandableBadge = memo(function ExpandableBadge({
   label,
-  style,
   secondaryLabel,
   icon,
   isExpanded,
@@ -1908,11 +1935,10 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   isLoading = false,
   isError = false,
   isLastInSequence = false,
-  disableOuterSpacing,
   borderlessWhenExpanded = false,
   testID,
 }: ExpandableBadgeProps) {
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const resolvedDisableOuterSpacing = useDisableOuterSpacing();
   const [isHovered, setIsHovered] = useState(false);
   const [isOpenFileHovered, setIsOpenFileHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
@@ -2065,9 +2091,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         (isLastInSequence
           ? expandableBadgeStylesheet.containerLastInSequence
           : expandableBadgeStylesheet.containerSpacing),
-      style,
     ],
-    [isLastInSequence, resolvedDisableOuterSpacing, style],
+    [isLastInSequence, resolvedDisableOuterSpacing],
   );
 
   const pressableStyle = useMemo(
@@ -2215,11 +2240,9 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   if (previous.secondaryLabel !== next.secondaryLabel) return false;
   if (previous.icon !== next.icon) return false;
   if (previous.isExpanded !== next.isExpanded) return false;
-  if (previous.style !== next.style) return false;
   if (previous.isLoading !== next.isLoading) return false;
   if (previous.isError !== next.isError) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
-  if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.borderlessWhenExpanded !== next.borderlessWhenExpanded) return false;
   if (previous.testID !== next.testID) return false;
   if (previous.onToggle !== next.onToggle) return false;
@@ -2229,7 +2252,6 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
 }
 
 interface ToolCallProps {
-  agentMessage?: AgentMessage;
   serverId?: string;
   toolName: string;
   args?: unknown;
@@ -2240,8 +2262,6 @@ interface ToolCallProps {
   cwd?: string;
   metadata?: Record<string, unknown>;
   isLastInSequence?: boolean;
-  disableOuterSpacing?: boolean;
-  onInlineDetailsExpandedChange?: (expanded: boolean) => void;
   onOpenFilePath?: (filePath: string) => void;
   defaultExpanded?: boolean;
   forceInline?: boolean;
@@ -2249,7 +2269,6 @@ interface ToolCallProps {
 }
 
 export const ToolCall = memo(function ToolCall({
-  agentMessage,
   serverId,
   toolName,
   args,
@@ -2260,8 +2279,6 @@ export const ToolCall = memo(function ToolCall({
   cwd,
   metadata,
   isLastInSequence = false,
-  disableOuterSpacing,
-  onInlineDetailsExpandedChange,
   onOpenFilePath,
   defaultExpanded,
   forceInline = false,
@@ -2300,7 +2317,7 @@ export const ToolCall = memo(function ToolCall({
         targetAgentTitle,
         resolveIcon: resolveToolCallIcon,
       }),
-    [toolName, status, error, effectiveDetail, metadata, cwd, agentMessage, targetAgentTitle],
+    [toolName, status, error, effectiveDetail, metadata, cwd, targetAgentTitle],
   );
   const isInlineExpanded = shouldRenderInline && presentation.canOpenDetails && isExpanded;
   const handleOpenFile = useMemo(() => {
@@ -2316,7 +2333,6 @@ export const ToolCall = memo(function ToolCall({
       openToolCall({
         toolName,
         displayName: presentation.displayName,
-        summary: presentation.summary,
         detail: effectiveDetail,
         errorText: presentation.errorText,
         icon: presentation.icon,
@@ -2330,28 +2346,11 @@ export const ToolCall = memo(function ToolCall({
     openToolCall,
     toolName,
     presentation.displayName,
-    presentation.summary,
     presentation.errorText,
     presentation.icon,
     presentation.isLoadingDetails,
     effectiveDetail,
   ]);
-
-  useEffect(() => {
-    if (!onInlineDetailsExpandedChange) {
-      return;
-    }
-    onInlineDetailsExpandedChange(isInlineExpanded);
-  }, [isInlineExpanded, onInlineDetailsExpandedChange]);
-
-  useEffect(() => {
-    if (!onInlineDetailsExpandedChange) {
-      return () => {};
-    }
-    return () => {
-      onInlineDetailsExpandedChange(false);
-    };
-  }, [onInlineDetailsExpandedChange]);
 
   // Render inline details for desktop
   const renderDetails = useCallback(() => {
@@ -2380,7 +2379,6 @@ export const ToolCall = memo(function ToolCall({
         text={effectiveDetail.text}
         outcome={presentation.planOutcome}
         testID="timeline-plan-card"
-        disableOuterSpacing={disableOuterSpacing}
       />
     );
   }
@@ -2398,7 +2396,6 @@ export const ToolCall = memo(function ToolCall({
       isLoading={status === "running" || status === "executing"}
       isError={status === "failed"}
       isLastInSequence={isLastInSequence}
-      disableOuterSpacing={disableOuterSpacing}
     />
   );
 }, areToolCallPropsEqual);
@@ -2406,7 +2403,6 @@ export const ToolCall = memo(function ToolCall({
 function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.toolName !== next.toolName) return false;
   if (previous.serverId !== next.serverId) return false;
-  if (previous.agentMessage !== next.agentMessage) return false;
   if (previous.args !== next.args) return false;
   if (previous.result !== next.result) return false;
   if (previous.error !== next.error) return false;
@@ -2415,7 +2411,6 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.cwd !== next.cwd) return false;
   if (previous.metadata !== next.metadata) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
-  if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;
   if (previous.defaultExpanded !== next.defaultExpanded) return false;
   if (previous.forceInline !== next.forceInline) return false;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMode } from "@ait/protocol/agent-types";
-import { resolveAgentControlsMode, resolveNextAgentModeId } from "./mode";
+import { resolveNextAgentModeId } from "./mode";
 
 const PLAN_MODE = { id: "plan", label: "Plan" } satisfies AgentMode;
 
@@ -9,35 +9,6 @@ const MODES = [
   { id: "build", label: "Build" },
   { id: "full-access", label: "Full Access" },
 ] satisfies AgentMode[];
-
-describe("resolveAgentControlsMode", () => {
-  it("uses ready mode when no controlled agent controls are provided", () => {
-    expect(resolveAgentControlsMode(undefined)).toBe("ready");
-  });
-
-  it("uses draft mode when controlled agent controls are provided", () => {
-    expect(
-      resolveAgentControlsMode({
-        providerDefinitions: [],
-        selectedProvider: "codex",
-        modeOptions: [],
-        selectedMode: "",
-        onSelectMode: () => undefined,
-        models: [],
-        selectedModel: "",
-        onSelectModel: () => undefined,
-        isModelLoading: false,
-        modelSelectorProviders: [],
-        isAllModelsLoading: false,
-        onSelectProviderAndModel: () => undefined,
-        thinkingOptions: [],
-        selectedThinkingOptionId: "",
-        onSelectThinkingOption: () => undefined,
-        onApplyAgentProfile: () => undefined,
-      }),
-    ).toBe("draft");
-  });
-});
 
 describe("resolveNextAgentModeId", () => {
   it("cycles from the selected mode to the next mode", () => {

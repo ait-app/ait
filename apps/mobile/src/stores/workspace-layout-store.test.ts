@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultChangesState, type ChangesState } from "@/panels/changes/state";
-import { defaultFileState, type FileState } from "@/panels/file/state";
 import {
   canDismissPaneInLayout,
   collectAllPanes,
@@ -934,7 +933,7 @@ describe("workspace-layout-store actions", () => {
       target: { kind: "file", path: "/repo/a.ts" },
       intent: "new",
     })!;
-    const fileState: FileState = { treeVisible: true, treeWidth: 240 };
+    const fileState = { treeVisible: true, treeWidth: 240 };
     store.setTabState(workspaceKey, file, fileState);
     const sameKind = store.replaceTab(workspaceKey, file, { kind: "file", path: "/repo/b.ts" });
     expect(sameKind).toBe(file);
@@ -1048,7 +1047,7 @@ describe("workspace-layout-store actions", () => {
     const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
     expect(collectAllTabs(layout.root).find((tab) => tab.tabId === file)).toMatchObject({
       target: { path: "/repo/a.ts", lineStart: 9 },
-      state: { ...defaultFileState, treeVisible: true, treeWidth: 300 },
+      state: { treeVisible: true, treeWidth: 300 },
     });
     expect(layout.parentTabIdByTabId?.[file]).toBe(parent);
 
@@ -1056,7 +1055,7 @@ describe("workspace-layout-store actions", () => {
       workspaceKey,
       file,
       { kind: "file", path: "/repo/b.ts" },
-      { ...defaultFileState, treeVisible: true, treeWidth: 300 },
+      { treeVisible: true, treeWidth: 300 },
     );
     expect(replacement).toBe(file);
     const replacedLayout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
@@ -1099,7 +1098,7 @@ describe("workspace-layout-store actions", () => {
       workspaceKey,
       replaced,
       { kind: "file", path: "/repo/b.ts" },
-      { ...defaultFileState, treeVisible: true },
+      { treeVisible: true },
     )!;
     const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
 
@@ -1175,7 +1174,7 @@ describe("workspace-layout-store actions", () => {
       workspaceKey,
       local as string,
       { kind: "file", path: "/repo/a.ts" },
-      { ...defaultFileState, treeVisible: true, treeWidth: 280 },
+      { treeVisible: true, treeWidth: 280 },
     );
 
     const tabs = collectAllTabs(
@@ -1187,7 +1186,6 @@ describe("workspace-layout-store actions", () => {
       path: "/repo/a.ts",
     });
     expect(tabs.find((tab) => tab.tabId === replacement)?.state).toEqual({
-      ...defaultFileState,
       treeVisible: true,
       treeWidth: 280,
     });
@@ -2571,43 +2569,6 @@ describe("workspace-layout-store actions", () => {
     expect(state.splitSizesByWorkspace[workspaceKey]).toBe(splitSizes);
   });
 
-  it("convertDraftToAgent replaces the draft tab with a canonical agent tab in the same pane", () => {
-    useWorkspaceLayoutIds("12121212-1212-1212-1212-121212121212");
-    const workspaceKey = createWorkspaceKey();
-    const store = workspaceLayoutStore.getState();
-
-    store.openTab({
-      workspaceKey: workspaceKey,
-      target: { kind: "file", path: "/repo/worktree/a.ts" },
-      intent: "reveal",
-    });
-    const secondTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: { kind: "draft", draftId: "draft-2" },
-      intent: "reveal",
-    });
-    const splitPaneId = store.splitPane(workspaceKey, {
-      tabId: secondTabId!,
-      targetPaneId: "main",
-      position: "right",
-    });
-
-    const nextTabId = store.convertDraftToAgent(workspaceKey, secondTabId!, "agent-1");
-    const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
-    const splitPane = findPaneById(layout.root, splitPaneId);
-    const convertedTab = collectAllTabs(layout.root).find((tab) => tab.tabId === nextTabId);
-
-    expect(splitPaneId).toBe("pane_12121212-1212-1212-1212-121212121212");
-    expect(nextTabId).toBe("agent_agent-1");
-    expect(splitPane?.tabIds).toEqual(["agent_agent-1"]);
-    expect(findPaneContainingTab(layout.root, "agent_agent-1")?.id).toBe(splitPaneId);
-    expect(convertedTab).toEqual({
-      tabId: "agent_agent-1",
-      target: { kind: "agent", agentId: "agent-1" },
-      createdAt: expect.any(Number),
-    });
-  });
-
   it("replaceTab keeps a draft tab in place while updating its target", () => {
     const workspaceKey = createWorkspaceKey();
     const store = workspaceLayoutStore.getState();
@@ -2751,62 +2712,6 @@ describe("workspace-layout-store actions", () => {
     expect(collectAllTabs(layout.root).filter((tab) => tab.target.kind === "agent")).toHaveLength(
       2,
     );
-  });
-
-  it("reorderTabs reorders tabs within the focused pane", () => {
-    const workspaceKey = createWorkspaceKey();
-    const store = workspaceLayoutStore.getState();
-
-    const firstTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: {
-        kind: "file",
-        path: "/repo/worktree/a.ts",
-      },
-      intent: "reveal",
-    });
-    const secondTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: {
-        kind: "file",
-        path: "/repo/worktree/b.ts",
-      },
-      intent: "reveal",
-    });
-    const thirdTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: {
-        kind: "file",
-        path: "/repo/worktree/c.ts",
-      },
-      intent: "reveal",
-    });
-
-    store.reorderTabs(workspaceKey, [thirdTabId!, firstTabId!]);
-    const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
-
-    expect(findPaneById(layout.root, "main")).toEqual({
-      id: "main",
-      tabIds: [thirdTabId!, firstTabId!, secondTabId!],
-      focusedTabId: thirdTabId,
-      tabs: [
-        {
-          tabId: thirdTabId,
-          target: { kind: "file", path: "/repo/worktree/c.ts" },
-          createdAt: expect.any(Number),
-        },
-        {
-          tabId: firstTabId,
-          target: { kind: "file", path: "/repo/worktree/a.ts" },
-          createdAt: expect.any(Number),
-        },
-        {
-          tabId: secondTabId,
-          target: { kind: "file", path: "/repo/worktree/b.ts" },
-          createdAt: expect.any(Number),
-        },
-      ],
-    });
   });
 
   it("reorderTabsInPane reorders tabs in the requested pane without changing focused pane", () => {
@@ -3461,16 +3366,8 @@ describe("workspace-layout-store actions", () => {
     store.hideAgent(workspaceKey, "agent-1");
     store.hideAgent(otherWorkspaceKey as string, "agent-2");
 
-    let state = workspaceLayoutStore.getState();
+    const state = workspaceLayoutStore.getState();
     expect(Array.from(state.hiddenAgentIdsByWorkspace[workspaceKey] ?? [])).toEqual(["agent-1"]);
-    expect(Array.from(state.hiddenAgentIdsByWorkspace[otherWorkspaceKey as string] ?? [])).toEqual([
-      "agent-2",
-    ]);
-
-    store.unhideAgent(workspaceKey, "agent-1");
-
-    state = workspaceLayoutStore.getState();
-    expect(state.hiddenAgentIdsByWorkspace[workspaceKey]).toBeUndefined();
     expect(Array.from(state.hiddenAgentIdsByWorkspace[otherWorkspaceKey as string] ?? [])).toEqual([
       "agent-2",
     ]);
@@ -3486,40 +3383,6 @@ describe("workspace-layout-store actions", () => {
       explorerPaneIdByWorkspace: {},
       sidePaneIdByWorkspace: {},
     });
-  });
-
-  it("convertDraftToAgent removes the draft and focuses the existing canonical agent tab", () => {
-    useWorkspaceLayoutIds("67676767-6767-6767-6767-676767676767");
-    const workspaceKey = createWorkspaceKey();
-    const store = workspaceLayoutStore.getState();
-
-    const draftTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: {
-        kind: "draft",
-        draftId: "draft-existing",
-      },
-      intent: "reveal",
-    });
-    const agentTabId = store.openTab({
-      workspaceKey: workspaceKey,
-      target: { kind: "agent", agentId: "agent-1" },
-      intent: "reveal",
-    });
-    const splitPaneId = store.splitPane(workspaceKey, {
-      tabId: agentTabId!,
-      targetPaneId: "main",
-      position: "right",
-    });
-
-    const nextTabId = store.convertDraftToAgent(workspaceKey, draftTabId!, "agent-1");
-    const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
-
-    expect(splitPaneId).toBe("pane_67676767-6767-6767-6767-676767676767");
-    expect(nextTabId).toBe("agent_agent-1");
-    expect(collectContentTabs(layout.root).map((tab) => tab.tabId)).toEqual(["agent_agent-1"]);
-    expect(layout.focusedPaneId).toBe(splitPaneId);
-    expect(findPaneContainingTab(layout.root, "agent_agent-1")?.id).toBe(splitPaneId);
   });
 
   it("reconcileTabs canonicalizes duplicates and prunes stale entity tabs from hydrated snapshots", () => {

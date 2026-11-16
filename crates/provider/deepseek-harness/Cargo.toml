@@ -1,0 +1,43 @@
+[package]
+name = "provider-deepseek-harness"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports and prompt/timeline protocol the adapter implements.
+provider-core.workspace = true
+# The shared native toolkit the adapter builds on: process launch, images, ACP, diagnostics.
+provider-native.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+# Consume bounded native event streams and concurrent session previews.
+futures-util.workspace = true
+# Authenticated DSH Host logical streams on an owned loopback WebSocket.
+tokio-tungstenite.workspace = true
+# Read-only native account balance inspection; credentials never enter public snapshots.
+reqwest.workspace = true
+reqwest.features = ["rustls-tls", "json", "stream"]
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Read DSH's native credential/configuration YAML without modifying its owned files.
+serde_yaml_ng.workspace = true
+regex.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Drive the adapter through the runtime's execution worker and AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true
+# Offline DSH Web Host and DeepSeek API fixtures, without credentials or a model API.
+axum.workspace = true

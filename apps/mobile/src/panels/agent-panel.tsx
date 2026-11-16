@@ -11,7 +11,7 @@ import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-co
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { getProviderIcon } from "@/components/provider-icons";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { useToastHost, type ToastApi, type ToastState } from "@/components/toast-host";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
 } from "@/composer/pill-styles";
-import { getActiveMessageSubmissions } from "@/composer/submission/model";
+import { getActiveMessageSubmissions } from "@/stores/message-submission-model";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
@@ -40,11 +40,13 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { useSettings } from "@/hooks/use-settings";
 import {
+  isAgentNotFoundErrorMessage,
   reconcileMissingAgentStateWithPresentAgent,
   shouldFetchAgentForLookup,
   shouldRetryLookupOnConnectionChange,
 } from "@/panels/agent-panel-load-state";
 import { AgentTracks, hasAgentTracks } from "@/panels/agent-tracks";
+import { formatAgentPanelSubtitle } from "@/panels/agent-panel-subtitle";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
@@ -74,7 +76,7 @@ import {
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import type { Theme } from "@/styles/theme";
 import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents";
-import { TimelineSyncStatus } from "@/timeline/sync-status";
+import { TimelineSyncStatus } from "@/components/timeline-sync-status";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";
@@ -211,6 +213,27 @@ function buildChatAgentFromState(
   };
 }
 
+function AgentNotFoundView() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.container} testID="agent-not-found">
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{t("agentPanel.states.notFound")}</Text>
+      </View>
+    </View>
+  );
+}
+
+function AgentLoadingView() {
+  return (
+    <View style={styles.container} testID="agent-loading">
+      <View style={styles.errorContainer}>
+        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+      </View>
+    </View>
+  );
+}
+
 function AgentLoadErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { t } = useTranslation();
   return (
@@ -231,43 +254,19 @@ function AgentLoadErrorView({ message, onRetry }: { message: string; onRetry: ()
 function renderChatAgentNonReadyView(args: {
   viewState: AgentScreenViewState;
   effectiveAgent: AgentScreenAgent | null;
-  t: TFunction;
   onRetryLoad: () => void;
 }): React.ReactElement | null {
-  const { viewState, effectiveAgent, t, onRetryLoad } = args;
+  const { viewState, effectiveAgent, onRetryLoad } = args;
   if (viewState.tag === "not_found") {
-    return (
-      <View style={styles.container} testID="agent-not-found">
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{t("agentPanel.states.notFound")}</Text>
-        </View>
-      </View>
-    );
+    return <AgentNotFoundView />;
   }
   if (viewState.tag === "error") {
     return <AgentLoadErrorView message={viewState.message} onRetry={onRetryLoad} />;
   }
   if (viewState.tag === "boot" || !effectiveAgent) {
-    return (
-      <View style={styles.container} testID="agent-loading">
-        <View style={styles.errorContainer}>
-          <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
-        </View>
-      </View>
-    );
+    return <AgentLoadingView />;
   }
   return null;
-}
-
-function formatProviderLabel(provider: Agent["provider"]): string {
-  if (!provider) {
-    return "Agent";
-  }
-  return provider
-    .split(/[-_\s]+/)
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
@@ -335,6 +334,8 @@ function useAgentPanelDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
 ): PanelDescriptor {
+  // Subscribes to language changes so the translated subtitle follows them.
+  useTranslation();
   const descriptorState = useSessionStore(
     useShallow((state) => {
       const session = state.sessions[context.serverId];
@@ -355,10 +356,12 @@ function useAgentPanelDescriptor(
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = getProviderIcon(provider, context.serverId);
 
+  const subtitle = formatAgentPanelSubtitle(provider);
+
   return {
     label: label ?? "",
-    subtitle: `${formatProviderLabel(provider)} agent`,
-    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
+    subtitle,
+    tooltip: label ?? subtitle,
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -471,7 +474,6 @@ export function useDraftPanelDescriptor(
 }
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
-const EMPTY_MESSAGE_SUBMISSIONS = [] as const;
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
 
@@ -491,10 +493,6 @@ function findActiveCreateHandoff(input: {
       pending.serverId === input.serverId &&
       pending.agentId === input.agentId,
   );
-}
-
-function isNotFoundErrorMessage(message: string): boolean {
-  return /agent not found|not found/i.test(message);
 }
 
 type AgentLookupState =
@@ -544,14 +542,13 @@ function AgentPanelContent({
     isUnknownDaemon && runtimeConnectionStatus === "connecting"
       ? "offline"
       : runtimeConnectionStatus;
-  const lastConnectionError = runtimeLastError;
 
   if (!resolvedServerId || (!runtimeClient && !hasCachedAgent)) {
     return (
       <AgentSessionUnavailableState
         serverLabel={serverLabel}
         connectionStatus={connectionStatus}
-        lastError={lastConnectionError}
+        lastError={runtimeLastError}
         isUnknownDaemon={isUnknownDaemon}
         t={t}
       />
@@ -588,24 +585,7 @@ function AgentPanelBody({
   isConnected: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
-  const { t } = useTranslation();
-  const { isArchivingAgent: _isArchivingAgent } = useArchiveAgent();
   const hasSession = useSessionStore((state) => Boolean(state.sessions[serverId]));
-  const projectPlacement = useStoreWithEqualityFn(
-    useSessionStore,
-    (state) => {
-      if (!agentId) {
-        return null;
-      }
-      const session = state.sessions[serverId];
-      return (
-        session?.agents?.get(agentId)?.projectPlacement ??
-        session?.agentDetails?.get(agentId)?.projectPlacement ??
-        null
-      );
-    },
-    (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b),
-  );
   const agentState = useSessionStore(
     useShallow((state) => selectChatAgentState(state, serverId, agentId)),
   );
@@ -672,7 +652,7 @@ function AgentPanelBody({
           return;
         }
         const message = toErrorMessage(error);
-        if (isNotFoundErrorMessage(message)) {
+        if (isAgentNotFoundErrorMessage(message)) {
           setLookupState({ tag: "not_found", message });
           return;
         }
@@ -681,47 +661,15 @@ function AgentPanelBody({
   }, [agentId, agentState.id, client, hasSession, isConnected, lookupState.tag, serverId]);
 
   if (lookupState.tag === "not_found") {
-    return (
-      <View style={styles.container} testID="agent-not-found">
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{t("agentPanel.states.notFound")}</Text>
-        </View>
-      </View>
-    );
+    return <AgentNotFoundView />;
   }
 
   if (lookupState.tag === "error") {
     return <AgentLoadErrorView message={lookupState.message} onRetry={retryAgentLookup} />;
   }
 
-  const agent: AgentScreenAgent | null =
-    agentState.serverId && agentState.id && agentState.status && agentState.cwd
-      ? {
-          serverId: agentState.serverId,
-          id: agentState.id,
-          provider: agentState.provider,
-          status: agentState.status,
-          cwd: agentState.cwd,
-          workspaceId: agentState.workspaceId,
-          capabilities: agentState.capabilities,
-          currentModeId: agentState.currentModeId,
-          model: agentState.model,
-          thinkingOptionId: agentState.thinkingOptionId,
-          runtimeInfo: agentState.runtimeInfo,
-          features: agentState.features,
-          lastError: agentState.lastError ?? null,
-          projectPlacement,
-        }
-      : null;
-
-  if (!agent) {
-    return (
-      <View style={styles.container} testID="agent-loading">
-        <View style={styles.errorContainer}>
-          <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
-        </View>
-      </View>
-    );
+  if (!buildChatAgentFromState(agentState, null)) {
+    return <AgentLoadingView />;
   }
 
   return (
@@ -754,7 +702,6 @@ function ChatAgentContent({
   isConnected: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
-  const { t } = useTranslation();
   const isPaneVisible = useRetainedPanelActive();
   const { api: toastApi, toast: toastState, dismiss: dismissToast } = useToastHost();
   const { isArchivingAgent } = useArchiveAgent();
@@ -864,14 +811,13 @@ function ChatAgentContent({
     };
   }, []);
 
-  const isInitializing = agentId ? isInitializingFromMap : false;
   const isHistorySyncing = useMemo(() => {
-    if (!agentId || !isInitializing) {
+    if (!agentId || !isInitializingFromMap) {
       return false;
     }
     const initKey = getInitKey(serverId, agentId);
     return Boolean(getInitDeferred(initKey));
-  }, [agentId, isInitializing, serverId]);
+  }, [agentId, isInitializingFromMap, serverId]);
   const needsAuthoritativeSync = useMemo(() => {
     if (!agentId) {
       return false;
@@ -1040,7 +986,7 @@ function ChatAgentContent({
           return;
         }
         const message = toErrorMessage(error);
-        if (isNotFoundErrorMessage(message)) {
+        if (isAgentNotFoundErrorMessage(message)) {
           setMissingAgentState({ kind: "not_found", message });
           return;
         }
@@ -1064,7 +1010,6 @@ function ChatAgentContent({
   const nonReadyView = renderChatAgentNonReadyView({
     viewState,
     effectiveAgent,
-    t,
     onRetryLoad: retryAgentLoad,
   });
   if (nonReadyView) return nonReadyView;
@@ -1243,7 +1188,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         isArchivingCurrentAgent={isArchivingCurrentAgent}
         archivedAt={agentState.archivedAt}
         cwd={cwd}
-        isSubmitLoading={false}
         agentInputDraft={agentInputDraft}
         editingSession={composerEditingSession}
         onAttentionInputFocus={onAttentionInputFocus}
@@ -1408,7 +1352,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
   workspaceId: string;
-  agentId?: string;
+  agentId: string;
   agent: AgentScreenAgent;
   routeBottomAnchorRequest: RouteBottomAnchorRequest;
   hasAppliedAuthoritativeHistory: boolean;
@@ -1428,29 +1372,20 @@ const AgentStreamSection = memo(function AgentStreamSection({
     ? resolveComposerTrackControlClearance(isCompactFormFactor)
     : 0;
   const streamItemsRaw = useSessionStore((state) =>
-    agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
+    state.sessions[serverId]?.agentStreamTail?.get(agentId),
   );
   const pendingMessageSubmissions = useSessionStore(
     useShallow((state) =>
-      agentId
-        ? getActiveMessageSubmissions(state.sessions[serverId]?.messageSubmissions.get(agentId))
-        : EMPTY_MESSAGE_SUBMISSIONS,
+      getActiveMessageSubmissions(state.sessions[serverId]?.messageSubmissions.get(agentId)),
     ),
   );
   const turnPresentation = useSessionStore(
-    useShallow((state) =>
-      agentId
-        ? selectAgentTurnPresentation(state.sessions[serverId], agentId)
-        : { isActive: false, isCancelling: false, startedAt: null, turnId: null },
-    ),
+    useShallow((state) => selectAgentTurnPresentation(state.sessions[serverId], agentId)),
   );
   const streamItems = streamItemsRaw ?? EMPTY_STREAM_ITEMS;
   const pendingPermissionList = useStoreWithEqualityFn(
     useSessionStore,
     (state) => {
-      if (!agentId) {
-        return EMPTY_PENDING_PERMISSION_LIST;
-      }
       const allPendingPermissions = state.sessions[serverId]?.pendingPermissions;
       if (!allPendingPermissions) {
         return EMPTY_PENDING_PERMISSION_LIST;
@@ -1500,7 +1435,6 @@ const AgentComposerSection = memo(function AgentComposerSection({
   isArchivingCurrentAgent,
   archivedAt,
   cwd,
-  isSubmitLoading,
   agentInputDraft,
   editingSession,
   onAttentionInputFocus,
@@ -1508,13 +1442,12 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onComposerHeightChange,
   onMessageSent,
 }: {
-  agentId?: string;
+  agentId: string;
   serverId: string;
   isPaneFocused: boolean;
   isArchivingCurrentAgent: boolean;
   archivedAt: Date | null;
   cwd: string;
-  isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
   editingSession: ComposerEditingSession;
   onAttentionInputFocus: () => void;
@@ -1522,9 +1455,6 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
 }) {
-  if (!agentId) {
-    return null;
-  }
   if (archivedAt) {
     return <ArchivedAgentCallout serverId={serverId} agentId={agentId} />;
   }
@@ -1538,7 +1468,6 @@ const AgentComposerSection = memo(function AgentComposerSection({
       serverId={serverId}
       isPaneFocused={isPaneFocused}
       cwd={cwd}
-      isSubmitLoading={isSubmitLoading}
       agentInputDraft={agentInputDraft}
       editingSession={editingSession}
       onAttentionInputFocus={onAttentionInputFocus}
@@ -1554,7 +1483,6 @@ function ActiveAgentComposer({
   serverId,
   isPaneFocused,
   cwd,
-  isSubmitLoading,
   agentInputDraft,
   editingSession,
   onAttentionInputFocus,
@@ -1566,7 +1494,6 @@ function ActiveAgentComposer({
   serverId: string;
   isPaneFocused: boolean;
   cwd: string;
-  isSubmitLoading: boolean;
   agentInputDraft: AgentInputDraft;
   editingSession: ComposerEditingSession;
   onAttentionInputFocus: () => void;
@@ -1668,7 +1595,7 @@ function ActiveAgentComposer({
         editingSession={editingSession}
         autoFocus
         autoFocusKey={String(agentInputDraft.attachmentFocusRequestId)}
-        isSubmitLoading={isSubmitLoading}
+        isSubmitLoading={false}
         onAttentionInputFocus={onAttentionInputFocus}
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={onComposerHeightChange}
@@ -1684,13 +1611,13 @@ function AgentSessionUnavailableState({
   serverLabel,
   connectionStatus,
   lastError,
-  isUnknownDaemon = false,
+  isUnknownDaemon,
   t,
 }: {
   serverLabel: string;
   connectionStatus: HostRuntimeConnectionStatus;
   lastError: string | null;
-  isUnknownDaemon?: boolean;
+  isUnknownDaemon: boolean;
   t: TFunction;
 }) {
   if (isUnknownDaemon) {

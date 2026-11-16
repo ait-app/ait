@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import { ScrollView } from "./scroll-view";
@@ -7,55 +7,30 @@ import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
-type CodeSurfaceTone = "surface0" | "surface1" | "surface2";
-
 interface ScrollableCodeSurfaceProps {
   children: ReactNode;
   maxHeight?: number;
-  horizontal?: boolean;
-  selectable?: boolean;
-  tone?: CodeSurfaceTone;
-  bordered?: boolean;
   style?: StyleProp<ViewStyle>;
   scrollStyle?: StyleProp<ViewStyle>;
-  contentContainerStyle?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>;
   testID?: string;
-  accessibilityLabel?: string;
 }
 
 interface SurfaceCardProps {
   children: ReactNode;
-  tone?: CodeSurfaceTone;
-  bordered?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
-  accessibilityLabel?: string;
   codeSurface?: boolean;
 }
 
-export function SurfaceCard({
-  children,
-  tone = "surface1",
-  bordered = true,
-  style,
-  testID,
-  accessibilityLabel,
-  codeSurface = false,
-}: SurfaceCardProps) {
-  const surfaceStyle = getSurfaceStyle(tone);
-  const containerStyle = useMemo(
-    () => [styles.container, surfaceStyle, bordered && styles.bordered, style],
-    [bordered, style, surfaceStyle],
-  );
+export function SurfaceCard({ children, style, testID, codeSurface = false }: SurfaceCardProps) {
+  const containerStyle = useMemo(() => [styles.container, style], [style]);
 
   return (
     <View
       style={containerStyle}
       dataSet={codeSurface ? CODE_SURFACE_DATASET : undefined}
       testID={testID}
-      accessible={accessibilityLabel != null}
-      accessibilityLabel={accessibilityLabel}
+      accessible={false}
     >
       {children}
     </View>
@@ -65,16 +40,9 @@ export function SurfaceCard({
 export function ScrollableCodeSurface({
   children,
   maxHeight,
-  horizontal = true,
-  selectable = true,
-  tone = "surface1",
-  bordered = true,
   style,
   scrollStyle,
-  contentContainerStyle,
-  textStyle,
   testID,
-  accessibilityLabel,
 }: ScrollableCodeSurfaceProps) {
   const maxHeightStyle = useMemo(
     () => (maxHeight == null ? null : inlineUnistylesStyle({ maxHeight })),
@@ -84,53 +52,29 @@ export function ScrollableCodeSurface({
     () => [styles.scroll, maxHeightStyle, scrollStyle],
     [maxHeightStyle, scrollStyle],
   );
-  const contentStyle = useMemo(
-    () => [styles.content, contentContainerStyle],
-    [contentContainerStyle],
-  );
-  const codeTextStyle = useMemo(() => [styles.text, textStyle], [textStyle]);
   const codeContent =
     typeof children === "string" ? (
-      <PlainCodeText text={children} selectable={selectable} textStyle={codeTextStyle} />
+      <PlainCodeText text={children} />
     ) : (
-      <Text selectable={selectable} style={codeTextStyle} dataSet={CODE_SURFACE_DATASET}>
+      <Text selectable style={styles.text} dataSet={CODE_SURFACE_DATASET}>
         {children}
       </Text>
     );
 
   return (
-    <SurfaceCard
-      tone={tone}
-      bordered={bordered}
-      style={[styles.scroll, style]}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
-      codeSurface
-    >
+    <SurfaceCard style={[styles.scroll, style]} testID={testID} codeSurface>
       <ScrollView style={outerScrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-        <View style={contentStyle}>
-          {horizontal ? (
-            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-              {codeContent}
-            </ScrollView>
-          ) : (
-            codeContent
-          )}
+        <View style={styles.content}>
+          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
+            {codeContent}
+          </ScrollView>
         </View>
       </ScrollView>
     </SurfaceCard>
   );
 }
 
-function PlainCodeText({
-  text,
-  selectable,
-  textStyle,
-}: {
-  text: string;
-  selectable: boolean;
-  textStyle: StyleProp<TextStyle>;
-}) {
+function PlainCodeText({ text }: { text: string }) {
   const lines = useMemo(() => {
     let offset = 0;
     return text.split("\n").map((line) => {
@@ -142,23 +86,12 @@ function PlainCodeText({
   return (
     <View dataSet={CODE_SURFACE_DATASET}>
       {lines.map(({ key, line }) => (
-        <Text key={key} selectable={selectable} style={textStyle} dataSet={CODE_SURFACE_DATASET}>
+        <Text key={key} selectable style={styles.text} dataSet={CODE_SURFACE_DATASET}>
           {line.length === 0 ? "\u200B" : line}
         </Text>
       ))}
     </View>
   );
-}
-
-function getSurfaceStyle(tone: CodeSurfaceTone): StyleProp<ViewStyle> {
-  switch (tone) {
-    case "surface0":
-      return styles.surface0;
-    case "surface2":
-      return styles.surface2;
-    case "surface1":
-      return styles.surface1;
-  }
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -168,20 +101,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   container: {
     overflow: "hidden",
-  },
-  bordered: {
+    backgroundColor: theme.colors.surface1,
     borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-  },
-  surface0: {
-    backgroundColor: theme.colors.surface0,
-  },
-  surface1: {
-    backgroundColor: theme.colors.surface1,
-  },
-  surface2: {
-    backgroundColor: theme.colors.surface2,
   },
   content: {
     paddingVertical: theme.spacing[3],

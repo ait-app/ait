@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { botStyles as styles } from "./styles";
 
@@ -18,13 +17,6 @@ const FAILURE_KEYS = {
 } as const;
 type Failure = keyof typeof FAILURE_KEYS;
 
-/** Whether the host can ask its Ait center for webhook channels. */
-export function useWebhookSetupSupported(serverId: string): boolean {
-  return useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotWebhookSetup === true,
-  );
-}
-
 function curlExample(url: string, secret: string): string {
   return [
     `curl -X POST '${url}' \\`,
@@ -33,6 +25,8 @@ function curlExample(url: string, secret: string): string {
     `  -d '{"text":"Hello","thread":"demo"}'`,
   ].join("\n");
 }
+
+const COPIED_RESET_MS = 1500;
 
 /** One value with a copy button; copying is how the owner takes it to the other system. */
 export function CopyField({
@@ -46,6 +40,13 @@ export function CopyField({
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (resetRef.current) clearTimeout(resetRef.current);
+    },
+    [],
+  );
   return (
     <View style={styles.permissionBlock}>
       <View style={styles.row}>
@@ -54,7 +55,14 @@ export function CopyField({
           variant="outline"
           size="sm"
           onPress={() => {
-            void Clipboard.setStringAsync(value).then(() => setCopied(true));
+            void Clipboard.setStringAsync(value).then(() => {
+              setCopied(true);
+              if (resetRef.current) clearTimeout(resetRef.current);
+              resetRef.current = setTimeout(() => {
+                setCopied(false);
+                resetRef.current = null;
+              }, COPIED_RESET_MS);
+            });
           }}
           accessibilityLabel={`${t("bots.webhookCopy")} ${label}`}
           testID={`${testID}-copy`}

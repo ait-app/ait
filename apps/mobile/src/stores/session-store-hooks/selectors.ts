@@ -162,23 +162,6 @@ export function createWorkspaceStructureProjectsSelector(
   };
 }
 
-export function selectProject(
-  state: SessionsSnapshot,
-  serverId: string | null,
-  projectId: string | null,
-): ProjectDescriptor | null {
-  if (!serverId || !projectId) return null;
-  return state.sessions[serverId]?.projects?.get(projectId) ?? null;
-}
-
-export function selectWorkspaceKeys(state: SessionsSnapshot, serverId: string | null): string[] {
-  if (!serverId) {
-    return EMPTY_WORKSPACE_KEYS;
-  }
-  const workspaces = state.sessions[serverId]?.workspaces;
-  return workspaces ? Array.from(workspaces.keys()) : EMPTY_WORKSPACE_KEYS;
-}
-
 export function selectRecommendedProjectPaths(
   state: SessionsSnapshot,
   serverId: string | null,
@@ -193,13 +176,6 @@ export function selectRecommendedProjectPaths(
   return Array.from(workspaces.values())
     .map((workspace) => workspace.projectRootPath)
     .filter((path) => path.length > 0);
-}
-
-export function selectHasWorkspaces(state: SessionsSnapshot, serverId: string | null): boolean {
-  if (!serverId) {
-    return false;
-  }
-  return (state.sessions[serverId]?.workspaces?.size ?? 0) > 0;
 }
 
 export function selectWorkspaceStatusesForBadges(

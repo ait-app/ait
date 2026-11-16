@@ -1,0 +1,18 @@
+export const branchSwitcher = {
+  triggerTooltip: "تبديل فرع مساحة العمل",
+  currentBranch: "الفرع الحالي: {{branchName}}. اضغط لتبديل الفرع.",
+  placeholder: "تبديل الفرع...",
+  searchPlaceholder: "تصفية الفروع...",
+  empty: "لم يتم العثور على فروع.",
+  title: "تبديل الفرع",
+  uncommittedTitle: "تغييرات غير ملتزم بها",
+  uncommittedMessage: "لديك تغييرات غير ملتزم بها. هل تريد تخبئتها قبل تبديل الفروع؟",
+  stashAndSwitch: "تخبئة وتبديل",
+  failedToStash: "فشل تخبئة التغييرات",
+  failedToSwitch: "فشل في تبديل الفرع",
+  restoreStashTitle: "هل تريد استعادة التغييرات المخبأة؟",
+  restoreStashMessage: "يحتوي هذا الفرع على تغييرات مخبأة من جلسة سابقة. هل ترغب في استعادتها؟",
+  restore: "استعادة",
+  later: "لاحقاً",
+  stashRestored: "تمت استعادة التغييرات المخبأة",
+};

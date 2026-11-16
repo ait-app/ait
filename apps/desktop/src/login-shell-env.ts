@@ -177,54 +177,57 @@ function shellFailureReason(result: SpawnSyncReturns<string>): string {
   return result.error ? "spawn-error" : "signal";
 }
 
+function attemptFailureDetails(
+  reason: string,
+  shell: string,
+  attempt: ShellEnvAttempt,
+  result: SpawnSyncReturns<string>,
+  markerFound: boolean,
+): ShellEnvErrorDetails {
+  return {
+    reason,
+    attemptKind: attempt.kind,
+    argv0: attempt.argv0,
+    shell,
+    shellArgs: attempt.shellArgs,
+    status: result.status,
+    signal: result.signal,
+    stdoutLength: result.stdout?.length ?? 0,
+    markerFound,
+    stderr: result.stderr,
+  };
+}
+
 function throwIfShellFailed({ result, regex, shell, attempt }: ThrowIfShellFailedInput): void {
   if (result.error || result.signal) {
     throw new ShellEnvError(
       "login shell did not complete",
-      {
-        reason: shellFailureReason(result),
-        attemptKind: attempt.kind,
-        argv0: attempt.argv0,
+      attemptFailureDetails(
+        shellFailureReason(result),
         shell,
-        shellArgs: attempt.shellArgs,
-        status: result.status,
-        signal: result.signal,
-        stdoutLength: result.stdout?.length ?? 0,
-        markerFound: regex.test(result.stdout ?? ""),
-        stderr: result.stderr,
-      },
+        attempt,
+        result,
+        regex.test(result.stdout ?? ""),
+      ),
       { cause: result.error },
     );
   }
   if (result.status !== 0 && result.status !== null) {
-    throw new ShellEnvError("login shell exited non-zero", {
-      reason: "non-zero-exit",
-      attemptKind: attempt.kind,
-      argv0: attempt.argv0,
-      shell,
-      shellArgs: attempt.shellArgs,
-      status: result.status,
-      signal: result.signal,
-      stdoutLength: result.stdout?.length ?? 0,
-      markerFound: regex.test(result.stdout ?? ""),
-      stderr: result.stderr,
-    });
+    throw new ShellEnvError(
+      "login shell exited non-zero",
+      attemptFailureDetails(
+        "non-zero-exit",
+        shell,
+        attempt,
+        result,
+        regex.test(result.stdout ?? ""),
+      ),
+    );
   }
   if (!result.stdout) {
     throw new ShellEnvError(
       "login shell produced no stdout",
-      {
-        reason: "no-stdout",
-        attemptKind: attempt.kind,
-        argv0: attempt.argv0,
-        shell,
-        shellArgs: attempt.shellArgs,
-        status: result.status,
-        signal: result.signal,
-        stdoutLength: result.stdout?.length ?? 0,
-        markerFound: false,
-        stderr: result.stderr,
-      },
+      attemptFailureDetails("no-stdout", shell, attempt, result, false),
       { cause: result.error },
     );
   }
@@ -373,18 +376,10 @@ async function shellEnvForAttempt({
 
   const match = regex.exec(result.stdout);
   if (!match?.[1]) {
-    throw new ShellEnvError("login shell output did not contain environment marker", {
-      reason: "marker-missing",
-      attemptKind: attempt.kind,
-      argv0: attempt.argv0,
-      shell,
-      shellArgs: attempt.shellArgs,
-      status: result.status,
-      signal: result.signal,
-      stdoutLength: result.stdout.length,
-      markerFound: false,
-      stderr: result.stderr,
-    });
+    throw new ShellEnvError(
+      "login shell output did not contain environment marker",
+      attemptFailureDetails("marker-missing", shell, attempt, result, false),
+    );
   }
 
   try {
@@ -392,18 +387,7 @@ async function shellEnvForAttempt({
   } catch (error) {
     throw new ShellEnvError(
       "failed to parse login shell environment JSON",
-      {
-        reason: "json-parse",
-        attemptKind: attempt.kind,
-        argv0: attempt.argv0,
-        shell,
-        shellArgs: attempt.shellArgs,
-        status: result.status,
-        signal: result.signal,
-        stdoutLength: result.stdout.length,
-        markerFound: true,
-        stderr: result.stderr,
-      },
+      attemptFailureDetails("json-parse", shell, attempt, result, true),
       { cause: error },
     );
   }

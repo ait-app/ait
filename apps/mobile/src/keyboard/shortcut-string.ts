@@ -160,29 +160,6 @@ export function parseChordString(s: string): KeyCombo[] {
   return s.split(" ").map(parseShortcutString);
 }
 
-export function keyComboToString(combo: KeyCombo): string {
-  const parts: string[] = [];
-
-  if (combo.mod) {
-    parts.push("Mod");
-  }
-  if (combo.ctrl) parts.push("Ctrl");
-  if (combo.alt) parts.push("Alt");
-  if (combo.shift) parts.push("Shift");
-  if (combo.meta) parts.push("Cmd");
-
-  const humanKey = CODE_TO_KEY[combo.code];
-  if (humanKey) {
-    parts.push(humanKey);
-  }
-
-  return parts.join("+");
-}
-
-export function chordToString(chord: KeyCombo[]): string {
-  return chord.map(keyComboToString).join(" ");
-}
-
 const MODIFIER_CODES = new Set([
   "MetaLeft",
   "MetaRight",

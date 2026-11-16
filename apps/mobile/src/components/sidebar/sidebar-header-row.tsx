@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
@@ -19,9 +19,8 @@ interface SidebarHeaderRowProps {
   onPress: () => void;
   isActive?: boolean;
   testID?: string;
-  nativeID?: string;
-  accessibilityLabel?: string;
   trailingText?: string | null;
+  trailing?: ReactNode;
   /**
    * "header" (default): a sidebar-height row with its own bottom separator —
    * the lone header at the top of a sidebar (settings "Back to workspace").
@@ -38,9 +37,8 @@ export function SidebarHeaderRow({
   onPress,
   isActive = false,
   testID,
-  nativeID,
-  accessibilityLabel,
   trailingText = null,
+  trailing,
   variant = "header",
   shortcutKeys = null,
 }: SidebarHeaderRowProps) {
@@ -71,6 +69,7 @@ export function SidebarHeaderRow({
           />
           <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
           {trailingText ? <Text style={styles.trailingText}>{trailingText}</Text> : null}
+          {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
           {shortcutKeys && Boolean(state.hovered) ? (
             // Overlay the hover-only badge so it never changes the row height:
             // with taller fallback fonts (Noto Sans CJK on Linux) the badge
@@ -82,7 +81,7 @@ export function SidebarHeaderRow({
         </>
       );
     },
-    [ThemedIcon, isActive, label, shortcutKeys, trailingText],
+    [ThemedIcon, isActive, label, shortcutKeys, trailingText, trailing],
   );
 
   return (
@@ -90,10 +89,9 @@ export function SidebarHeaderRow({
       <Pressable
         onPress={onPress}
         testID={testID}
-        nativeID={nativeID}
         accessible
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityLabel={label}
         style={buttonStyle}
       >
         {renderChildren}
@@ -117,6 +115,7 @@ function SidebarHeaderRowLabel({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  trailing: { marginLeft: "auto", flexShrink: 0 },
   container: {
     height: {
       xs: HEADER_INNER_HEIGHT_MOBILE,

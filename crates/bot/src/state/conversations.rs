@@ -1,9 +1,9 @@
-use domain::bot::{ChannelConfig, Conversation, DeliveryStatus, Turn, TurnStatus};
+use domain::bot::{ChannelConfig, Conversation, Turn, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{State, project_conversation};
+use super::State;
 use crate::channels::Incoming;
 use crate::protocol::{ConversationRequest, History, MemoryUpdate, Send, WorkspaceRequest};
 
@@ -36,7 +36,7 @@ impl State {
             reply_to: None,
         };
         let conversation = self.route(&incoming)?;
-        Ok(json!({"conversation":project_conversation(&conversation)}))
+        Ok(json!({"conversation":self.project_conversation(&conversation)}))
     }
     pub(crate) fn route(&mut self, incoming: &Incoming) -> Result<Conversation, ErrorCode> {
         let channel = self
@@ -160,32 +160,33 @@ impl State {
         {
             return Err(ErrorCode::ResourceExhausted);
         }
-        let turn = Turn {
-            id: BotTurnId::generate(),
-            conversation_id: conversation.id,
-            message_id: incoming.message_id,
-            sequence: conversation.next_sequence,
-            generation: conversation.generation,
-            text: incoming.text,
-            reply_to: incoming.reply_to,
-            reply: None,
-            messages: Vec::new(),
-            pending_permissions: Vec::new(),
-            status: TurnStatus::Queued,
-            delivery: DeliveryStatus::Pending,
-            error: None,
-            created_at: chrono::Utc::now().to_rfc3339(),
-        };
-        let mut next = conversation;
-        next.next_sequence = next
+        let mut turn = super::queued_turn(
+            &conversation,
+            incoming.message_id,
+            incoming.text,
+            chrono::Utc::now(),
+        );
+        turn.reply_to = incoming.reply_to;
+        self.enqueue(conversation, &turn)?;
+        Ok(json!({"turn":turn,"accepted":true,"duplicate":false}))
+    }
+    /// Commit `turn`, queued at `conversation`'s next sequence, and index it under its
+    /// channel message id.
+    pub(super) fn enqueue(
+        &mut self,
+        mut conversation: Conversation,
+        turn: &Turn,
+    ) -> Result<(), ErrorCode> {
+        conversation.next_sequence = conversation
             .next_sequence
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
-        self.save_conversation(next)?;
-        self.commit_turn(&turn)?;
+        let channel = conversation.channel_id;
+        self.save_conversation(conversation)?;
+        self.commit_turn(turn)?;
         self.inputs
-            .insert((incoming.channel_id, turn.message_id.clone()), turn.id);
-        Ok(json!({"turn":turn,"accepted":true,"duplicate":false}))
+            .insert((channel, turn.message_id.clone()), turn.id);
+        Ok(())
     }
     pub(super) fn reset(&mut self, request: &ConversationRequest) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;
@@ -201,7 +202,7 @@ impl State {
             self.progress(id, TurnStatus::Cancelled, None, None)?;
         }
         self.renew(&mut conversation)?;
-        Ok(json!({"conversation":project_conversation(&conversation)}))
+        Ok(json!({"conversation":self.project_conversation(&conversation)}))
     }
     /// Move a running turn's conversation to a new native session and generation, carrying the
     /// running turn and queued input along; used when the old session cannot reach the Bot's

@@ -20,10 +20,10 @@ import {
   UserMessage,
   type InlinePathTarget,
 } from "@/components/message";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import type { ToastApi } from "@/components/toast-host";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
-import type { PendingMessageSubmission } from "@/composer/submission/model";
+import type { PendingMessageSubmission } from "@/stores/message-submission-model";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
@@ -62,7 +62,6 @@ import React, {
   useMemo,
   useRef,
   useState,
-  type ComponentProps,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
@@ -157,9 +156,7 @@ function renderStreamItemWithTurnFooter(input: {
     />
   ) : null;
   const content = (
-    <StreamItemWrapper itemId={input.layoutItem.item.id} gapBelow={input.layoutItem.gapBelow}>
-      {input.content}
-    </StreamItemWrapper>
+    <StreamItemWrapper gapBelow={input.layoutItem.gapBelow}>{input.content}</StreamItemWrapper>
   );
 
   if (input.layoutItem.frameOrder === "footer-then-content") {
@@ -348,9 +345,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [isMobile],
     );
     const [isNearBottom, setIsNearBottom] = useState(true);
-    const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
-      new Set(),
-    );
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
       new Set(),
     );
@@ -415,7 +409,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     useEffect(() => {
       setIsNearBottom(true);
-      setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
     }, [agentId]);
 
@@ -637,24 +630,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       });
     }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
 
-    const setInlineDetailsExpanded = useCallback(
-      (itemId: string, expanded: boolean) => {
-        if (!streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion()) {
-          return;
-        }
-        setExpandedInlineToolCallIds((previous) => {
-          const next = new Set(previous);
-          if (expanded) {
-            next.add(itemId);
-          } else {
-            next.delete(itemId);
-          }
-          return next;
-        });
-      },
-      [streamRenderStrategy],
-    );
-
     const setToolCallGroupExpanded = useCallback((groupId: string, expanded: boolean) => {
       setExpandedToolCallGroupIds((previous) => {
         const next = new Set(previous);
@@ -678,6 +653,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             images={item.images}
             imageSources={item.imageSources}
             voiceTranscript={item.voiceTranscript}
+            origin={item.origin}
             attachments={item.attachments}
             timestamp={item.timestamp.getTime()}
             capabilities={context.capabilities}
@@ -710,7 +686,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                   renderFullContent={renderFullContent}
                   occurrenceKey={createAssistantImageOccurrenceKey({ agentId, itemId: item.id })}
                   message={item.text}
-                  timestamp={item.timestamp.getTime()}
                   workspaceRoot={workspaceRoot}
                   serverId={resolvedServerId}
                   client={client}
@@ -729,8 +704,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
         return (
           <ThoughtSlot
-            itemId={item.id}
-            onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
@@ -738,7 +711,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -758,15 +731,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             typeof data.detail.input === "string" &&
             data.detail.input.trim()
           ) {
-            return (
-              <SpeakMessage message={data.detail.input} timestamp={item.timestamp.getTime()} />
-            );
+            return <SpeakMessage message={data.detail.input} />;
           }
 
           return (
-            <ToolCallSlot
-              itemId={item.id}
-              onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+            <ToolCall
+              serverId={resolvedServerId}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -782,9 +752,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
         const data = payload.data;
         return (
-          <ToolCallSlot
-            itemId={item.id}
-            onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+          <ToolCall
+            serverId={resolvedServerId}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}
@@ -795,7 +764,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [context.cwd, handleToolCallOpenFile, resolvedServerId],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity
@@ -879,14 +848,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return null;
         }
       },
-      [
-        agentId,
-        renderUserMessageItem,
-        renderAssistantMessageItem,
-        renderThoughtItem,
-        renderToolCallItem,
-        resolvedServerId,
-      ],
+      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
@@ -951,7 +913,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const renderModel = useMemo<AgentStreamRenderModel>(() => {
       return {
         ...baseRenderModel,
-        boundary: baseRenderModel.boundary,
         auxiliary: {
           pendingPermissions: pendingPermissionsNode,
           turnFooter: turnFooterNode,
@@ -1013,13 +974,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [layoutHistoryItemById, renderStreamItem],
     );
 
-    const renderHistoryVirtualizedRow = useCallback<
-      StreamSegmentRenderers["renderHistoryVirtualizedRow"]
-    >((item) => renderHistoryRow(item), [renderHistoryRow]);
-    const renderHistoryMountedRow = useCallback<StreamSegmentRenderers["renderHistoryMountedRow"]>(
-      (item) => renderHistoryRow(item),
-      [renderHistoryRow],
-    );
     // useStableEvent keeps the function reference stable across flushes.
     // layoutLiveHeadItemById and renderStreamItem are read from the ref at call time,
     // so the live-head render always uses the latest layout without causing renderers
@@ -1048,22 +1002,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const renderers = useMemo<StreamSegmentRenderers>(
       () => ({
-        renderHistoryVirtualizedRow,
-        renderHistoryMountedRow,
+        renderHistoryVirtualizedRow: renderHistoryRow,
+        renderHistoryMountedRow: renderHistoryRow,
         renderLiveHeadRow,
         renderLiveAuxiliary,
       }),
-      [
-        renderHistoryVirtualizedRow,
-        renderHistoryMountedRow,
-        renderLiveHeadRow,
-        renderLiveAuxiliary,
-      ],
+      [renderHistoryRow, renderLiveHeadRow, renderLiveAuxiliary],
     );
 
-    const streamScrollEnabled =
-      !streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion() ||
-      expandedInlineToolCallIds.size === 0;
     const historyRowRevision = useMemo(
       () => ({
         contentById: presentation.historyGroupUpdatesByHostId,
@@ -1107,10 +1053,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 isLoadingOlderHistory: isLoadingOlder,
                 hasOlderHistory: hasOlder,
                 olderHistoryProgressKey: progressKey,
-                scrollEnabled: streamScrollEnabled,
                 listStyle: stylesheet.list,
                 baseListContentContainerStyle: stylesheet.listContentContainer,
-                forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
                 contentMaxWidth,
                 imageContext: { serverId: resolvedServerId, workspaceRoot },
               })}
@@ -1265,17 +1209,7 @@ function agentStreamViewPropsEqual(
 export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
 AgentStreamView.displayName = "AgentStreamView";
 
-interface ToolCallSlotProps extends Omit<
-  ComponentProps<typeof ToolCall>,
-  "onInlineDetailsExpandedChange"
-> {
-  itemId: string;
-  onInlineDetailsExpandedChangeByItemId: (itemId: string, expanded: boolean) => void;
-}
-
 interface ThoughtSlotProps {
-  itemId: string;
-  onInlineDetailsExpandedChangeByItemId: (itemId: string, expanded: boolean) => void;
   text: string;
   status: Extract<StreamItem, { kind: "thought" }>["status"];
   isLastInSequence: boolean;
@@ -1283,19 +1217,10 @@ interface ThoughtSlotProps {
 }
 
 // Reasoning text is paced the same way assistant text is; see @/hooks/use-revealed-text.
-function ThoughtSlot({
-  itemId,
-  onInlineDetailsExpandedChangeByItemId,
-  text,
-  status,
-  isLastInSequence,
-  defaultExpanded,
-}: ThoughtSlotProps) {
+function ThoughtSlot({ text, status, isLastInSequence, defaultExpanded }: ThoughtSlotProps) {
   const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
   return (
-    <ToolCallSlot
-      itemId={itemId}
-      onInlineDetailsExpandedChangeByItemId={onInlineDetailsExpandedChangeByItemId}
+    <ToolCall
       toolName="thinking"
       args={revealedText}
       status={status === "ready" ? "completed" : "executing"}
@@ -1304,18 +1229,6 @@ function ThoughtSlot({
       forceInline={defaultExpanded}
     />
   );
-}
-
-function ToolCallSlot({
-  itemId,
-  onInlineDetailsExpandedChangeByItemId,
-  ...rest
-}: ToolCallSlotProps) {
-  const handleExpandedChange = useCallback(
-    (expanded: boolean) => onInlineDetailsExpandedChangeByItemId(itemId, expanded),
-    [onInlineDetailsExpandedChangeByItemId, itemId],
-  );
-  return <ToolCall {...rest} onInlineDetailsExpandedChange={handleExpandedChange} />;
 }
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -1337,10 +1250,6 @@ const stylesheet = StyleSheet.create((theme) => ({
       md: theme.spacing[4],
     },
   },
-  forwardListContentContainer: {
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
-  },
   list: {
     flex: 1,
   },
@@ -1361,21 +1270,6 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   listHeaderContent: {
     gap: theme.spacing[3],
-  },
-  syncingIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    paddingLeft: theme.spacing[2],
-  },
-  syncingIndicatorText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-  },
-  invertedWrapper: {
-    transform: [{ scaleY: -1 }],
-    width: "100%",
   },
   emptyStateText: {
     color: theme.colors.foregroundMuted,
@@ -1403,7 +1297,6 @@ const stylesheet = StyleSheet.create((theme) => ({
 }));
 
 interface StreamItemWrapperProps {
-  itemId: string;
   gapBelow: number;
   children: ReactNode;
 }

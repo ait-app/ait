@@ -32,7 +32,7 @@ export function ComposerFullscreenFooter({ children, ...props }: ViewProps) {
   return <KeyboardTranslateView {...props}>{children}</KeyboardTranslateView>;
 }
 
-// Plain React Native styles: these land on Reanimated views (docs/unistyles.md).
+// Plain React Native styles: these land on Reanimated views.
 const styles = StyleSheet.create({
   inline: { flexShrink: 1 },
   fullscreen: { flex: 1, minHeight: 0 },

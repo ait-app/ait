@@ -19,6 +19,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.channel.feishu.scan.status.request",
         "bot.channel.feishu.scan.cancel.request",
         "bot.channel.feishu.connect.request",
+        "bot.channel.lark.connect.request",
         "bot.channel.telegram.pair.start.request",
         "bot.channel.telegram.pair.status.request",
         "bot.channel.telegram.pair.cancel.request",
@@ -41,6 +42,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.resume.request",
         "bot.remove.request",
         "bot.memory.update.request",
+        "bot.ticket.update.request",
     ] {
         assert_eq!(
             guest.refused(method, json!({})).await,
@@ -69,6 +71,9 @@ async fn guest_bot_access_is_read_only_v2() {
         "bot.history.get.request",
         "bot.turn.get.request",
         "bot.memory.get.request",
+        "bot.notifications.list.request",
+        "bot.ticket.list.request",
+        "bot.ticket.get.request",
     ] {
         guest.forwarded(method, json!({})).await;
     }

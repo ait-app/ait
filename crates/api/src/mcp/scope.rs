@@ -7,15 +7,16 @@
 use std::collections::BTreeSet;
 
 use bot::mcp::{Caller, CallerKind, Grant};
-use domain::bot::BOT_SCOPE_LABEL;
+use domain::ConversationId;
 use domain::bot::permissions::BotPermissions;
+use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL};
 use model::ErrorCode;
 use serde_json::{Map, Value, json};
 
 use crate::Shared;
 use crate::connection::rpc;
 
-use super::tools::creation;
+use super::tools::{creation, recall};
 
 /// Label namespace owned by Ait; scoped callers may write no label in it.
 const AIT_LABEL_PREFIX: &str = "ait.";
@@ -65,10 +66,26 @@ pub(super) struct Scope {
 }
 
 impl Scope {
-    /// Whether `tool` is granted; Bot-only tools are granted to Bot sessions, never subtrees.
+    /// Whether `tool` is granted; Bot-only tools are granted to Bot sessions, never subtrees,
+    /// and worker tools only to subtree Agents working on a ticket.
     pub(super) fn allows(&self, tool: &str) -> bool {
-        let bot = matches!(self.caller.kind, CallerKind::Bot { .. });
-        self.grant.permissions.allows(tool, bot)
+        self.grant
+            .permissions
+            .allows(tool, self.caller.kind.holder())
+    }
+
+    /// The Bot conversation that started the caller's work: a Bot session's own conversation,
+    /// or the origin label of the subtree caller Agent `context`, if it carries a valid one.
+    pub(super) fn origin(&self, context: Option<&Value>) -> Option<ConversationId> {
+        match &self.caller.kind {
+            CallerKind::Bot {
+                conversation_id, ..
+            } => Some(*conversation_id),
+            CallerKind::Subtree { .. } => context?["labels"][BOT_CONVERSATION_LABEL]
+                .as_str()?
+                .parse()
+                .ok(),
+        }
     }
 
     /// The Workspaces this caller may reach, for filtering listings at their source.
@@ -127,7 +144,8 @@ enum Rule {
 fn rule(tool: &str) -> Option<Rule> {
     Some(match tool {
         "list_profiles" | "list_providers" | "bot_memory_read" | "bot_memory_update"
-        | "workspace_overview" => Rule::Open,
+        | "workspace_overview" | "bot_tickets" | "bot_ticket_update" | "report_progress"
+        | "bot_read" | "ticket_read" => Rule::Open,
         "list_agents" | "list_pending_permissions" | "list_schedules" => Rule::Listing,
         "list_models" | "inspect_provider" => Rule::RootDirectory,
         "create_agent" => Rule::CreateAgent,
@@ -157,12 +175,15 @@ fn rule(tool: &str) -> Option<Rule> {
 /// `context` is the resolved caller Agent of a subtree credential; Bot sessions have none.
 /// Targets are resolved through existing RPCs and replaced by their canonical ids; a target
 /// Workspace must be in the grant and unarchived. Directories always come from the server.
-/// Created schedules and heartbeats record the root as their Bot scope.
+/// Created Agents, schedules and heartbeats record the root as their Bot scope and the caller's
+/// origin conversation (see [`Scope::origin`]).
 /// # Errors
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
 /// labels, features or modes outside the cap (including a schedule's effective mode), and Bot
-/// heartbeats; a guided refusal for editing a schedule not created by a Bot or for running or
-/// resuming such a schedule without a stored mode; and propagates target lookup failures.
+/// heartbeats; a guided refusal for an Agent a caller restricted to an external conversation's
+/// work may not reach (ADR-280 §4), for
+/// editing a schedule not created by a Bot or for running or resuming such a schedule without a
+/// stored mode; and propagates target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
@@ -179,13 +200,13 @@ pub(super) async fn confine(
         }
         Rule::CreateAgent => {
             let inherited = context.and_then(|agent| agent["workspaceId"].as_str());
-            rewrite_create_agent(scope, inherited, arguments)?;
+            rewrite_create_agent(scope, inherited, scope.origin(context), arguments)?;
             active(state, &text(&arguments["workspaceId"])?)
                 .await
                 .map(drop)
         }
         rule @ (Rule::Agent | Rule::AgentMode | Rule::UpdateAgent) => {
-            let agent = creation::require_success(state, &arguments["agentId"]).await?;
+            let agent = reachable(state, scope, &arguments["agentId"], context).await?;
             let id = text(&agent["id"])?;
             retarget(
                 scope,
@@ -210,6 +231,7 @@ pub(super) async fn confine(
             if rule == Rule::CreateSchedule {
                 let inherited = context.map(|agent| &agent["provider"]);
                 rewrite_create_schedule(scope, inherited, arguments)?;
+                record_origin(scope.origin(context), arguments);
             }
             active(state, &workspace).await.map(drop)
         }
@@ -217,6 +239,7 @@ pub(super) async fn confine(
             let workspace = heartbeat_workspace(scope, context)?;
             arguments["workspaceId"] = json!(workspace);
             arguments["botScope"] = json!(root);
+            record_origin(scope.origin(context), arguments);
             active(state, workspace).await.map(drop)
         }
         Rule::Terminal => terminal(state, scope, arguments).await,
@@ -240,6 +263,34 @@ pub(super) async fn confine(
         }
     };
     Ok(confined?)
+}
+
+/// Resolve Agent target `id` for `scope`'s caller and require that its sight reaches it
+/// (ADR-280 §4): a caller whose work came from an external conversation only the Agents of
+/// that conversation's tasks, one whose work came from the owner's conversation or from none
+/// every Agent the Workspace scope allows. `context` is a subtree caller's own Agent record.
+///
+/// For a restricted caller an id that names no Agent is refused like an Agent of someone
+/// else, so the refusal does not confirm that a title or prefix exists.
+/// # Errors
+/// Returns the unreachable-Agent refusal, and propagates lookup and Bot failures.
+async fn reachable(
+    state: &Shared,
+    scope: &Scope,
+    id: &Value,
+    context: Option<&Value>,
+) -> Result<Value, Failure> {
+    let sight = recall::sight(state, scope, context).await?;
+    let refused = Failure::Refused(recall::UNREACHABLE_AGENT);
+    let agent = match creation::require_success(state, id).await {
+        Err(ErrorCode::InvalidMessage) if recall::external(sight.as_ref()) => return Err(refused),
+        other => other?,
+    };
+    if recall::sees_agent(sight.as_ref(), &agent) {
+        Ok(agent)
+    } else {
+        Err(refused)
+    }
 }
 
 /// Remove out-of-scope entries from list results that cannot be filtered at the source.
@@ -283,13 +334,15 @@ fn admit(tool: &str, arguments: &Value) -> Result<Rule, ErrorCode> {
 ///
 /// The Workspace defaults to the caller's own Workspace for subtree callers (`inherited`) and to
 /// the root for Bot sessions. Created Agents carry `BOT_SCOPE_LABEL = root`, so their sessions
-/// receive derived credentials instead of the host token.
+/// receive derived credentials instead of the host token, and `BOT_CONVERSATION_LABEL = origin`
+/// when the caller has an origin conversation, so their notifications reach it.
 /// # Errors
 /// Returns `Forbidden` for a foreign Workspace, reserved labels, features or modes outside the
 /// cap, and `InvalidMessage` for malformed arguments.
 fn rewrite_create_agent(
     scope: &Scope,
     inherited: Option<&str>,
+    origin: Option<ConversationId>,
     arguments: &mut Value,
 ) -> Result<(), ErrorCode> {
     let root = scope.caller.root.as_str();
@@ -307,7 +360,18 @@ fn rewrite_create_agent(
     reserved_labels(arguments, AIT_LABEL_PREFIX)?;
     let labels = object(arguments, "labels")?;
     labels.insert(BOT_SCOPE_LABEL.to_owned(), json!(root));
+    if let Some(origin) = origin {
+        labels.insert(BOT_CONVERSATION_LABEL.to_owned(), json!(origin));
+    }
     Ok(())
+}
+
+/// Record `origin` as a created schedule's `botConversation`, which the tool schema does not let
+/// callers supply themselves.
+fn record_origin(origin: Option<ConversationId>, arguments: &mut Value) {
+    if let Some(origin) = origin {
+        arguments["botConversation"] = json!(origin);
+    }
 }
 
 /// Cap `update_agent` settings by the resolved `agent`'s provider and refuse reserved labels.

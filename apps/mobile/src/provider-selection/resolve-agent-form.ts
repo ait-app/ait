@@ -4,11 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
-import {
-  mergeProviderPreferences,
-  type FormPreferences,
-  type ProviderPreferences,
-} from "@/hooks/use-form-preferences";
+import type { FormPreferences } from "@/hooks/use-form-preferences";
 import { findModelByReference } from "./model-catalog";
 
 export interface FormInitialValues {
@@ -55,7 +51,6 @@ export const INITIAL_USER_MODIFIED: UserModifiedFields = {
 };
 
 export const PENDING_AGENT_FORM_RESOLUTION: AgentFormResolutionState = { status: "pending" };
-export const INITIAL_AGENT_FORM_RESOLUTION = PENDING_AGENT_FORM_RESOLUTION;
 
 type ProviderPrefs = NonNullable<FormPreferences["providerPreferences"]>[AgentProvider];
 
@@ -106,6 +101,14 @@ export type AgentFormAction =
       providerModels: AgentModelDefinition[] | null;
       providerPrefs?: ProviderPrefs | undefined;
     }
+  | {
+      type: "APPLY_MODEL_PRESET_FROM_USER";
+      provider: AgentProvider;
+      modelId: string;
+      thinkingOptionId: string | null;
+      providerDef: AgentProviderDefinition | undefined;
+      providerModels: AgentModelDefinition[] | null;
+    }
   | { type: "SET_MODE_FROM_USER"; modeId: string }
   | {
       type: "SET_MODEL_FROM_USER";
@@ -113,7 +116,6 @@ export type AgentFormAction =
       availableModels: AgentModelDefinition[] | null;
       providerPrefs: ProviderPrefs | undefined;
     }
-  | { type: "CLEAR_PROVIDER_SELECTION_FROM_USER" }
   | { type: "SET_THINKING_OPTION_FROM_USER"; thinkingOptionId: string }
   | { type: "RESET" };
 
@@ -125,13 +127,15 @@ export function normalizeSelectedModelId(modelId: string | null | undefined): st
 }
 
 export function resolveDefaultModel(
-  availableModels: AgentModelDefinition[] | null,
+  availableModels: readonly AgentModelDefinition[] | null,
 ): AgentModelDefinition | null {
   if (!availableModels || availableModels.length === 0) return null;
   return availableModels.find((model) => model.isDefault) ?? availableModels[0] ?? null;
 }
 
-export function resolveDefaultModelId(availableModels: AgentModelDefinition[] | null): string {
+export function resolveDefaultModelId(
+  availableModels: readonly AgentModelDefinition[] | null,
+): string {
   return resolveDefaultModel(availableModels)?.id ?? "";
 }
 
@@ -172,17 +176,11 @@ export function resolveThinkingOptionId(args: {
   modelId: string;
   requestedThinkingOptionId: string;
 }): string {
+  const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
+  if (normalizedThinkingOptionId) return normalizedThinkingOptionId;
   const effectiveModel = resolveEffectiveModel(args.availableModels, args.modelId);
   const thinkingOptions = effectiveModel?.thinkingOptions ?? [];
   if (thinkingOptions.length === 0) return "";
-
-  const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
-  if (
-    normalizedThinkingOptionId &&
-    thinkingOptions.some((option) => option.id === normalizedThinkingOptionId)
-  ) {
-    return normalizedThinkingOptionId;
-  }
 
   return effectiveModel?.defaultThinkingOptionId ?? thinkingOptions[0]?.id ?? "";
 }
@@ -208,18 +206,6 @@ function resolvePreferredModeId(input: {
     return defaultModeId;
   }
   return modes[0]?.id ?? "";
-}
-
-export function mergeSelectedComposerPreferences(args: {
-  preferences: FormPreferences;
-  provider: AgentProvider;
-  updates: Partial<ProviderPreferences>;
-}): FormPreferences {
-  return mergeProviderPreferences({
-    preferences: args.preferences,
-    provider: args.provider,
-    updates: args.updates,
-  });
 }
 
 export function hasFormStateChanged(prev: FormState, next: FormState): boolean {
@@ -250,7 +236,9 @@ export function buildProviderDefinitionMapForStatuses(args: {
 
   const matchingProviders = new Set(
     args.snapshotEntries
-      .filter((entry) => args.statuses.has(entry.status) && entry.enabled)
+      .filter(
+        (entry) => entry.enabled && (args.statuses.has(entry.status) || !!entry.models?.length),
+      )
       .map((entry) => entry.provider),
   );
 
@@ -321,11 +309,7 @@ function resolveModelField(input: {
       ? resolveCanonicalModelId(availableModels, preferredModel)
       : null;
     if (canonicalModel) return canonicalModel;
-    // OpenCode admits only IDs from its native catalogue. Do not replace an
-    // explicit draft choice, or treat an unavailable/empty catalogue as authoritative.
-    return provider === "opencode" && availableModels?.length
-      ? resolveDefaultModelId(availableModels)
-      : preferredModel;
+    return preferredModel;
   }
   return "";
 }
@@ -455,17 +439,6 @@ export function resolveFormStateFromProviderModels(
   );
 }
 
-function pickNextModeForProvider(input: {
-  providerDef: AgentProviderDefinition | undefined;
-  providerPrefs: ProviderPrefs | undefined;
-}): string {
-  const { providerDef, providerPrefs } = input;
-  return resolvePreferredModeId({
-    preferredModeId: providerPrefs?.mode,
-    providerDef,
-  });
-}
-
 function pickNextModeForProviderAndModel(input: {
   currentProvider: AgentProvider | null;
   currentModeId: string;
@@ -475,9 +448,9 @@ function pickNextModeForProviderAndModel(input: {
 }): string {
   const currentModeId = normalizeSelectedModeId(input.currentModeId);
   if (input.currentProvider === input.provider && currentModeId) return currentModeId;
-  return pickNextModeForProvider({
+  return resolvePreferredModeId({
+    preferredModeId: input.providerPrefs?.mode,
     providerDef: input.providerDef,
-    providerPrefs: input.providerPrefs,
   });
 }
 
@@ -546,16 +519,17 @@ function completeResolution(
 function applyProfile(state: AgentFormReducerState, action: ApplyProfileAction) {
   const preferredModelId = action.modelId || action.providerPrefs?.model || "";
   const normalizedModelId = resolveCanonicalModelId(action.providerModels, preferredModelId);
-  const nextModelId = normalizedModelId || resolveDefaultModelId(action.providerModels);
-  const availableModeIds = new Set(action.providerDef?.modes.map((mode) => mode.id) ?? []);
+  const nextModelId =
+    normalizedModelId || preferredModelId || resolveDefaultModelId(action.providerModels);
   const preferredModeId = action.modeId || action.providerPrefs?.mode || "";
-  const defaultModeId = action.providerDef?.defaultModeId ?? "";
-  let nextModeId = "";
-  if (availableModeIds.has(preferredModeId)) {
-    nextModeId = preferredModeId;
-  } else if (availableModeIds.has(defaultModeId)) {
-    nextModeId = defaultModeId;
-  }
+  const providerModes = action.providerDef?.modes ?? [];
+  // A known mode catalog proves a stale preference unusable, including a
+  // modeless provider; an absent definition keeps the persisted value intact.
+  const nextModeId = !action.providerDef
+    ? preferredModeId || ""
+    : providerModes.some((mode) => mode.id === preferredModeId)
+      ? preferredModeId
+      : action.providerDef.defaultModeId || "";
   const nextThinkingOptionId =
     action.thinkingOptionId ||
     pickNextThinkingOptionForProvider({
@@ -666,6 +640,31 @@ export function resolveAgentForm(
       return applyProfile(state, action);
     }
 
+    case "APPLY_MODEL_PRESET_FROM_USER":
+      return {
+        ...state,
+        form: {
+          ...state.form,
+          provider: action.provider,
+          model: action.modelId,
+          thinkingOptionId: resolveThinkingOptionId({
+            availableModels: action.providerModels,
+            modelId: action.modelId,
+            requestedThinkingOptionId: action.thinkingOptionId ?? "",
+          }),
+          modeId:
+            state.form.provider === action.provider
+              ? state.form.modeId
+              : (action.providerDef?.defaultModeId ?? action.providerDef?.modes[0]?.id ?? ""),
+        },
+        userModified: {
+          ...state.userModified,
+          provider: true,
+          model: true,
+          thinkingOptionId: true,
+        },
+      };
+
     case "SET_MODE_FROM_USER":
       return {
         ...state,
@@ -695,25 +694,6 @@ export function resolveAgentForm(
       };
     }
 
-    case "CLEAR_PROVIDER_SELECTION_FROM_USER":
-      return {
-        ...state,
-        form: {
-          ...state.form,
-          provider: null,
-          model: "",
-          modeId: "",
-          thinkingOptionId: "",
-        },
-        userModified: {
-          ...state.userModified,
-          provider: true,
-          model: true,
-          modeId: true,
-          thinkingOptionId: true,
-        },
-      };
-
     case "SET_THINKING_OPTION_FROM_USER":
       return {
         ...state,
@@ -725,7 +705,7 @@ export function resolveAgentForm(
       return {
         ...state,
         userModified: INITIAL_USER_MODIFIED,
-        resolution: INITIAL_AGENT_FORM_RESOLUTION,
+        resolution: PENDING_AGENT_FORM_RESOLUTION,
       };
     default:
       throw new Error("unreachable");

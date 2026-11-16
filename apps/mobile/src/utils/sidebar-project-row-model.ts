@@ -9,26 +9,18 @@ export interface SidebarProjectHostTarget {
   iconRevision?: string;
 }
 
-export type SidebarProjectTrailingAction =
+type SidebarProjectTrailingAction =
   | { kind: "new_workspace"; target: SidebarProjectHostTarget }
   | { kind: "none" };
 
-export interface SidebarProjectSectionRowModel {
+interface SidebarProjectRowModel {
   kind: "project_section";
   chevron: "expand" | "collapse";
   trailingAction: SidebarProjectTrailingAction;
 }
 
-export type SidebarProjectRowModel = SidebarProjectSectionRowModel;
-
 const EMPTY_MULTIPLICITY_MAP: ReadonlyMap<string, boolean> = new Map();
-function hostTarget(input: {
-  serverId: string;
-  projectId: string;
-  iconWorkingDir: string;
-  customIconRevision?: string | null;
-  iconRevision?: string;
-}): SidebarProjectHostTarget | null {
+function hostTarget(input: SidebarProjectHostTarget): SidebarProjectHostTarget | null {
   const iconWorkingDir = input.iconWorkingDir.trim();
   if (!input.serverId || !iconWorkingDir) {
     return null;

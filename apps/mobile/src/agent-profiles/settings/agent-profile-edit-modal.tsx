@@ -141,7 +141,12 @@ function OpenAgentProfileEditModal({
   );
   const model = useAgentProfileFormModel(snapshot);
   const state = useAgentProfileFormState(model);
-  useAgentProfileFormCatalog({ serverId, model });
+  const catalog = useAgentProfileFormCatalog({ serverId, model });
+  const selectedEntry = catalog.entries?.find((entry) => entry.provider === state.provider);
+  const catalogError =
+    selectedEntry?.status === "error" || selectedEntry?.status === "unavailable"
+      ? (selectedEntry.error ?? catalog.error)
+      : catalog.error;
   useAgentProfileFormFeatures({ serverId, model, state });
 
   const sheetHeader = useMemo<SheetHeader>(
@@ -169,9 +174,15 @@ function OpenAgentProfileEditModal({
     (value: { icon: string; color: string }) => model.setAppearance(value),
     [model],
   );
+  const handleCatalogOpen = useCallback(() => {
+    catalog.refetchIfStale(state.provider);
+  }, [catalog.refetchIfStale, state.provider]);
   const handleProviderChange = useCallback(
-    (value: string, display: SelectFieldDisplay) => model.setProvider(value, display),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      model.setProvider(value, display);
+      catalog.refetchIfStale(value);
+    },
+    [catalog.refetchIfStale, model],
   );
   const handleModelChange = useCallback(
     (value: string, display: SelectFieldDisplay) => model.setModel(value, value ? display : null),
@@ -264,6 +275,8 @@ function OpenAgentProfileEditModal({
           selectedDisplay={state.providerDisplay}
           options={providerOptions}
           onChange={handleProviderChange}
+          onOpen={handleCatalogOpen}
+          error={catalogError}
           placeholder={t("settings.host.agentProfiles.providerPlaceholder")}
           emptyText={t("settings.host.agentProfiles.noProviders")}
           loading={state.catalogResolution !== "complete"}
@@ -282,6 +295,7 @@ function OpenAgentProfileEditModal({
             selectedDisplay={state.modelDisplay}
             options={modelOptions}
             onChange={handleModelChange}
+            onOpen={handleCatalogOpen}
             placeholder={t("settings.host.agentProfiles.modelLabel")}
             emptyText={t("settings.host.agentProfiles.noModels")}
             disabled={state.isSubmitting}

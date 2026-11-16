@@ -4,6 +4,8 @@
 
 use std::fmt::Write as _;
 
+mod host_monitor;
+
 use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
 use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::Value;
@@ -39,6 +41,7 @@ pub enum DaemonError {
 /// Application coordinator for daemon-level WebSocket operations.
 #[derive(Debug)]
 pub struct Daemon {
+    monitor: Option<host_monitor::HostMonitor>,
     runtime: DaemonRuntime,
     config: Box<dyn DaemonConfigStore>,
     diagnostics: Option<std::sync::Arc<dyn crate::daemon::ports::DaemonDiagnostics>>,
@@ -49,10 +52,36 @@ impl Daemon {
     #[must_use]
     pub fn new(runtime: DaemonRuntime, config: Box<dyn DaemonConfigStore>) -> Self {
         Self {
+            monitor: None,
             runtime,
             config,
             diagnostics: None,
         }
+    }
+
+    /// Install a blocking host sampler; counters remain idle until a client requests them.
+    ///
+    /// `sampler` owns OS counters. Returns this daemon with a shared bounded sample cache.
+    #[must_use]
+    pub fn with_host_sampler(
+        mut self,
+        sampler: Box<dyn crate::daemon::ports::host_monitor::HostSampler>,
+    ) -> Self {
+        self.monitor = Some(host_monitor::HostMonitor::new(sampler));
+        self
+    }
+
+    pub(crate) fn host_stats(
+        &mut self,
+        include_history: bool,
+    ) -> Result<
+        crate::daemon::ports::host_monitor::HostSnapshot,
+        crate::daemon::ports::host_monitor::HostMonitorError,
+    > {
+        self.monitor
+            .as_mut()
+            .ok_or(crate::daemon::ports::host_monitor::HostMonitorError)?
+            .read(std::time::Instant::now(), include_history)
     }
 
     /// Attach the host's bounded incident collector without transferring provider ownership.

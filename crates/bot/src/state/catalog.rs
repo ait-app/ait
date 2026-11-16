@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use domain::bot::notification::SkipReason;
 use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
@@ -137,6 +138,12 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             allowed_senders,
             ..
         }
+        | ChannelConfig::Lark {
+            app_id,
+            secret_ref,
+            allowed_senders,
+            ..
+        }
         | ChannelConfig::Qq {
             app_id,
             secret_ref,
@@ -213,6 +220,7 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Webhook { endpoint_id, .. } => Some(("webhook", endpoint_id)),
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
+        ChannelConfig::Lark { app_id, .. } => Some(("lark", app_id)),
         ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
         ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
         ChannelConfig::PhotonImessage { project_id, .. } => Some(("photon", project_id)),
@@ -228,8 +236,12 @@ impl State {
             .unwrap_or_default()
             .normalized()
             .map_err(|_| ErrorCode::InvalidMessage)?;
+        let wake_scope = request.wake_scope.unwrap_or_default();
         if let Ok(bot) = self.current(&request.workspace_id) {
-            if bot.execution == execution && bot.permissions == permissions {
+            if bot.execution == execution
+                && bot.permissions == permissions
+                && bot.wake_scope == wake_scope
+            {
                 return Ok(json!({"bot":super::view(bot),"created":false}));
             }
             return Err(ErrorCode::BotConflict);
@@ -243,6 +255,7 @@ impl State {
             created_at: chrono::Utc::now().to_rfc3339(),
             permissions,
             workspaces: BTreeSet::new(),
+            wake_scope,
         };
         let mut catalog = self.catalog.clone();
         catalog.channels.push(Channel {
@@ -274,7 +287,12 @@ impl State {
             .iter_mut()
             .find(|entry| entry.id == id)
             .ok_or(ErrorCode::BotNotFound)?;
-        bot.execution = normalized_execution(request.execution)?;
+        if let Some(execution) = request.execution {
+            bot.execution = normalized_execution(execution)?;
+        }
+        if let Some(wake_scope) = request.wake_scope {
+            bot.wake_scope = wake_scope;
+        }
         let view = super::view(bot);
         self.save_catalog(catalog)?;
         Ok(json!({"bot":view,"configurationAppliesToNewSessions":true}))
@@ -338,6 +356,7 @@ impl State {
         };
         let view = self.set_state(id, BotState::Paused { reason })?;
         self.stop_bot(id, false, cancellation)?;
+        self.skip_pending(id, SkipReason::Paused)?;
         Ok(view)
     }
     /// Save `catalog` with `bots` retired and their external channel accounts released, then
@@ -368,6 +387,8 @@ impl State {
         self.released_webhooks.extend(webhooks);
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
+            self.delete_notifications(*bot)?;
+            self.delete_tickets(*bot)?;
         }
         Ok(())
     }

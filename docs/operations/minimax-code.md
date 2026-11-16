@@ -63,14 +63,14 @@ export AIT_SERVER_MINIMAX_CODE_BIN=/absolute/path/to/mcode
 离线测试不访问模型服务：
 
 ```sh
-cargo test --locked -p provider --lib local::minimax
+cargo test --locked -p provider-minimax
 ```
 
 真实测试需要已经登录的原生程序，会调用模型并在临时目录执行测试任务：
 
 ```sh
 AIT_TEST_MINIMAX_CODE_BIN="$(command -v mcode)" \
-  cargo test --locked -p provider --lib local::minimax::tests::live -- --ignored --nocapture
+  cargo test --locked -p provider-minimax --lib tests::live -- --ignored --nocapture
 ```
 
 浏览器真实联调使用独立的临时 daemon 和工作区，不连接正在使用的 AIT 服务：

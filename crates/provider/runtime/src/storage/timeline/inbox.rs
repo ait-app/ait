@@ -1,0 +1,329 @@
+//! Durable admission receipts. A claimed native write is never automatically replayed.
+
+use rusqlite::{Connection, OptionalExtension, params};
+use sha2::{Digest, Sha256};
+
+use super::{ErrorCode, Timeline, io};
+use provider_core::protocol::prompt::{AgentPrompt, MAX_PROMPT_BYTES};
+
+const MAX_QUEUED_INPUTS: u64 = 32;
+// An empty queue must accept one input that passed the shared prompt validation.
+const MAX_AGENT_INPUT_BYTES: u64 = MAX_PROMPT_BYTES as u64;
+const MAX_TOTAL_INPUT_BYTES: u64 = 4 * MAX_AGENT_INPUT_BYTES;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Receipt {
+    New,
+    Accepted,
+    Uncertain,
+    Rejected,
+}
+
+#[derive(Debug)]
+pub(crate) struct QueuedInput {
+    pub(crate) agent: String,
+    pub(crate) message: String,
+    pub(crate) prompt: AgentPrompt,
+}
+
+impl Timeline {
+    /// Read an existing receipt before current ownership checks, without admitting new work.
+    pub(crate) fn input_receipt(
+        &self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+        policy: &str,
+    ) -> Result<Option<Receipt>, ErrorCode> {
+        let fingerprint = fingerprint(policy, &serde_json::to_string(prompt).map_err(io)?);
+        let database = self.database.lock().map_err(io)?;
+        existing_receipt(&database, agent, message, &fingerprint)?
+            .map(|state| receipt(&state))
+            .transpose()
+    }
+
+    /// Fence an immediate question answer. Definitive rejections may be retried by the caller;
+    /// answers are never put in the interrupt queue or replayed on process recovery.
+    pub(crate) fn claim_answer(
+        &self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<Receipt, ErrorCode> {
+        prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
+        let encoded = serde_json::to_string(prompt).map_err(io)?;
+        let fingerprint = fingerprint("answer", &encoded);
+        let mut database = self.database.lock().map_err(io)?;
+        let tx = database.transaction().map_err(io)?;
+        if let Some(state) = existing_receipt(&tx, agent, message, &fingerprint)? {
+            match state.as_str() {
+                "accepted" => return Ok(Receipt::Accepted),
+                "claimed" | "uncertain" => return Ok(Receipt::Uncertain),
+                "rejected" => {
+                    tx.execute(
+                        "UPDATE input_receipts SET state='claimed' WHERE agent=? AND message=?",
+                        params![agent, message],
+                    )
+                    .map_err(io)?;
+                }
+                _ => return Err(ErrorCode::InvalidMessage),
+            }
+        } else {
+            tx.execute("INSERT INTO input_receipts(agent,message,fingerprint,prompt,state) VALUES(?,?,?,NULL,'claimed')",
+                params![agent,message,fingerprint]).map_err(io)?;
+        }
+        tx.commit().map_err(io)?;
+        Ok(Receipt::New)
+    }
+
+    /// Reserve input before any native effect; exact duplicates reuse their committed receipt.
+    pub(crate) fn reserve_input(
+        &self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+        policy: &str,
+    ) -> Result<Receipt, ErrorCode> {
+        prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
+        let encoded = serde_json::to_string(prompt).map_err(io)?;
+        let fingerprint = fingerprint(policy, &encoded);
+        let mut database = self.database.lock().map_err(io)?;
+        let tx = database.transaction().map_err(io)?;
+        if let Some(state) = existing_receipt(&tx, agent, message, &fingerprint)? {
+            return receipt(&state);
+        }
+        let (count, bytes): (u64, u64) = tx
+            .query_row(
+                "SELECT count(*), coalesce(sum(length(CAST(prompt AS BLOB))), 0) \
+                 FROM input_receipts WHERE state='queued' AND agent=?",
+                [agent],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(io)?;
+        let total: u64 = tx
+            .query_row(
+                "SELECT coalesce(sum(length(CAST(prompt AS BLOB))), 0) \
+                 FROM input_receipts WHERE state='queued'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(io)?;
+        let prompt_bytes = encoded.len() as u64;
+        if count >= MAX_QUEUED_INPUTS
+            || bytes.saturating_add(prompt_bytes) > MAX_AGENT_INPUT_BYTES
+            || total.saturating_add(prompt_bytes) > MAX_TOTAL_INPUT_BYTES
+        {
+            tracing::warn!(
+                queued_inputs = count,
+                queued_agent_bytes = bytes,
+                queued_total_bytes = total,
+                prompt_bytes,
+                limit_inputs = MAX_QUEUED_INPUTS,
+                limit_agent_bytes = MAX_AGENT_INPUT_BYTES,
+                limit_total_bytes = MAX_TOTAL_INPUT_BYTES,
+                "Agent input queue capacity exhausted"
+            );
+            return Err(ErrorCode::ResourceExhausted);
+        }
+        tx.execute("INSERT INTO input_receipts(agent,message,fingerprint,prompt,state) VALUES(?,?,?,?,'queued')",
+            params![agent,message,fingerprint,encoded]).map_err(io)?;
+        tx.commit().map_err(io)?;
+        Ok(Receipt::New)
+    }
+
+    /// Inspect queued work in FIFO order without changing admission state.
+    pub(crate) fn queued_inputs(&self) -> Result<Vec<QueuedInput>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let mut query = database.prepare("SELECT agent,message,prompt FROM input_receipts WHERE state='queued' ORDER BY seq LIMIT 1024").map_err(io)?;
+        query
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(io)?
+            .map(|row| {
+                let (agent, message, prompt) = row.map_err(io)?;
+                Ok(QueuedInput {
+                    agent,
+                    message,
+                    prompt: serde_json::from_str(&prompt).map_err(io)?,
+                })
+            })
+            .collect()
+    }
+
+    /// Read only identities needed by the scheduler, without decoding other Agents' prompts.
+    /// # Errors
+    /// Returns storage errors while listing pending identities.
+    pub(crate) fn queued_agents(&self) -> Result<Vec<String>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let mut query = database.prepare("SELECT DISTINCT agent FROM input_receipts WHERE state='queued' ORDER BY agent LIMIT 1024").map_err(io)?;
+        query
+            .query_map([], |row| row.get(0))
+            .map_err(io)?
+            .map(|row| row.map_err(io))
+            .collect()
+    }
+
+    /// Load the first FIFO input for one owner without scanning unrelated prompt bodies.
+    /// # Errors
+    /// Returns storage or persisted prompt decoding errors.
+    pub(crate) fn queued_for_agent(&self, agent: &str) -> Result<Option<QueuedInput>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let row = database.query_row("SELECT message,prompt FROM input_receipts WHERE state='queued' AND agent=? ORDER BY seq LIMIT 1", [agent], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }).optional().map_err(io)?;
+        row.map(|(message, prompt)| {
+            Ok(QueuedInput {
+                agent: agent.to_owned(),
+                message,
+                prompt: serde_json::from_str(&prompt).map_err(io)?,
+            })
+        })
+        .transpose()
+    }
+
+    /// Whether unsubmitted work remains for this Agent.
+    pub(crate) fn has_queued_input(&self, agent: &str) -> Result<bool, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM input_receipts WHERE agent=? AND state='queued')",
+                [agent],
+                |row| row.get(0),
+            )
+            .map_err(io)
+    }
+
+    /// Whether queued work or a foreground write awaiting native admission still owns completion.
+    /// Immediate answers have no stored prompt; uncertain writes are fenced by startup recovery.
+    /// # Errors
+    /// Returns storage failures when the receipt state cannot be read.
+    pub(crate) fn has_pending_admission(&self, agent: &str) -> Result<bool, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM input_receipts WHERE agent=?
+             AND prompt IS NOT NULL AND state IN ('queued','claimed'))",
+                [agent],
+                |row| row.get(0),
+            )
+            .map_err(io)
+    }
+
+    /// Commit the no-replay fence before writing to a native provider.
+    pub(crate) fn claim_input(&self, agent: &str, message: &str) -> Result<(), ErrorCode> {
+        let changed = self.database.lock().map_err(io)?.execute(
+            "UPDATE input_receipts SET state='claimed' WHERE agent=? AND message=? AND state='queued'", params![agent,message]).map_err(io)?;
+        if changed != 1 {
+            return Err(ErrorCode::IdempotencyConflict);
+        }
+        Ok(())
+    }
+
+    /// Store an admission outcome and discard the potentially large prompt body.
+    pub(crate) fn finish_input(
+        &self,
+        agent: &str,
+        message: &str,
+        result: Receipt,
+    ) -> Result<(), ErrorCode> {
+        let state = match result {
+            Receipt::Accepted => "accepted",
+            Receipt::Uncertain => "uncertain",
+            Receipt::Rejected => "rejected",
+            Receipt::New => return Err(ErrorCode::InvalidMessage),
+        };
+        let changed = self.database.lock().map_err(io)?.execute(
+            "UPDATE input_receipts SET state=?,prompt=NULL WHERE agent=? AND message=? AND state IN ('queued','claimed')", params![state,agent,message]).map_err(io)?;
+        if changed != 1 {
+            return Err(ErrorCode::IdempotencyConflict);
+        }
+        Ok(())
+    }
+
+    /// A definitive native steering rejection permits fallback delivery of that same input.
+    pub(crate) fn requeue_input(&self, agent: &str, message: &str) -> Result<(), ErrorCode> {
+        let changed = self.database.lock().map_err(io)?.execute(
+            "UPDATE input_receipts SET state='queued' WHERE agent=? AND message=? AND state='claimed' AND prompt IS NOT NULL", params![agent,message]).map_err(io)?;
+        if changed != 1 {
+            return Err(ErrorCode::IdempotencyConflict);
+        }
+        Ok(())
+    }
+
+    /// Explicit cancellation withdraws only inputs that never reached the native boundary.
+    pub(crate) fn cancel_inputs(&self, agent: &str) -> Result<(), ErrorCode> {
+        self.database.lock().map_err(io)?.execute("UPDATE input_receipts SET state='cancelled',prompt=NULL WHERE agent=? AND state='queued'", [agent]).map_err(io)?;
+        Ok(())
+    }
+
+    /// Process recovery retains uncertain receipts and never replays a possibly submitted input.
+    pub(crate) fn recover_inputs(&self) -> Result<(), ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .execute(
+                "UPDATE input_receipts SET state='uncertain',prompt=NULL WHERE state='claimed'",
+                [],
+            )
+            .map_err(io)?;
+        Ok(())
+    }
+}
+
+/// Fingerprint a submission so a reused client message ID with different content is detected.
+fn fingerprint(policy: &str, encoded_prompt: &str) -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(format!("{policy}\n{encoded_prompt}"))
+    )
+}
+
+/// Return the stored state of an existing receipt for `message`.
+/// # Errors
+/// Returns an idempotency conflict for a different fingerprint, or storage failures.
+fn existing_receipt(
+    database: &Connection,
+    agent: &str,
+    message: &str,
+    fingerprint: &str,
+) -> Result<Option<String>, ErrorCode> {
+    let existing: Option<(String, String)> = database
+        .query_row(
+            "SELECT fingerprint,state FROM input_receipts WHERE agent=? AND message=?",
+            params![agent, message],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(io)?;
+    existing
+        .map(|(previous, state)| {
+            if previous == fingerprint {
+                Ok(state)
+            } else {
+                Err(ErrorCode::IdempotencyConflict)
+            }
+        })
+        .transpose()
+}
+
+/// Map a stored ordinary-input state to its admission outcome.
+/// # Errors
+/// Returns unsupported format for an unknown persisted state.
+fn receipt(state: &str) -> Result<Receipt, ErrorCode> {
+    match state {
+        "queued" | "accepted" => Ok(Receipt::Accepted),
+        "claimed" | "uncertain" => Ok(Receipt::Uncertain),
+        "rejected" | "cancelled" => Ok(Receipt::Rejected),
+        _ => Err(ErrorCode::UnsupportedFormat),
+    }
+}
+
+#[cfg(test)]
+mod tests;

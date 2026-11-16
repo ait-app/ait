@@ -286,41 +286,59 @@ fn list_sorts_newest_first_without_leaking_occurrence_history() {
 }
 
 #[test]
-fn bot_scope_is_persisted_and_immutable() {
+fn bot_scope_and_conversation_are_persisted_and_immutable() {
     let (mut engine, store) = fixture();
+    let conversation = ConversationId::generate().to_string();
     let mut params = input();
     params["botScope"] = json!("wks_a");
+    params["botConversation"] = json!(conversation);
     let created = engine
         .request("schedule.create.request", params, now())
         .unwrap();
     assert_eq!(created["schedule"]["botScope"], "wks_a");
+    assert_eq!(
+        created["schedule"]["botConversation"],
+        conversation.as_str()
+    );
     let id = created["schedule"]["id"].as_str().unwrap().to_owned();
     let inspected = engine
         .request("schedule.inspect.request", json!({"scheduleId":id}), now())
         .unwrap();
     assert_eq!(inspected["schedule"]["botScope"], "wks_a");
 
-    for scope in [json!("wks_b"), Value::Null] {
+    for patch in [
+        json!({"scheduleId":id,"botScope":"wks_b"}),
+        json!({"scheduleId":id,"botScope":null}),
+        json!({"scheduleId":id,"botConversation":ConversationId::generate()}),
+        json!({"scheduleId":id,"botConversation":null}),
+    ] {
         assert!(matches!(
-            engine.request(
-                "schedule.update.request",
-                json!({"scheduleId":id,"botScope":scope}),
-                now()
-            ),
+            engine.request("schedule.update.request", patch, now()),
             Err(Error::Invalid)
         ));
     }
-    let mut blank = input();
-    blank["botScope"] = json!(" ");
-    assert!(matches!(
-        engine.request("schedule.create.request", blank, now()),
-        Err(Error::Invalid)
-    ));
+    for (field, value) in [
+        ("botScope", " "),
+        ("botConversation", "not-a-conversation"),
+        ("botConversation", "00000000-0000-0000-0000-000000000000"),
+    ] {
+        let mut invalid = input();
+        invalid[field] = json!(value);
+        assert!(
+            matches!(
+                engine.request("schedule.create.request", invalid, now()),
+                Err(Error::Invalid)
+            ),
+            "{field} {value}"
+        );
+    }
 
     let reopened = Engine::open(Box::new(store.clone()), now()).unwrap();
+    let stored = reopened.inspect(&id).unwrap();
+    assert_eq!(stored.bot_scope.as_deref(), Some("wks_a"));
     assert_eq!(
-        reopened.inspect(&id).unwrap().bot_scope.as_deref(),
-        Some("wks_a")
+        stored.bot_conversation.map(|id| id.to_string()),
+        Some(conversation)
     );
     let plain = create(&mut engine);
     let listed = engine
@@ -333,4 +351,5 @@ fn bot_scope_is_persisted_and_immutable() {
         .find(|schedule| schedule["id"] == plain.as_str())
         .unwrap();
     assert!(unscoped.get("botScope").is_none(), "{unscoped}");
+    assert!(unscoped.get("botConversation").is_none(), "{unscoped}");
 }

@@ -28,6 +28,7 @@ fn active_bot(workspace: &str) -> Bot {
         created_at: "2026-11-06T00:00:00Z".to_owned(),
         permissions: BotPermissions::default(),
         workspaces: BTreeSet::new(),
+        wake_scope: domain::bot::WakeScope::Own,
     }
 }
 
@@ -64,6 +65,7 @@ fn bot_token(access: McpAccess) -> SecretString {
         McpAccess::Scoped {
             token,
             bot_session: true,
+            worker: false,
         } => token,
         other => panic!("expected a Bot session credential, got {other:?}"),
     }
@@ -90,7 +92,11 @@ fn issued_credentials_resolve_to_their_caller_and_rotate_on_reissue() {
     let first = scoped_token(scopes.access(&subject("child", false, None, &labels)));
     let caller = scopes.resolve(first.expose_secret()).unwrap();
     assert_eq!(caller.root, WORKSPACE);
-    assert!(matches!(caller.kind, CallerKind::Subtree { ref agent_id } if agent_id == "child"));
+    assert!(
+        matches!(caller.kind, CallerKind::Subtree { ref agent_id, ticket: None }
+        if agent_id == "child")
+    );
+    assert_eq!(caller.kind.holder(), Holder::Subtree);
     let second = scoped_token(scopes.access(&subject("child", false, None, &labels)));
     assert_ne!(first.expose_secret(), second.expose_secret());
     assert!(scopes.resolve(first.expose_secret()).is_none());
@@ -106,6 +112,39 @@ fn issued_credentials_resolve_to_their_caller_and_rotate_on_reissue() {
 }
 
 #[test]
+fn subtree_credential_records_a_valid_ticket_label_as_a_worker() {
+    let scopes = Scopes::new();
+    scopes.publish(&catalog_with(active_bot(WORKSPACE)));
+    let ticket = TicketId::generate();
+    let mut labels = scope_labels(WORKSPACE);
+    labels.insert(BOT_TICKET_LABEL.to_owned(), ticket.to_string());
+    let access = scopes.access(&subject("worker", false, None, &labels));
+    assert!(
+        matches!(access, McpAccess::Scoped { worker: true, .. }),
+        "{access:?}"
+    );
+    let worker = scoped_token(access);
+    let caller = scopes.resolve(worker.expose_secret()).unwrap();
+    assert_eq!(
+        caller.kind,
+        CallerKind::Subtree {
+            agent_id: "worker".to_owned(),
+            ticket: Some(ticket),
+        }
+    );
+    assert_eq!(caller.kind.holder(), Holder::Worker);
+    labels.insert(BOT_TICKET_LABEL.to_owned(), "not-a-ticket".to_owned());
+    let access = scopes.access(&subject("other", false, None, &labels));
+    assert!(
+        matches!(access, McpAccess::Scoped { worker: false, .. }),
+        "{access:?}"
+    );
+    let invalid = scoped_token(access);
+    let caller = scopes.resolve(invalid.expose_secret()).unwrap();
+    assert_eq!(caller.kind.holder(), Holder::Subtree);
+}
+
+#[test]
 fn bot_credential_is_rejected_after_pause_remove_or_new_generation() {
     let scopes = Scopes::new();
     let mut bot = active_bot(WORKSPACE);
@@ -117,9 +156,13 @@ fn bot_credential_is_rejected_after_pause_remove_or_new_generation() {
     let token = bot_token(scopes.access(&session));
     let caller = scopes.resolve(token.expose_secret()).unwrap();
     assert_eq!(caller.root, WORKSPACE);
+    let conversation = owner["conversationId"].as_str().unwrap();
     assert!(matches!(
         caller.kind,
-        CallerKind::Bot { bot_id, ref session_id } if bot_id == bot.id && session_id == "session"
+        CallerKind::Bot { bot_id, conversation_id, ref session_id }
+            if bot_id == bot.id
+                && conversation_id.to_string() == conversation
+                && session_id == "session"
     ));
 
     bot.state = BotState::Paused {

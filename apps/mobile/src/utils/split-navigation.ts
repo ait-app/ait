@@ -4,7 +4,7 @@ const ROOT_MIN = 0;
 const ROOT_MAX = 1;
 const FLOAT_TOLERANCE = 0.000001;
 
-export interface PaneBounds {
+interface PaneBounds {
   paneId: string;
   left: number;
   top: number;

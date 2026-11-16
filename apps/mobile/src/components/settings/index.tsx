@@ -12,7 +12,6 @@ export { SettingsSection } from "./headings/settings-section";
 
 interface AppSettingsRowProps extends Omit<SettingsRowProps, "hint"> {
   hint?: ReactNode;
-  labelAccessory?: ReactNode;
 }
 
 export function SettingsCard({ children, testID }: { children: ReactNode; testID?: string }) {
@@ -30,27 +29,13 @@ export function SettingsCard({ children, testID }: { children: ReactNode; testID
   );
 }
 
-export function SettingsRow({
-  label,
-  labelAccessory,
-  hint,
-  error,
-  children,
-  testID,
-}: AppSettingsRowProps) {
+export function SettingsRow({ label, hint, error, children, testID }: AppSettingsRowProps) {
   const compact = useIsCompactFormFactor();
   const rowStyle = useMemo(() => [settingsStyles.row, compact && styles.compactRow], [compact]);
   return (
     <View style={rowStyle} testID={testID}>
       <View style={styles.label}>
-        {labelAccessory ? (
-          <View style={styles.labelRow}>
-            <Text style={[settingsStyles.rowTitle, styles.accessoryLabel]}>{label}</Text>
-            {labelAccessory}
-          </View>
-        ) : (
-          <Text style={settingsStyles.rowTitle}>{label}</Text>
-        )}
+        <Text style={settingsStyles.rowTitle}>{label}</Text>
         {typeof hint === "string" ? <Text style={settingsStyles.rowHint}>{hint}</Text> : hint}
         {error ? (
           <Text accessibilityRole="alert" style={settingsStyles.rowError}>
@@ -63,32 +48,30 @@ export function SettingsRow({
   );
 }
 
-export function SettingsSwitch({ value, onValueChange, disabled, ...row }: SettingsSwitchProps) {
+export function SettingsSwitch({ value, onValueChange, ...row }: SettingsSwitchProps) {
   return (
     <SettingsRow {...row}>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        accessibilityLabel={row.label}
-      />
+      <Switch value={value} onValueChange={onValueChange} accessibilityLabel={row.label} />
     </SettingsRow>
   );
 }
 
-function SettingsOption<Value extends string>({
-  option,
+/** A dropdown item that reports its value when picked. */
+export function ValueMenuItem<Value extends string>({
+  value,
+  label,
   selected,
-  onValueChange,
+  onChange,
 }: {
-  option: { label: string; value: Value };
+  value: Value;
+  label: string;
   selected: boolean;
-  onValueChange(value: Value): void;
+  onChange: (value: Value) => void;
 }) {
-  const select = useCallback(() => onValueChange(option.value), [onValueChange, option.value]);
+  const handleSelect = useCallback(() => onChange(value), [onChange, value]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={select}>
-      {option.label}
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {label}
     </DropdownMenuItem>
   );
 }
@@ -97,28 +80,24 @@ export function SettingsSelect<Value extends string>({
   value,
   options,
   onValueChange,
-  disabled,
   ...row
 }: SettingsSelectProps<Value>) {
   return (
     <SettingsRow {...row}>
       <DropdownMenu>
-        <DropdownTrigger
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={row.label}
-        >
+        <DropdownTrigger accessibilityRole="button" accessibilityLabel={row.label}>
           <Text style={styles.value}>
             {options.find((option) => option.value === value)?.label ?? value}
           </Text>
         </DropdownTrigger>
         <DropdownMenuContent side="bottom" align="end" width={220}>
           {options.map((option) => (
-            <SettingsOption
+            <ValueMenuItem
               key={option.value}
-              option={option}
+              value={option.value}
+              label={option.label}
               selected={option.value === value}
-              onValueChange={onValueChange}
+              onChange={onValueChange}
             />
           ))}
         </DropdownMenuContent>
@@ -130,13 +109,6 @@ export function SettingsSelect<Value extends string>({
 const styles = StyleSheet.create((theme) => ({
   compactRow: { flexWrap: "wrap", gap: theme.spacing[3] },
   label: { flexGrow: 1, flexShrink: 1, flexBasis: 160, marginRight: theme.spacing[3] },
-  labelRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  accessoryLabel: { flexShrink: 1, minWidth: 0 },
   control: { flexShrink: 1, maxWidth: "100%" },
   value: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
 }));

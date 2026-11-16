@@ -16,9 +16,9 @@ export async function resolveBrowserProfileHost(
   const host = store.getHosts().find((host) => host.serverId === serverId);
   if (!host) throw new Error("Workspace Host is not available for browser routing");
   const connection =
-    host?.connections.find((connection) => connection.id === snapshot?.activeConnectionId) ??
-    host?.connections.find((connection) => connection.id === host.preferredConnectionId) ??
-    host?.connections[0];
+    host.connections.find((connection) => connection.id === snapshot?.activeConnectionId) ??
+    host.connections.find((connection) => connection.id === host.preferredConnectionId) ??
+    host.connections[0];
   if (!connection) throw new Error("Workspace Host has no browser route");
   let target: DesktopDaemonTransportTarget | undefined;
   switch (connection.type) {

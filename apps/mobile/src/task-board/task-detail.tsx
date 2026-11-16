@@ -1,20 +1,28 @@
 import React, { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { Archive, ArrowUpRight, Check, GitFork, Square, X } from "lucide-react-native";
+import {
+  Archive,
+  ArrowUpRight,
+  Check,
+  GitFork,
+  Monitor,
+  Power,
+  WifiOff,
+  X,
+} from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { PermissionRequestCard } from "@/components/permission-request-card";
-import { useToast } from "@/contexts/toast-context";
-import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { toErrorMessage } from "@/utils/error-messages";
-import { taskActions, taskDescendants, type BoardTask } from "./model";
-import { TaskProvider, TaskStatus } from "./task-card";
+import { taskDescendants, type BoardTask } from "./model";
+import { useTaskActions } from "./use-task-actions";
+import { TaskProvider } from "./task-card";
+import { TaskStatus } from "./task-status";
 import { useSubagentsForParent } from "@/subagents";
 
 function ProviderSubtasks({ task }: { task: BoardTask }) {
@@ -65,12 +73,10 @@ export function TaskDetail({
   const { theme } = useUnistyles();
   const { agent } = task;
   const client = useHostRuntimeClient(agent.serverId);
-  const { archiveAgent } = useArchiveAgent();
-  const toast = useToast();
   const children = useMemo(() => taskDescendants(task), [task]);
   const running =
     agent.status === "running" || agent.status === "initializing" || agent.turn.phase === "open";
-  const allowed = taskActions(task);
+  const { action, allowed, disabled, open } = useTaskActions(task, online);
   const recent = useQuery({
     queryKey: [
       "task-board-preview",
@@ -97,29 +103,10 @@ export function TaskDetail({
       return latest?.item.type === "assistant_message" ? latest.item.text : null;
     },
   });
-  const action = useMutation({
-    retry: false,
-    networkMode: "always",
-    mutationFn: async (kind: "stop" | "read" | "archive") => {
-      if (!client || !online) throw new Error(t("taskBoard.offlineHint"));
-      if (!allowed[kind]) throw new Error(t("taskBoard.actionFailed"));
-      if (kind === "stop") await client.cancelAgent(agent.id);
-      else if (kind === "read") await client.clearAgentAttention(agent.id);
-      else {
-        try {
-          await archiveAgent({ serverId: agent.serverId, agentId: agent.id });
-        } catch (error) {
-          toast.error(toErrorMessage(error));
-          throw error;
-        }
-      }
-    },
-  });
-  const disabled = !online || action.isPending;
   return (
     <View style={styles.container} testID="task-detail">
       {showHeader ? (
-        <View style={styles.header}>
+        <View style={styles.header} testID="task-detail-header">
           <Text style={styles.heading}>{t("taskBoard.details")}</Text>
           <Pressable
             onPress={onClose}
@@ -139,6 +126,7 @@ export function TaskDetail({
               variant="ghost"
               size="sm"
               leftIcon={GitFork}
+              style={styles.parentLink}
               onPress={() => onSelect(parent.key)}
             >
               {parent.agent.title || t("agentList.fallbackTitle")}
@@ -146,7 +134,8 @@ export function TaskDetail({
           ) : null}
           <View style={styles.section}>
             <Text style={styles.meta}>
-              {task.projectName} / {task.workspaceName}
+              {task.projectName}
+              {task.workspaceName !== task.projectName ? ` › ${task.workspaceName}` : ""}
             </Text>
             <Text style={styles.title}>{agent.title || t("agentList.fallbackTitle")}</Text>
             <TaskStatus bucket={task.ownBucket} />
@@ -162,7 +151,16 @@ export function TaskDetail({
               </Text>
             ) : null}
             <TaskProvider task={task} />
-            <Text style={styles.meta}>{task.hostLabel}</Text>
+            <View style={styles.hostRow}>
+              {online ? (
+                <Monitor size={12} color={theme.colors.foregroundMuted} />
+              ) : (
+                <WifiOff size={12} color={theme.colors.statusWarning} />
+              )}
+              <Text style={[styles.meta, styles.shrink]} numberOfLines={1}>
+                {task.hostLabel}
+              </Text>
+            </View>
             {!online ? <Text style={styles.warning}>{t("taskBoard.offlineHint")}</Text> : null}
           </View>
           {agent.lastError ? (
@@ -238,23 +236,18 @@ export function TaskDetail({
           variant="default"
           leftIcon={ArrowUpRight}
           testID="task-open-conversation"
-          onPress={() =>
-            navigateToAgent({
-              serverId: agent.serverId,
-              agentId: agent.id,
-              workspaceId: agent.workspaceId,
-              pin: true,
-            })
-          }
+          onPress={open}
         >
           {t("taskBoard.openConversation")}
         </Button>
         <View style={styles.actions}>
           {allowed.stop ? (
             <Button
-              leftIcon={Square}
+              leftIcon={Power}
               size="sm"
               variant="outline"
+              style={styles.stopButton}
+              textStyle={styles.danger}
               disabled={disabled}
               loading={action.isPending && action.variables === "stop"}
               testID="task-stop"
@@ -295,11 +288,13 @@ export function TaskDetail({
 
 const styles = StyleSheet.create((theme) => ({
   container: { flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 },
+  // Matches the board toolbar height so both dividers line up.
   header: {
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -339,6 +334,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   row: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  hostRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[1] },
+  shrink: { flexShrink: 1 },
+  parentLink: { alignSelf: "flex-start" },
+  stopButton: { borderColor: theme.colors.statusDanger },
+  danger: { color: theme.colors.statusDanger },
   child: {
     paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[3],

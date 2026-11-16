@@ -27,6 +27,7 @@ import { identityColor } from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
+import { ValueMenuItem } from "@/components/settings";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedPencil = withUnistyles(Pencil);
@@ -179,9 +180,10 @@ function BadgeDisplayRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {HOST_BADGE_DISPLAYS.map((option) => (
-            <BadgeDisplayMenuItem
+            <ValueMenuItem
               key={option}
-              display={option}
+              value={option}
+              label={badgeDisplayLabel(t, option)}
               selected={option === badgeDisplay}
               onChange={onChange}
             />
@@ -189,24 +191,6 @@ function BadgeDisplayRow({
         </DropdownMenuContent>
       </DropdownMenu>
     </View>
-  );
-}
-
-function BadgeDisplayMenuItem({
-  display,
-  selected,
-  onChange,
-}: {
-  display: HostBadgeDisplay;
-  selected: boolean;
-  onChange: (display: HostBadgeDisplay) => void;
-}) {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => onChange(display), [display, onChange]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {badgeDisplayLabel(t, display)}
-    </DropdownMenuItem>
   );
 }
 

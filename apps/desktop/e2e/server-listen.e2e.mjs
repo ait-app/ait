@@ -17,7 +17,7 @@ const env = {
   AIT_TEST_APP_NAME: "Ait Listener Test",
   AIT_DISABLE_SINGLE_INSTANCE_LOCK: "1",
   AIT_SERVER_DATA_DIR: path.join(temporary, "server"),
-  AIT_SERVER_BIN: process.env.AIT_SERVER_BIN || path.join(root, "target/debug/daemon"),
+  AITD_BIN: process.env.AITD_BIN || path.join(root, "target/debug/daemon"),
   AIT_ELECTRON_USER_DATA_DIR: path.join(temporary, "electron"),
 };
 delete env.ELECTRON_RUN_AS_NODE;

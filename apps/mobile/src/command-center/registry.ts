@@ -81,14 +81,19 @@ export function createCommandCenterRegistry(): CommandCenterRegistry {
       ) {
         return;
       }
-      const ids = new Set<string>();
-      for (const contribution of registration.contributions) {
-        const id = contributionId(registration.owner.sourceId, contribution.id);
-        if (ids.has(id)) throw new Error(`Duplicate Command Center contribution id: ${id}`);
-        ids.add(id);
-      }
       registrations.set(registration.owner.sourceId, registration);
-      publish();
+      try {
+        publish();
+      } catch (error) {
+        // Ids are prefixed with a source id that may itself contain ":", so a collision can span
+        // sources. Restore the previous state so one rejected registration cannot wedge the rest.
+        if (current) {
+          registrations.set(registration.owner.sourceId, current);
+        } else {
+          registrations.delete(registration.owner.sourceId);
+        }
+        throw error;
+      }
     },
     remove(owner) {
       const current = registrations.get(owner.sourceId);

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { theme } = vi.hoisted(() => ({
   theme: {
     spacing: { 2: 8 },
+    fontFamily: { mono: "monospace" },
     fontSize: { sm: 13 },
     colors: {
       foreground: "#foreground",

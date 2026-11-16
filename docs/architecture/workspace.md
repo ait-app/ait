@@ -60,6 +60,10 @@
   `git fetch origin --prune --quiet`。全进程最多两个并发，单次限 120 秒并禁用凭据提示；
   它从不修改 HEAD、索引或工作树。无 origin 的目录跳过
   （[ADR-069](../decisions/workspace/adr-069-background-git-fetch.md)）。
+- Agent 一轮以完成或失败结束时，daemon 读取该 Agent `cwd` 的本地 checkout 状态（不 fetch），
+  有变化时发布 `checkout.status.update`，让客户端及时切换未提交变更与基准比较。同一目录至少间隔
+  60 秒读取一次，间隔内再次结束的轮次合并为间隔到期时的一次读取；与后台 fetch 共用“上次发布”
+  记录，任一来源只在状态变化时发布。
 
 ## Checkout 刷新与背压
 
@@ -107,7 +111,7 @@
   重新推导 confinement（优先 `worktreeRoot`），不随 Agent 持久化。Registry 读取失败或适配器未声明
   `supports_write_confinement` 时拒绝启动；目前声明支持的有 Claude Code、Codex、Pi、Oh My Pi、
   OpenCode、MiniMax Code（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）。
-- `provider::local::sandbox::command` 是唯一平台接缝：macOS 用 `/usr/bin/sandbox-exec -p` 加内联
+- `provider_native::sandbox::command` 是唯一平台接缝：macOS 用 `/usr/bin/sandbox-exec -p` 加内联
   profile，Linux 用 `/usr/bin/bwrap`（需支持 `--disable-userns`），其他平台返回 `Unavailable`。
   任何失败都不退化为不受限运行（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
@@ -120,6 +124,12 @@
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
 
+## 客户端 Workspace 记事本
+
+- 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab。每个 Workspace 最多一个记事本 tab，tab 布局保留在客户端。
+- 记事本内容存放在 Workspace 根目录的 `.ait-notebook.md`，通过现有文件读取、实时订阅和带版本校验的写入接口同步；因此 Workspace 分享时，协作者访问同一份笔记与 TODO 内容。
+- 访客写入沿用 Workspace 文件权限。写入失败会显示只读状态，并发修改通过文件版本冲突提示处理。
+
 ## 定时任务归属
 
 - 新建任务必须提供 `workspaceId`，已绑定的 `workspaceId` 不能改成另一个。目标变更由宿主的
@@ -130,3 +140,6 @@
   `archiveOnFinish` 只归档该次新建的 Agent，所属 Workspace 不被归档；只有旧版未绑定任务保留
   创建并归档独立 Workspace 的分支（[ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)、
   [任务手册](../operations/schedules.md)）。
+- 每次运行结算写盘后（含打开存储时记为失败的中断运行）调用 `schedule::ports::Runner::settled`；worker 启动时对 15 分钟内结束的运行再调用一次，
+  弥补关闭或崩溃前未送达的报告，观察者按运行 id 去重。daemon 据此向 Workspace Bot
+  提交运行结果通知（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。

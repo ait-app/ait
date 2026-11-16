@@ -17,14 +17,11 @@ import {
 } from "react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import {
-  MenuHint,
   MenuItem,
-  MenuLabel,
   MenuRoot,
   MenuSeparator,
   MenuSurface,
   useMenuContext,
-  type MenuSurfaceProps,
   type MenuTriggerState,
 } from "@/components/ui/menu";
 import { PressHighlight } from "@/components/ui/press-highlight";
@@ -34,14 +31,12 @@ import type { PressHighlightProps } from "@/components/ui/press-highlight.types"
  * A menu opened by a long press or a right click, anchored to the point of the gesture rather
  * than to a trigger box.
  *
- * Everything below the trigger is the shared menu engine — see `@/components/ui/menu` and
- * docs/menus.md. Only the way it opens is different from `dropdown-menu.tsx`.
+ * Everything below the trigger is the shared menu engine — see `@/components/ui/menu`. Only the
+ * way it opens is different from `dropdown-menu.tsx`.
  */
 
 export { MenuItem as ContextMenuItem };
-export { MenuLabel as ContextMenuLabel };
 export { MenuSeparator as ContextMenuSeparator };
-export { MenuHint as ContextMenuHint };
 export type { ActionStatus } from "@/components/ui/menu";
 
 /**
@@ -55,9 +50,7 @@ export function ContextMenu({
   return <MenuRoot {...props} compactMode={compactMode} />;
 }
 
-export function ContextMenuContent(props: MenuSurfaceProps): ReactElement | null {
-  return <MenuSurface {...props} />;
-}
+export { MenuSurface as ContextMenuContent };
 
 export function useContextMenu() {
   return useMenuContext("useContextMenu");

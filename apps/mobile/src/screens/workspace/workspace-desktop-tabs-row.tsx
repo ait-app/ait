@@ -52,9 +52,9 @@ import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-lay
 import { retainWorkspaceTabMeasuredWidth } from "@/screens/workspace/workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
-  WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
 import {
   buildWorkspaceDesktopTabActions,
@@ -617,6 +617,7 @@ function getFallbackTabLabel(
     pullRequest: string;
     schedule: string;
     bot: string;
+    notebook: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -644,6 +645,7 @@ function getFallbackTabLabel(
     return labels.pullRequest;
   }
   if (tab.target.kind === "bot") return labels.bot;
+  if (tab.target.kind === "notebook") return labels.notebook;
   if (tab.target.kind === "schedule") {
     return labels.schedule;
   }
@@ -689,7 +691,6 @@ function TabHandleContent({
   isHighlighted,
   showLabel,
   backdrop,
-  tabLabelSkeletonStyle,
   tabLabelStyle,
   modifiedTestId,
 }: {
@@ -697,7 +698,6 @@ function TabHandleContent({
   isHighlighted: boolean;
   showLabel: boolean;
   backdrop: SurfaceBackdrop;
-  tabLabelSkeletonStyle: React.ComponentProps<typeof View>["style"];
   tabLabelStyle: React.ComponentProps<typeof Text>["style"];
   modifiedTestId: string;
 }) {
@@ -713,7 +713,7 @@ function TabHandleContent({
         <WorkspaceTabIcon presentation={presentation} active={isHighlighted} backdrop={backdrop} />
       </View>
       {showLabel && presentation.titleState === "loading" ? (
-        <View style={tabLabelSkeletonStyle} />
+        <View style={styles.tabLabelSkeleton} />
       ) : null}
       {showLabel && presentation.titleState !== "loading" ? (
         <Text style={tabLabelStyle} selectable={false} numberOfLines={1} ellipsizeMode="tail">
@@ -852,7 +852,6 @@ function TabChip({
   const tabAccessibilityState = useMemo(() => ({ selected: isActive }), [isActive]);
   const testIdentity =
     tab.target.kind === "new_tab" ? tab.tabId : buildDeterministicWorkspaceTabId(tab.target);
-  const tabLabelSkeletonStyle = styles.tabLabelSkeleton;
   const tabLabelStyle = useMemo(
     () => [styles.tabLabel, isHighlighted && styles.tabLabelActive],
     [isHighlighted],
@@ -887,7 +886,6 @@ function TabChip({
                 isHighlighted={isHighlighted}
                 showLabel={showLabel}
                 backdrop={chipBackdrop}
-                tabLabelSkeletonStyle={tabLabelSkeletonStyle}
                 tabLabelStyle={tabLabelStyle}
                 modifiedTestId={`workspace-tab-modified-${testIdentity}`}
               />
@@ -1124,6 +1122,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       pullRequest: t("panels.pullRequest.label"),
       schedule: t("schedules.product.schedule"),
       bot: t("bots.title"),
+      notebook: t("panels.notebook.label"),
     }),
     [t],
   );
@@ -1401,16 +1400,6 @@ function ResolvedWorkspaceDesktopTabsRow({
     ],
   );
 
-  const tabsScrollStyle = useMemo(
-    () => [
-      styles.tabsScroll,
-      layout.requiresHorizontalScrollFallback
-        ? styles.tabsScrollOverflow
-        : styles.tabsScrollFitContent,
-    ],
-    [layout.requiresHorizontalScrollFallback],
-  );
-
   const row = (
     <View
       style={styles.tabsContainer}
@@ -1442,7 +1431,7 @@ function ResolvedWorkspaceDesktopTabsRow({
           horizontal
           scrollEnabled={layout.requiresHorizontalScrollFallback}
           testID="workspace-tabs-scroll"
-          style={tabsScrollStyle}
+          style={styles.tabsScroll}
           contentContainerStyle={styles.tabsContent}
           showsHorizontalScrollIndicator={false}
           onLayout={tabScrollBoundary.onLayout}
@@ -1453,7 +1442,6 @@ function ResolvedWorkspaceDesktopTabsRow({
           <SortableInlineList
             data={displayedTabs}
             keyExtractor={tabKeyExtractor}
-            useDragHandle
             disabled={!externalDndContext && displayedTabs.length < 2}
             onDragEnd={handleDragEnd}
             externalDndContext={externalDndContext}
@@ -1656,17 +1644,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabsScroll: {
     minWidth: 0,
+    flex: 1,
   },
   tabsScrollContainer: {
     minWidth: 0,
     flex: 1,
     alignSelf: "stretch",
-  },
-  tabsScrollFitContent: {
-    flex: 1,
-  },
-  tabsScrollOverflow: {
-    flex: 1,
   },
   tabsContent: {
     flexDirection: "row",

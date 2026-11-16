@@ -17,7 +17,7 @@ import {
   upsertUserMessage,
   upsertUserMessageAcrossStream,
 } from "./stream";
-import type { AgentProvider, ToolCallDetail } from "@ait/protocol/agent-types";
+import type { AgentProvider, ToolCallDetail, UserMessageOrigin } from "@ait/protocol/agent-types";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import { buildToolCallDisplayModel } from "@ait/protocol/tool-call-display";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
@@ -1444,6 +1444,25 @@ describe("stream reducer canonical tool calls", () => {
     ]);
   });
 
+  it.each([
+    "codex",
+    "claude",
+    "opencode",
+    "deepseek-harness",
+    "antigravity",
+    "pi",
+    "omp",
+    "minimax",
+  ] as const)(
+    "%s preserves an explicit empty TODO snapshot during history hydration",
+    (provider) => {
+      const state = hydrateStreamState([
+        { event: todoTimeline([], provider), timestamp: new Date("2026-11-13T10:00:00Z") },
+      ]);
+      expect(state).toEqual([expect.objectContaining({ kind: "todo_list", provider, items: [] })]);
+    },
+  );
+
   it("reports new work after completed tasks without reopening anything", () => {
     const state = hydrateStreamState([
       {
@@ -1575,6 +1594,34 @@ describe("stream reducer canonical tool calls", () => {
       ]);
 
       expect(state.filter(isAgentToolCallItem)).toEqual([]);
+    },
+  );
+
+  it.each(["claude", "opencode", "pi"] as const)(
+    "%s task tool fallback preserves in-progress status and active form",
+    (provider) => {
+      const state = hydrateStreamState([
+        {
+          event: canonicalToolTimeline({
+            provider,
+            callId: "tasks",
+            name: "TodoWrite",
+            status: "completed",
+            input: {
+              todos: [{ content: "Verify", activeForm: "Verifying", status: "in_progress" }],
+            },
+          }),
+          timestamp: new Date("2026-11-13T10:00:00Z"),
+        },
+      ]);
+      expect(state).toEqual([
+        expect.objectContaining({
+          kind: "todo_list",
+          items: [
+            { text: "Verify", activeForm: "Verifying", status: "in_progress", completed: false },
+          ],
+        }),
+      ]);
     },
   );
 
@@ -2449,5 +2496,90 @@ describe("notification timeline items", () => {
       { kind: "notification", level: "error", message: "Command blocked" },
     ]);
     expect(new Set(state.map((item) => item.id)).size).toBe(state.length);
+  });
+});
+
+describe("native TODO phase preservation", () => {
+  it("retains canonical phase metadata in live updates and history hydration", () => {
+    const group = { id: "phase:1", title: "Implementation" };
+    const event: AgentStreamEventPayload = {
+      type: "timeline",
+      provider: "omp",
+      item: { type: "todo", items: [{ text: "Build", completed: false, group }] },
+    };
+    const timestamp = new Date("2026-11-13T06:00:00.000Z");
+    for (const state of [
+      reduceStreamUpdate([], event, timestamp),
+      hydrateStreamState([{ event, timestamp }], { source: "canonical" }),
+    ]) {
+      const todo = state.find((item) => item.kind === "todo_list");
+      expect(todo?.kind === "todo_list" ? todo.items[0].group : undefined).toEqual(group);
+    }
+  });
+});
+
+describe("Ait-generated input origins", () => {
+  const scheduleOrigin: UserMessageOrigin = {
+    kind: "schedule",
+    scheduleId: "s1",
+    runId: "r1",
+    name: "nightly",
+  };
+
+  function originEvent(
+    origin: UserMessageOrigin = scheduleOrigin,
+    text = "Run the nightly report",
+  ): AgentStreamEventPayload {
+    return {
+      type: "timeline",
+      provider: "codex",
+      turnId: "turn",
+      item: { type: "user_message", messageId: "scheduled", text, origin },
+    };
+  }
+
+  it("carries the origin into live and replayed user messages", () => {
+    const live = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: originEvent(),
+      timestamp: new Date(1),
+    });
+    const replay = hydrateStreamState([{ event: originEvent(), timestamp: new Date(1) }]);
+    const expected = { text: "Run the nightly report", origin: scheduleOrigin };
+    expect(live.tail).toEqual([expect.objectContaining(expected)]);
+    expect(replay).toEqual([expect.objectContaining(expected)]);
+  });
+
+  it("replaces a cached raw envelope with the projected text and origin", () => {
+    const cached = createUserMessage({
+      messageId: "scheduled",
+      text: '<ait-input kind="schedule" schedule-id="s1" run-id="r1">\nRun the nightly report\n</ait-input>',
+      timestamp: new Date(1),
+    });
+    const applied = applyStreamEvent({
+      tail: [cached],
+      head: [],
+      event: originEvent(),
+      timestamp: new Date(2),
+    });
+    expect(applied.tail).toEqual([
+      expect.objectContaining({ text: "Run the nightly report", origin: scheduleOrigin }),
+    ]);
+  });
+
+  it("keeps an origin that names the bot's own inputs", () => {
+    const applied = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: originEvent({ kind: "bot_wake" }, "- agent_finished at t: done"),
+      timestamp: new Date(1),
+    });
+    expect(applied.tail).toEqual([
+      expect.objectContaining({
+        text: "- agent_finished at t: done",
+        origin: { kind: "bot_wake" },
+      }),
+    ]);
   });
 });

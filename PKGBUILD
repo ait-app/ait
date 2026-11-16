@@ -1,7 +1,7 @@
 # Maintainer: Ait contributors <https://github.com/ait-app/ait>
 # Local working-tree build. Run makepkg -si from this repository's root.
 pkgname=ait
-_ait_version=0.2.7
+_ait_version=0.2.14
 pkgrel=1
 pkgdesc='Local-first multi-agent manager, built from the local source tree'
 arch=('x86_64')
@@ -61,7 +61,7 @@ build() {
   local -x XDG_CACHE_HOME="$_ait_cache/tools"
   local -x TMPDIR="$_ait_cache/tmp"
   local -x CARGO_TARGET_DIR="$_ait_cache/cargo-target"
-  local -x AIT_SERVER_BIN="$CARGO_TARGET_DIR/release/daemon"
+  local -x AITD_BIN="$CARGO_TARGET_DIR/release/daemon"
   local -x AIT_BUILD_VERSION="git-$(git -C "$_ait_checkout" show -s --format=%cs HEAD)-$(git -C "$_ait_checkout" rev-parse --short=8 HEAD)"
   local -x EXPO_PUBLIC_AIT_BUILD_VERSION="$AIT_BUILD_VERSION"
   local -x CI=1 EXPO_NO_TELEMETRY=1

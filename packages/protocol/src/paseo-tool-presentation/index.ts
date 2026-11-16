@@ -3,7 +3,6 @@ import { getAitToolLeafName, isAitToolName } from "../tool-name-normalization.js
 import { getPaseoToolEntry, PASEO_TOOL_CATALOG, type PaseoToolName } from "./catalog.js";
 import { toSummaryText } from "./summary-text.js";
 
-export { buildAgentMessageDisplay, type AgentMessageDisplay } from "./agent-message.js";
 export {
   buildPaseoToolDetailSections,
   type PaseoToolDetailField,

@@ -4,10 +4,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
-import {
-  collectAssistantResponseContentForStreamRenderStrategy,
-  type StreamStrategy,
-} from "./strategy";
+import type { StreamStrategy } from "./strategy";
 import { resolveAssistantTurnForkBoundary, type AssistantTurnForkBoundary } from "./turn-boundary";
 import {
   AssistantTurnFooter,
@@ -18,7 +15,7 @@ import {
 import type { TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
 import { SyncedLoader } from "@/components/synced-loader";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const workingIndicatorColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -172,12 +169,7 @@ function CompletedTurnFooter({
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
   const getContent = useCallback(
-    () =>
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy,
-        items,
-        startIndex,
-      }),
+    () => strategy.collectAssistantResponseContent(items, startIndex),
     [strategy, items, startIndex],
   );
   const boundary = resolveAssistantTurnForkBoundary({

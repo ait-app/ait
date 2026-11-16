@@ -51,7 +51,7 @@ export interface TerminalFindResult {
 
 const FIND_HIGHLIGHT_LIMIT = 20_000;
 
-export interface TerminalEmulatorRuntimeMountInput {
+interface TerminalEmulatorRuntimeMountInput {
   root: HTMLDivElement;
   host: HTMLDivElement;
   initialSnapshot: TerminalState | null;
@@ -61,7 +61,7 @@ export interface TerminalEmulatorRuntimeMountInput {
   fontSize?: number;
 }
 
-export interface TerminalEmulatorRuntimeCallbacks {
+interface TerminalEmulatorRuntimeCallbacks {
   onFindRequest?: () => void;
   onFindResult?: (result: TerminalFindResult) => void;
   onInput?: (data: string) => Promise<void> | void;
@@ -85,14 +85,14 @@ export interface TerminalEmulatorRuntimeCallbacks {
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
 }
 
-export interface TerminalResizeEvent {
+interface TerminalResizeEvent {
   rows: number;
   cols: number;
   shouldClaim: boolean;
   forceClaim?: boolean;
 }
 
-export interface TerminalResizeRequest {
+interface TerminalResizeRequest {
   forceRefresh?: boolean;
   shouldClaim?: boolean;
   forceClaim?: boolean;
@@ -110,23 +110,6 @@ export function createTerminalResizeEvent(input: {
     shouldClaim: input.shouldClaim,
     forceClaim: input.shouldClaim && input.forceClaim,
   };
-}
-
-interface TerminalEmulatorRuntimeDisposables {
-  disposeInput: () => void;
-  disconnectResizeObserver: () => void;
-  removeWindowResize: () => void;
-  removeWindowFocus: () => void;
-  removeDocumentVisibilityChange: () => void;
-  removeVisualViewportResize: () => void;
-  clearFitTimeouts: () => void;
-  removeFontListeners: () => void;
-  removeTouchListeners: () => void;
-  restoreDocumentStyles: () => void;
-  restoreViewportStyles: () => void;
-  disposeFitAddon: () => void;
-  disposeWebglAddon: () => void;
-  disposeTerminal: () => void;
 }
 
 interface TerminalOutputOperation {
@@ -728,68 +711,29 @@ export class TerminalEmulatorRuntime {
 
     this.processOutputQueue();
 
-    const disposables: TerminalEmulatorRuntimeDisposables = {
-      disposeInput: () => {
-        inputDisposable.dispose();
-      },
-      disconnectResizeObserver: () => {
-        resizeObserver.disconnect();
-      },
-      removeWindowResize: () => {
-        window.removeEventListener("resize", windowResizeHandler);
-      },
-      removeWindowFocus: () => {
-        window.removeEventListener("focus", windowFocusHandler);
-      },
-      removeDocumentVisibilityChange: () => {
-        document.removeEventListener("visibilitychange", documentVisibilityChangeHandler);
-      },
-      removeVisualViewportResize: () => {
-        visualViewport?.removeEventListener("resize", visualViewportResizeHandler);
-      },
-      clearFitTimeouts: () => {
-        for (const handle of fitTimeouts) {
-          window.clearTimeout(handle);
-        }
-      },
-      removeFontListeners: () => {
-        fontSet?.removeEventListener?.("loadingdone", fontReadyHandler);
-      },
-      removeTouchListeners,
-      restoreDocumentStyles,
-      restoreViewportStyles,
-      disposeFitAddon: () => {
-        fitAddon.dispose();
-      },
-      disposeWebglAddon: () => {
-        if (webglAddonRaf !== null) {
-          cancelAnimationFrame(webglAddonRaf);
-          webglAddonRaf = null;
-        }
-        disposeWebglRenderer();
-        disposeImageAddon();
-      },
-      disposeTerminal: () => {
-        localFileLinkProvider.dispose();
-        terminal.dispose();
-      },
-    };
-
     this.cleanup = () => {
-      disposables.disposeInput();
-      disposables.disconnectResizeObserver();
-      disposables.removeWindowResize();
-      disposables.removeWindowFocus();
-      disposables.removeDocumentVisibilityChange();
-      disposables.removeVisualViewportResize();
-      disposables.clearFitTimeouts();
-      disposables.removeFontListeners();
-      disposables.removeTouchListeners();
-      disposables.disposeFitAddon();
-      disposables.disposeWebglAddon();
-      disposables.disposeTerminal();
-      disposables.restoreDocumentStyles();
-      disposables.restoreViewportStyles();
+      inputDisposable.dispose();
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", windowResizeHandler);
+      window.removeEventListener("focus", windowFocusHandler);
+      document.removeEventListener("visibilitychange", documentVisibilityChangeHandler);
+      visualViewport?.removeEventListener("resize", visualViewportResizeHandler);
+      for (const handle of fitTimeouts) {
+        window.clearTimeout(handle);
+      }
+      fontSet?.removeEventListener?.("loadingdone", fontReadyHandler);
+      removeTouchListeners();
+      fitAddon.dispose();
+      if (webglAddonRaf !== null) {
+        cancelAnimationFrame(webglAddonRaf);
+        webglAddonRaf = null;
+      }
+      disposeWebglRenderer();
+      disposeImageAddon();
+      localFileLinkProvider.dispose();
+      terminal.dispose();
+      restoreDocumentStyles();
+      restoreViewportStyles();
     };
   }
 
@@ -1090,7 +1034,7 @@ export class TerminalEmulatorRuntime {
     this.hasUngatedWrites = false;
     const previousSuppressInput = this.suppressInput;
     if (operation.suppressInput) {
-      this.suppressInput = Boolean(operation.suppressInput);
+      this.suppressInput = true;
     }
     const finalizeOperation = (expectedOperation: TerminalOutputOperation) => {
       if (this.inFlightOutputOperation !== expectedOperation) {
@@ -1133,12 +1077,10 @@ export class TerminalEmulatorRuntime {
     const data = operation.data;
     // Daemon restore frames end with the screen's input modes, so a snapshot re-seeds the
     // tracker from its own data after the reset above; emit once for the net change.
-    if (operation.type === "write" || operation.type === "snapshot") {
-      const text = this.inputModeDecoder.decode(data, { stream: true });
-      const result = this.inputModeTracker.feed(text);
-      if (result.changed || operation.type === "snapshot") {
-        this.emitInputModeChange();
-      }
+    const text = this.inputModeDecoder.decode(data, { stream: true });
+    const result = this.inputModeTracker.feed(text);
+    if (result.changed || operation.type === "snapshot") {
+      this.emitInputModeChange();
     }
     this.inFlightOutputOperationTimeout = setTimeout(() => {
       finalizeOperation(operation);
@@ -1299,19 +1241,16 @@ export class TerminalEmulatorRuntime {
       mode: null as "vertical" | "horizontal" | null,
     };
 
-    const touchStartHandler = (event: TouchEvent) => {
-      if (event.touches.length !== 1) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
-        return;
-      }
+    const resetTouch = () => {
+      touchScrollRemainderPx = 0;
+      activeTouch.identifier = -1;
+      activeTouch.mode = null;
+    };
 
-      const touch = event.touches[0];
+    const touchStartHandler = (event: TouchEvent) => {
+      const touch = event.touches.length === 1 ? event.touches[0] : undefined;
       if (!touch) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
+        resetTouch();
         return;
       }
 
@@ -1369,28 +1308,20 @@ export class TerminalEmulatorRuntime {
         (touch) => touch.identifier === activeTouch.identifier,
       );
       if (activeTouchEnded || event.touches.length === 0) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
+        resetTouch();
       }
-    };
-
-    const touchCancelHandler = () => {
-      touchScrollRemainderPx = 0;
-      activeTouch.identifier = -1;
-      activeTouch.mode = null;
     };
 
     input.root.addEventListener("touchstart", touchStartHandler, { passive: true });
     input.root.addEventListener("touchmove", touchMoveHandler, { passive: false });
     input.root.addEventListener("touchend", touchEndHandler, { passive: true });
-    input.root.addEventListener("touchcancel", touchCancelHandler, { passive: true });
+    input.root.addEventListener("touchcancel", resetTouch, { passive: true });
 
     return () => {
       input.root.removeEventListener("touchstart", touchStartHandler);
       input.root.removeEventListener("touchmove", touchMoveHandler);
       input.root.removeEventListener("touchend", touchEndHandler);
-      input.root.removeEventListener("touchcancel", touchCancelHandler);
+      input.root.removeEventListener("touchcancel", resetTouch);
     };
   }
 }

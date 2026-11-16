@@ -1,15 +1,8 @@
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath, trimTrailingSeparators } from "@/utils/path";
 
 export interface FilePreviewReadTarget {
   cwd: string;
   path: string;
-}
-
-function trimTrailingSeparators(value: string): string {
-  if (value === "/" || /^[A-Za-z]:[\\/]?$/.test(value)) {
-    return value.replace(/\\/g, "/");
-  }
-  return value.replace(/[\\/]+$/, "");
 }
 
 function normalizeForPathComparison(value: string): string {

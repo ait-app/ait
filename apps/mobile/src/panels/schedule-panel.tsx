@@ -1,22 +1,13 @@
 import { Text, View } from "react-native";
-import { CalendarClock } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { WorkspaceScheduleTab } from "@/components/schedules/workspace-schedule-tab";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
-import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
+import { definePanel } from "@/panels/panel-registry";
+import { schedulePanelPresentation } from "@/panels/panel-presentations";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useScheduleDetail } from "@/schedules/use-workspace-schedules";
 import { resolveScheduleTitle } from "@/utils/schedule-format";
-
-const ThemedCalendarClock = withUnistyles(CalendarClock);
-const schedulePanelPresentation = {
-  label: (t) => t("schedules.product.schedule"),
-  subtitle: (t) => t("schedules.browse"),
-  tooltip: (t) => t("schedules.browse"),
-  icon: ThemedCalendarClock,
-} satisfies PanelPresentation;
 
 function SchedulePanel() {
   const { t } = useTranslation();
@@ -100,7 +91,7 @@ export const schedulePanelRegistration = definePanel("schedule", {
       subtitle: label,
       tooltip: label,
       titleState: "ready",
-      icon: ThemedCalendarClock,
+      icon: schedulePanelPresentation.icon,
       statusBucket: null,
     };
   },

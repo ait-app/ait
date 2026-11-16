@@ -1,3 +1,4 @@
+import { useToggleAgentList } from "@/components/use-toggle-agent-list";
 import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
@@ -34,7 +35,6 @@ import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
-import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import {
   getIsElectronRuntime,
@@ -45,7 +45,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
-import { ToastProvider } from "@/contexts/toast-context";
+import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
 import { AgentNavigationListener } from "@/desktop/agent-navigation";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
@@ -55,13 +55,14 @@ import { getDesktopHost } from "@/desktop/host";
 import { loadDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { RosettaCalloutSource } from "@/desktop/updates/rosetta-callout-source";
 import { UpdateCalloutSource } from "@/desktop/updates/update-callout-source";
-import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useOpenProject } from "@/hooks/use-open-project";
+import { getOpenProjectFailureReason, type OpenProjectResult } from "@/hooks/open-project";
+import { useTranslation } from "react-i18next";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HostChooserModal, useHostChooser } from "@/hosts/host-chooser";
@@ -70,7 +71,7 @@ import {
   useKeyboardActionDispatcher,
 } from "@/keyboard/keyboard-action-dispatcher-context";
 import { KeyboardShiftProvider } from "@/keyboard/shift";
-import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
+import { AppNavigationGestureSurface } from "@/components/app-navigation-gesture-surface";
 import { MobilePanelsProvider, useIsMobilePanelActive } from "@/mobile-panels/provider";
 import {
   bindHostRuntimeAppState,
@@ -93,7 +94,8 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { flushDraftPersistStorage, observeSharedDraftState } from "@/stores/draft-store";
-import { usePanelStore } from "@/stores/panel-store";
+import { selectIsCompactFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { WorkspaceLayoutModePublisher } from "@/workspace-tabs/layout-mode-publisher";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
@@ -104,12 +106,12 @@ import {
   WindowChromeProvider,
   WindowChromeRegion,
   WindowChromeSafeArea,
-} from "@/utils/desktop-window";
+} from "@/desktop/desktop-window";
 import {
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { navigateToAgent } from "@/navigation/navigate-to-agent";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import {
   ensureOsNotificationPermission,
@@ -133,7 +135,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { AppState, useWindowDimensions, View } from "react-native";
-import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 polyfillCrypto();
@@ -472,25 +474,22 @@ export function useHostRuntimeBootstrapState(): HostRuntimeBootstrapState {
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
-const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 
 interface AppContainerProps {
   children: ReactNode;
-  chromeEnabled?: boolean;
+  chromeEnabled: boolean;
 }
 
 const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
-function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
+function AppContainer({ children, chromeEnabled }: AppContainerProps) {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
-  const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
-  const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
-  const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
   const exitFocusMode = usePanelStore((state) => state.exitFocusMode);
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const isDesktopAgentListOpen = usePanelStore((state) => state.desktop.agentListOpen);
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  const isNativeExplorerOpen = usePanelStore(selectIsCompactFileExplorerOpen);
   const { width: viewportWidth } = useWindowDimensions();
 
   const cycleTheme = useCallback(() => {
@@ -504,11 +503,14 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const usesCompactExplorerHost = explorerSidebarPresentation !== "pane";
   useCompactWebViewportZoomLock(isCompactLayout);
   const pathname = usePathname();
+  // Match the explorer model's route observation, including cold-mount params
+  // at "/" while excluding stale workspace params on app-wide pages.
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const isNativeWorkspaceActive = isNative && activeWorkspaceSelection !== null;
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
-  const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
   const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
-  const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
+  const toggleAgentList = useToggleAgentList(isCompactLayout);
   const toggleDesktopSidebars = useCallback(() => {
     // The focused workspace owns its layout key, its checkout, and therefore the
     // only correct answer to "is the explorer open". Let it decide when there is
@@ -536,11 +538,11 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction();
   useGlobalNewWorkspaceAction();
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),
+    nativeExplorerOpen: isNativeWorkspaceActive && isNativeExplorerOpen,
   });
   const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
   const desktopSidebarVisible = resolveDesktopSidebarVisibility({
@@ -581,7 +583,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       ) : null}
       {usesCompactExplorerHost ? (
         <CompactExplorerSidebarHost
-          enabled={chromeEnabled}
+          enabled={chromeEnabled && (!isNative || isNativeWorkspaceActive)}
           presentation={explorerSidebarPresentation === "dock" ? "dock" : "overlay"}
         >
           <WindowChromeRegion corners={chromeEnabled ? "both" : appChromeLayout.contentCorners}>
@@ -632,7 +634,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <AddProjectFlowHost />
         <HostChooserModal />
         <ProviderSettingsHost />
-        <WorkspaceSetupDialog />
         <KeyboardShortcutsDialog />
         <AppDiagnosticHost />
         <ChangelogHost />
@@ -641,10 +642,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     </View>
   );
 
-  const content = isCompactLayout ? (
-    <MobileGestureWrapper chromeEnabled={chromeEnabled}>{surface}</MobileGestureWrapper>
-  ) : (
-    surface
+  const content = (
+    <AppNavigationGestureSurface isCompact={isCompactLayout} chromeEnabled={chromeEnabled}>
+      {surface}
+    </AppNavigationGestureSurface>
   );
 
   return (
@@ -672,24 +673,6 @@ function SidebarChrome({
       {mounted ? <LeftSidebar active={active} /> : null}
       <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
     </SidebarModelProvider>
-  );
-}
-
-function MobileGestureWrapper({
-  children,
-  chromeEnabled,
-}: {
-  children: ReactNode;
-  chromeEnabled: boolean;
-}) {
-  const openGesture = useOpenAgentListGesture(chromeEnabled);
-
-  return (
-    <GestureDetector gesture={openGesture} touchAction={MOBILE_WEB_GESTURE_TOUCH_ACTION}>
-      <View collapsable={false} style={layoutStyles.surfaceFill} testID="compact-shell">
-        {children}
-      </View>
-    </GestureDetector>
   );
 }
 
@@ -743,6 +726,17 @@ function OpenProjectListener() {
   const [request, setRequest] = useState<PendingOpenProjectRequest | null>(null);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const openProject = useOpenProject(request?.serverId ?? null);
+  const { t } = useTranslation();
+  const toast = useToast();
+  // Stable so a language or toast change does not re-run the request effect and add the project
+  // twice.
+  const reportOpenProjectFailure = useStableEvent((result: OpenProjectResult | null) => {
+    toast.error(
+      result && getOpenProjectFailureReason(result) === "directory_not_found"
+        ? t("addProjectFlow.errors.directoryNotFound")
+        : t("addProjectFlow.errors.addProject"),
+    );
+  });
 
   const openPathOnChosenHost = useCallback(
     (path: string) => {
@@ -757,7 +751,6 @@ function OpenProjectListener() {
       }
 
       chooseHost({
-        title: "Choose host",
         onChooseHost: (serverId) => {
           setRequest({
             id: nextOpenProjectRequestId++,
@@ -784,23 +777,19 @@ function OpenProjectListener() {
       return;
     }
     let cancelled = false;
-    void openProject(request.path).then((result) => {
-      if (cancelled) {
+    void openProject(request.path)
+      .catch(() => null)
+      .then((result) => {
+        if (!cancelled) {
+          if (!result?.ok) reportOpenProjectFailure(result);
+          setRequest((current) => (current?.id === request.id ? null : current));
+        }
         return null;
-      }
-
-      if (!result.ok) {
-        setRequest((current) => (current?.id === request.id ? null : current));
-        return null;
-      }
-
-      setRequest((current) => (current?.id === request.id ? null : current));
-      return null;
-    });
+      });
     return () => {
       cancelled = true;
     };
-  }, [openProject, request]);
+  }, [openProject, reportOpenProjectFailure, request]);
 
   useEffect(() => {
     let disposed = false;

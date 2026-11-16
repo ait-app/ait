@@ -89,6 +89,7 @@ Google Play 和 iOS TestFlight 不随 PR、main CI 或 Dev build 构建；稳定
 | macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.zip`                                          |
 | Windows           | x64                 | `Ait-VERSION-windows-x64-setup.exe`                                    |
 | Windows           | x64                 | `Ait-VERSION-windows-x64.zip`                                          |
+| Android           | 通用                | `Ait-VERSION-android.apk`（Google 签名，稳定版，稍后附加）             |
 | Linux 独立 daemon | x86_64              | `Ait-VERSION-daemon-linux-x64.tar.gz`                                  |
 | macOS 独立 daemon | Apple Silicon arm64 | `Ait-VERSION-daemon-macos-arm64.tar.gz`                                |
 | 自动更新          | 各平台              | `latest-linux.yml`、`latest-mac.yml`、`latest.yml`、生成的 `.blockmap` |
@@ -115,8 +116,13 @@ Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平�
 同一次构建的 Rust `daemon`。归档内为可执行文件 `aitd` 和 `LICENSE`，与桌面包内的文件同名；改名是为了
 放入 `PATH` 时不与系统同名程序冲突；`--help` 和 `--version` 中的程序名也统一为 `aitd`。见 [ADR-212](../decisions/clients/adr-212-packaged-daemon-name-aitd.md)。macOS 版本单独用 Developer ID
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
-Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
+Linux daemon 在 `ubuntu-latest` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
 正式版、beta 和 dev build 都包含这两个归档；dev build 见上文 [Dev build](#dev-build)。
+
+本地打包独立 daemon 归档复用既有发布实现：仓库根运行
+`npm run package:daemon -- linux|mac VERSION BINARY DEST [--dev LABEL]`，等价于
+`node scripts/release-assets.mjs daemon …`（校验二进制 `--version`、打包 `aitd` 与 `LICENSE`、
+dev 标签命名），不引入新的打包路径；CI 仍直接调用同一脚本。
 
 ## Arch Linux 本地源码安装
 
@@ -199,9 +205,14 @@ npm ci
 npm run verify:release
 npm run test:release
 npm run test:mobile-release
+npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts
 npm run build:desktop-main
 npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 ```
+
+桌面、Web 和 Android 发布 job 在安装 npm 依赖后先检查翻译，再构建产物；iOS 在 Xcode Cloud
+的 `ci_post_clone.sh` 中执行相同检查。检查覆盖各语言的键、插值占位符和 BTW 文案，
+旁支会话的全部文案（含标题）必须提供本地化内容，不能直接复用英文。
 
 更新根 CHANGELOG.md：该文件
 会打入应用，供“新功能”页面读取。把版本与发布变更经 PR 合并到 `main` 后，再创建标签。
@@ -331,7 +342,7 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-重跑会构建桌面，稳定标签还会再次提交 Google Play 内部测试并启动新的 iOS 内部测试构建；如 Release 已有 Android APK，则验证并保留该附件。
+重跑会构建桌面，稳定标签还会再次提交 Google Play 内部测试并启动新的 iOS 内部测试构建；Release job 验证并保留已有的 Android APK，草稿状态下新的 APK 会替换它。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
@@ -362,7 +373,7 @@ Linux x86_64：
 ```bash
 npm ci
 cargo build --locked --release -p daemon --bin daemon --target x86_64-unknown-linux-gnu
-AIT_SERVER_BIN="$PWD/target/x86_64-unknown-linux-gnu/release/daemon" \
+AITD_BIN="$PWD/target/x86_64-unknown-linux-gnu/release/daemon" \
   AIT_DESKTOP_SMOKE=1 npm run package:linux
 ```
 
@@ -376,7 +387,7 @@ npm ci
 AIT_DESKTOP_SMOKE=1 npm run package:mac
 ```
 
-`package:mac` 生成 DMG 与 ZIP；`package:linux` 生成 AppImage 与 tar.gz。省略 `AIT_SERVER_BIN`
+`package:mac` 生成 DMG 与 ZIP；`package:linux` 生成 AppImage 与 tar.gz。省略 `AITD_BIN`
 会从当前源码构建 release daemon；提供该变量时仍检查二进制版本。只允许原生目标平台、架构。
 
 无签名凭据时，本机开发验证使用 `AIT_DESKTOP_SMOKE=1 npm run build:dmg`。它生成
@@ -405,9 +416,10 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 
 首次服务账号配置、Play App Signing、测试者名单、安装链接和重试步骤统一见
 [Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
-独立的 GitHub APK 工作流已移除，GitHub Release 不附带 Android 产物。发布边界见
-[ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md) 和
-[ADR-234](../decisions/clients/adr-234-play-internal-in-release-workflow.md)。
+Play 处理完成后，`android-apk` job 把 Google 签名的 universal APK 附加到草稿 Release。
+发布边界见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)、
+[ADR-234](../decisions/clients/adr-234-play-internal-in-release-workflow.md) 和
+[ADR-236](../decisions/clients/adr-236-google-signed-apk-release-asset.md)。
 
 ## App Store iOS 手动发布
 

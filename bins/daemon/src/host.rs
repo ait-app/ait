@@ -8,6 +8,7 @@ mod catalog;
 mod hub;
 #[cfg(unix)]
 mod mcp_socket;
+mod notifications;
 mod push;
 mod schedule;
 mod voice;
@@ -53,6 +54,7 @@ use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
+use provider::storage::usage_ledger::SqliteUsageLedger;
 use tokio::net::TcpListener;
 
 use crate::config::Config;
@@ -73,6 +75,8 @@ pub(super) struct Server {
     instance: Arc<InstanceLease>,
     managed: HostLink,
     publication: hub::Worker,
+    /// Host usage ledger, closed off the async runtime after the API has stopped.
+    usage_ledger: Option<Arc<SqliteUsageLedger>>,
 }
 
 /// Process-owned listener and data-directory lease, retained across runtime restarts and diagnostics.
@@ -166,10 +170,16 @@ impl Server {
             None => None,
         };
         let launch_instance = instance.clone();
-        let (services, sources, device) = tokio::task::spawn_blocking(move || {
+        let (services, sources, device, usage_ledger) = tokio::task::spawn_blocking(move || {
             let device = crate::device::load_state(&config.data_dir, launch_instance.server_id)?;
-            let (mut services, sources) =
-                compose_services(&config, address, &launch_instance, launch_mcp_token)?;
+            let usage_ledger = open_usage_ledger(&config.data_dir);
+            let (mut services, sources) = compose_services(
+                &config,
+                address,
+                &launch_instance,
+                launch_mcp_token,
+                usage_ledger.as_ref(),
+            )?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
                     let mut dependencies = service.into_dependencies();
@@ -177,7 +187,7 @@ impl Server {
                     metadata::Service::new(dependencies)
                 });
             }
-            Ok::<_, anyhow::Error>((services, sources, device))
+            Ok::<_, anyhow::Error>((services, sources, device, usage_ledger))
         })
         .await
         .context("join server initialization")??;
@@ -223,6 +233,7 @@ impl Server {
             instance,
             managed,
             publication,
+            usage_ledger,
         })
     }
 
@@ -244,6 +255,7 @@ impl Server {
             instance,
             managed,
             publication,
+            usage_ledger,
         } = self;
         let cancel = tokio_util::sync::CancellationToken::new();
         let manager_cancel = cancel.clone();
@@ -316,6 +328,15 @@ impl Server {
         publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
         drop(api);
+        // Closing waits for queued ledger writes, so it runs off the async runtime; any owner
+        // that outlives this close drops without waiting.
+        if let Some(ledger) = usage_ledger
+            && tokio::task::spawn_blocking(move || ledger.close())
+                .await
+                .is_err()
+        {
+            tracing::error!("usage ledger close failed");
+        }
         drop(instance);
         // The serving error explains a failed shutdown better than its consequences.
         result?;
@@ -329,21 +350,20 @@ fn compose_services(
     address: SocketAddr,
     instance: &Arc<InstanceLease>,
     mcp_token: secrecy::SecretString,
+    usage_ledger: Option<&Arc<SqliteUsageLedger>>,
 ) -> anyhow::Result<(Services, hub::sources::Sources)> {
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let skills = compose_skills(&config.data_dir)?;
-    let agents = Agents::new(Box::new(catalog::OwnedCatalog {
-        catalog: SqliteCatalog::open(&config.data_dir)?,
-        _instance: instance.clone(),
-    }));
+    let agents = compose_agents(&config.data_dir, instance)?;
     let server_id = instance.server_id.to_string();
-    let providers = Providers::new(&config.data_dir);
+    let providers = compose_providers(&config.data_dir, usage_ledger);
     let MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets: provider_presets,
     } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
@@ -379,8 +399,8 @@ fn compose_services(
     ))
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
-        (storage.agents.clone(), timeline, agent_mcp),
-        (&storage.workspaces, &storage.projects),
+        (storage.agents.clone(), timeline, agent_mcp, usage_ledger),
+        (&storage.workspaces, &storage.projects, &config.data_dir),
         instance,
         providers,
         (
@@ -388,14 +408,16 @@ fn compose_services(
             summary_generator.clone(),
             workspace_names.clone(),
             workspace_automation.clone(),
+            provider_presets,
         ),
     )?;
     let (schedules, bots) = compose_background(
         config,
         &agent_execution,
-        (&storage.workspaces, &storage.projects),
+        (&storage.workspaces, &storage.projects, &storage.agents),
         (&directory, &worktrees, scopes),
     )?;
+    let filesystem = compose_filesystem(config, &storage.workspaces, &storage.agents);
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
         push_tokens: compose_push(&config.data_dir, Arc::new(storage.agents))?,
@@ -415,7 +437,7 @@ fn compose_services(
         Services {
             bot: Some(bots),
             metadata: Some(metadata),
-            filesystem: Some(compose_filesystem(config, &storage.workspaces)),
+            filesystem: Some(filesystem),
             provider: Some(provider::Service::new(provider::Dependencies {
                 execution: agent_execution.clone(),
                 summary_generator,
@@ -429,6 +451,15 @@ fn compose_services(
         },
         publication_sources,
     ))
+}
+
+/// Open the Agent catalog while retaining the host's instance lease for its consumers.
+/// Returns SQLite open failures without releasing the host's lease.
+fn compose_agents(data: &std::path::Path, instance: &Arc<InstanceLease>) -> anyhow::Result<Agents> {
+    Ok(Agents::new(Box::new(catalog::OwnedCatalog {
+        catalog: SqliteCatalog::open(data)?,
+        _instance: instance.clone(),
+    })))
 }
 
 /// Compose the injected Agent MCP and the scoped-credential registry it issues from.
@@ -454,25 +485,37 @@ fn compose_workspace_labels(
     ))?)
 }
 
+/// Compose the Bot and schedule services and feed Agent attention, terminal attention and
+/// schedule run results into the Bots' notification inbox.
 fn compose_background(
     config: &Config,
     execution: &AgentExecution,
-    registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
+    (workspaces, projects, agents): (
+        &FileBackedWorkspaceRegistry,
+        &FileBackedProjectRegistry,
+        &FileBackedAgentRuntimeRegistry,
+    ),
     (directory, worktrees, scopes): (&Directory, &Arc<Mutex<Worktrees>>, Arc<::bot::mcp::Scopes>),
 ) -> anyhow::Result<(::schedule::service::Schedules, ::bot::service::Bots)> {
     let bots = bot::compose(
         &config.data_dir,
-        registries.0,
-        registries.1,
+        workspaces,
+        projects,
         execution.clone(),
         scopes.clone(),
     )?;
+    let notifier = notifications::Notifier::current(bots.clone());
+    if let Some(notifier) = &notifier {
+        notifier.forward_attention(&execution.events(), Arc::new(agents.clone()));
+    } else {
+        tracing::warn!("no async runtime; Workspace Bot notifications are disabled");
+    }
     let schedules = schedule::compose(
         &config.data_dir,
         execution.clone(),
         directory.clone(),
         worktrees.clone(),
-        scopes,
+        (scopes, notifier),
     )?;
     Ok((schedules, bots))
 }
@@ -480,8 +523,10 @@ fn compose_background(
 fn compose_filesystem(
     config: &Config,
     workspace_registry: &FileBackedWorkspaceRegistry,
+    agents: &FileBackedAgentRuntimeRegistry,
 ) -> filesystem::Service {
     let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
+    let git_fetch = git_fetch.with_agent_turns(Arc::new(agents.clone()));
     filesystem::Service::new(filesystem::Dependencies {
         checkout,
         git_fetch,
@@ -596,6 +641,7 @@ struct MetadataServices {
     config: FileDaemonConfigStore,
     generator: Arc<dyn SummaryGenerator>,
     names: WorkspaceNames,
+    presets: provider::service::presets::PresetService,
 }
 
 fn compose_metadata(
@@ -612,10 +658,12 @@ fn compose_metadata(
         api::summary_source(summary_generator.clone()),
         Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
+    let presets = provider::service::presets::PresetService::new(Arc::new(config_store.clone()));
     MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets,
     }
 }
 
@@ -689,6 +737,9 @@ fn compose_daemon(
         },
         Box::new(config_store),
     );
+    let daemon = daemon.with_host_sampler(Box::new(
+        metadata::daemon::local::LocalHostSampler::default(),
+    ));
     daemon.get_config().context("initialize daemon config")?;
     Ok(daemon)
 }
@@ -700,13 +751,51 @@ fn open_timeline(
         .map_err(|_| anyhow::anyhow!("initialize Agent timeline"))
 }
 
+/// Open the independent BTW store under `data_dir`, preserving side-question receipts.
+fn open_side_store(
+    data_dir: &std::path::Path,
+) -> anyhow::Result<provider::storage::side::SideStore> {
+    provider::storage::side::SideStore::open(&data_dir.join("agents/side-questions.sqlite3"))
+        .map_err(|_| anyhow::anyhow!("initialize Agent side-question store"))
+}
+
+/// Open `agents/usage.sqlite3` under `data_dir`, queueing recovery of calls left running.
+///
+/// Returns `None` after logging the failure, so the host starts without recording calls.
+fn open_usage_ledger(data_dir: &std::path::Path) -> Option<Arc<SqliteUsageLedger>> {
+    match SqliteUsageLedger::open_at_startup(data_dir) {
+        Ok(ledger) => Some(Arc::new(ledger)),
+        Err(error) => {
+            tracing::error!(%error, "usage ledger unavailable; provider calls are not recorded");
+            None
+        }
+    }
+}
+
+/// Configure the built-in providers; summary calls go to `usage_ledger` when the host has one.
+fn compose_providers(
+    data_dir: &std::path::Path,
+    usage_ledger: Option<&Arc<SqliteUsageLedger>>,
+) -> Providers {
+    let providers = provider_builtin::providers(data_dir);
+    match usage_ledger {
+        Some(ledger) => providers.with_usage_ledger(ledger.clone()),
+        None => providers,
+    }
+}
+
 fn compose_provider(
     agent_runtime: (
         FileBackedAgentRuntimeRegistry,
         provider::storage::timeline::Timeline,
         AgentMcp,
+        Option<&Arc<SqliteUsageLedger>>,
     ),
-    registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
+    registries: (
+        &FileBackedWorkspaceRegistry,
+        &FileBackedProjectRegistry,
+        &std::path::Path,
+    ),
     instance: &Arc<InstanceLease>,
     providers: Providers,
     metadata: (
@@ -714,18 +803,24 @@ fn compose_provider(
         Arc<dyn SummaryGenerator>,
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
+        provider::service::presets::PresetService,
     ),
 ) -> anyhow::Result<AgentExecution> {
-    let (directory, generator, names, workspace_automation) = metadata;
-    let (agent_runtime_registry, timeline, mcp) = agent_runtime;
-    let (workspace_registry, project_registry) = registries;
+    let (directory, generator, names, workspace_automation, presets) = metadata;
+    let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
+    let (workspace_registry, project_registry, data_dir) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)
+        .with_side_store(open_side_store(data_dir)?)
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)
         .with_workspace_names(Arc::new(names))
-        .with_workspaces(Arc::new(workspace_registry.clone()));
+        .with_workspaces(Arc::new(workspace_registry.clone()))
+        .with_presets(presets);
+    if let Some(ledger) = usage_ledger {
+        manager = manager.with_usage_ledger(ledger.clone());
+    }
     providers.register(&mut manager)?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,

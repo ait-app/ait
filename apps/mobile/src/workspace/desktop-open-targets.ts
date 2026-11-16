@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDesktopHost, type DesktopEditorBridge } from "@/desktop/host";
 
-export type DesktopOpenTargetKind = "editor" | "file-manager";
+type DesktopOpenTargetKind = "editor" | "file-manager";
 export type DesktopOpenTargetIcon =
   | { kind: "image"; dataUrl: string }
   | { kind: "symbol"; name: "folder" | "terminal" };
@@ -52,11 +52,11 @@ function getDesktopEditorBridge(): AvailableDesktopEditorBridge | null {
   };
 }
 
-export function hasDesktopOpenTargetsBridge(): boolean {
+function hasDesktopOpenTargetsBridge(): boolean {
   return getDesktopEditorBridge() !== null;
 }
 
-export async function listDesktopOpenTargets(): Promise<DesktopOpenTarget[]> {
+async function listDesktopOpenTargets(): Promise<DesktopOpenTarget[]> {
   const bridge = getDesktopEditorBridge();
   if (!bridge) {
     return [];

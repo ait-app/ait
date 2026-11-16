@@ -34,7 +34,6 @@ export const RelayControlGrantSchema = z.object({
   control_ticket: z.string().regex(/^[a-fA-F0-9]{64}$/),
   node_session_id: z.string().uuid(),
 });
-export type RelayControlGrant = z.infer<typeof RelayControlGrantSchema>;
 
 export const RelayStatusRequestSchema = z.object({
   type: z.literal("relay.status.request"),

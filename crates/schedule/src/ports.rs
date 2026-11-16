@@ -1,6 +1,6 @@
 //! Host execution and durable storage boundaries.
 
-use domain::schedule::{Schedule, Target};
+use domain::schedule::{Run, Schedule, Target};
 use domain::storage::schedule::Error;
 use tokio_util::sync::CancellationToken;
 
@@ -37,6 +37,14 @@ pub trait Runner: Send + Sync + std::fmt::Debug {
         progress: Progress,
         cancel: CancellationToken,
     ) -> Outcome;
+    /// Observe occurrence `run` of `schedule` once its settlement is durably saved, including
+    /// runs settled as interrupted when the worker opens its store. Every occurrence that ended
+    /// shortly before the worker opens is reported again then, so a report lost to a shutdown or
+    /// crash is delivered; observers dedupe by run id. Called on the schedule worker, so it
+    /// must hand off any slow work instead of blocking. The default ignores it.
+    fn settled(&self, schedule: &Schedule, run: &Run) {
+        let _ = (schedule, run);
+    }
 }
 
 /// Acknowledged durable occurrence identity updates, sent before starting the native turn.

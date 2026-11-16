@@ -1,10 +1,12 @@
-//! Atomic Bot catalog, receipts and workspace-keyed memory.
+//! Atomic Bot catalog, receipts, notification logs, tickets and workspace-keyed memory.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use domain::bot::notification::NotificationLog;
+use domain::bot::ticket::Ticket;
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotTurnId, ChannelId, ConversationId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId, TicketId};
 use model::bot::{StorageError, Store};
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
@@ -111,11 +113,13 @@ impl Store for FileStore {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(StorageError),
             _ => Ok(()),
         };
-        absent(fs::remove_file(
-            self.root.join("conversations").join(format!("{id}.json")),
-        ))?;
+        // The turns go first: a failure there leaves the conversation record in place, so the
+        // caller can retry instead of holding an index entry for a deleted conversation.
         absent(fs::remove_dir_all(
             self.root.join("turns").join(id.to_string()),
+        ))?;
+        absent(fs::remove_file(
+            self.root.join("conversations").join(format!("{id}.json")),
         ))
     }
     fn turns(&self, id: ConversationId) -> Result<Vec<Turn>, StorageError> {
@@ -173,7 +177,46 @@ impl Store for FileStore {
             .map_err(|_| StorageError)
     }
     fn delete_memory(&self, workspace: &str) -> Result<(), StorageError> {
-        match fs::remove_file(self.memory_path(workspace)) {
+        remove(&self.memory_path(workspace))
+    }
+    fn notification_logs(&self) -> Result<Vec<NotificationLog>, StorageError> {
+        records(&self.root.join("notifications"))
+    }
+    fn save_notification_log(&self, log: &NotificationLog) -> Result<(), StorageError> {
+        write(&self.notification_path(log.bot_id), log)
+    }
+    fn delete_notification_log(&self, bot: BotId) -> Result<(), StorageError> {
+        remove(&self.notification_path(bot))
+    }
+    fn scan_tickets(
+        &self,
+        visitor: &mut dyn FnMut(Ticket) -> Result<(), StorageError>,
+    ) -> Result<(), StorageError> {
+        let mut bots = match fs::read_dir(self.root.join("tickets")) {
+            Ok(bots) => bots,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(_) => return Err(StorageError),
+        };
+        bots.try_for_each(|bot| {
+            let bot = bot.map_err(|_| StorageError)?;
+            if bot.file_type().map_err(|_| StorageError)?.is_dir() {
+                visit_records(&bot.path(), visitor)
+            } else {
+                Ok(())
+            }
+        })
+    }
+    fn ticket(&self, bot: BotId, id: TicketId) -> Result<Ticket, StorageError> {
+        read(&self.ticket_path(bot, id))?.ok_or(StorageError)
+    }
+    fn save_ticket(&self, ticket: &Ticket) -> Result<(), StorageError> {
+        write(&self.ticket_path(ticket.bot_id, ticket.id), ticket)
+    }
+    fn delete_ticket(&self, bot: BotId, id: TicketId) -> Result<(), StorageError> {
+        remove(&self.ticket_path(bot, id))
+    }
+    fn delete_tickets(&self, bot: BotId) -> Result<(), StorageError> {
+        match fs::remove_dir_all(self.tickets_path(bot)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(_) => Err(StorageError),
@@ -182,10 +225,28 @@ impl Store for FileStore {
 }
 
 impl FileStore {
+    fn tickets_path(&self, bot: BotId) -> PathBuf {
+        self.root.join("tickets").join(bot.to_string())
+    }
+    fn ticket_path(&self, bot: BotId, id: TicketId) -> PathBuf {
+        self.tickets_path(bot).join(format!("{id}.json"))
+    }
+    fn notification_path(&self, bot: BotId) -> PathBuf {
+        self.root.join("notifications").join(format!("{bot}.json"))
+    }
     fn memory_path(&self, workspace: &str) -> PathBuf {
         self.root
             .join("memory")
             .join(format!("{:x}.md", Sha256::digest(workspace.as_bytes())))
+    }
+}
+
+/// Remove `path`; an absent file is not an error.
+fn remove(path: &Path) -> Result<(), StorageError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(StorageError),
     }
 }
 

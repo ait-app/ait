@@ -34,6 +34,13 @@
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "commit": "c187052ed68a2843f9fb1639f01bbebf1c717059",
   "pr_url": "https://github.com/ait-app/ait/pull/650",
+  "main_integration": {
+    "date": "2026-11-16",
+    "base": "37e6138bd62c9c95dc87964dbd5ad83408943bbc",
+    "status": "validated_pending_review",
+    "ownership": "Statistics DTOs stay crate-private in provider runtime with the committed readonly queries and operation routing that consume them. They directly reuse the existing AgentUsage from provider-core; native usage parsing and its regressions belong to provider-omp.",
+    "historical_checks": "The checks below describe the original 2026-11-11 Draft delivery at c187052e on the recorded 248a93cf base. They are retained as historical evidence, not verification of this main integration. Current commands and results must be recorded in PR #650 after the merge is resolved."
+  },
   "checks": {
     "results": [
       { "command": "cargo fmt --all --check", "result": "passed" },

@@ -154,3 +154,50 @@ fn turn_messages_roundtrip_and_old_turns_default_to_empty_messages() {
     assert_eq!(turn.status, TurnStatus::Running);
     assert_eq!(turn.delivery, DeliveryStatus::Pending);
 }
+
+#[test]
+fn old_turns_and_bots_load_and_default_fields_keep_their_stored_shape() {
+    use super::{Bot, Turn, WakeScope};
+
+    let turn = serde_json::json!({
+        "id": BotTurnId::generate(),
+        "conversationId": ConversationId::generate(),
+        "messageId": "input-1",
+        "sequence": 1,
+        "generation": 0,
+        "text": "question",
+        "replyTo": null,
+        "reply": null,
+        "messages": [],
+        "pendingPermissions": [],
+        "status": "queued",
+        "delivery": "pending",
+        "error": null,
+        "createdAt": "2026-11-05T00:00:00Z"
+    });
+    let bot = serde_json::json!({
+        "id": BotId::generate(),
+        "workspaceId": "w1",
+        "execution": {"provider": "codex", "model": null, "modeId": null, "thinking": null},
+        "builtinChannelId": ChannelId::generate(),
+        "state": {"kind": "active"},
+        "createdAt": "2026-01-01T00:00:00Z",
+        "permissions": {"groups": ["observe"], "modes": {}},
+        "workspaces": []
+    });
+
+    let loaded_turn: Turn = serde_json::from_value(turn.clone()).unwrap();
+    let mut loaded_bot: Bot = serde_json::from_value(bot.clone()).unwrap();
+
+    assert_eq!(loaded_turn.wake, None);
+    assert!(!loaded_turn.silent);
+    assert_eq!(loaded_turn.notification_cursor, None);
+    assert_eq!(serde_json::to_value(&loaded_turn).unwrap(), turn);
+    assert_eq!(loaded_bot.wake_scope, WakeScope::Own);
+    assert_eq!(serde_json::to_value(&loaded_bot).unwrap(), bot);
+    loaded_bot.wake_scope = WakeScope::All;
+    assert_eq!(
+        serde_json::to_value(&loaded_bot).unwrap()["wakeScope"],
+        "all"
+    );
+}

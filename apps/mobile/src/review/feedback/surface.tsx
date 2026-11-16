@@ -13,9 +13,9 @@ import { SPACING } from "@/styles/theme";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import {
   WorkspaceTabPresentationResolver,
-  WorkspaceTabIcon,
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import type { FeedbackRecipient, ReviewFeedbackState, createReviewFeedback } from "./index";
 
 type FeedbackModel = ReturnType<typeof createReviewFeedback>;

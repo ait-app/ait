@@ -15,7 +15,6 @@ export interface ZoomableViewportProps {
   actions?: ZoomableViewportAction[];
   accessibilityLabel?: string;
   fit?: ViewportFitOptions;
-  maxScale?: number;
   minScale?: number;
   onPressOutsideContent?: () => void;
   style?: StyleProp<ViewStyle>;

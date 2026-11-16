@@ -6,13 +6,13 @@ import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 
 // Everything the copy actions actually need. Kept narrower than SidebarWorkspaceEntry so the
 // command center can build one from the active route selection without a sidebar row.
-export interface CopyableWorkspace {
+interface CopyableWorkspace {
   workspaceId: string;
   workspaceDirectory: string | null | undefined;
   currentBranch: string | null | undefined;
 }
 
-export interface WorkspaceClipboardActions {
+interface WorkspaceClipboardActions {
   copyPath: (workspace: CopyableWorkspace) => void;
   copyBranchName: (workspace: CopyableWorkspace) => void;
 }

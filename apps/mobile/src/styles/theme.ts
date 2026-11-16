@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { darkHighlightColors, lightHighlightColors } from "@ait/highlight";
 
-export const baseColors = {
+const baseColors = {
   // Base colors
   white: "#ffffff",
   black: "#000000",
@@ -203,7 +203,7 @@ const darkStatusDotColors = {
   statusDotRunning: "#5caaf6",
 };
 
-export interface LightThemeConfig {
+interface LightThemeConfig {
   surface0: string;
   surface1: string;
   surface2: string;
@@ -244,7 +244,7 @@ const lightTerminalAnsi = {
   brightWhite: "#fafafa",
 } as const;
 
-export function buildLightSemanticColors(tint: LightThemeConfig) {
+function buildLightSemanticColors(tint: LightThemeConfig) {
   return {
     surface0: tint.surface0,
     surface1: tint.surface1,
@@ -333,7 +333,7 @@ const lightSemanticColors = buildLightSemanticColors({
 // Dark theme variant builder
 // ---------------------------------------------------------------------------
 
-export interface DarkThemeConfig {
+interface DarkThemeConfig {
   surface0: string;
   surface1: string;
   surface2: string;
@@ -372,7 +372,7 @@ const darkTerminalAnsi = {
   brightWhite: "#f0f0f2",
 } as const;
 
-export function buildDarkSemanticColors(tint: DarkThemeConfig) {
+function buildDarkSemanticColors(tint: DarkThemeConfig) {
   const foreground = tint.foreground ?? "#fafafa";
   const ring = tint.ring ?? "#d4d4d8";
   return {
@@ -570,7 +570,7 @@ export const FONT_SIZE = {
   "4xl": 26,
 } as const;
 
-export const LINE_HEIGHT = {
+const LINE_HEIGHT = {
   diff: 22,
 } as const;
 
@@ -583,14 +583,14 @@ export const ICON_SIZE = {
 
 export const ICON_STROKE_WIDTH = 1.5;
 
-export const FONT_WEIGHT = {
+const FONT_WEIGHT = {
   normal: "normal" as const,
   medium: "500" as const,
   semibold: "600" as const,
   bold: "bold" as const,
 } as const;
 
-export const BORDER_RADIUS = {
+const BORDER_RADIUS = {
   none: 0,
   sm: 2,
   base: 4,
@@ -601,13 +601,13 @@ export const BORDER_RADIUS = {
   full: 9999,
 } as const;
 
-export const BORDER_WIDTH = {
+const BORDER_WIDTH = {
   0: 0,
   1: 1,
   2: 2,
 } as const;
 
-export const OPACITY = {
+const OPACITY = {
   0: 0,
   50: 0.5,
   100: 1,
@@ -681,7 +681,7 @@ const darkShadow = {
   },
 } as const;
 
-export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColors>) {
+function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColors>) {
   return {
     colorScheme: "dark" as const,
     colors: {
@@ -695,10 +695,10 @@ export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemant
 }
 
 export const darkTheme = buildDarkTheme(paseoDarkColors);
-export const darkZincTheme = buildDarkTheme(zincDarkColors);
-export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
+const darkZincTheme = buildDarkTheme(zincDarkColors);
+const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
 export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
-export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
+const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
 // Pure black — zero-luminance background with high-contrast surfaces.
 const pureBlackDarkColors = buildDarkSemanticColors({
@@ -743,7 +743,7 @@ const lightShadow = {
   },
 } as const;
 
-export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSemanticColors>) {
+function buildLightTheme(semanticColors: ReturnType<typeof buildLightSemanticColors>) {
   return {
     colorScheme: "light" as const,
     colors: {
@@ -757,9 +757,6 @@ export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSema
 }
 
 export const lightTheme = buildLightTheme(lightSemanticColors);
-
-// Keep compatibility with existing code
-export const theme = darkTheme;
 
 export const THEME_OPTIONS = [
   {
@@ -815,15 +812,11 @@ export const THEME_OPTIONS = [
 ] as const;
 
 export const PLUGIN_THEME_PREFERENCE = "plugin";
-export const PLUGIN_THEME_NAMES = {
-  light: "pluginLight",
-  dark: "pluginDark",
-} as const;
 
 export type ThemePreference =
   | (typeof THEME_OPTIONS)[number]["name"]
   | typeof PLUGIN_THEME_PREFERENCE;
-export type ThemeName = Exclude<ThemePreference, "auto" | typeof PLUGIN_THEME_PREFERENCE>;
+type ThemeName = Exclude<ThemePreference, "auto" | typeof PLUGIN_THEME_PREFERENCE>;
 type ConcreteThemeOption = Exclude<(typeof THEME_OPTIONS)[number], { name: "auto" }>;
 export type Theme = ConcreteThemeOption["theme"];
 
@@ -841,9 +834,6 @@ type ThemeSwatches = {
 
 type RegisteredThemes = {
   [Option in ConcreteThemeOption as Option["unistylesName"]]: Option["theme"];
-} & {
-  pluginLight: typeof lightTheme;
-  pluginDark: typeof darkTheme;
 };
 
 export const THEME_TO_UNISTYLES = Object.fromEntries(
@@ -854,13 +844,9 @@ export const THEME_SWATCHES = Object.fromEntries(
   CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.swatch]),
 ) as ThemeSwatches;
 
-export const REGISTERED_THEMES = {
-  ...Object.fromEntries(
-    CONCRETE_THEME_OPTIONS.map((option) => [option.unistylesName, option.theme]),
-  ),
-  [PLUGIN_THEME_NAMES.light]: lightTheme,
-  [PLUGIN_THEME_NAMES.dark]: darkTheme,
-} as RegisteredThemes;
+export const REGISTERED_THEMES = Object.fromEntries(
+  CONCRETE_THEME_OPTIONS.map((option) => [option.unistylesName, option.theme]),
+) as RegisteredThemes;
 
 export function getNextThemePreference(current: ThemePreference): ThemePreference {
   const currentIndex = THEME_OPTIONS.findIndex((option) => option.name === current);

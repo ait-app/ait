@@ -14,7 +14,7 @@ import { useStatusRingRotation } from "@/components/status-ring/clock";
  * per-instance timing, so a ring that mounts mid-flight is already in phase — see `clock.ts`.
  *
  * The rotated view carries no theme-tracked style; the coloured arc is nested inside it. Putting
- * a Unistyles style on a Reanimated view crashes on theme change (docs/unistyles.md).
+ * a Unistyles style on a Reanimated view crashes on theme change.
  */
 export const StatusRing = memo(function StatusRing({ backdrop }: StatusRingProps) {
   const rotation = useStatusRingRotation();

@@ -45,11 +45,9 @@ const ThemedFolderGit2 = withUnistyles(FolderGit2);
 
 export function SidebarWorkspaceRowFrame({
   workspace,
-  isDragging = false,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
-  isDragging?: boolean;
   children: (input: {
     isHovered: boolean;
     contextMenuOpen: boolean;
@@ -58,15 +56,10 @@ export function SidebarWorkspaceRowFrame({
   }) => ReactNode;
 }) {
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const { isHovered, hoverHandlers } = useSidebarRowHover(contextMenuOpen || isDragging);
+  const { isHovered, hoverHandlers } = useSidebarRowHover(contextMenuOpen);
 
   return (
-    <WorkspaceHoverCard
-      workspace={workspace}
-      prHint={workspace.prHint}
-      isDragging={isDragging}
-      disabled={contextMenuOpen}
-    >
+    <WorkspaceHoverCard workspace={workspace} disabled={contextMenuOpen}>
       {children({
         isHovered,
         contextMenuOpen,
@@ -86,10 +79,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   backdrop,
   isHovered,
   isLoading,
-  isCreating = false,
   shortcutNumber = null,
   showShortcutBadge = false,
-  reserveIdleStatusIndicatorSpace = true,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -102,11 +93,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   backdrop: SidebarSurfaceBackdrop;
   isHovered: boolean;
   isLoading: boolean;
-  isCreating?: boolean;
   shortcutNumber?: number | null;
   showShortcutBadge?: boolean;
-  /** Keep the empty leading slot when the workspace has no active status. */
-  reserveIdleStatusIndicatorSpace?: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -117,12 +105,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   // where the two meet — the meta line is handed finished definitions.
   const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
   const workspaceBranchTextStyle = useMemo(
-    () => [
-      styles.workspaceBranchText,
-      isHovered && styles.workspaceBranchTextHovered,
-      isCreating && styles.workspaceBranchTextCreating,
-    ],
-    [isHovered, isCreating],
+    () => [styles.workspaceBranchText, isHovered && styles.workspaceBranchTextHovered],
+    [isHovered],
   );
 
   return (
@@ -143,7 +127,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             bucket={workspace.statusBucket}
             workspaceKind={workspace.workspaceKind}
             loading={isLoading}
-            reserveIdleSpace={reserveIdleStatusIndicatorSpace}
           />
         )}
         <View style={styles.workspaceContentColumn}>
@@ -190,12 +173,10 @@ function WorkspaceStatusIndicator({
   bucket,
   workspaceKind,
   loading = false,
-  reserveIdleSpace = true,
 }: {
   bucket: SidebarWorkspaceEntry["statusBucket"];
   workspaceKind: SidebarWorkspaceEntry["workspaceKind"];
   loading?: boolean;
-  reserveIdleSpace?: boolean;
 }) {
   // Busy is the only status that moves, and it is the ring rather than a dot for the same
   // reason it is a dot elsewhere: every status in the sidebar sits in this one slot, so busy
@@ -238,11 +219,11 @@ function WorkspaceStatusIndicator({
     // workspaces by indentation alone, and with nothing in the leading slot the rail has no
     // edge to read against — a workspace carrying its own glyph starts looking like a project
     // header. The dot is muted to half opacity so it holds the rail without reporting status.
-    return reserveIdleSpace ? (
+    return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done">
         <View style={styles.idleStatusDot} />
       </View>
-    ) : null;
+    );
   }
 
   let KindIcon: typeof ThemedMonitor;
@@ -362,14 +343,12 @@ export type SidebarWorkspaceTrailingPresentation = "visible" | "hidden" | "absen
 export function resolveTrailingActionVisibility({
   workspace,
   trailing,
-  hasArchiveAction,
   isHovered,
   isTouchPlatform,
   showShortcut,
 }: {
   workspace: SidebarWorkspaceEntry;
   trailing: SidebarWorkspaceTrailing;
-  hasArchiveAction: boolean;
   isHovered: boolean;
   isTouchPlatform: boolean;
   showShortcut: boolean;
@@ -377,14 +356,13 @@ export function resolveTrailingActionVisibility({
   trailingPresentation: SidebarWorkspaceTrailingPresentation;
   showKebab: boolean;
   showScrim: boolean;
-  renderSlot: boolean;
   reserveSlotWidth: boolean;
 } {
   const hasTrailing = hasSidebarWorkspaceTrailing({ workspace, trailing });
-  const showKebab = Boolean(hasArchiveAction && (isHovered || isTouchPlatform)) && !showShortcut;
+  const showKebab = (isHovered || isTouchPlatform) && !showShortcut;
   // Touch permanently replaces the stats with the menu. Only temporary shortcut hints
   // conceal content while retaining its width, so desktop rows do not shift.
-  const hasContent = hasTrailing && !(hasArchiveAction && isTouchPlatform);
+  const hasContent = hasTrailing && !isTouchPlatform;
   let trailingPresentation: SidebarWorkspaceTrailingPresentation = "absent";
   if (hasContent) trailingPresentation = showShortcut ? "hidden" : "visible";
   return {
@@ -394,12 +372,11 @@ export function resolveTrailingActionVisibility({
     // row — over an unhovered one the gradient fades to the wrong color. That is also why
     // touch, which shows the kebab without ever hovering, never gets one.
     showScrim: showKebab && isHovered,
-    renderSlot: hasArchiveAction || hasTrailing,
     // The slot only holds width for something that permanently sits in it. Trailing content
     // does; the kebab only does on touch, where there is no hover for it to appear on and so
     // no scrim to let it overlay the title. Everywhere else the width goes back to the title
     // and the kebab fades in over its tail.
-    reserveSlotWidth: hasContent || (hasArchiveAction && isTouchPlatform),
+    reserveSlotWidth: hasContent || isTouchPlatform,
   };
 }
 
@@ -537,9 +514,6 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.76,
     flexShrink: 1,
     minWidth: 0,
-  },
-  workspaceBranchTextCreating: {
-    opacity: 0.92,
   },
   workspaceBranchTextHovered: {
     opacity: 1,

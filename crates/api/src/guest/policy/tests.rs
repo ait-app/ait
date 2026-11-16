@@ -6,6 +6,7 @@ use super::*;
 use crate::guest::admit;
 use crate::test_support::{Workspaces, address};
 
+mod btw;
 mod node;
 mod regressions;
 mod scopes;
@@ -115,7 +116,6 @@ fn methods_are_classified_by_default_deny() {
         ("workspace.script.run.wait.request", Rule::Workspace),
         ("workspace.list.request", Rule::WorkspaceList),
         ("agent.get.request", Rule::Agent("agentId")),
-        ("agent.statistics.get.request", Rule::Agent("agentId")),
         ("agent.timeline.get.request", Rule::Agent("agentId")),
         ("agent.message.send.request", Rule::AgentDrive("agentId")),
         (
@@ -172,6 +172,7 @@ fn methods_are_classified_by_default_deny() {
         "agent.detach.request",
         "agent.timeline.append.request",
         "provider.usage.list.request",
+        "provider.usage.ledger.request",
         "provider.diagnostic.request",
         "provider.sessions.recent.list.request",
         "file.upload.request",
@@ -204,6 +205,14 @@ fn methods_are_classified_by_default_deny() {
     assert!(!Rule::Node.admits(ResourceKind::Project));
     assert!(Rule::WorkspaceCreate.admits(ResourceKind::Project));
     assert!(!Rule::Deny.admits(ResourceKind::Node));
+}
+
+#[test]
+fn statistics_use_the_read_only_agent_scope() {
+    assert_eq!(
+        classify("agent.statistics.get.request"),
+        Rule::Agent("agentId")
+    );
 }
 
 #[tokio::test]
@@ -467,6 +476,7 @@ async fn agent_creation_is_forced_into_the_workspace() {
         json!({"config": {"provider": "codex", "providerOptions": {}}}),
         json!({"config": {"provider": "codex"}, "labels": {GUEST_SHARE: "forged"}}),
         json!({"config": {"provider": "codex"}, "labels": {"ait.bot.scope": "forged"}}),
+        json!({"config": {"provider": "codex"}, "labels": {"ait.bot.ticket": "forged"}}),
         json!({"config": {"provider": "codex"}, "callerAgentId": "owner-agent"}),
     ] {
         assert_eq!(

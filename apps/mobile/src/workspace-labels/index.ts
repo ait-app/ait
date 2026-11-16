@@ -11,12 +11,7 @@ export { buildWorkspaceLabelPickerRows } from "./internal/picker-model";
 export type { WorkspaceLabelPickerRow } from "./internal/picker-model";
 export { mergeWorkspaceLabelCatalogs } from "./internal/merge";
 export { workspaceLabelErrorMessage } from "./internal/workflow-model";
-export type {
-  WorkspaceLabelManagerDraft,
-  WorkspaceLabelManagerHost,
-  WorkspaceLabelManagerSnapshot,
-  WorkspaceLabelPickerModelSnapshot,
-} from "./internal/workflow-model";
+export type { WorkspaceLabelManagerDraft } from "./internal/workflow-model";
 
 export function createWorkspaceLabelPickerModel(
   dependencies: ConstructorParameters<typeof WorkspaceLabelPickerModel>[0],

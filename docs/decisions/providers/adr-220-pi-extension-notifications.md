@@ -5,12 +5,14 @@ date: 2026-11-06
 amends:
   - providers/adr-156-pi-native-rpc-provider.md
 paths:
-  - crates/provider
+  - crates/provider/runtime
+  - crates/provider/pi
 ---
 
 # ADR-220：Pi 扩展通知与会话时间线
 
 - 范围：`crates/provider`；修订 [ADR-156](adr-156-pi-native-rpc-provider.md)。
+- 适配器现位于 `crates/provider-pi`（[ADR-270](adr-270-provider-crate-family.md)）。
 
 ## 背景
 
