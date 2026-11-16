@@ -274,23 +274,40 @@ async fn conflicting_progress_observation_fails_the_turn_without_corrupting_hist
     manager = manager.with_timeline(timeline.clone());
     {
         let mut state = client.0.lock().unwrap();
+        state.failure_message = Some("private provider detail");
+        state.fail_close = true;
         state.events.push_back(progress("same", "accepted"));
-        state.events.push_back(progress("same", "changed"));
+        state
+            .events
+            .push_back(progress("same", "private rejected content"));
         state
             .events
             .push_back(AgentTurnEvent::Completed(Some("must not win".to_owned())));
     }
+    assert_eq!(manager.poll().await, Err(AgentManagerError::Session));
+    client.0.lock().unwrap().fail_close = false;
     manager.poll().await.unwrap();
     let rows = timeline.read("agent-1").unwrap().1;
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entry.item["text"], "accepted");
     assert_eq!(rows[1].entry.item["type"], "error");
+    let expected = "Provider event rejected (progress, IdempotencyConflict)";
+    assert_eq!(rows[1].entry.item["message"], expected);
+    assert_eq!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .last_error
+            .as_deref(),
+        Some(expected)
+    );
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error
     );
     assert!(manager.live_snapshot("agent-1").is_none());
-    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    assert_eq!(client.0.lock().unwrap().close_calls, 2);
 }
 
 #[tokio::test]
@@ -348,6 +365,10 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
     let rows = timeline.read("agent-1").unwrap().1;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entry.item["type"], "error");
+    assert_eq!(
+        rows[0].entry.item["message"],
+        "Provider event rejected (progress, ResourceExhausted)"
+    );
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error

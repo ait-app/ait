@@ -14,6 +14,13 @@ const MAX_TEXT: usize = 192 * 1024;
 /// tool instead of its final text, so the report is shown as the subagent's final message.
 const SUBAGENT_HANDBACK: &str = "SubagentHandback";
 
+#[derive(Debug)]
+struct StreamBlock {
+    kind: String,
+    ordinal: usize,
+    has_delta: bool,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Stream {
     images: provider_native::images::ImageStore,
@@ -25,7 +32,10 @@ pub(super) struct Stream {
     messages: BTreeMap<String, usize>,
     partial_bytes: BTreeMap<String, usize>,
     message_id: Option<String>,
-    blocks: BTreeMap<u64, String>,
+    blocks: BTreeMap<u64, StreamBlock>,
+    next_block: usize,
+    blocks_without_delta: usize,
+    suppress_progress: bool,
     compacting: bool,
     /// Subagent launches; their completion notices belong to the child, not the parent timeline.
     agent_calls: BTreeSet<String>,
@@ -143,21 +153,53 @@ impl Stream {
     fn partial(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         match event["type"].as_str() {
             Some("message_start") => {
-                self.message_id = Some(text(&event["message"], "id")?.to_owned());
-                self.blocks.clear();
+                let message = text(&event["message"], "id")?;
+                if self.message_id.as_deref() != Some(message) {
+                    self.message_id = Some(message.to_owned());
+                    self.blocks.clear();
+                    self.next_block = self.messages.get(message).copied().unwrap_or_default();
+                    self.blocks_without_delta = 0;
+                    // A snapshot received first cannot be matched to a later stream block.
+                    self.suppress_progress = self.next_block != 0;
+                }
             }
             Some("content_block_start") => {
                 if self.blocks.len() >= MAX_ITEMS {
                     return Err(AgentSessionError::Failed);
                 }
                 let index = event["index"].as_u64().ok_or(AgentSessionError::Failed)?;
-                self.blocks
-                    .insert(index, text(&event["content_block"], "type")?.to_owned());
+                let kind = text(&event["content_block"], "type")?;
+                if let Some(block) = self.blocks.get(&index) {
+                    if block.kind != kind {
+                        return Err(AgentSessionError::Failed);
+                    }
+                } else {
+                    // A block without text deltas may be absent from the assistant snapshot.
+                    // Its ordinal is therefore ambiguous until the snapshot arrives.
+                    self.suppress_progress |= self.blocks_without_delta != 0;
+                    let message = self.message_id.as_ref().ok_or(AgentSessionError::Failed)?;
+                    let ordinal = self
+                        .next_block
+                        .max(self.messages.get(message).copied().unwrap_or_default());
+                    self.next_block = ordinal.saturating_add(1);
+                    self.blocks_without_delta += 1;
+                    self.blocks.insert(
+                        index,
+                        StreamBlock {
+                            kind: kind.to_owned(),
+                            ordinal,
+                            has_delta: false,
+                        },
+                    );
+                }
             }
             Some("content_block_delta") => {
                 let index = event["index"].as_u64().ok_or(AgentSessionError::Failed)?;
-                let kind = self.blocks.get(&index).ok_or(AgentSessionError::Failed)?;
-                let field = match (kind.as_str(), event["delta"]["type"].as_str()) {
+                let block = self
+                    .blocks
+                    .get_mut(&index)
+                    .ok_or(AgentSessionError::Failed)?;
+                let field = match (block.kind.as_str(), event["delta"]["type"].as_str()) {
                     ("text", Some("text_delta")) => "text",
                     ("thinking", Some("thinking_delta")) => "thinking",
                     _ => return Ok(()),
@@ -168,8 +210,15 @@ impl Stream {
                 if delta.is_empty() {
                     return Ok(());
                 }
+                if !block.has_delta {
+                    block.has_delta = true;
+                    self.blocks_without_delta -= 1;
+                }
+                if self.suppress_progress {
+                    return Ok(());
+                }
                 let message = self.message_id.as_ref().ok_or(AgentSessionError::Failed)?;
-                let id = format!("{message}:{index}");
+                let id = format!("{message}:{}", block.ordinal);
                 if self.completed.contains(&id) {
                     return Ok(());
                 }

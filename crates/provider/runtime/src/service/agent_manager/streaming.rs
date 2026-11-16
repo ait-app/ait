@@ -41,12 +41,34 @@ pub(super) fn prepare_failure(agent: &mut super::LiveAgent) {
             .filter(|diagnostic| diagnostic.will_retry != Some(true));
     }
     let message = failure_message(agent).into_owned();
+    set_failure_entry(agent, &message);
+}
+
+fn set_failure_entry(agent: &mut super::LiveAgent, message: &str) {
     agent.failure_entry = Some(provider_core::protocol::timeline::NativeItem {
         key: format!("host:provider-failure:{}", uuid::Uuid::new_v4()),
         turn_id: agent.turn.clone(),
         timestamp: now_timestamp(),
         item: serde_json::json!({"type":"error","message":message}),
     });
+}
+
+fn event_kind(event: &AgentTurnEvent) -> &'static str {
+    match event {
+        AgentTurnEvent::Started(_) => "started",
+        AgentTurnEvent::Subagent(_) => "subagent",
+        AgentTurnEvent::Progress { .. } => "progress",
+        AgentTurnEvent::PermissionRequested(_) => "permission_requested",
+        AgentTurnEvent::PermissionResolved(_) => "permission_resolved",
+        AgentTurnEvent::Timeline(_) => "timeline",
+        AgentTurnEvent::History(_) => "history",
+        AgentTurnEvent::Usage(_) => "usage",
+        AgentTurnEvent::RequestUsage(_) => "request_usage",
+        AgentTurnEvent::RuntimeInfo(_) => "runtime_info",
+        AgentTurnEvent::Completed(_) => "completed",
+        AgentTurnEvent::Cancelled => "cancelled",
+        AgentTurnEvent::Failed => "failed",
+    }
 }
 
 /// Commit the prepared notice using its retry-stable identity and timestamp.
@@ -175,8 +197,14 @@ pub(super) async fn drain(
             // Any other rejection is deterministic for this event; retrying it would wedge the
             // lane, so the turn fails and the native session is settled instead.
             Err(error) => {
+                let kind = agent.pending.as_ref().map_or("unknown", event_kind);
                 tracing::warn!(provider = %agent.record.provider, agent_id = %id,
-                    error_code = ?error, "Native provider event was rejected");
+                    event_kind = kind, error_code = ?error, "Native provider event was rejected");
+                // Only fixed event names and error codes cross this boundary.
+                set_failure_entry(
+                    agent,
+                    &format!("Provider event rejected ({kind}, {error:?})"),
+                );
                 agent.pending = Some(AgentTurnEvent::Failed);
                 break;
             }
