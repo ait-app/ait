@@ -13,6 +13,7 @@ fn session() -> CodexSession {
         requests: provider_native::usage::requests::CodexRequests::default(),
         child_requests: std::collections::BTreeMap::new(),
         notes: provider_native::notes::Notes::default(),
+        plan_updates: std::collections::BTreeMap::new(),
         last_anchor: None,
         manual_compactions: 0,
         children: super::super::super::subagents::Live::default(),

@@ -306,6 +306,8 @@ interface TaskEntry {
   text: string;
   status: TaskStatus;
   completed: boolean;
+  /** Synthetic position identity, matching the daemon-side legacy TodoWrite projection. */
+  id?: string;
   activeForm?: string;
 }
 
@@ -321,11 +323,16 @@ const ClaudeTodoWriteSchema = z.object({
   ),
 });
 
+const UpdatePlanStatusSchema = z
+  .enum(["pending", "in_progress", "completed", "inProgress"])
+  .catch("pending")
+  .transform((status) => (status === "inProgress" ? "in_progress" : status));
+
 const UpdatePlanSchema = z.object({
   plan: z.array(
     z.object({
       step: z.string(),
-      status: TaskStatusSchema.catch("pending"),
+      status: UpdatePlanStatusSchema,
     }),
   ),
 });
@@ -353,7 +360,7 @@ export function extractTaskEntriesFromToolCall(
     if (!parsed.success) {
       return null;
     }
-    return parsed.data.todos.map((todo) => {
+    return parsed.data.todos.map((todo, index) => {
       const status = todo.status;
       const text = todo.content.trim();
       const activeForm = todo.activeForm?.trim();
@@ -361,6 +368,9 @@ export function extractTaskEntriesFromToolCall(
         text: text.length ? text : todo.content,
         status,
         completed: status === "completed",
+        // Legacy TodoWrite items carry no native id; the daemon-side projection assigns
+        // the same position identity, so both paths derive identical task keys.
+        id: `legacy:${index}`,
         ...(activeForm ? { activeForm } : {}),
       };
     });

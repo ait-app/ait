@@ -1463,6 +1463,33 @@ describe("stream reducer canonical tool calls", () => {
     },
   );
 
+  it("derives one activity for an inserted task in an id-less list", () => {
+    // ACP plan snapshots and OMP reminders carry no native ids. Inserting a task
+    // must report only that task as added, not every task that shifted position.
+    const state = hydrateStreamState([
+      {
+        event: todoTimeline([
+          { text: "First", completed: false, status: "pending" },
+          { text: "Second", completed: false, status: "pending" },
+        ]),
+        timestamp: new Date("2026-11-16T10:00:00Z"),
+      },
+      {
+        event: todoTimeline([
+          { text: "Urgent", completed: false, status: "in_progress" },
+          { text: "First", completed: false, status: "pending" },
+          { text: "Second", completed: false, status: "pending" },
+        ]),
+        timestamp: new Date("2026-11-16T10:00:01Z"),
+      },
+    ]);
+
+    expect(state.flatMap((item) => (item.kind === "todo_list" ? [item.activity] : []))).toEqual([
+      { type: "created", count: 2 },
+      { type: "added", task: "Urgent" },
+    ]);
+  });
+
   it("reports new work after completed tasks without reopening anything", () => {
     const state = hydrateStreamState([
       {
@@ -1577,6 +1604,50 @@ describe("stream reducer canonical tool calls", () => {
     assert.strictEqual(todos.items[0]?.text, "Task 1");
   });
 
+  it("derives no spurious activities when the canonical snapshot and the tool call agree", () => {
+    // The daemon emits the canonical snapshot (with legacy position ids) when the
+    // TodoWrite call starts, then the completed tool call arrives with the same items.
+    // Both paths must derive identical task keys, so the second append updates in place
+    // instead of reporting every task as newly added.
+    const state = hydrateStreamState([
+      {
+        event: todoTimeline(
+          [
+            { id: "legacy:0", text: "Task 1", completed: false, status: "pending" },
+            { id: "legacy:1", text: "Task 2", completed: true, status: "completed" },
+          ],
+          "claude",
+        ),
+        timestamp: new Date("2026-11-16T10:00:00Z"),
+      },
+      {
+        event: canonicalToolTimeline({
+          provider: "claude",
+          callId: "todo-write",
+          name: "TodoWrite",
+          status: "completed",
+          input: {
+            todos: [
+              { content: "Task 1", status: "pending" },
+              { content: "Task 2", status: "completed" },
+            ],
+          },
+        }),
+        timestamp: new Date("2026-11-16T10:00:01Z"),
+      },
+    ]);
+
+    const todoLists = state.filter(
+      (item): item is Extract<StreamItem, { kind: "todo_list" }> => item.kind === "todo_list",
+    );
+    assert.strictEqual(todoLists.length, 1);
+    assert.strictEqual(todoLists[0]?.activity.type, "created");
+    assert.deepStrictEqual(
+      todoLists[0]?.items.map((item) => item.id),
+      ["legacy:0", "legacy:1"],
+    );
+  });
+
   it.each(["TaskCreate", "TaskUpdate", "TaskList"])(
     "suppresses Claude %s bookkeeping tool calls",
     (name) => {
@@ -1618,7 +1689,13 @@ describe("stream reducer canonical tool calls", () => {
         expect.objectContaining({
           kind: "todo_list",
           items: [
-            { text: "Verify", activeForm: "Verifying", status: "in_progress", completed: false },
+            {
+              text: "Verify",
+              id: "legacy:0",
+              activeForm: "Verifying",
+              status: "in_progress",
+              completed: false,
+            },
           ],
         }),
       ]);

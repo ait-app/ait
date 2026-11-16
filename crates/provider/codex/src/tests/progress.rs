@@ -227,3 +227,52 @@ async fn native_plan_progress_is_a_durable_todo_snapshot_or_a_reviewable_plan() 
         }
     }
 }
+
+#[tokio::test]
+async fn repeated_plan_content_keeps_each_occurrence_and_the_latest_state() {
+    let fixture = Fixture::new();
+    fixture.mode("workflows");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("plan-progress-repeat", &spec.config)
+        .await
+        .unwrap();
+    let mut todos = Vec::new();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "todo" => {
+                    todos.push(entry);
+                }
+                Some(AgentTurnEvent::Completed(_)) => break,
+                Some(AgentTurnEvent::Failed) => panic!("plan progress failed"),
+                _ => tokio::time::sleep(Duration::from_millis(5)).await,
+            }
+        }
+    })
+    .await
+    .unwrap();
+    // A -> B -> A within one turn: every occurrence stays durable under its own key,
+    // and the persisted history ends on the latest state, not the earlier B row.
+    assert_eq!(todos.len(), 3);
+    assert_ne!(todos[0].key, todos[1].key);
+    assert_ne!(todos[1].key, todos[2].key);
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    let last = history
+        .iter()
+        .filter(|entry| entry.item["type"] == "todo")
+        .last()
+        .expect("durable plan snapshots");
+    assert_eq!(last.item["items"][0]["status"], "pending");
+    assert_eq!(
+        history
+            .iter()
+            .filter(|entry| entry.item["type"] == "todo")
+            .count(),
+        3
+    );
+}

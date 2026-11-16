@@ -1456,8 +1456,11 @@ function taskStatus(task: TodoEntry): NonNullable<TodoEntry["status"]> {
   return task.status === "in_progress" ? "in_progress" : "pending";
 }
 
-function taskKey(task: TodoEntry, index: number): string {
-  return task.id ?? `${index}:${task.text}`;
+function taskKey(task: TodoEntry): string {
+  // Identity is the native id when present. Position-based keys break on every
+  // insertion or reorder of id-less lists (ACP plans, reminders), reporting each
+  // shifted task as newly added; text keys keep per-task identity stable.
+  return task.id ?? task.text;
 }
 
 function deriveTaskActivities(
@@ -1468,10 +1471,10 @@ function deriveTaskActivities(
     return current.length > 0 ? [{ type: "created", count: current.length }] : [];
   }
 
-  const previousByKey = new Map(previous.map((task, index) => [taskKey(task, index), task]));
+  const previousByKey = new Map(previous.map((task) => [taskKey(task), task]));
   const activities: TaskActivity[] = [];
-  for (const [index, task] of current.entries()) {
-    const prior = previousByKey.get(taskKey(task, index));
+  for (const task of current) {
+    const prior = previousByKey.get(taskKey(task));
     if (!prior) {
       activities.push({ type: "added", task: task.text });
       continue;
