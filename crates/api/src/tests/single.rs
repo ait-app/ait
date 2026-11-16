@@ -1,21 +1,52 @@
+use std::collections::BTreeSet;
+
 use super::*;
 
 #[tokio::test]
-async fn single_mode_negotiates_all_methods_and_owns_release() {
+async fn single_mode_negotiates_a_full_bounded_offer_and_owns_release() {
     let fixture = Fixture::start().await;
-    let info = fixture.api.shared.info();
-    assert!(info.capabilities.len() > 64);
+    let available: BTreeSet<_> = fixture.api.shared.info().capabilities.into_iter().collect();
+    let required = [
+        "connection.ping",
+        "server.status.subscribe",
+        "subscription.release.request",
+        "agent.statistics.get.request",
+        "connection.single.v1",
+    ];
+    assert!(required.iter().all(|method| available.contains(*method)));
+    let mut offered: BTreeSet<_> = required.into_iter().map(str::to_owned).collect();
+    // ADR-074 bounds a client's offer, independently of the growing server catalog.
+    for capability in &available {
+        if offered.len() == 256 {
+            break;
+        }
+        offered.insert(capability.clone());
+    }
+    assert_eq!(offered.len(), 256);
+    let expected: BTreeSet<_> = offered.intersection(&available).cloned().collect();
     let mut socket = fixture.socket().await;
     send(
         &mut socket,
         json!({"type":"hello","client_id":"single-client",
         "protocol":{"major":1,"min_minor":0,"max_minor":0},
-        "capabilities":info.capabilities,"required_capabilities":["connection.single.v1"]}),
+        "capabilities":offered,"required_capabilities":["connection.single.v1"]}),
     )
     .await;
     let welcome = receive(&mut socket).await;
-    assert_eq!(welcome["type"], "server_info");
-    assert!(welcome["negotiated_capabilities"].as_array().unwrap().len() > 64);
+    assert_eq!(welcome["type"], "server_info", "{welcome}");
+    let negotiated: Vec<String> =
+        serde_json::from_value(welcome["negotiated_capabilities"].clone()).unwrap();
+    assert_eq!(negotiated.len(), 256);
+    assert_eq!(negotiated.into_iter().collect::<BTreeSet<_>>(), expected);
+    assert_eq!(
+        request(
+            &mut socket,
+            "agent.statistics.get.request",
+            json!({"agentId":"missing"})
+        )
+        .await["code"],
+        "not_implemented"
+    );
     assert_eq!(
         request(&mut socket, "connection.ping", json!({"nonce":"alive"})).await["result"]["nonce"],
         "alive"

@@ -21,10 +21,11 @@ async fn read_burst(reads: usize, expect_exhaustion: bool) {
     .await;
     let mut socket = fixture.socket().await;
     let mut greeting = hello();
-    greeting["capabilities"] = json!(fixture.api.shared.info().capabilities);
+    greeting["capabilities"] = json!(["connection.ping", "fs.explorer.request"]);
     greeting["required_capabilities"] = json!(["connection.single.v1", "file.upload.request"]);
     send(&mut socket, greeting).await;
-    receive(&mut socket).await;
+    let welcome = receive(&mut socket).await;
+    assert_eq!(welcome["type"], "server_info", "{welcome}");
     send(
         &mut socket,
         json!({"type":"request","request_id":"upload",

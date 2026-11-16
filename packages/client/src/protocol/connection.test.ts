@@ -162,6 +162,33 @@ it.each([true, false])("advertises statistics only when implemented (%s)", (supp
   }
 });
 describe("Rust v1 connection", () => {
+  it.each([
+    "ws://127.0.0.1:7316/v1/ws",
+    "ait+desktop://account-relay/00000000-0000-4000-8000-000000000001",
+  ])("keeps the single-connection hello within the 256-capability budget for %s", async (url) => {
+    const h = harness(undefined, url);
+    h.stopHello();
+    const client = createPaseoClient({
+      url,
+      clientId: "single-capability-budget",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      expect(h.sockets).toHaveLength(1);
+      h.ready();
+      await connected;
+      const hello = JSON.parse(h.sockets[0].send.mock.calls[0][0]);
+      expect(hello.capabilities).toContain("agent.statistics.get.request");
+      expect(hello.required_capabilities).toContain("connection.single.v1");
+      const offered = new Set([...hello.capabilities, ...hello.required_capabilities]);
+      expect(offered.size).toBeLessThanOrEqual(256);
+    } finally {
+      await client.close();
+    }
+  });
+
   it("connects the public SDK directly to raw Rust transports with Bearer authentication", async () => {
     const h = harness();
     h.stopHello();
