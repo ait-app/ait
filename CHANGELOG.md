@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.2.15 - 2026-11-17
+
+- An experimental Workspace notebook tab lets a workspace keep shared notes and TODOs in `.ait-notebook.md`, with live collaboration between the people who have it. Guests who only have the file see a read-only view, and a conflicting write is shown instead of being applied over someone else's change.
+- The MiniMax `ask_user` questionnaire is shown as a question form instead of raw JSON: the options and their descriptions, whether one or many can be chosen, the recommended option and the waiting-for-answer state.
+- Agent profiles open in their own settings page instead of a popup sheet, and editing a profile offers an explicit "Leave unchanged" choice for the model, mode and thinking level. A stored value the host no longer offers is shown as unresolved and is kept when you save, so fields written by a newer client survive the edit.
+- Claude turns no longer fail with an "IdempotencyConflict" when a streamed block and the assistant snapshot number their blocks differently, and a rejected runtime event now keeps its error code in the failure notice instead of showing a generic provider error.
+- The TODO list is shown correctly in more situations: the Claude task list no longer gains phantom "task added" capsules after every update, a Codex plan that returns to an earlier state no longer shows a stale step after a restart, and inserting or reordering a task in a list without ids no longer reports the moved tasks as newly added.
+- A QQ group message that only carries the author's id is accepted again, so Bot replies reach groups that send the legacy shape.
+
 ## 0.2.14 - 2026-11-16
 
 - A schedule that runs a new Agent each time now has an explicit "After each run" choice: keep the session in the Workspace so you can keep talking after the task finishes, or archive it (default). The choice is kept when the schedule is edited, when the execution target changes, and for older records that never set it.
