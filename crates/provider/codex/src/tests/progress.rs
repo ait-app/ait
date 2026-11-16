@@ -262,17 +262,10 @@ async fn repeated_plan_content_keeps_each_occurrence_and_the_latest_state() {
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
     let history = client.history(&handle, &spec.cwd).await.unwrap();
-    let last = history
+    let durable: Vec<_> = history
         .iter()
         .filter(|entry| entry.item["type"] == "todo")
-        .last()
-        .expect("durable plan snapshots");
-    assert_eq!(last.item["items"][0]["status"], "pending");
-    assert_eq!(
-        history
-            .iter()
-            .filter(|entry| entry.item["type"] == "todo")
-            .count(),
-        3
-    );
+        .collect();
+    assert_eq!(durable.len(), 3);
+    assert_eq!(durable[2].item["items"][0]["status"], "pending");
 }
