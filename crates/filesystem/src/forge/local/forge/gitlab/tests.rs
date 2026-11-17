@@ -1,6 +1,7 @@
 use super::super::resolver::ForgeKind;
 use super::*;
-use crate::forge::ports::{PullRequestMergeable, PullRequestTimelineItem};
+use crate::forge::ports::PullRequestTimelineItem;
+use domain::workspace::protocol::workspace::{CheckStatus, ChecksStatus, Mergeable};
 use serde_json::json;
 
 fn context() -> ForgeContext {
@@ -62,9 +63,9 @@ fn status_preserves_merge_facts_and_pipeline_aggregate() {
     let result = status::parse(&mr(), &context(), Some(&approvals), Some(&pipeline)).unwrap();
     assert_eq!(result.forge, "gitlab");
     assert_eq!(result.project_path.as_deref(), Some("group/team/project"));
-    assert_eq!(result.mergeable, PullRequestMergeable::Mergeable);
-    assert_eq!(result.checks_status, "success");
-    assert_eq!(result.checks[0].status, "skipped");
+    assert_eq!(result.mergeable, Mergeable::Mergeable);
+    assert_eq!(result.checks_status, ChecksStatus::Success);
+    assert_eq!(result.checks[0].status, CheckStatus::Skipped);
     assert_eq!(result.forge_specific.as_ref().unwrap()["approvalsGiven"], 2);
     assert_eq!(
         result.forge_specific.as_ref().unwrap()["pipelineStatus"],
@@ -95,13 +96,13 @@ fn old_gitlab_merge_signals_drafts_and_conflicts_are_respected() {
     value["state"] = json!("merged");
     let result = status::parse(&value, &context(), None, None).unwrap();
     assert!(result.is_merged && result.is_draft);
-    assert_eq!(result.mergeable, PullRequestMergeable::Mergeable);
+    assert_eq!(result.mergeable, Mergeable::Mergeable);
     value["has_conflicts"] = json!(true);
     assert_eq!(
         status::parse(&value, &context(), None, None)
             .unwrap()
             .mergeable,
-        PullRequestMergeable::Conflicting
+        Mergeable::Conflicting
     );
     value["has_conflicts"] = json!(false);
     value["detailed_merge_status"] = json!("checking");
@@ -109,7 +110,7 @@ fn old_gitlab_merge_signals_drafts_and_conflicts_are_respected() {
         status::parse(&value, &context(), None, None)
             .unwrap()
             .mergeable,
-        PullRequestMergeable::Unknown
+        Mergeable::Unknown
     );
 }
 
@@ -146,11 +147,13 @@ fn checks_keep_allowed_failures_and_required_manual_jobs_distinct() {
         {"id":1,"name":"wait","stage":"test","status":"waiting_for_resource"}]});
     let checks = pipeline::checks(&value).unwrap();
     assert_eq!(
-        checks
-            .iter()
-            .map(|check| check.status.as_str())
-            .collect::<Vec<_>>(),
-        ["pending", "pending", "failure", "success"]
+        checks.iter().map(|check| check.status).collect::<Vec<_>>(),
+        [
+            CheckStatus::Pending,
+            CheckStatus::Pending,
+            CheckStatus::Failure,
+            CheckStatus::Success,
+        ]
     );
     assert_eq!(
         checks[1].traits.as_ref().unwrap(),
@@ -167,10 +170,10 @@ fn checks_keep_allowed_failures_and_required_manual_jobs_distinct() {
         "scheduled",
     ] {
         assert!(pipeline::is_active(state));
-        assert_eq!(pipeline::checks_status(state), "pending");
+        assert_eq!(pipeline::checks_status(state), ChecksStatus::Pending);
     }
-    assert_eq!(pipeline::checks_status("failed"), "failure");
-    assert_eq!(pipeline::checks_status("canceled"), "none");
+    assert_eq!(pipeline::checks_status("failed"), ChecksStatus::Failure);
+    assert_eq!(pipeline::checks_status("canceled"), ChecksStatus::None);
 }
 
 #[cfg(unix)]

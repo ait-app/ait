@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use domain::workspace::protocol::workspace::{CheckStatus, ChecksStatus};
 use serde_json::{Value, json};
 
 use super::{
@@ -113,13 +114,13 @@ pub(super) fn is_active(status: &str) -> bool {
 }
 
 /// The pipeline's own aggregate is authoritative, even with manual deployment jobs.
-pub(super) fn checks_status(status: &str) -> &'static str {
+pub(super) fn checks_status(status: &str) -> ChecksStatus {
     match status {
-        "success" | "passed" => "success",
-        "failed" => "failure",
-        "manual" => "pending",
-        _ if is_active(status) => "pending",
-        _ => "none",
+        "success" | "passed" => ChecksStatus::Success,
+        "failed" => ChecksStatus::Failure,
+        "manual" => ChecksStatus::Pending,
+        _ if is_active(status) => ChecksStatus::Pending,
+        _ => ChecksStatus::None,
     }
 }
 
@@ -151,21 +152,21 @@ pub(super) fn checks(pipeline: &Value) -> Result<Vec<PullRequestCheck>, ForgeRun
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let (status, traits) = match (job_status(&raw), optional) {
-            ("failed", true) => ("success", Some(vec!["warning".to_owned()])),
-            ("manual", true) => ("skipped", Some(vec!["manual".to_owned()])),
+            ("failed", true) => (CheckStatus::Success, Some(vec!["warning".to_owned()])),
+            ("manual", true) => (CheckStatus::Skipped, Some(vec!["manual".to_owned()])),
             ("manual", false) => (
-                "pending",
+                CheckStatus::Pending,
                 Some(vec!["manual".to_owned(), "action_required".to_owned()]),
             ),
-            ("failed", false) => ("failure", None),
-            ("canceled", _) => ("cancelled", None),
-            ("success", _) => ("success", None),
-            ("skipped", _) => ("skipped", None),
-            _ => ("pending", None),
+            ("failed", false) => (CheckStatus::Failure, None),
+            ("canceled", _) => (CheckStatus::Cancelled, None),
+            ("success", _) => (CheckStatus::Success, None),
+            ("skipped", _) => (CheckStatus::Skipped, None),
+            _ => (CheckStatus::Pending, None),
         };
         result.push(PullRequestCheck {
             name: string(job, "name")?,
-            status: status.to_owned(),
+            status,
             url: optional_string(job, "web_url"),
             workflow: optional_string(job, "stage"),
             duration: None,

@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
+use domain::workspace::protocol::workspace::Mergeable;
 use serde_json::Value;
 
 use super::{
@@ -402,7 +403,7 @@ pub(super) fn merge(
         .ok_or_else(|| malformed("GitLab merge facts are unavailable"))?;
     if mr.is_draft
         || mr.state != "open"
-        || mr.mergeable != super::PullRequestMergeable::Mergeable
+        || mr.mergeable != Mergeable::Mergeable
         || facts
             .get("mergeWhenPipelineSucceeds")
             .and_then(Value::as_bool)

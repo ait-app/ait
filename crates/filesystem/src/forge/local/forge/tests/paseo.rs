@@ -1,6 +1,10 @@
 //! Observable GitHub payload contracts from Paseo services/github-service.test.ts.
-use super::*;
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
 use serde_json::json;
+
+use super::*;
 
 #[test]
 fn incomplete_and_missing_forge_objects_remain_absent_instead_of_fabricated() {
@@ -29,10 +33,10 @@ fn incomplete_and_missing_forge_objects_remain_absent_instead_of_fabricated() {
 #[test]
 fn checks_ignore_incomplete_nodes_and_keep_pending_cancelled_and_skipped_states() {
     for (conclusion, expected) in [
-        ("CANCELLED", "cancelled"),
-        ("SKIPPED", "skipped"),
-        ("NEUTRAL", "skipped"),
-        ("FUTURE_STATE", "pending"),
+        ("CANCELLED", CheckStatus::Cancelled),
+        ("SKIPPED", CheckStatus::Skipped),
+        ("NEUTRAL", CheckStatus::Skipped),
+        ("FUTURE_STATE", CheckStatus::Pending),
     ] {
         let result = status(json!({"reviewDecision":"FUTURE_STATE","statusCheckRollup":[
             {"__typename":"CheckRun"}, {"__typename":"StatusContext"}, {"__typename":"Unknown"},
@@ -41,7 +45,7 @@ fn checks_ignore_incomplete_nodes_and_keep_pending_cancelled_and_skipped_states(
         ]}));
         assert_eq!(result.checks.len(), 2);
         assert_eq!(result.checks[0].status, expected);
-        assert_eq!(result.checks[1].status, "pending");
+        assert_eq!(result.checks[1].status, CheckStatus::Pending);
         assert!(result.review_decision.is_none());
     }
     assert!(
@@ -101,9 +105,9 @@ fn status_preserves_pull_request_source_commit_after_merge() {
 #[test]
 fn check_rollup_failure_dominates_pending_and_supports_graphql_context_nodes() {
     let cases = [
-        ("FAILURE", "failure"),
-        ("IN_PROGRESS", "pending"),
-        ("SUCCESS", "success"),
+        ("FAILURE", ChecksStatus::Failure),
+        ("IN_PROGRESS", ChecksStatus::Pending),
+        ("SUCCESS", ChecksStatus::Success),
     ];
     for (state, expected) in cases {
         let result = status(json!({"statusCheckRollup":{"contexts":{"nodes":[
@@ -117,8 +121,8 @@ fn check_rollup_failure_dominates_pending_and_supports_graphql_context_nodes() {
         {"__typename":"StatusContext","context":"legacy","state":"ERROR"},
         {"__typename":"CheckRun","name":"tests","status":"IN_PROGRESS"}
     ]}));
-    assert_eq!(mixed.checks_status, "failure");
-    assert_eq!(status(json!({})).checks_status, "none");
+    assert_eq!(mixed.checks_status, ChecksStatus::Failure);
+    assert_eq!(status(json!({})).checks_status, ChecksStatus::None);
 }
 
 #[test]
@@ -141,8 +145,8 @@ fn status_check_metadata_includes_workflow_ids_and_formatted_duration() {
 fn unexpected_mergeability_stays_unknown_while_review_decisions_are_normalized() {
     for value in [Value::Null, json!("unexpected"), json!(42)] {
         let result = status(json!({"mergeable":value,"reviewDecision":"REVIEW_REQUIRED"}));
-        assert_eq!(result.mergeable, PullRequestMergeable::Unknown);
-        assert_eq!(result.review_decision.as_deref(), Some("pending"));
+        assert_eq!(result.mergeable, Mergeable::Unknown);
+        assert_eq!(result.review_decision, Some(ReviewDecision::Pending));
     }
     let merged = status(json!({"state":"CLOSED","mergedAt":"2026-01-01T00:00:00Z"}));
     assert!(merged.is_merged);

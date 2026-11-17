@@ -1,3 +1,6 @@
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
 use serde_json::json;
 
 use super::*;
@@ -44,10 +47,10 @@ fn serializes_paseo_status_timeline_and_check_shapes() {
             head_sha: None,
             is_merged: false,
             is_draft: false,
-            mergeable: PullRequestMergeable::Mergeable,
+            mergeable: Mergeable::Mergeable,
             checks: vec![PullRequestCheck {
                 name: "test".to_owned(),
-                status: "success".to_owned(),
+                status: CheckStatus::Success,
                 url: None,
                 workflow: None,
                 duration: Some("2m".to_owned()),
@@ -55,8 +58,8 @@ fn serializes_paseo_status_timeline_and_check_shapes() {
                 workflow_run_id: None,
                 traits: None,
             }],
-            checks_status: "success".to_owned(),
-            review_decision: Some("approved".to_owned()),
+            checks_status: ChecksStatus::Success,
+            review_decision: Some(ReviewDecision::Approved),
             repo_owner: Some("acme".to_owned()),
             repo_name: Some("app".to_owned()),
             github: None,

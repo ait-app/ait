@@ -1,3 +1,4 @@
+use domain::workspace::protocol::workspace::{ChecksStatus, Mergeable};
 use serde_json::{Value, json};
 
 mod failures;
@@ -5,9 +6,8 @@ mod failures;
 use super::execute;
 use crate::forge::ports::{
     CheckDetails, ForgeAuthState, ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem,
-    ForgeSearchKind, PullRequestCreated, PullRequestMergeMethod, PullRequestMergeable,
-    PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
-    TimelineReviewState,
+    ForgeSearchKind, PullRequestCreated, PullRequestMergeMethod, PullRequestStatus,
+    PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem, TimelineReviewState,
 };
 use crate::forge::service::Forge;
 
@@ -114,9 +114,9 @@ impl ForgeRuntime for FakeForge {
                 head_sha: None,
                 is_merged: false,
                 is_draft: false,
-                mergeable: PullRequestMergeable::Mergeable,
+                mergeable: Mergeable::Mergeable,
                 checks: Vec::new(),
-                checks_status: "none".to_owned(),
+                checks_status: ChecksStatus::None,
                 review_decision: None,
                 repo_owner: Some("acme".to_owned()),
                 repo_name: Some("app".to_owned()),

@@ -417,11 +417,7 @@ fn protocol_status(status: port::PullRequestStatus) -> protocol::PullRequestStat
         head_sha: status.head_sha,
         is_merged: status.is_merged,
         is_draft: status.is_draft,
-        mergeable: match status.mergeable {
-            port::PullRequestMergeable::Mergeable => protocol::PullRequestMergeable::Mergeable,
-            port::PullRequestMergeable::Conflicting => protocol::PullRequestMergeable::Conflicting,
-            port::PullRequestMergeable::Unknown => protocol::PullRequestMergeable::Unknown,
-        },
+        mergeable: status.mergeable,
         checks: status
             .checks
             .into_iter()

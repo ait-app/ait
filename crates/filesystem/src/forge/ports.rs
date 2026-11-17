@@ -2,6 +2,9 @@
 //!
 //! Blocking forge adapter contract.
 
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
 use serde_json::Value;
 
 /// Forge failure category.
@@ -123,24 +126,13 @@ pub struct PullRequestCreated {
     pub(crate) number: u64,
 }
 
-/// Pull request mergeability.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PullRequestMergeable {
-    /// Mergeable.
-    Mergeable,
-    /// Conflicting.
-    Conflicting,
-    /// Unknown.
-    Unknown,
-}
-
 /// One normalized pull request check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PullRequestCheck {
     /// Check name.
     pub(crate) name: String,
     /// Normalized lifecycle.
-    pub(crate) status: String,
+    pub(crate) status: CheckStatus,
     /// Details URL.
     pub(crate) url: Option<String>,
     /// Workflow display name.
@@ -181,13 +173,13 @@ pub(crate) struct PullRequestStatus {
     /// Draft state.
     pub(crate) is_draft: bool,
     /// Mergeability.
-    pub(crate) mergeable: PullRequestMergeable,
+    pub(crate) mergeable: Mergeable,
     /// Checks.
     pub(crate) checks: Vec<PullRequestCheck>,
     /// Aggregate check state.
-    pub(crate) checks_status: String,
+    pub(crate) checks_status: ChecksStatus,
     /// Review decision.
-    pub(crate) review_decision: Option<String>,
+    pub(crate) review_decision: Option<ReviewDecision>,
     /// Repository owner.
     pub(crate) repo_owner: Option<String>,
     /// Repository name.

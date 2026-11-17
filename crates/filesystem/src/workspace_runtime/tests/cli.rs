@@ -1,5 +1,7 @@
 use std::os::unix::fs::PermissionsExt;
 
+use domain::workspace::protocol::workspace::{CheckStatus, ChecksStatus};
+
 use super::*;
 
 struct Fixture {
@@ -91,7 +93,7 @@ fn workspace_runtime_forge_cache_updates_ci_and_merge_and_retains_success_on_net
     let initial = fixture.read(|forge| forge.pull_request.is_some());
     assert_eq!(
         initial.forge.unwrap().pull_request.unwrap().checks_status,
-        "pending"
+        ChecksStatus::Pending
     );
     for _ in 0..20 {
         fixture.source.snapshot(fixture.repo.to_str().unwrap());
@@ -102,8 +104,8 @@ fn workspace_runtime_forge_cache_updates_ci_and_merge_and_retains_success_on_net
     expire(&fixture.source, &fixture.repo, true);
     let merged = fixture.read(|forge| forge.pull_request.as_ref().is_some_and(|pr| pr.is_merged));
     let pr = merged.forge.unwrap().pull_request.unwrap();
-    assert_eq!(pr.checks_status, "success");
-    assert_eq!(pr.checks[0].status, "success");
+    assert_eq!(pr.checks_status, ChecksStatus::Success);
+    assert_eq!(pr.checks[0].status, CheckStatus::Success);
 
     fs::write(fixture.root.path().join("fail"), "").unwrap();
     expire(&fixture.source, &fixture.repo, true);

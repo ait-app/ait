@@ -2,6 +2,9 @@
 
 use std::sync::Arc;
 
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
 use domain::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspaceDiffStat, WorkspaceForgeSnapshot, WorkspaceGitSnapshot,
     WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot,
@@ -53,20 +56,20 @@ fn populated() -> WorkspaceRuntimeSnapshot {
                 head_ref_name: "feature".to_owned(),
                 is_merged: true,
                 is_draft: false,
-                mergeable: "MERGEABLE".to_owned(),
-                checks: Some("success")
+                mergeable: Mergeable::Mergeable,
+                checks: Some(CheckStatus::Success)
                     .into_iter()
                     .map(|status| WorkspaceCheckSnapshot {
                         name: "test".to_owned(),
-                        status: status.to_owned(),
+                        status,
                         url: None,
                         workflow: Some("CI".to_owned()),
                         duration: None,
                         traits: None,
                     })
                     .collect(),
-                checks_status: "success".to_owned(),
-                review_decision: Some("approved".to_owned()),
+                checks_status: ChecksStatus::Success,
+                review_decision: Some(ReviewDecision::Approved),
                 repo_owner: Some("acme".to_owned()),
                 repo_name: Some("repo".to_owned()),
                 github: None,
@@ -80,42 +83,60 @@ fn populated() -> WorkspaceRuntimeSnapshot {
 fn runtime_projection_preserves_failed_checks_and_unknown_forge_states() {
     let source = Arc::new(Runtime::default());
     let mut directory = directory().with_runtime_source(source.clone());
-    for (mergeable, check, review) in [
-        ("CONFLICTING", "failure", "changes_requested"),
-        ("UNKNOWN", "pending", "review_required"),
-        ("UNKNOWN", "skipped", "unknown"),
-        ("UNKNOWN", "cancelled", "approved"),
+    for (mergeable, check, review, checks_status) in [
+        (
+            Mergeable::Conflicting,
+            CheckStatus::Failure,
+            ReviewDecision::ChangesRequested,
+            ChecksStatus::Failure,
+        ),
+        (
+            Mergeable::Unknown,
+            CheckStatus::Pending,
+            ReviewDecision::Pending,
+            ChecksStatus::Pending,
+        ),
+        (
+            Mergeable::Unknown,
+            CheckStatus::Skipped,
+            ReviewDecision::Pending,
+            ChecksStatus::None,
+        ),
+        (
+            Mergeable::Unknown,
+            CheckStatus::Cancelled,
+            ReviewDecision::Approved,
+            ChecksStatus::None,
+        ),
     ] {
         let mut snapshot = populated();
         let forge = snapshot.forge.as_mut().unwrap();
         forge.error = Some("refresh failed".to_owned());
         let pr = forge.pull_request.as_mut().unwrap();
-        pr.mergeable = mergeable.to_owned();
-        pr.checks[0].status = check.to_owned();
-        pr.checks_status = check.to_owned();
-        pr.review_decision = Some(review.to_owned());
+        pr.mergeable = mergeable;
+        pr.checks[0].status = check;
+        pr.checks_status = checks_status;
+        pr.review_decision = Some(review);
         *source.snapshot.lock().unwrap() = snapshot;
         let list = execute(&mut directory, "workspace.list.request", json!({})).unwrap();
         let runtime = &list["entries"][0]["githubRuntime"];
         assert_eq!(runtime["error"]["message"], "refresh failed");
-        assert_eq!(runtime["pullRequest"]["checks"][0]["status"], check);
+        assert_eq!(
+            runtime["pullRequest"]["checks"][0]["status"],
+            serde_json::to_value(check).unwrap()
+        );
         assert_eq!(runtime["pullRequest"]["number"], 136);
-        assert_eq!(runtime["pullRequest"]["mergeable"], mergeable);
+        assert_eq!(
+            runtime["pullRequest"]["mergeable"],
+            serde_json::to_value(mergeable).unwrap()
+        );
         assert_eq!(
             runtime["pullRequest"]["checksStatus"],
-            match check {
-                "failure" => "failure",
-                "pending" => "pending",
-                _ => "none",
-            }
+            serde_json::to_value(checks_status).unwrap()
         );
         assert_eq!(
             runtime["pullRequest"]["reviewDecision"],
-            match review {
-                "changes_requested" => "changes_requested",
-                "approved" => "approved",
-                _ => "pending",
-            }
+            serde_json::to_value(review).unwrap()
         );
     }
 }

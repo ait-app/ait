@@ -4,6 +4,8 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
+use domain::workspace::protocol::workspace::ChecksStatus;
+
 use super::*;
 use crate::forge::ports::{CheckDetailsQuery, ForgeRuntime};
 use model::workspace::worktrees::ChangeRequestResolver;
@@ -139,7 +141,7 @@ fn gitlab_cloud_never_invokes_github_and_retains_its_identity_without_an_mr() {
     let fixture = Fixture::new();
     let read = fixture.status();
     assert_eq!(read.forge.as_deref(), Some("gitlab"));
-    assert_eq!(read.status.unwrap().checks_status, "success");
+    assert_eq!(read.status.unwrap().checks_status, ChecksStatus::Success);
     assert!(!fixture.root.path().join("gh-calls").exists());
     assert!(
         fixture
@@ -451,7 +453,7 @@ fn optional_pipeline_and_approval_errors_do_not_hide_the_mr() {
     fixture.payload("approvals", &json!(null));
     let status = fixture.status().status.unwrap();
     assert!(status.checks.is_empty());
-    assert_eq!(status.checks_status, "pending");
+    assert_eq!(status.checks_status, ChecksStatus::Pending);
     fixture.error("ci-get", "HTTP 401 authentication failed");
     assert_eq!(fixture.status().auth_state, ForgeAuthState::Unauthenticated);
 }

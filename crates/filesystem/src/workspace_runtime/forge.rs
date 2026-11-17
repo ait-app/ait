@@ -5,8 +5,7 @@ use domain::workspace::runtime::{
 };
 
 use crate::forge::ports::{
-    ForgeAuthState, ForgeFailureKind, ForgeRuntimeError, PullRequestMergeable, PullRequestStatus,
-    PullRequestStatusRead,
+    ForgeAuthState, ForgeFailureKind, ForgeRuntimeError, PullRequestStatus, PullRequestStatusRead,
 };
 
 pub(super) fn snapshot(
@@ -44,12 +43,7 @@ fn pull_request(pr: PullRequestStatus) -> WorkspacePullRequestSnapshot {
         head_ref_name: pr.head_ref_name,
         is_merged: pr.is_merged,
         is_draft: pr.is_draft,
-        mergeable: match pr.mergeable {
-            PullRequestMergeable::Mergeable => "MERGEABLE",
-            PullRequestMergeable::Conflicting => "CONFLICTING",
-            PullRequestMergeable::Unknown => "UNKNOWN",
-        }
-        .to_owned(),
+        mergeable: pr.mergeable,
         checks: pr
             .checks
             .into_iter()

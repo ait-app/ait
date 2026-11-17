@@ -1,5 +1,7 @@
 //! Read-only Git, Forge and checkout snapshots for Workspace presentation.
 
+use super::protocol::workspace::{CheckStatus, ChecksStatus, Mergeable, ReviewDecision};
+
 /// Line counts against the checkout's comparison base, including working changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WorkspaceDiffStat {
@@ -36,7 +38,7 @@ pub struct WorkspaceCheckSnapshot {
     /// Check name.
     pub name: String,
     /// Normalized check lifecycle.
-    pub status: String,
+    pub status: CheckStatus,
     /// Browser details URL.
     pub url: Option<String>,
     /// Workflow name.
@@ -67,13 +69,13 @@ pub struct WorkspacePullRequestSnapshot {
     /// Whether the change request is a draft.
     pub is_draft: bool,
     /// Normalized mergeability.
-    pub mergeable: String,
+    pub mergeable: Mergeable,
     /// Individual CI checks.
     pub checks: Vec<WorkspaceCheckSnapshot>,
     /// Aggregate CI state.
-    pub checks_status: String,
+    pub checks_status: ChecksStatus,
     /// Normalized review decision.
-    pub review_decision: Option<String>,
+    pub review_decision: Option<ReviewDecision>,
     /// Repository owner.
     pub repo_owner: Option<String>,
     /// Repository name.

@@ -1,9 +1,9 @@
 //! Checkout facts projected into the existing Workspace wire shape.
 
 use domain::workspace::protocol::workspace::{
-    AheadBehind, CheckStatus, ChecksStatus, DiffStat, Mergeable, ReviewDecision, WorkspaceCheck,
-    WorkspaceDescriptorPayload, WorkspaceGitHubRuntimePayload, WorkspaceGitRuntimePayload,
-    WorkspacePullRequest, WorkspaceRuntimeError,
+    AheadBehind, DiffStat, WorkspaceCheck, WorkspaceDescriptorPayload,
+    WorkspaceGitHubRuntimePayload, WorkspaceGitRuntimePayload, WorkspacePullRequest,
+    WorkspaceRuntimeError,
 };
 use domain::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot,
@@ -60,26 +60,10 @@ fn pull_request(pr: &WorkspacePullRequestSnapshot) -> WorkspacePullRequest {
         head_ref_name: pr.head_ref_name.clone(),
         is_merged: pr.is_merged,
         is_draft: Some(pr.is_draft),
-        mergeable: Some(match pr.mergeable.as_str() {
-            "MERGEABLE" => Mergeable::Mergeable,
-            "CONFLICTING" => Mergeable::Conflicting,
-            _ => Mergeable::Unknown,
-        }),
+        mergeable: Some(pr.mergeable),
         checks: Some(pr.checks.iter().map(summary_check).collect()),
-        checks_status: Some(match pr.checks_status.as_str() {
-            "success" => ChecksStatus::Success,
-            "failure" => ChecksStatus::Failure,
-            "pending" => ChecksStatus::Pending,
-            _ => ChecksStatus::None,
-        }),
-        review_decision: pr
-            .review_decision
-            .as_deref()
-            .map(|decision| match decision {
-                "approved" => ReviewDecision::Approved,
-                "changes_requested" => ReviewDecision::ChangesRequested,
-                _ => ReviewDecision::Pending,
-            }),
+        checks_status: Some(pr.checks_status),
+        review_decision: pr.review_decision,
         repo_owner: pr.repo_owner.clone(),
         repo_name: pr.repo_name.clone(),
         github: pr.github.clone(),
@@ -94,13 +78,7 @@ fn pull_request(pr: &WorkspacePullRequestSnapshot) -> WorkspacePullRequest {
 fn summary_check(check: &WorkspaceCheckSnapshot) -> WorkspaceCheck {
     WorkspaceCheck {
         name: check.name.clone(),
-        status: match check.status.as_str() {
-            "success" => CheckStatus::Success,
-            "failure" => CheckStatus::Failure,
-            "skipped" => CheckStatus::Skipped,
-            "cancelled" => CheckStatus::Cancelled,
-            _ => CheckStatus::Pending,
-        },
+        status: check.status,
         url: None,
         workflow: None,
         duration: None,

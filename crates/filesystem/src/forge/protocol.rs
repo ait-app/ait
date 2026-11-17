@@ -5,6 +5,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
+
 /// Stable forge availability state copied from Paseo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -244,18 +248,6 @@ pub(crate) struct PullRequestAutoMergeResult {
     pub(crate) error: Option<crate::git::protocol::CheckoutError>,
 }
 
-/// Pull request mergeability.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub(crate) enum PullRequestMergeable {
-    /// Forge reports the request can merge.
-    Mergeable,
-    /// Forge reports conflicts.
-    Conflicting,
-    /// Forge does not know yet.
-    Unknown,
-}
-
 /// One normalized CI check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -263,7 +255,7 @@ pub(crate) struct PullRequestCheck {
     /// Check name.
     pub(crate) name: String,
     /// Normalized lifecycle.
-    pub(crate) status: String,
+    pub(crate) status: CheckStatus,
     /// Details URL.
     pub(crate) url: Option<String>,
     /// Workflow display name.
@@ -313,13 +305,13 @@ pub(crate) struct PullRequestStatus {
     /// Whether it is a draft.
     pub(crate) is_draft: bool,
     /// Forge mergeability.
-    pub(crate) mergeable: PullRequestMergeable,
+    pub(crate) mergeable: Mergeable,
     /// Normalized checks.
     pub(crate) checks: Vec<PullRequestCheck>,
     /// Aggregate check state.
-    pub(crate) checks_status: String,
+    pub(crate) checks_status: ChecksStatus,
     /// Review decision.
-    pub(crate) review_decision: Option<String>,
+    pub(crate) review_decision: Option<ReviewDecision>,
     /// Repository owner.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) repo_owner: Option<String>,

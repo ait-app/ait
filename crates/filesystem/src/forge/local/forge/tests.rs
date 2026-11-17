@@ -5,6 +5,8 @@ use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use domain::workspace::protocol::workspace::{CheckStatus, ChecksStatus};
+
 use crate::forge::ports::{
     ForgeAuthState, ForgeRuntime, ForgeSearchKind, PullRequestMergeMethod, PullRequestTimelineItem,
 };
@@ -45,8 +47,8 @@ fn github_cli_adapter_parses_search_status_timeline_checks_and_mutations() {
     let status = status.status.unwrap();
     assert_eq!(status.number, Some(2));
     assert_eq!(status.repo_owner.as_deref(), Some("acme"));
-    assert_eq!(status.checks[0].status, "failure");
-    assert_eq!(status.checks_status, "failure");
+    assert_eq!(status.checks[0].status, CheckStatus::Failure);
+    assert_eq!(status.checks_status, ChecksStatus::Failure);
 
     forge
         .merge_current_pull_request(repository.to_str().unwrap(), PullRequestMergeMethod::Squash)

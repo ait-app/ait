@@ -9,14 +9,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::DateTime;
+use domain::workspace::protocol::workspace::{
+    CheckStatus, ChecksStatus, Mergeable, ReviewDecision,
+};
 use serde_json::Value;
 
 use crate::forge::ports::{
     CheckAnnotation, CheckDetails, CheckFailedJob, CheckOutput, ForgeAuthState, ForgeFailureKind,
     ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem, ForgeSearchKind,
-    PullRequestCheck, PullRequestCreated, PullRequestMergeMethod, PullRequestMergeable,
-    PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
-    TimelineCommentLocation, TimelineError, TimelineErrorKind, TimelineReviewState,
+    PullRequestCheck, PullRequestCreated, PullRequestMergeMethod, PullRequestStatus,
+    PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem, TimelineCommentLocation,
+    TimelineError, TimelineErrorKind, TimelineReviewState,
 };
 use crate::support::process::{self, Bounds, RunError, StderrTap};
 
@@ -1002,13 +1005,19 @@ fn parse_status(
     };
     let checks = parse_checks(value.get("statusCheckRollup"));
     let checks_status = if checks.is_empty() {
-        "none"
-    } else if checks.iter().any(|check| check.status == "failure") {
-        "failure"
-    } else if checks.iter().any(|check| check.status == "pending") {
-        "pending"
+        ChecksStatus::None
+    } else if checks
+        .iter()
+        .any(|check| check.status == CheckStatus::Failure)
+    {
+        ChecksStatus::Failure
+    } else if checks
+        .iter()
+        .any(|check| check.status == CheckStatus::Pending)
+    {
+        ChecksStatus::Pending
     } else {
-        "success"
+        ChecksStatus::Success
     };
     let (repo_owner, repo_name) = parse_repo_from_pull_url(&url)
         .map_or((None, None), |(owner, name)| (Some(owner), Some(name)));
@@ -1029,22 +1038,21 @@ fn parse_status(
             .and_then(Value::as_bool)
             .unwrap_or(false),
         mergeable: match value.get("mergeable").and_then(Value::as_str) {
-            Some("MERGEABLE") => PullRequestMergeable::Mergeable,
-            Some("CONFLICTING") => PullRequestMergeable::Conflicting,
-            _ => PullRequestMergeable::Unknown,
+            Some("MERGEABLE") => Mergeable::Mergeable,
+            Some("CONFLICTING") => Mergeable::Conflicting,
+            _ => Mergeable::Unknown,
         },
         checks,
-        checks_status: checks_status.to_owned(),
+        checks_status,
         review_decision: value
             .get("reviewDecision")
             .and_then(Value::as_str)
             .and_then(|decision| match decision {
-                "APPROVED" => Some("approved"),
-                "CHANGES_REQUESTED" => Some("changes_requested"),
-                "REVIEW_REQUIRED" => Some("pending"),
+                "APPROVED" => Some(ReviewDecision::Approved),
+                "CHANGES_REQUESTED" => Some(ReviewDecision::ChangesRequested),
+                "REVIEW_REQUIRED" => Some(ReviewDecision::Pending),
                 _ => None,
-            })
-            .map(str::to_owned),
+            }),
         repo_owner,
         repo_name,
         github: None,
@@ -1073,8 +1081,7 @@ fn parse_checks(value: Option<&Value>) -> Vec<PullRequestCheck> {
                     status: check_run_status(
                         value.get("status").and_then(Value::as_str),
                         value.get("conclusion").and_then(Value::as_str),
-                    )
-                    .to_owned(),
+                    ),
                     url: optional_string(&value, "detailsUrl"),
                     workflow: optional_string(&value, "workflowName"),
                     duration: check_duration(&value),
@@ -1091,8 +1098,7 @@ fn parse_checks(value: Option<&Value>) -> Vec<PullRequestCheck> {
                 };
                 PullRequestCheck {
                     name,
-                    status: status_context_state(value.get("state").and_then(Value::as_str))
-                        .to_owned(),
+                    status: status_context_state(value.get("state").and_then(Value::as_str)),
                     url: optional_string(&value, "targetUrl"),
                     workflow: None,
                     duration: None,
@@ -1108,24 +1114,24 @@ fn parse_checks(value: Option<&Value>) -> Vec<PullRequestCheck> {
     checks.into_values().collect()
 }
 
-fn check_run_status(status: Option<&str>, conclusion: Option<&str>) -> &'static str {
+fn check_run_status(status: Option<&str>, conclusion: Option<&str>) -> CheckStatus {
     if status != Some("COMPLETED") {
-        return "pending";
+        return CheckStatus::Pending;
     }
     match conclusion {
-        Some("SUCCESS") => "success",
-        Some("FAILURE" | "TIMED_OUT" | "ACTION_REQUIRED") => "failure",
-        Some("CANCELLED") => "cancelled",
-        Some("SKIPPED" | "NEUTRAL") => "skipped",
-        _ => "pending",
+        Some("SUCCESS") => CheckStatus::Success,
+        Some("FAILURE" | "TIMED_OUT" | "ACTION_REQUIRED") => CheckStatus::Failure,
+        Some("CANCELLED") => CheckStatus::Cancelled,
+        Some("SKIPPED" | "NEUTRAL") => CheckStatus::Skipped,
+        _ => CheckStatus::Pending,
     }
 }
 
-fn status_context_state(state: Option<&str>) -> &'static str {
+fn status_context_state(state: Option<&str>) -> CheckStatus {
     match state {
-        Some("SUCCESS") => "success",
-        Some("FAILURE" | "ERROR") => "failure",
-        _ => "pending",
+        Some("SUCCESS") => CheckStatus::Success,
+        Some("FAILURE" | "ERROR") => CheckStatus::Failure,
+        _ => CheckStatus::Pending,
     }
 }
 

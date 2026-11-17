@@ -1,11 +1,12 @@
 //! MR status and forge facts consumed by Paseo's GitLab UI.
 
+use domain::workspace::protocol::workspace::{ChecksStatus, Mergeable};
 use serde_json::{Value, json};
 
 use super::{
     ForgeContext, ForgeRuntimeError, integer, optional_string, pipeline, project_path, string,
 };
-use crate::forge::ports::{PullRequestMergeable, PullRequestStatus};
+use crate::forge::ports::PullRequestStatus;
 
 /// Project GitLab's status without inferring merge readiness from CI alone.
 /// Uses MR JSON and resolved project context, with optional approval/job enrichment.
@@ -51,7 +52,7 @@ pub(super) fn parse(
         .and_then(|value| value.get("status"))
         .or_else(|| mr.pointer("/head_pipeline/status"))
         .and_then(Value::as_str)
-        .map_or("none", pipeline::checks_status);
+        .map_or(ChecksStatus::None, pipeline::checks_status);
     Ok(PullRequestStatus {
         forge: "gitlab".to_owned(),
         project_path: Some(path.to_owned()),
@@ -73,17 +74,17 @@ pub(super) fn parse(
             .or_else(|| mr.get("work_in_progress").and_then(Value::as_bool))
             .unwrap_or(false),
         mergeable: if conflicts {
-            PullRequestMergeable::Conflicting
+            Mergeable::Conflicting
         } else if ready {
-            PullRequestMergeable::Mergeable
+            Mergeable::Mergeable
         } else {
-            PullRequestMergeable::Unknown
+            Mergeable::Unknown
         },
         checks: pipeline
             .map(pipeline::checks)
             .transpose()?
             .unwrap_or_default(),
-        checks_status: checks_status.to_owned(),
+        checks_status,
         review_decision: None,
         // Legacy repoOwner is a single segment; projectPath carries nested groups.
         repo_owner: owner
