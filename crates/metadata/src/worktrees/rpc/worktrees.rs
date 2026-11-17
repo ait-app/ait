@@ -12,7 +12,6 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
 use crate::worktrees::protocol::worktrees::{
     CheckoutError, CheckoutErrorCode, WorktreeArchiveRequest, WorktreeArchiveResult,
@@ -23,6 +22,7 @@ use crate::worktrees::service::worktrees::{
     ArchiveScope, ArchiveWorktree, CreateAction, CreateWorktree, WorktreeFailureKind, Worktrees,
     WorktreesError,
 };
+use model::rpc::{decode, encode};
 
 /// Completed dispatch plus an optional workspace event sent after the response.
 pub(crate) struct Dispatched {

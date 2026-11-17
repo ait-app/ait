@@ -41,8 +41,8 @@ use crate::automation::service::{
     SetupStatus, WorkspaceAutomation, WorkspaceAutomationServiceError,
 };
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use model::rpc::{decode, encode};
 
 /// Decode and execute a business request.
 ///

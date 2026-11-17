@@ -80,6 +80,10 @@ import {
 import {
   applyDictationTranscript,
   computeCanStartDictation,
+  createPromptHistoryState,
+  navigatePromptHistory,
+  rememberPrompt,
+  resetPromptHistoryNavigation,
   resolveComposerSurfacePresentation,
   resolveComposerSurfaceText,
   resolveRetainedSelection,
@@ -210,6 +214,7 @@ type WebTextInputKeyPressEvent = NativeSyntheticEvent<
     metaKey?: boolean;
     ctrlKey?: boolean;
     shiftKey?: boolean;
+    altKey?: boolean;
     // Web-only: present on DOM KeyboardEvent during IME composition (CJK input).
     isComposing?: boolean;
     keyCode?: number;
@@ -379,6 +384,7 @@ function SendButtonContent({
 
 interface DesktopKeyPressContext {
   onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
+  onPromptHistoryKeyPress: (event: WebTextInputKeyPressEvent) => boolean;
   input: ComposerKeyPressEvent["input"];
   submitOnEnter: boolean;
   isAgentRunning: boolean;
@@ -404,6 +410,8 @@ function handleDesktopKeyPressImpl(
     });
     if (handled) return;
   }
+
+  if (ctx.onPromptHistoryKeyPress(event)) return;
 
   const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
 
@@ -881,7 +889,7 @@ interface SendMessageContext {
   exitFullscreen: () => void;
 }
 
-function sendMessageImpl(ctx: SendMessageContext): void {
+function sendMessageImpl(ctx: SendMessageContext): boolean {
   const trimmed = ctx.value.trim();
   if (
     !trimmed &&
@@ -889,7 +897,7 @@ function sendMessageImpl(ctx: SendMessageContext): void {
     !ctx.hasExternalContent &&
     !ctx.allowEmptySubmit
   ) {
-    return;
+    return false;
   }
   ctx.exitFullscreen();
   ctx.onSubmit({
@@ -903,6 +911,7 @@ function sendMessageImpl(ctx: SendMessageContext): void {
   if (!ctx.preserveHeightOnSubmit) {
     ctx.onMinimizeHeight();
   }
+  return true;
 }
 
 interface QueueMessageContext {
@@ -915,14 +924,15 @@ interface QueueMessageContext {
   exitFullscreen: () => void;
 }
 
-function queueMessageImpl(ctx: QueueMessageContext): void {
-  if (!ctx.onQueue) return;
+function queueMessageImpl(ctx: QueueMessageContext): boolean {
+  if (!ctx.onQueue) return false;
   const trimmed = ctx.value.trim();
-  if (!trimmed && ctx.attachments.length === 0) return;
+  if (!trimmed && ctx.attachments.length === 0) return false;
   ctx.exitFullscreen();
   ctx.onQueue({ text: trimmed, attachments: ctx.attachments, cwd: ctx.cwd });
   ctx.replaceText("");
   ctx.onMinimizeHeight();
+  return true;
 }
 
 function resolveMaxInputHeight(windowHeight: number, compact: boolean): number {
@@ -1085,6 +1095,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const focusIntentRef = useRef(false);
     const valueRef = useRef(value);
     const selectionRef = useRef({ start: value.length, end: value.length });
+    const promptHistoryRef = useRef(createPromptHistoryState());
     const paneFocusedRef = useRef(isPaneFocused);
     paneFocusedRef.current = isPaneFocused;
     const [webTextArea, setWebTextArea] = useState<HTMLElement | null>(null);
@@ -1192,6 +1203,51 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [onChangeText, updateComposerHeightForText, updateLiveTextPresence],
     );
 
+    const rememberSubmittedPrompt = useCallback((prompt: string) => {
+      rememberPrompt(promptHistoryRef.current, prompt);
+    }, []);
+
+    const handlePromptHistoryKeyPress = useCallback(
+      (event: WebTextInputKeyPressEvent): boolean => {
+        const { key, altKey, ctrlKey, metaKey, shiftKey } = event.nativeEvent;
+        if (
+          (key !== "ArrowUp" && key !== "ArrowDown") ||
+          altKey ||
+          ctrlKey ||
+          metaKey ||
+          shiftKey
+        ) {
+          return false;
+        }
+
+        const input = getComposerInputSnapshot(
+          textInputRef.current,
+          valueRef.current,
+          selectionRef.current,
+        );
+        if (
+          key === "ArrowUp" &&
+          promptHistoryRef.current.cursor === -1 &&
+          input.text.length > 0 &&
+          (input.selection.start !== 0 || input.selection.end !== 0)
+        ) {
+          return false;
+        }
+
+        const text = navigatePromptHistory(
+          promptHistoryRef.current,
+          key === "ArrowUp" ? "up" : "down",
+          input.text,
+        );
+        if (text === null) return false;
+
+        event.preventDefault();
+        replaceText(text, { start: text.length, end: text.length });
+        return true;
+      },
+      [replaceText],
+    );
+
     useImperativeHandle(ref, () => ({
       focus: () => {
         textInputRef.current?.focus();
@@ -1235,6 +1291,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     useEffect(() => {
       if (appliedTextReplacementKeyRef.current === textReplacement.key) return;
       appliedTextReplacementKeyRef.current = textReplacement.key;
+      if (textReplacement.kind === "hydrated") {
+        promptHistoryRef.current = createPromptHistoryState();
+      } else {
+        resetPromptHistoryNavigation(promptHistoryRef.current);
+      }
       updateComposerHeightForText?.(valueRef.current, textReplacement.text);
       valueRef.current = textReplacement.text;
       updateLiveTextPresence(textReplacement.text);
@@ -1266,15 +1327,32 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           value: valueRef.current,
           defaultSendBehavior,
           isAgentRunning,
-          onQueue,
-          onSubmit,
+          onQueue: onQueue
+            ? (payload) => {
+                rememberSubmittedPrompt(payload.text);
+                onQueue(payload);
+              }
+            : undefined,
+          onSubmit: (payload) => {
+            rememberSubmittedPrompt(payload.text);
+            onSubmit(payload);
+          },
           replaceText,
           attachments,
           cwd,
           autoSend,
         });
       },
-      [replaceText, onSubmit, onQueue, attachments, cwd, isAgentRunning, defaultSendBehavior],
+      [
+        replaceText,
+        onSubmit,
+        onQueue,
+        attachments,
+        cwd,
+        isAgentRunning,
+        defaultSendBehavior,
+        rememberSubmittedPrompt,
+      ],
     );
 
     const handleDictationError = useCallback(
@@ -1450,7 +1528,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       if (!preserveHeightOnSubmit) {
         updateLiveTextPresence("");
       }
-      sendMessageImpl({
+      const didSubmit = sendMessageImpl({
         value: liveValue,
         attachments,
         hasExternalContent,
@@ -1462,6 +1540,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         preserveHeightOnSubmit,
         exitFullscreen,
       });
+      if (didSubmit) rememberSubmittedPrompt(liveValue);
     }, [
       allowEmptySubmit,
       attachments,
@@ -1473,21 +1552,30 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       preserveHeightOnSubmit,
       updateLiveTextPresence,
       exitFullscreen,
+      rememberSubmittedPrompt,
     ]);
 
-    const handleQueueMessage = useCallback(
-      () =>
-        queueMessageImpl({
-          value: textInputRef.current?.getText() ?? valueRef.current,
-          attachments,
-          cwd,
-          onQueue,
-          replaceText,
-          onMinimizeHeight: minimizeInputHeight,
-          exitFullscreen,
-        }),
-      [attachments, cwd, onQueue, replaceText, minimizeInputHeight, exitFullscreen],
-    );
+    const handleQueueMessage = useCallback(() => {
+      const liveValue = textInputRef.current?.getText() ?? valueRef.current;
+      const didQueue = queueMessageImpl({
+        value: liveValue,
+        attachments,
+        cwd,
+        onQueue,
+        replaceText,
+        onMinimizeHeight: minimizeInputHeight,
+        exitFullscreen,
+      });
+      if (didQueue) rememberSubmittedPrompt(liveValue);
+    }, [
+      attachments,
+      cwd,
+      onQueue,
+      replaceText,
+      minimizeInputHeight,
+      exitFullscreen,
+      rememberSubmittedPrompt,
+    ]);
 
     const handleDefaultSendAction = useCallback(() => {
       runDefaultSendAction({
@@ -1535,6 +1623,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       (event: WebTextInputKeyPressEvent) => {
         handleDesktopKeyPressImpl(event, {
           onKeyPressCallback,
+          onPromptHistoryKeyPress: handlePromptHistoryKeyPress,
           input: getComposerInputSnapshot(
             textInputRef.current,
             valueRef.current,
@@ -1552,6 +1641,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       },
       [
         onKeyPressCallback,
+        handlePromptHistoryKeyPress,
         shouldSubmitOnEnter,
         isAgentRunning,
         onQueue,
@@ -1616,6 +1706,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const handleInputChange = useCallback(
       (nextValue: string) => {
+        resetPromptHistoryNavigation(promptHistoryRef.current);
         updateComposerHeightForText?.(valueRef.current, nextValue);
         valueRef.current = nextValue;
         updateLiveTextPresence(nextValue);

@@ -52,6 +52,7 @@ pub(crate) enum Operation {
     Feature,
     Permission,
     RecentSessions,
+    SessionPreview,
     Import,
     Refresh,
     ForkContext,
@@ -120,6 +121,7 @@ impl Operation {
             "agent.feature.set.request" => Ok(Self::Feature),
             "agent.permission.resolve.request" => Ok(Self::Permission),
             "provider.sessions.recent.list.request" => Ok(Self::RecentSessions),
+            "provider.sessions.preview.get.request" => Ok(Self::SessionPreview),
             "agent.import.request" => Ok(Self::Import),
             "agent.refresh.request" => Ok(Self::Refresh),
             "agent.fork_context.request" => Ok(Self::ForkContext),
@@ -187,6 +189,7 @@ impl Operation {
             Self::Feature => "agent.feature.set.request",
             Self::Permission => "agent.permission.resolve.request",
             Self::RecentSessions => "provider.sessions.recent.list.request",
+            Self::SessionPreview => "provider.sessions.preview.get.request",
             Self::Import => "agent.import.request",
             Self::Refresh => "agent.refresh.request",
             Self::ForkContext => "agent.fork_context.request",
@@ -277,6 +280,7 @@ impl Operation {
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
             Self::RecentSessions
+            | Self::SessionPreview
             | Self::Commands
             | Self::Diagnostic
             | Self::PresetDescribe
@@ -347,6 +351,7 @@ impl Operation {
             Self::Create
             | Self::Resume
             | Self::RecentSessions
+            | Self::SessionPreview
             | Self::Import
             | Self::Diagnostic
             | Self::PresetDescribe

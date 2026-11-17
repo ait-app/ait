@@ -54,8 +54,15 @@ impl super::CodexSession {
             let item = json!({"type":"todo","items":items});
             let hash =
                 Sha256::digest(serde_json::to_vec(&item).map_err(|_| AgentSessionError::Failed)?);
+            let occurrence = self
+                .plan_updates
+                .entry(turn.to_owned())
+                .and_modify(|count| *count = (*count).saturating_add(1))
+                .or_insert(0);
+            // The occurrence keeps an identical repeat of earlier content durable as its own
+            // row; without it the deduplicated key would hide the later state as stale.
             let entry = NativeItem {
-                key: format!("native:codex:plan-progress:{turn}:{hash:x}"),
+                key: format!("native:codex:plan-progress:{turn}:{occurrence}:{hash:x}"),
                 turn_id: Some(turn.to_owned()),
                 timestamp: super::discovery::timestamp(),
                 item,

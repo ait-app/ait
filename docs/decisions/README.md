@@ -31,6 +31,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
@@ -72,6 +73,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 工作区、文件与 Git
 
+- [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
 - [ADR-229：Workspace 脚本运行记录、输出与参数](workspace/adr-229-workspace-script-runs.md)
 - [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
@@ -80,7 +82,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
-- [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)
+- [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)（经 [ADR-283](workspace/adr-283-shared-rpc-codecs.md) 修订）
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)
 - [ADR-131：metadata 按能力组组织模块](workspace/adr-131-metadata-capability-groups.md)（经 [ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）
 - [ADR-130：Workspace 与 Project 方法归 metadata，filesystem 只保留本地适配器](workspace/adr-130-workspace-methods-owned-by-metadata.md)（经 [ADR-131](workspace/adr-131-metadata-capability-groups.md) 修订）
@@ -116,6 +118,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
+- [ADR-240：DSH 非活动历史只读浏览与固定截面预览](providers/adr-240-dsh-inactive-history-preview.md)（提议中）
 - [ADR-237：OpenCode 子会话终态只读核对](providers/adr-237-opencode-child-terminal-readback.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
@@ -192,7 +195,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
-- [ADR-281：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-281-browser-webcontents-view.md)
+- [ADR-284：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-284-browser-webcontents-view.md)
+- [ADR-281：可分享的 Workspace 记事本标签页](clients/adr-281-workspace-notebook-tab.md)
 - [ADR-236：GitHub Release 附带 Google 签名的 Android APK](clients/adr-236-google-signed-apk-release-asset.md)
 - [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)
 - [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)（经 [ADR-236](clients/adr-236-google-signed-apk-release-asset.md) 修订）
@@ -251,7 +255,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-077：Android APK 的 GitHub Release 发布](clients/adr-077-android-apk-release.md)（经 [ADR-078](clients/adr-078-optional-android-release.md) 修订）
 - [ADR-076：Android 账户与中继客户端](clients/adr-076-android-account-relay.md)（经 [ADR-084](clients/adr-084-ios-account-relay.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md) 修订）
 - [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)（经 [ADR-098](clients/adr-098-acknowledged-client-chunks.md) 修订）
-- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)（经 [ADR-075](clients/adr-075-relay-protocol-modules.md)、[ADR-076](clients/adr-076-android-account-relay.md)、[ADR-083](clients/adr-083-online-service-host-sync.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-120](daemon/adr-120-single-connection-startup-admission.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md)、[ADR-154](clients/adr-154-account-status-channel.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
+- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)（经 [ADR-075](clients/adr-075-relay-protocol-modules.md)、[ADR-076](clients/adr-076-android-account-relay.md)、[ADR-083](clients/adr-083-online-service-host-sync.md)、[ADR-086](clients/adr-086-authing-native-login.md)、[ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-120](daemon/adr-120-single-connection-startup-admission.md)、[ADR-122](clients/adr-122-persistent-online-service-hosts.md)、[ADR-154](clients/adr-154-account-status-channel.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-282](daemon/adr-282-single-connection-capability-budget.md) 修订）
 - [ADR-073：桌面主窗口的导航信任边界](clients/adr-073-desktop-renderer-navigation.md)
 - [ADR-070：Ait iOS TestFlight 手动发布工作流](clients/adr-070-ios-testflight-release.md)（已由 [ADR-183](clients/adr-183-ios-xcode-cloud-release.md) 取代）
 - [ADR-063：Ait 本地 UI 包与原生测试连接](clients/adr-063-ait-local-ui-packages.md)

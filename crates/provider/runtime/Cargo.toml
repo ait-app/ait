@@ -30,6 +30,8 @@ uuid.workspace = true
 pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.
 regex.workspace = true
+# Encode opaque preview continuation cursors on the session-history wire.
+base64.workspace = true
 # File-backed registries behind the `testing` execution worker; only `test-support` enables it.
 persistence = { workspace = true, optional = true }
 

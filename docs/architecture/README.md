@@ -6,6 +6,8 @@
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
+客户端 Workspace 记事本由 `apps/mobile` 提供，内容使用 Workspace 文件系统中的 `.ait-notebook.md`，通过现有文件协议共享，不新增 daemon 能力。
+
 ## Rust 能力边界
 
 | Crate                       | 职责                                            | 生产代码的内部依赖                                                                                                                                                           |
@@ -49,6 +51,8 @@ daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。
 `crates/provider/runtime/src/diagnostics.rs` 的诊断来源表（adapter 的覆盖变量与默认程序）和 `crates/provider/runtime/src/service/provider_catalog.rs` 的 Catalog 特例。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
 `provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。非 dev 边启用会被依赖守卫拒绝。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
+RPC envelope 的 JSON 编解码由 `model::rpc` 统一提供；metadata 与 filesystem 继续在各自
+边界内定义错误码，并把错误值交给共享编码器。
 依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
 
 每个功能 crate 对外提供完整 `Service`，API 按 crate 安装，组件声明方法和消息方向。
@@ -165,7 +169,7 @@ macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Deskto
 见 [ADR-223](../decisions/clients/adr-223-desktop-workspace-windows.md)。
 桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
-浏览器页面由桌面主进程的 `WebContentsView` 托管，渲染进程只保留 bounds、事件和控制代理；profile、导航、弹窗、权限与键盘策略仍由主进程统一安装，见 [ADR-281](../decisions/clients/adr-281-browser-webcontents-view.md)。
+浏览器页面由桌面主进程的 `WebContentsView` 托管，渲染进程只保留 bounds、事件和控制代理；profile、导航、弹窗、权限与键盘策略仍由主进程统一安装，见 [ADR-284](../decisions/clients/adr-284-browser-webcontents-view.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 

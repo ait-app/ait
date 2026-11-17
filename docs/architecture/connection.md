@@ -18,6 +18,10 @@
   只含已安装的完整 crate 服务、基础连接方法及 relay、publication、shares 方法；行为差异用 `features`
   表达，不新增方法名（[ADR-100](../decisions/daemon/adr-100-crate-level-service-installation.md)、
   [ADR-108](../decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)）。
+- 单连接模式的 hello 通常回显整份 `info.capabilities`，因此能力提议预算
+  `model::server::single::MAX_CAPABILITIES` 必须大于当前方法目录；超出预算按 `invalid_message`
+  拒绝握手。普通四通道连接的每通道提议上限仍为 64
+  （[ADR-282](../decisions/daemon/adr-282-single-connection-capability-budget.md)）。
 - 请求校验顺序固定：未知名称 `method_not_found`，方向错误 `invalid_message`，未协商
   `unsupported_capability`，已声明但未安装 `not_implemented`。`server.status.unsubscribe` 沿用
   `server.status.subscribe` 的协商（[ADR-026](../decisions/daemon/adr-026-canonical-paseo-websocket-surface.md)、

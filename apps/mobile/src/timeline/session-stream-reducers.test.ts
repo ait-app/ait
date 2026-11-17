@@ -4262,7 +4262,7 @@ describe("processAgentStreamEvent", () => {
           text: "Verify",
           status: "in_progress",
           completed: false,
-          ...(name === "TodoWrite" ? { activeForm: "Verifying" } : {}),
+          ...(name === "TodoWrite" ? { id: "legacy:0", activeForm: "Verifying" } : {}),
         },
       ]);
       if (event.item.type !== "tool_call") throw new Error("Expected tool call");

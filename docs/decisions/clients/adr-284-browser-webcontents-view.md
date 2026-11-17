@@ -1,5 +1,5 @@
 ---
-id: ADR-281
+id: ADR-284
 status: accepted
 date: 2026-11-16
 paths:
@@ -7,7 +7,7 @@ paths:
   - apps/mobile/src/desktop/browser
 ---
 
-# ADR-281：Workspace 浏览器由主进程 WebContentsView 托管
+# ADR-284：Workspace 浏览器由主进程 WebContentsView 托管
 
 ## 背景
 

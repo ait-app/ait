@@ -3,6 +3,64 @@ import type { ActiveTurnBehavior } from "@ait/protocol/messages";
 import type { MessagePayload, TextReplacement } from "@/composer/types";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 
+const PROMPT_HISTORY_LIMIT = 50;
+
+export interface PromptHistoryState {
+  entries: string[];
+  cursor: number;
+  draft: string;
+}
+
+export function createPromptHistoryState(): PromptHistoryState {
+  return { entries: [], cursor: -1, draft: "" };
+}
+
+export function resetPromptHistoryNavigation(state: PromptHistoryState): void {
+  state.cursor = -1;
+  state.draft = "";
+}
+
+export function rememberPrompt(state: PromptHistoryState, prompt: string): void {
+  const normalized = prompt.trim();
+  if (!normalized) return;
+
+  if (state.entries[state.entries.length - 1] !== normalized) {
+    state.entries.push(normalized);
+    if (state.entries.length > PROMPT_HISTORY_LIMIT) {
+      state.entries.shift();
+    }
+  }
+  resetPromptHistoryNavigation(state);
+}
+
+export function navigatePromptHistory(
+  state: PromptHistoryState,
+  direction: "up" | "down",
+  currentText: string,
+): string | null {
+  if (state.entries.length === 0) return null;
+
+  if (direction === "up") {
+    if (state.cursor === -1) {
+      state.draft = currentText;
+      state.cursor = state.entries.length - 1;
+    } else if (state.cursor > 0) {
+      state.cursor -= 1;
+    }
+    return state.entries[state.cursor] ?? null;
+  }
+
+  if (state.cursor === -1) return null;
+  if (state.cursor < state.entries.length - 1) {
+    state.cursor += 1;
+    return state.entries[state.cursor] ?? null;
+  }
+
+  const draft = state.draft;
+  resetPromptHistoryNavigation(state);
+  return draft;
+}
+
 export type SendBehavior = ActiveTurnBehavior | "queue";
 
 export function resolveActiveSendBehavior(

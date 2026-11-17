@@ -60,6 +60,7 @@ import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { supportsAccountRelay } from "@/runtime/account-state";
 import { OnlineServiceSection } from "@/screens/settings/online-service-section";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
+import { AgentProfileEditPage } from "@/agent-profiles";
 import ProjectsScreen from "@/screens/projects-screen";
 import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
 import { EditorSection } from "@/screens/settings/editor-section";
@@ -1020,6 +1021,7 @@ function SettingsSidebar({
   let selectedHostSection: HostSectionSlug | null = null;
   if (view.kind === "host") selectedHostSection = view.section;
   if (view.kind === "project") selectedHostSection = "projects";
+  if (view.kind === "agentProfile") selectedHostSection = "agents";
 
   const sidebarBody = (
     <>
@@ -1166,7 +1168,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const lastWorkspaceSelection = useLastWorkspaceSelection();
   const routedSettingsHostServerId =
-    view.kind === "host" || view.kind === "project" ? view.serverId : null;
+    view.kind === "host" || view.kind === "project" || view.kind === "agentProfile"
+      ? view.serverId
+      : null;
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
     routedSettingsHostServerId ?? lastWorkspaceSelection?.serverId ?? null,
   );
@@ -1181,7 +1185,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   // The host the four sections scope to: the host on the active view, otherwise
   // the picker choice, otherwise the connected local daemon, otherwise the first host.
   const activeHostServerId = useMemo(() => {
-    if (view.kind === "host" || view.kind === "project") return view.serverId;
+    if (view.kind === "host" || view.kind === "project" || view.kind === "agentProfile")
+      return view.serverId;
     return resolveActiveHostServerId({
       selectedServerId: selectedSettingsHostServerId,
       localServerId,
@@ -1323,6 +1328,15 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
         openSettingsRoute(buildSettingsHostSectionRoute(serverId, "projects"));
         return;
       }
+      if (view.kind === "agentProfile") {
+        const target = buildSettingsHostSectionRoute(serverId, "agents");
+        if (isCompactLayout) {
+          router.push(target);
+        } else {
+          router.replace(target);
+        }
+        return;
+      }
       if (view.kind !== "host") {
         return;
       }
@@ -1376,6 +1390,15 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     if (view.kind === "project") {
       return { title: t("settings.projects"), Icon: FolderGit2 };
     }
+    if (view.kind === "agentProfile") {
+      return {
+        title:
+          view.profileId === null
+            ? t("settings.host.agentProfiles.addProfileTitle")
+            : t("settings.host.agentProfiles.editProfileTitle"),
+        Icon: Bot,
+      };
+    }
     return null;
   })();
 
@@ -1397,6 +1420,16 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             projectId={view.projectId}
             onBackToProjects={handleBackFromDetail}
             showBackToProjects={!isCompactLayout}
+          />
+        );
+      }
+      if (view.kind === "agentProfile") {
+        return (
+          <AgentProfileEditPage
+            key={`${view.serverId}:${view.profileId ?? "create"}`}
+            serverId={view.serverId}
+            profileId={view.profileId}
+            onDone={handleBackFromDetail}
           />
         );
       }

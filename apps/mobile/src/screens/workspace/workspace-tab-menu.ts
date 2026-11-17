@@ -167,6 +167,7 @@ function getCloseButtonTestId(tab: WorkspaceTabDescriptor): string {
     return `workspace-new-tab-close-${tab.tabId}`;
   }
   if (tab.target.kind === "bot") return `workspace-bot-close-${tab.tabId}`;
+  if (tab.target.kind === "notebook") return `workspace-notebook-close-${tab.tabId}`;
   if (tab.target.kind === "schedule") {
     return `workspace-schedule-close-${tab.tabId}`;
   }

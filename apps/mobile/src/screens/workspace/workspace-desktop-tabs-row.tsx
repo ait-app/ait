@@ -617,6 +617,7 @@ function getFallbackTabLabel(
     pullRequest: string;
     schedule: string;
     bot: string;
+    notebook: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -644,6 +645,7 @@ function getFallbackTabLabel(
     return labels.pullRequest;
   }
   if (tab.target.kind === "bot") return labels.bot;
+  if (tab.target.kind === "notebook") return labels.notebook;
   if (tab.target.kind === "schedule") {
     return labels.schedule;
   }
@@ -1120,6 +1122,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       pullRequest: t("panels.pullRequest.label"),
       schedule: t("schedules.product.schedule"),
       bot: t("bots.title"),
+      notebook: t("panels.notebook.label"),
     }),
     [t],
   );

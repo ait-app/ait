@@ -64,4 +64,18 @@ export const panels = {
     loadError: "Failed to load diff",
     capabilityMissing: "Update the host to view commit diffs.",
   },
+  notebook: {
+    label: "Notebook",
+    subtitle: "Shared workspace notes",
+    tooltip: "Shared workspace notes",
+    disabled: "Enable experimental features to use the workspace notebook.",
+    loading: "Loading shared workspace notes...",
+    placeholder: "Write notes and TODOs for this workspace...",
+    saved: "Saved",
+    saving: "Saving...",
+    unsaved: "Unsaved changes",
+    readOnly: "Shared workspace notes are read-only for guests.",
+    conflict: "Notes changed on disk. Keep the latest version before editing again.",
+    saveFailed: "Unable to save workspace notes.",
+  },
 };

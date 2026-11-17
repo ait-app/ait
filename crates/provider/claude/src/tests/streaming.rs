@@ -128,6 +128,234 @@ fn partial(stream: &mut streaming::Stream, event: &Value) {
 }
 
 #[test]
+fn nonzero_stream_indexes_match_split_snapshots_and_history() {
+    let mut stream = streaming::Stream::default();
+    let snapshots = [
+        json!({"type":"assistant","uuid":"reason","message":{"id":"message","content":[
+            {"type":"thinking","thinking":"Reason"}]}}),
+        json!({"type":"assistant","uuid":"answer","message":{"id":"message","content":[
+            {"type":"text","text":"Hello"}]}}),
+    ];
+    partial(
+        &mut stream,
+        &json!({"type":"message_start","message":{"id":"message"}}),
+    );
+    for (index, kind, field, value, snapshot) in [
+        (1, "thinking", "thinking", "Reason", &snapshots[0]),
+        (2, "text", "text", "Hello", &snapshots[1]),
+    ] {
+        let start =
+            json!({"type":"content_block_start","index":index,"content_block":{"type":kind}});
+        partial(&mut stream, &start);
+        partial(&mut stream, &start);
+        partial(
+            &mut stream,
+            &json!({"type":"content_block_delta","index":index,
+            "delta":{"type":format!("{field}_delta"),(field):value}}),
+        );
+        stream.record(snapshot).unwrap();
+        partial(
+            &mut stream,
+            &json!({"type":"message_start","message":{"id":"message"}}),
+        );
+    }
+
+    let timeline = memory_timeline().unwrap();
+    let mut completed = Vec::new();
+    while let Some(event) = stream.events.pop_front() {
+        match event {
+            AgentTurnEvent::Progress { observation, entry } => {
+                progress_timeline(&timeline, "agent", "claude", &observation, &entry).unwrap();
+            }
+            AgentTurnEvent::Timeline(entry) => {
+                completed.push((entry.key.clone(), entry.item.clone()));
+                append_timeline(&timeline, "agent", "claude", &[entry]).unwrap();
+            }
+            _ => panic!("unexpected stream event"),
+        }
+    }
+    assert_eq!(completed[0].0, "native:claude:message:0");
+    assert_eq!(completed[1].0, "native:claude:message:1");
+    let (_, entries) = timeline_entries(&timeline, "agent").unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .filter_map(|entry| entry.item["text"].as_str())
+            .collect::<String>(),
+        "ReasonHello"
+    );
+
+    let mut replay = streaming::Stream::default();
+    for snapshot in &snapshots {
+        replay.record(snapshot).unwrap();
+    }
+    let replayed: Vec<_> = replay
+        .events
+        .into_iter()
+        .map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => (entry.key, entry.item),
+            _ => panic!("history must only contain completed items"),
+        })
+        .collect();
+    assert_eq!(completed, replayed);
+}
+
+#[test]
+fn ambiguous_empty_or_unknown_blocks_wait_for_the_complete_snapshot() {
+    for block in [
+        json!({"type":"text"}),
+        json!({"type":"unknown"}),
+        json!({"type":"tool_use"}),
+    ] {
+        let mut stream = streaming::Stream::default();
+        partial(
+            &mut stream,
+            &json!({"type":"message_start","message":{"id":"message"}}),
+        );
+        partial(
+            &mut stream,
+            &json!({"type":"content_block_start","index":0,"content_block":block}),
+        );
+        partial(
+            &mut stream,
+            &json!({"type":"content_block_start","index":1,"content_block":{"type":"text"}}),
+        );
+        partial(
+            &mut stream,
+            &json!({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hello"}}),
+        );
+        assert!(stream.events.is_empty());
+        stream
+            .record(
+                &json!({"type":"assistant","uuid":"record","message":{"id":"message","content":[
+            {"type":"text","text":"Hello"}]}}),
+            )
+            .unwrap();
+        let Some(AgentTurnEvent::Timeline(entry)) = stream.events.pop_front() else {
+            panic!("the completed snapshot must remain visible");
+        };
+        assert_eq!(entry.key, "native:claude:message:0");
+        assert_eq!(entry.item["text"], "Hello");
+    }
+}
+
+#[test]
+fn ambiguous_block_present_in_snapshot_preserves_history_ordinals() {
+    let mut stream = streaming::Stream::default();
+    partial(
+        &mut stream,
+        &json!({"type":"message_start","message":{"id":"message"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":0,"content_block":{"type":"unknown"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":1,"content_block":{"type":"text"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hello"}}),
+    );
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"record","message":{"id":"message","content":[
+        {"type":"unknown"},{"type":"text","text":"Hello"}]}}),
+        )
+        .unwrap();
+    let Some(AgentTurnEvent::Timeline(entry)) = stream.events.pop_front() else {
+        panic!("the completed snapshot must remain visible");
+    };
+    assert_eq!(entry.key, "native:claude:message:1");
+    assert_eq!(entry.item["text"], "Hello");
+    assert!(stream.events.is_empty());
+}
+
+#[test]
+fn late_stream_after_snapshot_does_not_duplicate_content() {
+    let mut stream = streaming::Stream::default();
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"first","message":{"id":"message","content":[
+        {"type":"text","text":"First"}]}}),
+        )
+        .unwrap();
+    partial(
+        &mut stream,
+        &json!({"type":"message_start","message":{"id":"message"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":0,"content_block":{"type":"text"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"First"}}),
+    );
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"second","message":{"id":"message","content":[
+        {"type":"text","text":"Second"}]}}),
+        )
+        .unwrap();
+    let items: Vec<_> = stream
+        .events
+        .into_iter()
+        .map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => (entry.key, entry.item["text"].clone()),
+            _ => panic!("late stream must not create progress"),
+        })
+        .collect();
+    assert_eq!(
+        items,
+        [
+            ("native:claude:message:0".into(), json!("First")),
+            ("native:claude:message:1".into(), json!("Second"))
+        ]
+    );
+}
+
+#[test]
+fn a_new_message_restores_streaming_after_ambiguous_blocks() {
+    let mut stream = streaming::Stream::default();
+    partial(
+        &mut stream,
+        &json!({"type":"message_start","message":{"id":"first"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":0,"content_block":{"type":"unknown"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":1,"content_block":{"type":"text"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"hidden"}}),
+    );
+    assert!(stream.events.is_empty());
+    partial(
+        &mut stream,
+        &json!({"type":"message_start","message":{"id":"second"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_start","index":1,"content_block":{"type":"text"}}),
+    );
+    partial(
+        &mut stream,
+        &json!({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"live"}}),
+    );
+    let Some(AgentTurnEvent::Progress { entry, .. }) = stream.events.pop_front() else {
+        panic!("a new message must resume streaming");
+    };
+    assert_eq!(entry.key, "native:claude:second:0");
+    assert_eq!(entry.item["text"], "live");
+}
+
+#[test]
 fn text_and_reasoning_deltas_match_native_history_keys() {
     let mut stream = streaming::Stream::default();
     partial(

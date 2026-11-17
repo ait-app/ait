@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
+pub(super) use super::roles::{is_key as is_role_key, valid as valid_role};
+
 pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
     if spec.provider != "claude"
         || !Path::new(&spec.cwd).is_absolute()
@@ -17,6 +19,7 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     validate_shape(config)?;
+    super::roles::check_size(config)?;
     let (fast, disabled) = model_capabilities(config.model.as_deref());
     if (config
         .feature_values
@@ -41,9 +44,15 @@ pub(super) fn validate_shape(config: &StoredAgentConfig) -> Result<(), AgentSess
         config.thinking_option_id.as_deref(),
         None | Some("off" | "low" | "medium" | "high" | "xhigh" | "max" | "ultracode")
     ) || config.feature_values.as_ref().is_some_and(|values| {
-        values
-            .iter()
-            .any(|(key, value)| key != "fast_mode" || !value.is_boolean())
+        values.iter().any(|(key, value)| {
+            if key == "fast_mode" {
+                !value.is_boolean()
+            } else {
+                // Role assignments are opaque native selections; their shape is checked here
+                // and their names against the discovered role set in `validate`.
+                !is_role_key(key) || !valid_role(key, value)
+            }
+        })
     }) || config
         .system_prompt
         .as_ref()
@@ -70,13 +79,15 @@ pub(super) fn modes() -> Vec<Value> {
     .collect()
 }
 
-pub(super) fn features(config: &StoredAgentConfig) -> Vec<Value> {
+pub(super) fn features(config: &StoredAgentConfig, models: &[Value]) -> Vec<Value> {
     if !model_capabilities(config.model.as_deref()).0 {
-        return Vec::new();
+        return super::roles::features(config, models);
     }
-    vec![json!({"id":"fast_mode","type":"toggle","label":"Fast mode",
+    let mut features = vec![json!({"id":"fast_mode","type":"toggle","label":"Fast mode",
         "description":"Use Claude Code fast mode on a supported model",
-        "value":config.feature_values.as_ref().and_then(|values|values.get("fast_mode")) == Some(&Value::Bool(true))})]
+        "value":config.feature_values.as_ref().and_then(|values|values.get("fast_mode")) == Some(&Value::Bool(true))})];
+    features.extend(super::roles::features(config, models));
+    features
 }
 
 // Capabilities follow the pinned Paseo manifest. Custom gateway aliases do not inherit

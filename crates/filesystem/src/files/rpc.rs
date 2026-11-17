@@ -12,7 +12,7 @@ use crate::files::ports as port;
 use crate::files::protocol::files as wire;
 use crate::files::service::files::Files;
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
+use model::rpc::{decode, encode};
 
 const INLINE_LIMIT: u64 = 512 * 1024;
 

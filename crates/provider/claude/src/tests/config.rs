@@ -91,7 +91,7 @@ fn first_party_fast_and_thinking_capabilities_do_not_leak_to_custom_aliases() {
         )
         .unwrap();
         config::validate(&config).unwrap();
-        assert_eq!(config::features(&config)[0]["value"], true);
+        assert_eq!(config::features(&config, &[])[0]["value"], true);
     }
     for model in [
         "claude-sonnet-5",
@@ -103,7 +103,15 @@ fn first_party_fast_and_thinking_capabilities_do_not_leak_to_custom_aliases() {
             serde_json::from_value(json!({"model":model,"featureValues":{"fast_mode":true}}))
                 .unwrap();
         assert_eq!(config::validate(&config), Err(AgentSessionError::Rejected));
-        assert_eq!(config::features(&config), [] as [Value; 0]);
+        // Fast mode is withheld on these aliases, but native roles still apply to every model,
+        // so the listing keeps the role selects and drops only the gated toggle.
+        let features = config::features(&config, &[]);
+        assert!(!features.iter().any(|feature| feature["id"] == "fast_mode"));
+        assert!(
+            features
+                .iter()
+                .any(|feature| feature["id"] == "modelRole.subagent")
+        );
     }
     let response = json!({"models":[{"value":"claude-opus-5","displayName":"Opus","supportedEffortLevels":["xhigh"]}]});
     let models = config::models(&response).unwrap();

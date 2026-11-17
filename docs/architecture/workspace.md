@@ -18,7 +18,9 @@
   `ports` 与 `protocol`，`support` 不依赖任何组；各自的 `tests/module_boundaries.rs` 强制执行
   （[ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)、
   [ADR-131](../decisions/workspace/adr-131-metadata-capability-groups.md)、
-  [ADR-136](../decisions/workspace/adr-136-single-area-layer-flattening.md)）。
+  [ADR-136](../decisions/workspace/adr-136-single-area-layer-flattening.md)、
+  [ADR-283](../decisions/workspace/adr-283-shared-rpc-codecs.md)）。RPC JSON 编解码统一从
+  `model::rpc` 导入。
 - 单连接调度中，只有归属 crate 已声明的 `workspace.worktree.`、`workspace.recovery.`、
   `workspace.github.`、`project.github.` 方法进入文件操作队列，长时间 clone/checkout 不阻塞目录读取
   （[ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)）。
@@ -123,6 +125,12 @@
   以避免嵌套沙箱失败；写入边界由外层沙箱提供
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
+
+## 客户端 Workspace 记事本
+
+- 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab。每个 Workspace 最多一个记事本 tab，tab 布局保留在客户端。
+- 记事本内容存放在 Workspace 根目录的 `.ait-notebook.md`，通过现有文件读取、实时订阅和带版本校验的写入接口同步；因此 Workspace 分享时，协作者访问同一份笔记与 TODO 内容。
+- 访客写入沿用 Workspace 文件权限。写入失败会显示只读状态，并发修改通过文件版本冲突提示处理。
 
 ## 定时任务归属
 

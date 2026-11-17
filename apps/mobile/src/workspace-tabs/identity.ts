@@ -55,6 +55,7 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
     case "changes_tree":
     case "files":
     case "pull_request":
+    case "notebook":
       return { kind: value.kind };
     case "bot": {
       // Legacy persisted targets carried botId and list/create views; only settings survives.
@@ -159,6 +160,9 @@ function secondaryWorkspaceTabTargetsEqual(
   if (left.kind === "pull_request" && right.kind === "pull_request") {
     return true;
   }
+  if (left.kind === "notebook" && right.kind === "notebook") {
+    return true;
+  }
   if (left.kind === "bot" && right.kind === "bot") {
     return left.view === right.view;
   }
@@ -213,9 +217,9 @@ function recordsShallowEqual(
   return true;
 }
 
-/** Bot and Cron tabs exist at most once per workspace, and their tab id is their kind. */
+/** Bot, Cron, and notebook tabs exist at most once per workspace, and their tab id is their kind. */
 export function isWorkspaceSingletonTabTarget(target: { kind: string }): boolean {
-  return target.kind === "bot" || target.kind === "schedule";
+  return target.kind === "bot" || target.kind === "schedule" || target.kind === "notebook";
 }
 
 export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): string {
@@ -248,6 +252,9 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   }
   if (target.kind === "schedule") {
     return "schedule";
+  }
+  if (target.kind === "notebook") {
+    return "notebook";
   }
   if (target.kind === "working_diff") {
     return "working_diff";

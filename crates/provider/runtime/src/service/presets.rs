@@ -14,6 +14,54 @@ use provider_core::ports::preset::{
 /// Largest accepted provider identifier on a preset request.
 const MAX_PROVIDER: usize = 128;
 
+/// Run one blocking Ait-store mutation off the reactor while holding its write fence.
+///
+/// `writes` is a `std::sync::Mutex`, so it must not be held across an `await`; a blocking
+/// preset write also commits a temp file with two `fsync` calls, which would stall a Tokio
+/// worker for the whole durability window. The guard is therefore acquired and released
+/// entirely inside the blocking closure, and only its outcome crosses back to the reactor.
+/// A panicking task drops its sender, which reports the store as unavailable rather than
+/// hanging the request.
+async fn fenced<T: Send + 'static>(
+    writes: &Arc<std::sync::Mutex<()>>,
+    store: ait::AitPresets,
+    operation: impl FnOnce(ait::AitPresets) -> Result<T, String> + Send + 'static,
+) -> Result<T, PresetError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let writes = writes.clone();
+    tokio::task::spawn_blocking(move || {
+        let outcome = writes
+            .lock()
+            .map_err(|_| "Preset store is unavailable".to_owned())
+            .and_then(|_guard| operation(store));
+        // The receiver may be gone if the caller was cancelled; the write already happened.
+        let _ = sender.send(outcome);
+    });
+    receiver
+        .await
+        .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?
+        .map_err(PresetError::Rejected)
+}
+
+/// Run one blocking Ait-store read off the reactor.
+///
+/// A read takes no write fence: the store's own lock already orders it against a concurrent
+/// `patch`, and queueing it behind the fence would let a save delay every list. It reads
+/// the same file a save commits, so it still must not run on a Tokio worker.
+async fn reading<T: Send + 'static>(
+    store: ait::AitPresets,
+    operation: impl FnOnce(ait::AitPresets) -> T + Send + 'static,
+) -> Result<T, PresetError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    tokio::task::spawn_blocking(move || {
+        // The receiver may be gone if the caller was cancelled; the read has no effect.
+        let _ = sender.send(operation(store));
+    });
+    receiver
+        .await
+        .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))
+}
+
 /// Unified preset access for one provider, routed to whichever store owns it.
 #[derive(Debug, Clone)]
 pub struct PresetService {
@@ -87,19 +135,22 @@ impl PresetService {
                     .collect()
             });
         }
-        self.ait()
-            .list(provider)
-            .map(|presets| {
-                presets
-                    .into_iter()
-                    .map(|preset| PresetEntry {
-                        preset,
-                        source: PresetSource::Ait,
-                        editable: true,
-                    })
-                    .collect()
-            })
-            .map_err(PresetError::Unavailable)
+        reading(self.ait(), {
+            let provider = provider.to_owned();
+            move |store| store.list(&provider)
+        })
+        .await?
+        .map(|presets| {
+            presets
+                .into_iter()
+                .map(|preset| PresetEntry {
+                    preset,
+                    source: PresetSource::Ait,
+                    editable: true,
+                })
+                .collect()
+        })
+        .map_err(PresetError::Unavailable)
     }
 
     /// Create or replace one preset through the store that owns it.
@@ -134,13 +185,13 @@ impl PresetService {
         // The lock spans the read-modify-write, not just the write: two concurrent saves of
         // different presets would otherwise both list the same store and the later one would
         // publish a list that drops the other's entry, each still reporting success.
-        let _guard = self
-            .writes
-            .lock()
-            .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?;
-        self.ait()
-            .save(provider, preset, original)
-            .map_err(PresetError::Rejected)
+        let provider = provider.to_owned();
+        let preset = preset.clone();
+        let original = original.map(str::to_owned);
+        fenced(&self.writes, self.ait(), move |store| {
+            store.save(&provider, &preset, original.as_deref())
+        })
+        .await
     }
 
     /// Remove one preset through the store that owns it.
@@ -170,13 +221,12 @@ impl PresetService {
             return client.delete_native_preset(cwd, name).await;
         }
         // Deleting is the same list-wide rewrite as saving, so it takes the same fence.
-        let _guard = self
-            .writes
-            .lock()
-            .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?;
-        self.ait()
-            .delete(provider, name)
-            .map_err(PresetError::Rejected)
+        let provider = provider.to_owned();
+        let name = name.to_owned();
+        fenced(&self.writes, self.ait(), move |store| {
+            store.delete(&provider, &name)
+        })
+        .await
     }
 }
 

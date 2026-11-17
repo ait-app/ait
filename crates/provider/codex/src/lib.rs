@@ -235,6 +235,7 @@ impl CodexClient {
                         .restore_children(resume.is_some() && !history, &spec.cwd, &id)
                         .await?,
                     notes: provider_native::notes::Notes::restore(saved(resume, "controlNotes"))?,
+                    plan_updates: plan_updates(saved(resume, "planUpdates")),
                     last_anchor: None,
                     manual_compactions: 0,
                     pending_goal_start: false,
@@ -598,6 +599,9 @@ struct CodexSession {
     latest_plan: Option<plans::Plan>,
     children: subagents::Live,
     notes: provider_native::notes::Notes,
+    /// Occurrences of each turn's non-plan-mode progress snapshots, so identical
+    /// content restores distinct durable keys instead of reviving an earlier row.
+    plan_updates: std::collections::BTreeMap<String, u64>,
     last_anchor: Option<String>,
     manual_compactions: u8,
     pending_goal_start: bool,
@@ -931,6 +935,9 @@ impl AgentSession for CodexSession {
         }
         if let Some(saved) = self.notes.saved() {
             metadata.insert("controlNotes".to_owned(), saved);
+        }
+        if !self.plan_updates.is_empty() {
+            metadata.insert("planUpdates".to_owned(), json!(self.plan_updates));
         }
         Some(AgentPersistenceHandle {
             provider: "codex".to_owned(),
@@ -1298,4 +1305,21 @@ fn saved<'a>(
     resume
         .and_then(|(handle, _)| handle.metadata.as_ref())
         .and_then(|metadata| metadata.get(key))
+}
+
+/// Restore each turn's durable progress-snapshot occurrence count; malformed or
+/// oversized state starts fresh rather than failing the session.
+fn plan_updates(saved: Option<&Value>) -> std::collections::BTreeMap<String, u64> {
+    let Some(entries) = saved.and_then(Value::as_object) else {
+        return std::collections::BTreeMap::new();
+    };
+    entries
+        .iter()
+        .filter(|(turn, _)| !turn.is_empty() && turn.len() <= 512)
+        .map(|(turn, count)| {
+            let bounded = count.as_u64().filter(|count| *count <= 4096).unwrap_or(0);
+            (turn.clone(), bounded)
+        })
+        .take(1024)
+        .collect()
 }

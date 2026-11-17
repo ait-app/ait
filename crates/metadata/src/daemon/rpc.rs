@@ -13,7 +13,7 @@ use crate::daemon::protocol::{
 };
 use crate::daemon::service::{Daemon, DaemonError};
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
+use model::rpc::{decode, encode};
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -85,11 +85,7 @@ pub(crate) struct Executed {
 ///
 /// # Errors
 /// Returns validation or configuration storage errors.
-pub(crate) fn execute(
-    daemon: &mut Daemon,
-    method: &str,
-    params: Value,
-) -> Result<Executed, ErrorCode> {
+pub(crate) fn execute(daemon: &Daemon, method: &str, params: Value) -> Result<Executed, ErrorCode> {
     match method {
         "daemon.host_stats.request" => {
             if !params.is_object() {

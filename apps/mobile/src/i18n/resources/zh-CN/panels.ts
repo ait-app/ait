@@ -64,4 +64,18 @@ export const panels = {
     loadError: "加载差异失败",
     capabilityMissing: "请更新主机以查看提交差异。",
   },
+  notebook: {
+    label: "记事本",
+    subtitle: "共享工作区笔记",
+    tooltip: "共享工作区笔记",
+    disabled: "开启测试功能后才能使用工作区记事本。",
+    loading: "正在加载共享工作区笔记…",
+    placeholder: "记录此工作区的笔记和 TODO…",
+    saved: "已保存",
+    saving: "保存中…",
+    unsaved: "有未保存的更改",
+    readOnly: "共享工作区笔记对访客只读。",
+    conflict: "磁盘上的笔记已变化，请确认最新版本后再编辑。",
+    saveFailed: "无法保存工作区笔记。",
+  },
 };

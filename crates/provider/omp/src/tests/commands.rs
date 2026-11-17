@@ -18,7 +18,11 @@ async fn until(
 }
 
 fn note(text: &str) -> impl Fn(&AgentTurnEvent) -> bool + '_ {
-    move |event| matches!(event, AgentTurnEvent::Timeline(entry) if entry.item["text"] == text)
+    move |event| {
+        matches!(event, AgentTurnEvent::Timeline(entry)
+            if entry.item["type"] == "tool_call"
+                && entry.item["detail"]["text"].as_str().is_some_and(|item| item.contains(text)))
+    }
 }
 
 fn compactions(events: &[AgentTurnEvent]) -> Vec<&Value> {

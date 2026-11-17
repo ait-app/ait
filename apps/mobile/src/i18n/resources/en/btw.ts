@@ -17,6 +17,7 @@ export const btw = {
   question: "Side question",
   send: "Send side question",
   stop: "Stop side question",
+  follow: "Follow",
   newPlaceholder: "Ask a side question…",
   followUpPlaceholder: "Ask a follow-up…",
   emptyTitle: "Ask about this conversation",

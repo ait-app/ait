@@ -55,6 +55,10 @@ fn encodes_payloads_and_reports_the_requested_failure_code() {
         encode(Unencodable, ErrorCode::RegistryIo),
         Err(ErrorCode::RegistryIo)
     );
+    assert_eq!(
+        encode(Unencodable, "serialization failed"),
+        Err("serialization failed")
+    );
 }
 
 #[test]

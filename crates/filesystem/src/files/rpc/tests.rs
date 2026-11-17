@@ -58,7 +58,7 @@ fn projects_missing_and_failed_versions_without_inventing_content() {
 fn invalid_payloads_and_operation_failures_are_distinct() {
     assert!(matches!(
         decode::<wire::WriteRequest>(json!({"cwd":"x"})),
-        Err(ErrorCode::InvalidMessage)
+        Err(model::ErrorCode::InvalidMessage)
     ));
     let (path, error) = split::<String>(Err(port::FileError("missing".to_owned())));
     assert!(path.is_none());

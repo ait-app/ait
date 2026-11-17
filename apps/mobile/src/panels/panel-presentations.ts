@@ -1,4 +1,11 @@
-import { Bot, CalendarClock, FileDiff, Files, GitPullRequest } from "lucide-react-native";
+import {
+  Bot,
+  CalendarClock,
+  FileDiff,
+  Files,
+  GitPullRequest,
+  StickyNote,
+} from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import type { PanelPresentation } from "@/panels/panel-registry";
 
@@ -10,6 +17,7 @@ const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedFiles = withUnistyles(Files);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedStickyNote = withUnistyles(StickyNote);
 
 export const botPanelPresentation = {
   label: (t) => t("bots.title"),
@@ -37,6 +45,13 @@ export const schedulePanelPresentation = {
   subtitle: (t) => t("schedules.browse"),
   tooltip: (t) => t("schedules.browse"),
   icon: ThemedCalendarClock,
+} satisfies PanelPresentation;
+
+export const notebookPanelPresentation = {
+  label: (t) => t("panels.notebook.label"),
+  subtitle: (t) => t("panels.notebook.subtitle"),
+  tooltip: (t) => t("panels.notebook.tooltip"),
+  icon: ThemedStickyNote,
 } satisfies PanelPresentation;
 
 export const workingDiffPanelPresentation = {

@@ -7,6 +7,7 @@ mod inspection;
 mod metadata;
 mod permissions;
 mod rewind;
+mod roles;
 mod session;
 mod side;
 mod streaming;
@@ -124,6 +125,22 @@ impl ClaudeClient {
         client
     }
 
+    /// Project the aliases recorded by the last native probe into selectable model rows.
+    ///
+    /// Settings listings are synchronous, so they render from this cache rather than probing.
+    /// A host that has not probed yet offers only the inherit/unset rows, which still apply.
+    fn cached_models(&self) -> Vec<Value> {
+        self.resolved_models.read().map_or_else(
+            |_| Vec::new(),
+            |models| {
+                models
+                    .iter()
+                    .map(|(alias, resolved)| json!({"id":alias,"label":resolved}))
+                    .collect()
+            },
+        )
+    }
+
     fn resolved_config(&self, config: &StoredAgentConfig) -> StoredAgentConfig {
         let mut resolved = config.clone();
         if let Some(model) = self.resolved_models.read().ok().and_then(|models| {
@@ -222,7 +239,7 @@ impl AgentClient for ClaudeClient {
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":config::features(&self.resolved_config(config)),"capabilities":{
+        json!({"availableModes":config::modes(),"features":config::features(&self.resolved_config(config), &self.cached_models()),"capabilities":{
             "supportsMcpServers":true,
             "supportsDynamicModes":true,"supportsRewindConversation":true,"supportsRewindFiles":true,"supportsRewindBoth":true,
             "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
@@ -259,10 +276,14 @@ impl AgentClient for ClaudeClient {
                 confinement: None,
             })
             .await?;
+        let models = config::models(&response)?;
         Ok(Details {
-            models: config::models(&response)?,
             modes: config::modes(),
-            features: config::features(&self.resolved_config(&StoredAgentConfig::default())),
+            features: config::features(
+                &self.resolved_config(&StoredAgentConfig::default()),
+                &models,
+            ),
+            models,
         })
     }
 

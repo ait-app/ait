@@ -107,6 +107,7 @@ impl ExecutionState {
             Operation::Usage => self.usage(params).await,
             Operation::UsageLedger => self.usage_ledger(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
+            Operation::SessionPreview => self.session_preview(params).await,
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,
             Operation::ForkContext => self.fork_context(params).await,

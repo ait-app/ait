@@ -1,6 +1,7 @@
 const PRIMARY_LAUNCH_ORDER = [
   "agent",
   "bot",
+  "notebook",
   "terminal",
   "changes",
   "diff",
@@ -17,6 +18,7 @@ const SUPPORTING_LAUNCH_ORDER = [
   "files",
   "agent",
   "bot",
+  "notebook",
   "browser",
   "pullRequest",
   "schedule",

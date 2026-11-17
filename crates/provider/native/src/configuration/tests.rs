@@ -132,6 +132,37 @@ fn claude_merges_sandbox_settings_without_losing_permission_rules() {
 }
 
 #[test]
+fn claude_emits_role_environment_through_the_settings_document() {
+    let environment = [
+        ("CLAUDE_CODE_SUBAGENT_MODEL", "claude-opus-5-5".to_owned()),
+        // An unset lever travels as an explicit empty value, which is how Claude Code turns it
+        // off; dropping the key instead would silently leave the user's own value in force.
+        ("ANTHROPIC_DEFAULT_HAIKU_MODEL", String::new()),
+    ];
+    let args = claude_with_environment(&StoredAgentConfig::default(), false, &environment).unwrap();
+    let settings: Value = serde_json::from_str(
+        args.iter()
+            .find_map(|arg| arg.strip_prefix("--settings="))
+            .expect("role environment produces a settings argument"),
+    )
+    .unwrap();
+    assert_eq!(
+        settings["env"]["CLAUDE_CODE_SUBAGENT_MODEL"],
+        json!("claude-opus-5-5")
+    );
+    assert_eq!(settings["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"], json!(""));
+}
+
+#[test]
+fn an_empty_role_environment_adds_no_settings_argument() {
+    let args = claude_with_environment(&StoredAgentConfig::default(), false, &[]).unwrap();
+    assert!(
+        args.iter().all(|arg| !arg.starts_with("--settings=")),
+        "no role assignment and no other option means no settings document"
+    );
+}
+
+#[test]
 fn rejects_unknown_invalid_or_overbroad_advanced_configuration() {
     for (provider, value) in [
         ("codex", json!({"providerOptions":{"unknown":true}})),

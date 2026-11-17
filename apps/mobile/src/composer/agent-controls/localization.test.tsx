@@ -8,7 +8,6 @@ import { DraftAgentControls } from "./index";
 
 vi.mock("@/agent-profiles", () => ({
   useAgentProfilePicker: () => null,
-  useAgentProfileEditor: () => ({ element: null }),
 }));
 
 // Keep the actual draft, mode and feature controls; replace the surrounding model browser.

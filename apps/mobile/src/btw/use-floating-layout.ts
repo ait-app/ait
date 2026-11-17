@@ -5,53 +5,82 @@ import { isWeb } from "@/constants/platform";
 import { useSettledKeyboardShift } from "@/keyboard/shift";
 import { measureElement, type Rect } from "@/components/ui/menu/menu-anchor";
 import { SPACING } from "@/styles/theme";
+import type { BtwDragBounds, BtwFloatingFrame } from "@/btw/floating-drag";
+
+export type { BtwFloatingFrame };
 
 interface Viewport extends Rect {
   layoutHeight: number;
 }
-export interface BtwFloatingFrame {
-  left: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
 
-/** Keep the conversation entirely above its composer, including in narrow split panes. */
+/** Gap kept from every edge of the window, and from the composer the window opens above. */
+const EDGE = SPACING[2];
+const COMPOSER_GAP = SPACING[3];
+const MAX_WIDTH = 384;
+const MAX_HEIGHT = 420;
+
+/**
+ * The window opens above its composer, hugging the right edge of the window. The composer is
+ * centred in a reading column, so its own right edge sits far inside a wide layout; the window
+ * edge is where a floating window is looked for. A window too narrow for the panel shrinks the
+ * panel instead of pushing it outside.
+ */
 export function resolveBtwFloatingFrame(
   anchor: Rect,
   viewport: Viewport,
   safeTop: number,
 ): BtwFloatingFrame {
-  const edge = SPACING[2];
-  const top = viewport.y + safeTop + edge;
-  const bottom = Math.min(anchor.y - SPACING[3], viewport.y + viewport.height - edge);
-  const width = Math.max(0, Math.min(448, anchor.width, viewport.width - edge * 2));
+  const width = Math.max(0, Math.min(MAX_WIDTH, viewport.width - EDGE * 2));
+  const top = viewport.y + safeTop + EDGE;
+  const bottom = Math.min(anchor.y - COMPOSER_GAP, viewport.y + viewport.height - EDGE);
   return {
-    left: Math.max(
-      viewport.x + edge,
-      Math.min(anchor.x + anchor.width - width, viewport.x + viewport.width - edge - width),
-    ),
+    left: Math.max(viewport.x + EDGE, viewport.x + viewport.width - EDGE - width),
     bottom: viewport.layoutHeight - bottom,
     width,
-    height: Math.max(0, Math.min(560, bottom - top)),
+    height: Math.max(0, Math.min(MAX_HEIGHT, bottom - top)),
   };
+}
+
+/** The box a dragged window may travel in: the whole window, minus an edge gap. */
+export function resolveBtwDragBounds(
+  viewport: Viewport,
+  safeTop: number,
+  size: { width: number; height: number },
+): BtwDragBounds {
+  const minLeft = viewport.x + EDGE;
+  const minTop = viewport.y + safeTop + EDGE;
+  return {
+    minLeft,
+    minTop,
+    maxLeft: Math.max(minLeft, viewport.x + viewport.width - EDGE - size.width),
+    maxTop: Math.max(minTop, viewport.y + viewport.height - EDGE - size.height),
+  };
+}
+
+export interface BtwFloatingLayout {
+  /** Where the composer alone would put the window, before any drag. */
+  frame: BtwFloatingFrame | null;
+  dragBounds: BtwDragBounds | null;
+  layoutHeight: number;
 }
 
 export function useBtwFloatingLayout(
   visible: boolean,
   anchorRef: RefObject<View | null>,
   anchorLayoutVersion: number,
-): BtwFloatingFrame | null {
+): BtwFloatingLayout {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   // The shared composer dock already applies the keyboard shift. Remeasure its
   // final screen coordinates rather than subtracting the keyboard inset twice.
   const keyboardShift = useSettledKeyboardShift();
   const [frame, setFrame] = useState<BtwFloatingFrame | null>(null);
+  const [dragBounds, setDragBounds] = useState<BtwDragBounds | null>(null);
 
   useLayoutEffect(() => {
     if (!visible) {
       setFrame(null);
+      setDragBounds(null);
       return;
     }
     let disposed = false;
@@ -103,6 +132,12 @@ export function useBtwFloatingLayout(
             ? previous
             : next,
         );
+        setDragBounds(
+          resolveBtwDragBounds(viewport, insets.top, {
+            width: next.width,
+            height: next.height,
+          }),
+        );
       });
     };
     const onScroll = (event: Event) => {
@@ -130,5 +165,6 @@ export function useBtwFloatingLayout(
       }
     };
   }, [visible, anchorRef, anchorLayoutVersion, width, height, insets.top, keyboardShift]);
-  return frame;
+
+  return { frame, dragBounds, layoutHeight: height };
 }

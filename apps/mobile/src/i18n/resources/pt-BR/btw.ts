@@ -17,6 +17,7 @@ export const btw = {
   question: "Pergunta paralela",
   send: "Enviar pergunta paralela",
   stop: "Parar pergunta paralela",
+  follow: "Continuar",
   newPlaceholder: "Faça uma pergunta paralela…",
   followUpPlaceholder: "Faça uma pergunta de acompanhamento…",
   emptyTitle: "Pergunte sobre esta conversa",

@@ -34,33 +34,40 @@ const TaskListCard = memo(function TaskListCard({ tasks }: { tasks: TodoEntry[] 
       panelTitle={t("message.todo.title")}
       accessibilityLabel={`TODO, ${progress}`}
     >
-      {sections.map((section) => (
-        <View key={section.id}>
-          {section.title ? (
-            <View style={styles.phaseHeader}>
-              {section.number ? <Text style={styles.phaseNumber}>{section.number}</Text> : null}
-              <Text accessibilityRole="header" style={styles.phaseTitle}>
-                {section.title}
-              </Text>
-              <Text style={styles.phaseProgress}>
-                {section.completed}/{section.total}
-              </Text>
-            </View>
-          ) : null}
-          {section.rows.map(({ task, number, depth }, index) => (
-            <ComposerTrackRow key={task.id ?? `${index}:${task.text}`}>
-              <View style={styles.taskRow(depth)}>
-                <TaskListRow task={task} number={number} numberOfLines={0} />
+      <View style={styles.content}>
+        {sections.map((section) => (
+          <View key={section.id}>
+            {section.title ? (
+              <View style={styles.phaseHeader}>
+                {section.number ? <Text style={styles.phaseNumber}>{section.number}</Text> : null}
+                <Text accessibilityRole="header" style={styles.phaseTitle}>
+                  {section.title}
+                </Text>
+                <Text style={styles.phaseProgress}>
+                  {section.completed}/{section.total}
+                </Text>
               </View>
-            </ComposerTrackRow>
-          ))}
-        </View>
-      ))}
+            ) : null}
+            {section.rows.map(({ task, number, depth }, index) => (
+              <ComposerTrackRow key={task.id ?? `${index}:${task.text}`}>
+                <View style={styles.taskRow(depth)}>
+                  <TaskListRow task={task} number={number} numberOfLines={0} />
+                </View>
+              </ComposerTrackRow>
+            ))}
+          </View>
+        ))}
+      </View>
     </ComposerTrackPill>
   );
 });
 
 const styles = StyleSheet.create((theme) => ({
+  // The card page pads vertically only; each row frame insets itself horizontally. Matching the
+  // missing step here gives a row fill the same distance from all four card edges.
+  content: {
+    paddingVertical: theme.spacing[1],
+  },
   // The task row draws its own icon and text; this only lets it span the shared row frame.
   // Basis stays `auto` so the text's width reaches the panel's measurement — see track.tsx.
   taskRow: (depth: number) => ({

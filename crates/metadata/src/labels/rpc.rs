@@ -35,8 +35,8 @@ use crate::labels::service::{
     WorkspaceLabels,
 };
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use model::rpc::{decode, encode};
 
 /// Ephemeral delivery failure; the host closes a connection when its budget is exhausted.
 #[derive(Debug, thiserror::Error)]

@@ -17,6 +17,7 @@ export const btw = {
   question: "サイド質問",
   send: "サイド質問を送信",
   stop: "サイド質問を停止",
+  follow: "続ける",
   newPlaceholder: "サイド質問を入力…",
   followUpPlaceholder: "追加質問を入力…",
   emptyTitle: "この会話について質問",

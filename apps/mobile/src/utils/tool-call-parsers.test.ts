@@ -118,10 +118,38 @@ describe("tool-call-parsers", () => {
     ).toEqual([
       {
         text: "Verify support",
+        id: "legacy:0",
         activeForm: "Verifying support",
         status: "in_progress",
         completed: false,
       },
+    ]);
+  });
+
+  it("assigns position identities that match the daemon-side legacy TodoWrite projection", () => {
+    const tasks = extractTaskEntriesFromToolCall("TodoWrite", {
+      todos: [
+        { content: "First", status: "pending" },
+        { content: "Second", status: "pending" },
+      ],
+    });
+    expect(tasks?.map((task) => task.id)).toEqual(["legacy:0", "legacy:1"]);
+  });
+
+  it("maps the native camelCase update_plan status onto the shared statuses", () => {
+    const tasks = extractTaskEntriesFromToolCall("update_plan", {
+      plan: [
+        { step: "Draft", status: "pending" },
+        { step: "Build", status: "inProgress" },
+        { step: "Verify", status: "completed" },
+        { step: "Unknown", status: "blocked" },
+      ],
+    });
+    expect(tasks?.map((task) => task.status)).toEqual([
+      "pending",
+      "in_progress",
+      "completed",
+      "pending",
     ]);
   });
 });

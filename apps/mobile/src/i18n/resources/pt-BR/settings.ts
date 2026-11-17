@@ -528,6 +528,9 @@ export const settings = {
       sectionTitle: "Perfis de agente",
       unavailable: "Conecte-se a este host para gerenciar perfis de agente",
       unsupported: "Este host executa um daemon que ainda não é compatível com perfis de agente",
+      notFound: "Perfil não encontrado",
+      leaveUnchanged: "Manter inalterado",
+      unresolvedValue: "Não disponível neste host",
       emptyState:
         "Nenhum perfil ainda. Adicione um para iniciar agentes a partir de um provedor e modelo salvos.",
       addProfileTitle: "Adicionar perfil de agente",

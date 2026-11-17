@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 import { Alert, Text, View } from "react-native";
+import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { AgentProfile } from "@ait/protocol/messages";
 import { Button } from "@/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -11,55 +11,29 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { buildAgentProfileCreateRoute, buildAgentProfileEditRoute } from "@/utils/host-routes";
 import { useAgentProfiles } from "../internal/use-agent-profiles";
-import { generateAgentProfileId } from "../internal/profile-id";
-import type { AgentProfileValue } from "../internal/profile-form-model";
-import { AgentProfileEditModal } from "./agent-profile-edit-modal";
 import { AgentProfileRow } from "./agent-profile-row";
 
 const ThemedPlus = withUnistyles(Plus);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const addIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 
-interface EditTarget {
-  mode: "create" | "edit";
-  profile?: AgentProfile;
-}
-
 export function AgentProfilesSection({ serverId }: { serverId: string }): ReactElement {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { profiles, isSupported, saveProfiles } = useAgentProfiles(serverId);
   const { entries } = useProvidersSnapshot(serverId, { cwd: null });
-  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
-  const handleAddOpen = useCallback(() => setEditTarget({ mode: "create" }), []);
-  const handleEditClose = useCallback(() => setEditTarget(null), []);
+  const handleAddOpen = useCallback(() => {
+    router.push(buildAgentProfileCreateRoute(serverId));
+  }, [serverId]);
 
   const handleEditOpen = useCallback(
     (id: string) => {
-      const profile = profiles?.find((entry) => entry.id === id);
-      if (!profile) {
-        return;
-      }
-      setEditTarget({ mode: "edit", profile });
+      router.push(buildAgentProfileEditRoute(serverId, id));
     },
-    [profiles],
-  );
-
-  const handleSave = useCallback(
-    async (value: AgentProfileValue) => {
-      const current = profiles ?? [];
-      const editing = editTarget?.mode === "edit" ? editTarget.profile : undefined;
-      // The edited profile is replaced, not merged: `value` omits the fields the
-      // user cleared, so spreading it over the stored record would silently keep
-      // the old model, mode, thinking option or notes.
-      const next: AgentProfile[] = editing
-        ? current.map((entry) => (entry.id === editing.id ? { id: entry.id, ...value } : entry))
-        : [...current, { id: generateAgentProfileId(), ...value }];
-      await saveProfiles(next);
-    },
-    [editTarget, profiles, saveProfiles],
+    [serverId],
   );
 
   const reorder = useCallback(
@@ -188,15 +162,6 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
           )}
         </View>
       </SettingsSection>
-
-      <AgentProfileEditModal
-        serverId={serverId}
-        visible={editTarget !== null}
-        mode={editTarget?.mode ?? "create"}
-        {...(editTarget?.profile ? { profile: editTarget.profile } : {})}
-        onClose={handleEditClose}
-        onSave={handleSave}
-      />
     </>
   );
 }

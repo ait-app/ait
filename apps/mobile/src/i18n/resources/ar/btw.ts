@@ -15,6 +15,7 @@ export const btw = {
   question: "سؤال جانبي",
   send: "إرسال السؤال الجانبي",
   stop: "إيقاف السؤال الجانبي",
+  follow: "متابعة",
   newPlaceholder: "اطرح سؤالًا جانبيًا…",
   followUpPlaceholder: "اطرح سؤال متابعة…",
   emptyTitle: "اسأل عن هذه المحادثة",

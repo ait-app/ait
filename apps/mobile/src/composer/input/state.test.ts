@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyDictationTranscript,
   computeCanStartDictation,
+  createPromptHistoryState,
+  navigatePromptHistory,
+  rememberPrompt,
   resolveActiveSendBehavior,
   resolveComposerSurfacePresentation,
   resolveComposerSurfaceText,
@@ -275,6 +278,29 @@ describe("composer send behavior", () => {
 
     expect(defaultAction.calls).toEqual(["queue"]);
     expect(alternateAction.calls).toEqual(["send"]);
+  });
+});
+
+describe("prompt history", () => {
+  it("returns the newest prompt first and restores the current draft when moving down", () => {
+    const history = createPromptHistoryState();
+    rememberPrompt(history, "first prompt");
+    rememberPrompt(history, "second prompt");
+
+    expect(navigatePromptHistory(history, "up", "draft")).toBe("second prompt");
+    expect(navigatePromptHistory(history, "up", "second prompt")).toBe("first prompt");
+    expect(navigatePromptHistory(history, "down", "first prompt")).toBe("second prompt");
+    expect(navigatePromptHistory(history, "down", "second prompt")).toBe("draft");
+  });
+
+  it("ignores blank prompts and consecutive duplicates", () => {
+    const history = createPromptHistoryState();
+    rememberPrompt(history, "  ");
+    rememberPrompt(history, "same prompt");
+    rememberPrompt(history, "same prompt");
+
+    expect(history.entries).toEqual(["same prompt"]);
+    expect(navigatePromptHistory(history, "up", "")).toBe("same prompt");
   });
 });
 

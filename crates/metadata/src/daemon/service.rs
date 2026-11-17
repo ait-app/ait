@@ -41,7 +41,8 @@ pub enum DaemonError {
 /// Application coordinator for daemon-level WebSocket operations.
 #[derive(Debug)]
 pub struct Daemon {
-    monitor: Option<host_monitor::HostMonitor>,
+    /// Sample cache with its own lock, so a counter read never excludes configuration writes.
+    monitor: Option<std::sync::Mutex<host_monitor::HostMonitor>>,
     runtime: DaemonRuntime,
     config: Box<dyn DaemonConfigStore>,
     diagnostics: Option<std::sync::Arc<dyn crate::daemon::ports::DaemonDiagnostics>>,
@@ -67,20 +68,31 @@ impl Daemon {
         mut self,
         sampler: Box<dyn crate::daemon::ports::host_monitor::HostSampler>,
     ) -> Self {
-        self.monitor = Some(host_monitor::HostMonitor::new(sampler));
+        self.monitor = Some(std::sync::Mutex::new(host_monitor::HostMonitor::new(
+            sampler,
+        )));
         self
     }
 
+    /// Read host counters, sampling only when the cache is stale.
+    ///
+    /// # Errors
+    /// Returns an error when no sampler is installed, its lock is poisoned, or the OS counters
+    /// cannot be read.
     pub(crate) fn host_stats(
-        &mut self,
+        &self,
         include_history: bool,
     ) -> Result<
         crate::daemon::ports::host_monitor::HostSnapshot,
         crate::daemon::ports::host_monitor::HostMonitorError,
     > {
-        self.monitor
-            .as_mut()
-            .ok_or(crate::daemon::ports::host_monitor::HostMonitorError)?
+        let monitor = self
+            .monitor
+            .as_ref()
+            .ok_or(crate::daemon::ports::host_monitor::HostMonitorError)?;
+        monitor
+            .lock()
+            .map_err(|_| crate::daemon::ports::host_monitor::HostMonitorError)?
             .read(std::time::Instant::now(), include_history)
     }
 

@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { Bot } from "lucide-react-native";
 import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
-import type { AgentProfilePicker, AgentProfileSeed } from "@/agent-profiles";
+import type { AgentProfilePicker } from "@/agent-profiles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -36,8 +36,6 @@ interface CompactModelSheetProps {
   onApplyProfile?: (profileId: string) => void;
   modelPresets?: ModelPresetControls;
   onEditProfiles?: () => void;
-  onCreateProfile?: (seed: AgentProfileSeed) => void;
-  onEditProfile?: (profileId: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
   onRetryProvider?: (provider: AgentProvider) => void;
@@ -54,30 +52,6 @@ function shortModelLabel(label: string): string {
   return separatorIndex === -1 ? label : label.slice(separatorIndex + 1);
 }
 
-function resolveModelSheetProfileActions(
-  onCreateProfile: ((seed: AgentProfileSeed) => void) | undefined,
-  onEditProfile: ((profileId: string) => void) | undefined,
-  close: () => void,
-): {
-  create?: (seed: AgentProfileSeed) => void;
-  edit?: (profileId: string) => void;
-} {
-  return {
-    create: onCreateProfile
-      ? (seed: AgentProfileSeed) => {
-          close();
-          onCreateProfile(seed);
-        }
-      : undefined,
-    edit: onEditProfile
-      ? (profileId: string) => {
-          close();
-          onEditProfile(profileId);
-        }
-      : undefined,
-  };
-}
-
 export function CompactModelSheet({
   providers,
   selectedProvider,
@@ -89,8 +63,6 @@ export function CompactModelSheet({
   onApplyProfile,
   modelPresets,
   onEditProfiles,
-  onCreateProfile,
-  onEditProfile,
   onOpen,
   onClose,
   onRetryProvider,
@@ -236,8 +208,6 @@ export function CompactModelSheet({
     onEditProfiles?.();
   }, [close, onEditProfiles]);
 
-  const profileActions = resolveModelSheetProfileActions(onCreateProfile, onEditProfile, close);
-
   const toggle = useCallback(() => {
     if (isOpen) {
       close();
@@ -331,8 +301,6 @@ export function CompactModelSheet({
             onApplyProfile={handleApplyProfile}
             modelPresets={presetControls}
             onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
-            onCreateProfile={profileActions.create}
-            onEditProfile={profileActions.edit}
             onRetryProvider={onRetryProvider}
             isRetryingProvider={isRetryingProvider}
             scrolling={modelBrowserScrolling}
@@ -376,8 +344,6 @@ export function CompactModelSheet({
               onSelect={handleBrowserSelect}
               modelPresets={presetControls}
               onEditProfiles={onEditProfiles ? handleEditProfiles : undefined}
-              onCreateProfile={profileActions.create}
-              onEditProfile={profileActions.edit}
               onRetryProvider={onRetryProvider}
               isRetryingProvider={isRetryingProvider}
               scrolling={modelBrowserScrolling}

@@ -492,7 +492,12 @@ async fn installed_omp_local_commands_settle_with_an_echo_and_their_output() {
     assert_eq!(items[0]["type"], "user_message", "{events:?}");
     assert_eq!(items[0]["text"], "/session");
     assert_eq!(items[0]["clientMessageId"], "client-1");
-    assert_eq!(items[1]["text"], output.as_str());
+    // The output is a command card, not assistant prose.
+    assert_eq!(items[1]["type"], "tool_call", "{events:?}");
+    assert_eq!(items[1]["name"], "session");
+    assert_eq!(items[1]["metadata"]["nativeType"], "command_output");
+    assert_eq!(items[1]["detail"]["type"], "plain_text");
+    assert_eq!(items[1]["detail"]["text"], output.as_str());
     session.close().await.unwrap();
 }
 

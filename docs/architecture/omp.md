@@ -92,6 +92,8 @@ flowchart LR
   当前回合延续，旧会话未完成的工具标为结束。非 UUID 的会话 ID 仍按协议失败处理。
 - 本地命令（确认中 `agentInvoked: false`）没有 `prompt_result` 和 `session_settled`，
   立即进入空闲核对；结算时先回显输入，再显示去除 ANSI 并修剪过的 `command_output`。
+  该输出是一张命令卡（`tool_call` + `plain_text`），不是助手正文；同一文本仍是该回合的最终文本
+  （`Completed`），供空闲状态与通知摘要使用。
   确认或 `prompt_result` 报告 `agentInvoked: false` 时，该 prompt 的待确认输入移出队列，客户端消息 ID
   留给本地回显；OMP 18.18.8 会在本地命令后立即运行此时接受的 steer，该 steer 保留自己的 ID。
 - 同一 prompt 在接纳后又收到一次 `response success: false` 时，按 `prompt_result{status: error}` 处理。
@@ -114,8 +116,9 @@ flowchart LR
 - 等待 prompt 接纳不设超时：OMP 可在接纳前等待用户回答对话（ADR-198）。prompt 写入受请求超时约束，
   进程退出由轮询发现，用户取消仍受上述 5 秒确认上限约束。
 - 追加输入用 `steer` 写入后立即返回，每个回合至多 128 个未确认请求。以 `/` 开头的命令文本
-  不作为 steer 发送，而是交还运行时，作为新的 prompt 投递。OMP 在写入后拒绝时，显示带脱敏原因的
-  警告通知，回合继续；输入不重新排队。
+  不作为 steer 发送，而是交还运行时，作为新的 prompt 投递；已知命令（内置命令与 Ait 屏蔽的命令）
+  由 `handles_out_of_band` 报告为带外答复，运行时因此不会为它中断当前回合。OMP 在写入后拒绝时，
+  显示带脱敏原因的警告通知，回合继续；输入不重新排队。
 - `abort` 到达时 OMP 尚未取出的 steer 会被 OMP 丢弃；它的待确认记录在回合结束时清除。
 
 ## 内置斜杠命令
@@ -130,6 +133,30 @@ flowchart LR
   迟到的拒绝与 steer 相同，显示为警告。
 - 命令列表先列内置命令，再列 OMP 的 `get_available_commands`；同名时 OMP 的条目替换内置条目，
   但保留内置的参数提示。`skill` 来源映射为 `kind: skill`。
+- Ait 屏蔽 OMP 的 62 行原生斜杠命令（`docs/plans/pr612-split/sources.json` 的 `commands_tsv`
+  中标为屏蔽的行，含别名共 69 个名字），按策略与承接方式分类：
+  - `rewrite`（23 行 / 27 个名字）：Ait 接管该设置。其中 16 个名字指向 Ait 的控件——`model`、
+    `models`、`switch` 指模型选择器，`modelpreset` 指 Settings › Providers › Model presets，
+    `effort` 指思考控件，`fast` 指 Speed 控件，`settings` 指 Settings，`setup`、`providers`
+    指 Settings › Providers，`login`、`logout` 指账号页，`hub`、`subagents` 指 Subagents 面板，
+    `resume` 指 History，`branch`、`rewind` 指 Rewind 菜单；其余 11 个（`advisor`、`prewalk`、
+    `slow`、`skillful`、`extended-context`、`computer`、`browser`、`agents`、`tree`、`export`、
+    `dump`）Ait 拥有该设置但暂无控件，答复不指向不存在的入口。
+  - `defer`（34 行 / 36 个名字）：Ait 尚未交付该能力，原生处理器不得在 Ait 之外执行副作用。
+    `todo`、`plan-review`、`new`、`clear`、`delete`、`fresh`、`shake`、`pin`、`unpin`、`rename`、
+    `move`、`wt`、`worktree`、`fork`、`restart`、`mcp`、`skills`、`marketplace`、`plugins`、
+    `plugin`、`reload-plugins`、`ssh`、`forget-approvals`、`add-dir`、`remove-dir`、`copy`、`open`、
+    `local`、`git`、`share`、`collab`、`join`、`leave`、`pause`、`live`、`retry`。
+  - `exclude`（5 行 / 6 个名字）：终端专属，Ait 不另造替代——`hotkeys`、`quit`、`q`、`exit`、
+    `record`、`debug`。
+- 这些命令都不写入 OMP，也不进入命令列表，因此补全不会提供提交时会被拒绝的条目。文本走带外答复，
+  `handles_out_of_band` 为 true，回合进行中提交时不会被当作 steer 拒绝、进而中断原生回合
+  （[取消与追加输入](#取消与追加输入)）。答复是命令卡：有控件时指出控件（模型选择器、Model presets、
+  思考控件、Speed 控件、Settings、Providers、账号页、Subagents 面板、History、Rewind 菜单）；暂无控件时
+  只说该设置由 Ait 管理，不指向不存在的入口；未交付的能力与终端专属命令各自说明命令不会交给 OMP。
+  OMP 在原生处理器里执行的副作用因此不会在 Ait 之外发生。带结构化输出 schema 或会话已关闭时仍为
+  `Rejected`。
+- Ait 自己的答复同 `command_output` 一样显示为命令卡，不作助手正文。
 
 ## 交互
 
@@ -161,18 +188,19 @@ flowchart LR
 实时事件与历史使用同一套投影（`stream`、`events`、`tool_detail`）；Progress 与 Timeline 分离，
 锚点键确定。
 
-| 原生输出                                   | 共享展示                         | 规则                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 用户消息                                   | 用户消息                         | `messageId` 为原生条目 ID。实时事件不带 ID，先暂存，经后台 `get_branch_messages` 按文本查得；2 秒内查不到时沿用锚点键。重复广播只显示一次。                                                                                                                                                                                                        |
-| `skill-prompt`（用户发起）                 | 用户消息 `/skill:<名称> <参数>`  | 消耗该次输入的客户端消息身份；实时与历史均以锚点键为 `messageId`。                                                                                                                                                                                                                                                                                 |
-| 助手文本 / thinking                        | 回复 / Thinking                  | 只使用 `text_delta` 与 `thinking_delta`；保留原生消息与轮次身份。                                                                                                                                                                                                                                                                                  |
-| 工具                                       | 工具卡                           | bash→shell，read→read（http(s)→fetch），edit→edit + diff，write→write，find/grep/ls/glob/ast_grep/web_search→search，task→sub_agent，ask/yield/wait/think 等→plain_text，`xd://`→实际执行的工具，`proc://` 与其他→unknown。`tool_execution_end` 即时结束实时行，`toolResult` 记录同一结果；`isError` 或 `web_search` 的 `details.error` 判为失败。 |
-| `todo` 工具、`todo_reminder`、`todoPhases` | Todo 列表                        | 不显示 todo 工具行；丢弃 abandoned，blocked 附带原因，与上一份相同的列表不再显示。连接时和每轮结束后读取 `get_state.todoPhases`。                                                                                                                                                                                                                  |
-| `<system-notice>` 自定义消息               | 通知                             | 包括 `async-result`；`<task-result>` 显示为 “Background job <id> <status>” 并按状态定级，其余正文附在通知后。                                                                                                                                                                                                                                      |
-| `advisor` 自定义消息                       | `advisor` 工具行                 | 每条建议带严重级别标签。                                                                                                                                                                                                                                                                                                                           |
-| 其他可见自定义消息                         | 以 `customType` 命名的文本工具行 | `display: false` 不显示。                                                                                                                                                                                                                                                                                                                          |
-| `notice`、重试、回退、目标、压缩           | 通知 / 状态工具行 / 压缩行       | 仅实时显示；重试、回退与目标行使用稳定 callId，压缩开始与结束共用 compactionId。                                                                                                                                                                                                                                                                   |
-| 输出图片                                   | 图片工件                         | `blob:sha256` 从 OMP 数据根目录的 `blobs` 读取，单张上限 32 MiB。                                                                                                                                                                                                                                                                                  |
+| 原生输出                                     | 共享展示                         | 规则                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 用户消息                                     | 用户消息                         | `messageId` 为原生条目 ID。实时事件不带 ID，先暂存，经后台 `get_branch_messages` 按文本查得；2 秒内查不到时沿用锚点键。重复广播只显示一次。                                                                                                                                                                                                        |
+| `skill-prompt`（用户发起）                   | 用户消息 `/skill:<名称> <参数>`  | 消耗该次输入的客户端消息身份；实时与历史均以锚点键为 `messageId`。                                                                                                                                                                                                                                                                                 |
+| 助手文本 / thinking                          | 回复 / Thinking                  | 只使用 `text_delta` 与 `thinking_delta`；保留原生消息与轮次身份。                                                                                                                                                                                                                                                                                  |
+| 工具                                         | 工具卡                           | bash→shell，read→read（http(s)→fetch），edit→edit + diff，write→write，find/grep/ls/glob/ast_grep/web_search→search，task→sub_agent，ask/yield/wait/think 等→plain_text，`xd://`→实际执行的工具，`proc://` 与其他→unknown。`tool_execution_end` 即时结束实时行，`toolResult` 记录同一结果；`isError` 或 `web_search` 的 `details.error` 判为失败。 |
+| `todo` 工具、`todo_reminder`、`todoPhases`   | Todo 列表                        | 不显示 todo 工具行；丢弃 abandoned，blocked 附带原因，与上一份相同的列表不再显示。连接时和每轮结束后读取 `get_state.todoPhases`。                                                                                                                                                                                                                  |
+| `<system-notice>` 自定义消息                 | 通知                             | 包括 `async-result`；`<task-result>` 显示为 “Background job <id> <status>” 并按状态定级，其余正文附在通知后。                                                                                                                                                                                                                                      |
+| `advisor` 自定义消息                         | `advisor` 工具行                 | 每条建议带严重级别标签。                                                                                                                                                                                                                                                                                                                           |
+| 其他可见自定义消息                           | 以 `customType` 命名的文本工具行 | `display: false` 不显示。                                                                                                                                                                                                                                                                                                                          |
+| `notice`、重试、回退、目标、压缩             | 通知 / 状态工具行 / 压缩行       | 仅实时显示；重试、回退与目标行使用稳定 callId，压缩开始与结束共用 compactionId。                                                                                                                                                                                                                                                                   |
+| 命令答复（`command_output`、Ait 自身的答复） | 命令卡                           | `tool_call` + `plain_text`，`callId` 每次唯一，`metadata.source` 为 `omp_command`；`name` 是命令名，摘要取答复首行，全文可展开。不作助手正文；答复同时是该回合的最终文本（`Completed`），供空闲状态与通知摘要使用。                                                                                                                                |
+| 输出图片                                     | 图片工件                         | `blob:sha256` 从 OMP 数据根目录的 `blobs` 读取，单张上限 32 MiB。                                                                                                                                                                                                                                                                                  |
 
 ## 输入
 

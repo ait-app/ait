@@ -36,7 +36,7 @@ pub fn decode<T: DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
 /// # Errors
 ///
 /// Returns `error` when `value` cannot be represented as JSON.
-pub fn encode(value: impl Serialize, error: ErrorCode) -> Result<Value, ErrorCode> {
+pub fn encode<E>(value: impl Serialize, error: E) -> Result<Value, E> {
     serde_json::to_value(value).map_err(|_| error)
 }
 

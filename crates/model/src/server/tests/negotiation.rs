@@ -27,25 +27,27 @@ fn single_connection_requires_explicit_selection_and_has_a_unique_capability_bud
         Err(ErrorCode::UnsupportedCapability)
     );
 
-    offer.capabilities = (0..255).map(|id| format!("cap.{id}")).collect();
+    // Fill every budget slot, then show the union check rejects one entry past it.
+    let budget = single::MAX_CAPABILITIES;
+    offer.capabilities = (0..budget - 1).map(|id| format!("cap.{id}")).collect();
     let mut available = offer.capabilities.clone();
     available.push(single::CAPABILITY.to_owned());
-    assert_eq!(offer.negotiate_available(&available).unwrap().len(), 256);
+    assert_eq!(offer.negotiate_available(&available).unwrap().len(), budget);
     // A capability present in both lists counts once, but both lists are individually bounded.
     offer.capabilities.push(single::CAPABILITY.to_owned());
     assert!(offer.negotiate_available(&available).is_ok());
-    offer.capabilities[255] = "cap.255".to_owned();
+    offer.capabilities[budget - 1] = format!("cap.{}", budget - 1);
     assert_eq!(
         offer.negotiate_available(&available),
         Err(ErrorCode::InvalidMessage)
     );
-    offer.capabilities = vec!["cap.0".to_owned(); 257];
+    offer.capabilities = vec!["cap.0".to_owned(); budget + 1];
     assert_eq!(
         offer.negotiate_available(&available),
         Err(ErrorCode::InvalidMessage)
     );
     offer.capabilities.clear();
-    offer.required_capabilities = vec![single::CAPABILITY.to_owned(); 257];
+    offer.required_capabilities = vec![single::CAPABILITY.to_owned(); budget + 1];
     assert_eq!(
         offer.negotiate_available(&available),
         Err(ErrorCode::InvalidMessage)

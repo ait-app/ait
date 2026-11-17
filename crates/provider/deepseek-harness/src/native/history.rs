@@ -12,7 +12,8 @@ use std::collections::BTreeMap;
 
 /// A fixed journal cut and its native metadata, shared by replay and import.
 pub(super) struct Journal {
-    pub(super) header: Value,
+    pub(super) parent_id: Option<String>,
+    pub(super) created_at: String,
     pub(super) values: Value,
     pub(super) entries: Vec<NativeItem>,
     pub(super) active: bool,
@@ -55,45 +56,21 @@ pub(super) async fn read_snapshot(
     cwd: &str,
 ) -> Result<Journal, AgentSessionError> {
     let address = json!({"kind":"session","sessionId":session_id});
-    runtime
-        .subscribe(
-            "history",
-            "session/follow",
-            json!({"request":{"address":address,"maxMessages":50}}),
+    // The Web client's follow endpoint promotes a cold session to an Agent after its snapshot.
+    // Only these non-activating endpoints may be used by history/import readers.
+    let parent_id = validate_root(runtime, session_id, cwd).await?;
+    // The read-only wire summary omits creation time. The shared import contract permits the
+    // observation time in this case; do not fabricate a native header from an event timestamp.
+    let created_at = chrono::Utc::now().to_rfc3339();
+    let (cut, values) = baseline(runtime, session_id).await?;
+    let page = runtime
+        .api
+        .call(
+            "session/page",
+            json!({"request":{"address":address,"throughSeq":cut,"maxMessages":50}}),
         )
         .await?;
-    let snapshot = tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        loop {
-            let frame = runtime.next().await?;
-            if frame["type"] == "item"
-                && frame["streamId"] == "events"
-                && frame["value"]["type"] == "emit"
-            {
-                continue;
-            }
-            if frame["type"] != "item"
-                || frame["streamId"] != "history"
-                || frame["value"]["type"] != "snapshot"
-            {
-                return Err(AgentSessionError::Failed);
-            }
-            return Ok(frame["value"].clone());
-        }
-    })
-    .await
-    .map_err(|_| AgentSessionError::Failed)??;
-    if snapshot["header"]["id"] != session_id
-        || snapshot["header"]["cwd"] != cwd
-        || snapshot["header"]["origin"] == "subagent"
-    {
-        return Err(AgentSessionError::Failed);
-    }
-    let cut = snapshot["cursor"]
-        .as_i64()
-        .ok_or(AgentSessionError::Failed)?;
-    let header = snapshot["header"].clone();
-    let values = snapshot["projections"]["values"].clone();
-    let records = pages(runtime, &address, cut, snapshot).await?;
+    let records = pages(runtime, &address, cut, page).await?;
     let active = records
         .iter()
         .rev()
@@ -104,6 +81,24 @@ pub(super) async fn read_snapshot(
             )
         })
         .is_some_and(|record| record["event"]["type"] == "turn/start");
+    let entries = project_records(runtime, client, session_id, records).await?;
+    Ok(Journal {
+        parent_id,
+        created_at,
+        values,
+        entries,
+        active,
+    })
+}
+
+/// Project ordered native records into deduplicated display items without submitting input.
+/// Image hydration uses the native read-only attachment endpoint; no writer is addressed.
+pub(super) async fn project_records(
+    runtime: &Runtime,
+    client: &DeepSeekHarnessClient,
+    session_id: &str,
+    records: Vec<Value>,
+) -> Result<Vec<NativeItem>, AgentSessionError> {
     let mut stream = Stream::new(client.images.clone());
     let mut tools = BTreeMap::new();
     let mut entries: Vec<NativeItem> = Vec::new();
@@ -132,12 +127,51 @@ pub(super) async fn read_snapshot(
             }
         }
     }
-    Ok(Journal {
-        header,
-        values,
-        entries,
-        active,
-    })
+    Ok(entries)
+}
+
+/// Validate a root identity and working directory before any activating native subscription.
+/// Returns its optional native parent, or an error for absent, foreign, or subagent identities.
+pub(super) async fn validate_root(
+    runtime: &Runtime,
+    session_id: &str,
+    cwd: &str,
+) -> Result<Option<String>, AgentSessionError> {
+    let listed = runtime
+        .api
+        .call("session/list", json!({"_request":{}}))
+        .await?;
+    let summary = listed["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["sessionId"] == session_id))
+        .ok_or(AgentSessionError::Failed)?;
+    if summary["cwd"] != cwd || summary["origin"] == "subagent" {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(summary["parentSessionId"].as_str().map(str::to_owned))
+}
+
+/// Obtain an exact read-only projection cut; migration hints cannot replace authoritative facts.
+/// Missing endpoints and invalid baselines fail without falling back to an activating follow.
+pub(super) async fn baseline(
+    runtime: &Runtime,
+    session_id: &str,
+) -> Result<(i64, Value), AgentSessionError> {
+    let mut value = runtime
+        .api
+        .call(
+            "session/projections",
+            json!({"request":{"sessionId":session_id}}),
+        )
+        .await?;
+    let cut = value["asOfSeq"]
+        .as_i64()
+        .filter(|cut| *cut >= -1 && *cut < i64::MAX)
+        .ok_or(AgentSessionError::Failed)?;
+    if value["kind"] != "sequenced" || !value["values"].is_object() {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok((cut, value["values"].take()))
 }
 
 async fn pages(

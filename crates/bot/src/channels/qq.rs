@@ -519,7 +519,11 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
 /// Extract the common fields from a QQ group message.
 fn group_fields(data: &Value) -> Option<(String, &str, &str)> {
     let group = data["group_openid"].as_str()?;
-    let sender = data["author"]["member_openid"].as_str()?;
+    // QQ normally sends `member_openid`, but some gateway payloads only retain the
+    // legacy `author.id` field. Both identify the member within this group.
+    let sender = data["author"]["member_openid"]
+        .as_str()
+        .or_else(|| data["author"]["id"].as_str())?;
     Some((
         format!("{GROUP_PEER}:{group}"),
         sender,

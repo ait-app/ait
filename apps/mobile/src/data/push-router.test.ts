@@ -341,6 +341,32 @@ describe("server data push router", () => {
       });
   });
 
+  it("keeps the pushed config when a read is already in flight", async () => {
+    const queryClient = new QueryClient();
+    const fake = createFakeClient();
+    const serverId = "server-1";
+    const queryKey = daemonConfigQueryKey(serverId);
+    const stale = { ...daemonConfig, appendSystemPrompt: "stale" };
+    const read = Promise.withResolvers<MutableDaemonConfig>();
+    queryClient.setQueryData(queryKey, stale);
+    void queryClient
+      .fetchQuery({ queryKey, queryFn: () => read.promise, retry: false })
+      .catch(() => {});
+    const unmount = mountServerDataPushRouter({ client: fake.client, queryClient, serverId });
+
+    fake.emit({
+      type: "status",
+      payload: { status: "daemon_config_changed", config: daemonConfig },
+    });
+    // The read resolves after the push: without cancelling it, its stale snapshot would land
+    // last and revert the config the daemon just published.
+    read.resolve(stale);
+    await vi.waitFor(() => expect(queryClient.isFetching({ queryKey })).toBe(0));
+
+    expect(queryClient.getQueryData(queryKey)).toEqual(daemonConfig);
+    unmount();
+  });
+
   it("subscribes active checkout diff queries and writes matching diff events", () => {
     const queryClient = new QueryClient();
     const fake = createFakeClient();

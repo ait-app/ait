@@ -45,6 +45,12 @@ fn full_group_event(content: &str) -> Value {
     event
 }
 
+fn legacy_group_event(content: &str) -> Value {
+    let mut event = full_group_event(content);
+    event["author"] = json!({"id":"member-open"});
+    event
+}
+
 #[test]
 fn private_messages_route_to_the_sender() {
     let routed = inbound(&channel(false), PRIVATE_MESSAGE, &private_event())
@@ -93,6 +99,20 @@ fn full_group_events_route_even_without_a_bot_mention() {
         .unwrap()
         .is_none()
     );
+}
+
+#[test]
+fn group_events_fall_back_to_the_legacy_author_id() {
+    let routed = inbound(
+        &channel(true),
+        GROUP_ALL_MESSAGE,
+        &legacy_group_event("hello everyone"),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(routed.peer, "group:group-1");
+    assert_eq!(routed.sender, "member-open");
+    assert_eq!(routed.text, "hello everyone");
 }
 
 #[test]

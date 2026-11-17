@@ -65,4 +65,19 @@ export const panels = {
     loadError: "Échec du chargement des différences",
     capabilityMissing: "Mettez à jour l'hôte pour voir les différences des commits.",
   },
+  notebook: {
+    label: "Notes",
+    subtitle: "Notes partagées de l’espace de travail",
+    tooltip: "Notes partagées de l’espace de travail",
+    disabled:
+      "Activez les fonctionnalités expérimentales pour utiliser les notes de l’espace de travail.",
+    loading: "Chargement des notes partagées…",
+    placeholder: "Écrivez les notes et TODO de cet espace de travail…",
+    saved: "Enregistré",
+    saving: "Enregistrement…",
+    unsaved: "Modifications non enregistrées",
+    readOnly: "Les notes partagées sont en lecture seule pour les invités.",
+    conflict: "Les notes sur le disque ont changé. Vérifiez la dernière version avant de modifier.",
+    saveFailed: "Impossible d’enregistrer les notes.",
+  },
 };

@@ -6,6 +6,7 @@ import {
   botPanelPresentation,
   changesTreePanelPresentation,
   filesPanelPresentation,
+  notebookPanelPresentation,
   pullRequestPanelPresentation,
   schedulePanelPresentation,
   workingDiffPanelPresentation,
@@ -78,6 +79,7 @@ export function NewTabLauncherProvider({
 const BUILT_IN_SELECTIONS = {
   agent: { kind: "agent" },
   bot: { kind: "target", target: { kind: "bot" } },
+  notebook: { kind: "target", target: { kind: "notebook" } },
   terminal: { kind: "terminal" },
   changes: { kind: "target", target: { kind: "changes_tree" } },
   diff: { kind: "target", target: { kind: "working_diff" } },
@@ -135,6 +137,15 @@ export function useWorkspaceTabLaunchCatalog(input: {
         hidden: !experimentalFeatures,
         panelKind: "bot",
         launch: launchSelection(BUILT_IN_SELECTIONS.bot),
+      },
+      notebook: {
+        id: "notebook",
+        label: notebookPanelPresentation.label(t),
+        Icon: notebookPanelPresentation.icon,
+        disabled: false,
+        hidden: !experimentalFeatures,
+        panelKind: "notebook",
+        launch: launchSelection(BUILT_IN_SELECTIONS.notebook),
       },
       terminal: {
         id: "terminal",

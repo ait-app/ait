@@ -535,6 +535,15 @@ for line in sys.stdin:
                 "plan":[{"step":"First step","status":"completed"},{"step":"Second step","status":"inProgress"}]}})
             complete(pending, "Progress reported")
             continue
+        if text == "plan-progress-repeat":
+            emit({"method":"turn/plan/updated","params":{"threadId":thread_id,"turnId":pending,
+                "plan":[{"step":"Only step","status":"pending"}]}})
+            emit({"method":"turn/plan/updated","params":{"threadId":thread_id,"turnId":pending,
+                "plan":[{"step":"Only step","status":"inProgress"}]}})
+            emit({"method":"turn/plan/updated","params":{"threadId":thread_id,"turnId":pending,
+                "plan":[{"step":"Only step","status":"pending"}]}})
+            complete(pending, "Progress repeated")
+            continue
         if text == "auto-compaction":
             item = {"type":"contextCompaction","id":"compact-" + pending}
             stream_items.append(item)

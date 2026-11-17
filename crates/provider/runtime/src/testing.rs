@@ -690,3 +690,30 @@ pub fn timeline_subagents(
 ) -> Result<Vec<NativeSubagent>, ErrorCode> {
     timeline.subagents(parent)
 }
+
+/// Encode one preview continuation cursor as the session-history wire token.
+///
+/// # Errors
+/// Returns a serialization failure when the cursor cannot be represented.
+pub fn encode_preview_cursor(
+    cursor: &provider_core::ports::native_history::PreviewCursor,
+) -> Result<String, serde_json::Error> {
+    crate::protocol::native_sessions::encode_preview_cursor(cursor)
+}
+
+/// Rejection of an opaque preview continuation token; every failure is the same outcome.
+///
+/// The production decoder stays crate-private; this public mirror carries the same
+/// outcome for adapter tests through the `test-support` feature.
+#[derive(Debug, PartialEq, Eq)]
+pub struct DecodeCursorError;
+
+/// Decode an opaque preview continuation token without trusting its fields.
+///
+/// # Errors
+/// Returns a rejection for oversized, malformed or non-object tokens.
+pub fn decode_preview_cursor(
+    encoded: &str,
+) -> Result<provider_core::ports::native_history::PreviewCursor, DecodeCursorError> {
+    crate::protocol::native_sessions::decode_preview_cursor(encoded).map_err(|_| DecodeCursorError)
+}

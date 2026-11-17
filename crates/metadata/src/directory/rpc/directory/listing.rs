@@ -7,8 +7,8 @@ use domain::workspace::protocol::projection::{project_descriptor, workspace_desc
 use model::ServerMessage;
 use serde_json::{Value, json};
 
-use crate::support::rpc::encode;
 use crate::support::time::now_timestamp;
+use model::rpc::encode;
 
 use super::{
     Directory, ErrorCode, WorkspaceDescriptorPayload, WorkspaceListRequest, WorkspaceListResult,

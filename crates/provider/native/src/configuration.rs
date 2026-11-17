@@ -266,6 +266,25 @@ pub fn claude(
     config: &StoredAgentConfig,
     confined: bool,
 ) -> Result<Vec<String>, AgentSessionError> {
+    claude_with_environment(config, confined, &[])
+}
+
+/// Build the native Claude argument list with adapter-owned session environment entries.
+///
+/// `environment` arrives already mapped to Claude Code's own variable names by the adapter that
+/// owns that vocabulary, so this shared crate never learns a provider's role set. The entries are
+/// emitted through `--settings` rather than the process environment: verified on 2.1.325, the CLI
+/// `--settings` document takes precedence over the user's `~/.claude/settings.json`, which is what
+/// lets one session redirect a role without editing the user's configuration.
+///
+/// # Errors
+///
+/// Returns the same errors as [`validate`].
+pub fn claude_with_environment(
+    config: &StoredAgentConfig,
+    confined: bool,
+    environment: &[(&str, String)],
+) -> Result<Vec<String>, AgentSessionError> {
     validate(config, "claude")?;
     let empty = BTreeMap::new();
     let options = config.provider_options.as_ref().unwrap_or(&empty);
@@ -330,6 +349,9 @@ pub fn claude(
     }
     if config.thinking_option_id.as_deref() == Some("ultracode") {
         settings["ultracode"] = json!(true);
+    }
+    for (variable, value) in environment {
+        settings["env"][*variable] = json!(value);
     }
     if settings
         .as_object()

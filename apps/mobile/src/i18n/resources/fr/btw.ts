@@ -17,6 +17,7 @@ export const btw = {
   question: "Question secondaire",
   send: "Envoyer la question secondaire",
   stop: "Arrêter la question secondaire",
+  follow: "Suivre",
   newPlaceholder: "Poser une question secondaire…",
   followUpPlaceholder: "Poser une question complémentaire…",
   emptyTitle: "Interroger cette conversation",
