@@ -12,6 +12,7 @@ import type {
 import type { AgentAttachment, AgentStreamEventPayload } from "@ait/protocol/messages";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
+import { isRecord } from "../utils/is-record";
 
 /**
  * Simple hash function for deterministic ID generation
@@ -910,10 +911,6 @@ interface StreamUpdateOptions {
   source?: StreamUpdateSource;
   reservedItemIds?: ReadonlySet<string>;
   timelineCursor?: TimelinePosition;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeChunk(text: string): { chunk: string; hasContent: boolean } {

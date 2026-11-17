@@ -18,6 +18,7 @@ import {
 import { buildLineDiff, parseUnifiedDiff, type DiffLine } from "@/utils/tool-call-parsers";
 import { highlightDiffLines } from "@/utils/diff-highlight";
 import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";
+import { isRecord } from "@/utils/is-record";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { extensionFromPath, highlightToKeyedLines } from "@/utils/highlight-cache";
@@ -547,10 +548,6 @@ interface QuestionnaireStep {
 interface QuestionnaireOutput {
   waitingForUser: boolean;
   message?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseQuestionnaireSteps(input: unknown): QuestionnaireStep[] | null {

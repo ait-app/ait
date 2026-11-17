@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isRecord } from "../is-record.js";
 
 export const MIN_WINDOW_WIDTH = 400;
 export const MIN_WINDOW_HEIGHT = 300;
@@ -42,10 +43,6 @@ export interface WindowStateStore {
 }
 
 const WINDOW_STATE_FILENAME = "window-state.json";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error;

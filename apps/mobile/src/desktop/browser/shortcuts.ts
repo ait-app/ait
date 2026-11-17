@@ -5,6 +5,7 @@ import {
   type ParsedShortcutBinding,
 } from "../../keyboard/keyboard-shortcuts";
 import type { KeyCombo } from "../../keyboard/shortcut-string";
+import { isRecord } from "../../utils/is-record";
 
 export interface BrowserShortcutPrefix {
   alt: boolean;
@@ -43,10 +44,6 @@ export function shouldPublishBrowserShortcutPolicy(input: {
   return (
     input.isBrowserInput || (input.previousChordState.step > 0 && input.nextChordState.step === 0)
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function parseBrowserShortcutInput(value: unknown): BrowserShortcutInput | null {

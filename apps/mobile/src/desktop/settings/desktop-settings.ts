@@ -9,6 +9,7 @@ import {
 } from "@/desktop/hooks/desktop-ipc-error";
 import type { ReleaseChannel } from "@/hooks/use-settings";
 import { i18n } from "@/i18n/i18next";
+import { isRecord } from "@/utils/is-record";
 
 const DESKTOP_SETTINGS_QUERY_KEY = ["desktop-settings"] as const;
 
@@ -195,8 +196,4 @@ function normalizePatch(updates: DesktopSettingsPatch): Record<string, unknown> 
     ...(updates.notifications ? { notifications: updates.notifications } : {}),
     ...(updates.daemon ? { daemon: updates.daemon } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

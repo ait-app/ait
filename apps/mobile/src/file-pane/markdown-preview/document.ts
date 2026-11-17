@@ -1,4 +1,5 @@
 import { parseDocument, stringify } from "yaml";
+import { isRecord } from "@/utils/is-record";
 
 export interface MarkdownFrontMatterRow {
   key: string;
@@ -32,7 +33,7 @@ function parseFrontMatter(match: RegExpExecArray, source: string): MarkdownPrevi
   }
 
   const metadata = document.toJS({ maxAliasCount: 100 });
-  if (!isMetadataRecord(metadata)) {
+  if (!isRecord(metadata)) {
     return { frontMatter: [], body: source };
   }
 
@@ -45,10 +46,6 @@ function parseFrontMatter(match: RegExpExecArray, source: string): MarkdownPrevi
     frontMatter,
     body: source.slice(match[0].length),
   };
-}
-
-function isMetadataRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function formatFrontMatterValue(value: unknown): string {
