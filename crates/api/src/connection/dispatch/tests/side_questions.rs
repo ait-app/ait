@@ -53,7 +53,11 @@ async fn dispatch_rpc(api: &Api, method: &str, params: Value) -> Value {
     request(context, &api.shared, &mut subscriptions)
         .await
         .unwrap();
-    let response = decode(receiver.try_recv().unwrap().message);
+    let queued = tokio::time::timeout(std::time::Duration::from_secs(3), receiver.recv())
+        .await
+        .expect("admitted BTW requests must deliver their response")
+        .expect("the response channel must remain open until delivery");
+    let response = decode(queued.message);
     assert_eq!(response["request_id"], "request-1", "{method}: {response}");
     assert!(receiver.try_recv().is_err(), "{method} replied twice");
     assert_eq!(subscriptions.len(), 0);
