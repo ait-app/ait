@@ -116,6 +116,60 @@ function info(methods: string[]) {
   const message = serverInfo({ server_id: "ait" }, new Set(methods));
   return parseServerInfoStatusPayload(object(object(message).payload));
 }
+it("emits every server-info feature schema key as an explicit boolean", () => {
+  const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
+  expect(Object.keys(payload.features ?? {})).toHaveLength(93);
+  expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
+    true,
+  );
+});
+it("advertises the compatibility feature aliases supported by the daemon methods", () => {
+  const methods = [
+    "checkout.commits.list.request",
+    "fs.entry.create.request",
+    "fs.entry.rename.request",
+    "fs.entry.delete.request",
+    "fs.entry.duplicate.request",
+    "daemon.update.request",
+    "workspace.mark_unread.request",
+    "agent.fork_context.request",
+    "checkout.github.set_auto_merge.request",
+    "checkout.github.get_check_details.request",
+    "workspace.recovery.restore.request",
+    "workspace.script.list.request",
+    "workspace.script.start.request",
+    "workspace.script.stop.request",
+    "workspace.script.run.get.request",
+    "workspace.script.run.wait.request",
+    "agent.thinking.set.request",
+    "daemon.config.get.request",
+    "daemon.config.set.request",
+    "provider.snapshot.get.request",
+    "agent.timeline.set_subscription.request",
+    "agent.message.send.request",
+    "agent.list.request",
+  ];
+  expect(info(methods)?.features).toMatchObject({
+    commitsList: true,
+    commitBaseClassification: true,
+    fsEntryOps: true,
+    fsEntryDuplicate: true,
+    daemonSelfUpdate: true,
+    workspaceMarkUnread: true,
+    agentForkContext: true,
+    agentForkContextCursor: true,
+    checkoutGithubSetAutoMerge: true,
+    githubCheckDetails: true,
+    worktreeRestore: true,
+    workspaceScriptManagement: true,
+    agentThinkingUpdate: true,
+    relayConfig: true,
+    providersSnapshotCwd: true,
+    selectiveAgentTimeline: true,
+    canonicalSubmittedPrompts: true,
+    agentTurnIdentity: true,
+  });
+});
 describe("Rust daemon software version", () => {
   it.each(["0.0.10", "v0.0.11"])("preserves the connected server's version %s", (version) => {
     const envelope = serverInfo({ server_id: "ait", version }, new Set());
