@@ -64,6 +64,7 @@ struct Worker {
     cancellation: CancellationToken,
     admission: Arc<Semaphore>,
     discovery_responses: Arc<Semaphore>,
+    execution_responses: Arc<Semaphore>,
     thread: Mutex<Option<JoinHandle<()>>>,
     events: SessionEvents,
     timeline: crate::storage::timeline::Timeline,
@@ -82,13 +83,13 @@ struct OwnedRuntime {
 #[derive(Clone)]
 pub struct AgentExecution(Arc<Worker>);
 
-/// Owns one discovery response slot through transport delivery, including after worker completion.
-pub(crate) struct DiscoveryResponse {
+/// Owns one response slot through transport delivery, including after worker completion.
+pub(crate) struct AdmittedResponse {
     receiver: oneshot::Receiver<Result<Value, ErrorCode>>,
     _permit: OwnedSemaphorePermit,
 }
 
-impl DiscoveryResponse {
+impl AdmittedResponse {
     /// Wait for the admitted result without releasing the bounded response slot.
     pub(crate) async fn receive(&mut self) -> Result<Value, ErrorCode> {
         (&mut self.receiver).await.map_err(|_| ErrorCode::AgentIo)?
@@ -178,6 +179,7 @@ impl AgentExecution {
             cancellation,
             admission: Arc::new(Semaphore::new(64)),
             discovery_responses: Arc::new(Semaphore::new(64)),
+            execution_responses: Arc::new(Semaphore::new(64)),
             thread: Mutex::new(Some(thread)),
             events,
             timeline,
@@ -278,7 +280,7 @@ impl AgentExecution {
         &self,
         method: &str,
         params: Value,
-    ) -> Result<DiscoveryResponse, ErrorCode> {
+    ) -> Result<AdmittedResponse, ErrorCode> {
         self.admit_discovery_operation(Operation::parse(method)?, params)
     }
 
@@ -286,7 +288,7 @@ impl AgentExecution {
         &self,
         method: Operation,
         params: Value,
-    ) -> Result<DiscoveryResponse, ErrorCode> {
+    ) -> Result<AdmittedResponse, ErrorCode> {
         if method.access() != Access::Catalog && method != Operation::Usage {
             return Err(ErrorCode::UnsupportedCapability);
         }
@@ -299,30 +301,37 @@ impl AgentExecution {
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
-        let command_permit = self
+        Ok(AdmittedResponse {
+            receiver: self.enqueue(method, params, None, None)?,
+            _permit: permit,
+        })
+    }
+
+    /// Admit an execution or Timeline request before its response task is spawned.
+    /// The command enters the shared FIFO synchronously; the response slot remains owned
+    /// until delivery or caller cancellation, independently of native operation completion.
+    /// # Errors
+    /// Rejects completion waits and catalog methods, shutdown, or exhausted bounded slots.
+    pub(crate) fn admit_request(
+        &self,
+        method: &str,
+        params: Value,
+    ) -> Result<AdmittedResponse, ErrorCode> {
+        let method = Operation::parse(method)?;
+        if method == Operation::Wait || method.access() == Access::Catalog {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::AgentIo);
+        }
+        let permit = self
             .0
-            .admission
+            .execution_responses
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
-        let (reply, receiver) = oneshot::channel();
-        self.0
-            .sender
-            .try_send(Command::Request {
-                method,
-                params,
-                reply,
-                cancel: None,
-                realtime: None,
-                permit: command_permit,
-                queued: std::time::Instant::now(),
-            })
-            .map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
-                mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
-            })?;
-        Ok(DiscoveryResponse {
-            receiver,
+        Ok(AdmittedResponse {
+            receiver: self.enqueue(method, params, None, None)?,
             _permit: permit,
         })
     }
@@ -343,10 +352,22 @@ impl AgentExecution {
     async fn call_with_realtime(
         &self,
         method: Operation,
-        mut params: Value,
+        params: Value,
         cancel: Option<CancellationToken>,
         realtime: Option<model::realtime::Endpoint>,
     ) -> Result<Value, ErrorCode> {
+        self.enqueue(method, params, cancel, realtime)?
+            .await
+            .map_err(|_| ErrorCode::AgentIo)?
+    }
+
+    fn enqueue(
+        &self,
+        method: Operation,
+        mut params: Value,
+        cancel: Option<CancellationToken>,
+        realtime: Option<model::realtime::Endpoint>,
+    ) -> Result<oneshot::Receiver<Result<Value, ErrorCode>>, ErrorCode> {
         if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::AgentIo);
         }
@@ -378,7 +399,7 @@ impl AgentExecution {
                 mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
                 mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
             })?;
-        receiver.await.map_err(|_| ErrorCode::AgentIo)?
+        Ok(receiver)
     }
 }
 

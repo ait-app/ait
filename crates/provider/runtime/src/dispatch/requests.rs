@@ -150,9 +150,12 @@ pub(super) async fn execution(
         )
         .map_err(Into::into);
     }
-    let params = std::mem::take(&mut context.request.params);
-    let result = super::agent_execution::dispatch(&context.request.method, params, state).await;
-    context.respond(result).map_err(Into::into)
+    if context.request.method == "agent.context.compact.request" {
+        let params = std::mem::take(&mut context.request.params);
+        let result = super::agent_execution::dispatch(&context.request.method, params, state).await;
+        return context.respond(result).map_err(Into::into);
+    }
+    super::agent_execution::request(context, state).map_err(Into::into)
 }
 
 /// Try the timeline request branch and consume `pending` only on a match.
@@ -189,14 +192,11 @@ pub(super) async fn timeline(
                 .respond(Err(ErrorCode::UnsupportedCapability))
                 .map_err(Into::into);
         };
-        let payload = serde_json::json!({"request":context.request.params,"plugin":plugin});
-        let result =
-            super::agent_execution::dispatch("internal.timeline.append", payload, state).await;
-        return context.respond(result).map_err(Into::into);
+        context.request.params =
+            serde_json::json!({"request":context.request.params,"plugin":plugin});
+        "internal.timeline.append".clone_into(&mut context.request.method);
     }
-    let params = std::mem::take(&mut context.request.params);
-    let result = super::agent_execution::dispatch(&context.request.method, params, state).await;
-    context.respond(result).map_err(Into::into)
+    super::agent_execution::request(context, state).map_err(Into::into)
 }
 
 /// Try the catalog request branch and consume `pending` only on a match.

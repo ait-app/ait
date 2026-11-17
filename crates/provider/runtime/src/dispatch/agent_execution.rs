@@ -40,7 +40,43 @@ use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::dispatch::State as Shared;
+use model::Context;
 use model::outbound::{Outbound, QueueError};
+
+/// Admit ordered native work without holding the connection's capability worker.
+/// Response ownership and task tracking remain bounded until delivery.
+/// # Errors
+/// Returns delivery failure; admission and execution errors use the original request ID.
+pub(super) fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
+    let admission = state
+        .admission
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if state.cancellation.is_cancelled() {
+        return context.respond(Err(ErrorCode::ServerDraining));
+    }
+    let Some(execution) = &state.agent_execution else {
+        return context.respond(Err(ErrorCode::UnsupportedCapability));
+    };
+    let mut response =
+        match execution.admit_request(&context.request.method, context.request.params) {
+            Ok(response) => response,
+            Err(error) => {
+                return context
+                    .outbound
+                    .respond(context.request.id, Err(error.into()));
+            }
+        };
+    let outbound = context.outbound.clone();
+    let request_id = context.request.id;
+    state.tasks.spawn(async move {
+        let result = response.receive().await.map_err(Into::into);
+        let _ = outbound.respond(request_id, result);
+        drop(response);
+    });
+    drop(admission);
+    Ok(())
+}
 
 pub(crate) fn wait(
     request_id: String,

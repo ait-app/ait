@@ -64,6 +64,9 @@
 - 单连接每个 worker 队列容量为 16，组内保持顺序。RPC 超出队列时返回可重试的
   `resource_exhausted`，不自动重放；事件或二进制帧无法入队时结束连接；`connection.ping` 在路由层
   直接回答，不等待业务 worker（[ADR-120](../decisions/daemon/adr-120-single-connection-startup-admission.md)）。
+- Provider 的普通原生执行与 Timeline 请求在 worker 内按接收顺序完成有界接纳，响应由受追踪的
+  任务独立投递；等待慢速原生操作不阻塞后续 Provider 查询或订阅释放。同一 Agent 的修改仍由
+  [Provider 执行器](provider.md)保序，连接所有的订阅状态仍由所属 worker 管理。
 - 已接纳 RPC 的 `Context.call` 排队等待共享短任务额度（3 个）；直接 `Runtime.run` 在额度用尽时拒绝。
   等待可被停机取消，已开始的阻塞任务在客户端断线后仍被追踪完成
   （[ADR-134](../decisions/daemon/adr-134-admitted-rpc-job-waiting.md)）。

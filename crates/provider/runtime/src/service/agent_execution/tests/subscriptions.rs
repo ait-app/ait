@@ -11,6 +11,7 @@ use super::*;
 
 mod catalog;
 mod creation;
+mod execution;
 
 #[derive(Debug, Default)]
 struct HostPublisher(Mutex<Vec<(String, Value)>>);

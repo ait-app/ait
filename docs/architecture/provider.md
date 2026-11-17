@@ -156,12 +156,16 @@
   的屏障执行（[ADR-091](../decisions/providers/adr-091-independent-session-execution.md)，修订
   [ADR-088](../decisions/providers/adr-088-provider-catalog-startup-isolation.md)、
   [ADR-032](../decisions/providers/adr-032-daemon-native-provider-execution.md) 的全局串行）。
+- 普通原生执行与 Timeline 请求在连接 worker 内同步接纳，再由受追踪的任务等待响应；
+  慢速会话操作不占用该连接的 Provider worker。创建观察、订阅建立和显式历史压缩仍在各自入口
+  完成；同一 Agent 的操作顺序由执行器保持。
 - 执行器使用专用 Tokio current-thread runtime 驱动原生 I/O，会话操作与存储读取经
   `spawn_blocking` 离开 reactor
   （[ADR-091](../decisions/providers/adr-091-independent-session-execution.md)）。
-- 预算：命令接纳 64、Catalog 响应槽 64、原生会话 32、历史读取 8、直接读取 16、显式 Provider
+- 预算：命令接纳 64、执行响应槽 64、Catalog 响应槽 64、原生会话 32、历史读取 8、直接读取 16、显式 Provider
   查询 16；Catalog 每 Provider 并发 4、总并发 16、待发现 64，60 秒内的条目直接复用，进行中的发现
-  合并重复刷新（[ADR-091](../decisions/providers/adr-091-independent-session-execution.md)）。
+  合并重复刷新。执行与 Catalog 的响应槽分别保留到响应投递，防止后台等待任务无界增长
+  （[ADR-091](../decisions/providers/adr-091-independent-session-execution.md)）。
 - 独立读取只在 Provider、原生持久句柄、配置和 runtime 信息完全一致时复用会话所有者发布的
   动态模式与功能；比较用的配置只存在内存中，不进入响应或事件
   （[ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)）。

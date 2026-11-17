@@ -12,6 +12,7 @@ mod recall;
 mod schedules;
 mod support;
 mod tickets;
+mod transport;
 
 use support::{BOT_SESSION, Scoped, codex_modes, rejected, structured, succeeded};
 
