@@ -270,14 +270,16 @@ afterEach(async () => {
 it("leaves the main conversation interactive and follows up in a desktop floating window", async () => {
   const { behind } = await mount(1440, 900);
   const window = document.querySelector('[data-testid="btw-window"]')!.getBoundingClientRect();
-  expect(window.width).toBe(448);
+  expect(window.width).toBe(384);
   expect(window.right).toBeLessThanOrEqual(1440);
-  expect(getComputedStyle(page.getByTestId("side-question-input").element()).outlineStyle).toBe(
-    "none",
-  );
+  await expect.element(page.getByTestId("side-question-input")).not.toBeInTheDocument();
   await page.screenshot({ path: "../../.vitest-screenshots/btw-desktop.png" });
   await page.getByRole("button", { name: "Continue main conversation" }).click();
   expect(behind).toHaveBeenCalledTimes(1);
+  await page.getByTestId("side-question-follow").click();
+  expect(getComputedStyle(page.getByTestId("side-question-input").element()).outlineStyle).toBe(
+    "none",
+  );
   await page.getByTestId("side-question-input").fill("What changes when I expand this window?");
   await page.getByTestId("side-question-input").click();
   await userEvent.keyboard("{Enter}");
@@ -289,6 +291,68 @@ it("leaves the main conversation interactive and follows up in a desktop floatin
   expect(mocks.ask).toHaveBeenCalledTimes(1);
 });
 
+async function dragHeader(byX: number, byY: number) {
+  const header = page.getByTestId("side-question-header").element();
+  const box = header.getBoundingClientRect();
+  const startX = box.left + box.width / 2;
+  const startY = box.top + box.height / 2;
+  const pointer = (type: string, clientX: number, clientY: number) =>
+    header.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, clientX, clientY, pointerId: 1 }),
+    );
+  await act(async () => {
+    pointer("pointerdown", startX, startY);
+  });
+  await act(async () => {
+    window.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        clientX: startX + byX,
+        clientY: startY + byY,
+        pointerId: 1,
+      }),
+    );
+  });
+  await act(async () => {
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
+  });
+  await act(async () => {
+    await new Promise(requestAnimationFrame);
+  });
+  return page.getByTestId("btw-window").element().getBoundingClientRect();
+}
+
+it("opens the composer from the Follow button and sends with a round control", async () => {
+  await mount(1440, 900);
+  await expect.element(page.getByTestId("side-question-input")).not.toBeInTheDocument();
+  await page.screenshot({ path: "../../.vitest-screenshots/btw-collapsed.png" });
+  await page.getByTestId("side-question-follow").click();
+  await expect.element(page.getByTestId("side-question-input")).toBeVisible();
+  await expect.element(page.getByTestId("side-question-follow")).not.toBeInTheDocument();
+  const send = page.getByTestId("side-question-ask").element().getBoundingClientRect();
+  expect(Math.round(send.width)).toBe(Math.round(send.height));
+  expect(getComputedStyle(page.getByTestId("side-question-ask").element()).borderRadius).not.toBe(
+    "0px",
+  );
+  await page.screenshot({ path: "../../.vitest-screenshots/btw-composing.png" });
+});
+
+it("drags the window anywhere in the viewport and stops at its edges", async () => {
+  await mount(1440, 900);
+  const start = page.getByTestId("btw-window").element().getBoundingClientRect();
+  const moved = await dragHeader(-300, -200);
+  expect(moved.left).toBeCloseTo(start.left - 300, 0);
+  expect(moved.top).toBeCloseTo(start.top - 200, 0);
+  await page.screenshot({ path: "../../.vitest-screenshots/btw-dragged.png" });
+  const leftEdge = await dragHeader(-4000, -4000);
+  expect(leftEdge.left).toBe(lightTheme.spacing[2]);
+  expect(leftEdge.top).toBe(lightTheme.spacing[2]);
+  const rightEdge = await dragHeader(6000, 6000);
+  expect(rightEdge.right).toBe(1440 - lightTheme.spacing[2]);
+  expect(rightEdge.bottom).toBe(900 - lightTheme.spacing[2]);
+  expect(rightEdge.width).toBe(384);
+});
+
 it("fits the narrow viewport and expands without resending the side conversation", async () => {
   await mount(390, 844);
   const window = document.querySelector('[data-testid="btw-window"]')!.getBoundingClientRect();
@@ -298,6 +362,8 @@ it("fits the narrow viewport and expands without resending the side conversation
   await expect
     .element(page.getByRole("button", { name: "Open as a full conversation" }))
     .toBeVisible();
+  await page.getByTestId("side-question-follow").click();
+  await expect.element(page.getByTestId("side-question-input")).toBeVisible();
   await page.screenshot({ path: "../../.vitest-screenshots/btw-mobile.png" });
   await page.getByRole("button", { name: "Open as a full conversation" }).click();
   expect(mocks.transfer).toHaveBeenCalledWith("topic");
@@ -354,6 +420,7 @@ it.skipIf(!hasThemeRuntime)(
   "updates the mounted window, inputs, prose and shared controls across app palettes",
   async () => {
     await mount(1440, 900);
+    await page.getByTestId("side-question-follow").click();
     await page.getByTestId("side-question-input").fill("How does the branch keep context?");
     await expect.poll(colors).toEqual(palette(lightTheme));
     await page.screenshot({ path: "../../.vitest-screenshots/btw-theme-light-desktop.png" });
@@ -388,15 +455,16 @@ async function expectWindowAboveComposer() {
       return (
         panel.bottom <= composer.top - lightTheme.spacing[3] + 1 &&
         panel.top >= lightTheme.spacing[2] - 1 &&
-        panel.left >= composer.left - 1 &&
-        panel.right <= composer.right + 1 &&
-        panel.width <= composer.width + 1
+        panel.left >= lightTheme.spacing[2] - 1 &&
+        panel.right <= window.innerWidth - lightTheme.spacing[2] + 1 &&
+        panel.width <= 384 &&
+        panel.height <= 420
       );
     })
     .toBe(true);
 }
 
-it("follows growing input and attachments above the main composer, including a short split pane", async () => {
+it("follows growing input and attachments above the main composer, including a short viewport", async () => {
   await mount(1440, 900);
   await expectWindowAboveComposer();
   const originalBottom = page.getByTestId("btw-window").element().getBoundingClientRect().bottom;
@@ -411,7 +479,6 @@ it("follows growing input and attachments above the main composer, including a s
   await expectWindowAboveComposer();
   await page.getByRole("button", { name: "Toggle narrow pane" }).click();
   await expectWindowAboveComposer();
-  expect(page.getByTestId("btw-window").element().getBoundingClientRect().width).toBe(320);
   await page.viewport(1100, 480);
   await expectWindowAboveComposer();
   expect(page.getByTestId("btw-window").element().getBoundingClientRect().height).toBeLessThan(220);
@@ -457,6 +524,7 @@ it.skipIf(!hasThemeRuntime)(
     await expect
       .poll(() => font(document.querySelector('[data-testid="side-question-user-text"]')!))
       .toEqual({ size: "19px", family: "monospace" });
+    await page.getByTestId("side-question-follow").click();
     await expect
       .poll(() => font(document.querySelector('[data-testid="side-question-input"]')!))
       .toEqual({ size: "19px", family: "monospace" });

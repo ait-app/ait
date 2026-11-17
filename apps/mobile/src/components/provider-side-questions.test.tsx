@@ -32,7 +32,11 @@ vi.mock("@/runtime/host-runtime", () => ({
 }));
 vi.mock("@/btw/use-transfer", () => ({ useTransferSideQuestion: () => mocks.transfer }));
 vi.mock("@/btw/use-floating-layout", () => ({
-  useBtwFloatingLayout: () => ({ left: 400, bottom: 144, width: 448, height: 560 }),
+  useBtwFloatingLayout: () => ({
+    frame: { left: 400, bottom: 144, width: 384, height: 420 },
+    dragBounds: { minLeft: 8, maxLeft: 1048, minTop: 8, maxTop: 472 },
+    layoutHeight: 900,
+  }),
 }));
 vi.mock("@/composer/keyboard-scope", () => ({
   useComposerKeyboardScope: () => ({ isPaneFocused: mocks.focused }),
@@ -140,6 +144,7 @@ afterEach(cleanup);
 it("follows up the selected topic and renders streamed native updates without touching the main writer", async () => {
   const view = render(panel());
   await screen.findByText("First answer");
+  fireEvent.click(screen.getByTestId("side-question-follow"));
   fireEvent.change(screen.getByTestId("side-question-input"), { target: { value: "Follow up" } });
   fireEvent.click(screen.getByTestId("side-question-ask"));
   await waitFor(() =>
@@ -202,6 +207,7 @@ it("preserves newer text typed while an earlier question is being admitted", asy
   mocks.ask.mockReturnValue(admission.promise);
   mocks.history.mockResolvedValue({ records: [], omitted: 0 });
   render(panel());
+  fireEvent.click(screen.getByTestId("side-question-follow"));
   const input = screen.getByTestId("side-question-input");
   await waitFor(() =>
     expect(screen.getByTestId("side-question-ask")).toHaveProperty("disabled", true),
@@ -335,6 +341,7 @@ it("does not resend an uncertain ask and waits for durable reconciliation before
   mocks.ask.mockResolvedValue({ receipt: "uncertain" });
   render(panel());
   await act(async () => {});
+  fireEvent.click(screen.getByTestId("side-question-follow"));
   fireEvent.change(screen.getByTestId("side-question-input"), { target: { value: "Question" } });
   fireEvent.click(screen.getByTestId("side-question-ask"));
   await screen.findByText("btw.uncertain");
@@ -365,6 +372,7 @@ it("shows the provider's specific unavailable reason without enabling a fake que
   });
   render(panel());
   await screen.findByText("Native side conversations are not exposed by this provider.");
+  fireEvent.click(screen.getByTestId("side-question-follow"));
   expect(screen.getByTestId("side-question-ask")).toHaveProperty("disabled", true);
   expect(mocks.ask).not.toHaveBeenCalled();
 });
@@ -429,6 +437,7 @@ it("can expand preserved history when its runner is unavailable, without allowin
   });
   render(panel());
   await screen.findByText("First answer");
+  fireEvent.click(screen.getByTestId("side-question-follow"));
   expect(screen.getByTestId("side-question-ask")).toHaveProperty("disabled", true);
   expect(screen.getByTestId("side-question-expand")).toHaveProperty("disabled", false);
   fireEvent.click(screen.getByTestId("side-question-expand"));

@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { ArrowUp, GitBranch, History, Maximize2, Plus, Square, X } from "lucide-react-native";
+import {
+  ArrowUp,
+  GitBranch,
+  History,
+  Maximize2,
+  MessageSquarePlus,
+  Plus,
+  Square,
+  X,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { SideQuestionsState, SideTopic } from "@ait/protocol/messages";
 import { isWeb } from "@/constants/platform";
 import { Button } from "@/components/ui/button";
-import { createControlGeometry } from "@/components/ui/control-geometry";
+import { buttonControlHeight, createControlGeometry } from "@/components/ui/control-geometry";
+import { useBtwDragHandle } from "@/components/btw-floating-surface";
 import { ICON_SIZE, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BtwConversation } from "@/components/btw-conversation";
@@ -65,6 +75,17 @@ export function BtwWindow({
   const nearBottom = useRef(true);
   const { width } = useWindowDimensions();
   const controlSize = width < 640 ? "md" : "sm";
+  const dragHandle = useBtwDragHandle();
+  const { style: dragHandleStyle, ...dragHandleProps } = dragHandle;
+  const roundControl = {
+    width: buttonControlHeight[controlSize],
+    height: buttonControlHeight[controlSize],
+    paddingHorizontal: 0,
+    borderRadius: theme.borderRadius.full,
+  };
+  // The window opens as a place to read; the composer only takes space once it is asked for.
+  const [composing, setComposing] = useState(false);
+  const showCompose = composing || draft.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const [inputHovered, setInputHovered] = useState(false);
   const running = Boolean(state.runningId);
@@ -77,8 +98,8 @@ export function BtwWindow({
     if (isWeb && typeof HTMLElement !== "undefined" && input instanceof HTMLElement) {
       input.style.outline = "none";
     }
-    input?.focus();
-  }, [topic?.id]);
+    if (showCompose) input?.focus();
+  }, [topic?.id, showCompose]);
 
   useEffect(() => {
     nearBottom.current = true;
@@ -87,7 +108,11 @@ export function BtwWindow({
 
   return (
     <View style={styles.window} testID="btw-window" accessibilityLabel={t("btw.title")}>
-      <View style={styles.header}>
+      <View
+        {...dragHandleProps}
+        style={[styles.header, dragHandleStyle]}
+        testID="side-question-header"
+      >
         <View style={styles.heading}>
           <Text style={styles.title}>{t("btw.title")}</Text>
         </View>
@@ -200,71 +225,89 @@ export function BtwWindow({
         </View>
       ) : null}
       <View style={styles.footer}>
-        <View
-          style={[
-            styles.compose,
-            inputHovered ? styles.composeHovered : null,
-            inputFocused ? styles.composeFocused : null,
-          ]}
-          onPointerEnter={() => setInputHovered(true)}
-          onPointerLeave={() => setInputHovered(false)}
-          testID="side-question-compose"
-        >
-          <TextInput
-            ref={inputRef}
-            value={draft}
-            onChangeText={onDraftChange}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => setInputFocused(false)}
-            placeholder={topic ? t("btw.followUpPlaceholder") : t("btw.newPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
-            accessibilityLabel={t("btw.question")}
-            multiline
-            editable={!disabled}
-            style={styles.input}
-            onKeyPress={(event) => {
-              const nativeEvent = event.nativeEvent as typeof event.nativeEvent & {
-                shiftKey?: boolean;
-                isComposing?: boolean;
-                keyCode?: number;
-              };
-              if (
-                isWeb &&
-                nativeEvent.key === "Enter" &&
-                !nativeEvent.shiftKey &&
-                !isImeComposingKeyboardEvent(nativeEvent)
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                onSubmit();
-              }
-            }}
-            testID="side-question-input"
-          />
-          {running ? (
-            <Button
-              variant="secondary"
-              size={controlSize}
-              leftIcon={Square}
-              accessibilityLabel={t("btw.stop")}
-              onPress={onCancel}
-              disabled={disabled || pending}
-              testID="side-question-cancel"
-            />
-          ) : (
-            <Button
-              variant="default"
-              size={controlSize}
-              leftIcon={ArrowUp}
-              accessibilityLabel={t("btw.send")}
-              onPress={onSubmit}
-              disabled={!draft.trim() || disabled || pending || loading}
-              loading={pending}
-              testID="side-question-ask"
-            />
-          )}
-        </View>
-        <Text style={styles.footerText}>{t("btw.footer")}</Text>
+        {showCompose ? (
+          <>
+            <View
+              style={[
+                styles.compose,
+                inputHovered ? styles.composeHovered : null,
+                inputFocused ? styles.composeFocused : null,
+              ]}
+              onPointerEnter={() => setInputHovered(true)}
+              onPointerLeave={() => setInputHovered(false)}
+              testID="side-question-compose"
+            >
+              <TextInput
+                ref={inputRef}
+                value={draft}
+                onChangeText={onDraftChange}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                placeholder={topic ? t("btw.followUpPlaceholder") : t("btw.newPlaceholder")}
+                placeholderTextColor={theme.colors.foregroundMuted}
+                accessibilityLabel={t("btw.question")}
+                multiline
+                editable={!disabled}
+                style={styles.input}
+                onKeyPress={(event) => {
+                  const nativeEvent = event.nativeEvent as typeof event.nativeEvent & {
+                    shiftKey?: boolean;
+                    isComposing?: boolean;
+                    keyCode?: number;
+                  };
+                  if (
+                    isWeb &&
+                    nativeEvent.key === "Enter" &&
+                    !nativeEvent.shiftKey &&
+                    !isImeComposingKeyboardEvent(nativeEvent)
+                  ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSubmit();
+                  }
+                }}
+                testID="side-question-input"
+              />
+              {running ? (
+                <Button
+                  variant="secondary"
+                  size={controlSize}
+                  leftIcon={Square}
+                  style={roundControl}
+                  accessibilityLabel={t("btw.stop")}
+                  onPress={onCancel}
+                  disabled={disabled || pending}
+                  testID="side-question-cancel"
+                />
+              ) : (
+                <Button
+                  variant="default"
+                  size={controlSize}
+                  leftIcon={ArrowUp}
+                  style={roundControl}
+                  accessibilityLabel={t("btw.send")}
+                  onPress={onSubmit}
+                  disabled={!draft.trim() || disabled || pending || loading}
+                  loading={pending}
+                  testID="side-question-ask"
+                />
+              )}
+            </View>
+            <Text style={styles.footerText}>{t("btw.footer")}</Text>
+          </>
+        ) : (
+          <Button
+            variant="secondary"
+            size={controlSize}
+            leftIcon={MessageSquarePlus}
+            style={styles.follow}
+            accessibilityState={{ expanded: false }}
+            onPress={() => setComposing(true)}
+            testID="side-question-follow"
+          >
+            {t("btw.follow")}
+          </Button>
+        )}
       </View>
     </View>
   );
@@ -338,6 +381,7 @@ const styles = StyleSheet.create((theme) => {
       maxWidth: 260,
     },
     footer: { padding: theme.spacing[3], paddingTop: theme.spacing[2], gap: theme.spacing[2] },
+    follow: { alignSelf: "stretch" },
     compose: {
       ...geometry.controlRest,
       flexDirection: "row",
