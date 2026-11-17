@@ -47,6 +47,7 @@ export const pairing = {
       hostNotFound: "호스트를 찾을 수 없습니다. 호스트 이름을 확인하고 다시 시도하세요.",
       hostUnreachable: "호스트에 연결할 수 없습니다. 네트워크와 방화벽을 확인하세요.",
       tlsError: "TLS 오류. 직접 연결은 데몬 앞에 TLS 종단 장치가 있을 때만 SSL을 사용합니다.",
+      incorrectPassword: "비밀번호가 올바르지 않습니다. 확인한 후 다시 시도하세요.",
       unableToConnect: "연결할 수 없습니다. 호스트/포트와 데몬에 접근 가능한지 확인하세요.",
       details: "세부 정보: {{detail}}",
     },

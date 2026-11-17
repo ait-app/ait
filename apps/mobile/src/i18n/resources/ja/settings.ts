@@ -405,6 +405,8 @@ export const settings = {
       title: "接続",
       removeTitle: "接続を削除",
       removeMessage: "{{name}}を削除しますか？この操作は元に戻せません。",
+      removeLastMessage:
+        "{{name}} はこのホストの唯一の接続です。削除すると、ホストもこのアプリから削除されます。この操作は元に戻せません。",
       removeAction: "削除",
       removeErrorTitle: "エラー",
       removeErrorMessage: "接続を削除できません",
@@ -760,6 +762,7 @@ export const settings = {
       nameAccessibility: "スクリプト名",
       commandAccessibility: "スクリプトコマンド",
       nameRequired: "名前は必須です",
+      nameDuplicate: "この名前は別のスクリプトで使われています",
       commandRequired: "コマンドは必須です",
       newScript: "新しいスクリプト",
       editScript: "{{name}}を編集",

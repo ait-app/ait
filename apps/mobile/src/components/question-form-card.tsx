@@ -340,6 +340,9 @@ export function QuestionFormCard({
   const [otherTexts, setOtherTexts] = useState<Record<number, string>>({});
   const [respondingAction, setRespondingAction] = useState<"submit" | "dismiss" | null>(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  // The free-text input keeps its own text and reads `value` only when it mounts. Bumping this
+  // remounts it after an option replaces the typed answer, so the card shows what will be sent.
+  const [otherInputRevision, setOtherInputRevision] = useState(0);
 
   const toggleOption = useCallback(
     (qIndex: number, optIndex: number, multiSelect: boolean) => {
@@ -359,19 +362,21 @@ export function QuestionFormCard({
       }
 
       setSelections((prev) => ({ ...prev, [qIndex]: next }));
-      setOtherTexts((prev) => {
-        if (multiSelect && questions?.[qIndex]?.answerFormat === "array") return prev;
-        if (!prev[qIndex]) return prev;
-        const nextTexts = { ...prev };
-        delete nextTexts[qIndex];
-        return nextTexts;
-      });
+      const keepsOtherText = multiSelect && questions?.[qIndex]?.answerFormat === "array";
+      if (!keepsOtherText && otherTexts[qIndex]) {
+        setOtherTexts((prev) => {
+          const nextTexts = { ...prev };
+          delete nextTexts[qIndex];
+          return nextTexts;
+        });
+        setOtherInputRevision((revision) => revision + 1);
+      }
 
       if (!multiSelect && next.size > 0 && qIndex === activeQuestionIndex && questions) {
         setActiveQuestionIndex(Math.min(qIndex + 1, questions.length - 1));
       }
     },
-    [activeQuestionIndex, questions, selections],
+    [activeQuestionIndex, otherTexts, questions, selections],
   );
 
   const setOtherText = useCallback(
@@ -577,6 +582,7 @@ export function QuestionFormCard({
           ) : null}
           {showTextInput ? (
             <QuestionOtherInput
+              key={otherInputRevision}
               multiline={activeQuestion.multiline}
               qIndex={resolvedActiveQuestionIndex}
               accessibilityLabel={activeQuestion.question}

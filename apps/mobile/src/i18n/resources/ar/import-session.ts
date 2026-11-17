@@ -18,6 +18,7 @@ export const importSession = {
     loading: "جارٍ تحميل الجلسات الأخيرة...",
     failedProvider: "تعذر تحميل جلسات {{provider}}",
     failedImport: "تعذر استيراد الجلسة المحددة.",
+    openImportedFailed: "تم استيراد الجلسة، لكن تعذر فتح مشروعها.",
     workingDirectoryUnavailable:
       "مجلد العمل للجلسة غير متاح على هذا المضيف: {{path}}. استعد المجلد وحاول الاستيراد مرة أخرى.",
   },

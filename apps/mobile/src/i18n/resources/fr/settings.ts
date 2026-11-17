@@ -410,6 +410,8 @@ export const settings = {
       title: "Connexions",
       removeTitle: "Supprimer la connexion",
       removeMessage: "Supprimer {{name}} ? Cela ne peut pas être annulé.",
+      removeLastMessage:
+        "{{name}} est la seule connexion de cet hôte. La supprimer retire aussi l'hôte de cette application. Cette action est irréversible.",
       removeAction: "Retirer",
       removeErrorTitle: "Erreur",
       removeErrorMessage: "Impossible de supprimer la connexion",
@@ -770,6 +772,7 @@ export const settings = {
       nameAccessibility: "Nom du script",
       commandAccessibility: "Commande de script",
       nameRequired: "Le nom est requis",
+      nameDuplicate: "Un autre script utilise déjà ce nom",
       commandRequired: "La commande est requise",
       newScript: "Nouveau script",
       editScript: "Modifier {{name}}",

@@ -47,6 +47,7 @@ export const pairing = {
       hostNotFound: "未找到 host。请检查主机名后重试。",
       hostUnreachable: "Host 不可达。请检查网络和防火墙。",
       tlsError: "TLS 错误。只有守护进程前方配置了 TLS 终止代理时，直接连接才使用 SSL。",
+      incorrectPassword: "密码不正确。请检查后重试。",
       unableToConnect: "无法连接。请检查主机地址、端口，并确认守护进程可达。",
       details: "详情：{{detail}}",
     },

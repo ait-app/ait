@@ -74,6 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("React", React);
   mocks.detail.data = task;
+  mocks.detail.isError = false;
   mocks.list = [];
   mocks.run.mockResolvedValue(undefined);
   mocks.pause.mockResolvedValue(undefined);
@@ -82,6 +83,23 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   clients.splice(0).forEach((client) => client.clear());
+});
+
+it("keeps the edit form open when a background refresh of the task fails", () => {
+  mocks.detail.isError = true;
+  open(false, { view: "edit" });
+  expect(screen.getByTestId("schedule-editor")).toBeTruthy();
+});
+
+it("still reports a failed refresh in the read-only details and when nothing was loaded", () => {
+  mocks.detail.isError = true;
+  const details = open(false);
+  expect(screen.queryByTestId("workspace-schedule-details")).toBeNull();
+  details.unmount();
+
+  mocks.detail.data = null;
+  open(false, { view: "edit" });
+  expect(screen.queryByTestId("schedule-editor")).toBeNull();
 });
 
 it("restores a guest edit tab as readable details without task controls", () => {

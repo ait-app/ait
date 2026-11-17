@@ -7,43 +7,19 @@ import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-rea
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import {
-  parseConnectionUri,
-  serializeConnectionUri,
-  serializeConnectionUriForStorage,
-} from "@/utils/daemon-endpoints";
-import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
+  buildConnectionFailureCopy,
+  buildConnectionUriFromDraft,
+  draftFromConnectionUri,
+  isConnectionUriEdited,
+  prepareDirectConnection,
+  resolveDirectConnectionDraft,
+  type DirectConnectionLabels,
+  type PreparedDirectConnection,
+} from "./add-host-direct-connection";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
-
-interface DirectConnectionDraft {
-  host: string;
-  port: string;
-  useTls: boolean;
-  password: string;
-}
-
-interface PreparedDirectConnection {
-  uri: string;
-  endpoint: string;
-  useTls: boolean;
-  password?: string;
-}
-
-interface DirectConnectionLabels {
-  hostRequired: string;
-  invalidPort: string;
-  invalidConnection: string;
-  failedToConnect: (endpoint: string) => string;
-  noAdditionalDetails: (detail: string) => string;
-  timedOut: string;
-  refused: string;
-  hostNotFound: string;
-  hostUnreachable: string;
-  tlsError: string;
-  unableToConnect: string;
-}
 
 const styles = StyleSheet.create((theme) => ({
   field: {
@@ -138,145 +114,6 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-function isIpv6Host(host: string): boolean {
-  return host.includes(":") && !host.startsWith("[") && !host.endsWith("]");
-}
-
-function buildConnectionUriFromDraft(
-  draft: DirectConnectionDraft,
-  labels: DirectConnectionLabels,
-): string {
-  const host = draft.host.trim();
-  const port = Number(draft.port.trim());
-  if (!host) {
-    throw new Error(labels.hostRequired);
-  }
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(labels.invalidPort);
-  }
-
-  return serializeConnectionUriForStorage({
-    host,
-    port,
-    isIpv6: isIpv6Host(host),
-    useTls: draft.useTls,
-    ...(draft.password ? { password: draft.password } : {}),
-  });
-}
-
-function prepareDirectConnection(
-  draft: DirectConnectionDraft,
-  labels: DirectConnectionLabels,
-): PreparedDirectConnection {
-  const parsed = parseConnectionUri(buildConnectionUriFromDraft(draft, labels));
-  const endpoint = parsed.isIpv6
-    ? `[${parsed.host}]:${parsed.port}`
-    : `${parsed.host}:${parsed.port}`;
-
-  return {
-    uri: serializeConnectionUri(parsed),
-    endpoint,
-    useTls: parsed.useTls,
-    ...(parsed.password ? { password: parsed.password } : {}),
-  };
-}
-
-function draftFromConnectionUri(uri: string): DirectConnectionDraft {
-  const parsed = parseConnectionUri(uri);
-  return {
-    host: parsed.host,
-    port: String(parsed.port),
-    useTls: parsed.useTls,
-    password: parsed.password ?? "",
-  };
-}
-
-function normalizeTransportMessage(message: string | null | undefined): string | null {
-  if (!message) return null;
-  const trimmed = message.trim();
-  if (!trimmed) return null;
-  return trimmed;
-}
-
-function formatTechnicalTransportDetails(
-  details: (string | null)[],
-  labels: DirectConnectionLabels,
-): string | null {
-  const unique = Array.from(
-    new Set(
-      details
-        .map((value) => normalizeTransportMessage(value))
-        .filter((value): value is string => Boolean(value))
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
-    ),
-  );
-
-  if (unique.length === 0) return null;
-
-  const allGeneric = unique.every((value) => {
-    const lower = value.toLowerCase();
-    return lower === "transport error" || lower === "transport closed";
-  });
-
-  if (allGeneric) {
-    return labels.noAdditionalDetails(unique[0] ?? "");
-  }
-
-  return unique.join(" — ");
-}
-
-function buildConnectionFailureCopy(input: {
-  endpoint: string;
-  error: unknown;
-  labels: DirectConnectionLabels;
-}): { title: string; detail: string | null; raw: string | null } {
-  const { endpoint, error, labels } = input;
-  const title = labels.failedToConnect(endpoint);
-
-  const raw = (() => {
-    if (error instanceof DaemonConnectionTestError) {
-      return (
-        formatTechnicalTransportDetails([error.reason, error.lastError], labels) ??
-        normalizeTransportMessage(error.message)
-      );
-    }
-    if (error instanceof Error) {
-      return normalizeTransportMessage(error.message);
-    }
-    return null;
-  })();
-
-  const rawLower = raw?.toLowerCase() ?? "";
-  let detail: string | null = null;
-
-  if (raw === "Incorrect password" || raw === "Password required") {
-    detail = raw;
-  } else if (rawLower.includes("timed out")) {
-    detail = labels.timedOut;
-  } else if (
-    rawLower.includes("econnrefused") ||
-    rawLower.includes("connection refused") ||
-    rawLower.includes("err_connection_refused")
-  ) {
-    detail = labels.refused;
-  } else if (rawLower.includes("enotfound") || rawLower.includes("not found")) {
-    detail = labels.hostNotFound;
-  } else if (rawLower.includes("ehostunreach") || rawLower.includes("host is unreachable")) {
-    detail = labels.hostUnreachable;
-  } else if (
-    rawLower.includes("certificate") ||
-    rawLower.includes("tls") ||
-    rawLower.includes("ssl")
-  ) {
-    detail = labels.tlsError;
-  } else {
-    detail = labels.unableToConnect;
-  }
-
-  return { title, detail, raw };
-}
-
 export interface AddHostModalProps {
   visible: boolean;
   onClose: () => void;
@@ -305,6 +142,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [advancedUri, setAdvancedUri] = useState("");
+  const [advancedUriWhenOpened, setAdvancedUriWhenOpened] = useState("");
   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
 
   const clearInput = useCallback(() => {
@@ -315,6 +153,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     setIsPasswordVisible(false);
     setIsAdvancedOpen(false);
     setAdvancedUri("");
+    setAdvancedUriWhenOpened("");
     bumpInputResetKey();
   }, []);
 
@@ -345,6 +184,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       hostNotFound: t("pairing.direct.errors.hostNotFound"),
       hostUnreachable: t("pairing.direct.errors.hostUnreachable"),
       tlsError: t("pairing.direct.errors.tlsError"),
+      incorrectPassword: t("pairing.direct.errors.incorrectPassword"),
       unableToConnect: t("pairing.direct.errors.unableToConnect"),
     }),
     [t],
@@ -370,10 +210,16 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
     let connection: PreparedDirectConnection;
     try {
-      connection = prepareDirectConnection(
-        { host, port, useTls, password },
+      const draft = resolveDirectConnectionDraft(
+        {
+          fields: { host, port, useTls, password },
+          isAdvancedOpen,
+          advancedUri,
+          advancedUriWhenOpened,
+        },
         directConnectionLabels,
       );
+      connection = prepareDirectConnection(draft, directConnectionLabels);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : directConnectionLabels.invalidConnection;
@@ -422,10 +268,13 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       setIsSaving(false);
     }
   }, [
+    advancedUri,
+    advancedUriWhenOpened,
     daemons,
     directConnectionLabels,
     handleClose,
     host,
+    isAdvancedOpen,
     isMobile,
     isSaving,
     onSaved,
@@ -455,31 +304,50 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
   const handleToggleAdvanced = useCallback(() => {
     if (!isAdvancedOpen) {
+      let generatedUri = "";
       try {
-        setAdvancedUri(
-          buildConnectionUriFromDraft({ host, port, useTls, password }, directConnectionLabels),
+        generatedUri = buildConnectionUriFromDraft(
+          { host, port, useTls, password },
+          directConnectionLabels,
         );
       } catch {
-        setAdvancedUri("");
+        // The fields do not form a connection yet; the URI field starts empty.
       }
+      setAdvancedUri(generatedUri);
+      setAdvancedUriWhenOpened(generatedUri);
       setErrorMessage("");
       setIsAdvancedOpen(true);
       return;
     }
 
-    try {
-      const next = draftFromConnectionUri(advancedUri);
-      setHost(next.host);
-      setPort(next.port);
-      setUseTls(next.useTls);
-      setPassword(next.password);
-      setErrorMessage("");
-      bumpInputResetKey();
-    } catch {
-      setErrorMessage("");
+    // An untouched URI is just the fields as they were when the section opened; applying it
+    // would undo anything edited in the fields since.
+    if (isConnectionUriEdited({ advancedUri, advancedUriWhenOpened })) {
+      try {
+        const next = draftFromConnectionUri(advancedUri);
+        setHost(next.host);
+        setPort(next.port);
+        setUseTls(next.useTls);
+        setPassword(next.password);
+        bumpInputResetKey();
+      } catch {
+        // Keep the section open: collapsing would throw the typed URI away without a word.
+        setErrorMessage(directConnectionLabels.invalidConnection);
+        return;
+      }
     }
+    setErrorMessage("");
     setIsAdvancedOpen(false);
-  }, [advancedUri, directConnectionLabels, host, isAdvancedOpen, password, port, useTls]);
+  }, [
+    advancedUri,
+    advancedUriWhenOpened,
+    directConnectionLabels,
+    host,
+    isAdvancedOpen,
+    password,
+    port,
+    useTls,
+  ]);
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;

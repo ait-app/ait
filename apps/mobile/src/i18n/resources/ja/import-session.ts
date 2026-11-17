@@ -18,6 +18,7 @@ export const importSession = {
     loading: "最近のセッションを読み込み中...",
     failedProvider: "{{provider}} のセッションを読み込めませんでした",
     failedImport: "選択したセッションをインポートできませんでした。",
+    openImportedFailed: "セッションはインポートされましたが、プロジェクトを開けませんでした。",
     workingDirectoryUnavailable:
       "セッションの作業ディレクトリがこのホストにありません: {{path}}。ディレクトリを復元して、もう一度インポートしてください。",
   },

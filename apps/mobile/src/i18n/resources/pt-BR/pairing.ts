@@ -48,6 +48,7 @@ export const pairing = {
       hostUnreachable: "Host inacessível. Verifique sua rede e firewall.",
       tlsError:
         "Erro de TLS. Conexões diretas usam SSL apenas quando há um terminador TLS na frente do daemon.",
+      incorrectPassword: "Senha incorreta. Verifique a senha e tente novamente.",
       unableToConnect:
         "Não foi possível conectar. Verifique o host/porta e se o daemon está acessível.",
       details: "Detalhes: {{detail}}",

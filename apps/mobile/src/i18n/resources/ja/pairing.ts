@@ -47,6 +47,7 @@ export const pairing = {
       hostNotFound: "ホストが見つかりません。ホスト名を確認してもう一度試してください。",
       hostUnreachable: "ホストに到達できません。ネットワークとファイアウォールを確認してください。",
       tlsError: "TLSエラー。直接接続は、デーモンの前にTLS終端がある場合のみSSLを使用します。",
+      incorrectPassword: "パスワードが正しくありません。確認してもう一度お試しください。",
       unableToConnect: "接続できません。ホスト/ポートとデーモンが到達可能かを確認してください。",
       details: "詳細: {{detail}}",
     },

@@ -124,6 +124,30 @@ interface DictationTranscriptContext {
   autoSend: boolean;
 }
 
+interface QueueComposerInputContext {
+  value: string;
+  attachments: MessagePayload["attachments"];
+  cwd: string;
+  onQueue: ((payload: MessagePayload) => void) | undefined;
+  onMinimizeHeight: () => void;
+  exitFullscreen: () => void;
+}
+
+/**
+ * Hands the typed message to the owner's queue. The owner clears the input once it has accepted
+ * the message; clearing here as well would wipe a draft it turned down, such as `/btw` typed
+ * while attachments are present.
+ */
+export function queueComposerInput(ctx: QueueComposerInputContext): boolean {
+  if (!ctx.onQueue) return false;
+  const trimmed = ctx.value.trim();
+  if (!trimmed && ctx.attachments.length === 0) return false;
+  ctx.exitFullscreen();
+  ctx.onQueue({ text: trimmed, attachments: ctx.attachments, cwd: ctx.cwd });
+  ctx.onMinimizeHeight();
+  return true;
+}
+
 export function applyDictationTranscript(text: string, ctx: DictationTranscriptContext): void {
   if (!text) return;
   const shouldPad = ctx.value.length > 0 && !/\s$/.test(ctx.value);
@@ -137,8 +161,8 @@ export function applyDictationTranscript(text: string, ctx: DictationTranscriptC
   ctx.replaceText(nextValue);
 
   if (ctx.defaultSendBehavior === "queue" && ctx.isAgentRunning && ctx.onQueue) {
+    // The owner clears the input once it has accepted the message; see `queueComposerInput`.
     ctx.onQueue({ text: nextValue, attachments: ctx.attachments, cwd: ctx.cwd });
-    ctx.replaceText("");
     return;
   }
 

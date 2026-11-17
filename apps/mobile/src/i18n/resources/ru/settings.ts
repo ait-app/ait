@@ -410,6 +410,8 @@ export const settings = {
       title: "Подключения",
       removeTitle: "Удалить подключение",
       removeMessage: "Удалить {{name}}? Это действие нельзя отменить.",
+      removeLastMessage:
+        "{{name}} — единственное подключение этого хоста. Его удаление также удалит хост из приложения. Это действие нельзя отменить.",
       removeAction: "Удалить",
       removeErrorTitle: "Ошибка",
       removeErrorMessage: "Не удалось удалить подключение",
@@ -764,6 +766,7 @@ export const settings = {
       nameAccessibility: "Название скрипта",
       commandAccessibility: "Команда скрипта",
       nameRequired: "Укажите название",
+      nameDuplicate: "Это имя уже используется другим скриптом",
       commandRequired: "Требуется команда",
       newScript: "Новый скрипт",
       editScript: "Изменить {{name}}",

@@ -84,7 +84,10 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
         <LoadingSpinner color={styles.muted.color} />
       </View>
     );
-  } else if (detail.isError || !detail.data) {
+  } else if (!detail.data || (detail.isError && view !== "edit")) {
+    // The detail is re-polled every few seconds, and a failed poll keeps the last data. The
+    // edit form stays mounted on that data: swapping it for the error would discard whatever
+    // the user had typed into it.
     content = (
       <QueryError
         message={t("schedules.loadDetailError")}

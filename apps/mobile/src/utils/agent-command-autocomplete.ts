@@ -116,6 +116,14 @@ export function findActiveSlashCommand(
   return null;
 }
 
+/**
+ * Drops the slash command being typed and keeps the rest of the draft. The command range only
+ * covers the text before the cursor, so anything after it is the user's prompt, not the command.
+ */
+export function removeActiveSlashCommand(text: string, command: SlashCommandRange): string {
+  return text.slice(0, command.start) + text.slice(command.end);
+}
+
 export function applySlashCommandReplacement(input: ApplySlashCommandReplacementInput): string {
   const before = input.text.slice(0, input.command.start);
   const after = input.text.slice(input.command.end);

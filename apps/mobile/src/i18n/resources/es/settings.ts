@@ -409,6 +409,8 @@ export const settings = {
       title: "Conexiones",
       removeTitle: "Quitar conexión",
       removeMessage: "¿Quitar {{name}}? Esto no se puede deshacer.",
+      removeLastMessage:
+        "{{name}} es la única conexión de este host. Al eliminarla también se eliminará el host de esta aplicación. Esta acción no se puede deshacer.",
       removeAction: "Eliminar",
       removeErrorTitle: "Error",
       removeErrorMessage: "No se puede eliminar la conexión",
@@ -764,6 +766,7 @@ export const settings = {
       nameAccessibility: "Nombre del script",
       commandAccessibility: "Comando del script",
       nameRequired: "El nombre es obligatorio",
+      nameDuplicate: "Otro script ya usa este nombre",
       commandRequired: "Se requiere comando",
       newScript: "Nuevo script",
       editScript: "Editar {{name}}",

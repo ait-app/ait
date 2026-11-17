@@ -429,6 +429,8 @@ export const settings = {
       title: "连接",
       removeTitle: "移除连接",
       removeMessage: "移除 {{name}}？此操作无法撤销。",
+      removeLastMessage:
+        "{{name}} 是这台主机唯一的连接。移除它会同时把主机从本应用中移除，且无法撤销。",
       removeAction: "移除",
       removeErrorTitle: "错误",
       removeErrorMessage: "无法移除连接",
@@ -770,6 +772,7 @@ export const settings = {
       nameAccessibility: "脚本名称",
       commandAccessibility: "脚本命令",
       nameRequired: "名称必填",
+      nameDuplicate: "已有其他脚本使用这个名称",
       commandRequired: "命令必填",
       newScript: "新建脚本",
       editScript: "编辑 {{name}}",

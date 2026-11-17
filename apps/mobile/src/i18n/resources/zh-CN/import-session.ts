@@ -18,6 +18,7 @@ export const importSession = {
     loading: "正在加载最近会话...",
     failedProvider: "无法加载 {{provider}} 的会话",
     failedImport: "无法导入所选会话。",
+    openImportedFailed: "会话已导入，但无法打开它所在的项目。",
     workingDirectoryUnavailable:
       "此会话在主机上的原工作目录不可用：{{path}}。请恢复该目录后重试导入。",
   },

@@ -4,6 +4,7 @@ import {
   computeCanStartDictation,
   createPromptHistoryState,
   navigatePromptHistory,
+  queueComposerInput,
   rememberPrompt,
   resolveActiveSendBehavior,
   resolveComposerSurfacePresentation,
@@ -190,6 +191,59 @@ describe("dictation transcript behavior", () => {
     expect(actions).toEqual([
       "replace:typed context spoken prompt",
       "submit:typed context spoken prompt",
+    ]);
+  });
+});
+
+describe("queueing from the composer input", () => {
+  it("leaves the typed text for the owner to clear, so a rejected message is not lost", () => {
+    const actions: string[] = [];
+
+    const didQueue = queueComposerInput({
+      value: "  /btw why is this failing?  ",
+      attachments: [],
+      cwd: "/repo",
+      onQueue: (payload) => actions.push(`queue:${payload.text}`),
+      onMinimizeHeight: () => actions.push("minimize"),
+      exitFullscreen: () => actions.push("exit-fullscreen"),
+    });
+
+    expect(didQueue).toBe(true);
+    expect(actions).toEqual(["exit-fullscreen", "queue:/btw why is this failing?", "minimize"]);
+  });
+
+  it("does nothing without content or without a queue", () => {
+    const onQueue = vi.fn();
+    const base = {
+      attachments: [],
+      cwd: "/repo",
+      onMinimizeHeight: () => undefined,
+      exitFullscreen: () => undefined,
+    };
+
+    expect(queueComposerInput({ ...base, value: "   ", onQueue })).toBe(false);
+    expect(queueComposerInput({ ...base, value: "hello", onQueue: undefined })).toBe(false);
+    expect(onQueue).not.toHaveBeenCalled();
+  });
+
+  it("queues an auto-sent dictation without clearing the input itself", () => {
+    const actions: string[] = [];
+
+    applyDictationTranscript("spoken prompt", {
+      value: "typed context",
+      defaultSendBehavior: "queue",
+      isAgentRunning: true,
+      onQueue: (payload) => actions.push(`queue:${payload.text}`),
+      replaceText: (text) => actions.push(`replace:${text}`),
+      onSubmit: (payload) => actions.push(`submit:${payload.text}`),
+      attachments: [],
+      cwd: "/repo",
+      autoSend: true,
+    });
+
+    expect(actions).toEqual([
+      "replace:typed context spoken prompt",
+      "queue:typed context spoken prompt",
     ]);
   });
 });

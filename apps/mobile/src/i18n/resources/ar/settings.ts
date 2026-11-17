@@ -402,6 +402,8 @@ export const settings = {
       title: "اتصالات",
       removeTitle: "إزالة الاتصال",
       removeMessage: "إزالة {{name}}؟ لا يمكن التراجع عن هذا.",
+      removeLastMessage:
+        "{{name}} هو الاتصال الوحيد لهذا المضيف. ستؤدي إزالته إلى إزالة المضيف من هذا التطبيق أيضًا. لا يمكن التراجع عن هذا الإجراء.",
       removeAction: "إزالة",
       removeErrorTitle: "خطأ",
       removeErrorMessage: "غير قادر على إزالة الاتصال",
@@ -749,6 +751,7 @@ export const settings = {
       nameAccessibility: "اسم البرنامج النصي",
       commandAccessibility: "أمر البرنامج النصي",
       nameRequired: "الاسم مطلوب",
+      nameDuplicate: "يوجد سكربت آخر يستخدم هذا الاسم",
       commandRequired: "الأمر مطلوب",
       newScript: "نص جديد",
       editScript: "تحرير {{name}}",

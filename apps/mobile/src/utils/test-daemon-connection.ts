@@ -77,12 +77,18 @@ function isIncorrectPasswordFailure(input: {
 export class DaemonConnectionTestError extends Error {
   reason: string | null;
   lastError: string | null;
+  /** The host answered but turned the password down. */
+  incorrectPassword: boolean;
 
-  constructor(message: string, details: { reason: string | null; lastError: string | null }) {
+  constructor(
+    message: string,
+    details: { reason: string | null; lastError: string | null; incorrectPassword?: boolean },
+  ) {
     super(message);
     this.name = "DaemonConnectionTestError";
     this.reason = details.reason;
     this.lastError = details.lastError;
+    this.incorrectPassword = details.incorrectPassword ?? false;
   }
 }
 
@@ -209,11 +215,12 @@ function connectAndProbe(
           clearTimeout(timer);
           const reason = trimNonEmpty(toErrorMessage(error));
           const lastError = trimNonEmpty(client.lastError);
-          const message = isIncorrectPasswordFailure({ config, reason, lastError })
+          const incorrectPassword = isIncorrectPasswordFailure({ config, reason, lastError });
+          const message = incorrectPassword
             ? "Incorrect password"
             : pickBestReason(reason, lastError);
           void client.close().catch(() => undefined);
-          reject(new DaemonConnectionTestError(message, { reason, lastError }));
+          reject(new DaemonConnectionTestError(message, { reason, lastError, incorrectPassword }));
         });
     },
   );

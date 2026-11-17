@@ -1,5 +1,6 @@
 import { useCallback, useMemo, type ReactElement } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { showAlert } from "@/utils/show-alert";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react-native";
@@ -53,7 +54,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
+        showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
       }
     },
     [profiles, saveProfiles, t],
@@ -81,7 +82,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         try {
           await saveProfiles(profiles.filter((entry) => entry.id !== id));
         } catch (error) {
-          Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
+          showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
         }
         return;
       });

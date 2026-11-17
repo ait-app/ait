@@ -146,6 +146,36 @@ export function configToDraft(config: PaseoConfigRaw | null | undefined): Projec
   };
 }
 
+/**
+ * Scripts are stored as an object keyed by name, so two rows with the same name collapse into
+ * one when the draft is written and the earlier definition is lost.
+ */
+export function hasDuplicateScriptName(
+  scripts: readonly ProjectScriptDraft[],
+  script: ProjectScriptDraft,
+): boolean {
+  const name = script.name.trim();
+  if (name.length === 0) {
+    return false;
+  }
+  return scripts.some((other) => other.id !== script.id && other.name.trim() === name);
+}
+
+/**
+ * Undoes an edit sheet that was dismissed without saving: an existing script returns to how it
+ * was when the sheet opened, and a script added by that sheet is removed.
+ */
+export function revertScriptEdit(
+  draft: ProjectConfigDraft,
+  edit: { id: string; original: ProjectScriptDraft | null },
+): ProjectConfigDraft {
+  const { id, original } = edit;
+  if (!original) {
+    return { ...draft, scripts: draft.scripts.filter((row) => row.id !== id) };
+  }
+  return { ...draft, scripts: draft.scripts.map((row) => (row.id === id ? original : row)) };
+}
+
 interface ApplyDraftInput {
   draft: ProjectConfigDraft;
   base: PaseoConfigRaw | null | undefined;

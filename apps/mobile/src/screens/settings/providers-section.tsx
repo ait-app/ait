@@ -2,13 +2,13 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   Pressable,
   Text,
   View,
   type GestureResponderEvent,
   type PressableStateCallbackType,
 } from "react-native";
+import { showAlert } from "@/utils/show-alert";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
@@ -362,7 +362,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert(t("settings.providers.updateErrorTitle"), toErrorMessage(error));
+        showAlert(t("settings.providers.updateErrorTitle"), toErrorMessage(error));
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
@@ -388,7 +388,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
 
         await patchConfig({ removeProviders: [providerId] });
       } catch (error) {
-        Alert.alert(t("settings.providers.remove.errorTitle"), toErrorMessage(error));
+        showAlert(t("settings.providers.remove.errorTitle"), toErrorMessage(error));
       } finally {
         if (removingProviderIdRef.current === providerId) {
           removingProviderIdRef.current = null;
@@ -407,7 +407,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         await patchConfig(buildAcpProviderConfigPatch(entry));
         await refresh([entry.id]);
       } catch (error) {
-        Alert.alert(t("settings.providers.addErrorTitle"), toErrorMessage(error));
+        showAlert(t("settings.providers.addErrorTitle"), toErrorMessage(error));
       } finally {
         setInstallingProviderId((current) => (current === entry.id ? null : current));
       }

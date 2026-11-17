@@ -403,6 +403,8 @@ export const settings = {
       title: "연결",
       removeTitle: "연결 제거",
       removeMessage: "{{name}}을(를) 제거할까요? 되돌릴 수 없습니다.",
+      removeLastMessage:
+        "{{name}}은(는) 이 호스트의 유일한 연결입니다. 제거하면 호스트도 이 앱에서 제거됩니다. 이 작업은 되돌릴 수 없습니다.",
       removeAction: "제거",
       removeErrorTitle: "오류",
       removeErrorMessage: "연결을 제거할 수 없습니다",
@@ -754,6 +756,7 @@ export const settings = {
       nameAccessibility: "스크립트 이름",
       commandAccessibility: "스크립트 명령",
       nameRequired: "이름을 입력하세요",
+      nameDuplicate: "다른 스크립트가 이미 이 이름을 사용하고 있습니다",
       commandRequired: "명령을 입력하세요",
       newScript: "새 스크립트",
       editScript: "{{name}} 편집",

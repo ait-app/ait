@@ -18,6 +18,7 @@ export const importSession = {
     loading: "최근 세션을 불러오는 중...",
     failedProvider: "{{provider}} 세션을 불러올 수 없습니다",
     failedImport: "선택한 세션을 가져올 수 없습니다.",
+    openImportedFailed: "세션을 가져왔지만 해당 프로젝트를 열 수 없습니다.",
     workingDirectoryUnavailable:
       "이 호스트에서 세션의 작업 디렉터리를 사용할 수 없습니다: {{path}}. 디렉터리를 복원한 후 다시 가져오세요.",
   },

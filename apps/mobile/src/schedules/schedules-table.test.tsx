@@ -15,6 +15,8 @@ vi.mock("@/hooks/use-schedule-mutations", () => ({
   useScheduleMutations: () => mutations,
 }));
 vi.mock("@/components/provider-icons", () => ({ getProviderIcon: () => () => null }));
+const toast = vi.hoisted(() => ({ show: vi.fn(), copied: vi.fn(), error: vi.fn() }));
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 
 vi.stubGlobal("React", React);
 const { SchedulesTable } = await import("@/components/schedules/schedules-table");
@@ -158,8 +160,21 @@ it("allows retrying a failed pause", async () => {
   fireEvent.click(button);
   await waitFor(() => expect(mutations.pauseSchedule).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(button.getAttribute("aria-disabled")).not.toBe("true"));
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith("Host unavailable");
   fireEvent.click(button);
   await waitFor(() => expect(mutations.pauseSchedule).toHaveBeenCalledTimes(2));
+  expect(toast.error).toHaveBeenCalledTimes(1);
+});
+
+it("reports a failed run-now, which has no optimistic change to roll back", async () => {
+  mutations.runScheduleNow.mockRejectedValueOnce(new Error("Schedule is already running"));
+  render(<SchedulesTable rows={[task(newAgentTarget)]} onEditSchedule={vi.fn()} />);
+  fireEvent.click(screen.getByTestId("schedule-kebab-daily-release"));
+  fireEvent.click(await screen.findByTestId("schedule-menu-run-daily-release"));
+
+  await waitFor(() =>
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith("Schedule is already running"),
+  );
 });
 
 it.each(["expired", "finished", "targetGone"] as const)(

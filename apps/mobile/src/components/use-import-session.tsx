@@ -6,6 +6,7 @@ import { useHostChooser } from "@/hosts/host-chooser";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { useOpenProject } from "@/hooks/use-open-project";
+import { useToast } from "@/contexts/toast-context";
 
 interface UseImportSessionOptions {
   serverId?: string;
@@ -32,18 +33,29 @@ export function useNavigateToImportedAgent(
   serverId: string | null | undefined,
 ): (agent: ImportedAgentTarget) => Promise<void> {
   const router = useRouter();
+  const { t } = useTranslation();
+  const toast = useToast();
   const normalizedServerId = serverId?.trim() || null;
   const openProject = useOpenProject(normalizedServerId);
 
   return useCallback(
     async (agent: ImportedAgentTarget) => {
       if (!normalizedServerId) return;
-      const project = await openProject(agent.cwd);
-      if (project.ok) {
-        router.push(buildHostAgentDetailRoute(normalizedServerId, agent.id) as Href);
+      // The import itself has already succeeded and its sheet is closed, so a failure here is the
+      // only sign the user gets that the session exists but was not opened.
+      let opened = false;
+      try {
+        opened = (await openProject(agent.cwd)).ok;
+      } catch (error) {
+        console.error("[ImportSession] Failed to open the imported session's project", error);
       }
+      if (!opened) {
+        toast.error(t("importSession.status.openImportedFailed"));
+        return;
+      }
+      router.push(buildHostAgentDetailRoute(normalizedServerId, agent.id) as Href);
     },
-    [normalizedServerId, openProject, router],
+    [normalizedServerId, openProject, router, t, toast],
   );
 }
 

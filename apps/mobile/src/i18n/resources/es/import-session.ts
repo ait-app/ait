@@ -18,6 +18,7 @@ export const importSession = {
     loading: "Cargando sesiones recientes...",
     failedProvider: "No se pudieron cargar las sesiones de {{provider}}",
     failedImport: "No se pudo importar la sesión seleccionada.",
+    openImportedFailed: "La sesión se importó, pero no se pudo abrir su proyecto.",
     workingDirectoryUnavailable:
       "El directorio de trabajo de la sesión no está disponible en este host: {{path}}. Restáuralo e inténtalo de nuevo.",
   },

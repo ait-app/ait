@@ -41,7 +41,9 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   applyDraftToConfig,
   configToDraft,
+  hasDuplicateScriptName,
   METADATA_PROMPT_KEYS,
+  revertScriptEdit,
   type LifecycleOriginalKind,
   type MetadataPromptKey,
   type ProjectConfigDraft,
@@ -491,7 +493,12 @@ function ProjectConfigForm({
 
   const [draft, setDraft] = useState<ProjectConfigDraft>(() => configToDraft(baseConfig));
   const [writeError, setWriteError] = useState<ProjectConfigRpcError | null>(null);
-  const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
+  // `original` is the script as it was when the sheet opened, or null for a script the sheet
+  // itself added. Dismissing the sheet puts it back.
+  const [scriptEdit, setScriptEdit] = useState<{
+    id: string;
+    original: ProjectScriptDraft | null;
+  } | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: async (input: {
@@ -581,7 +588,7 @@ function ProjectConfigForm({
   );
 
   const handleEditScript = useCallback((script: ProjectScriptDraft) => {
-    setEditingScriptId(script.id);
+    setScriptEdit({ id: script.id, original: script });
   }, []);
 
   const handleAddScript = useCallback(() => {
@@ -601,7 +608,7 @@ function ProjectConfigForm({
         },
       ],
     }));
-    setEditingScriptId(id);
+    setScriptEdit({ id, original: null });
   }, []);
 
   const handleEditingDraftChange = useCallback((next: ProjectScriptDraft) => {
@@ -612,31 +619,21 @@ function ProjectConfigForm({
   }, []);
 
   const handleCancelEditing = useCallback(() => {
-    if (!editingScriptId) {
+    if (!scriptEdit) {
       return;
     }
-    setDraft((d) => {
-      const entry = d.scripts.find((row) => row.id === editingScriptId);
-      if (!entry) return d;
-      const isEmpty =
-        entry.name.trim().length === 0 &&
-        entry.commandText.trim().length === 0 &&
-        entry.type.trim().length === 0 &&
-        entry.portText.trim().length === 0;
-      if (!isEmpty) return d;
-      return { ...d, scripts: d.scripts.filter((row) => row.id !== editingScriptId) };
-    });
-    setEditingScriptId(null);
-  }, [editingScriptId]);
+    setDraft((d) => revertScriptEdit(d, scriptEdit));
+    setScriptEdit(null);
+  }, [scriptEdit]);
 
   const handleSaveEditing = useCallback(() => {
-    setEditingScriptId(null);
+    setScriptEdit(null);
   }, []);
 
-  const editingScript = draft.scripts.find((entry) => entry.id === editingScriptId);
+  const editingScript = draft.scripts.find((entry) => entry.id === scriptEdit?.id);
 
   const hasInvalidScripts = useMemo(
-    () => draft.scripts.some((script) => validateScript(script, t).hasErrors),
+    () => draft.scripts.some((script) => validateScript(script, draft.scripts, t).hasErrors),
     [draft.scripts, t],
   );
 
@@ -812,6 +809,7 @@ function ProjectConfigForm({
       {editingScript ? (
         <ScriptEditModal
           script={editingScript}
+          scripts={draft.scripts}
           onChange={handleEditingDraftChange}
           onCancel={handleCancelEditing}
           onSave={handleSaveEditing}
@@ -936,9 +934,17 @@ interface ScriptValidation {
   commandError: string | null;
 }
 
-function validateScript(script: ProjectScriptDraft, t: TFunction): ScriptValidation {
-  const nameError =
-    script.name.trim().length === 0 ? t("settings.project.scripts.nameRequired") : null;
+function validateScript(
+  script: ProjectScriptDraft,
+  scripts: readonly ProjectScriptDraft[],
+  t: TFunction,
+): ScriptValidation {
+  let nameError: string | null = null;
+  if (script.name.trim().length === 0) {
+    nameError = t("settings.project.scripts.nameRequired");
+  } else if (hasDuplicateScriptName(scripts, script)) {
+    nameError = t("settings.project.scripts.nameDuplicate");
+  }
   const commandError =
     script.commandText.trim().length === 0 ? t("settings.project.scripts.commandRequired") : null;
   return {
@@ -950,6 +956,7 @@ function validateScript(script: ProjectScriptDraft, t: TFunction): ScriptValidat
 
 interface ScriptEditModalProps {
   script: ProjectScriptDraft;
+  scripts: readonly ProjectScriptDraft[];
   onChange: (next: ProjectScriptDraft) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -963,7 +970,7 @@ interface ScriptFieldsTouched {
 const ALL_TOUCHED: ScriptFieldsTouched = { name: true, command: true };
 const NONE_TOUCHED: ScriptFieldsTouched = { name: false, command: false };
 
-function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModalProps) {
+function ScriptEditModal({ script, scripts, onChange, onCancel, onSave }: ScriptEditModalProps) {
   const { t } = useTranslation();
   const [touched, setTouched] = useState<ScriptFieldsTouched>(NONE_TOUCHED);
 
@@ -991,7 +998,7 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
   const handleNameBlur = useCallback(() => markTouched("name"), [markTouched]);
   const handleCommandBlur = useCallback(() => markTouched("command"), [markTouched]);
 
-  const validation = validateScript(script, t);
+  const validation = validateScript(script, scripts, t);
 
   const handleSavePress = useCallback(() => {
     if (validation.hasErrors) {

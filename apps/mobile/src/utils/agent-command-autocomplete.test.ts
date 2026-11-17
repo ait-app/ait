@@ -5,6 +5,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  removeActiveSlashCommand,
 } from "./agent-command-autocomplete";
 
 describe("filterAndRankCommandAutocompleteEntries", () => {
@@ -132,5 +133,32 @@ describe("filterInlineSkillCommandEntries", () => {
     expect(filterInlineSkillCommandEntries(entries).map((entry) => entry.command.name)).toEqual([
       "taste",
     ]);
+  });
+});
+
+describe("removeActiveSlashCommand", () => {
+  it("clears an input that holds only the command being typed", () => {
+    const text = "/cl";
+    const command = findActiveSlashCommand({ text, cursorIndex: text.length });
+
+    expect(command).not.toBeNull();
+    expect(removeActiveSlashCommand(text, command!)).toBe("");
+  });
+
+  it("keeps the draft that follows a slash typed at the start", () => {
+    const text = "/fix the login bug in auth.ts and add tests";
+    const command = findActiveSlashCommand({ text, cursorIndex: 1 });
+
+    expect(command).toMatchObject({ start: 0, end: 1, position: "start" });
+    expect(removeActiveSlashCommand(text, command!)).toBe(
+      "fix the login bug in auth.ts and add tests",
+    );
+  });
+
+  it("keeps the lines after a leading command token", () => {
+    const text = "/review\nlook at the retry logic first";
+    const command = findActiveSlashCommand({ text, cursorIndex: 4 });
+
+    expect(removeActiveSlashCommand(text, command!)).toBe("iew\nlook at the retry logic first");
   });
 });

@@ -48,6 +48,7 @@ export const pairing = {
       hostUnreachable: "El host no es accesible. Verifique su red y firewall.",
       tlsError:
         "Error de TLS. Las conexiones directas utilizan SSL solo cuando hay un terminador TLS delante del demonio.",
+      incorrectPassword: "Contraseña incorrecta. Compruébela e inténtelo de nuevo.",
       unableToConnect:
         "No se puede conectar. Verifique el host/puerto y que se pueda acceder al demonio.",
       details: "Detalles: {{detail}}",

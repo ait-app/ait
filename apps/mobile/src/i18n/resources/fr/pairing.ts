@@ -48,6 +48,7 @@ export const pairing = {
       hostUnreachable: "L'hôte est inaccessible. Vérifiez votre réseau et votre pare-feu.",
       tlsError:
         "Erreur TLS. Les connexions directes utilisent SSL uniquement lorsqu'un terminateur TLS se trouve devant le démon.",
+      incorrectPassword: "Mot de passe incorrect. Vérifiez-le et réessayez.",
       unableToConnect:
         "Impossible de se connecter. Vérifiez l'hôte/le port et que le démon est accessible.",
       details: "Détails : {{detail}}",

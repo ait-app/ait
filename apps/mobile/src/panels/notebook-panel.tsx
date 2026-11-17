@@ -107,6 +107,9 @@ function NotebookPanel() {
   const latestContentRef = useRef(content);
   const createAttemptedRef = useRef(false);
   const saveGenerationRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveSkippedWhileInFlightRef = useRef(false);
+  const [saveRearm, setSaveRearm] = useState(0);
   const lastAppliedVersionKeyRef = useRef<string | null>(null);
   const invariantTarget = target;
   invariant(invariantTarget.kind === "notebook", "NotebookPanel requires notebook target");
@@ -175,13 +178,24 @@ function NotebookPanel() {
     setStatus("clean");
   }, [dirty, liveFile.file, loaded, observation]);
 
+  // Debounced autosave. It is keyed on the text itself, not only on `dirty`: `dirty` stays true
+  // from the first keystroke until everything is written, so an effect keyed on it alone runs
+  // once and never saves what was typed during or after that first write.
   useEffect(() => {
     if (!dirty || !canEdit || !client || !workspaceDirectory || !versionRef.current) return;
     const generation = saveGenerationRef.current;
     const timer = setTimeout(() => {
+      // One write at a time: a second one would carry the version the first is about to
+      // replace and come back as a conflict. The write in flight re-arms this effect when it
+      // settles.
+      if (saveInFlightRef.current) {
+        saveSkippedWhileInFlightRef.current = true;
+        return;
+      }
       const expectedVersion = versionRef.current;
       const nextContent = latestContentRef.current;
       if (!expectedVersion) return;
+      saveInFlightRef.current = true;
       setStatus("saving");
       void client
         .writeFile({
@@ -214,10 +228,17 @@ function NotebookPanel() {
           if (generation === saveGenerationRef.current) {
             setStatus(isReadOnlyError(error) ? "readonly" : "error");
           }
+        })
+        .finally(() => {
+          saveInFlightRef.current = false;
+          if (saveSkippedWhileInFlightRef.current) {
+            saveSkippedWhileInFlightRef.current = false;
+            setSaveRearm((count) => count + 1);
+          }
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [canEdit, client, dirty, workspaceDirectory]);
+  }, [canEdit, client, content, dirty, persistedContent, saveRearm, workspaceDirectory]);
 
   const handleChange = useCallback(
     (nextContent: string) => {

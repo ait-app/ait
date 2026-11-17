@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { PaseoConfigRawSchema } from "@ait/protocol/paseo-config-schema";
 import type { PaseoConfigRaw } from "@ait/protocol/messages";
-import { applyDraftToConfig, configToDraft, type ProjectConfigDraft } from "./project-config-form";
+import {
+  applyDraftToConfig,
+  configToDraft,
+  hasDuplicateScriptName,
+  revertScriptEdit,
+  type ProjectConfigDraft,
+  type ProjectScriptDraft,
+} from "./project-config-form";
 
 function emptyDraft(): ProjectConfigDraft {
   return {
@@ -348,5 +355,70 @@ describe("applyDraftToConfig", () => {
     const next = applyDraftToConfig({ draft, base });
     const scripts = next.scripts ?? {};
     expect(Object.keys(scripts)).toEqual(["dev"]);
+  });
+});
+
+function scriptDraft(id: string, name: string, commandText = "npm run dev"): ProjectScriptDraft {
+  return {
+    id,
+    name,
+    commandText,
+    commandOriginalKind: "string",
+    type: "",
+    portText: "",
+    rawEntry: {},
+  };
+}
+
+describe("hasDuplicateScriptName", () => {
+  const scripts = [scriptDraft("a", "dev"), scriptDraft("b", "test"), scriptDraft("c", " dev ")];
+
+  it("flags a script whose trimmed name another row already uses", () => {
+    expect(hasDuplicateScriptName(scripts, scripts[2]!)).toBe(true);
+    expect(hasDuplicateScriptName(scripts, scripts[0]!)).toBe(true);
+  });
+
+  it("does not compare a script with itself or flag an empty name", () => {
+    expect(hasDuplicateScriptName(scripts, scripts[1]!)).toBe(false);
+    expect(
+      hasDuplicateScriptName([scriptDraft("a", ""), scriptDraft("b", " ")], scriptDraft("b", " ")),
+    ).toBe(false);
+  });
+
+  it("guards the write, where the second row would replace the first", () => {
+    const next = applyDraftToConfig({
+      base: {},
+      draft: {
+        ...emptyDraft(),
+        scripts: [scriptDraft("a", "dev", "npm run dev"), scriptDraft("b", "dev", "vite")],
+      },
+    });
+    expect(next.scripts).toEqual({ dev: { command: "vite" } });
+  });
+});
+
+describe("revertScriptEdit", () => {
+  it("restores an existing script to how it was when the sheet opened", () => {
+    const original = scriptDraft("a", "dev", "npm run dev");
+    const draft = {
+      ...emptyDraft(),
+      scripts: [scriptDraft("a", "dev", "rm -rf ."), scriptDraft("b", "test")],
+    };
+
+    expect(revertScriptEdit(draft, { id: "a", original }).scripts).toEqual([
+      original,
+      scriptDraft("b", "test"),
+    ]);
+  });
+
+  it("removes a script the dismissed sheet had added, even when partly filled in", () => {
+    const draft = {
+      ...emptyDraft(),
+      scripts: [scriptDraft("a", "dev"), scriptDraft("new", "lint", "")],
+    };
+
+    expect(revertScriptEdit(draft, { id: "new", original: null }).scripts).toEqual([
+      scriptDraft("a", "dev"),
+    ]);
   });
 });

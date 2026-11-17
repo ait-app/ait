@@ -78,7 +78,8 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { showAlert } from "@/utils/show-alert";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
@@ -237,7 +238,13 @@ function HostConnectionError({ serverId }: { serverId: string }) {
   return <Text style={styles.errorText}>{connectionError}</Text>;
 }
 
-export function HostConnectionsPage({ serverId }: { serverId: string }) {
+export function HostConnectionsPage({
+  serverId,
+  onHostRemoved,
+}: {
+  serverId: string;
+  onHostRemoved?: () => void;
+}) {
   const host = useHostProfile(serverId);
 
   if (!host) {
@@ -247,7 +254,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
   return (
     <View>
       <HostConnectionError serverId={serverId} />
-      <ConnectionsSection host={host} />
+      <ConnectionsSection host={host} onHostRemoved={onHostRemoved} />
       {supportsAccountRelay() && !supportsBrowserAccount() && !isSharedResourceHost(host) ? (
         <OnlineServiceHostSection host={host} />
       ) : null}
@@ -433,7 +440,13 @@ function HostConfigError({ serverId }: { serverId: string }) {
   );
 }
 
-function ConnectionsSection({ host }: { host: HostProfile }) {
+function ConnectionsSection({
+  host,
+  onHostRemoved,
+}: {
+  host: HostProfile;
+  onHostRemoved?: () => void;
+}) {
   const { t } = useTranslation();
   const { removeConnection } = useHostMutations();
   const snapshot = useHostRuntimeSnapshot(host.serverId);
@@ -441,6 +454,8 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
   const [pendingRemoveConnection, setPendingRemoveConnection] = useState<{
     connectionId: string;
     title: string;
+    // Removing a host's only connection removes the host itself.
+    removesHost: boolean;
   } | null>(null);
   const [isRemovingConnection, setIsRemovingConnection] = useState(false);
   const removeConnectionHeader = useMemo<SheetHeader>(
@@ -453,9 +468,10 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       setPendingRemoveConnection({
         connectionId: connection.id,
         title: formatHostConnectionLabel(connection, t),
+        removesHost: host.connections.length === 1 && host.connections[0]?.id === connection.id,
       });
     },
-    [t],
+    [host.connections, t],
   );
 
   const handleCloseConfirm = useCallback(() => {
@@ -469,19 +485,24 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
 
   const handleConfirmRemove = useCallback(() => {
     if (!pendingRemoveConnection) return;
-    const { connectionId } = pendingRemoveConnection;
+    const { connectionId, removesHost } = pendingRemoveConnection;
     setIsRemovingConnection(true);
     void removeConnection(host.serverId, connectionId)
-      .then(() => setPendingRemoveConnection(null))
+      .then(() => {
+        setPendingRemoveConnection(null);
+        // The host is gone, so this page has nothing left to show.
+        if (removesHost) onHostRemoved?.();
+        return;
+      })
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        Alert.alert(
+        showAlert(
           t("settings.host.connections.removeErrorTitle"),
           t("settings.host.connections.removeErrorMessage"),
         );
       })
       .finally(() => setIsRemovingConnection(false));
-  }, [pendingRemoveConnection, removeConnection, host.serverId, t]);
+  }, [pendingRemoveConnection, removeConnection, host.serverId, onHostRemoved, t]);
 
   return (
     <SettingsSection title={t("settings.host.connections.title")}>
@@ -510,9 +531,12 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
           testID="remove-connection-confirm-modal"
         >
           <Text style={styles.confirmText}>
-            {t("settings.host.connections.removeMessage", {
-              name: pendingRemoveConnection.title,
-            })}
+            {t(
+              pendingRemoveConnection.removesHost
+                ? "settings.host.connections.removeLastMessage"
+                : "settings.host.connections.removeMessage",
+              { name: pendingRemoveConnection.title },
+            )}
           </Text>
           <View style={styles.confirmActions}>
             <Button
@@ -633,7 +657,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       try {
         await request;
       } catch (error) {
-        Alert.alert(t("settings.host.daemon.restart.requestFailedTitle"), toErrorMessage(error));
+        showAlert(t("settings.host.daemon.restart.requestFailedTitle"), toErrorMessage(error));
       } finally {
         if (isMountedRef.current) setIsRestarting(false);
       }
@@ -643,14 +667,14 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      Alert.alert(
+      showAlert(
         t("settings.host.daemon.restart.unavailableTitle"),
         t("settings.host.daemon.restart.unavailableMessage"),
       );
       return;
     }
     if (!isHostConnected()) {
-      Alert.alert(
+      showAlert(
         t("settings.host.daemon.restart.offlineTitle"),
         t("settings.host.daemon.restart.offlineMessage"),
       );
@@ -711,7 +735,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        Alert.alert(
+        showAlert(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.dialogFailedMessage"),
         );
@@ -962,9 +986,11 @@ function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
         mcp: {
           injectIntoAgents: next,
         },
+      }).catch((error) => {
+        showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
       });
     },
-    [patchConfig],
+    [patchConfig, t],
   );
 
   if (!isConnected) return null;
@@ -1011,7 +1037,7 @@ function DaemonConfigSwitchCard({
     (next: boolean) => {
       void patchConfig({ [configKey]: next }).catch((error) => {
         console.error(`[HostPage] Failed to update ${logLabel}`, error);
-        Alert.alert(labels.updateFailed, toErrorMessage(error));
+        showAlert(labels.updateFailed, toErrorMessage(error));
       });
     },
     [configKey, labels.updateFailed, logLabel, patchConfig],
@@ -1081,15 +1107,17 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
   const [draft, setDraft] = useState(persistedPrompt);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // The text area keeps its own text and reads `value` only when it mounts, so putting the
+  // stored prompt back on screen takes a remount.
+  const [inputRevision, setInputRevision] = useState(0);
   const header = useMemo<SheetHeader>(
     () => ({ title: t("settings.host.orchestration.systemPrompt.sheetTitle") }),
     [t],
   );
 
-  useEffect(() => {
-    setDraft(persistedPrompt);
-  }, [persistedPrompt]);
-
+  // The draft is seeded when the sheet opens. It must not follow `persistedPrompt` while the
+  // sheet is open: a failed save rolls the stored value back, and following it would drop the
+  // text the user still sees.
   const hasChanges = draft !== persistedPrompt;
 
   const handleOpen = useCallback(() => {
@@ -1112,12 +1140,14 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
       })
       .catch((error) => {
         console.error("[HostPage] Failed to save append system prompt", error);
+        showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
       })
       .finally(() => setIsSaving(false));
-  }, [draft, patchConfig]);
+  }, [draft, patchConfig, t]);
 
   const handleReset = useCallback(() => {
     setDraft(persistedPrompt);
+    setInputRevision((revision) => revision + 1);
   }, [persistedPrompt]);
 
   if (!isConnected) return null;
@@ -1154,6 +1184,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
           desktopMaxWidth={560}
         >
           <SettingsTextAreaCard
+            key={inputRevision}
             testID="host-page-append-system-prompt-input"
             accessibilityLabel={t("settings.host.orchestration.systemPrompt.accessibilityLabel")}
             value={draft}
@@ -1273,7 +1304,7 @@ function RemoveHostSection({
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        Alert.alert(
+        showAlert(
           t("settings.host.daemon.remove.errorTitle"),
           isLocalDaemon
             ? t("settings.host.daemon.remove.localErrorMessage")
@@ -1591,7 +1622,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         try {
           await saveProfiles(profiles.filter((p) => p.id !== id));
         } catch (error) {
-          Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
+          showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
         }
         return;
       });
@@ -1611,7 +1642,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
+        showAlert(t("common.errors.unableToSave"), toErrorMessage(error));
       }
     },
     [profiles, saveProfiles, t],

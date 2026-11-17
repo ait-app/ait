@@ -8,6 +8,7 @@ import {
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  removeActiveSlashCommand,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
 import {
@@ -545,7 +546,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     onSelectOption: selectOptionFromKeyPress,
     onEscape:
       mode === "command" && activeSlashCommand?.position === "start"
-        ? () => setUserInput("")
+        ? () => setUserInput(removeActiveSlashCommand(userInput, activeSlashCommand))
         : undefined,
   });
 

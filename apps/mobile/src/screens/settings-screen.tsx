@@ -126,14 +126,8 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type PressableStateCallbackType,
-} from "react-native";
+import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
+import { showAlert } from "@/utils/show-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -204,7 +198,7 @@ function renderHostSettingsContent(
     case "projects":
       return <ProjectsScreen serverId={view.serverId} />;
     case "connections":
-      return <HostConnectionsPage serverId={view.serverId} />;
+      return <HostConnectionsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
     case "agents":
       return <HostAgentsPage serverId={view.serverId} />;
     case "metadata":
@@ -762,10 +756,7 @@ function DesktopAppUpdateRow() {
       })
       .catch((error) => {
         console.error("[Settings] Failed to open app update confirmation", error);
-        Alert.alert(
-          t("settings.about.updates.alertTitle"),
-          t("settings.about.updates.alertMessage"),
-        );
+        showAlert(t("settings.about.updates.alertTitle"), t("settings.about.updates.alertMessage"));
       });
   }, [installUpdate, isDesktopApp, t]);
 

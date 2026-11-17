@@ -87,6 +87,7 @@ import {
   computeCanStartDictation,
   createPromptHistoryState,
   navigatePromptHistory,
+  queueComposerInput,
   rememberPrompt,
   resetPromptHistoryNavigation,
   resolveComposerSurfacePresentation,
@@ -921,27 +922,6 @@ function sendMessageImpl(ctx: SendMessageContext): boolean {
   return true;
 }
 
-interface QueueMessageContext {
-  value: string;
-  attachments: ComposerAttachment[];
-  cwd: string;
-  onQueue: ((payload: MessagePayload) => void) | undefined;
-  replaceText: (text: string) => void;
-  onMinimizeHeight: () => void;
-  exitFullscreen: () => void;
-}
-
-function queueMessageImpl(ctx: QueueMessageContext): boolean {
-  if (!ctx.onQueue) return false;
-  const trimmed = ctx.value.trim();
-  if (!trimmed && ctx.attachments.length === 0) return false;
-  ctx.exitFullscreen();
-  ctx.onQueue({ text: trimmed, attachments: ctx.attachments, cwd: ctx.cwd });
-  ctx.replaceText("");
-  ctx.onMinimizeHeight();
-  return true;
-}
-
 function resolveMaxInputHeight(windowHeight: number, compact: boolean): number {
   if (compact) return DEFAULT_MAX_INPUT_HEIGHT;
   if (!Number.isFinite(windowHeight) || windowHeight <= 0) return DEFAULT_MAX_INPUT_HEIGHT;
@@ -1564,25 +1544,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const handleQueueMessage = useCallback(() => {
       const liveValue = textInputRef.current?.getText() ?? valueRef.current;
-      const didQueue = queueMessageImpl({
+      const didQueue = queueComposerInput({
         value: liveValue,
         attachments,
         cwd,
         onQueue,
-        replaceText,
         onMinimizeHeight: minimizeInputHeight,
         exitFullscreen,
       });
       if (didQueue) rememberSubmittedPrompt(liveValue);
-    }, [
-      attachments,
-      cwd,
-      onQueue,
-      replaceText,
-      minimizeInputHeight,
-      exitFullscreen,
-      rememberSubmittedPrompt,
-    ]);
+    }, [attachments, cwd, onQueue, minimizeInputHeight, exitFullscreen, rememberSubmittedPrompt]);
 
     const handleDefaultSendAction = useCallback(() => {
       runDefaultSendAction({

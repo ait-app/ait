@@ -9,6 +9,8 @@ import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { resolveScheduleTitle, scheduleProductName } from "@/utils/schedule-format";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
+import { useToast } from "@/contexts/toast-context";
+import { toErrorMessage } from "@/utils/error-messages";
 
 /** A schedule plus the client-derived fields the row renders. */
 export interface ScheduleRowView {
@@ -73,6 +75,7 @@ function SchedulesTableRow({
   const { schedule } = row;
   const { id, serverId } = schedule;
   const mutations = useScheduleMutations({ serverId });
+  const toast = useToast();
   const [pending, setPending] = useState<ScheduleRowPending>(NO_PENDING);
 
   const runAction = useCallback(
@@ -80,9 +83,11 @@ function SchedulesTableRow({
       setPending((current) => ({ ...current, [key]: true }));
       try {
         await action();
-      } catch {
-        // Mutations roll back their own optimistic cache writes on error and
-        // re-fetch on settle; surfacing per-row toasts here is out of scope.
+      } catch (error) {
+        // Mutations roll back their own optimistic cache writes on error and re-fetch on
+        // settle. "Run now" has no optimistic write at all, so without a message a failed
+        // action looks exactly like one that was never pressed.
+        toast.error(toErrorMessage(error));
       } finally {
         setPending((current) => {
           const next = { ...current };
@@ -91,7 +96,7 @@ function SchedulesTableRow({
         });
       }
     },
-    [],
+    [toast],
   );
 
   const handleEdit = useCallback(() => {

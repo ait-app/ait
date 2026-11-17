@@ -435,6 +435,8 @@ export const settings = {
       title: "Connections",
       removeTitle: "Remove connection",
       removeMessage: "Remove {{name}}? This cannot be undone.",
+      removeLastMessage:
+        "{{name}} is this host's only connection. Removing it also removes the host from this app. This cannot be undone.",
       removeAction: "Remove",
       removeErrorTitle: "Error",
       removeErrorMessage: "Unable to remove connection",
@@ -784,6 +786,7 @@ export const settings = {
       nameAccessibility: "Script name",
       commandAccessibility: "Script command",
       nameRequired: "Name is required",
+      nameDuplicate: "Another script already uses this name",
       commandRequired: "Command is required",
       newScript: "New script",
       editScript: "Edit {{name}}",

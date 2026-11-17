@@ -236,6 +236,7 @@ describe("test-daemon-connection connectToDaemon", () => {
       ),
     ).rejects.toMatchObject({
       message: "Incorrect password",
+      incorrectPassword: true,
     });
   });
 
