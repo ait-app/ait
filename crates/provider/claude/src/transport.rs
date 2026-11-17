@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio::task::JoinHandle;
@@ -12,8 +12,8 @@ use tokio_util::task::AbortOnDropHandle;
 
 use super::ClaudeClient;
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
-use provider_core::ports::diagnostics::{Category, Diagnostic};
 use provider_native::diagnostics::Diagnostics;
+use provider_native::json_lines::{Frame, JsonLines};
 use provider_native::process_group::{self, Signal};
 
 /// Largest stdout frame or native transcript line. `--replay-user-messages` and the transcript
@@ -119,35 +119,13 @@ impl Transport {
         let reader_input = input.clone();
         let deadline = client.deadline;
         let reader = tokio::spawn(async move {
-            let mut output = BufReader::new(output);
+            let mut output = JsonLines::new(output, MAX_FRAME);
             loop {
-                let mut bytes = Vec::new();
-                let read = (&mut output)
-                    .take(MAX_FRAME as u64)
-                    .read_until(b'\n', &mut bytes)
-                    .await;
-                // A short successful read without a newline proves EOF. A frame that fills
-                // `take` must fail rather than deliver a prefix and silently discard the rest.
-                let trailing = matches!(read, Ok(1..))
-                    && bytes.len() < MAX_FRAME
-                    && bytes.last() != Some(&b'\n');
-                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
-                    let category = if matches!(read, Ok(0)) {
-                        Category::Closed
-                    } else {
-                        Category::Protocol
-                    };
-                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
-                    break;
-                }
-                if bytes.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
-                    reader_diagnostics
-                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
-                    break;
+                let frame = match output.next().await {
+                    Ok(frame) => frame,
+                    Err(end) => break end.observe(&reader_diagnostics),
                 };
+                let message = &frame.value;
                 if message["type"] == "control_request"
                     && message["request"]["subtype"] != "can_use_tool"
                 {
@@ -156,11 +134,7 @@ impl Transport {
                     let _ = tokio::time::timeout(deadline, write(&reader_input, &reply)).await;
                     break;
                 }
-                if !send_record(&sender, &budget, &bytes, message).await {
-                    break;
-                }
-                if trailing {
-                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+                if !send_record(&sender, &budget, frame).await {
                     break;
                 }
             }
@@ -320,13 +294,8 @@ impl Drop for Transport {
 }
 
 /// Send one parsed frame, holding its byte budget until the reader releases it.
-async fn send_record(
-    sender: &mpsc::Sender<Record>,
-    budget: &Arc<Semaphore>,
-    bytes: &[u8],
-    message: Value,
-) -> bool {
-    let Ok(size) = u32::try_from(bytes.len()) else {
+async fn send_record(sender: &mpsc::Sender<Record>, budget: &Arc<Semaphore>, frame: Frame) -> bool {
+    let Ok(size) = u32::try_from(frame.size) else {
         return false;
     };
     let Ok(permit) = budget.clone().acquire_many_owned(size).await else {
@@ -334,7 +303,7 @@ async fn send_record(
     };
     sender
         .send(Record {
-            value: message,
+            value: frame.value,
             _budget: permit,
         })
         .await

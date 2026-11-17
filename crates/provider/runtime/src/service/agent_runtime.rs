@@ -21,7 +21,8 @@ use serde::Deserialize;
 pub(crate) mod archive;
 mod search;
 
-const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";
+/// Agent label naming the Agent that created or observed this child Agent.
+pub(crate) const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";
 const OPEN_AGENT_TAB_LABEL_PREFIX: &str = "paseo.open-agent-tab.";
 const DEFAULT_PAGE_LIMIT: usize = 200;
 

@@ -5,6 +5,23 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde::Deserialize;
 
+/// Every wire field a session configuration object may carry: [`SessionConfig`], a draft
+/// configuration, or resume overrides. The flattened [`StoredAgentConfig`] prevents serde from
+/// denying unknown fields, so handlers check keys against this list before decoding.
+pub(crate) const SESSION_CONFIG_FIELDS: &[&str] = &[
+    "provider",
+    "cwd",
+    "title",
+    "modeId",
+    "model",
+    "thinkingOptionId",
+    "systemPrompt",
+    "featureValues",
+    "providerOptions",
+    "mcpServers",
+    "toolPolicy",
+];
+
 /// Native session configuration. Advanced fields are validated before any side effect.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

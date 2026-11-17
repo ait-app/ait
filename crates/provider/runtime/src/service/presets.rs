@@ -25,7 +25,7 @@ const MAX_PROVIDER: usize = 128;
 async fn fenced<T: Send + 'static>(
     writes: &Arc<std::sync::Mutex<()>>,
     store: ait::AitPresets,
-    operation: impl FnOnce(ait::AitPresets) -> Result<T, String> + Send + 'static,
+    operation: impl FnOnce(ait::AitPresets) -> Result<T, ait::AitPresetError> + Send + 'static,
 ) -> Result<T, PresetError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let writes = writes.clone();
@@ -33,7 +33,7 @@ async fn fenced<T: Send + 'static>(
         let outcome = writes
             .lock()
             .map_err(|_| "Preset store is unavailable".to_owned())
-            .and_then(|_guard| operation(store));
+            .and_then(|_guard| operation(store).map_err(|error| error.to_string()));
         // The receiver may be gone if the caller was cancelled; the write already happened.
         let _ = sender.send(outcome);
     });
@@ -150,7 +150,7 @@ impl PresetService {
                 })
                 .collect()
         })
-        .map_err(PresetError::Unavailable)
+        .map_err(|error| PresetError::Unavailable(error.to_string()))
     }
 
     /// Create or replace one preset through the store that owns it.

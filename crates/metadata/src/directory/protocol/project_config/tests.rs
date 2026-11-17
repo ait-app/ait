@@ -134,6 +134,18 @@ fn result_boolean_discriminator_matches_paseo_payload() {
         json!({"ok":true,"repoRoot":"/repo","config":null,"revision":null})
     );
     assert_eq!(
+        serde_json::to_string(&ProjectConfigWriteResult::Success {
+            repo_root: "/repo".to_owned(),
+            config: PaseoConfigRaw::new(json!({"scripts":{}})).unwrap(),
+            revision: PaseoConfigRevision {
+                mtime_ms: 12.5,
+                size: 42.0,
+            },
+        })
+        .unwrap(),
+        r#"{"ok":true,"repoRoot":"/repo","config":{"scripts":{}},"revision":{"mtimeMs":12.5,"size":42.0}}"#
+    );
+    assert_eq!(
         serde_json::to_value(ProjectConfigWriteResult::Failure {
             repo_root: "/repo".to_owned(),
             error: ProjectConfigRpcError::StaleProjectConfig {

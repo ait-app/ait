@@ -3,7 +3,7 @@
 use domain::directory_sync::Cursor;
 use serde_json::{Value, json};
 
-use crate::support::rpc::encode;
+use model::rpc::encode;
 
 use super::{
     AgentListRequest, AgentRuntimeDirectory, ErrorCode, QueryScope, entry, map_error, page, query,

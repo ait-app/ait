@@ -14,6 +14,7 @@ struct Lane {
 
 use super::operation::{Access, Operation};
 use super::{Command, ErrorCode, ExecutionState};
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 
 /// Shared factories and independently owned session lanes; all accepted work is tracked.
 pub(super) struct Router {
@@ -452,7 +453,7 @@ fn side_lane(
             .owners
             .place(&lane, format!("workspace:{workspace}"))?;
     }
-    if let Some(parent) = record.labels.get("paseo.parent-agent-id") {
+    if let Some(parent) = record.labels.get(PARENT_AGENT_ID_LABEL) {
         state.owners.place(&lane, format!("parent:{parent}"))?;
     }
     Ok(Some(lane))

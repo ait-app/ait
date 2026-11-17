@@ -87,19 +87,28 @@ pub(crate) async fn active_workspace(
     state: &Shared,
     id: &str,
 ) -> Result<Option<PersistedWorkspaceRecord>, ErrorCode> {
-    let id = id.to_owned();
+    Ok(all_workspaces(state)
+        .await?
+        .into_iter()
+        .find(|workspace| workspace.workspace_id == id && !workspace.is_archived()))
+}
+
+/// Read every registered workspace, archived ones included.
+///
+/// # Errors
+/// Returns `UnsupportedCapability` without a directory, or registry failures.
+pub(crate) async fn all_workspaces(
+    state: &Shared,
+) -> Result<Vec<PersistedWorkspaceRecord>, ErrorCode> {
     state
         .runtime
         .run_queued(
             state.metadata.directory.clone(),
             ErrorCode::RegistryIo,
-            move |directory| {
-                let workspaces = directory
+            |directory| {
+                directory
                     .list_workspaces()
-                    .map_err(|_| ErrorCode::RegistryIo)?;
-                Ok(workspaces
-                    .into_iter()
-                    .find(|workspace| workspace.workspace_id == id && !workspace.is_archived()))
+                    .map_err(|_| ErrorCode::RegistryIo)
             },
         )
         .await

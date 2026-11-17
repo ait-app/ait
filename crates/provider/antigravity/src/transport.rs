@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -14,6 +14,7 @@ use super::{
     diagnostics::{Diagnostics, Failure},
 };
 use provider_core::ports::agent_session::AgentSessionError;
+use provider_native::json_lines::{End, JsonLines};
 use provider_native::process_group::{self, Signal};
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
@@ -169,42 +170,18 @@ impl Transport {
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let diagnostics = process.diagnostics.clone();
         let reader = tokio::spawn(async move {
-            let mut output = BufReader::new(output);
+            let mut output = JsonLines::new(output, MAX_FRAME);
             loop {
-                let mut bytes = Vec::new();
-                let read = (&mut output)
-                    .take(MAX_FRAME as u64)
-                    .read_until(b'\n', &mut bytes)
-                    .await;
-                // A short successful read without a newline proves EOF; a full read may
-                // have exhausted `take` while the provider still has more bytes to send.
-                let trailing = matches!(read, Ok(1..))
-                    && bytes.len() < MAX_FRAME
-                    && bytes.last() != Some(&b'\n');
-                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
-                    diagnostics.observe(if matches!(read, Ok(0)) {
-                        Failure::Exit
-                    } else {
-                        Failure::Protocol
-                    });
-                    break;
-                }
-                if bytes.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
-                    diagnostics.observe(Failure::Protocol);
-                    break;
+                let message = match output.next().await {
+                    Ok(frame) => frame.value,
+                    Err(End::Closed) => break diagnostics.observe(Failure::Exit),
+                    Err(End::Read | End::Decode) => break diagnostics.observe(Failure::Protocol),
                 };
                 if !message["event"].is_string() {
                     diagnostics.observe(Failure::Protocol);
                     break;
                 }
                 if sender.send(message).await.is_err() {
-                    break;
-                }
-                if trailing {
-                    diagnostics.observe(Failure::Exit);
                     break;
                 }
             }

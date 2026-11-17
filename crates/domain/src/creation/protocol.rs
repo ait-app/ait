@@ -92,21 +92,4 @@ pub struct Snapshot {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::Phase;
-
-    #[test]
-    fn phases_use_stable_wire_names_and_terminal_states() {
-        assert_eq!(
-            serde_json::to_string(&Phase::WorkspaceReady).unwrap(),
-            "\"workspace_ready\""
-        );
-        assert_eq!(
-            serde_json::from_str::<Phase>("\"prompt_started\"").unwrap(),
-            Phase::PromptStarted
-        );
-        assert!(!Phase::AgentReady.is_terminal());
-        assert!(Phase::Completed.is_terminal());
-        assert!(Phase::Failed.is_terminal());
-    }
-}
+mod tests;

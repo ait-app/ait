@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 use tokio::process::Child;
 use tokio_util::task::AbortOnDropHandle;
 
-use super::{AgentSessionError, MAX_ANSWER_BYTES, OpenCodeClient, SideRunnerSpec};
+use super::{AgentSessionError, OpenCodeClient, SideRunnerSpec};
+use provider_core::protocol::side_questions::MAX_ANSWER_BYTES;
 use provider_native::process_group::{self, Signal};
 
 const MAX_SCHEMA: usize = 4 * 1024 * 1024;

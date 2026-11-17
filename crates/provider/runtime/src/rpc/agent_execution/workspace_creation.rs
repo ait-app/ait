@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{CreateRequest, ErrorCode, ExecutionState, parse_creation};
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 use crate::support::rpc::decode;
 use provider_core::protocol::prompt::AgentPrompt;
 
@@ -129,8 +130,7 @@ impl ExecutionState {
             super::placement::directory(target.to_str().ok_or(ErrorCode::InvalidMessage)?)?;
         request.workspace_id = Some(id.clone());
         if let Some(parent) = &request.caller_agent_id {
-            if request.labels.len() == 100 && !request.labels.contains_key("paseo.parent-agent-id")
-            {
+            if request.labels.len() == 100 && !request.labels.contains_key(PARENT_AGENT_ID_LABEL) {
                 return Err(ErrorCode::InvalidMessage);
             }
             let caller = self
@@ -141,7 +141,7 @@ impl ExecutionState {
                 .ok_or(ErrorCode::AgentNotFound)?;
             request
                 .labels
-                .insert("paseo.parent-agent-id".into(), caller.id);
+                .insert(PARENT_AGENT_ID_LABEL.into(), caller.id);
         }
         Ok((request, prompt, id.clone()))
     }

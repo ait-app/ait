@@ -58,7 +58,9 @@ pub(super) async fn read_snapshot(
     let address = json!({"kind":"session","sessionId":session_id});
     // The Web client's follow endpoint promotes a cold session to an Agent after its snapshot.
     // Only these non-activating endpoints may be used by history/import readers.
-    let parent_id = validate_root(runtime, session_id, cwd).await?;
+    let parent_id = root_summary(runtime, session_id, cwd).await?["parentSessionId"]
+        .as_str()
+        .map(str::to_owned);
     // The read-only wire summary omits creation time. The shared import contract permits the
     // observation time in this case; do not fabricate a native header from an event timestamp.
     let created_at = chrono::Utc::now().to_rfc3339();
@@ -130,25 +132,30 @@ pub(super) async fn project_records(
     Ok(entries)
 }
 
-/// Validate a root identity and working directory before any activating native subscription.
-/// Returns its optional native parent, or an error for absent, foreign, or subagent identities.
-pub(super) async fn validate_root(
+/// Find the listed root summary and validate its directory and origin before any activating
+/// native subscription or page read.
+/// Returns the native summary, or an error for absent, foreign, or subagent identities.
+pub(super) async fn root_summary(
     runtime: &Runtime,
     session_id: &str,
     cwd: &str,
-) -> Result<Option<String>, AgentSessionError> {
-    let listed = runtime
+) -> Result<Value, AgentSessionError> {
+    let mut listed = runtime
         .api
         .call("session/list", json!({"_request":{}}))
         .await?;
     let summary = listed["items"]
-        .as_array()
-        .and_then(|items| items.iter().find(|item| item["sessionId"] == session_id))
+        .as_array_mut()
+        .and_then(|items| {
+            items
+                .iter_mut()
+                .find(|item| item["sessionId"] == session_id)
+        })
         .ok_or(AgentSessionError::Failed)?;
     if summary["cwd"] != cwd || summary["origin"] == "subagent" {
         return Err(AgentSessionError::Failed);
     }
-    Ok(summary["parentSessionId"].as_str().map(str::to_owned))
+    Ok(summary.take())
 }
 
 /// Obtain an exact read-only projection cut; migration hints cannot replace authoritative facts.

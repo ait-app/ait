@@ -127,7 +127,7 @@ async fn read_page(
     client: &DeepSeekHarnessClient,
     request: &PreviewRequest,
 ) -> Result<SessionPreview, AgentSessionError> {
-    let summary = root_summary(runtime, &request.session_id, &request.cwd).await?;
+    let summary = history::root_summary(runtime, &request.session_id, &request.cwd).await?;
     let (cut, values) = match &request.cursor {
         Some(cursor) => (cursor.through_seq, Value::Null),
         None => history::baseline(runtime, &request.session_id).await?,
@@ -297,26 +297,6 @@ fn display_page(
         });
     entries.truncate(request.limit);
     Ok((entries, older_cursor))
-}
-
-/// Find the listed root summary and validate its directory and origin before any page read.
-async fn root_summary(
-    runtime: &Runtime,
-    session_id: &str,
-    cwd: &str,
-) -> Result<Value, AgentSessionError> {
-    let listed = runtime
-        .api
-        .call("session/list", json!({"_request":{}}))
-        .await?;
-    let summary = listed["items"]
-        .as_array()
-        .and_then(|items| items.iter().find(|item| item["sessionId"] == session_id))
-        .ok_or(AgentSessionError::Failed)?;
-    if summary["cwd"] != cwd || summary["origin"] == "subagent" {
-        return Err(AgentSessionError::Failed);
-    }
-    Ok(summary.clone())
 }
 
 /// Validate one wire page: event records, contiguous sequences below the exclusive boundary.

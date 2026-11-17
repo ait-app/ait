@@ -10,7 +10,7 @@ use serde_json::Value;
 use super::{Session, inside};
 use crate::Shared;
 use crate::guest::Reach;
-use crate::shares::rpc::{active_project, active_workspace};
+use crate::shares::rpc::{active_project, active_workspace, all_workspaces};
 
 /// Check additional owner-only effects of otherwise scoped requests.
 /// # Errors
@@ -56,18 +56,7 @@ async fn archive(
         return Ok(());
     }
     // A worktree archive can retire multiple registrations, even from other projects.
-    let workspaces = state
-        .runtime
-        .run_queued(
-            state.metadata.directory.clone(),
-            ErrorCode::RegistryIo,
-            |directory| {
-                directory
-                    .list_workspaces()
-                    .map_err(|_| ErrorCode::RegistryIo)
-            },
-        )
-        .await?;
+    let workspaces = all_workspaces(state).await?;
     let explicit = params["worktreePath"]
         .as_str()
         .filter(|path| !path.trim().is_empty());

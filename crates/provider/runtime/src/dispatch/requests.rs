@@ -1,5 +1,6 @@
 //! Request branches tried in order by this crate; each owns recognition and consumption.
 
+use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode};
 
 use super::{Completion, State};
@@ -13,18 +14,7 @@ pub(super) async fn skills(
     pending: &mut Option<Context<'_>>,
     state: &State,
 ) -> Result<(), DispatchError> {
-    let Some(context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "agent.skills.get_status.request"
-                | "agent.skills.reconcile.request"
-                | "agent.skills.uninstall.request"
-                | "agent.skills.save_selection.request"
-                | "agent.skills.import_legacy_selection.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let context = claim(pending, crate::skills::service::METHODS)?;
     context
         .rpc(
             state.skills.clone(),
@@ -44,18 +34,7 @@ pub(super) async fn agents(
     pending: &mut Option<Context<'_>>,
     state: &State,
 ) -> Result<(), DispatchError> {
-    let Some(context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "agent.configure"
-                | "agent.get"
-                | "agent.list"
-                | "agent.default.get"
-                | "agent.default.set"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let context = claim(pending, crate::rpc::agents::METHODS)?;
     context
         .rpc(
             state.agents.clone(),
@@ -76,22 +55,7 @@ pub(super) async fn runtime(
     state: &State,
     connection: &mut crate::connection::Connection,
 ) -> Result<Option<Completion>, DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "agent.list.request"
-                | "agent.history.get.request"
-                | "agent.get.request"
-                | "agent.update.request"
-                | "agent.archive.request"
-                | "agent.delete.request"
-                | "agent.detach.request"
-                | "agent.attention.clear.request"
-                | "agent.items.close.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let mut context = claim(pending, crate::rpc::agent_runtime::METHODS)?;
     if context.request.method == "agent.list.request"
         && context
             .request
@@ -129,13 +93,7 @@ pub(super) async fn execution(
     pending: &mut Option<Context<'_>>,
     state: &State,
 ) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        super::agent_execution::METHODS
-            .iter()
-            .any(|method| method.name == context.request.method)
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let mut context = claim(pending, super::agent_execution::METHODS)?;
     if context.request.method == "agent.create.request" {
         return crate::connection::Connection::create(context, state)
             .await
@@ -152,7 +110,7 @@ pub(super) async fn execution(
     }
     if context.request.method == "agent.context.compact.request" {
         let params = std::mem::take(&mut context.request.params);
-        let result = super::agent_execution::dispatch(&context.request.method, params, state).await;
+        let result = super::agent_execution::compact(params, state).await;
         return context.respond(result).map_err(Into::into);
     }
     super::agent_execution::request(context, state).map_err(Into::into)
@@ -168,18 +126,7 @@ pub(super) async fn timeline(
     state: &State,
     connection: &mut crate::connection::Connection,
 ) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "agent.timeline.get.request"
-                | "agent.timeline.search.request"
-                | "agent.timeline.list_prompts.request"
-                | "agent.timeline.append.request"
-                | "agent.timeline.set_subscription.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let mut context = claim(pending, crate::rpc::timeline::METHODS)?;
     if context.request.method == "agent.timeline.set_subscription.request" {
         return connection
             .subscribe(context, state)
@@ -208,19 +155,22 @@ pub(super) fn catalog(
     pending: &mut Option<Context<'_>>,
     state: &State,
 ) -> Result<(), DispatchError> {
-    let Some(context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "provider.usage.list.request"
-                | "provider.available.list.request"
-                | "provider.models.list.request"
-                | "provider.modes.list.request"
-                | "provider.features.list.request"
-                | "provider.snapshot.get.request"
-                | "provider.snapshot.refresh.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
+    let context = claim(pending, super::catalog::METHODS)?;
     super::catalog::request(context, state).map_err(Into::into)
+}
+
+/// Take `pending` when its method is one of `methods`, the owning component's declared set.
+/// # Errors
+/// Returns `NotImplemented` and leaves `pending` in place for any other method.
+fn claim<'a>(
+    pending: &mut Option<Context<'a>>,
+    methods: &[MethodSpec],
+) -> Result<Context<'a>, DispatchError> {
+    pending
+        .take_if(|context| {
+            methods
+                .iter()
+                .any(|method| method.name == context.request.method)
+        })
+        .ok_or(DispatchError::NotImplemented)
 }

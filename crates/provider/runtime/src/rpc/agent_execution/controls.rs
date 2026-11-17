@@ -4,13 +4,15 @@ use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::usage_ledger::{UsageLedgerError, UsageQuery};
+use crate::protocol::agent_execution::SESSION_CONFIG_FIELDS;
 use crate::protocol::controls::{
     CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::native_sessions::canonical;
-use crate::support::rpc::encode;
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
+use model::rpc::encode;
 use provider_core::ports::agent_session::AgentSessionSpec;
 use provider_core::protocol::agent_config::ConfigPatch;
 
@@ -20,16 +22,8 @@ const MAX_LEDGER_RANGE_MS: i64 = 400 * 24 * 60 * 60 * 1000;
 impl ExecutionState {
     pub(super) async fn unified_subagents(&self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["parentAgentId", "subagentId"])?;
-        let parent = self.resolve(
-            params["parentAgentId"]
-                .as_str()
-                .ok_or(ErrorCode::InvalidMessage)?,
-        )?;
-        let record = self
-            .registry
-            .get(&parent)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
+        let parent = self.resolve_field(&params, "parentAgentId")?;
+        let record = self.record(&parent)?;
         let root = record
             .observation
             .as_ref()
@@ -51,11 +45,7 @@ impl ExecutionState {
                 .ok_or(ErrorCode::UnsupportedCapability)?
                 .subagent_agent(root, native)?
                 .ok_or(ErrorCode::AgentNotFound)?;
-            let record = self
-                .registry
-                .get(&id)
-                .map_err(|_| ErrorCode::AgentIo)?
-                .ok_or(ErrorCode::AgentNotFound)?;
+            let record = self.record(&id)?;
             if record.internal
                 || record
                     .observation
@@ -79,7 +69,7 @@ impl ExecutionState {
                     || {
                         record
                             .labels
-                            .get("paseo.parent-agent-id")
+                            .get(PARENT_AGENT_ID_LABEL)
                             .is_some_and(|id| id == &parent)
                     },
                     |source| source.ready && source.parent_agent_id == parent,
@@ -191,11 +181,7 @@ impl ExecutionState {
             vec!["agentId", field]
         };
         only(params, &allowed)?;
-        let id = self.resolve(
-            params["agentId"]
-                .as_str()
-                .ok_or(ErrorCode::InvalidMessage)?,
-        )?;
+        let id = self.resolve_field(params, "agentId")?;
         self.active_workspace(&id)?;
         let value = params.get(field).ok_or(ErrorCode::InvalidMessage)?;
         let patch = match field {
@@ -240,31 +226,12 @@ impl ExecutionState {
 
     pub(super) async fn commands(&self, params: Value) -> Result<Value, ErrorCode> {
         if let Some(config) = params.get("draftConfig").filter(|value| !value.is_null()) {
-            only(
-                config,
-                &[
-                    "provider",
-                    "cwd",
-                    "title",
-                    "modeId",
-                    "model",
-                    "thinkingOptionId",
-                    "systemPrompt",
-                    "featureValues",
-                    "providerOptions",
-                    "mcpServers",
-                    "toolPolicy",
-                ],
-            )?;
+            only(config, SESSION_CONFIG_FIELDS)?;
         }
         let request: CommandsRequest = decode(params)?;
         let (id, spec) = match self.resolve(&request.agent_id) {
             Ok(id) => {
-                let record = self
-                    .registry
-                    .get(&id)
-                    .map_err(|_| ErrorCode::AgentIo)?
-                    .ok_or(ErrorCode::AgentNotFound)?;
+                let record = self.record(&id)?;
                 (
                     id,
                     AgentSessionSpec {
@@ -305,11 +272,7 @@ impl ExecutionState {
         }
         let request: SubagentRequest = decode(params)?;
         let id = self.resolve(&request.parent_agent_id)?;
-        let record = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
+        let record = self.record(&id)?;
         let children = self.manager.subagents(&id).await?;
         if list {
             let root = record
@@ -377,16 +340,6 @@ impl ExecutionState {
         object.insert("subagentId".to_owned(), json!(child_id));
         object.insert("provider".to_owned(), json!(record.provider));
         crate::rpc::timeline::bounded(value).map_err(Into::into)
-    }
-
-    fn active_workspace(&self, id: &str) -> Result<(), ErrorCode> {
-        let record = self
-            .registry
-            .get(id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
-        Ok(())
     }
 }
 

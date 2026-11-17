@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use domain::workspace::worktrees::{DirectoryGit, WorktreeAction, WorktreeCreation};
+use model::workspace::worktrees::WorktreeProvisioning;
 
 use crate::protocol::creation::{GitAction, GitOptions, WorktreeTarget};
 
@@ -164,16 +167,22 @@ impl ExecutionState {
         } else {
             return Ok(());
         };
-        let provisioning = self
-            .import_directory
-            .as_ref()
-            .and_then(|directory| directory.shared_worktrees())
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+        let provisioning = self.shared_worktrees()?;
         let cwd = request.config.cwd.clone();
         tokio::task::spawn_blocking(move || provisioning.prepare_directory(&cwd, &intent))
             .await
             .map_err(|_| ErrorCode::RegistryIo)?
             .map_err(|_| ErrorCode::InvalidMessage)
+    }
+
+    /// The host's shared Git worktree provisioning adapter.
+    /// # Errors
+    /// Returns `UnsupportedCapability` when the host installed no Workspace directory or adapter.
+    fn shared_worktrees(&self) -> Result<Arc<dyn WorktreeProvisioning>, ErrorCode> {
+        self.import_directory
+            .as_ref()
+            .and_then(|directory| directory.shared_worktrees())
+            .ok_or(ErrorCode::UnsupportedCapability)
     }
 
     pub(super) async fn start_worktree_setup(&self, workspace: &str) {
@@ -191,11 +200,7 @@ impl ExecutionState {
         mut input: WorktreeCreation,
     ) -> Result<String, ErrorCode> {
         input.cwd = Some(super::placement::directory(&request.config.cwd)?);
-        let provisioning = self
-            .import_directory
-            .as_ref()
-            .and_then(|directory| directory.shared_worktrees())
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+        let provisioning = self.shared_worktrees()?;
         let created = tokio::task::spawn_blocking(move || {
             provisioning.create(&input, &chrono::Utc::now().to_rfc3339())
         })
@@ -216,11 +221,7 @@ impl ExecutionState {
             .close(id)
             .await
             .map_err(|error| super::map_manager(&error))?;
-        let provisioning = self
-            .import_directory
-            .as_ref()
-            .and_then(|directory| directory.shared_worktrees())
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+        let provisioning = self.shared_worktrees()?;
         let workspace = workspace.to_owned();
         tokio::task::spawn_blocking(move || {
             provisioning.archive(&workspace, &chrono::Utc::now().to_rfc3339())
@@ -237,11 +238,7 @@ impl ExecutionState {
         created_worktree: bool,
     ) -> Result<(), ErrorCode> {
         if created_worktree {
-            let provisioning = self
-                .import_directory
-                .as_ref()
-                .and_then(|directory| directory.shared_worktrees())
-                .ok_or(ErrorCode::UnsupportedCapability)?;
+            let provisioning = self.shared_worktrees()?;
             self.manager.auto_archive_worktree_on_finish(
                 id.to_owned(),
                 workspace.to_owned(),

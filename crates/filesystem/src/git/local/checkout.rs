@@ -63,7 +63,7 @@ impl LocalCheckout {
         let cwd = expanded_directory(cwd)?;
         let repo_root = match git_optional(&cwd, &["rev-parse", "--show-toplevel"])? {
             Some(root) => canonical_git_path(&root)?,
-            None => return Ok(non_git_status()),
+            None => return Ok(CheckoutStatus::default()),
         };
         let common_dir = git_required(
             &cwd,
@@ -713,25 +713,6 @@ const fn too_large_diff() -> CheckoutDiff {
     CheckoutDiff {
         files: Vec::new(),
         diff_too_large: true,
-    }
-}
-
-fn non_git_status() -> CheckoutStatus {
-    CheckoutStatus {
-        is_git: false,
-        repo_root: None,
-        main_repo_root: None,
-        current_branch: None,
-        is_dirty: None,
-        branch_status: None,
-        base_ref: None,
-        ahead_behind: None,
-        upstream_ref: None,
-        ahead_of_origin: None,
-        behind_of_origin: None,
-        has_remote: false,
-        remote_url: None,
-        is_managed_worktree: false,
     }
 }
 

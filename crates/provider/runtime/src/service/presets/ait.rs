@@ -14,6 +14,32 @@ use provider_core::ports::preset::Preset;
 /// The daemon-config key that holds one provider's managed presets.
 pub(crate) const FIELD: &str = "modelPresets";
 
+/// Failure of an Ait-managed preset operation; every message is client-readable.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum AitPresetError {
+    /// Daemon configuration could not be read.
+    #[error("Daemon configuration could not be read")]
+    ConfigUnreadable,
+    /// The stored list does not decode as presets.
+    #[error("Stored presets are malformed")]
+    Malformed,
+    /// A preset or list broke a domain rule; carries the domain's client-readable reason.
+    #[error("{0}")]
+    Invalid(String),
+    /// The validated list could not be encoded for storage.
+    #[error("Presets could not be serialized")]
+    Unserializable,
+    /// Daemon configuration could not be written.
+    #[error("Daemon configuration could not be written")]
+    ConfigUnwritable,
+    /// The named preset does not exist.
+    #[error("Preset {0:?} is not defined")]
+    NotDefined(String),
+    /// A rename target already belongs to another preset.
+    #[error("Preset {0:?} already exists")]
+    AlreadyExists(String),
+}
+
 /// Preset store backed by daemon configuration.
 #[derive(Debug, Clone)]
 pub(crate) struct AitPresets {
@@ -27,11 +53,11 @@ impl AitPresets {
     }
 
     /// The current preset list for `provider`, parsed strictly enough to reject broken storage.
-    fn read(&self, provider: &str) -> Result<Vec<Preset>, String> {
+    fn read(&self, provider: &str) -> Result<Vec<Preset>, AitPresetError> {
         let config = self
             .config
             .get()
-            .map_err(|_| "Daemon configuration could not be read".to_owned())?;
+            .map_err(|_| AitPresetError::ConfigUnreadable)?;
         let stored = config
             .get("providers")
             .and_then(|providers| providers.get(provider))
@@ -39,20 +65,19 @@ impl AitPresets {
         let Some(stored) = stored.filter(|stored| !stored.is_null()) else {
             return Ok(Vec::new());
         };
-        let presets: Vec<Preset> = serde_json::from_value(stored.clone())
-            .map_err(|_| "Stored presets are malformed".to_owned())?;
-        validate_presets(&presets)?;
+        let presets: Vec<Preset> =
+            serde_json::from_value(stored.clone()).map_err(|_| AitPresetError::Malformed)?;
+        validate_presets(&presets).map_err(AitPresetError::Invalid)?;
         Ok(presets)
     }
 
     /// Persist one provider's whole preset list, leaving every other provider untouched.
-    fn write(&self, provider: &str, presets: &[Preset]) -> Result<(), String> {
-        validate_presets(presets)?;
-        let value = serde_json::to_value(presets)
-            .map_err(|_| "Presets could not be serialized".to_owned())?;
+    fn write(&self, provider: &str, presets: &[Preset]) -> Result<(), AitPresetError> {
+        validate_presets(presets).map_err(AitPresetError::Invalid)?;
+        let value = serde_json::to_value(presets).map_err(|_| AitPresetError::Unserializable)?;
         self.config
             .patch(&json!({"providers":{provider:{FIELD:value}}}))
-            .map_err(|_| "Daemon configuration could not be written".to_owned())?;
+            .map_err(|_| AitPresetError::ConfigUnwritable)?;
         Ok(())
     }
 }
@@ -62,7 +87,7 @@ impl AitPresets {
     ///
     /// # Errors
     /// Returns a client-readable reason when storage is unreadable or malformed.
-    pub(crate) fn list(&self, provider: &str) -> Result<Vec<Preset>, String> {
+    pub(crate) fn list(&self, provider: &str) -> Result<Vec<Preset>, AitPresetError> {
         self.read(provider)
     }
 
@@ -79,8 +104,8 @@ impl AitPresets {
         provider: &str,
         preset: &Preset,
         original: Option<&str>,
-    ) -> Result<(), String> {
-        preset.validate()?;
+    ) -> Result<(), AitPresetError> {
+        preset.validate().map_err(AitPresetError::Invalid)?;
         let mut presets = self.read(provider)?;
         let existing = presets.iter().position(|stored| stored.name == preset.name);
         let index = match original {
@@ -89,9 +114,9 @@ impl AitPresets {
                 let source = presets
                     .iter()
                     .position(|stored| stored.name == original)
-                    .ok_or_else(|| format!("Preset {original:?} is not defined"))?;
+                    .ok_or_else(|| AitPresetError::NotDefined(original.to_owned()))?;
                 if existing.is_some_and(|index| index != source) {
-                    return Err(format!("Preset {:?} already exists", preset.name));
+                    return Err(AitPresetError::AlreadyExists(preset.name.clone()));
                 }
                 source
             }
@@ -111,12 +136,12 @@ impl AitPresets {
     ///
     /// # Errors
     /// Returns a client-readable rejection before writing anything.
-    pub(crate) fn delete(&self, provider: &str, name: &str) -> Result<(), String> {
+    pub(crate) fn delete(&self, provider: &str, name: &str) -> Result<(), AitPresetError> {
         let mut presets = self.read(provider)?;
         let before = presets.len();
         presets.retain(|preset| preset.name != name);
         if presets.len() == before {
-            return Err(format!("Preset {name:?} is not defined"));
+            return Err(AitPresetError::NotDefined(name.to_owned()));
         }
         self.write(provider, &presets)
     }

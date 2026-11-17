@@ -17,7 +17,8 @@ use crate::ports::agent::AgentError;
 use crate::protocol::agent;
 use crate::rpc::ErrorCode;
 use crate::service::agents::Agents;
-use crate::support::rpc::{decode, encode};
+use crate::support::rpc::decode;
+use model::rpc::encode;
 
 /// Decode and execute a business request.
 ///

@@ -417,15 +417,29 @@ impl Live {
         Ok(())
     }
 
-    pub(crate) fn stopped(&mut self, failed: bool, all: bool) -> Vec<AgentTurnEvent> {
+    /// Mark every running child failed after the parent turn failed.
+    pub(crate) fn fail_all(&mut self) -> Vec<AgentTurnEvent> {
+        self.terminate("failed", true)
+    }
+
+    /// Mark every running child, background ones included, canceled once the process is gone.
+    pub(crate) fn cancel_all(&mut self) -> Vec<AgentTurnEvent> {
+        self.terminate("canceled", true)
+    }
+
+    /// Mark running foreground children canceled, leaving background children running.
+    #[cfg(test)]
+    pub(crate) fn cancel_foreground(&mut self) -> Vec<AgentTurnEvent> {
+        self.terminate("canceled", false)
+    }
+
+    fn terminate(&mut self, status: &str, include_background: bool) -> Vec<AgentTurnEvent> {
         let mut events = Vec::new();
         for child in self.children.values_mut() {
-            if child.descriptor.descriptor["status"] == "running" && (all || !child.background) {
-                set_status(
-                    child,
-                    if failed { "failed" } else { "canceled" },
-                    &mut events,
-                );
+            if child.descriptor.descriptor["status"] == "running"
+                && (include_background || !child.background)
+            {
+                set_status(child, status, &mut events);
             }
         }
         events

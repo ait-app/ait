@@ -45,8 +45,8 @@ pub(crate) struct CheckoutBranchStatus {
     pub(crate) ahead_behind: Option<AheadBehind>,
 }
 
-/// Git/non-Git checkout status.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Git/non-Git checkout status; the default is the status of a directory outside Git.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckoutStatus {
     /// Whether Git metadata was found.
     pub(crate) is_git: bool,

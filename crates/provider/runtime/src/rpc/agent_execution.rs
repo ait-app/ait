@@ -22,13 +22,15 @@ use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
+use crate::protocol::agent_execution::{
+    CreateRequest, ResumeRequest, SESSION_CONFIG_FIELDS, SendRequest,
+};
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
 use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::ownership::RUNTIME_OVERLAY_FIELDS;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
-use crate::service::agent_runtime::AgentRuntimeDirectory;
+use crate::service::agent_runtime::{AgentRuntimeDirectory, PARENT_AGENT_ID_LABEL};
 use crate::support::rpc::decode;
 use provider_core::ports::agent_session::AgentSessionSpec;
 
@@ -258,11 +260,7 @@ impl ExecutionState {
         method: Operation,
         params: &Value,
     ) -> Result<String, ErrorCode> {
-        let record = self
-            .registry
-            .get(id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
+        let record = self.record(id)?;
         let scope = record.observation.as_ref().map_or_else(
             || id.to_owned(),
             crate::service::agent_manager::observed::scope,
@@ -367,12 +365,7 @@ impl ExecutionState {
             timestamp: chrono::Utc::now().to_rfc3339(),
             item,
         };
-        let provider = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?
-            .provider;
+        let provider = self.record(&id)?.provider;
         let (epoch, positions) = timeline.append(&id, &provider, &[entry])?;
         Ok(json!({"epoch":epoch,"seq":positions.first()}))
     }
@@ -489,7 +482,7 @@ impl ExecutionState {
         let created = created.and_then(|record| {
             self.workspace(Some(&workspace_id), &record.cwd)
                 .map_err(|_| AgentManagerError::InvalidRequest)?;
-            if let Some(parent) = record.labels.get("paseo.parent-agent-id")
+            if let Some(parent) = record.labels.get(PARENT_AGENT_ID_LABEL)
                 && self
                     .registry
                     .get(parent)
@@ -575,12 +568,7 @@ impl ExecutionState {
         )?;
         let request: SendRequest = decode(params)?;
         let id = self.resolve(&request.agent_id)?;
-        let record = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        self.active_workspace(&id)?;
         let behavior = request.active_turn_behavior.unwrap_or_default();
         let prompt = request.into_prompt();
         let result = self.manager.deliver(&id, &prompt, behavior).await;
@@ -651,6 +639,32 @@ impl ExecutionState {
         } else {
             self.resolve(identifier)
         }
+    }
+
+    /// Resolve the Agent named by the string `field` of `params`.
+    /// # Errors
+    /// Returns `InvalidMessage` when the field is missing or not a string, or a resolution error.
+    fn resolve_field(&self, params: &Value, field: &str) -> Result<String, ErrorCode> {
+        self.resolve(params[field].as_str().ok_or(ErrorCode::InvalidMessage)?)
+    }
+
+    /// Read the durable record of the resolved Agent `id`.
+    /// # Errors
+    /// Returns `AgentIo` when the registry cannot be read and `AgentNotFound` when it has no record.
+    fn record(&self, id: &str) -> Result<PersistedAgentRuntimeRecord, ErrorCode> {
+        self.registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)
+    }
+
+    /// Require the resolved Agent `id` to be placed in an active Workspace and Project.
+    /// # Errors
+    /// Returns record read failures or `InvalidMessage` for an archived or missing placement.
+    fn active_workspace(&self, id: &str) -> Result<(), ErrorCode> {
+        let record = self.record(id)?;
+        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        Ok(())
     }
 
     fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
@@ -791,22 +805,7 @@ fn parse_creation(
             "outputSchema",
         ],
     )?;
-    only(
-        &params["config"],
-        &[
-            "provider",
-            "cwd",
-            "title",
-            "modeId",
-            "model",
-            "thinkingOptionId",
-            "systemPrompt",
-            "featureValues",
-            "providerOptions",
-            "mcpServers",
-            "toolPolicy",
-        ],
-    )?;
+    only(&params["config"], SESSION_CONFIG_FIELDS)?;
     let mut intent = params.clone();
     if let Some(object) = intent.as_object_mut() {
         object.remove("idempotencyKey");

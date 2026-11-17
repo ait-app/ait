@@ -12,6 +12,7 @@ use provider_core::ports::agent_session::{
 use provider_core::protocol::prompt::AgentPrompt;
 use provider_native::acp_config;
 use provider_native::acp_permissions;
+use provider_native::acp_session;
 use provider_native::acp_streaming::Stream;
 use provider_native::acp_transport::Transport;
 
@@ -35,56 +36,15 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
-    if let Some(handle) = handle
-        && (handle.provider != PROVIDER
-            || handle.session_id.is_empty()
-            || handle.session_id.len() > 1024
-            || handle.session_id.chars().any(char::is_control)
-            || handle
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("cwd"))
-                .and_then(Value::as_str)
-                != Some(&spec.cwd))
-    {
+    if handle.is_some_and(|handle| !acp_session::resumable(handle, PROVIDER, &spec.cwd)) {
         return Err(AgentSessionError::Rejected);
     }
     let mut transport = transport::spawn(client, &spec.cwd)?;
-    let initialized = transport
-        .request(
-            "initialize",
-            json!({"protocolVersion":1,
-        "clientCapabilities":{},"clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
-        )
-        .await?;
-    if initialized["protocolVersion"] != 1 {
-        return Err(AgentSessionError::Failed);
-    }
-    let capabilities = initialized["agentCapabilities"].clone();
-    let mut params = json!({"cwd":spec.cwd,"mcpServers":acp_config::mcp_servers(&spec.config)});
-    let method = if let Some(handle) = handle {
-        if !capabilities["sessionCapabilities"]["resume"].is_object() {
-            return Err(AgentSessionError::Rejected);
-        }
-        params["sessionId"] = json!(handle.session_id);
-        "session/resume"
-    } else {
-        "session/new"
-    };
-    let result = transport.request(method, params).await?;
-    let id = match handle {
-        Some(handle) => {
-            // A resumed session must answer with the handle it was given, or the later
-            // requests would address a session the agent does not have.
-            if let Some(reported) = acp_config::text(&result, "sessionId").ok()
-                && reported != handle.session_id
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            handle.session_id.clone()
-        }
-        None => acp_config::text(&result, "sessionId")?.to_owned(),
-    };
+    let acp_session::Opened {
+        capabilities,
+        result,
+        id,
+    } = acp_session::open(&mut transport, json!({}), spec, handle).await?;
     let mut session = Session {
         transport,
         id,
@@ -152,19 +112,13 @@ impl Session {
     /// Answer every unanswered permission with ACP's `cancelled` outcome, then ask the agent
     /// to cancel the running prompt. The correlated prompt response still settles the turn.
     async fn cancel_prompt(&mut self) -> Result<(), AgentSessionError> {
-        for (id, pending) in std::mem::take(&mut self.permissions) {
-            self.transport
-                .send(&acp_permissions::cancelled(&pending))
-                .await?;
-            self.stream
-                .events
-                .push_back(AgentTurnEvent::PermissionResolved(id));
-        }
-        self.transport
-            .send(
-                &json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}}),
-            )
-            .await
+        acp_session::cancel(
+            &mut self.transport,
+            &self.id,
+            &mut self.permissions,
+            &mut self.stream.events,
+        )
+        .await
     }
 
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
@@ -192,7 +146,7 @@ impl Session {
                     &self.id,
                     self.active.is_some(),
                     &mut self.permissions,
-                    PROVIDER,
+                    |message| acp_permissions::capture(message, PROVIDER),
                 )?;
                 self.stream
                     .events
@@ -239,12 +193,7 @@ impl AgentSession for Session {
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
-        Some(AgentPersistenceHandle {
-            provider: PROVIDER.to_owned(),
-            session_id: self.id.clone(),
-            native_handle: None,
-            metadata: Some(BTreeMap::from([("cwd".to_owned(), json!(self.cwd))])),
-        })
+        Some(acp_session::persistence(PROVIDER, &self.id, &self.cwd))
     }
 
     async fn start_turn(
@@ -298,16 +247,14 @@ impl AgentSession for Session {
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
-        let pending = self
-            .permissions
-            .get(id)
-            .ok_or(AgentSessionError::Rejected)?;
-        let reply = acp_permissions::resolve_tool(pending, response)?;
-        self.transport.send(&reply).await?;
-        self.permissions.remove(id);
-        self.stream
-            .events
-            .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        acp_session::respond(
+            &mut self.transport,
+            &mut self.permissions,
+            &mut self.stream.events,
+            id,
+            response,
+        )
+        .await?;
         if response["behavior"] == "deny" && response["interrupt"] == true {
             self.cancel_prompt().await?;
         }
@@ -318,16 +265,8 @@ impl AgentSession for Session {
         if self.closed {
             return Ok(());
         }
-        let result = if self.capabilities["sessionCapabilities"]["close"].is_object() {
-            self.transport
-                .request("session/close", json!({"sessionId":self.id}))
-                .await
-                .map(|_| ())
-        } else {
-            Ok(())
-        };
-        let stopped = self.transport.close().await;
+        let result = acp_session::close(&mut self.transport, &self.id, &self.capabilities).await;
         self.closed = true;
-        result.and(stopped)
+        result
     }
 }

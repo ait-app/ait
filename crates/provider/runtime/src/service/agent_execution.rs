@@ -292,19 +292,7 @@ impl AgentExecution {
         if method.access() != Access::Catalog && method != Operation::Usage {
             return Err(ErrorCode::UnsupportedCapability);
         }
-        if self.0.cancellation.is_cancelled() {
-            return Err(ErrorCode::AgentIo);
-        }
-        let permit = self
-            .0
-            .discovery_responses
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| ErrorCode::CatalogBusy)?;
-        Ok(AdmittedResponse {
-            receiver: self.enqueue(method, params, None, None)?,
-            _permit: permit,
-        })
+        self.admit(method, params, &self.0.discovery_responses)
     }
 
     /// Admit an execution or Timeline request before its response task is spawned.
@@ -321,12 +309,22 @@ impl AgentExecution {
         if method == Operation::Wait || method.access() == Access::Catalog {
             return Err(ErrorCode::UnsupportedCapability);
         }
+        self.admit(method, params, &self.0.execution_responses)
+    }
+
+    /// Enqueue an accepted `method` while holding one of `slots` until its response is delivered.
+    /// # Errors
+    /// Rejects shutdown, exhausted response or request slots, or a full or closed worker queue.
+    fn admit(
+        &self,
+        method: Operation,
+        params: Value,
+        slots: &Arc<Semaphore>,
+    ) -> Result<AdmittedResponse, ErrorCode> {
         if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::AgentIo);
         }
-        let permit = self
-            .0
-            .execution_responses
+        let permit = slots
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;

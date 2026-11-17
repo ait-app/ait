@@ -3,6 +3,7 @@ use std::path::Path;
 use domain::workspace::lifecycle::WorkspaceCreation;
 
 use super::{CreateRequest, ErrorCode, ExecutionState};
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 
 impl ExecutionState {
     pub(super) async fn creation_placement(
@@ -21,13 +22,12 @@ impl ExecutionState {
             })
             .transpose()?;
         if let Some(caller) = &caller {
-            if request.labels.len() == 100 && !request.labels.contains_key("paseo.parent-agent-id")
-            {
+            if request.labels.len() == 100 && !request.labels.contains_key(PARENT_AGENT_ID_LABEL) {
                 return Err(ErrorCode::InvalidMessage);
             }
             request
                 .labels
-                .insert("paseo.parent-agent-id".to_owned(), caller.id.clone());
+                .insert(PARENT_AGENT_ID_LABEL.to_owned(), caller.id.clone());
         }
         if let Some(worktree) = super::worktrees::intent(request)? {
             let id = self.create_worktree_placement(request, worktree).await?;

@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::Shared;
 use crate::shares::guests::Registration;
-use crate::shares::rpc::{active_project, active_workspace};
+use crate::shares::rpc::{active_project, active_workspace, all_workspaces};
 
 /// Outstanding download tokens one guest connection may hold.
 const MAX_DOWNLOADS: usize = 16;
@@ -175,23 +175,9 @@ async fn project_workspaces(
     state: &Shared,
     id: &str,
 ) -> Result<Vec<PersistedWorkspaceRecord>, ErrorCode> {
-    let id = id.to_owned();
-    state
-        .runtime
-        .run_queued(
-            state.metadata.directory.clone(),
-            ErrorCode::RegistryIo,
-            move |directory| {
-                let workspaces = directory
-                    .list_workspaces()
-                    .map_err(|_| ErrorCode::RegistryIo)?;
-                Ok(workspaces
-                    .into_iter()
-                    .filter(|workspace| workspace.project_id == id)
-                    .collect())
-            },
-        )
-        .await
+    let mut workspaces = all_workspaces(state).await?;
+    workspaces.retain(|workspace| workspace.project_id == id);
+    Ok(workspaces)
 }
 
 fn active(workspace: &PersistedWorkspaceRecord) -> bool {

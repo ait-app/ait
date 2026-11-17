@@ -388,7 +388,7 @@ impl ClaudeSession {
             AgentTurnEvent::Completed(text)
         } else {
             self.observe_failure(message);
-            self.stream.events.extend(self.children.stopped(true, true));
+            self.stream.events.extend(self.children.fail_all());
             AgentTurnEvent::Failed
         };
         self.stream.events.push_back(result);
@@ -729,9 +729,7 @@ impl AgentSession for ClaudeSession {
         // The direct stream transport kills the Claude process after an interrupt. Unlike
         // Paseo's persistent SDK query, no background task can remain alive behind this session,
         // so terminalize every child instead of leaving an unobservable running descriptor.
-        self.stream
-            .events
-            .extend(self.children.stopped(false, true));
+        self.stream.events.extend(self.children.cancel_all());
         self.stream.events.push_back(AgentTurnEvent::Cancelled);
         Ok(())
     }
@@ -774,7 +772,7 @@ impl AgentSession for ClaudeSession {
         self.active = None;
         self.permissions.clear();
         self.stream = streaming::Stream::new(self.client.images.clone());
-        self.children.stopped(false, true);
+        self.children.cancel_all();
         Ok(())
     }
 }

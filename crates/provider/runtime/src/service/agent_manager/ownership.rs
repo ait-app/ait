@@ -12,6 +12,7 @@ use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 
 use super::auto_archive::Retirement;
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 
 /// Committed control fields overlaid on independent directory reads.
 pub(crate) const RUNTIME_OVERLAY_FIELDS: [&str; 7] = [
@@ -402,7 +403,7 @@ impl Owners {
         if let Some(workspace) = &record.workspace_id {
             scopes.insert(format!("workspace:{workspace}"));
         }
-        if let Some(parent) = record.labels.get("paseo.parent-agent-id") {
+        if let Some(parent) = record.labels.get(PARENT_AGENT_ID_LABEL) {
             scopes.insert(format!("parent:{parent}"));
         }
         Ok(())

@@ -397,56 +397,41 @@ pub(crate) fn protocol_status(
     cwd: &str,
     result: Result<port::CheckoutStatus, port::CheckoutRuntimeError>,
 ) -> protocol::CheckoutStatusResult {
-    match result {
-        Ok(status) => protocol::CheckoutStatusResult {
-            cwd: cwd.to_owned(),
-            is_git: status.is_git,
-            repo_root: status.repo_root,
-            main_repo_root: status.main_repo_root,
-            current_branch: status.current_branch,
-            is_dirty: status.is_dirty,
-            branch_status: status
-                .branch_status
-                .map(|branch| protocol::CheckoutBranchStatus {
-                    head_sha: branch.head_sha,
-                    has_conflicts: branch.has_conflicts,
-                    remote_ref: branch.remote_ref,
-                    ahead_behind: branch.ahead_behind.map(|counts| protocol::AheadBehind {
-                        ahead: counts.ahead,
-                        behind: counts.behind,
-                    }),
-                }),
-            base_ref: status.base_ref,
-            ahead_behind: status.ahead_behind.map(|counts| protocol::AheadBehind {
-                ahead: counts.ahead,
-                behind: counts.behind,
+    let (status, error) = match result {
+        Ok(status) => (status, None),
+        Err(error) => (port::CheckoutStatus::default(), Some(protocol_error(error))),
+    };
+    protocol::CheckoutStatusResult {
+        cwd: cwd.to_owned(),
+        is_git: status.is_git,
+        repo_root: status.repo_root,
+        main_repo_root: status.main_repo_root,
+        current_branch: status.current_branch,
+        is_dirty: status.is_dirty,
+        branch_status: status
+            .branch_status
+            .map(|branch| protocol::CheckoutBranchStatus {
+                head_sha: branch.head_sha,
+                has_conflicts: branch.has_conflicts,
+                remote_ref: branch.remote_ref,
+                ahead_behind: branch.ahead_behind.map(protocol_counts),
             }),
-            upstream_ref: status.upstream_ref,
-            ahead_of_origin: status.ahead_of_origin,
-            behind_of_origin: status.behind_of_origin,
-            has_remote: status.has_remote,
-            remote_url: status.remote_url,
-            is_paseo_owned_worktree: status.is_managed_worktree,
-            error: None,
-        },
-        Err(error) => protocol::CheckoutStatusResult {
-            cwd: cwd.to_owned(),
-            is_git: false,
-            repo_root: None,
-            main_repo_root: None,
-            current_branch: None,
-            is_dirty: None,
-            branch_status: None,
-            base_ref: None,
-            ahead_behind: None,
-            upstream_ref: None,
-            ahead_of_origin: None,
-            behind_of_origin: None,
-            has_remote: false,
-            remote_url: None,
-            is_paseo_owned_worktree: false,
-            error: Some(protocol_error(error)),
-        },
+        base_ref: status.base_ref,
+        ahead_behind: status.ahead_behind.map(protocol_counts),
+        upstream_ref: status.upstream_ref,
+        ahead_of_origin: status.ahead_of_origin,
+        behind_of_origin: status.behind_of_origin,
+        has_remote: status.has_remote,
+        remote_url: status.remote_url,
+        is_paseo_owned_worktree: status.is_managed_worktree,
+        error,
+    }
+}
+
+const fn protocol_counts(counts: port::AheadBehind) -> protocol::AheadBehind {
+    protocol::AheadBehind {
+        ahead: counts.ahead,
+        behind: counts.behind,
     }
 }
 

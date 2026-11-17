@@ -9,6 +9,7 @@ use model::ErrorCode;
 use sha2::{Digest, Sha256};
 
 use super::{AgentManager, AgentManagerError};
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 use crate::storage::timeline::Timeline;
 use provider_core::ports::controls::NativeSubagent;
 
@@ -204,7 +205,7 @@ fn project_record(
     record.cwd.clone_from(&child.cwd);
     record.workspace_id.clone_from(&root.workspace_id);
     record.labels.insert(
-        "paseo.parent-agent-id".to_owned(),
+        PARENT_AGENT_ID_LABEL.to_owned(),
         source.parent_agent_id.clone(),
     );
     source.revision = prior.map_or(0, |prior| prior.revision);
@@ -250,7 +251,7 @@ fn reuse_managed(
         timeline.store_subagent(&root.id, child)?;
         if managed
             .labels
-            .get("paseo.parent-agent-id")
+            .get(PARENT_AGENT_ID_LABEL)
             .is_some_and(|known| known != parent)
         {
             return Err(ErrorCode::IdempotencyConflict);
@@ -259,7 +260,7 @@ fn reuse_managed(
             .update(&managed.id, &|current| {
                 let mut next = current.clone();
                 next.labels
-                    .insert("paseo.parent-agent-id".to_owned(), parent.to_owned());
+                    .insert(PARENT_AGENT_ID_LABEL.to_owned(), parent.to_owned());
                 next
             })
             .map_err(|_| ErrorCode::AgentIo)?;

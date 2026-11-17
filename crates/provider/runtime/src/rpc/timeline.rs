@@ -20,6 +20,7 @@ use crate::storage::timeline::Row;
 use crate::storage::timeline::Timeline;
 #[cfg(test)]
 use crate::timeline_projection::page;
+use crate::timeline_projection::page::Page;
 use crate::timeline_projection::project;
 
 mod text_search;
@@ -87,17 +88,7 @@ fn fetch_stored_with_tasks(
             .len();
         Ok(MAX_RESPONSE_BYTES.saturating_sub(envelope + 40))
     })?;
-    let epoch = value["epoch"].clone();
-    value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
-    value["startCursor"] = page
-        .start_seq
-        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
-    value["endCursor"] = page
-        .end_seq
-        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
-    value["hasOlder"] = json!(page.has_older);
-    value["hasNewer"] = json!(page.has_newer);
-    bounded_task_page(value)
+    bounded_task_page(value, page)
 }
 
 #[cfg(test)]
@@ -175,16 +166,7 @@ fn fetch_with_tasks(
     // A narrower source window can increase the digit count of either cursor's sequence.
     let entry_bytes = MAX_RESPONSE_BYTES.saturating_sub(envelope_bytes + 40);
     let page = page::fit(rows, page, selection, entry_bytes)?;
-    value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
-    value["startCursor"] = page
-        .start_seq
-        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
-    value["endCursor"] = page
-        .end_seq
-        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
-    value["hasOlder"] = json!(page.has_older);
-    value["hasNewer"] = json!(page.has_newer);
-    bounded_task_page(value)
+    bounded_task_page(value, page)
 }
 
 // Large legacy task lists must not be duplicated past the existing page budget. A reference
@@ -218,7 +200,22 @@ fn encoded_tasks(snapshot: Value, encoding: TaskEncoding) -> Option<Value> {
     }
 }
 
-fn bounded_task_page(value: Value) -> Result<Value, ErrorCode> {
+/// Fill the selected `page` into the response envelope `value`, whose `epoch` names its cursors,
+/// then enforce the task-reference and response budgets.
+/// # Errors
+/// Returns `AgentIo` when entries cannot be encoded and `ResourceExhausted` when a task reference
+/// lost its row or the response exceeds the byte budget.
+fn bounded_task_page(mut value: Value, page: Page) -> Result<Value, ErrorCode> {
+    let epoch = value["epoch"].clone();
+    value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
+    value["startCursor"] = page
+        .start_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["endCursor"] = page
+        .end_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["hasOlder"] = json!(page.has_older);
+    value["hasNewer"] = json!(page.has_newer);
     if let Some(seq) = value["taskSnapshot"]["entrySeq"].as_u64()
         && !value["entries"].as_array().is_some_and(|entries| {
             entries

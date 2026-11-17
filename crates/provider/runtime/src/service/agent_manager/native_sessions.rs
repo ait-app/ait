@@ -12,6 +12,7 @@ use super::AgentManager;
 use crate::protocol::native_sessions::{
     PreviewEntries, PreviewRequest as WirePreviewRequest, RecentRequest,
 };
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 use crate::support::time::now_timestamp;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionError};
 use provider_core::ports::native_history::{
@@ -313,7 +314,7 @@ impl AgentManager {
                 .update(&record.id, &|current| {
                     let mut next = current.clone();
                     next.workspace_id.clone_from(&record.workspace_id);
-                    next.labels.remove("paseo.parent-agent-id");
+                    next.labels.remove(PARENT_AGENT_ID_LABEL);
                     next.labels.extend(record.labels.clone());
                     apply_history(&mut next, history);
                     next

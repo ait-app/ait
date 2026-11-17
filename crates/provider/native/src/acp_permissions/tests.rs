@@ -1,6 +1,9 @@
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 
-use super::{cancelled, capture, resolve_tool};
+use super::{admit, cancelled, capture, form, resolve, resolve_tool};
+use provider_core::ports::agent_session::AgentSessionError;
 
 const PROVIDER: &str = "deepseek-harness";
 
@@ -155,4 +158,165 @@ fn cancelled_replies_withdraw_permissions_and_forms_without_a_choice() {
         cancelled(&pending),
         json!({"jsonrpc":"2.0","id":42,"result":{"action":"cancel"}})
     );
+}
+
+fn questionnaire() -> Value {
+    json!({"id":"question","method":"elicitation/create","params":{
+        "sessionId":"native","toolCallId":"tool-question","mode":"form",
+        "message":"Choose languages","requestedSchema":{"type":"object",
+            "properties":{
+                "language":{"type":"array","uniqueItems":true,"items":{"anyOf":[
+                    {"const":"rust","title":"Rust, stable"},{"const":"go","title":"Go"}]}},
+                "language_custom":{"type":"string","title":"Other language"}},
+            "required":["language"]}}})
+}
+
+#[test]
+fn forms_project_native_choices_into_questions_for_the_owning_provider() {
+    let pending = form(&questionnaire(), "minimax").unwrap();
+    assert_eq!(pending.rpc_id, json!("question"));
+    assert!(pending.options.is_empty());
+    assert_eq!(pending.unique_fields, ["language"]);
+    let schema = pending.schema.as_ref().unwrap();
+    assert_eq!(
+        schema["properties"]["language"],
+        json!({"type":"array","items":{"type":"string","enum":["rust","go"],
+            "enumNames":["Rust, stable","Go"]}})
+    );
+    let request = &pending.request;
+    assert_eq!(request["provider"], "minimax");
+    assert_eq!(request["kind"], "question");
+    assert_eq!(request["title"], "Choose languages");
+    assert_eq!(request["metadata"]["toolCallId"], "tool-question");
+    let questions = request["input"]["questions"].as_array().unwrap();
+    let language = questions
+        .iter()
+        .find(|question| question["header"] == "language")
+        .unwrap();
+    assert_eq!(language["allowEmpty"], false);
+    assert_eq!(language["answerFormat"], "array");
+    assert_eq!(language["answerKey"], "language");
+    assert_eq!(language["allowOther"], false);
+    assert_eq!(
+        language["options"],
+        json!([{"label":"Rust, stable"},{"label":"Go"}])
+    );
+    let custom = questions
+        .iter()
+        .find(|question| question["header"] == "language_custom")
+        .unwrap();
+    assert_eq!(custom["allowEmpty"], true);
+}
+
+#[test]
+fn forms_reject_other_modes_unsupported_schemas_and_missing_identities() {
+    let mut url = questionnaire();
+    url["params"]["mode"] = json!("url");
+    assert_eq!(
+        form(&url, "minimax").unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    let mut nested = questionnaire();
+    nested["params"]["requestedSchema"]["properties"]["language"] = json!({"type":"object"});
+    assert_eq!(
+        form(&nested, "minimax").unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    let mut unnamed = questionnaire();
+    unnamed["params"]["requestedSchema"]["properties"]["language"]["items"]["anyOf"][0] =
+        json!({"title":"Rust"});
+    assert_eq!(
+        form(&unnamed, "minimax").unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    let mut anonymous = questionnaire();
+    anonymous["id"] = Value::Null;
+    assert_eq!(
+        form(&anonymous, "minimax").unwrap_err(),
+        AgentSessionError::Failed
+    );
+}
+
+#[test]
+fn form_answers_map_titles_to_native_values_and_keep_unique_choices() {
+    let pending = form(&questionnaire(), "opencode").unwrap();
+    assert_eq!(
+        resolve(
+            &pending,
+            &json!({"behavior":"allow","updatedInput":{"answers":{
+                "language":["Rust, stable","Go"],"language_custom":"C++"}}})
+        )
+        .unwrap(),
+        json!({"jsonrpc":"2.0","id":"question","result":{"action":"accept",
+            "content":{"language":["rust","go"],"language_custom":"C++"}}})
+    );
+    assert_eq!(
+        resolve(
+            &pending,
+            &json!({"behavior":"allow","updatedInput":{"content":{"language":["go"]}}})
+        )
+        .unwrap()["result"]["content"],
+        json!({"language":["go"]})
+    );
+    assert_eq!(
+        resolve(&pending, &json!({"behavior":"deny"})).unwrap()["result"],
+        json!({"action":"decline"})
+    );
+    for response in [
+        json!({"behavior":"allow","updatedInput":{"answers":{"language":["invalid"]}}}),
+        json!({"behavior":"allow","updatedInput":{"content":{"language":["rust","rust"]}}}),
+        json!({"behavior":"allow","updatedInput":{}}),
+        json!({"behavior":"unknown"}),
+    ] {
+        assert_eq!(
+            resolve(&pending, &response).unwrap_err(),
+            AgentSessionError::Rejected
+        );
+    }
+}
+
+#[test]
+fn resolve_answers_tool_permissions_with_their_native_options() {
+    let pending = capture(&request(), PROVIDER).unwrap();
+    assert_eq!(
+        resolve(&pending, &json!({"behavior":"allow"})).unwrap(),
+        resolve_tool(&pending, &json!({"behavior":"allow"})).unwrap()
+    );
+    assert!(resolve(&pending, &json!({"behavior":"allow","updatedInput":{}})).is_err());
+}
+
+#[test]
+fn admit_retains_callbacks_only_for_the_active_prompt_of_the_session() {
+    let mut pending = BTreeMap::new();
+    let project = |message: &Value| form(message, "minimax");
+    assert_eq!(
+        admit(&questionnaire(), "native", false, &mut pending, project),
+        Err(AgentSessionError::Failed)
+    );
+    assert_eq!(
+        admit(&questionnaire(), "other", true, &mut pending, project),
+        Err(AgentSessionError::Failed)
+    );
+    let admitted = admit(&questionnaire(), "native", true, &mut pending, project).unwrap();
+    assert_eq!(admitted["kind"], "question");
+    assert_eq!(pending[admitted["id"].as_str().unwrap()].request, admitted);
+    assert_eq!(
+        admit(&questionnaire(), "native", true, &mut pending, project),
+        Err(AgentSessionError::Failed)
+    );
+    let mut permission = request();
+    permission["params"]["sessionId"] = json!("native");
+    admit(&permission, "native", true, &mut pending, |message| {
+        capture(message, PROVIDER)
+    })
+    .unwrap();
+    assert_eq!(pending.len(), 2);
+    let mut rejected = questionnaire();
+    rejected["id"] = json!("another");
+    rejected["params"]["mode"] = json!("url");
+    assert_eq!(
+        admit(&rejected, "native", true, &mut pending, project),
+        Err(AgentSessionError::Rejected)
+    );
+    assert_eq!(pending.len(), 2);
 }

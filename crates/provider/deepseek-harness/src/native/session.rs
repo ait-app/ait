@@ -72,7 +72,7 @@ pub(crate) async fn open(
     }
     if let Some(handle) = handle {
         // Validate the durable root identity read-only before the existing writer adopt path.
-        super::history::validate_root(&runtime, &handle.session_id, &spec.cwd).await?;
+        super::history::root_summary(&runtime, &handle.session_id, &spec.cwd).await?;
         request["sessionId"] = json!(handle.session_id);
     }
     let created = runtime

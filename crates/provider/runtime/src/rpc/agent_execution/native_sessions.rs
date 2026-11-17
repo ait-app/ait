@@ -29,17 +29,8 @@ impl ExecutionState {
 
     pub(super) async fn refresh(&mut self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["agentId"])?;
-        let id = self.resolve(
-            params["agentId"]
-                .as_str()
-                .ok_or(ErrorCode::InvalidMessage)?,
-        )?;
-        let record = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        let id = self.resolve_field(&params, "agentId")?;
+        self.active_workspace(&id)?;
         self.manager.refresh_native(&id).await?;
         let (_, rows) = self
             .manager

@@ -2,6 +2,7 @@
 
 pub mod acp_config;
 pub mod acp_permissions;
+pub mod acp_session;
 /// ACP session notifications projected into bounded timeline and progress events.
 pub mod acp_streaming;
 /// Owned, bounded JSON-RPC stdio connection to a native ACP process.
@@ -12,12 +13,14 @@ pub mod configuration;
 pub mod diagnostics;
 pub mod elicitation;
 pub mod images;
+pub mod json_lines;
 pub mod metadata_process;
 pub mod notes;
 pub mod process_group;
 pub mod prompt_blocks;
 pub mod sandbox;
 pub mod session_preview;
+pub mod side_runner;
 pub mod summary_model;
 pub mod todo;
 pub mod tool_detail;

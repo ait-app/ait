@@ -8,6 +8,7 @@ use crate::service::agent_execution::lane::{Fence, Message};
 use crate::service::agent_execution::operation::{Access, Operation};
 use crate::service::agent_manager::auto_archive::Retirement;
 use crate::service::agent_manager::ownership::Barrier;
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 
 struct PendingFence {
     ready: oneshot::Receiver<()>,
@@ -75,7 +76,7 @@ pub(super) fn scopes(
             pending.extend(
                 records
                     .iter()
-                    .filter(|record| record.labels.get("paseo.parent-agent-id") == Some(&id))
+                    .filter(|record| record.labels.get(PARENT_AGENT_ID_LABEL) == Some(&id))
                     .map(|record| record.id.clone()),
             );
         }

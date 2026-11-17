@@ -84,17 +84,20 @@ pub(crate) enum ProjectConfigRpcError {
     WriteFailed,
 }
 
-/// Read response matching Paseo's boolean-discriminated result.
+/// Configuration operation response matching Paseo's boolean-discriminated result.
+///
+/// Reads and writes share this shape and differ only in whether a successful result may lack a
+/// file; see [`ProjectConfigReadResult`] and [`ProjectConfigWriteResult`].
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ProjectConfigReadResult {
-    /// The file was read, including the missing-file state.
+pub(crate) enum ProjectConfigResult<Config, Revision> {
+    /// The file was read (including the missing-file state) or atomically installed.
     Success {
         /// Canonical registered root.
         repo_root: String,
-        /// Missing files return null.
-        config: Option<PaseoConfigRaw>,
-        /// Missing files return null.
-        revision: Option<PaseoConfigRevision>,
+        /// Normalized configuration on disk.
+        config: Config,
+        /// Revision of the file on disk.
+        revision: Revision,
     },
     /// The request was rejected without a transport failure.
     Failure {
@@ -105,75 +108,22 @@ pub(crate) enum ProjectConfigReadResult {
     },
 }
 
-impl Serialize for ProjectConfigReadResult {
+/// Read response; a missing file returns null configuration and revision.
+pub(crate) type ProjectConfigReadResult =
+    ProjectConfigResult<Option<PaseoConfigRaw>, Option<PaseoConfigRevision>>;
+
+/// Write response carrying the installed configuration and its revision.
+pub(crate) type ProjectConfigWriteResult = ProjectConfigResult<PaseoConfigRaw, PaseoConfigRevision>;
+
+impl<Config: Serialize, Revision: Serialize> Serialize for ProjectConfigResult<Config, Revision> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct Success<'a> {
+        struct Success<'a, Config, Revision> {
             ok: bool,
             repo_root: &'a str,
-            config: &'a Option<PaseoConfigRaw>,
-            revision: &'a Option<PaseoConfigRevision>,
-        }
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Failure<'a> {
-            ok: bool,
-            repo_root: &'a str,
-            error: &'a ProjectConfigRpcError,
-        }
-        match self {
-            Self::Success {
-                repo_root,
-                config,
-                revision,
-            } => Success {
-                ok: true,
-                repo_root,
-                config,
-                revision,
-            }
-            .serialize(serializer),
-            Self::Failure { repo_root, error } => Failure {
-                ok: false,
-                repo_root,
-                error,
-            }
-            .serialize(serializer),
-        }
-    }
-}
-
-/// Write response matching Paseo's boolean-discriminated result.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ProjectConfigWriteResult {
-    /// The validated file was atomically installed.
-    Success {
-        /// Canonical registered root.
-        repo_root: String,
-        /// Normalized configuration written to disk.
-        config: PaseoConfigRaw,
-        /// Revision of the installed file.
-        revision: PaseoConfigRevision,
-    },
-    /// The request was rejected without a transport failure.
-    Failure {
-        /// Request root, or canonical root after resolution.
-        repo_root: String,
-        /// Stable inline failure.
-        error: ProjectConfigRpcError,
-    },
-}
-
-impl Serialize for ProjectConfigWriteResult {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Success<'a> {
-            ok: bool,
-            repo_root: &'a str,
-            config: &'a PaseoConfigRaw,
-            revision: &'a PaseoConfigRevision,
+            config: &'a Config,
+            revision: &'a Revision,
         }
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]

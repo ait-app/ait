@@ -1,3 +1,4 @@
+use provider_core::ports::diagnostics::Category;
 use tokio::process::Command;
 
 use super::*;

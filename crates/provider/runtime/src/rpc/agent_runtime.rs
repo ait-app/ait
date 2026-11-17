@@ -39,12 +39,13 @@ use crate::rpc::ErrorCode;
 use crate::service::agent_runtime::{
     AgentDirectoryEntry as ApplicationEntry, AgentDirectoryPage as ApplicationPage,
     AgentDirectoryQuery, AgentPlacement, AgentRuntimeDirectory, AgentRuntimeError,
-    AgentSort as ApplicationSort, AgentSortKey as ApplicationSortKey, ResolvedAgent,
-    SortDirection as ApplicationSortDirection, ThinkingOptionFilter, effective_thinking_option_id,
-    resolved_updated_at,
+    AgentSort as ApplicationSort, AgentSortKey as ApplicationSortKey, PARENT_AGENT_ID_LABEL,
+    ResolvedAgent, SortDirection as ApplicationSortDirection, ThinkingOptionFilter,
+    effective_thinking_option_id, resolved_updated_at,
 };
-use crate::support::rpc::{decode, encode};
+use crate::support::rpc::decode;
 use crate::support::time::now_timestamp;
+use model::rpc::encode;
 use provider_core::protocol::agent_config::NullableSetting;
 
 /// Decode and execute a business request.
@@ -457,7 +458,7 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
             .observation
             .as_ref()
             .map(|source| source.parent_agent_id.clone())
-            .or_else(|| record.labels.get("paseo.parent-agent-id").cloned()),
+            .or_else(|| record.labels.get(PARENT_AGENT_ID_LABEL).cloned()),
         observation: record.observation.as_ref().map(|source| {
             serde_json::json!({
             "revision":source.revision,"rootAgentId":source.root_agent_id,"nativeId":source.native_id,

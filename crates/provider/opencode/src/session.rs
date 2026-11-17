@@ -17,7 +17,7 @@ use tokio_util::task::AbortOnDropHandle;
 use super::{
     PROVIDER,
     client::OpenCodeClient,
-    config, history, interactions, launcher,
+    config, history, launcher,
     observation::{Observation, Source},
     streaming::Stream,
     subagents::live::Live,
@@ -580,7 +580,7 @@ impl Session {
                         return Err(AgentSessionError::Failed);
                     }
                     let captured = if message["method"] == "elicitation/create" {
-                        interactions::form(&message)?
+                        acp_permissions::form(&message, PROVIDER)?
                     } else {
                         acp_permissions::capture(&message, PROVIDER)?
                     };
@@ -1079,7 +1079,7 @@ impl Execution {
             return Err(AgentSessionError::Failed);
         }
         let pending = if message["method"] == "elicitation/create" {
-            match interactions::form(message) {
+            match acp_permissions::form(message, PROVIDER) {
                 Ok(pending) => pending,
                 Err(AgentSessionError::Rejected) => {
                     transport.send(&json!({"jsonrpc":"2.0","id":message["id"],"result":{"action":"cancel"}})).await?;
@@ -1106,7 +1106,7 @@ impl Execution {
             .lock()
             .map_err(|_| AgentSessionError::Failed)
             .and_then(|requests| {
-                interactions::resolve(
+                acp_permissions::resolve(
                     requests.get(&id).ok_or(AgentSessionError::Rejected)?,
                     &response,
                 )
@@ -1225,7 +1225,7 @@ impl AgentSession for Session {
         }
         let reply = {
             let pending = self.pending.lock().map_err(|_| AgentSessionError::Failed)?;
-            interactions::resolve(
+            acp_permissions::resolve(
                 pending.get(id).ok_or(AgentSessionError::Rejected)?,
                 response,
             )?

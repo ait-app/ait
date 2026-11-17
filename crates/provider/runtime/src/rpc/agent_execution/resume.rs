@@ -1,26 +1,12 @@
 use super::{ErrorCode, ExecutionState, ResumeRequest, decode, map_manager, only};
+use crate::protocol::agent_execution::SESSION_CONFIG_FIELDS;
 use serde_json::{Value, json};
 
 impl ExecutionState {
     pub(super) async fn resume(&mut self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["handle", "overrides"])?;
         if let Some(overrides) = params.get("overrides") {
-            only(
-                overrides,
-                &[
-                    "provider",
-                    "cwd",
-                    "title",
-                    "modeId",
-                    "model",
-                    "thinkingOptionId",
-                    "systemPrompt",
-                    "featureValues",
-                    "providerOptions",
-                    "mcpServers",
-                    "toolPolicy",
-                ],
-            )?;
+            only(overrides, SESSION_CONFIG_FIELDS)?;
         }
         let mut request: ResumeRequest = decode(params)?;
         let records = self.registry.list().map_err(|_| ErrorCode::AgentIo)?;

@@ -35,11 +35,12 @@ pub(crate) const METHODS: &[MethodSpec] = &[
 ];
 
 use model::ErrorCode;
-use model::ServerMessage;
 use model::methods::MethodSpec;
 use serde_json::Value;
+use tokio_util::task::task_tracker::TaskTrackerToken;
 
 use crate::dispatch::State as Shared;
+use crate::service::agent_execution::{AdmittedResponse, AgentExecution};
 use model::Context;
 use model::outbound::{Outbound, QueueError};
 
@@ -48,6 +49,24 @@ use model::outbound::{Outbound, QueueError};
 /// # Errors
 /// Returns delivery failure; admission and execution errors use the original request ID.
 pub(super) fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
+    respond_admitted(context, state, AgentExecution::admit_request)
+}
+
+/// Admit `context` through `admit` on the installed executor, then deliver its response from a
+/// tracked task so the connection's capability worker is never held.
+///
+/// # Arguments
+/// * `context` - Pending request whose method and parameters are admitted.
+/// * `state` - Shared admission, cancellation, task tracking and the installed executor.
+/// * `admit` - Executor lane that reserves a bounded response slot for the request.
+///
+/// # Errors
+/// Returns delivery failure; admission and execution errors use the original request ID.
+pub(super) fn respond_admitted(
+    context: Context<'_>,
+    state: &Shared,
+    admit: fn(&AgentExecution, &str, Value) -> Result<AdmittedResponse, crate::rpc::ErrorCode>,
+) -> Result<(), QueueError> {
     let admission = state
         .admission
         .lock()
@@ -58,17 +77,19 @@ pub(super) fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueE
     let Some(execution) = &state.agent_execution else {
         return context.respond(Err(ErrorCode::UnsupportedCapability));
     };
-    let mut response =
-        match execution.admit_request(&context.request.method, context.request.params) {
-            Ok(response) => response,
-            Err(error) => {
-                return context
-                    .outbound
-                    .respond(context.request.id, Err(error.into()));
-            }
-        };
+    let mut response = match admit(execution, &context.request.method, context.request.params) {
+        Ok(response) => response,
+        Err(error) => {
+            return context
+                .outbound
+                .respond(context.request.id, Err(error.into()));
+        }
+    };
     let outbound = context.outbound.clone();
     let request_id = context.request.id;
+    // Admission happens before spawn, and the response owner retains its permit until
+    // outbound delivery. Dropping the socket cannot cancel accepted work, such as a catalog
+    // cache or refresh update.
     state.tasks.spawn(async move {
         let result = response.receive().await.map_err(Into::into);
         let _ = outbound.respond(request_id, result);
@@ -99,7 +120,7 @@ pub(crate) fn wait(
         None
     };
     if let Some(code) = error {
-        return send_error(outbound, request_id, code);
+        return outbound.respond(request_id, Err(code));
     }
     let execution = state
         .agent_execution
@@ -115,81 +136,77 @@ pub(crate) fn wait(
             () = failure.cancelled() => return,
             result = execution.execute("agent.finish.wait.request", params) => result,
         };
-        let _ = match result {
-            Ok(result) => outbound.send(&ServerMessage::Response { request_id, result }),
-            Err(code) => send_error(&outbound, request_id, code.into()),
-        };
+        let _ = outbound.respond(request_id, result.map_err(Into::into));
     });
     drop(admission);
     Ok(())
 }
 
-fn send_error(outbound: &Outbound, request_id: String, code: ErrorCode) -> Result<(), QueueError> {
-    outbound.send(&ServerMessage::Error {
-        request_id: Some(request_id),
-        code,
-        message: code.message().to_owned(),
-        retryable: code.retryable(),
-    })
+/// Summarize chat history for `agent.context.compact.request` with the isolated generator.
+/// # Errors
+/// Returns `ServerDraining` after shutdown begins, `InvalidMessage` for a malformed or oversized
+/// request, and `UnsupportedCapability` when no generator is installed or generation fails.
+pub(crate) async fn compact(params: Value, state: &Shared) -> Result<Value, ErrorCode> {
+    let tracking = track(state)?;
+    let request: crate::protocol::native_sessions::ContextCompactRequest =
+        serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
+    if request.context.len() > 96 * 1024
+        || request.cwd.trim().is_empty()
+        || request.provider.trim().is_empty()
+        || request
+            .model
+            .as_deref()
+            .is_some_and(|model| model.trim().is_empty())
+    {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    let source = state
+        .summary_source
+        .as_ref()
+        .ok_or(ErrorCode::UnsupportedCapability)?;
+    let summary = source
+        .generate(domain::summary::SummaryRequest {
+            kind: domain::summary::SummaryKind::ChatHistory,
+            cwd: request.cwd,
+            context: request.context,
+            selection: Some(domain::summary::SummarySelection {
+                provider: request.provider,
+                model: request.model,
+                thinking_option_id: request.thinking_option_id,
+            }),
+        })
+        .await
+        .map_err(|_| ErrorCode::UnsupportedCapability)?;
+    drop(tracking);
+    Ok(serde_json::json!({"summary":summary["summary"]}))
 }
 
+/// Execute `method` on the installed native executor while tracking it for shutdown.
+/// # Errors
+/// Returns `UnsupportedCapability` without an executor, `ServerDraining` after shutdown
+/// begins, or the executor's failure.
 pub(crate) async fn dispatch(
     method: &str,
     params: Value,
     state: &Shared,
 ) -> Result<Value, ErrorCode> {
-    if method == "agent.context.compact.request" {
-        let tracking = {
-            let _admission = state.admission.lock().map_err(|_| ErrorCode::AgentIo)?;
-            if state.cancellation.is_cancelled() {
-                return Err(ErrorCode::ServerDraining);
-            }
-            state.tasks.token()
-        };
-        let request: crate::protocol::native_sessions::ContextCompactRequest =
-            serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
-        if request.context.len() > 96 * 1024
-            || request.cwd.trim().is_empty()
-            || request.provider.trim().is_empty()
-            || request
-                .model
-                .as_deref()
-                .is_some_and(|model| model.trim().is_empty())
-        {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        let source = state
-            .summary_source
-            .as_ref()
-            .ok_or(ErrorCode::UnsupportedCapability)?;
-        let summary = source
-            .generate(domain::summary::SummaryRequest {
-                kind: domain::summary::SummaryKind::ChatHistory,
-                cwd: request.cwd,
-                context: request.context,
-                selection: Some(domain::summary::SummarySelection {
-                    provider: request.provider,
-                    model: request.model,
-                    thinking_option_id: request.thinking_option_id,
-                }),
-            })
-            .await
-            .map_err(|_| ErrorCode::UnsupportedCapability)?;
-        drop(tracking);
-        return Ok(serde_json::json!({"summary":summary["summary"]}));
-    }
     let execution = state
         .agent_execution
         .as_ref()
         .ok_or(ErrorCode::UnsupportedCapability)?;
-    let tracking = {
-        let _admission = state.admission.lock().map_err(|_| ErrorCode::AgentIo)?;
-        if state.cancellation.is_cancelled() {
-            return Err(ErrorCode::ServerDraining);
-        }
-        state.tasks.token()
-    };
+    let tracking = track(state)?;
     let result = execution.execute(method, params).await.map_err(Into::into);
     drop(tracking);
     result
+}
+
+/// Track one foreground operation so shutdown drains it, unless the server is already draining.
+/// # Errors
+/// Returns `AgentIo` for a poisoned admission lock and `ServerDraining` after shutdown begins.
+fn track(state: &Shared) -> Result<TaskTrackerToken, ErrorCode> {
+    let _admission = state.admission.lock().map_err(|_| ErrorCode::AgentIo)?;
+    if state.cancellation.is_cancelled() {
+        return Err(ErrorCode::ServerDraining);
+    }
+    Ok(state.tasks.token())
 }

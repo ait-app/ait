@@ -3,16 +3,16 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::diagnostics::Diagnostics;
+use crate::json_lines::{End, JsonLines};
 use crate::process_group::{self, Signal};
 use provider_core::ports::agent_session::AgentSessionError;
-use provider_core::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 8 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -65,45 +65,17 @@ impl Transport {
         let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let reader = tokio::spawn(async move {
-            let mut output = BufReader::new(output);
+            let mut output = JsonLines::new(output, MAX_FRAME);
             loop {
-                let mut bytes = Vec::new();
-                let read = (&mut output)
-                    .take(MAX_FRAME as u64)
-                    .read_until(b'\n', &mut bytes)
-                    .await;
-                // Without a newline, only a short successful read proves EOF. Reaching the
-                // `take` limit may leave unread bytes and must remain a protocol failure.
-                let trailing = matches!(read, Ok(1..))
-                    && bytes.len() < MAX_FRAME
-                    && bytes.last() != Some(&b'\n');
-                if !matches!(read, Ok(1..)) || (bytes.last() != Some(&b'\n') && !trailing) {
-                    let category = if matches!(read, Ok(0)) {
-                        Category::Closed
-                    } else {
-                        Category::Protocol
-                    };
-                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
-                    break;
-                }
-                if bytes.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
-                    reader_diagnostics
-                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
-                    break;
+                let message = match output.next().await {
+                    Ok(frame) => frame.value,
+                    Err(end) => break end.observe(&reader_diagnostics),
                 };
                 if message["jsonrpc"] != "2.0" {
-                    reader_diagnostics
-                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
+                    End::Decode.observe(&reader_diagnostics);
                     break;
                 }
                 if sender.send(message).await.is_err() {
-                    break;
-                }
-                if trailing {
-                    reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
                     break;
                 }
             }

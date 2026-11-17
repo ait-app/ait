@@ -1,7 +1,6 @@
 //! `MiniMax` Code over its official ACP interface, matching Paseo's integration.
 
 mod config;
-mod interactions;
 mod session;
 
 use std::path::PathBuf;

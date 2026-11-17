@@ -63,7 +63,7 @@ fn announcements_aliases_nested_frames_and_background_lifetimes_are_separate() {
         "message":{"id":"reply","model":"claude-child","content":[{"type":"text","text":"child answer"}]}}), "root", "/tmp").unwrap();
     assert!(frames.iter().any(|event| matches!(event, AgentTurnEvent::Subagent(SubagentEvent::Timeline { id, entry }) if id == "call" && entry.item["text"] == "child answer")));
     live.observe(&json!({"type":"system","subtype":"task_updated","task_id":"task","patch":{"is_backgrounded":true}}), "root", "/tmp").unwrap();
-    live.stopped(false, false);
+    live.cancel_foreground();
     assert_eq!(live.children()[0].descriptor["status"], "running");
     assert_eq!(live.children()[1].descriptor["status"], "canceled");
     live.observe(&json!({"type":"system","subtype":"task_notification","task_id":"task","status":"completed","usage":{"total_tokens":123}}), "root", "/tmp").unwrap();
@@ -78,7 +78,7 @@ fn task_started_background_flag_survives_foreground_stop() {
     record["is_backgrounded"] = json!(true);
 
     live.observe(&record, "root", "/tmp").unwrap();
-    live.stopped(false, false);
+    live.cancel_foreground();
 
     assert_eq!(live.children()[0].descriptor["status"], "running");
 }

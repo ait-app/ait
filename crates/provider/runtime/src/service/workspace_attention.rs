@@ -17,7 +17,7 @@ use model::workspace::attention::{
     WorkspaceActivitySource, WorkspaceAttention, WorkspaceAttentionScan,
 };
 
-const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";
+use crate::service::agent_runtime::PARENT_AGENT_ID_LABEL;
 
 /// Workspace attention adapter sharing the Agent directory's durable registry.
 #[derive(Debug)]

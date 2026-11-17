@@ -11,17 +11,8 @@ impl ExecutionState {
         endpoint: model::realtime::Endpoint,
     ) -> Result<Value, ErrorCode> {
         only(&params, &["agentId"])?;
-        let id = self.resolve(
-            params["agentId"]
-                .as_str()
-                .ok_or(ErrorCode::InvalidMessage)?,
-        )?;
-        let record = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        let id = self.resolve_field(&params, "agentId")?;
+        self.active_workspace(&id)?;
         let supported = self.manager.start_realtime(&id, endpoint).await?;
         Ok(json!({"supported":supported}))
     }
@@ -30,12 +21,7 @@ impl ExecutionState {
         only(&params, &["agentId", "text"])?;
         let request: crate::protocol::agent_execution::SendRequest = decode(params)?;
         let id = self.resolve(&request.agent_id)?;
-        let record = self
-            .registry
-            .get(&id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        self.active_workspace(&id)?;
         let result = if self.manager.has_pending_input(&id)? {
             Err(super::AgentManagerError::Busy)
         } else {
@@ -58,11 +44,7 @@ impl ExecutionState {
         params: Value,
     ) -> Result<Value, ErrorCode> {
         only(&params, &["agentId", "turnId"])?;
-        let id = self.resolve(
-            params["agentId"]
-                .as_str()
-                .ok_or(ErrorCode::InvalidMessage)?,
-        )?;
+        let id = self.resolve_field(&params, "agentId")?;
         let turn = params["turnId"]
             .as_str()
             .filter(|id| model::valid_id(id))

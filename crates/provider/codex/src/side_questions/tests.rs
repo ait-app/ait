@@ -1,7 +1,9 @@
 use super::*;
 use domain::agent_runtime::StoredAgentConfig;
 use provider_core::ports::agent_session::{AgentClient, AgentSessionSpec};
-use provider_core::protocol::side_questions::{SideContextEntry, SideContextSnapshot};
+use provider_core::protocol::side_questions::{
+    BtwHistoryTurn, SideContextEntry, SideContextSnapshot,
+};
 use std::time::Duration;
 
 struct Fixture {
@@ -195,7 +197,7 @@ async fn cancel_is_record_scoped_and_reaps_the_auxiliary_group() {
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             runner.poll_side();
-            if runner.topic.as_ref().unwrap().latest_turn().answer == "visible partial" {
+            if runner.panel.topic().unwrap().latest_turn().answer == "visible partial" {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -238,7 +240,7 @@ async fn cancel_is_record_scoped_and_reaps_the_auxiliary_group() {
     .await
     .unwrap();
     assert_eq!(
-        runner.topic.as_ref().unwrap().latest_turn().status,
+        runner.panel.topic().unwrap().latest_turn().status,
         SideTurnStatus::Cancelled
     );
     assert!(!locator::path(&fixture.spec.directory, "hold").exists());
