@@ -15,7 +15,7 @@ pub struct State {
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed daemon service.
-    pub daemon: Option<Arc<Mutex<crate::daemon::service::Daemon>>>,
+    pub daemon: Option<Arc<crate::daemon::service::Daemon>>,
     /// Installed directory service.
     pub directory: Option<Arc<Mutex<crate::directory::service::directory::Directory>>>,
     /// Installed workspace labels service.
@@ -366,7 +366,7 @@ pub async fn daemon_snapshot(
     let capabilities = state.info.implemented_capabilities.clone();
     let lifecycle = state.info().lifecycle;
     state
-        .run(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
+        .run_shared(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
             crate::daemon::rpc::snapshot(
                 daemon,
                 &method,

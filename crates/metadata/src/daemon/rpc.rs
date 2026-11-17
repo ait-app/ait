@@ -85,11 +85,7 @@ pub(crate) struct Executed {
 ///
 /// # Errors
 /// Returns validation or configuration storage errors.
-pub(crate) fn execute(
-    daemon: &mut Daemon,
-    method: &str,
-    params: Value,
-) -> Result<Executed, ErrorCode> {
+pub(crate) fn execute(daemon: &Daemon, method: &str, params: Value) -> Result<Executed, ErrorCode> {
     match method {
         "daemon.host_stats.request" => {
             if !params.is_object() {

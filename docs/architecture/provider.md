@@ -21,6 +21,15 @@
 - 预设点击一次提交默认模型、思考等级和整套角色分配。未指定的角色恢复继承，显式清空保留清空；
   非模型的模式、权限、工具等配置保持原值。草稿先更新待创建配置，已运行 Agent 经现有
   `agent.config.apply.request` 提交；失败遵循该入口的原子校验与错误返回。
+- Claude Code 的角色来自其原生环境变量，不由 adapter 自造词汇：`modelRole.` 前缀下共 8 个开关，
+  依次为 `subagent`（`CLAUDE_CODE_SUBAGENT_MODEL`）、`workflow`
+  （`CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL`）、`subagent-effort`（`CLAUDE_CODE_SUBAGENT_EFFORT`，
+  等级集为 `low`/`medium`/`high`/`xhigh`/`max`）、`small-fast`（`ANTHROPIC_SMALL_FAST_MODEL`）与
+  `opus`/`sonnet`/`haiku`/`fable`（`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL`）。主模型不在其中：
+  它就是 `config.model`。选项除缓存的模型别名外还有 `native`（继承，默认，不写任何变量）与 `unset`
+  （显式清空，写空字符串）；已存但当前不可解析的值仍保留在选项中并标为不可用，不静默丢弃。这些键经
+  `--settings` 的 `env` 传给 Claude Code 子进程，只写这一份命令行配置，从不改用户的
+  `~/.claude/settings.json`；变量名单由 adapter 持有，`provider-native` 只负责按给定名字与值写入。
 
 ## 边界与装配
 

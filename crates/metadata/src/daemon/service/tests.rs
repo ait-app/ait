@@ -199,27 +199,94 @@ impl crate::daemon::ports::host_monitor::HostSampler for TestHostSampler {
 
 #[test]
 fn host_monitor_rpc_validates_input_and_returns_opt_in_history() {
-    let mut daemon = daemon().with_host_sampler(Box::new(TestHostSampler));
-    let call = |daemon: &mut Daemon, params| {
+    let daemon = daemon().with_host_sampler(Box::new(TestHostSampler));
+    let call = |daemon: &Daemon, params| {
         crate::daemon::rpc::execute(daemon, "daemon.host_stats.request", params)
             .map(|executed| executed.value)
     };
-    let summary = call(&mut daemon, json!({})).unwrap();
+    let summary = call(&daemon, json!({})).unwrap();
     assert_eq!(summary["platform"], "test");
     assert!(summary["history"].as_array().unwrap().is_empty());
     assert!(summary["current"]["cpuPercent"].is_null());
-    let detail = call(&mut daemon, json!({"includeHistory":true})).unwrap();
+    let detail = call(&daemon, json!({"includeHistory":true})).unwrap();
     assert_eq!(detail["history"].as_array().unwrap().len(), 1);
     for params in [
         json!([]),
         json!({"includeHistory":"yes"}),
         json!({"arbitrary":true}),
     ] {
-        assert!(call(&mut daemon, params).is_err());
+        assert!(call(&daemon, params).is_err());
     }
 }
 
 #[test]
 fn host_monitor_without_an_adapter_fails_explicitly() {
     assert!(daemon().host_stats(false).is_err());
+}
+
+/// A sampler that parks inside `sample()` until the test releases it.
+///
+/// Parking inside the call is what makes the lock state observable: while the sampler is here,
+/// the monitor — and therefore any lock protecting it — is genuinely held.
+#[derive(Debug)]
+struct HeldSampler {
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+}
+
+impl crate::daemon::ports::host_monitor::HostSampler for HeldSampler {
+    fn sample(
+        &mut self,
+        _: bool,
+    ) -> Result<
+        crate::daemon::ports::host_monitor::HostSnapshot,
+        crate::daemon::ports::host_monitor::HostMonitorError,
+    > {
+        let _ = self.entered.send(());
+        let _ = self
+            .release
+            .recv_timeout(std::time::Duration::from_secs(10));
+        TestHostSampler.sample(false)
+    }
+}
+
+/// A configuration write must complete while a host sample is still in flight.
+///
+/// Both operations belong to one daemon, so a single lock around the whole service would make an
+/// 8 ms durability write wait behind a `/proc` and `statfs` sweep that the client triggers every
+/// two seconds. The sampler here blocks until released, so the write can only pass if it does not
+/// queue behind the monitor's own lock.
+#[test]
+fn config_patch_completes_while_a_host_sample_is_in_flight() {
+    let (entered, entered_rx) = std::sync::mpsc::channel();
+    let (release, release_rx) = std::sync::mpsc::channel();
+    let daemon = std::sync::Arc::new(daemon().with_host_sampler(Box::new(HeldSampler {
+        entered,
+        release: release_rx,
+    })));
+
+    let sampling = {
+        let daemon = daemon.clone();
+        std::thread::spawn(move || daemon.host_stats(false))
+    };
+    entered_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the sampler should reach `sample()`");
+
+    // The write runs on its own thread so a blocked one fails the assertion instead of hanging.
+    let (patched, patched_rx) = std::sync::mpsc::channel();
+    let writing = {
+        let daemon = daemon.clone();
+        std::thread::spawn(move || {
+            let _ = patched.send(daemon.set_config(&json!({"relay":{"enabled":true}})));
+        })
+    };
+    let result = patched_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("a config write must not wait for an in-flight host sample");
+    assert_eq!(result.unwrap()["patch"]["relay"]["enabled"], true);
+
+    release.send(()).unwrap();
+    writing.join().unwrap();
+    sampling.join().unwrap().unwrap();
 }

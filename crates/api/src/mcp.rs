@@ -106,7 +106,7 @@ async fn enabled(state: &Shared) -> Result<(), ApiError> {
     if let Some(daemon) = &state.metadata.daemon {
         let config = state
             .runtime
-            .run_queued(Some(daemon.clone()), model::ErrorCode::DaemonIo, |daemon| {
+            .run_shared_queued(Some(daemon.clone()), model::ErrorCode::DaemonIo, |daemon| {
                 daemon.get_config().map_err(|_| model::ErrorCode::DaemonIo)
             })
             .await

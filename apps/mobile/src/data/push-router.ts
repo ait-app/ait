@@ -400,10 +400,12 @@ function applyDaemonConfigStatus(input: {
   if (!isDaemonConfigChangedPayload(payload)) {
     return;
   }
-  input.queryClient.setQueryData<MutableDaemonConfig>(
-    daemonConfigQueryKey(input.serverId),
-    payload.config,
-  );
+  const queryKey = daemonConfigQueryKey(input.serverId);
+  // A push carries a snapshot the daemon published after committing it, so it always supersedes
+  // a read already in flight. Cancelling first reverts that read's optimistic state and stops it
+  // from landing afterwards with an older config; the push is then the only writer.
+  void input.queryClient.cancelQueries({ queryKey, exact: true });
+  input.queryClient.setQueryData<MutableDaemonConfig>(queryKey, payload.config);
 }
 
 function setCheckoutDiffPayload(input: {

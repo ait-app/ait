@@ -383,7 +383,7 @@ impl Api {
         let metadata = Arc::new(metadata::dispatch::State {
             push_tokens: services.push_tokens.map(shared_service),
             runtime: runtime.clone(),
-            daemon: services.daemon.map(shared_service),
+            daemon: services.daemon.map(Arc::new),
             directory: directory.map(shared_service),
             workspace_labels: services.workspace_labels.map(shared_service),
             workspace_automation: services.workspace_automation,

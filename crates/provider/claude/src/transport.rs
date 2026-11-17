@@ -406,9 +406,10 @@ fn launch_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    command.args(provider_native::configuration::claude(
+    command.args(provider_native::configuration::claude_with_environment(
         &spec.config,
         spec.confinement.is_some(),
+        &super::roles::environment(&spec.config),
     )?);
     let mcp_config = provider_native::configuration::claude_mcp(&spec.config)
         .map(|document| mcp_config_file(&document))

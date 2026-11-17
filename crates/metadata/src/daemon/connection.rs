@@ -31,7 +31,7 @@ pub(crate) async fn dispatch(
     let method = method.to_owned();
     let events = state.session_events.clone();
     state
-        .run(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
+        .run_shared(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
             let executed = rpc::execute(daemon, &method, params)?;
             if let Some(config) = executed.changed_config {
                 events.publish(
