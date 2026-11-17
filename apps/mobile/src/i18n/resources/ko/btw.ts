@@ -22,8 +22,6 @@ export const btw = {
   emptyDescription: "기본 대화를 계속하면서 생각을 정리할 수 있는 별도 공간입니다.",
   emptyHistory: "아직 사이드 대화가 없습니다.",
   thinking: "생각 중…",
-  footer: "사이드 대화는 기본 대화와 분리되어 유지됩니다.",
-  shortened: "일부 컨텍스트 또는 미리보기가 생략되었습니다. 펼쳐서 저장된 대화를 계속하세요.",
   unsupportedHost:
     "이 호스트에서는 사이드 대화를 사용할 수 없습니다. 호스트를 업데이트한 후 다시 시도하세요.",
   cancelFailed: "사이드 질문을 중지하지 못했습니다. 아직 실행 중입니다.",

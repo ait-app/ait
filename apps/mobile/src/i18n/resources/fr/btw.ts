@@ -25,9 +25,6 @@ export const btw = {
     "Un espace séparé pour réfléchir pendant que votre conversation principale continue.",
   emptyHistory: "Aucune conversation secondaire pour le moment.",
   thinking: "Réflexion…",
-  footer: "Les conversations secondaires restent séparées de votre conversation principale.",
-  shortened:
-    "Une partie du contexte ou de l’aperçu a été omise. Développez pour continuer avec la conversation enregistrée.",
   unsupportedHost:
     "Les conversations secondaires ne sont pas disponibles sur cet hôte. Mettez-le à jour et réessayez.",
   cancelFailed: "Impossible d’arrêter cette question secondaire. Elle est toujours en cours.",

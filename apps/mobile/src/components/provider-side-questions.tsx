@@ -60,55 +60,79 @@ export function BtwPanel({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const agent = useSessionStore((store) => store.sessions[serverId]?.agents.get(agentId));
-  const live = agent?.providerUi?.sideQuestions;
+  const sourceTitle = useSessionStore(
+    (store) => store.sessions[serverId]?.agents.get(agentId)?.title,
+  );
+  const live = useSessionStore(
+    (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi?.sideQuestions,
+  );
   const owner = `${serverId}:${agentId}`;
   const hydrated = useBtwVisibilityStore((store) => store.hydrated);
   const ended = useBtwVisibilityStore((store) => store.ended.find(([key]) => key === owner)?.[1]);
   const { isPaneFocused } = useComposerKeyboardScope();
-  const [history, setHistory] = useState<SideQuestionsState | null>(null);
+  const [history, setHistory] = useState<{
+    state: SideQuestionsState;
+    live: SideQuestionsState | undefined;
+  } | null>(null);
   const [topicId, setTopicId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<"ask" | "cancel" | "transfer" | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const inFlight = useRef(false);
+  const historyVersion = useRef(0);
+  const latestLive = useRef(live);
   const askedKey = useRef(0);
   const wasOpened = useRef(false);
   const transfer = useTransferSideQuestion({ serverId, agentId, workspaceId });
   const visible =
     isPaneFocused &&
     (opened || Boolean(hydrated && ended !== "*" && live?.reveal && live.reveal !== ended));
-  const state = history ?? live ?? EMPTY_STATE;
+  const state = history && history.live === live ? history.state : (live ?? EMPTY_STATE);
   const topic = state.records.find((record) => record.id === topicId) ?? null;
   const draftKey = topicId ?? "new";
   const draft = drafts[draftKey] ?? "";
   const runningId = state.runningId;
-  const transferBlocked = disabled || uncertain || state.pendingAcceptance === true || !client;
+  // The host persists an unresolved receipt before admitting an ask. While our
+  // request is still in flight, that projection means sending, not a failed send.
+  const acceptanceUncertain = pending !== "ask" && (uncertain || state.pendingAcceptance === true);
+  const transferBlocked = disabled || acceptanceUncertain || !client;
+
+  const invalidateHistory = useCallback(() => {
+    historyVersion.current += 1;
+    setLoading(false);
+  }, []);
 
   // A history read can be newer than the last pushed agent snapshot. The next
   // snapshot becomes authoritative again, so a cancelled answer cannot reappear.
   useEffect(() => {
+    latestLive.current = live;
+    setLoading(false);
     setHistory(null);
     if (live?.pendingAcceptance !== undefined) setUncertain(live.pendingAcceptance);
   }, [live]);
 
   const refresh = useCallback(async () => {
     if (!client) return;
+    const version = ++historyVersion.current;
+    const snapshot = latestLive.current;
     setLoading(true);
     try {
       const next = await client.listSideQuestions({ agentId });
-      setHistory(next);
-      setError(next.pendingAcceptance ? t("btw.uncertain") : null);
+      if (version !== historyVersion.current) return;
+      if (snapshot !== latestLive.current) return latestLive.current;
+      setHistory({ state: next, live: snapshot });
+      setError(null);
       setUncertain(next.pendingAcceptance === true);
       return next;
     } catch (cause) {
+      if (version !== historyVersion.current || snapshot !== latestLive.current) return;
       const failure = classifyBtwHistoryFailure(cause, client.supportsSideQuestions());
       setError(failure.kind === "unsupported" ? t("btw.unsupportedHost") : failure.message);
     } finally {
-      setLoading(false);
+      if (version === historyVersion.current) setLoading(false);
     }
   }, [agentId, client, t]);
 
@@ -119,16 +143,21 @@ export function BtwPanel({
     }
     if (!wasOpened.current) {
       wasOpened.current = true;
+      // A command with a question loads history after admission. Reading it now
+      // starts redundant provider work and can race with the pending receipt.
+      if (request?.question) return;
+      setTopicId(live?.runningId ?? live?.records[0]?.id ?? null);
       void refresh().then((next) => {
-        if (!request?.question) setTopicId(next?.runningId ?? next?.records[0]?.id ?? null);
+        if (next) setTopicId(next.runningId ?? next.records[0]?.id ?? null);
       });
     }
-  }, [client, isConnected, visible, refresh, request?.question]);
+  }, [client, isConnected, live, visible, refresh, request?.question]);
 
   const setDraft = (text: string) => setDrafts((current) => ({ ...current, [draftKey]: text }));
 
   const ask = useCallback(
     async (question: string, recordId?: string) => {
+      if (inFlight.current || !question.trim()) return;
       if (client && !client.supportsSideQuestions()) {
         setError(t("btw.unsupportedHost"));
         return;
@@ -138,18 +167,11 @@ export function BtwPanel({
         setError(t("btw.busy"));
         return;
       }
-      if (
-        !client ||
-        disabled ||
-        uncertain ||
-        state.pendingAcceptance ||
-        state.available === false ||
-        inFlight.current ||
-        !question.trim()
-      )
+      if (!client || disabled || uncertain || state.pendingAcceptance || state.available === false)
         return;
       inFlight.current = true;
-      setPending(true);
+      invalidateHistory();
+      setPending("ask");
       setError(null);
       try {
         const receipt = await client.askSideQuestion({
@@ -173,8 +195,8 @@ export function BtwPanel({
         });
         if (receipt.receipt === "uncertain") {
           setUncertain(true);
-          setError(t("btw.uncertain"));
         } else {
+          setUncertain(false);
           await refresh();
         }
       } catch (cause) {
@@ -183,13 +205,14 @@ export function BtwPanel({
         setError(failure.kind === "unsupported" ? t("btw.unsupportedHost") : failure.message);
       } finally {
         inFlight.current = false;
-        setPending(false);
+        setPending(null);
       }
     },
     [
       agentId,
       client,
       disabled,
+      invalidateHistory,
       refresh,
       runningId,
       state.available,
@@ -231,7 +254,8 @@ export function BtwPanel({
       return;
     }
     inFlight.current = true;
-    setPending(true);
+    invalidateHistory();
+    setPending("cancel");
     setError(null);
     try {
       const cancelled = await client!.cancelSideQuestion({ agentId, recordId: runningId });
@@ -249,14 +273,15 @@ export function BtwPanel({
       setError(failure.kind === "unsupported" ? t("btw.unsupportedHost") : failure.message);
     } finally {
       inFlight.current = false;
-      setPending(false);
+      setPending(null);
     }
   };
 
   const expand = async () => {
     if (!topic || !workspaceId || transferBlocked || inFlight.current || runningId) return;
     inFlight.current = true;
-    setPending(true);
+    invalidateHistory();
+    setPending("transfer");
     setError(null);
     try {
       await transfer(topic.id);
@@ -266,7 +291,7 @@ export function BtwPanel({
       setError(failure.kind === "unsupported" ? t("btw.unsupportedHost") : failure.message);
     } finally {
       inFlight.current = false;
-      setPending(false);
+      setPending(null);
     }
   };
 
@@ -279,24 +304,31 @@ export function BtwPanel({
       onSubmit={() => void ask(draft, topicId ?? undefined)}
     >
       <BtwWindow
-        sourceTitle={agent?.title ?? t("btw.sourceFallback")}
+        sourceTitle={sourceTitle ?? t("btw.sourceFallback")}
         state={state}
         topic={topic}
         draft={draft}
-        error={error ?? state.unavailableReason ?? state.error ?? null}
+        error={
+          error ??
+          state.unavailableReason ??
+          (acceptanceUncertain
+            ? t("btw.uncertain")
+            : pending === "ask" && state.pendingAcceptance
+              ? null
+              : (state.error ?? null))
+        }
         loading={loading && !history && !live}
-        pending={pending}
+        pending={pending !== null}
         disabled={
           disabled ||
-          uncertain ||
-          state.pendingAcceptance === true ||
+          acceptanceUncertain ||
           state.available === false ||
           !client ||
           client.supportsSideQuestions() === false
         }
         historyOpen={historyOpen}
         canTransfer={Boolean(topic && workspaceId && !transferBlocked)}
-        closeBlocked={uncertain || state.pendingAcceptance === true}
+        closeBlocked={acceptanceUncertain}
         onDraftChange={setDraft}
         onSubmit={() => void ask(draft, topicId ?? undefined)}
         onCancel={() => void cancel(false)}

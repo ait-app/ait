@@ -24,9 +24,6 @@ export const btw = {
   emptyDescription: "Un espacio separado para pensar mientras continúa tu conversación principal.",
   emptyHistory: "Aún no hay conversaciones laterales.",
   thinking: "Pensando…",
-  footer: "Las conversaciones laterales permanecen separadas de la conversación principal.",
-  shortened:
-    "Se omitió parte del contexto o la vista previa. Expande para continuar con la conversación guardada.",
   unsupportedHost:
     "Las conversaciones laterales no están disponibles en este host. Actualízalo e inténtalo de nuevo.",
   cancelFailed: "No se pudo detener esta pregunta lateral. Sigue en ejecución.",

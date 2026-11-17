@@ -212,7 +212,6 @@ export function BtwWindow({
           </>
         ) : null}
         {topic ? <BtwConversation topic={topic} /> : null}
-        {topic?.truncated ? <Text style={styles.muted}>{t("btw.shortened")}</Text> : null}
       </ScrollView>
       {error ? (
         <View style={styles.errorRow}>
@@ -226,75 +225,72 @@ export function BtwWindow({
       ) : null}
       <View style={styles.footer}>
         {showCompose ? (
-          <>
-            <View
-              style={[
-                styles.compose,
-                inputHovered ? styles.composeHovered : null,
-                inputFocused ? styles.composeFocused : null,
-              ]}
-              onPointerEnter={() => setInputHovered(true)}
-              onPointerLeave={() => setInputHovered(false)}
-              testID="side-question-compose"
-            >
-              <TextInput
-                ref={inputRef}
-                value={draft}
-                onChangeText={onDraftChange}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
-                placeholder={topic ? t("btw.followUpPlaceholder") : t("btw.newPlaceholder")}
-                placeholderTextColor={theme.colors.foregroundMuted}
-                accessibilityLabel={t("btw.question")}
-                multiline
-                editable={!disabled}
-                style={styles.input}
-                onKeyPress={(event) => {
-                  const nativeEvent = event.nativeEvent as typeof event.nativeEvent & {
-                    shiftKey?: boolean;
-                    isComposing?: boolean;
-                    keyCode?: number;
-                  };
-                  if (
-                    isWeb &&
-                    nativeEvent.key === "Enter" &&
-                    !nativeEvent.shiftKey &&
-                    !isImeComposingKeyboardEvent(nativeEvent)
-                  ) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onSubmit();
-                  }
-                }}
-                testID="side-question-input"
+          <View
+            style={[
+              styles.compose,
+              inputHovered ? styles.composeHovered : null,
+              inputFocused ? styles.composeFocused : null,
+            ]}
+            onPointerEnter={() => setInputHovered(true)}
+            onPointerLeave={() => setInputHovered(false)}
+            testID="side-question-compose"
+          >
+            <TextInput
+              ref={inputRef}
+              value={draft}
+              onChangeText={onDraftChange}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              placeholder={topic ? t("btw.followUpPlaceholder") : t("btw.newPlaceholder")}
+              placeholderTextColor={theme.colors.foregroundMuted}
+              accessibilityLabel={t("btw.question")}
+              multiline
+              editable={!disabled}
+              style={styles.input}
+              onKeyPress={(event) => {
+                const nativeEvent = event.nativeEvent as typeof event.nativeEvent & {
+                  shiftKey?: boolean;
+                  isComposing?: boolean;
+                  keyCode?: number;
+                };
+                if (
+                  isWeb &&
+                  nativeEvent.key === "Enter" &&
+                  !nativeEvent.shiftKey &&
+                  !isImeComposingKeyboardEvent(nativeEvent)
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onSubmit();
+                }
+              }}
+              testID="side-question-input"
+            />
+            {running ? (
+              <Button
+                variant="secondary"
+                size={controlSize}
+                leftIcon={Square}
+                style={roundControl}
+                accessibilityLabel={t("btw.stop")}
+                onPress={onCancel}
+                disabled={disabled || pending}
+                testID="side-question-cancel"
               />
-              {running ? (
-                <Button
-                  variant="secondary"
-                  size={controlSize}
-                  leftIcon={Square}
-                  style={roundControl}
-                  accessibilityLabel={t("btw.stop")}
-                  onPress={onCancel}
-                  disabled={disabled || pending}
-                  testID="side-question-cancel"
-                />
-              ) : (
-                <Button
-                  variant="default"
-                  size={controlSize}
-                  leftIcon={ArrowUp}
-                  style={roundControl}
-                  accessibilityLabel={t("btw.send")}
-                  onPress={onSubmit}
-                  disabled={!draft.trim() || disabled || pending || loading}
-                  loading={pending}
-                  testID="side-question-ask"
-                />
-              )}
-            </View>
-            <Text style={styles.footerText}>{t("btw.footer")}</Text>
-          </>
+            ) : (
+              <Button
+                variant="default"
+                size={controlSize}
+                leftIcon={ArrowUp}
+                style={roundControl}
+                accessibilityLabel={t("btw.send")}
+                onPress={onSubmit}
+                disabled={!draft.trim() || disabled || pending || loading}
+                loading={pending}
+                testID="side-question-ask"
+              />
+            )}
+          </View>
         ) : (
           <Button
             variant="secondary"
@@ -409,7 +405,6 @@ const styles = StyleSheet.create((theme) => {
       maxHeight: theme.spacing[16] + theme.spacing[12],
       outlineWidth: 0,
     },
-    footerText: { ...metadataText, color: theme.colors.foregroundMuted, textAlign: "center" },
     errorRow: {
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[2],

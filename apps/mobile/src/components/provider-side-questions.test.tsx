@@ -202,6 +202,106 @@ it("opens /btw question as a new topic and submits it exactly once after rerende
   expect(mocks.ask).toHaveBeenCalledTimes(1);
 });
 
+it("keeps admission pending without flashing an error or fetching competing history", async () => {
+  const admission = Promise.withResolvers<{ receipt: string; recordId: string }>();
+  mocks.ask.mockReturnValue(admission.promise);
+  const view = render(panel({ question: "Side question", key: 1 }));
+  await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(1));
+  expect(mocks.history).not.toHaveBeenCalled();
+
+  mocks.live = {
+    records: [],
+    omitted: 0,
+    pendingAcceptance: true,
+    error: "Side-question acceptance is unknown; reconcile before asking again.",
+  };
+  view.rerender(panel());
+  await act(async () => {});
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByTestId("side-question-ask")).toHaveProperty("disabled", true);
+  expect(screen.getByTestId("side-question-input")).toHaveProperty("readOnly", false);
+
+  mocks.live = {
+    records: [{ ...topic, status: "running" }],
+    runningId: "topic",
+    omitted: 0,
+    pendingAcceptance: false,
+  };
+  view.rerender(panel());
+  fireEvent.keyDown(screen.getByTestId("side-question-input"), { key: "Enter" });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(mocks.ask).toHaveBeenCalledTimes(1);
+
+  mocks.history.mockResolvedValue(mocks.live);
+  await act(async () => admission.resolve({ receipt: "accepted", recordId: "topic" }));
+  await screen.findByText("First answer");
+  fireEvent.click(screen.getByTestId("side-question-follow"));
+  fireEvent.keyDown(screen.getByTestId("side-question-input"), { key: "Enter" });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(mocks.history).toHaveBeenCalledTimes(1);
+});
+
+it.each(["snapshot", "failure"])(
+  "ignores a late opening-history %s after a successful send",
+  async (result) => {
+    const openingHistory = Promise.withResolvers<SideQuestionsState>();
+    mocks.live = { records: [topic], omitted: 0 };
+    mocks.history.mockReturnValueOnce(openingHistory.promise).mockResolvedValue({
+      records: [{ ...topic, answer: "New answer", updatedAt: 3 }],
+      omitted: 0,
+      pendingAcceptance: false,
+    });
+    render(panel());
+    fireEvent.click(screen.getByTestId("side-question-follow"));
+    fireEvent.change(screen.getByTestId("side-question-input"), {
+      target: { value: "Follow up" },
+    });
+    fireEvent.click(screen.getByTestId("side-question-ask"));
+    await screen.findByText("New answer");
+
+    await act(async () => {
+      if (result === "failure") openingHistory.reject(new Error("Stale history failed"));
+      else
+        openingHistory.resolve({
+          records: [topic],
+          omitted: 0,
+          pendingAcceptance: true,
+        });
+    });
+    expect(screen.getByText("New answer")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mocks.ask).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("uses confirmed history while the live admission snapshot is still pending", async () => {
+  const admission = Promise.withResolvers<{ receipt: string; recordId: string }>();
+  mocks.ask.mockReturnValue(admission.promise);
+  const view = render(panel({ question: "Side question", key: 1 }));
+  mocks.live = { records: [], omitted: 0, pendingAcceptance: true };
+  view.rerender(panel());
+  mocks.history.mockResolvedValue({ records: [topic], omitted: 0, pendingAcceptance: false });
+  await act(async () => admission.resolve({ receipt: "accepted", recordId: "topic" }));
+  await screen.findByText("First answer");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", false);
+});
+
+it.each([true, false])(
+  "discards history after a newer live update with an initial snapshot=%s",
+  async (hasSnapshot) => {
+    const history = Promise.withResolvers<SideQuestionsState>();
+    mocks.live = hasSnapshot ? { records: [topic], omitted: 0 } : undefined;
+    mocks.history.mockReturnValue(history.promise);
+    const view = render(panel());
+    mocks.live = { records: [{ ...topic, answer: "Live answer", updatedAt: 3 }], omitted: 0 };
+    view.rerender(panel());
+    await act(async () => history.resolve({ records: [topic], omitted: 0 }));
+    expect(screen.getByText("Live answer")).toBeTruthy();
+    expect(screen.queryByText("First answer")).toBeNull();
+  },
+);
+
 it("preserves newer text typed while an earlier question is being admitted", async () => {
   const admission = Promise.withResolvers<{ receipt: string; recordId: string }>();
   mocks.ask.mockReturnValue(admission.promise);
@@ -361,6 +461,25 @@ it("does not resend an uncertain ask and waits for durable reconciliation before
     expect(screen.getByTestId("side-question-ask")).toHaveProperty("disabled", false),
   );
   expect(mocks.ask).toHaveBeenCalledTimes(1);
+});
+
+it("clears an uncertain receipt warning when a live snapshot confirms acceptance", async () => {
+  mocks.ask.mockResolvedValue({ receipt: "uncertain" });
+  const view = render(panel({ question: "Side question", key: 1 }));
+  await screen.findByText("btw.uncertain");
+  mocks.live = { records: [topic], omitted: 0, pendingAcceptance: false };
+  view.rerender(panel());
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", false);
+  expect(mocks.ask).toHaveBeenCalledTimes(1);
+});
+
+it("reports unresolved acceptance from history when no local send is pending", async () => {
+  mocks.history.mockResolvedValue({ records: [topic], omitted: 0, pendingAcceptance: true });
+  render(panel());
+  await screen.findByText("btw.uncertain");
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", true);
+  expect(mocks.ask).not.toHaveBeenCalled();
 });
 
 it("shows the provider's specific unavailable reason without enabling a fake question path", async () => {

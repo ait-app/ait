@@ -24,9 +24,6 @@ export const btw = {
   emptyDescription: "Um espaço separado para refletir enquanto a conversa principal continua.",
   emptyHistory: "Ainda não há conversas paralelas.",
   thinking: "Pensando…",
-  footer: "As conversas paralelas permanecem separadas da conversa principal.",
-  shortened:
-    "Parte do contexto ou da prévia foi omitida. Expanda para continuar com a conversa salva.",
   unsupportedHost:
     "Conversas paralelas não estão disponíveis neste host. Atualize-o e tente novamente.",
   cancelFailed: "Não foi possível parar esta pergunta paralela. Ela ainda está em execução.",

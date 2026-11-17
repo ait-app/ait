@@ -25,9 +25,6 @@ export const btw = {
     "A separate space to think something through while your main conversation continues.",
   emptyHistory: "No side conversations yet.",
   thinking: "Thinking…",
-  footer: "Side conversations stay separate from your main conversation.",
-  shortened:
-    "Some context or preview content was omitted. Expand to continue with the saved conversation.",
   unsupportedHost:
     "Side conversations are unavailable on this host. Update the host and try again.",
   cancelFailed: "Could not stop this side question. It is still running.",

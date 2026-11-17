@@ -22,8 +22,6 @@ export const btw = {
   emptyDescription: "在独立的小窗口里聊一聊，主会话会继续工作。",
   emptyHistory: "还没有旁支会话。",
   thinking: "思考中…",
-  footer: "这里的对话独立于主会话。",
-  shortened: "部分上下文或预览已省略。展开后可携带已保存的上下文和问答继续工作。",
   unsupportedHost: "此主机暂不支持旁支会话，请更新主机后重试。",
   cancelFailed: "未能停止旁支回答，它仍在运行。",
   busy: "旁支问题仍在回答，请等待或先停止回答。",
