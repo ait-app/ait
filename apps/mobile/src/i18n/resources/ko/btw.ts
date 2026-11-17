@@ -15,6 +15,7 @@ export const btw = {
   question: "사이드 질문",
   send: "사이드 질문 보내기",
   stop: "사이드 질문 중지",
+  follow: "이어 묻기",
   newPlaceholder: "사이드 질문하기…",
   followUpPlaceholder: "후속 질문하기…",
   emptyTitle: "이 대화에 대해 질문",

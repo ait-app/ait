@@ -1,8 +1,18 @@
-import { useCallback, useRef, type ReactNode, type RefObject } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { Modal, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import type { View as RNView } from "react-native";
 import { useBtwFloatingLayout } from "@/btw/use-floating-layout";
+import { useBtwDrag, type BtwDragHandleProps } from "@/btw/use-floating-drag";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { isWeb } from "@/constants/platform";
 import {
@@ -12,6 +22,13 @@ import {
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
+
+const BtwDragHandleContext = createContext<BtwDragHandleProps | null>(null);
+
+/** Props that turn a window header into the handle that moves the floating window. */
+export function useBtwDragHandle(): BtwDragHandleProps {
+  return useContext(BtwDragHandleContext) ?? {};
+}
 
 export function BtwFloatingSurface({
   visible,
@@ -25,10 +42,12 @@ export function BtwFloatingSurface({
   onClose: () => void;
   onSubmit: () => void;
   children: ReactNode;
-  anchorRef: RefObject<View | null>;
+  anchorRef: RefObject<RNView | null>;
   anchorLayoutVersion?: number;
 }) {
-  const frame = useBtwFloatingLayout(visible, anchorRef, anchorLayoutVersion);
+  const layout = useBtwFloatingLayout(visible, anchorRef, anchorLayoutVersion);
+  const drag = useBtwDrag(layout);
+  const frame = drag.frame;
   const layer = useOverlayLayer("floating");
   const elementRef = useRef<HTMLElement | null>(null);
   const setScope = useWebOverlayRegistration({
@@ -55,19 +74,23 @@ export function BtwFloatingSurface({
     },
   });
   const assignScope = useCallback(
-    (node: View | null) => {
+    (node: RNView | null) => {
       elementRef.current =
         typeof HTMLElement !== "undefined" && node instanceof HTMLElement ? node : null;
       setScope(node);
     },
     [setScope],
   );
+  const dragHandle = useMemo(() => drag.headerProps, [drag.headerProps]);
+
   if (!visible || !frame || frame.height <= 0 || frame.width <= 0) return null;
   const surface = (
     <OverlayLayerProvider layer={layer}>
       <View pointerEvents="box-none" style={[styles.overlay, { zIndex: layer }]}>
         <View ref={assignScope} style={[styles.position, inlineUnistylesStyle(frame)]}>
-          {children}
+          <BtwDragHandleContext.Provider value={dragHandle}>
+            {children}
+          </BtwDragHandleContext.Provider>
         </View>
       </View>
     </OverlayLayerProvider>

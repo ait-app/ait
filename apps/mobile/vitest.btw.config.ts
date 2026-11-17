@@ -77,6 +77,7 @@ export default defineConfig({
       "lucide-react-native/icons/git-branch",
       "lucide-react-native/icons/rotate-ccw-clock",
       "lucide-react-native/icons/maximize-2",
+      "lucide-react-native/icons/message-square-plus",
       "lucide-react-native/icons/plus",
       "lucide-react-native/icons/square",
       "lucide-react-native/icons/x",

@@ -15,6 +15,7 @@ export const btw = {
   question: "旁支问题",
   send: "发送旁支问题",
   stop: "停止旁支回答",
+  follow: "继续追问",
   newPlaceholder: "顺便问一个问题…",
   followUpPlaceholder: "继续追问…",
   emptyTitle: "随时问一个旁支问题",
