@@ -33,7 +33,7 @@
   "base_update": "Rebased onto main after the task04 base was closed with #650; the export path never depended on task04's statistics code.",
   "observed_latest_main": "c5e9655b7f9b1d40db98e14dbf9a82ead3b82ff6",
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-export",
-  "commit": null,
+  "commit": "6d3a1acd",
   "pr_url": "https://github.com/ait-app/ait/pull/656",
   "updated_at": "2026-11-17",
   "interface_changes": [
