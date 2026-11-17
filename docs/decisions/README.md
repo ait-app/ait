@@ -90,7 +90,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-130：Workspace 与 Project 方法归 metadata，filesystem 只保留本地适配器](workspace/adr-130-workspace-methods-owned-by-metadata.md)（经 [ADR-131](workspace/adr-131-metadata-capability-groups.md) 修订）
 - [ADR-126：按身份读取目标 Workspace，完整目录后台同步](workspace/adr-126-workspace-target-read.md)
 - [ADR-113：filesystem 按能力组组织模块](workspace/adr-113-filesystem-capability-groups.md)（经 [ADR-129](providers/adr-129-provider-owned-skills.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md)、[ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）
-- [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-113](workspace/adr-113-filesystem-capability-groups.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md)、[ADR-139](bot/adr-139-workspace-bots-and-owned-channels.md) 修订）
+- [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-113](workspace/adr-113-filesystem-capability-groups.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md)、[ADR-139](bot/adr-139-workspace-bots-and-owned-channels.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
 - [ADR-084：工作区主按钮按提交与 PR 生命周期推进](workspace/adr-084-workspace-primary-git-action.md)
 - [ADR-083：工作区重置到 origin 的最新默认分支](workspace/adr-083-reset-workspace-to-origin-default.md)（经 [ADR-092](workspace/adr-092-reset-same-named-remote-branch.md) 修订）
@@ -123,6 +123,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
 - [ADR-240：DSH 非活动历史只读浏览与固定截面预览](providers/adr-240-dsh-inactive-history-preview.md)（提议中）
+- [ADR-239：已保存 Timeline 导出与一次性客户端下载](providers/adr-239-persisted-timeline-export-downloads.md)（提议中）
 - [ADR-237：OpenCode 子会话终态只读核对](providers/adr-237-opencode-child-terminal-readback.md)
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
@@ -177,7 +178,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)（经 [ADR-105](daemon/adr-105-file-tools-and-startup-config.md)、[ADR-106](daemon/adr-106-concrete-file-persistence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md) 修订）
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)（经 [ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-118](daemon/adr-118-summary-contracts-and-persistence-configuration.md) 修订）
 - [ADR-099：Provider 自选辅助小模型](providers/adr-099-provider-owned-auxiliary-models.md)
-- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)（经 [ADR-278](providers/adr-278-shared-btw-sessions.md) 修订）
+- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)（经 [ADR-239](providers/adr-239-persisted-timeline-export-downloads.md)、[ADR-278](providers/adr-278-shared-btw-sessions.md) 修订）
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)（经 [ADR-140](providers/adr-140-codex-mcp-display-previews.md) 修订）
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)（经 [ADR-099](providers/adr-099-provider-owned-auxiliary-models.md)、[ADR-101](providers/adr-101-provider-summary-generator.md)、[ADR-102](providers/adr-102-provider-metadata-independence.md)、[ADR-179](providers/adr-179-provider-owned-tests.md)、[ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)（经 [ADR-091](providers/adr-091-independent-session-execution.md) 修订）
@@ -269,7 +270,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-055：Ait 与 Paseo 的桌面数据和链接隔离](clients/adr-055-desktop-profile-isolation.md)（经 [ADR-056](clients/adr-056-paseo-coexistence.md)、[ADR-073](clients/adr-073-desktop-renderer-navigation.md)、[ADR-216](clients/adr-216-default-data-directory-ait.md) 修订）
 - [ADR-054：桌面服务监听配置与网络地址](clients/adr-054-desktop-daemon-listen.md)
 - [ADR-053：Ait 0.0.7 桌面发布切换到 apps/desktop](clients/adr-053-paseo-desktop-release.md)（经 [ADR-055](clients/adr-055-desktop-profile-isolation.md) 修订）
-- [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md) 修订）
+- [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
 - [ADR-048：Paseo workspace 与 Rust 桌面服务启动](clients/adr-048-paseo-desktop-rust-launcher.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-128](clients/adr-128-desktop-daemon-keep-running.md)、[ADR-184](clients/adr-184-windows-desktop-without-daemon.md)、[ADR-207](clients/adr-207-desktop-daemon-readiness-ownership.md) 修订）
 - [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)（经 [ADR-045](daemon/adr-045-remove-hub-chat-loop.md)、[ADR-094](clients/adr-094-canonical-ait-client-methods.md)、[ADR-211](clients/adr-211-sdk-native-daemon-protocol.md) 修订）
 

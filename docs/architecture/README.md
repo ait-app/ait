@@ -102,6 +102,10 @@ Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可�
 Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
 旧视图保持有效，权限写入仍核对最新记录，见
 [ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
+会话导出同样是独立只读操作：完整读取已保存 Timeline，按类型渲染 Markdown/HTML，再通过类型化
+Completion 把匿名 artifact 交给 API/Files 既有一次性下载管线，不调用原生导出或另建 token 系统。
+新增 RPC/SDK、内部文件所有权、浏览器下载 CORS 与平台完成语义见
+[ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)。
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。

@@ -162,6 +162,8 @@ export function serverInfo(
     providerUsageList: has("provider.usage.list.request"),
     providerUsageLedger: has("provider.usage.ledger.request"),
     agentDetach: has("agent.detach.request"),
+    agentTimelineExport:
+      has("agent.timeline.export.request") && has("agent.timeline.export.cancel.request"),
     agentThinkingUpdate: has("agent.thinking.set.request"),
     daemonDiagnostics: has("diagnostics.request"),
     daemonSelfUpdate: has("daemon.update.request"),

@@ -45,6 +45,10 @@
 - TODO cards keep the same spacing on all four sides.
 - The mobile app keeps the projections it already has while the host is briefly out of date, instead of dropping them.
 
+## Unreleased
+
+- Export the entire saved Timeline, or its conversation messages and voice transcripts, as readable Markdown or inert HTML from context details without interrupting an active turn. Saved result cards and attachment references are preserved; size limits fail explicitly instead of truncating. Downloads are single-use, cancellable and checked against the receipt size; missing artifacts never trigger an automatic re-export. Older hosts show the feature as unavailable. This adds typed export/cancel RPCs and SDK methods plus narrowly validated-origin GET/OPTIONS CORS on the existing file-download endpoint; existing message schemas, token/visitor authorization and provider-native interfaces are unchanged.
+
 ## 0.2.15 - 2026-11-17
 
 - An experimental Workspace notebook tab lets a workspace keep shared notes and TODOs in `.ait-notebook.md`, with live collaboration between the people who have it. Guests who only have the file see a read-only view, and a conflicting write is shown instead of being applied over someone else's change.

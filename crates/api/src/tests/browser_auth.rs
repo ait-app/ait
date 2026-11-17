@@ -1,3 +1,9 @@
+use std::io::{Seek, Write};
+
+use filesystem::files::local::LocalFiles;
+use filesystem::files::service::files::Files;
+use model::download::GeneratedArtifact;
+
 use super::*;
 
 const ORIGIN: &str = "http://localhost:8081";
@@ -130,5 +136,89 @@ async fn browser_origins_must_be_configured_before_sharing_and_shutdown_rejects_
     fixture.api.begin_shutdown();
     let response = browser_ticket(State(fixture.api.shared.clone()), HeaderMap::new()).await;
     assert_eq!(response.err().unwrap().0, StatusCode::SERVICE_UNAVAILABLE);
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn browser_artifact_download_preserves_origin_policy_and_single_use_grants() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api = Api::new(
+        listener.local_addr().unwrap(),
+        "download".to_owned(),
+        "instance".to_owned(),
+        TOKEN.into(),
+        Services::default(),
+    )
+    .unwrap()
+    .with_browser_origins(vec![ORIGIN.to_owned()])
+    .unwrap();
+    let mut files = Files::new(Box::new(LocalFiles::new(
+        root.path().to_owned(),
+        root.path(),
+    )));
+    let mut file = tempfile::tempfile().unwrap();
+    file.write_all(b"# saved\n").unwrap();
+    file.rewind().unwrap();
+    files
+        .issue_artifact(
+            "browser-export".to_owned(),
+            GeneratedArtifact {
+                agent_id: "agent".to_owned(),
+                file_name: "timeline.md".to_owned(),
+                mime_type: "text/markdown".to_owned(),
+                size: 8,
+                file,
+            },
+        )
+        .unwrap();
+    let state = Arc::get_mut(&mut api.shared).unwrap();
+    Arc::get_mut(&mut state.filesystem).unwrap().files = Some(shared_service(files));
+    let fixture = Fixture::serve(listener, api);
+    let endpoint = fixture.url("/api/files/download?token=browser-export");
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    for method in [Method::GET, Method::OPTIONS] {
+        let denied = client
+            .request(method, &endpoint)
+            .header("origin", "http://evil.test")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        assert!(!denied.headers().contains_key("access-control-allow-origin"));
+    }
+    let preflight = client
+        .request(Method::OPTIONS, &endpoint)
+        .header("origin", ORIGIN)
+        .header("access-control-request-method", "GET")
+        .header("access-control-request-headers", "authorization")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
+    assert_eq!(preflight.headers()["access-control-allow-origin"], ORIGIN);
+    assert!(
+        !preflight
+            .headers()
+            .contains_key("access-control-allow-credentials")
+    );
+    let downloaded = client
+        .get(&endpoint)
+        .header("origin", ORIGIN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(downloaded.status(), StatusCode::OK);
+    assert_eq!(downloaded.headers()["access-control-allow-origin"], ORIGIN);
+    assert_eq!(downloaded.bytes().await.unwrap().as_ref(), b"# saved\n");
+    let replay = client
+        .get(&endpoint)
+        .header("origin", ORIGIN)
+        .send()
+        .await
+        .unwrap();
+    // Existing consumed/expired grant semantics stay 403, not a new status-code contract.
+    assert_eq!(replay.status(), StatusCode::FORBIDDEN);
+    assert_eq!(replay.headers()["access-control-allow-origin"], ORIGIN);
     fixture.stop().await;
 }

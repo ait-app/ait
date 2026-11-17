@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
 import { useDownloadStore } from "./download-store";
+import type { AgentTimelineExportResult } from "@ait/protocol/messages";
 
 const mocks = vi.hoisted(() => ({
   files: new Set<string>(),
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   share: vi.fn(),
   stream: vi.fn(),
   directDownload: vi.fn(),
+  fetch: vi.fn(),
   failOpen: false,
   platform: "android",
 }));
@@ -22,6 +24,13 @@ vi.mock("react-native", () => ({
 vi.mock("@/desktop/host", () => ({ getDesktopHost: () => undefined }));
 vi.mock("@/constants/platform", () => ({ isWeb: false }));
 vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
+vi.mock("@/runtime/browser-account", () => ({ supportsBrowserAccount: () => false }));
+vi.mock("@/runtime/daemon-transport/browser-account-relay", () => ({
+  downloadBrowserAccountFile: async () => {
+    throw new Error("Unexpected browser transfer on a native platform");
+  },
+}));
+vi.mock("@/runtime/daemon-transport/direct-download", () => ({ downloadFetch: mocks.fetch }));
 vi.mock("expo-file-system/legacy", () => ({
   createDownloadResumable: (url: string, uri: string) => ({
     downloadAsync: () => mocks.directDownload(url, uri),
@@ -167,4 +176,137 @@ describe("native mobile direct-host download files", () => {
     expect(mocks.files.size).toBe(0);
     expect(mocks.share).not.toHaveBeenCalled();
   });
+});
+
+describe("native timeline export consumer", () => {
+  const artifact: AgentTimelineExportResult = {
+    agentId: "agent",
+    format: "html",
+    scope: "timeline",
+    source: "persisted_timeline",
+    token: "once",
+    fileName: "timeline.html",
+    mimeType: "text/html",
+    size: 3,
+    entries: 1,
+    expiresAt: "2026-11-11T01:00:00Z",
+  };
+  it.each(["android", "ios"])(
+    "streams %s export bytes into a final file before sharing",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.stream.mockImplementation(async ({ write }) => write(new Uint8Array([1, 2, 3])));
+      const release = vi.fn();
+      await useDownloadStore.getState().startTimelineExport({
+        serverId: "host",
+        agentId: "agent",
+        daemonProfile: { connections: [relayConnection] } as HostProfile,
+        generate: async () => artifact,
+        release,
+      });
+      expect(mocks.write).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+      expect(mocks.files).toEqual(new Set(["file:///cache/timeline.html"]));
+      expect(mocks.share).toHaveBeenCalledWith(
+        "file:///cache/timeline.html",
+        expect.objectContaining({ mimeType: "text/html" }),
+      );
+      expect(mocks.stream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          maxBytes: 16 * 1024 * 1024,
+          expectedSize: artifact.size,
+          signal: expect.any(AbortSignal),
+        }),
+      );
+      expect(release).not.toHaveBeenCalled();
+      expect([...useDownloadStore.getState().downloads.values()][0]!.status).toBe("complete");
+    },
+  );
+
+  it("aborts a partial stream, closes and deletes it without sharing or regenerating", async () => {
+    mocks.stream.mockImplementation(({ signal, write }) => {
+      write(new Uint8Array([1]));
+      const { promise, reject } = Promise.withResolvers<void>();
+      signal.addEventListener("abort", () => reject(new Error("Cancelled")), { once: true });
+      return promise;
+    });
+    const generate = vi.fn(async () => artifact);
+    const release = vi.fn(async () => ({ released: true }));
+    const pending = useDownloadStore.getState().startTimelineExport({
+      serverId: "host",
+      agentId: "agent",
+      daemonProfile: { connections: [relayConnection] } as HostProfile,
+      generate,
+      release,
+    });
+    await vi.waitFor(() => expect(mocks.write).toHaveBeenCalledOnce());
+    [...useDownloadStore.getState().downloads.values()][0]!.cancel!();
+    await pending;
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(mocks.files.size).toBe(0);
+    expect(mocks.share).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledExactlyOnceWith("once");
+  });
+
+  it.each(["stream-failure", "destination-conflict"])(
+    "preserves a foreign file occupying the reserved target on %s",
+    async (mode) => {
+      mocks.stream.mockImplementation(async ({ write }) => {
+        write(new Uint8Array([1, 2, 3]));
+        mocks.files.add("file:///cache/timeline.html");
+        if (mode === "stream-failure") throw new Error("Transfer failed");
+      });
+      const release = vi.fn(async () => ({ released: true }));
+      await useDownloadStore.getState().startTimelineExport({
+        serverId: "host",
+        agentId: "agent",
+        daemonProfile: { connections: [relayConnection] } as HostProfile,
+        generate: async () => artifact,
+        release,
+      });
+      expect(mocks.files).toEqual(new Set(["file:///cache/timeline.html"]));
+      expect(mocks.share).not.toHaveBeenCalled();
+      expect([...useDownloadStore.getState().downloads.values()][0]!.status).toBe("error");
+      expect(release).toHaveBeenCalledExactlyOnceWith("once");
+    },
+  );
+
+  it("removes its moved file when sharing is cancelled without reporting completion", async () => {
+    mocks.stream.mockImplementation(async ({ write }) => write(new Uint8Array([1, 2, 3])));
+    mocks.share.mockRejectedValue(new Error("Share cancelled"));
+    const release = vi.fn(async () => ({ released: true }));
+    await useDownloadStore.getState().startTimelineExport({
+      serverId: "host",
+      agentId: "agent",
+      daemonProfile: { connections: [relayConnection] } as HostProfile,
+      generate: async () => artifact,
+      release,
+    });
+    expect(mocks.files.size).toBe(0);
+    expect([...useDownloadStore.getState().downloads.values()][0]!.status).toBe("error");
+    expect(release).toHaveBeenCalledExactlyOnceWith("once");
+  });
+
+  it.each(["android", "ios"])(
+    "streams direct HTTP into %s files without a buffered fetch fallback",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.fetch.mockResolvedValue(new Response(new Uint8Array([1, 2, 3])));
+      const release = vi.fn();
+      await useDownloadStore.getState().startTimelineExport({
+        serverId: "host",
+        agentId: "agent",
+        daemonProfile: { connections: [directConnection] } as HostProfile,
+        generate: async () => artifact,
+        release,
+      });
+      expect(mocks.write).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+      expect(mocks.files).toEqual(new Set(["file:///cache/timeline.html"]));
+      expect(mocks.fetch).toHaveBeenCalledWith(
+        "http://remote.test:6767/api/files/download?token=once",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(release).not.toHaveBeenCalled();
+    },
+  );
 });

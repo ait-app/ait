@@ -79,19 +79,7 @@ pub(super) async fn request(
     match provider::dispatch::dispatch(&mut context, &state.provider, &mut subscriptions.provider)
         .await
     {
-        Ok(Some(provider::dispatch::Completion::CloseTerminals {
-            request_id,
-            mut value,
-            terminal_ids,
-        })) => {
-            let result = terminal::dispatch::close_many(&state.terminal, terminal_ids)
-                .await
-                .map(|terminals| {
-                    value["terminals"] = terminals;
-                    value
-                });
-            return outbound.respond(request_id, result);
-        }
+        Ok(Some(completion)) => return complete_provider(completion, state, outbound).await,
         Ok(None) => return Ok(()),
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "provider"),
         Err(DispatchError::Delivery(error)) => return Err(error),
@@ -118,6 +106,40 @@ async fn transport(context: &mut Option<Context<'_>>, state: &Shared) -> Result<
         result => return result,
     }
     relay::rpc::request(context, &state.relay, Some(state.relay_management()))
+}
+
+async fn complete_provider(
+    completion: provider::dispatch::Completion,
+    state: &Shared,
+    outbound: &Outbound,
+) -> Result<(), QueueError> {
+    match completion {
+        provider::dispatch::Completion::CloseTerminals {
+            request_id,
+            mut value,
+            terminal_ids,
+        } => {
+            let result = terminal::dispatch::close_many(&state.terminal, terminal_ids)
+                .await
+                .map(|terminals| {
+                    value["terminals"] = terminals;
+                    value
+                });
+            outbound.respond(request_id, result)
+        }
+        provider::dispatch::Completion::TimelineExport { request_id, export } => {
+            let result = super::timeline_export::register(state, export).await;
+            outbound.respond(request_id, result)
+        }
+        provider::dispatch::Completion::ReleaseTimelineExport {
+            request_id,
+            agent_id,
+            token,
+        } => {
+            let result = super::timeline_export::release(state, agent_id, token).await;
+            outbound.respond(request_id, result)
+        }
+    }
 }
 
 async fn complete_metadata(

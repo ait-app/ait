@@ -112,11 +112,11 @@ impl BrowserAuth {
     }
 }
 
-pub(super) fn cors(headers: &mut HeaderMap, origin: HeaderValue) {
+pub(super) fn cors(headers: &mut HeaderMap, origin: HeaderValue, method: &'static str) {
     headers.insert("access-control-allow-origin", origin);
     headers.insert(
         "access-control-allow-methods",
-        HeaderValue::from_static("POST"),
+        HeaderValue::from_static(method),
     );
     headers.insert(
         "access-control-allow-headers",

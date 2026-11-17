@@ -7,6 +7,8 @@ export interface MethodSpec {
   kind: "request" | "event" | "response";
   channel: number;
   response: string | null;
+  /** Opt out when the caller must explicitly initiate every attempt. */
+  retryAdmission?: false;
 }
 
 // Channel onboarding waits on an external platform. Rust runs it on the same lane as file work, and
@@ -367,6 +369,23 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "agent.get.response",
+  },
+  // Rendering a whole saved Timeline is long work, and Rust's own lane routing keeps provider
+  // methods off the default lane. The provider lane also stays inside the 64 capabilities Rust
+  // accepts per split connection.
+  "agent.timeline.export.request": {
+    method: "agent.timeline.export.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.timeline.export.response",
+    retryAdmission: false,
+  },
+  "agent.timeline.export.cancel.request": {
+    method: "agent.timeline.export.cancel.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.timeline.export.cancel.response",
+    retryAdmission: false,
   },
   "agent.history.get.request": {
     method: "agent.history.get.request",

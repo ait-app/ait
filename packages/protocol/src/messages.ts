@@ -284,6 +284,33 @@ const JsonWireValueSchema = z.unknown() as z.ZodType<JsonValue>;
 
 export const AgentStatusSchema = z.enum(AGENT_LIFECYCLE_STATUSES);
 
+export const AgentTimelineExportOptionsSchema = z.object({
+  format: z.enum(["markdown", "html"]),
+  scope: z.enum(["conversation", "timeline"]),
+});
+export type AgentTimelineExportOptions = z.infer<typeof AgentTimelineExportOptionsSchema>;
+
+/** A single-use download artifact, never a server filesystem path. */
+export const AgentTimelineExportResultSchema = AgentTimelineExportOptionsSchema.extend({
+  agentId: z.string(),
+  source: z.literal("persisted_timeline"),
+  token: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  size: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(16 * 1024 * 1024),
+  entries: z.number().int().nonnegative(),
+  expiresAt: z.string(),
+});
+export type AgentTimelineExportResult = z.infer<typeof AgentTimelineExportResultSchema>;
+
+export const AgentTimelineExportCancelResultSchema = z.object({
+  released: z.boolean(),
+});
+export type AgentTimelineExportCancelResult = z.infer<typeof AgentTimelineExportCancelResultSchema>;
 const AgentModeSchema: z.ZodType<AgentMode> = z.object({
   id: z.string(),
   label: z.string(),
@@ -1592,6 +1619,24 @@ export const FetchAgentRequestMessageSchema = z.object({
   agentId: z.string(),
 });
 
+export const AgentTimelineExportRequestMessageSchema = AgentTimelineExportOptionsSchema.extend({
+  type: z.literal("agent.timeline.export.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+export type AgentTimelineExportRequestMessage = z.infer<
+  typeof AgentTimelineExportRequestMessageSchema
+>;
+
+export const AgentTimelineExportCancelRequestMessageSchema = z.object({
+  type: z.literal("agent.timeline.export.cancel.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  token: z.string(),
+});
+export type AgentTimelineExportCancelRequestMessage = z.infer<
+  typeof AgentTimelineExportCancelRequestMessageSchema
+>;
 export const SendAgentMessageRequestSchema = z.object({
   type: z.literal("agent.message.send.request"),
   requestId: z.string(),
@@ -3276,6 +3321,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ShareSetRequestSchema,
   ShareRemoveRequestSchema,
   FetchAgentRequestMessageSchema,
+  AgentTimelineExportRequestMessageSchema,
+  AgentTimelineExportCancelRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
   CloseItemsRequestMessageSchema,
@@ -3638,6 +3685,7 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(workspaceRequestReceipts): added in v0.8.0; remove gate after 2027-03-07.
         workspaceRequestReceipts: z.boolean().optional(),
         creationLifecycle: z.boolean().optional(),
+        agentTimelineExport: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
         workspaceBotNotifications: z.boolean().optional(),
@@ -4756,6 +4804,21 @@ export const FetchAgentResponseMessageSchema = z.object({
   }),
 });
 
+export const AgentTimelineExportResponseMessageSchema = z.object({
+  type: z.literal("agent.timeline.export.response"),
+  payload: AgentTimelineExportResultSchema.extend({ requestId: z.string() }),
+});
+export type AgentTimelineExportResponseMessage = z.infer<
+  typeof AgentTimelineExportResponseMessageSchema
+>;
+
+export const AgentTimelineExportCancelResponseMessageSchema = z.object({
+  type: z.literal("agent.timeline.export.cancel.response"),
+  payload: AgentTimelineExportCancelResultSchema.extend({ requestId: z.string() }),
+});
+export type AgentTimelineExportCancelResponseMessage = z.infer<
+  typeof AgentTimelineExportCancelResponseMessageSchema
+>;
 const AgentTimelineSeqRangeSchema = z.object({
   startSeq: z.number().int().nonnegative(),
   endSeq: z.number().int().nonnegative(),
@@ -6874,6 +6937,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LegacyOpenInEditorResponseMessageSchema,
   ArchiveWorkspaceResponseMessageSchema,
   FetchAgentResponseMessageSchema,
+  AgentTimelineExportResponseMessageSchema,
+  AgentTimelineExportCancelResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,

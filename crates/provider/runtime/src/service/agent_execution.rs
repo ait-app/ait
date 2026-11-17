@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 pub(crate) mod operation;
 use operation::{Access, Operation};
+mod export;
 mod lane;
 mod routing;
 mod voice;
@@ -65,6 +66,7 @@ struct Worker {
     admission: Arc<Semaphore>,
     discovery_responses: Arc<Semaphore>,
     execution_responses: Arc<Semaphore>,
+    exports: Arc<Semaphore>,
     thread: Mutex<Option<JoinHandle<()>>>,
     events: SessionEvents,
     timeline: crate::storage::timeline::Timeline,
@@ -180,6 +182,7 @@ impl AgentExecution {
             admission: Arc::new(Semaphore::new(64)),
             discovery_responses: Arc::new(Semaphore::new(64)),
             execution_responses: Arc::new(Semaphore::new(64)),
+            exports: Arc::new(Semaphore::new(2)),
             thread: Mutex::new(Some(thread)),
             events,
             timeline,

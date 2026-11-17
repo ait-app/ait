@@ -49,6 +49,7 @@ export * from "./sidebar-callout";
 export * from "./startup";
 export * from "./subagents";
 export * from "./task-board";
+export * from "./timeline-export";
 export * from "./tool-call-details";
 export * from "./tool-call-group";
 export * from "./voice-timeline";

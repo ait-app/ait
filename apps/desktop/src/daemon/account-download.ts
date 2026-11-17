@@ -6,6 +6,10 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import { normalizeCenter, type AccountSessionManager } from "./account-session.js";
 
+interface DirectDownloadTarget {
+  baseUrl: string;
+  authHeader: string | null;
+}
 /** The Host's serve link no longer supports Hub downloads; the relay route applies. */
 class HubDownloadUnsupported extends Error {}
 
@@ -93,6 +97,9 @@ interface PreparedDownload {
   hostId: string;
   center: string;
   downloadId: string;
+  direct?: DirectDownloadTarget;
+  maxBytes?: number;
+  expectedSize?: number;
   destination: string | null;
   started: boolean;
   aborted: boolean;
@@ -112,21 +119,39 @@ export class AccountDownloadManager {
 
   async prepare(
     owner: WebContents,
-    input: { hostId: string; center: string; fileName: string; downloadId: string },
+    input: {
+      hostId: string;
+      center: string;
+      fileName: string;
+      downloadId: string;
+      direct?: DirectDownloadTarget;
+      maxBytes?: number;
+      expectedSize?: number;
+    },
   ): Promise<string> {
     if (this.active.size >= 4) throw new Error("Too many concurrent downloads.");
     const window = BrowserWindow.fromWebContents(owner);
     if (!window) throw new Error("The download window has closed.");
-    const account = this.account.snapshot();
-    const center = normalizeCenter(input.center);
-    if (account.status === "logged_out" || account.center !== center)
-      throw new Error("Sign in to the online service used by this host.");
+    const center = input.direct ? "" : normalizeCenter(input.center);
+    if (input.direct) {
+      const url = new URL(input.direct.baseUrl);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
+        throw new Error("Invalid download origin.");
+      input = { ...input, direct: { ...input.direct, baseUrl: url.origin } };
+    } else {
+      const account = this.account.snapshot();
+      if (account.status === "logged_out" || account.center !== center)
+        throw new Error("Sign in to the online service used by this host.");
+    }
     const id = randomUUID();
     const download: PreparedDownload = {
       owner,
       hostId: input.hostId,
       center,
       downloadId: input.downloadId,
+      direct: input.direct,
+      maxBytes: input.maxBytes,
+      expectedSize: input.expectedSize,
       destination: null,
       started: false,
       aborted: false,
@@ -189,6 +214,10 @@ export class AccountDownloadManager {
     download.started = true;
     clearTimeout(download.timer);
     try {
+      if (download.direct) {
+        await this.transferDirect(download, input.token);
+        return;
+      }
       await this.transfer(
         owner,
         {
@@ -196,6 +225,8 @@ export class AccountDownloadManager {
           center: download.center,
           token: input.token,
           downloadId: download.downloadId,
+          maxBytes: download.maxBytes,
+          expectedSize: download.expectedSize,
         },
         download.destination,
         () => download.aborted,
@@ -208,9 +239,91 @@ export class AccountDownloadManager {
     }
   }
 
+  private async transferDirect(download: PreparedDownload, token: string): Promise<void> {
+    const controller = new AbortController();
+    download.cancelTransfer = () => controller.abort();
+    if (download.aborted) controller.abort();
+    const url = new URL("/api/files/download", download.direct!.baseUrl);
+    url.searchParams.set("token", token);
+    const temporary = `${download.destination}.ait-${randomUUID()}.part`;
+    const file = await open(temporary, "wx", 0o600);
+    let complete = false;
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        redirect: "error",
+        headers: download.direct!.authHeader
+          ? { Authorization: download.direct!.authHeader }
+          : undefined,
+      });
+      if (!response.ok || !response.body) {
+        await response.body?.cancel();
+        throw new Error(`Download failed (HTTP ${response.status}).`);
+      }
+      const reader = response.body.getReader();
+      let bytes = 0;
+      const total = Number(response.headers.get("content-length"));
+      try {
+        if (total > (download.maxBytes ?? Infinity))
+          throw new Error("Download size limit exceeded.");
+        if (
+          download.expectedSize !== undefined &&
+          response.headers.has("content-length") &&
+          total !== download.expectedSize
+        )
+          throw new Error("File size mismatch.");
+        while (true) {
+          controller.signal.throwIfAborted();
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > (download.maxBytes ?? Infinity))
+            throw new Error("Download size limit exceeded.");
+          if (download.expectedSize !== undefined && bytes > download.expectedSize)
+            throw new Error("File size mismatch.");
+          let offset = 0;
+          while (offset < chunk.value.byteLength) {
+            const written = await file.write(chunk.value, offset, chunk.value.byteLength - offset);
+            if (!written.bytesWritten) throw new Error("Failed to write the file.");
+            offset += written.bytesWritten;
+          }
+          if (!download.owner.isDestroyed())
+            download.owner.send("paseo:event:account-download-progress", {
+              id: download.downloadId,
+              bytesWritten: bytes,
+              totalBytes: download.expectedSize ?? total,
+            });
+        }
+        if (response.headers.has("content-length") && bytes !== total)
+          throw new Error("File size mismatch.");
+        if (download.expectedSize !== undefined && bytes !== download.expectedSize)
+          throw new Error("File size mismatch.");
+      } finally {
+        await reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+      controller.signal.throwIfAborted();
+      await file.sync();
+      await file.close();
+      controller.signal.throwIfAborted();
+      await rename(temporary, download.destination!);
+      complete = true;
+    } finally {
+      await file.close().catch(() => undefined);
+      if (!complete) await unlink(temporary).catch(() => undefined);
+    }
+  }
+
   private async transfer(
     owner: WebContents,
-    input: { hostId: string; center: string; token: string; downloadId: string },
+    input: {
+      hostId: string;
+      center: string;
+      token: string;
+      downloadId: string;
+      maxBytes?: number;
+      expectedSize?: number;
+    },
     destination: string,
     isAborted: () => boolean,
     setCancel: (cancel: () => void) => void,
@@ -264,7 +377,7 @@ export class AccountDownloadManager {
   /** Write one download's messages to `file`; the relay and Hub routes carry the same ones. */
   private stream(
     owner: WebContents,
-    input: { downloadId: string },
+    input: { downloadId: string; maxBytes?: number; expectedSize?: number },
     file: FileHandle,
     channel: DownloadChannel,
     setCancel: (cancel: () => void) => void,
@@ -322,6 +435,10 @@ export class AccountDownloadManager {
             if (settled) return;
             if (binary) {
               if (stage !== "body") throw new Error("Invalid download protocol.");
+              if (bytes + chunk.length > (input.maxBytes ?? Infinity))
+                throw new Error("Download size limit exceeded.");
+              if (input.expectedSize !== undefined && bytes + chunk.length > input.expectedSize)
+                throw new Error("File size mismatch.");
               let offset = 0;
               while (offset < chunk.length) {
                 const result = await file.write(chunk, offset, chunk.length - offset);
@@ -336,7 +453,7 @@ export class AccountDownloadManager {
                 owner.send("paseo:event:account-download-progress", {
                   id: input.downloadId,
                   bytesWritten: bytes,
-                  totalBytes: total ?? 0,
+                  totalBytes: input.expectedSize ?? total ?? 0,
                 });
               }
               return;
@@ -367,6 +484,14 @@ export class AccountDownloadManager {
               )
                 throw new Error("Invalid file size.");
               total = message.content_length ?? null;
+              if (total !== null && total > (input.maxBytes ?? Infinity))
+                throw new Error("Download size limit exceeded.");
+              if (
+                input.expectedSize !== undefined &&
+                total !== null &&
+                total !== input.expectedSize
+              )
+                throw new Error("File size mismatch.");
               stage = "body";
               return;
             }
@@ -374,7 +499,8 @@ export class AccountDownloadManager {
               stage === "body" &&
               message.type === "download.end" &&
               message.bytes === bytes &&
-              (total === null || total === bytes)
+              (total === null || total === bytes) &&
+              (input.expectedSize === undefined || input.expectedSize === bytes)
             ) {
               await file.sync();
               await channel.send(JSON.stringify({ type: "download.complete" }));

@@ -20,6 +20,11 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
+export type {
+  AgentTimelineExportOptions,
+  AgentTimelineExportResult,
+  AgentTimelineExportCancelResult,
+} from "@ait/protocol/messages";
 import type {
   ShareAudience,
   ShareListResponse,
@@ -30,6 +35,11 @@ import type {
 import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import {
   AgentCreateFailedStatusPayloadSchema,
+  AgentTimelineExportResultSchema,
+  AgentTimelineExportCancelResultSchema,
+  type AgentTimelineExportOptions,
+  type AgentTimelineExportResult,
+  type AgentTimelineExportCancelResult,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   parseServerInfoStatusPayload,
@@ -2730,6 +2740,44 @@ export class DaemonClient {
     });
   }
 
+  /** Create one persisted-timeline download; failures never regenerate an artifact. */
+  async exportAgentTimeline(
+    agentId: string,
+    options: AgentTimelineExportOptions,
+  ): Promise<AgentTimelineExportResult> {
+    if (this.lastServerInfoMessage?.features?.agentTimelineExport !== true) {
+      throw Object.assign(new Error("Agent timeline export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "agent.timeline.export.request",
+        agentId,
+        format: options.format,
+        scope: options.scope,
+      },
+      responseType: "agent.timeline.export.response",
+      selectPayload: (payload) => AgentTimelineExportResultSchema.parse(payload),
+    });
+  }
+
+  /** Release an unused export token without creating a replacement artifact. */
+  async cancelAgentTimelineExport(
+    agentId: string,
+    token: string,
+  ): Promise<AgentTimelineExportCancelResult> {
+    if (this.lastServerInfoMessage?.features?.agentTimelineExport !== true) {
+      throw Object.assign(new Error("Agent timeline export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.timeline.export.cancel.request", agentId, token },
+      responseType: "agent.timeline.export.cancel.response",
+      selectPayload: (payload) => AgentTimelineExportCancelResultSchema.parse(payload),
+    });
+  }
   async fetchAgent(options: FetchAgentOptions): Promise<FetchAgentResult | null>;
   async fetchAgent(agentId: string, requestId?: string): Promise<FetchAgentResult | null>;
   async fetchAgent(

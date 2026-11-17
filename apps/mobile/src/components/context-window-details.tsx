@@ -3,6 +3,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { AgentUsage } from "@/usage";
 import { formatTokenCount } from "./context-window-meter.utils";
+import { TimelineExport } from "./timeline-export";
 
 interface ContextWindowDetailsProps {
   serverId: string;
@@ -55,6 +56,7 @@ export function ContextWindowDetails({
           <Text style={styles.detail}>{t("contextWindow.sessionCost", { cost: sessionCost })}</Text>
         ) : null}
       </View>
+      <TimelineExport serverId={serverId} agentId={agentId} />
       <AgentUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
     </>
   );
