@@ -5,6 +5,7 @@ import {
   DEFAULT_MOUNTED_RECENT_STREAM_ITEMS,
   findMountedWindowStart,
   getMountedRecentStreamItems,
+  readPositiveIntegerOverride,
 } from "./history-window";
 
 export const DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD = 100;
@@ -14,14 +15,6 @@ const COLLAPSED_TOOL_SEQUENCE_ROW_HEIGHT_ESTIMATE = 40;
 type BottomAnchorE2ETestGlobals = typeof globalThis & {
   __PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD?: unknown;
 };
-
-function readPositiveIntegerOverride(value: unknown): number | null {
-  if (!Number.isFinite(value)) {
-    return null;
-  }
-  const normalized = Math.trunc(value as number);
-  return normalized > 0 ? normalized : null;
-}
 
 export function getWebPartialVirtualizationThreshold(): number {
   const override = readPositiveIntegerOverride(

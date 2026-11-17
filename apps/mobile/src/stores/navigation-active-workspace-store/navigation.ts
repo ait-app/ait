@@ -4,6 +4,7 @@ import {
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
   decodeWorkspaceIdFromPathSegment,
+  getParamValue,
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
@@ -44,17 +45,6 @@ export interface NavigateToWorkspaceDeps extends PrepareWorkspaceTabDeps {
 
 export interface NavigateToLastWorkspaceDeps extends NavigateToWorkspaceDeps {
   getLastWorkspaceSelection: () => ActiveWorkspaceSelection | null;
-}
-
-function getParamValue(value: string | string[] | undefined): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (Array.isArray(value)) {
-    const firstValue = value[0];
-    return typeof firstValue === "string" ? firstValue.trim() : "";
-  }
-  return "";
 }
 
 function parseWorkspaceSelectionFromRouteParams(params: {

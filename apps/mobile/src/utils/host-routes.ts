@@ -504,6 +504,18 @@ export function buildProjectSettingsRoute(serverId: string, projectId: string) {
   return `/settings/hosts/${encodeSegment(serverId)}/projects/${encodeSegment(projectId)}` as const;
 }
 
+/** The trimmed route param; expo-router hands repeated params over as an array, so take the first. */
+export function getParamValue(value: string | string[] | undefined): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    const firstValue = value[0];
+    return typeof firstValue === "string" ? firstValue.trim() : "";
+  }
+  return "";
+}
+
 export function normalizeProjectSettingsRouteId(value: string | string[] | undefined): string {
   const id = Array.isArray(value) ? value[0] : value;
   return typeof id === "string" ? id : "";

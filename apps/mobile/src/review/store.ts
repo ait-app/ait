@@ -19,6 +19,7 @@ import {
 } from "@/review/state";
 import { generateMessageId } from "@/types/stream";
 import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/utils/diff-layout";
+import { normalizeCwd } from "@/utils/path";
 import type { AgentAttachment } from "@ait/protocol/messages";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 
@@ -72,14 +73,6 @@ type ReviewDraftStore = ReviewDraftStoreState & ReviewDraftStoreActions;
 
 function encodeKeyPart(value: string): string {
   return encodeURIComponent(value.trim());
-}
-
-function normalizeCwd(cwd: string): string {
-  const trimmed = cwd.trim();
-  if (trimmed === "/") {
-    return trimmed;
-  }
-  return trimmed.replace(/\/+$/, "");
 }
 
 function normalizeBaseRef(baseRef: string | null | undefined): string {

@@ -3,6 +3,7 @@ import type {
   AudioEngineCallbacks,
   AudioPlaybackSource,
 } from "@/voice/audio-engine-types";
+import { parsePcmSampleRate } from "@/voice/pcm-sample-rate";
 import * as native from "@ait/expo-two-way-audio";
 
 interface PendingAudio {
@@ -13,15 +14,6 @@ interface PendingAudio {
 
 interface AudioEngineTraceOptions {
   traceLabel?: string;
-}
-
-function parsePcmSampleRate(mimeType: string): number | null {
-  const match = /rate=(\d+)/i.exec(mimeType);
-  if (!match) {
-    return null;
-  }
-  const rate = Number(match[1]);
-  return Number.isFinite(rate) && rate > 0 ? rate : null;
 }
 
 function resamplePcm16(pcm: Uint8Array, fromRate: number, toRate: number): Uint8Array {
