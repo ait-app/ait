@@ -194,13 +194,15 @@ pub(super) fn features(config: &StoredAgentConfig, models: &[Value]) -> Vec<Valu
                 vec![json!({"id":INHERIT,"label":"Use Claude Code setting","isDefault":true})];
             options.push(json!({"id":UNSET,"label":"Unassigned"}));
             match &lever.kind {
-                Kind::Model => options.extend(
-                    choices
-                        .iter()
-                        .map(|(id, label)| json!({"id":id,"label":label})),
-                ),
+                Kind::Model => {
+                    options.extend(
+                        choices
+                            .iter()
+                            .map(|(id, label)| json!({"id":id,"label":label})),
+                    );
+                }
                 Kind::Level(levels) => {
-                    options.extend(levels.iter().map(|level| json!({"id":level,"label":level})))
+                    options.extend(levels.iter().map(|level| json!({"id":level,"label":level})));
                 }
             }
             // Keep an unknown stored value selectable instead of silently rerouting the role.
