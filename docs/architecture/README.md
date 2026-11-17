@@ -8,6 +8,10 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 
 客户端 Workspace 记事本由 `apps/mobile` 提供，内容使用 Workspace 文件系统中的 `.ait-notebook.md`，通过现有文件协议共享，不新增 daemon 能力。
 
+Paseo 工具调用的名称、摘要与详情规则由协议包的共享 catalog 和 formatter 拥有，客户端只消费展示结果，
+不得复制工具映射。入口和字段顺序约束见[工具调用展示规格](tool-call-presentation.md)与
+[ADR-285](../decisions/clients/adr-285-shared-tool-call-presentation.md)。
+
 ## Rust 能力边界
 
 | Crate                       | 职责                                            | 生产代码的内部依赖                                                                                                                                                           |

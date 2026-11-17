@@ -2,6 +2,49 @@ import { describe, expect, it } from "vitest";
 import { buildPaseoToolDetailSections } from "./index.js";
 
 describe("Paseo tool-call detail presentation", () => {
+  it.each(["create_agent", "send_agent_prompt", "update_agent"])(
+    "preserves the catalog field order for %s",
+    (toolName) => {
+      expect(
+        buildPaseoToolDetailSections(
+          `ait.${toolName}`,
+          { internal: true, labels: ["team"], settings: { modeId: "plan" } },
+          null,
+        ),
+      ).toEqual([
+        {
+          kind: "fields",
+          title: "Details",
+          fields: [
+            { label: "Internal", value: "Yes" },
+            { label: "Settings", value: "Mode: plan" },
+            { label: "Labels", value: "• team" },
+          ],
+        },
+      ]);
+    },
+  );
+
+  it("preserves catalog input order for browser_list_tabs", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "ait.browser_list_tabs",
+        { url: "https://example.com", browserId: "tab", fullPage: true },
+        null,
+      ),
+    ).toEqual([
+      {
+        kind: "fields",
+        title: "Details",
+        fields: [
+          { label: "Browser tab", value: "tab" },
+          { label: "Url", value: "https://example.com" },
+          { label: "Full page", value: "Yes" },
+        ],
+      },
+    ]);
+  });
+
   it.each(["mcp__ait__create_agent", "ait.create_agent", "ait_remote.create_agent"])(
     "shares one create-agent mapping for %s",
     (toolName) => {

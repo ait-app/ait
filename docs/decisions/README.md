@@ -195,6 +195,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
+- [ADR-285：Paseo 工具调用展示由协议包统一拥有](clients/adr-285-shared-tool-call-presentation.md)
 - [ADR-284：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-284-browser-webcontents-view.md)
 - [ADR-281：可分享的 Workspace 记事本标签页](clients/adr-281-workspace-notebook-tab.md)
 - [ADR-236：GitHub Release 附带 Google 签名的 Android APK](clients/adr-236-google-signed-apk-release-asset.md)
