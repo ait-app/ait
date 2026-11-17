@@ -1,4 +1,4 @@
-import { webContents as allWebContents, type WebContents } from "electron";
+import { shell, webContents as allWebContents, type WebContents } from "electron";
 import { PASEO_BROWSER_PROFILE_PARTITION } from "../browser-profile.js";
 import {
   BROWSER_NEW_TAB_REQUEST_EVENT,
@@ -11,6 +11,7 @@ import { PaseoBrowserWebviewRegistry } from "./registry.js";
 export {
   BROWSER_NEW_TAB_REQUEST_EVENT,
   decideBrowserWindowOpenRequest,
+  isAllowedBrowserWebviewUrl,
   PendingBrowserWindowOpenRequests,
 };
 
@@ -161,11 +162,32 @@ export function getActivePaseoBrowserWebContentsForHostWindow(
 }
 
 function preventUnsafeBrowserWebviewNavigation(
-  event: { preventDefault: () => void },
+  event: { preventDefault: () => void; isMainFrame?: boolean },
   url: string | undefined,
 ): void {
+  if (isGoogleAuthenticationUrl(url)) {
+    event.preventDefault();
+    if (event.isMainFrame !== false) {
+      void Promise.resolve(shell.openExternal(url)).catch((error: unknown) => {
+        console.warn("[browser-webviews] failed to open Google sign-in externally", error);
+      });
+    }
+    return;
+  }
   if (!isAllowedBrowserWebviewUrl(url)) {
     event.preventDefault();
+  }
+}
+
+function isGoogleAuthenticationUrl(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "accounts.google.com";
+  } catch {
+    return false;
   }
 }
 

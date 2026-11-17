@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import type { WebContents } from "electron";
 import { PASEO_BROWSER_PROFILE_PARTITION } from "../browser-profile.js";
 import {
   getPaseoBrowserIdForWebContents,
@@ -6,11 +7,39 @@ import {
   isPaseoBrowserWebviewAttach,
   preparePaseoBrowserWebContents,
   registerAttachedPaseoBrowser,
+  registerBrowserWebviewNavigationGuards,
   unregisterPaseoBrowser,
   unregisterPaseoBrowserFromHost,
 } from "./index.js";
 
-vi.mock("electron", () => ({}));
+const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn() }));
+
+vi.mock("electron", () => ({
+  shell: { openExternal },
+  webContents: { fromId: vi.fn() },
+}));
+
+class FakeWebContents {
+  private readonly listeners = new Map<
+    string,
+    (event: { preventDefault: () => void; isMainFrame?: boolean; url: string }) => void
+  >();
+
+  public on(
+    event: string,
+    listener: (event: { preventDefault: () => void; isMainFrame?: boolean; url: string }) => void,
+  ): this {
+    this.listeners.set(event, listener);
+    return this;
+  }
+
+  public emit(
+    event: string,
+    payload: { preventDefault: () => void; isMainFrame?: boolean; url: string },
+  ): void {
+    this.listeners.get(event)?.(payload);
+  }
+}
 
 class FakeRenderer {
   public constructor(public readonly id: number) {}
@@ -46,6 +75,37 @@ class FakeBrowserGuest {
 }
 
 describe("browser webview attachment", () => {
+  test("opens Google account navigation in the external browser", async () => {
+    openExternal.mockResolvedValue(undefined);
+    const webContents = new FakeWebContents();
+    const preventDefault = vi.fn();
+    registerBrowserWebviewNavigationGuards(webContents as unknown as WebContents);
+
+    webContents.emit("will-navigate", {
+      url: "https://accounts.google.com/ServiceLogin?continue=https://www.google.com/",
+      preventDefault,
+    });
+    await Promise.resolve();
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(openExternal).toHaveBeenCalledWith(
+      "https://accounts.google.com/ServiceLogin?continue=https://www.google.com/",
+    );
+  });
+
+  test("keeps ordinary Google pages inside the workspace browser", () => {
+    const webContents = new FakeWebContents();
+    const preventDefault = vi.fn();
+    registerBrowserWebviewNavigationGuards(webContents as unknown as WebContents);
+
+    webContents.emit("will-navigate", {
+      url: "https://www.google.com/",
+      preventDefault,
+    });
+
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
   test("accepts a remote profile only when it belongs to this host window", () => {
     const input = { src: "http://127.0.0.1:4322/", partition: "persist:ait-browser-relay-host" };
     expect(isPaseoBrowserWebviewAttach(input)).toBe(false);

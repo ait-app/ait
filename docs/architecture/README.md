@@ -165,6 +165,7 @@ macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Deskto
 见 [ADR-223](../decisions/clients/adr-223-desktop-workspace-windows.md)。
 桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
+浏览器页面由桌面主进程的 `WebContentsView` 托管，渲染进程只保留 bounds、事件和控制代理；profile、导航、弹窗、权限与键盘策略仍由主进程统一安装，见 [ADR-281](../decisions/clients/adr-281-browser-webcontents-view.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 

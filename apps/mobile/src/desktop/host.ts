@@ -145,6 +145,27 @@ export interface DesktopAttachedBrowserRegistration {
   webContentsId: number;
 }
 
+export interface DesktopBrowserViewBounds {
+  container: { x: number; y: number; width: number; height: number };
+  contents: { x: number; y: number; width: number; height: number };
+  visible: boolean;
+}
+
+export interface DesktopBrowserViewEvent {
+  browserId: string;
+  type: string;
+  url?: string;
+  title?: string;
+  favicons?: string[];
+  errorCode?: number;
+  errorDescription?: string;
+  validatedURL?: string;
+  isMainFrame?: boolean;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  isLoading?: boolean;
+}
+
 export interface DesktopBrowserBridge {
   prepareWorkspaceProfile?: (input: {
     serverId: string;
@@ -155,6 +176,20 @@ export interface DesktopBrowserBridge {
   }) => Promise<{ profilePartition: string }>;
   setShortcutPolicy?: (input: BrowserKeyboardPolicy) => Promise<void>;
   readonly profilePartition?: string;
+  createView?: (input: {
+    browserId: string;
+    workspaceId: string;
+    profilePartition: string;
+    initialUrl: string;
+  }) => Promise<void>;
+  destroyView?: (browserId: string) => Promise<void>;
+  setViewBounds?: (browserId: string, bounds: DesktopBrowserViewBounds) => Promise<void>;
+  navigateView?: (browserId: string, url: string) => Promise<void>;
+  commandView?: (
+    browserId: string,
+    command: "focus" | "go-back" | "go-forward" | "reload" | "stop",
+  ) => Promise<void>;
+  executeViewJavaScript?: (browserId: string, code: string) => Promise<unknown>;
   registerAttachedBrowser?: (input: DesktopAttachedBrowserRegistration) => Promise<void>;
   unregisterWorkspaceBrowser?: (browserId: string) => Promise<void>;
   setWorkspaceActiveBrowser?: (input: {

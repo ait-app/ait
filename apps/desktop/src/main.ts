@@ -56,6 +56,7 @@ import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.
 import { createBrowserCaptureService } from "./features/browser-capture.js";
 import { BrowserKeyboard } from "./features/browser-keyboard/index.js";
 import {
+  PASEO_BROWSER_PROFILE_PARTITION,
   applyBrowserGuestPermissionPolicy,
   clearPaseoBrowserProfile,
   getLegacyPaseoBrowserProfileSession,
@@ -73,6 +74,7 @@ import {
   getPaseoBrowserIdForWebContents,
   getPaseoBrowserWebContentsForHostWindow,
   getPaseoBrowserWebviewRegistry,
+  isAllowedBrowserWebviewUrl,
   isPaseoBrowserWebviewAttach,
   listRegisteredPaseoBrowserIds,
   preparePaseoBrowserWebContents,
@@ -82,6 +84,11 @@ import {
   unregisterPaseoBrowserFromHost,
   unregisterPaseoBrowserHost,
 } from "./features/browser-webviews/index.js";
+import {
+  PaseoBrowserWebContentsViewManager,
+  type BrowserViewBounds,
+  type BrowserViewCommand,
+} from "./features/browser-webviews/view.js";
 import { registerDialogHandlers } from "./features/dialogs.js";
 import { registerEditorTargetHandlers } from "./features/editor-targets/ipc.js";
 import { setupApplicationMenu } from "./features/menu.js";
@@ -191,6 +198,77 @@ interface AttachedBrowserInput {
   browserId: string;
   workspaceId: string;
   webContentsId: number;
+}
+
+interface BrowserViewCreateInput {
+  browserId: string;
+  workspaceId: string;
+  profilePartition: string;
+  initialUrl: string;
+}
+
+function readBrowserViewCreateInput(input: unknown): BrowserViewCreateInput | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  if (
+    typeof record.browserId !== "string" ||
+    record.browserId.trim().length === 0 ||
+    typeof record.workspaceId !== "string" ||
+    record.workspaceId.trim().length === 0 ||
+    typeof record.profilePartition !== "string" ||
+    record.profilePartition.trim().length === 0 ||
+    typeof record.initialUrl !== "string" ||
+    !isAllowedBrowserWebviewUrl(record.initialUrl)
+  ) {
+    return null;
+  }
+  return {
+    browserId: record.browserId.trim(),
+    workspaceId: record.workspaceId.trim(),
+    profilePartition: record.profilePartition.trim(),
+    initialUrl: record.initialUrl,
+  };
+}
+
+function readBrowserViewBounds(input: unknown): BrowserViewBounds | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  const readRectangle = (value: unknown) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return null;
+    }
+    const rectangle = value as Record<string, unknown>;
+    const values = [rectangle.x, rectangle.y, rectangle.width, rectangle.height];
+    if (!values.every((entry) => typeof entry === "number" && Number.isFinite(entry))) {
+      return null;
+    }
+    return {
+      x: values[0] as number,
+      y: values[1] as number,
+      width: values[2] as number,
+      height: values[3] as number,
+    };
+  };
+  const container = readRectangle(record.container);
+  const contents = readRectangle(record.contents);
+  if (!container || !contents || typeof record.visible !== "boolean") {
+    return null;
+  }
+  return { container, contents, visible: record.visible };
+}
+
+function readBrowserViewCommand(input: unknown): BrowserViewCommand | null {
+  return input === "focus" ||
+    input === "go-back" ||
+    input === "go-forward" ||
+    input === "reload" ||
+    input === "stop"
+    ? input
+    : null;
 }
 
 function readAttachedBrowserInput(input: unknown): AttachedBrowserInput | null {
@@ -343,6 +421,21 @@ function installBrowserWindowOpenHandler(input: {
   });
 }
 
+const browserViewManager = new PaseoBrowserWebContentsViewManager({
+  registry: getPaseoBrowserWebviewRegistry(),
+  keyboardPreloadPath: getBrowserKeyboardPreloadPath(),
+  registerNavigationGuards: registerBrowserWebviewNavigationGuards,
+  installWindowOpenHandler: installBrowserWindowOpenHandler,
+  installContextMenu: ({ contents, mainWindow }) => {
+    contents.on("context-menu", (_event, params) => {
+      showBrowserWebviewContextMenu(mainWindow, contents, params);
+    });
+  },
+  attachKeyboard: ({ contents, hostContents }) => {
+    browserKeyboard.attach({ contents, hostContents });
+  },
+});
+
 // Allow users to pass Chromium flags via AIT_ELECTRON_FLAGS for debugging
 // rendering issues (e.g. "--disable-gpu --ozone-platform=x11").
 // Must run before app.whenReady().
@@ -399,6 +492,72 @@ ipcMain.handle("paseo:agent-navigation:ready", (event) => {
   return agentNavigationInbox.windowReady(event.sender.id);
 });
 
+ipcMain.handle("paseo:browser:create-view", async (event, rawInput: unknown) => {
+  const input = readBrowserViewCreateInput(rawInput);
+  const mainWindow = BrowserWindow.fromWebContents(event.sender);
+  if (!input || !mainWindow) {
+    throw new Error("Invalid browser view creation request");
+  }
+  const allowedPartitions = [
+    PASEO_BROWSER_PROFILE_PARTITION,
+    ...accountBrowserPartitions(event.sender.id),
+  ];
+  if (!allowedPartitions.includes(input.profilePartition)) {
+    throw new Error("Browser profile partition is not allowed for this window");
+  }
+  await browserViewManager.create({
+    ...input,
+    hostContents: event.sender,
+    hostWindow: mainWindow,
+  });
+});
+
+ipcMain.handle("paseo:browser:destroy-view", (event, browserId: unknown) => {
+  if (typeof browserId === "string" && browserId.trim().length > 0) {
+    browserViewManager.destroy(event.sender.id, browserId.trim());
+  }
+});
+
+ipcMain.handle("paseo:browser:set-view-bounds", (event, browserId: unknown, rawBounds: unknown) => {
+  const bounds = readBrowserViewBounds(rawBounds);
+  if (typeof browserId === "string" && browserId.trim().length > 0 && bounds) {
+    browserViewManager.setBounds(event.sender.id, browserId.trim(), bounds);
+  }
+});
+
+ipcMain.handle("paseo:browser:navigate-view", async (event, browserId: unknown, url: unknown) => {
+  if (
+    typeof browserId !== "string" ||
+    browserId.trim().length === 0 ||
+    typeof url !== "string" ||
+    !isAllowedBrowserWebviewUrl(url)
+  ) {
+    throw new Error("Invalid browser view navigation request");
+  }
+  await browserViewManager.navigate(event.sender.id, browserId.trim(), url);
+});
+
+ipcMain.handle("paseo:browser:command-view", (event, browserId: unknown, rawCommand: unknown) => {
+  const command = readBrowserViewCommand(rawCommand);
+  if (typeof browserId === "string" && browserId.trim().length > 0 && command) {
+    browserViewManager.command(event.sender.id, browserId.trim(), command);
+  }
+});
+
+ipcMain.handle(
+  "paseo:browser:execute-view-javascript",
+  (event, browserId: unknown, code: unknown) => {
+    if (
+      typeof browserId !== "string" ||
+      browserId.trim().length === 0 ||
+      typeof code !== "string"
+    ) {
+      return Promise.reject(new Error("Invalid browser view script request"));
+    }
+    return browserViewManager.executeJavaScript(event.sender.id, browserId.trim(), code);
+  },
+);
+
 ipcMain.handle("paseo:browser:register-attached", (event, rawInput: unknown) => {
   const input = readAttachedBrowserInput(rawInput);
   if (!input) {
@@ -439,6 +598,7 @@ ipcMain.handle("paseo:browser:register-attached", (event, rawInput: unknown) => 
 ipcMain.handle("paseo:browser:unregister-workspace-browser", async (event, browserId: unknown) => {
   if (typeof browserId === "string" && browserId.trim().length > 0) {
     const normalizedBrowserId = browserId.trim();
+    browserViewManager.destroy(event.sender.id, normalizedBrowserId);
     const hasOtherHost = getPaseoBrowserWebviewRegistry().hasBrowserInOtherHostWindow(
       event.sender.id,
       normalizedBrowserId,
@@ -769,6 +929,7 @@ async function createWindow(
     accountAppWindows.delete(webContentsId);
     options.onClosed?.(webContentsId);
     agentNavigationInbox.removeWindow(webContentsId);
+    browserViewManager.destroyHost(webContentsId);
     unregisterPaseoBrowserHost(webContentsId);
     browserKeyboard.detachHost(webContentsId);
   });

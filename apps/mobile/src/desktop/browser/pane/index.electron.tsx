@@ -66,6 +66,7 @@ import {
 } from "@/desktop/browser/store";
 import {
   applyInactiveBrowserWebviewViewport,
+  createBrowserWebviewElement,
   prepareBrowserWebview,
   presentBrowserWebview,
   rememberBrowserWebviewSize,
@@ -81,6 +82,8 @@ import {
   type ElementSelectorOutcome,
 } from "./element-selector.electron";
 import { resolveBrowserProfileHost } from "../remote-profile";
+import { isGoogleAuthenticationUrl } from "../google-auth";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 type ElectronWebview = HTMLElement & {
   canGoBack?: () => boolean;
@@ -711,7 +714,8 @@ export function BrowserPane({
           browserErrorLabelsRef.current,
         );
         const residentWebview = takeResidentBrowserWebview(browserId) as ElectronWebview | null;
-        const webview = residentWebview ?? (document.createElement("webview") as ElectronWebview);
+        const webview =
+          residentWebview ?? (createBrowserWebviewElement(document) as ElectronWebview);
         webviewRef.current = webview;
         if (!residentWebview) {
           prepareBrowserWebview(webview, {
@@ -930,6 +934,14 @@ export function BrowserPane({
       const normalizedUrl = normalizeBrowserUrl(nextUrl);
       const webview = webviewRef.current;
       const unsafeNavigationMessage = getUnsafeNavigationMessage(normalizedUrl, browserErrorLabels);
+      if (unsafeNavigationMessage === null && isGoogleAuthenticationUrl(normalizedUrl)) {
+        toastRef.current?.show(t("serviceUrl.externalBrowser"), { variant: "info" });
+        void openExternalUrl(normalizedUrl).catch((error: unknown) => {
+          console.warn("[browser-pane] failed to open Google sign-in externally", error);
+          toastRef.current?.error(browserErrorLabels.failedToLoad);
+        });
+        return;
+      }
       const previousUrl = browserRef.current?.url ?? initialUrlRef.current;
       pendingNavigationUrlRef.current = unsafeNavigationMessage ? null : normalizedUrl;
       updateBrowserRef.current(browserIdRef.current, {
@@ -963,7 +975,7 @@ export function BrowserPane({
         webview.setAttribute("src", normalizedUrl);
       }
     },
-    [browserErrorLabels],
+    [browserErrorLabels, t],
   );
 
   const handleBack = useCallback(() => {
