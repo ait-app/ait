@@ -1203,8 +1203,7 @@ function parseBinding(binding: ShortcutBinding): ParsedShortcutBinding {
   return { ...binding, parsedChord };
 }
 
-export const DEFAULT_BINDINGS: readonly ParsedShortcutBinding[] =
-  SHORTCUT_BINDINGS.map(parseBinding);
+const DEFAULT_BINDINGS: readonly ParsedShortcutBinding[] = SHORTCUT_BINDINGS.map(parseBinding);
 
 export type ShortcutOverrides = Record<string, string | null>;
 

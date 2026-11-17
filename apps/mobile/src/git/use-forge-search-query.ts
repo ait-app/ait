@@ -12,7 +12,7 @@ import { i18n } from "@/i18n/i18next";
 import { useFetchQuery } from "@/data/query";
 import { parseForgeAuthState } from "@/git/forge";
 
-export const FORGE_SEARCH_STALE_TIME = 30_000;
+const FORGE_SEARCH_STALE_TIME = 30_000;
 
 export interface ForgeSearchPayload {
   items: ForgeSearchItem[];

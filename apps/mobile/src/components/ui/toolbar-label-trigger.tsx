@@ -30,7 +30,7 @@ export function toolbarLabelTriggerStyle(state: ToolbarLabelTriggerState): Style
 }
 
 /** Shared spacing for interactive triggers and visually aligned passive context. */
-export function toolbarLabelTriggerFrameStyle(): StyleProp<ViewStyle> {
+function toolbarLabelTriggerFrameStyle(): StyleProp<ViewStyle> {
   return styles.trigger;
 }
 

@@ -8,7 +8,7 @@ import type { CommandCenterContribution } from "./contributions";
 import type { CommandCenterListMetrics } from "./list-metrics";
 
 /** Sections that reorder by how well they match the query. */
-export const CONTRIBUTION_SECTION_BAND = 0;
+const CONTRIBUTION_SECTION_BAND = 0;
 /** Sections pinned below every contribution section regardless of match quality. */
 export const PINNED_SECTION_BAND = 1;
 
@@ -37,10 +37,7 @@ export interface CommandCenterScore {
  * query over the contributions registered today hits that case — hidden keywords here are
  * synonyms nothing else displays ("automation", "recurring", "repo", "shell", "hotkeys").
  */
-export function compareCommandCenterScores(
-  left: CommandCenterScore,
-  right: CommandCenterScore,
-): number {
+function compareCommandCenterScores(left: CommandCenterScore, right: CommandCenterScore): number {
   return left.fieldRank - right.fieldRank || compareMatchScores(left.match, right.match);
 }
 

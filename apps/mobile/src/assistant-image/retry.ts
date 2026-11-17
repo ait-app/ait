@@ -1,4 +1,4 @@
-export const ASSISTANT_IMAGE_RETRY_DELAYS_MS = [100, 400, 1_200] as const;
+const ASSISTANT_IMAGE_RETRY_DELAYS_MS = [100, 400, 1_200] as const;
 
 export async function runAssistantImageOperationWithRetry<T>(input: {
   operation: () => Promise<T>;

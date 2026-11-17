@@ -65,7 +65,7 @@ function getWebTextInputElement(input: EditingTextInputHandle | null): HTMLEleme
   return element instanceof HTMLElement ? element : null;
 }
 
-export const SMALL_ACTION_HIT_SLOP = 8;
+const SMALL_ACTION_HIT_SLOP = 8;
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);

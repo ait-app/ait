@@ -5,7 +5,7 @@ import { Circle, CircleCheck, CircleDot, CircleAlert } from "lucide-react-native
 import type { WorkspaceStateBucket } from "@ait/protocol/agent-state-bucket";
 import type { Theme } from "@/styles/theme";
 
-export function taskStatusColor(theme: Theme, bucket: WorkspaceStateBucket): string {
+function taskStatusColor(theme: Theme, bucket: WorkspaceStateBucket): string {
   if (bucket === "needs_input") return theme.colors.statusWarning;
   if (bucket === "failed") return theme.colors.statusDanger;
   if (bucket === "running") return theme.colors.statusDotRunning;

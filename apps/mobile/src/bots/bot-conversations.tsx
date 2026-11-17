@@ -12,10 +12,7 @@ import { botKeys } from "./queries";
 import { botChatStyles as chatStyles } from "./styles";
 
 /** Whether `conversation` is the Bot's built-in Ait conversation, the only one Ait can send to. */
-export function isBuiltinConversation(
-  conversation: BotConversation,
-  builtinChannelId: string,
-): boolean {
+function isBuiltinConversation(conversation: BotConversation, builtinChannelId: string): boolean {
   return conversation.channelKind === "builtin" || conversation.channelId === builtinChannelId;
 }
 
@@ -31,7 +28,7 @@ export function conversationChannel(conversation: BotConversation, t: TFunction)
  * A label a person recognizes a conversation by: Ait for the built-in one, otherwise its channel
  * with the chat, sender and thread ids, since hosts keep no display names of other platforms.
  */
-export function conversationLabel(
+function conversationLabel(
   conversation: BotConversation,
   builtinChannelId: string,
   t: TFunction,

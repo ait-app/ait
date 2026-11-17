@@ -160,7 +160,7 @@ function useWorkspaceLabelCatalog(
   return { labelCatalog, toggleLabel };
 }
 
-export function useWorkspaceCommandCenterActions(): void {
+function useWorkspaceCommandCenterActions(): void {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const { t } = useTranslation();
   const selection = useActiveWorkspaceSelection();

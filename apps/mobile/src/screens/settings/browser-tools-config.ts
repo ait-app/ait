@@ -1,7 +1,7 @@
 import type { MutableDaemonConfig } from "@ait/protocol/messages";
 import { toErrorMessage } from "@/utils/error-messages";
 
-export const BROWSER_TOOLS_TITLE_KEY = "settings.host.agents.browserTools.title";
+const BROWSER_TOOLS_TITLE_KEY = "settings.host.agents.browserTools.title";
 export const BROWSER_TOOLS_WARNING_KEY = "settings.host.agents.browserTools.hint";
 
 export interface BrowserToolsCardState {

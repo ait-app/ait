@@ -9,7 +9,7 @@ import { SPACING, type Theme } from "@/styles/theme";
 // paths) render different data, but their ROWS should look identical — same
 // indentation, density, name emphasis, and chevron. Keep those here so the two trees can't
 // drift apart.
-export const TREE_INDENT_PER_LEVEL = 12;
+const TREE_INDENT_PER_LEVEL = 12;
 export const WORKSPACE_FILE_ROW_VERTICAL_PADDING = SPACING[1.5];
 export const WORKSPACE_TREE_ICON_SIZE = 16;
 export const WORKSPACE_TREE_LOADING_ICON_SIZE = 14;

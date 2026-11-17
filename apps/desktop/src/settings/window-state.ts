@@ -63,7 +63,7 @@ function coerceDimension(value: unknown, minimum: number): number | null {
   return Math.max(minimum, rounded);
 }
 
-export function coerceWindowState(input: unknown): WindowState | null {
+function coerceWindowState(input: unknown): WindowState | null {
   if (!isRecord(input)) {
     return null;
   }

@@ -320,7 +320,7 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
+function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
   return (
     <View style={sidebarWorkspaceRowStyles.shortcutBadge}>
       <Text style={sidebarWorkspaceRowStyles.shortcutBadgeText}>{number}</Text>

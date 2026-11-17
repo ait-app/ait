@@ -47,7 +47,7 @@ function navigateDeps(): NavigateToWorkspaceDeps {
   };
 }
 
-export function hydrateLastWorkspaceSelection(): Promise<void> {
+function hydrateLastWorkspaceSelection(): Promise<void> {
   return lastWorkspaceSelectionStore.hydrate();
 }
 
@@ -55,7 +55,7 @@ export function getLastWorkspaceSelection(): ActiveWorkspaceSelection | null {
   return lastWorkspaceSelectionStore.getSelection();
 }
 
-export function getIsLastWorkspaceSelectionHydrated(): boolean {
+function getIsLastWorkspaceSelectionHydrated(): boolean {
   return lastWorkspaceSelectionStore.isHydrated();
 }
 

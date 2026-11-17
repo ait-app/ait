@@ -9,10 +9,7 @@ export type TranslateHelpKey = (key: string) => string;
  * find ⌘K. The modifier a user types rarely matches the token the binding
  * stores, and never matches the symbol the badge renders.
  */
-export function shortcutSearchAliases(
-  keys: readonly ShortcutKey[],
-  shortcutOs: ShortcutOs,
-): string {
+function shortcutSearchAliases(keys: readonly ShortcutKey[], shortcutOs: ShortcutOs): string {
   const aliases = keys.map((key) => {
     if (shortcutOs === "mac") {
       if (key === "mod" || key === "meta") return ["cmd", "command"];

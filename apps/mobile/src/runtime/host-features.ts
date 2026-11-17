@@ -15,7 +15,7 @@ export interface HostFeatureSessionState {
   >;
 }
 
-export function hostSupportsFeature(
+function hostSupportsFeature(
   serverInfo: DaemonServerInfo | null | undefined,
   feature: HostFeatureName,
 ): boolean {

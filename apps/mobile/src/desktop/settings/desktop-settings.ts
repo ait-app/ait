@@ -134,7 +134,7 @@ export async function loadDesktopSettings(): Promise<DesktopSettings> {
   return parseDesktopSettings(await invokeDesktopCommand<unknown>("get_desktop_settings"));
 }
 
-export async function updatePersistedDesktopSettings(
+async function updatePersistedDesktopSettings(
   updates: DesktopSettingsPatch,
 ): Promise<DesktopSettings> {
   if (!getIsElectron()) {

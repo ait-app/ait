@@ -107,7 +107,7 @@ export async function resolveStagingUserId(filePath: string): Promise<string> {
   return id;
 }
 
-export function getStagingUserId(): Promise<string> {
+function getStagingUserId(): Promise<string> {
   if (cachedStagingUserIdPromise == null) {
     cachedStagingUserIdPromise = resolveStagingUserId(
       path.join(app.getPath("userData"), ".updaterId"),

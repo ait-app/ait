@@ -44,7 +44,7 @@ function launchKey(target: LaunchTarget): string {
   return target.kind === "chat" ? "chat" : `terminal:${target.profileId}`;
 }
 
-export function resolveTerminalComposerState(
+function resolveTerminalComposerState(
   input: ResolveTerminalComposerStateInput,
 ): TerminalComposerState {
   const { launchTarget, terminalProfiles, terminalPromptText } = input;

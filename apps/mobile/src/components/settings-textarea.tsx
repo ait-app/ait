@@ -14,7 +14,7 @@ interface SettingsTextAreaProps {
   style?: StyleProp<TextStyle>;
 }
 
-export function SettingsTextArea({
+function SettingsTextArea({
   accessibilityLabel,
   value,
   onChangeText,

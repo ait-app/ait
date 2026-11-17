@@ -13,7 +13,7 @@ import { definePanel } from "@/panels/panel-registry";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { notebookPanelPresentation } from "@/panels/panel-presentations";
 
-export const WORKSPACE_NOTEBOOK_PATH = ".ait-notebook.md";
+const WORKSPACE_NOTEBOOK_PATH = ".ait-notebook.md";
 
 type NotebookStatus =
   | "loading"

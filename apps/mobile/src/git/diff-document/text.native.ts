@@ -370,7 +370,7 @@ function primaryFont(families: string[], size: number): SkFont {
   return matchFont({ fontFamily: family, fontSize: size });
 }
 
-export function nativeFontFamilies(configuredFamily: string): string[] {
+function nativeFontFamilies(configuredFamily: string): string[] {
   const configured = configuredFamily
     .split(",")
     .map((family) => family.trim().replace(/^['"]|['"]$/g, ""))

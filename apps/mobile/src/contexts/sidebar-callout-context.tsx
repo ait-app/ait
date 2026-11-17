@@ -132,7 +132,7 @@ export function useSidebarCallouts(): SidebarCalloutsApi {
   return api;
 }
 
-export function useActiveSidebarCallout(): SidebarCalloutEntry | null {
+function useActiveSidebarCallout(): SidebarCalloutEntry | null {
   return useContext(SidebarCalloutStateContext);
 }
 

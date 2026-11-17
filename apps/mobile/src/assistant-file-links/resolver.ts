@@ -173,10 +173,7 @@ function getAssistantFileLinkTokenInfo(source: AssistantFileLinkSource): {
   return { token: source.href, fromHref: true };
 }
 
-export function getAmbiguousSuggestionQuery(
-  target: InlinePathTarget,
-  workspaceRoot: string,
-): string {
+function getAmbiguousSuggestionQuery(target: InlinePathTarget, workspaceRoot: string): string {
   const normalizedRoot = workspaceRoot.replace(/\\/g, "/").replace(/\/+$/, "");
   const normalizedPath = target.path.replace(/\\/g, "/");
   const prefix = `${normalizedRoot}/`;
@@ -188,7 +185,7 @@ export function getAmbiguousSuggestionQuery(
   return lastSlash >= 0 ? normalizedPath.slice(lastSlash + 1) : normalizedPath;
 }
 
-export function shouldResolveDirectFileThroughSuggestions(input: {
+function shouldResolveDirectFileThroughSuggestions(input: {
   context: AssistantFileLinkContext;
   source: AssistantFileLinkSource;
   token: string;

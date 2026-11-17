@@ -170,7 +170,7 @@ function resolveDesktopAppVersion(): string {
 // Daemon lifecycle
 // ---------------------------------------------------------------------------
 
-export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {
+async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {
   return getRustDaemon().status();
 }
 

@@ -2,7 +2,7 @@ export interface AfterPaintScheduler {
   schedule: (callback: () => void) => () => void;
 }
 
-export const browserAfterPaintScheduler: AfterPaintScheduler = {
+const browserAfterPaintScheduler: AfterPaintScheduler = {
   schedule: (callback) => {
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
       let cancelled = false;

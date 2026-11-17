@@ -53,11 +53,11 @@ export type AgentProfileColor = "none" | IdentityColorName;
 
 export const AGENT_PROFILE_COLORS: readonly AgentProfileColor[] = ["none", ...IDENTITY_COLOR_NAMES];
 
-export function isAgentProfileIconKey(value: string | undefined): value is AgentProfileIconKey {
+function isAgentProfileIconKey(value: string | undefined): value is AgentProfileIconKey {
   return AGENT_PROFILE_ICON_KEYS.some((key) => key === value);
 }
 
-export function isAgentProfileColor(value: string | undefined): value is AgentProfileColor {
+function isAgentProfileColor(value: string | undefined): value is AgentProfileColor {
   return AGENT_PROFILE_COLORS.some((color) => color === value);
 }
 

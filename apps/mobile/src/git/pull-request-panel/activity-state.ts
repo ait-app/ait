@@ -19,7 +19,7 @@ export function getActivityState(): PullRequestActivityState {
   return { collapsedKeys: [], expandedKeys: [] };
 }
 
-export function getActivityStateKey(identity: PullRequestActivityIdentity): string {
+function getActivityStateKey(identity: PullRequestActivityIdentity): string {
   return `${identity.prNumber}:${identity.activityId}`;
 }
 

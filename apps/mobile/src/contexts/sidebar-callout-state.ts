@@ -40,7 +40,7 @@ export function createSidebarCalloutState(): SidebarCalloutState {
   };
 }
 
-export function normalizeDismissalKey(key: string | null | undefined): string | null {
+function normalizeDismissalKey(key: string | null | undefined): string | null {
   const trimmed = key?.trim();
   return trimmed ? trimmed : null;
 }
