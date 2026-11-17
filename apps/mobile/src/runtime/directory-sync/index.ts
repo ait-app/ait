@@ -34,7 +34,9 @@ import type {
   DirectoryCursor,
   DirectoryReplicaMutation,
 } from "@/runtime/replica-cache";
+import { hostSupportsFeature } from "@/runtime/host-features";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
+import type { DaemonServerInfo } from "@/stores/session-store";
 
 type FetchAgentsPayload = Awaited<ReturnType<DaemonClient["fetchAgents"]>>;
 type FetchWorkspacesPayload = Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>;
@@ -109,6 +111,7 @@ export interface DirectoryConnection {
   client: DaemonClient | null;
   status: "online" | "offline";
   source: DirectorySourceToken;
+  serverInfo: DaemonServerInfo | null;
 }
 
 export interface DirectoryCheckpointStorage {
@@ -149,6 +152,7 @@ export class DirectorySync {
     client: null,
     status: "offline",
     source: { clientGeneration: 0, connectionEpoch: 0 },
+    serverInfo: null,
   };
   private agentSubscription: OwnedSubscription<FetchAgentsPayload> | null = null;
   private workspaceSubscription: OwnedSubscription<FetchWorkspacesPayload> | null = null;
@@ -354,9 +358,7 @@ export class DirectorySync {
   }
 
   private supportsDirectorySubscriptions(): boolean {
-    return (
-      this.connection.client?.getLastServerInfoMessage()?.features?.directorySubscriptions !== false
-    );
+    return hostSupportsFeature(this.connection.serverInfo, "directorySubscriptions");
   }
 
   private scheduleSnapshotRefresh(): void {
@@ -418,9 +420,7 @@ export class DirectorySync {
   }
 
   private supportsWorkspaceTargetRead(): boolean {
-    return (
-      this.connection.client?.getLastServerInfoMessage()?.features?.workspaceTargetRead === true
-    );
+    return hostSupportsFeature(this.connection.serverInfo, "workspaceTargetRead");
   }
 
   private async readTargetAgent(agentId: string): Promise<void> {
@@ -667,9 +667,11 @@ export class DirectorySync {
     });
     try {
       await this.waitForSessionMetadata(client, source);
-      const serverInfo = useSessionStore.getState().sessions[this.serverId]?.serverInfo;
-      const supportsProjectList = serverInfo?.features?.projectList === true;
-      const supportsDirectorySync = serverInfo?.features?.directorySync === true;
+      const supportsProjectList = hostSupportsFeature(this.connection.serverInfo, "projectList");
+      const supportsDirectorySync = hostSupportsFeature(
+        this.connection.serverInfo,
+        "directorySync",
+      );
       const projectsReady = supportsProjectList
         ? this.fetchProjectSnapshot(client, source, transaction, supportsDirectorySync)
         : Promise.resolve();
@@ -768,11 +770,10 @@ export class DirectorySync {
 
   async connectWorkspaceLabels(): Promise<void> {
     const { client } = this.requireOnline();
-    const serverInfo = client.getLastServerInfoMessage();
     await workspaceLabels.connect({
       serverId: this.serverId,
       client,
-      supportsWorkspaceLabels: serverInfo?.features?.workspaceLabels === true,
+      supportsWorkspaceLabels: hostSupportsFeature(this.connection.serverInfo, "workspaceLabels"),
     });
   }
 
@@ -887,10 +888,7 @@ export class DirectorySync {
   }
 
   private supportsDirectorySync(): boolean {
-    return (
-      useSessionStore.getState().sessions[this.serverId]?.serverInfo?.features?.directorySync ===
-      true
-    );
+    return hostSupportsFeature(this.connection.serverInfo, "directorySync");
   }
 
   private commitAgentSnapshot(
@@ -1069,8 +1067,7 @@ export class DirectorySync {
     source: DirectorySourceToken,
   ): Promise<void> {
     await this.waitForSessionState(client, source, () => {
-      const session = useSessionStore.getState().sessions[this.serverId];
-      return this.hasMatchingSession(client, source) && session?.serverInfo !== null;
+      return this.hasMatchingSession(client, source) && this.connection.serverInfo !== null;
     });
   }
 

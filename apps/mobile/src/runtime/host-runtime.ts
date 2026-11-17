@@ -20,6 +20,7 @@ import { nativePerformanceTrace } from "@/performance/native-trace";
 import { projectIconCache } from "@/projects/icon-cache";
 import { revokePushNotifications } from "@/push-notifications";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
+import { hostSupportsFeature } from "@/runtime/host-features";
 import { ReplicaCache } from "@/runtime/replica-cache";
 import type { ReplicaRowStore } from "@/runtime/replica-cache/row-store";
 import { createReplicaRowStore } from "@/runtime/replica-cache/row-store-factory";
@@ -28,6 +29,7 @@ import { readValidatedJson, readValidatedString } from "@/storage/validated-stor
 import {
   useSessionStore,
   type Agent,
+  type DaemonServerInfo,
   type ProjectDescriptor,
   type WorkspaceDescriptor,
 } from "@/stores/session-store";
@@ -129,6 +131,7 @@ export interface HostRuntimeSnapshot {
   probeByConnectionId: Map<string, ConnectionProbeState>;
   clientGeneration: number;
   connectionEpoch: number;
+  serverInfo: DaemonServerInfo | null;
 }
 
 type HostRuntimeSnapshotPatch = Partial<Omit<HostRuntimeSnapshot, "serverId" | "clientGeneration">>;
@@ -167,6 +170,20 @@ function hashForLog(value: string): string {
     hash = (hash * 31 + value.charCodeAt(index)) | 0;
   }
   return `h_${Math.abs(hash).toString(16)}`;
+}
+
+function normalizeServerInfo(
+  info: ReturnType<DaemonClient["getLastServerInfoMessage"]>,
+): DaemonServerInfo | null {
+  if (!info) return null;
+  return {
+    serverId: info.serverId,
+    hostname: info.hostname?.trim() || null,
+    version: info.version?.trim() || null,
+    ...(info.desktopManaged !== undefined ? { desktopManaged: info.desktopManaged } : {}),
+    ...(info.capabilities ? { capabilities: info.capabilities } : {}),
+    ...(info.features ? { features: { ...info.features } } : {}),
+  };
 }
 
 export interface HostRuntimeControllerDeps {
@@ -630,6 +647,7 @@ export class HostRuntimeController {
       hasEverLoadedAgentDirectory: false,
       probeByConnectionId: new Map(),
       clientGeneration: 0,
+      serverInfo: null,
     };
   }
 
@@ -685,6 +703,7 @@ export class HostRuntimeController {
     this.updateSnapshot({
       ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       client: null,
+      serverInfo: null,
     });
   }
 
@@ -1290,6 +1309,7 @@ export class HostRuntimeController {
     }
 
     this.activeClient = client;
+    this.snapshot = { ...this.snapshot, serverInfo: null };
     this.applyConnectionEvent({
       type: "select_connection",
       connectionId: connection.id,
@@ -1299,6 +1319,7 @@ export class HostRuntimeController {
     this.updateSnapshot({
       ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       client: null,
+      serverInfo: null,
     });
 
     const failConnection = async (error: unknown) => {
@@ -1313,6 +1334,7 @@ export class HostRuntimeController {
       this.updateSnapshot({
         ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
         client: null,
+        serverInfo: null,
       });
       try {
         await client.close();
@@ -1327,6 +1349,10 @@ export class HostRuntimeController {
         this.deps.mountClientHandlers?.({ client, host: this.host, connection }) ?? null;
       this.unsubscribeClientStatus = client.subscribeConnectionStatus((state) => {
         if (!this.isCurrentSwitchRequest(requestVersion) || this.activeClient !== client) return;
+        const serverInfo =
+          state.status === "connected"
+            ? normalizeServerInfo(client.getLastServerInfoMessage())
+            : null;
         this.applyConnectionEvent({
           type: "client_state",
           state,
@@ -1336,6 +1362,7 @@ export class HostRuntimeController {
           ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
           ...this.buildAgentDirectoryStatusPatch(),
           client,
+          serverInfo,
         });
       });
     } catch (error) {
@@ -1889,15 +1916,16 @@ export class HostRuntimeStore {
     controller.adoptReconciledServerId(newServerId);
     const snapshot = controller.getSnapshot();
     this.clearHostReplica(oldServerId);
-    this.syncSessionReplica(newServerId, snapshot);
     directory.connectionChanged({
       client: snapshot.client,
       status: snapshot.connectionStatus === "online" ? "online" : "offline",
+      serverInfo: snapshot.serverInfo,
       source: {
         clientGeneration: snapshot.clientGeneration,
         connectionEpoch: snapshot.connectionEpoch,
       },
     });
+    this.syncSessionReplica(newServerId, snapshot);
 
     const listeners = this.serverListeners.get(oldServerId);
     if (listeners) {
@@ -2503,8 +2531,8 @@ export class HostRuntimeStore {
       this.lastConnectionStatusByServer.set(host.serverId, initialSnapshot.connectionStatus);
       controller.subscribe(() => {
         const snapshot = controller.getSnapshot();
-        this.syncSessionReplica(snapshot.serverId, snapshot);
         this.syncDirectoryConnection(snapshot.serverId);
+        this.syncSessionReplica(snapshot.serverId, snapshot);
         this.emit(snapshot.serverId);
       });
       void controller
@@ -2530,6 +2558,9 @@ export class HostRuntimeStore {
     const sessionStore = useSessionStore.getState();
     sessionStore.initializeSession(serverId, snapshot.client, snapshot.clientGeneration);
     sessionStore.updateSessionClient(serverId, snapshot.client, snapshot.clientGeneration);
+    if (snapshot.serverInfo) {
+      sessionStore.updateSessionServerInfo(serverId, snapshot.serverInfo);
+    }
   }
 
   private clearHostReplica(serverId: string): void {
@@ -2548,6 +2579,7 @@ export class HostRuntimeStore {
     directory?.connectionChanged({
       client: snapshot.client,
       status: snapshot.connectionStatus === "online" ? "online" : "offline",
+      serverInfo: snapshot.serverInfo,
       source: {
         clientGeneration: snapshot.clientGeneration,
         connectionEpoch: snapshot.connectionEpoch,
@@ -2600,8 +2632,10 @@ export class HostRuntimeStore {
         write: (update) => useSessionStore.getState().setQueuedMessages(serverId, update),
       },
       submitMessage: async ({ text, attachments }) => {
-        const supportsForgeAttachments =
-          useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;
+        const supportsForgeAttachments = hostSupportsFeature(
+          this.getSnapshot(serverId)?.serverInfo,
+          "forgeSearch",
+        );
         await dispatchComposerAgentMessage({
           client,
           agentId,
@@ -2867,9 +2901,10 @@ export class HostRuntimeStore {
     const connectionEpoch = this.getSnapshot(serverId)?.connectionEpoch;
     return fetchAgentTimelinePage(agentId, request, {
       scope: client ?? directory,
-      supportsCachedReads:
-        useSessionStore.getState().sessions[serverId]?.serverInfo?.features
-          ?.agentTimelineCachedReads === true,
+      supportsCachedReads: hostSupportsFeature(
+        this.getSnapshot(serverId)?.serverInfo,
+        "agentTimelineCachedReads",
+      ),
       fetch: (pageRequest) => directory.fetchTimeline(agentId, pageRequest),
       isCurrent: () =>
         this.directorySyncByServer.get(serverId) === directory &&

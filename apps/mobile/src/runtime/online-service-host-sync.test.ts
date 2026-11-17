@@ -61,9 +61,9 @@ vi.mock("./host-runtime", () => ({
       { serverId: "first", label: "Built-in daemon" },
       { serverId: "remote", label: "Remote" },
     ],
+    getSnapshot: () => ({ serverInfo: { features: { onlineServiceSync: mocks.supported } } }),
     getClient: () => ({
       isConnected: mocks.connected,
-      getLastServerInfoMessage: () => ({ features: { onlineServiceSync: mocks.supported } }),
       getOnlineServiceStatus: mocks.status,
       getPublicationStatus: mocks.publication,
       authorizePublication: mocks.authorize,

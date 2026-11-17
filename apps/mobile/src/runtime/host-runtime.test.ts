@@ -1452,6 +1452,12 @@ describe("HostRuntimeController", () => {
     });
 
     await controller.start({ autoProbe: false });
+    expect(controller.getSnapshot().serverInfo).toMatchObject({
+      serverId: "srv_test",
+      hostname: "test",
+      version: "0.8.0",
+      features: { ownedSubscriptions: true },
+    });
 
     clients[0]?.setConnectionState({
       status: "disconnected",
@@ -1462,6 +1468,7 @@ describe("HostRuntimeController", () => {
     expect(latest?.activeConnectionId).toBe("direct:lan:6767");
     expect(latest?.connectionStatus).toBe("error");
     expect(latest?.lastError).toBe("transport closed");
+    expect(latest?.serverInfo).toBeNull();
     unsubscribe();
   });
 

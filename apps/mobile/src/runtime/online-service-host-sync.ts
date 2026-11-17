@@ -5,6 +5,7 @@ import type { RelayStatus } from "@ait/protocol/relay";
 import type { DeviceAuthorization, PublicationStatus } from "@ait/protocol/publication";
 import { getDesktopHost } from "@/desktop/host";
 import { getDesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
+import { hostSupportsFeature } from "./host-features";
 import { getNativeAccount } from "./native-account";
 import { getHostRuntimeStore } from "./host-runtime";
 import { serializeNativeAccountCommand, useAccountState } from "./account-state";
@@ -213,8 +214,11 @@ export async function synchronizeDefaultDesktopHost(): Promise<void> {
     return;
   const store = getHostRuntimeStore();
   const host = store.getHosts().find((host) => host.serverId === daemon.serverId);
-  const client = store.getClient(daemon.serverId);
-  if (!host || client?.getLastServerInfoMessage()?.features?.onlineServiceSync !== true) return;
+  if (
+    !host ||
+    !hostSupportsFeature(store.getSnapshot(daemon.serverId)?.serverInfo, "onlineServiceSync")
+  )
+    return;
   await synchronizeOnlineServiceHost(host.serverId, host.label, true, { automatic: true });
 }
 

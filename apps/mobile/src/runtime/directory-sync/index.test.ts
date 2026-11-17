@@ -12,6 +12,7 @@ import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
+  type DaemonServerInfo,
 } from "@/stores/session-store";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";
 import {
@@ -214,6 +215,7 @@ class FakeDirectoryClient {
   getLastServerInfoMessage() {
     return {
       features: {
+        directorySubscriptions: true,
         workspaceLabels: this.supportsWorkspaceLabels,
         workspaceTargetRead: this.supportsWorkspaceTargetRead,
       },
@@ -223,11 +225,38 @@ class FakeDirectoryClient {
 
 const serverIds = new Set<string>();
 
+function currentServerInfo(serverId: string, client: FakeDirectoryClient): DaemonServerInfo {
+  const stored = useSessionStore.getState().sessions[serverId]?.serverInfo;
+  if (stored) return stored;
+  const wire = client.getLastServerInfoMessage();
+  return {
+    serverId,
+    hostname: null,
+    version: null,
+    ...(wire.features ? { features: wire.features } : {}),
+  };
+}
+
+function refreshDirectoryServerInfo(
+  directory: DirectorySync,
+  serverId: string,
+  client: FakeDirectoryClient,
+  connectionEpoch = 1,
+): void {
+  directory.connectionChanged({
+    client: client as unknown as DaemonClient,
+    status: "online",
+    serverInfo: currentServerInfo(serverId, client),
+    source: { clientGeneration: 1, connectionEpoch },
+  });
+}
+
 function createDirectory(
   serverId: string,
   options?: {
     workspaceLabels?: boolean;
     workspaceTargetRead?: boolean;
+    serverInfo?: DaemonServerInfo | null;
     checkpoints?: DirectoryCheckpointStorage;
     markWorkspaceError?: (error: string | null) => void;
   },
@@ -253,6 +282,8 @@ function createDirectory(
   directory.connectionChanged({
     client: client as unknown as DaemonClient,
     status: "online",
+    serverInfo:
+      options?.serverInfo === undefined ? currentServerInfo(serverId, client) : options.serverInfo,
     source: { clientGeneration: 1, connectionEpoch: 1 },
   });
   return { client, directory };
@@ -400,6 +431,7 @@ describe("target workspace reads", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 2 },
     });
     expect(await directory.prepareWorkspaceRoute("target")).toBe("missing");
@@ -690,6 +722,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const workspace = normalizeWorkspaceDescriptor({
@@ -866,6 +899,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -946,6 +980,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -956,6 +991,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, directorySync: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     const refresh = directory.refreshWorkspaces();
     await expect.poll(() => client.fetchWorkspacesCalls).toBe(1);
@@ -1006,6 +1042,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -1016,6 +1053,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, directorySync: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     const refresh = directory.refreshAgents();
     await expect.poll(() => client.fetchAgentsCalls).toBe(1);
@@ -1064,6 +1102,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -1074,6 +1113,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, directorySync: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     directory.setAgentRouteDemand(["agent-1"]);
     await directory.refreshDemand();
@@ -1155,6 +1195,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient, 1);
@@ -1200,6 +1241,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -1210,6 +1252,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { directorySync: true, workspaceMultiplicity: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     const refresh = directory.refreshAgents();
     const load = directory.loadCachedAgent(cachedAgent.id);
@@ -1253,6 +1296,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -1263,6 +1307,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { directorySync: true, workspaceMultiplicity: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     await directory.refreshAgents({
       subscribe: {},
@@ -1281,7 +1326,7 @@ describe("DirectorySync session readiness", () => {
 
   it("waits for workspace capability metadata before choosing the workspace protocol", async () => {
     const serverId = "workspace-metadata";
-    const { client, directory } = createDirectory(serverId);
+    const { client, directory } = createDirectory(serverId, { serverInfo: null });
 
     const refresh = directory.refreshWorkspaces({ subscribe: true });
     await Promise.resolve();
@@ -1298,6 +1343,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
     await refresh;
 
     expect(client.fetchWorkspacesCalls).toBe(1);
@@ -1316,6 +1362,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, projectList: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
 
     await directory.refreshWorkspaces();
 
@@ -1379,6 +1426,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     const store = useSessionStore.getState();
@@ -1389,6 +1437,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, projectList: true, directorySync: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
     client.projectResult = {
       requestId: "projects",
       projects: [
@@ -1441,6 +1490,7 @@ describe("DirectorySync session readiness", () => {
         version: "test",
         features: { workspaceMultiplicity: true, projectList: true },
       });
+      refreshDirectoryServerInfo(directory, serverId, client);
       const releaseProjects = client.holdProjectFetch();
       const releaseWorkspaces = client.holdWorkspaceFetch();
       const project = {
@@ -1493,6 +1543,7 @@ describe("DirectorySync session readiness", () => {
       version: "test",
       features: { workspaceMultiplicity: true, directorySync: true },
     });
+    refreshDirectoryServerInfo(directory, serverId, client);
     directory.acceptWorkspaces([normalizeWorkspaceDescriptor(createWorkspaceEntry("retained"))]);
     const release = client.holdWorkspaceFetch();
     const refresh = directory.refreshWorkspaces();
@@ -1501,6 +1552,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 2 },
     });
     release({
@@ -1526,6 +1578,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: null,
       status: "offline",
+      serverInfo: null,
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     await expect(staleRefresh).rejects.toBeInstanceOf(DirectoryRefreshSupersededError);
@@ -1533,6 +1586,7 @@ describe("DirectorySync session readiness", () => {
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 2 },
     });
     const currentRefresh = directory.refreshAgents();
@@ -1753,6 +1807,7 @@ it("fills every cached workspace beneath live updates received during the SQLite
   directory.connectionChanged({
     client: client as unknown as DaemonClient,
     status: "online",
+    serverInfo: currentServerInfo(serverId, client),
     source: { clientGeneration: 1, connectionEpoch: 1 },
   });
   useSessionStore.getState().updateSessionServerInfo(serverId, {
@@ -1865,6 +1920,7 @@ describe("snapshot-only host directories", () => {
     useSessionStore
       .getState()
       .updateSessionServerInfo(serverId, { ...info, hostname: null, version: "0.0.6" });
+    refreshDirectoryServerInfo(directory, serverId, client);
     const observeAgents = vi.spyOn(client, "observeAgents");
     const observeWorkspaces = vi.spyOn(client, "observeWorkspaces");
     const observeEvents = vi.spyOn(client, "observeEvents");
@@ -1918,6 +1974,7 @@ describe("snapshot-only host directories", () => {
     const store = useSessionStore.getState();
     store.initializeSession(serverId, client as unknown as DaemonClient, 1);
     store.updateSessionServerInfo(serverId, { ...info, serverId, hostname: null, version: "test" });
+    refreshDirectoryServerInfo(directory, serverId, client);
     const demand = {};
     try {
       directory.setDemand(demand, true);
@@ -2058,9 +2115,11 @@ it.each(["before", "during", "before-metadata", "damaged"] as const)(
     const connection = {
       client: client as unknown as DaemonClient,
       status: "online" as const,
+      serverInfo: null as DaemonServerInfo | null,
       source: { clientGeneration: 1, connectionEpoch: 1 },
     };
     initializeSession(timing !== "before-metadata");
+    connection.serverInfo = currentServerInfo(serverId, client);
     directory.connectionChanged(connection);
     const visibleIds = () =>
       [...useSessionStore.getState().sessions[serverId].workspaces.keys()].sort();
@@ -2072,6 +2131,8 @@ it.each(["before", "during", "before-metadata", "damaged"] as const)(
       if (timing === "before-metadata") {
         await directory.restoreCachedDirectory();
         publishServerInfo();
+        connection.serverInfo = currentServerInfo(serverId, client);
+        directory.connectionChanged(connection);
       }
       await expect.poll(() => client.listProjectsCalls).toBe(1);
       await expect.poll(() => client.fetchAgentsCalls).toBe(1);
@@ -2152,6 +2213,7 @@ function createWorkspaceLabelDirectory(serverId: string) {
       workspaceMultiplicity: true,
     },
   });
+  refreshDirectoryServerInfo(directory, serverId, client);
   return { client, directory };
 }
 
@@ -2219,12 +2281,14 @@ describe("DirectorySync workspace labels", () => {
     directory.connectionChanged({
       client: null,
       status: "offline",
+      serverInfo: null,
       source: { clientGeneration: 1, connectionEpoch: 1 },
     });
     expect(useWorkspaceLabels.getState().hosts[serverId]?.status).toBe("offline");
     directory.connectionChanged({
       client: client as unknown as DaemonClient,
       status: "online",
+      serverInfo: currentServerInfo(serverId, client),
       source: { clientGeneration: 1, connectionEpoch: 2 },
     });
     await flushWorkspaceLabels();
