@@ -1,4 +1,9 @@
 import type { AccountSessionManager } from "./account-session.js";
+import {
+  hasRustFeature,
+  parseServerInfo,
+  RUST_SINGLE_CONNECTION_FEATURE,
+} from "@ait/client/internal/protocol/handshake";
 import type { HubLink, HubSession } from "@ait/client/internal/hub";
 
 const MAX_PENDING_MESSAGES = 16;
@@ -125,10 +130,7 @@ export class AccountTransportManager {
     // The first message is the accept payload, which flow control does not count.
     const credit = session.verified ? bytes.length : 0;
     if (!session.verified) {
-      let message: {
-        type?: string;
-        info?: { server_id?: string; instance_id?: string; features?: string[] };
-      };
+      let message: unknown;
       try {
         if (binary) throw new Error();
         message = JSON.parse(bytes.toString());
@@ -136,14 +138,13 @@ export class AccountTransportManager {
         this.finish(id, session, "Invalid relay handshake");
         return;
       }
+      const info = parseServerInfo(message);
       if (
-        message.type !== "server_info" ||
-        (session.expectedServerId !== null &&
-          message.info?.server_id !== session.expectedServerId) ||
-        typeof message.info?.instance_id !== "string" ||
-        !message.info.instance_id ||
-        !Array.isArray(message.info?.features) ||
-        !message.info.features.includes("ait-rust-single-v1")
+        !info ||
+        (session.expectedServerId !== null && info.server_id !== session.expectedServerId) ||
+        typeof info.instance_id !== "string" ||
+        !info.instance_id ||
+        !hasRustFeature(info, RUST_SINGLE_CONNECTION_FEATURE)
       ) {
         this.finish(id, session, "Target Host identity or protocol changed");
         return;

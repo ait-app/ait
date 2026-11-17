@@ -4,6 +4,14 @@ import { ClientMessageChunks } from "./chunks.js";
 import { METHODS, type MethodSpec } from "./methods.js";
 import { sessionEventKind } from "@ait/protocol/session-event-kinds";
 import { eventMessage, responseMessage, rpcError, serverInfo } from "./messages.js";
+import {
+  buildHello,
+  hasRustFeature,
+  hasSupportedRustProtocol,
+  parseServerInfo,
+  RUST_SINGLE_CONNECTION_CAPABILITY,
+  RUST_SINGLE_CONNECTION_FEATURE,
+} from "./handshake.js";
 import type { HubShareResourceKind } from "../hub/index.js";
 import type { DaemonClientTrace } from "../daemon-client.js";
 import { object, strings, type Payload, type Transport, type TransportFactory } from "./types.js";
@@ -57,10 +65,6 @@ export interface DaemonConnection extends Omit<Transport, "send" | "onMessage"> 
   forget(requestId: string): void;
 }
 
-/** Hello capability that selects the daemon's single-socket mode (`connection.single.v1`). */
-const SINGLE_CONNECTION = "connection.single.v1";
-/** Server feature of daemons that accept `SINGLE_CONNECTION`. */
-const SINGLE_FEATURE = "ait-rust-single-v1";
 const ALL_CAPABILITIES = [...new Set(CHANNEL_CAPABILITIES.flat())];
 const MAX_SPLIT_ENDPOINTS = 64;
 /** Endpoints whose daemon rejected the single-connection hello; they reconnect with four sockets. */
@@ -227,16 +231,10 @@ export function createDaemonConnection(
   function sendHello(): void {
     for (const [index, channel] of channels.entries()) {
       channel.send(
-        JSON.stringify({
-          type: "hello",
-          client_id: clientId,
-          protocol: {
-            major: 1,
-            min_minor: 0,
-            max_minor: 0,
-          },
+        buildHello({
+          clientId,
           capabilities: capabilityGroups[index],
-          required_capabilities: single ? [SINGLE_CONNECTION] : [],
+          requiredCapabilities: single ? [RUST_SINGLE_CONNECTION_CAPABILITY] : [],
         }),
       );
     }
@@ -289,9 +287,8 @@ export function createDaemonConnection(
     const publish = (value: Payload) => emit(value, metrics);
     if (message.type === "server_info") {
       if (!helloSent || negotiated.has(channel)) throw new Error("Unexpected Rust daemon hello");
-      const nextInfo = object(message.info);
-      const protocol = object(nextInfo.protocol);
-      if (protocol.major !== 1 || protocol.minor !== 0 || typeof nextInfo.server_id !== "string") {
+      const nextInfo = parseServerInfo(message);
+      if (!nextInfo || !hasSupportedRustProtocol(nextInfo)) {
         throw new Error("Unsupported Rust daemon protocol");
       }
       if (
@@ -302,7 +299,7 @@ export function createDaemonConnection(
       }
       info = nextInfo;
       // An upgraded daemon behind a remembered endpoint gets single mode on the next connect.
-      if (!single && Array.isArray(info.features) && info.features.includes(SINGLE_FEATURE))
+      if (!single && hasRustFeature(nextInfo, RUST_SINGLE_CONNECTION_FEATURE))
         splitEndpoints.delete(url);
       implemented = new Set(strings(nextInfo.implemented_capabilities));
       negotiated.set(channel, new Set(strings(message.negotiated_capabilities)));

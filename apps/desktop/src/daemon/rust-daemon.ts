@@ -21,6 +21,7 @@ import { createServer } from "node:net";
 import { hostname, homedir, uptime } from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
+import { buildHello, parseServerInfo } from "@ait/client/internal/protocol/handshake";
 
 // Lookup order under the user's home: the current default, then the retired Desktop-managed and
 // standalone daemon defaults. Existing directories are used in place and never moved.
@@ -685,8 +686,6 @@ function withoutPid(info: DaemonProbe): Omit<DaemonProbe, "pid"> {
   return rest;
 }
 
-const PROTOCOL = { major: 1, min_minor: 0, max_minor: 0 };
-
 /**
  * Authenticate and negotiate a connection; optionally execute one lifecycle/identity request.
  * A new child's readiness needs only the handshake, independent of business RPC admission.
@@ -716,20 +715,19 @@ function rustDaemonRequest(
     ws.on("close", () => finish(new Error("Rust daemon closed before readiness handshake.")));
     ws.on("open", () =>
       ws.send(
-        JSON.stringify({
-          type: "hello",
-          protocol: PROTOCOL,
-          client_id: "desktop-readiness",
+        buildHello({
+          clientId: "desktop-readiness",
           capabilities: method ? [method] : [],
-          required_capabilities: method ? [method] : [],
+          requiredCapabilities: method ? [method] : [],
         }),
       ),
     );
     ws.on("message", (data) => {
       try {
         const message = JSON.parse(data.toString());
-        if (message.type === "server_info" && typeof message.info?.server_id === "string") {
-          info = message.info;
+        const serverInfo = parseServerInfo(message);
+        if (serverInfo) {
+          info = serverInfo;
           if (method) {
             ws.send(JSON.stringify({ type: "request", request_id: "desktop", method, params: {} }));
           } else {

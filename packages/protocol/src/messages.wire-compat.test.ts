@@ -5,7 +5,6 @@ import {
   AgentTimelineItemPayloadSchema,
   ServerInfoStatusPayloadSchema,
   SessionOutboundMessageSchema,
-  WSHelloMessageSchema,
   WorkspaceSetupSnapshotSchema,
   WorkspaceSetupProgressMessageSchema,
   AgentTimelineEntryPayloadSchema,
@@ -77,49 +76,7 @@ const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
 });
 
 describe("wire schema compatibility", () => {
-  test("hello parses with and without the project update capability", () => {
-    const legacy = WSHelloMessageSchema.parse({
-      type: "hello",
-      clientId: "legacy-client",
-      clientType: "mobile",
-      protocolVersion: 1,
-    });
-    const capable = WSHelloMessageSchema.parse({
-      type: "hello",
-      clientId: "capable-client",
-      clientType: "mobile",
-      protocolVersion: 1,
-      capabilities: { project_updates: true },
-    });
-
-    expect([legacy, capable]).toEqual([
-      {
-        type: "hello",
-        clientId: "legacy-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-      },
-      {
-        type: "hello",
-        clientId: "capable-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-        capabilities: { project_updates: true },
-      },
-    ]);
-  });
-
   test("timeline replacement invalidation is opt-in and carries no timeline rows", () => {
-    expect(
-      WSHelloMessageSchema.parse({
-        type: "hello",
-        clientId: "capable-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-        capabilities: { timeline_replacement_invalidation: true },
-      }).capabilities,
-    ).toEqual({ timeline_replacement_invalidation: true });
-
     expect(
       SessionOutboundMessageSchema.parse({
         type: "agent.timeline.replacement",
@@ -316,17 +273,6 @@ describe("wire schema compatibility", () => {
       message: "Command blocked by user",
     });
   });
-});
-
-test("0.8 timeline and setup capabilities remain optional in the hello", () => {
-  const hello = { type: "hello", clientId: "compat", clientType: "mobile", protocolVersion: 1 };
-  expect(WSHelloMessageSchema.safeParse(hello).success).toBe(true);
-  expect(
-    WSHelloMessageSchema.parse({
-      ...hello,
-      capabilities: { plugin_timeline_items: true, workspace_setup_blocked: true },
-    }).capabilities,
-  ).toEqual({ plugin_timeline_items: true, workspace_setup_blocked: true });
 });
 
 test("plugin rows and identity merges require a capable receiver", () => {
