@@ -18,6 +18,7 @@ import {
   type ListTerminalsPayload,
   upsertCreatedTerminalPayload,
 } from "@/screens/workspace/terminals/state";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type TerminalTabDestination =
   | { kind: "open"; paneId?: string }
@@ -172,7 +173,7 @@ export function useWorkspaceTerminals(input: UseWorkspaceTerminalsInput) {
       }
     },
     onError: (error: unknown) => {
-      onTerminalCreateFailed(error instanceof Error ? error.message : String(error));
+      onTerminalCreateFailed(toErrorMessage(error));
     },
   });
   const killMutation = useMutation({

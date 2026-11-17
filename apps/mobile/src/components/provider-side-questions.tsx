@@ -11,12 +11,13 @@ import { BtwWindow } from "@/components/btw-window";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useBtwVisibilityStore } from "@/stores/btw-visibility-store";
 import { useSessionStore } from "@/stores/session-store";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type BtwHistoryFailure = { kind: "unsupported" } | { kind: "retryable"; message: string };
 
 /** Connection failures must remain retryable rather than masquerading as missing provider support. */
 export function classifyBtwHistoryFailure(cause: unknown, supported: boolean): BtwHistoryFailure {
-  const rawMessage = cause instanceof Error ? cause.message : String(cause);
+  const rawMessage = toErrorMessage(cause);
   const message =
     cause instanceof Error && cause.name === "DaemonRpcError"
       ? rawMessage.replace(/(?: requestType=\S+)?(?: code=\S+)?$/, "")

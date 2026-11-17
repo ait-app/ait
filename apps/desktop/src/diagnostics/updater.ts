@@ -1,4 +1,5 @@
 import { displayAppVersion } from "../app-version.js";
+import { isRecord } from "../is-record.js";
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -141,10 +142,6 @@ function readMacBundleVersion(bundlePath: string): string | null {
     ["-extract", "CFBundleShortVersionString", "raw", infoPath],
     { encoding: "utf8" },
   ).trim();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isMissingFileError(error: unknown): boolean {

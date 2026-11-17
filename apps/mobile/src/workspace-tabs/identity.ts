@@ -1,5 +1,6 @@
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { normalizeWorkspaceFileLocation, workspaceFileLocationsEqual } from "@/workspace/file-open";
+import { isRecord } from "@/utils/is-record";
 import { trimNonEmpty } from "@/utils/string";
 
 export function normalizeWorkspaceTabTarget(
@@ -86,7 +87,7 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
 }
 
 function normalizeWorkspaceDraftTabSetup(value: unknown): WorkspaceDraftTabSetup | undefined {
-  const record = isPlainRecord(value) ? value : null;
+  const record = isRecord(value) ? value : null;
   if (!record) {
     return undefined;
   }
@@ -103,7 +104,7 @@ function normalizeWorkspaceDraftTabSetup(value: unknown): WorkspaceDraftTabSetup
     thinkingOptionId: trimNonEmpty(
       typeof record.thinkingOptionId === "string" ? record.thinkingOptionId : null,
     ),
-    featureValues: isPlainRecord(record.featureValues) ? { ...record.featureValues } : {},
+    featureValues: isRecord(record.featureValues) ? { ...record.featureValues } : {},
   };
 }
 
@@ -294,8 +295,4 @@ function normalizePositiveInteger(value: number | null | undefined): number | nu
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : null;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

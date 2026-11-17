@@ -1,4 +1,5 @@
 import { i18n } from "@/i18n/i18next";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export class DaemonConnectionRegistrationError extends Error {
   constructor(message: string) {
@@ -26,7 +27,7 @@ export class DaemonManagementOperationError extends Error {
  */
 export class DaemonSettingsPersistError extends Error {
   constructor(cause: unknown) {
-    super(cause instanceof Error ? cause.message : String(cause));
+    super(toErrorMessage(cause));
     this.name = "DaemonSettingsPersistError";
     this.cause = cause;
   }

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/shallow";
+import { normalizeCwd } from "@/utils/path";
 import type { WorkspaceComposerAttachment } from "./types";
 
 const EMPTY_WORKSPACE_ATTACHMENTS: readonly WorkspaceComposerAttachment[] = [];
@@ -41,14 +42,6 @@ type WorkspaceAttachmentsStore = WorkspaceAttachmentsStoreState & WorkspaceAttac
 
 function encodeScopePart(value: string): string {
   return encodeURIComponent(value.trim());
-}
-
-function normalizeCwd(cwd: string): string {
-  const trimmed = cwd.trim();
-  if (trimmed === "/") {
-    return trimmed;
-  }
-  return trimmed.replace(/\/+$/, "");
 }
 
 export function buildWorkspaceAttachmentScopeKey(input: WorkspaceAttachmentScopeInput): string {

@@ -1,6 +1,7 @@
 import { startDesktopDaemon, type DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
 import { connectionFromListen } from "@/types/host-connection";
 import type { HostRuntimeStore } from "@/runtime/host-runtime";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type DaemonStartResult = { ok: true } | { ok: false; error: string };
 export type DaemonStartCondition = boolean | (() => boolean | Promise<boolean>);
@@ -69,7 +70,7 @@ export class DaemonStartService {
         shouldStart =
           typeof input.shouldStart === "boolean" ? input.shouldStart : await input.shouldStart();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         return this.fail(`Failed to evaluate desktop daemon settings: ${message}`);
       }
 
@@ -81,7 +82,7 @@ export class DaemonStartService {
       const result = await upsertDesktopDaemonConnection(this.store, daemon);
       return result.ok ? result : this.fail(result.error);
     } catch (error) {
-      return this.fail(error instanceof Error ? error.message : String(error));
+      return this.fail(toErrorMessage(error));
     } finally {
       this.endRequest();
     }

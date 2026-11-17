@@ -12,6 +12,7 @@ import {
   type StreamItem,
 } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
+import { toErrorMessage } from "@/utils/error-messages";
 import type { JsonValue as PluginTimelineData } from "@ait/protocol/agent-types";
 import {
   AgentStatusSchema,
@@ -86,7 +87,7 @@ export class ReplicaCacheReadError extends Error {
   readonly cause: unknown;
 
   constructor(serverId: string, operation: string, cause: unknown) {
-    const message = cause instanceof Error ? cause.message : String(cause);
+    const message = toErrorMessage(cause);
     super(`Replica cache unavailable for host ${serverId} while ${operation}: ${message}`);
     this.name = "ReplicaCacheReadError";
     this.serverId = serverId;
@@ -1224,7 +1225,7 @@ export class ReplicaCache {
       serverId: row.serverId,
       kind: row.kind,
       id: row.id,
-      reason: error instanceof Error ? error.message : String(error),
+      reason: toErrorMessage(error),
     });
   }
 

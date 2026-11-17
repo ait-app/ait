@@ -5,7 +5,6 @@ import {
   buildSubagentPillPresentation,
   buildSubagentRowPresentationData,
   countFinishedSubagents,
-  resolveRowLabel,
 } from "./track-presentation";
 
 function row(
@@ -144,26 +143,6 @@ describe("countFinishedSubagents", () => {
         row({ id: "finished", status: "idle" }),
       ]),
     ).toBe(1);
-  });
-});
-
-describe("resolveRowLabel", () => {
-  it("returns null when title is not a string", () => {
-    expect(resolveRowLabel(null as unknown as SubagentRow["title"])).toBe(null);
-  });
-
-  it("returns null for whitespace-only titles", () => {
-    expect(resolveRowLabel("   ")).toBe(null);
-  });
-
-  it("returns null for the placeholder 'new agent' regardless of case", () => {
-    expect(resolveRowLabel("new agent")).toBe(null);
-    expect(resolveRowLabel("New Agent")).toBe(null);
-    expect(resolveRowLabel("  NEW AGENT  ")).toBe(null);
-  });
-
-  it("returns the trimmed title for real names", () => {
-    expect(resolveRowLabel("  Build the thing  ")).toBe("Build the thing");
   });
 });
 

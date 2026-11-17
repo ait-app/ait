@@ -26,6 +26,7 @@ import {
 } from "@/screens/workspace/workspace-deck-retention";
 import {
   decodeWorkspaceIdFromPathSegment,
+  getParamValue,
   parseWorkspaceOpenIntent,
   type WorkspaceOpenIntent,
 } from "@/utils/host-routes";
@@ -37,17 +38,6 @@ import { resolveOpenIntentConsumption } from "@/screens/workspace/workspace-open
 import { prepareWorkspaceTab } from "@/workspace-tabs/workspace-navigation";
 import { isNative, isWeb } from "@/constants/platform";
 import { RenderProfile } from "@/utils/render-profiler";
-
-function getParamValue(value: string | string[] | undefined): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (Array.isArray(value)) {
-    const firstValue = value[0];
-    return typeof firstValue === "string" ? firstValue.trim() : "";
-  }
-  return "";
-}
 
 function getOpenIntentTarget(openIntent: WorkspaceOpenIntent): WorkspaceTabTarget {
   if (openIntent.kind === "agent") {

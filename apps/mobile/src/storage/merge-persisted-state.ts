@@ -1,8 +1,6 @@
-type RecordValue = Record<string, unknown>;
+import { isRecord } from "../utils/is-record";
 
-function isRecord(value: unknown): value is RecordValue {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+type RecordValue = Record<string, unknown>;
 
 function equal(left: unknown, right: unknown): boolean {
   return left === right || JSON.stringify(left) === JSON.stringify(right);

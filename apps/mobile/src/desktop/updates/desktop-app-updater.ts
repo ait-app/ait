@@ -5,6 +5,7 @@ import type {
   DesktopReleaseChannel,
 } from "@/desktop/updates/desktop-updates";
 import { i18n } from "@/i18n/i18next";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type DesktopAppUpdateStatus =
   | "idle"
@@ -101,13 +102,6 @@ function buildSnapshot(state: InternalState): DesktopAppUpdaterSnapshot {
     isChecking: state.status === "checking",
     isInstalling: state.status === "installing" || state.isInstalling,
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") {
-    return error.message;
-  }
-  return String(error);
 }
 
 export function formatStatusText(input: {
@@ -359,7 +353,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
         return null;
       }
 
-      const message = getErrorMessage(error);
+      const message = toErrorMessage(error);
       if (silent) {
         console.warn("[DesktopUpdater] Silent update check failed", message);
       } else {
@@ -404,7 +398,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
       });
       return result;
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = toErrorMessage(error);
       deps.reportInstallError?.({
         error,
         message: i18n.t("desktop.updates.installError"),

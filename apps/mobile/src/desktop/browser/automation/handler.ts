@@ -17,6 +17,7 @@ import {
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { delay } from "@/utils/delay";
+import { toErrorMessage } from "@/utils/error-messages";
 
 type BrowserAutomationExecuteRequest = Extract<
   SessionOutboundMessage,
@@ -442,7 +443,7 @@ function normalizeThrownBridgeError(
     return browserAutomationFailure({ requestId, ...typed });
   }
 
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorMessage(error);
   if (message.includes("No handler registered")) {
     return browserAutomationFailure({
       requestId,

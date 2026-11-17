@@ -67,7 +67,7 @@ const pinLeadingIcon = <ThemedPin size={14} uniProps={mutedIconColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={mutedIconColorMapping} />;
 const shareLeadingIcon = <ThemedShare2 size={14} uniProps={mutedIconColorMapping} />;
 
-function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
+export function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreVertical
       size={14}
@@ -293,7 +293,7 @@ export function SidebarWorkspaceMenu({
         accessibilityLabel={t("sidebar.workspace.actions.menu")}
         testID={`sidebar-workspace-kebab-${workspaceKey}`}
       >
-        {renderTriggerIcon}
+        {renderKebabTriggerIcon}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

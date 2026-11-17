@@ -12,6 +12,7 @@ import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attri
 import { definePanel } from "@/panels/panel-registry";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { notebookPanelPresentation } from "@/panels/panel-presentations";
+import { toErrorMessage } from "@/utils/error-messages";
 
 const WORKSPACE_NOTEBOOK_PATH = ".ait-notebook.md";
 
@@ -81,7 +82,7 @@ function decodeNotebookContent(bytes: Uint8Array): string {
 }
 
 function isReadOnlyError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorMessage(error);
   return /read.?only|permission|forbidden|denied/i.test(message);
 }
 

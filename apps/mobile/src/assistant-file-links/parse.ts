@@ -1,5 +1,5 @@
 import { ASSISTANT_FILE_EXTENSIONS } from "./extensions";
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath, isHomeRelativePath } from "@/utils/path";
 import { safeDecodeURIComponent } from "@/utils/string";
 
 export interface InlinePathTarget {
@@ -523,10 +523,6 @@ function isAllowedAbsolutePath(pathValue: string, workspaceRoot?: string): boole
   const comparePrefix = compareWorkspaceRoot === "/" ? "/" : `${compareWorkspaceRoot}/`;
 
   return comparePath === compareWorkspaceRoot || comparePath.startsWith(comparePrefix);
-}
-
-function isHomeRelativePath(pathValue: string): boolean {
-  return pathValue === "~" || pathValue.startsWith("~/") || pathValue.startsWith("~\\");
 }
 
 function isExternalHref(value: string): boolean {

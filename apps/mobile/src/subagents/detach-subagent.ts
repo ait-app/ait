@@ -1,28 +1,15 @@
 import type { Agent } from "@/stores/session-store";
+import { resolveAgentTitleLabel } from "@/utils/agent-title-label";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 
 export interface ResolveDetachSubagentDialogInput {
   title: Agent["title"] | null | undefined;
 }
 
-function resolveSubagentLabel(title: Agent["title"] | null | undefined): string | null {
-  if (typeof title !== "string") {
-    return null;
-  }
-  const normalized = title.trim();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.toLowerCase() === "new agent") {
-    return null;
-  }
-  return normalized;
-}
-
 export function resolveDetachSubagentDialog(
   input: ResolveDetachSubagentDialogInput,
 ): ConfirmDialogInput {
-  const subagentLabel = resolveSubagentLabel(input.title) ?? "This subagent";
+  const subagentLabel = resolveAgentTitleLabel(input.title) ?? "This subagent";
 
   return {
     title: "Detach subagent?",

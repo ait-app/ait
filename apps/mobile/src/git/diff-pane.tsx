@@ -99,6 +99,7 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export function resolveDiffLayout(
   layout: "unified" | "split",
@@ -1615,7 +1616,7 @@ export function ChangesSurface({
           toast.error(payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"));
         }
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(toErrorMessage(cause));
       }
     },
     [client, cwd, t, toast],

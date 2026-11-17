@@ -1,8 +1,6 @@
-const DEFAULT_MIN_THUMB_SIZE = 36;
+import { clamp } from "@/utils/clamp";
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+const DEFAULT_MIN_THUMB_SIZE = 36;
 
 export interface OverlayScrollbarGeometryInput {
   viewportSize: number;

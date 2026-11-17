@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAbsolutePath } from "./path";
+import { isAbsolutePath, isHomeRelativePath, normalizeCwd } from "./path";
 
 describe("isAbsolutePath", () => {
   it("returns true for Unix absolute paths", () => {
@@ -35,5 +35,37 @@ describe("isAbsolutePath", () => {
   it("handles mixed separators in absolute paths", () => {
     expect(isAbsolutePath("C:/Users\\mixed/path")).toBe(true);
     expect(isAbsolutePath("/tmp\\mixed/path")).toBe(true);
+  });
+});
+
+describe("isHomeRelativePath", () => {
+  it("returns true for the home directory and paths under it", () => {
+    expect(isHomeRelativePath("~")).toBe(true);
+    expect(isHomeRelativePath("~/notes.md")).toBe(true);
+    expect(isHomeRelativePath("~\\notes.md")).toBe(true);
+  });
+
+  it("returns false for other paths", () => {
+    expect(isHomeRelativePath("")).toBe(false);
+    expect(isHomeRelativePath("~user/notes.md")).toBe(false);
+    expect(isHomeRelativePath("/home/user")).toBe(false);
+    expect(isHomeRelativePath("docs/~/notes.md")).toBe(false);
+  });
+});
+
+describe("normalizeCwd", () => {
+  it("trims whitespace and trailing slashes", () => {
+    expect(normalizeCwd("  /repo/app  ")).toBe("/repo/app");
+    expect(normalizeCwd("/repo/app/")).toBe("/repo/app");
+    expect(normalizeCwd("/repo/app///")).toBe("/repo/app");
+  });
+
+  it("keeps a bare root", () => {
+    expect(normalizeCwd("/")).toBe("/");
+    expect(normalizeCwd(" / ")).toBe("/");
+  });
+
+  it("leaves backslash separators alone", () => {
+    expect(normalizeCwd("C:\\repo\\")).toBe("C:\\repo\\");
   });
 });

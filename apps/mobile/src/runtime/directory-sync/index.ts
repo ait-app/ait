@@ -35,6 +35,7 @@ import type {
   DirectoryReplicaMutation,
 } from "@/runtime/replica-cache";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
+import { toErrorMessage } from "@/utils/error-messages";
 
 type FetchAgentsPayload = Awaited<ReturnType<DaemonClient["fetchAgents"]>>;
 type FetchWorkspacesPayload = Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>;
@@ -633,7 +634,7 @@ export class DirectorySync {
       const deltas = this.agentTransactions.fail(transaction);
       if (deltas) for (const delta of deltas) this.agents.applyDelta(delta);
       if (!(error instanceof DirectoryRefreshSupersededError)) {
-        this.callbacks.markAgentError(error instanceof Error ? error.message : String(error));
+        this.callbacks.markAgentError(toErrorMessage(error));
       }
       throw error;
     }
@@ -695,7 +696,7 @@ export class DirectorySync {
       const deltas = this.workspaceTransactions.fail(transaction);
       if (deltas) for (const delta of deltas) this.applyWorkspaceDelta(delta);
       if (!(error instanceof DirectoryRefreshSupersededError) && this.isCurrent(client, source)) {
-        this.callbacks.markWorkspaceError?.(error instanceof Error ? error.message : String(error));
+        this.callbacks.markWorkspaceError?.(toErrorMessage(error));
       }
       throw error;
     }

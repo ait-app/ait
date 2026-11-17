@@ -6,6 +6,7 @@ import path from "node:path";
 import { z } from "zod";
 
 import type { AppReleaseChannel } from "../features/auto-updater.js";
+import { isRecord } from "../is-record.js";
 
 export interface DesktopSettings {
   releaseChannel: AppReleaseChannel;
@@ -86,10 +87,6 @@ const PersistedDocumentSchema = z
 
 type StoredDesktopSettings = z.output<typeof DesktopSettingsSchema>;
 type PersistedDesktopSettingsDocument = z.output<typeof PersistedDocumentSchema>;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function coerceReleaseChannel(value: unknown): AppReleaseChannel | null {
   const result = ReleaseChannelSchema.safeParse(value);

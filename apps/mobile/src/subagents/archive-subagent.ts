@@ -1,4 +1,5 @@
 import type { Agent } from "@/stores/session-store";
+import { resolveAgentTitleLabel } from "@/utils/agent-title-label";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 
 export interface ResolveArchiveSubagentDialogInput {
@@ -6,24 +7,10 @@ export interface ResolveArchiveSubagentDialogInput {
   status: Agent["status"] | null | undefined;
 }
 
-function resolveSubagentLabel(title: Agent["title"] | null | undefined): string | null {
-  if (typeof title !== "string") {
-    return null;
-  }
-  const normalized = title.trim();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.toLowerCase() === "new agent") {
-    return null;
-  }
-  return normalized;
-}
-
 export function resolveArchiveSubagentDialog(
   input: ResolveArchiveSubagentDialogInput,
 ): ConfirmDialogInput {
-  const subagentLabel = resolveSubagentLabel(input.title) ?? "this subagent";
+  const subagentLabel = resolveAgentTitleLabel(input.title) ?? "this subagent";
   const isRunning = input.status === "running";
 
   return {

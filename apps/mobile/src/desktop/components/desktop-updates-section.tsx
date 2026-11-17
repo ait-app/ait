@@ -21,6 +21,7 @@ import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings, type DesktopSettings } from "@/desktop/settings/desktop-settings";
 import { resolveAppVersion } from "@/utils/app-version";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
+import { toErrorMessage } from "@/utils/error-messages";
 
 import { DaemonListenRows } from "./daemon-listen-rows";
 
@@ -38,7 +39,7 @@ function useDaemonCliStatusModal() {
       setCliStatusOutput(await getCliDaemonStatus());
       setIsCliStatusModalOpen(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       setCliStatusOutput(t("desktop.daemon.fullStatus.fetchFailed", { message }));
       setIsCliStatusModalOpen(true);
     } finally {

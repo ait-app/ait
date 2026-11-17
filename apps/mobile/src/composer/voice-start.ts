@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { useVoiceOptional } from "@/contexts/voice-context";
+import { toErrorMessage } from "@/utils/error-messages";
 
 /** Creates a draft's empty session before handing its real ID to the voice runtime. */
 export function useComposerVoiceStart({
@@ -34,7 +35,7 @@ export function useComposerVoiceStart({
       const targetId = hasAgent ? agentId : await createVoiceAgent?.();
       if (targetId) await voice.startVoice(serverId, targetId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       if (message.trim()) onError(message);
     } finally {
       pending.current = false;

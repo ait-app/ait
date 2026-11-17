@@ -15,6 +15,7 @@ import {
   decodeWorkspaceIdFromPathSegment,
   encodeFilePathForPathSegment,
   encodeWorkspaceIdForPathSegment,
+  getParamValue,
   isSettingsSectionSlug,
   normalizeHostSectionSlug,
   normalizeProjectSettingsRouteId,
@@ -308,5 +309,20 @@ describe("settings section slugs", () => {
 
   it("no longer treats daemon as a valid app-level settings section", () => {
     expect(isSettingsSectionSlug("daemon")).toBe(false);
+  });
+});
+
+describe("route param values", () => {
+  it("trims a single param", () => {
+    expect(getParamValue("  server-1  ")).toBe("server-1");
+  });
+
+  it("takes the first of a repeated param", () => {
+    expect(getParamValue([" first ", "second"])).toBe("first");
+    expect(getParamValue([])).toBe("");
+  });
+
+  it("returns an empty string for a missing param", () => {
+    expect(getParamValue(undefined)).toBe("");
   });
 });

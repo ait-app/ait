@@ -1,4 +1,4 @@
-import { isAbsolutePath, trimTrailingSeparators } from "@/utils/path";
+import { isAbsolutePath, isHomeRelativePath, trimTrailingSeparators } from "@/utils/path";
 
 export interface FilePreviewReadTarget {
   cwd: string;
@@ -44,10 +44,6 @@ function deriveFilesystemRootFromAbsolutePath(value: string): string | null {
   }
 
   return null;
-}
-
-function isHomeRelativePath(value: string): boolean {
-  return value === "~" || value.startsWith("~/") || value.startsWith("~\\");
 }
 
 export function resolveFilePreviewReadTarget(input: {

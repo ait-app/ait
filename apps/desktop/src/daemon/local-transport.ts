@@ -8,6 +8,7 @@ import {
 } from "@ait/protocol/ssh-transport";
 import { BrowserWindow } from "electron";
 import { WebSocket, type RawData } from "ws";
+import { isRecord } from "../is-record.js";
 
 export interface LocalTransportTarget {
   transportType: "socket" | "pipe";
@@ -135,10 +136,6 @@ function describeTransportTarget(target: TransportTarget): string {
     return `Remote SSH host ${target.host}`;
   }
   return target.transportType === "pipe" ? "local daemon pipe" : "local daemon socket";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function parseTransportTarget(value: unknown): TransportTarget {

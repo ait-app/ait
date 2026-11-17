@@ -11,6 +11,7 @@ import { getDesktopDaemonLogs, type DesktopDaemonLogs } from "@/desktop/daemon/d
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
+import { toErrorMessage } from "@/utils/error-messages";
 
 interface StartupSplashScreenProps {
   bootstrapState?: {
@@ -161,7 +162,7 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
         if (isCancelled) {
           return;
         }
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         setDaemonLogs(null);
         setLogsError(t("startup.logs.loadFailed", { message }));
       })

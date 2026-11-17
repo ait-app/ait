@@ -1,3 +1,5 @@
+import { normalizeCwd } from "@/utils/path";
+
 export type WorkingDiffComparison = "uncommitted" | "base";
 
 export interface WorkingDiffComparisonOverride {
@@ -15,11 +17,6 @@ export interface WorkingDiffCheckoutIdentity {
   serverId: string;
   workspaceId?: string | null;
   cwd: string;
-}
-
-function normalizeCwd(cwd: string): string {
-  const trimmed = cwd.trim();
-  return trimmed === "/" ? trimmed : trimmed.replace(/\/+$/, "");
 }
 
 export function workingDiffComparisonKey(input: WorkingDiffCheckoutIdentity): string {

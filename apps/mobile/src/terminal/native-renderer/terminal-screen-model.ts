@@ -4,6 +4,7 @@ import type {
   TerminalRowRange,
   TerminalViewportState,
 } from "./headless-terminal-state";
+import { clamp } from "@/utils/clamp";
 
 type TerminalScrollMode = "following" | "scrolled";
 
@@ -142,8 +143,4 @@ function rowRange(input: {
     firstRow: input.firstRow,
     lastRow: Math.min(input.newestRow, input.firstRow + input.visibleRows - 1),
   };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }

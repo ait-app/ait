@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import type { ComposerTrackPillSegment } from "@/composer/tracks";
+import { resolveAgentTitleLabel } from "@/utils/agent-title-label";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { deriveSidebarStateBucket, STATUS_BUCKET_ORDER } from "@/utils/sidebar-agent-state";
 import type { SubagentRow } from "./select";
@@ -26,10 +27,10 @@ export interface SubagentRowPresentationData {
 export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowPresentationData {
   // Unified Agents carry the task or a user rename in their title. Legacy descriptors keep
   // their task in description. Providers supply the compact secondary context.
-  const description = resolveRowLabel(row.description);
-  const title = resolveRowLabel(row.title);
+  const description = resolveAgentTitleLabel(row.description);
+  const title = resolveAgentTitleLabel(row.title);
   const label = row.kind === "paseo" ? (title ?? description) : (description ?? title);
-  const providerSubtitle = resolveRowLabel(row.subtitle);
+  const providerSubtitle = resolveAgentTitleLabel(row.subtitle);
   const subtitle = providerSubtitle ?? (row.kind === "provider" && description ? title : null);
   const status = presentationStatus(row);
   return {
@@ -127,18 +128,4 @@ function summarizeSubagentStatus(rows: readonly SubagentRow[]): SubagentStatusCo
 
 export function countFinishedSubagents(rows: readonly SubagentRow[]): number {
   return rows.filter(isFinishedSubagent).length;
-}
-
-export function resolveRowLabel(title: string | null | undefined): string | null {
-  if (typeof title !== "string") {
-    return null;
-  }
-  const normalized = title.trim();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.toLowerCase() === "new agent") {
-    return null;
-  }
-  return normalized;
 }

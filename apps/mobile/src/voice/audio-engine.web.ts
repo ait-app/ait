@@ -4,6 +4,7 @@ import type {
   AudioEngineCallbacks,
   AudioPlaybackSource,
 } from "@/voice/audio-engine-types";
+import { parsePcmSampleRate } from "@/voice/pcm-sample-rate";
 
 interface QueuedAudio {
   audio: AudioPlaybackSource;
@@ -44,15 +45,6 @@ function resampleToPcm16(input: Float32Array, inputRate: number, outputRate: num
   }
 
   return new Uint8Array(output.buffer, output.byteOffset, output.byteLength);
-}
-
-function parsePcmSampleRate(mimeType: string): number | null {
-  const match = /rate=(\d+)/i.exec(mimeType);
-  if (!match) {
-    return null;
-  }
-  const rate = Number(match[1]);
-  return Number.isFinite(rate) && rate > 0 ? rate : null;
 }
 
 function pcm16LeToAudioBuffer(

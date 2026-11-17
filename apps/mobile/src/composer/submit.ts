@@ -1,5 +1,6 @@
 import { isDeliveredSendError } from "@/stores/message-submission-model";
 import { i18n } from "@/i18n/i18next";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "delivered" | "failed";
 
@@ -69,7 +70,7 @@ export async function runImmediateClientSlashCommand(
     return "completed";
   } catch (error) {
     input.onError?.(error);
-    input.setSendError(error instanceof Error ? error.message : String(error));
+    input.setSendError(toErrorMessage(error));
     return "failed";
   } finally {
     input.setIsProcessing(false);

@@ -1,5 +1,5 @@
 import { localFileSourceToPath } from "@/attachments/utils";
-import { isAbsolutePath, trimTrailingSeparators } from "@/utils/path";
+import { isAbsolutePath, isHomeRelativePath, trimTrailingSeparators } from "@/utils/path";
 import { safeDecodeURIComponent } from "@/utils/string";
 
 function normalizePathSegments(value: string): string {
@@ -69,10 +69,6 @@ function joinAbsolute(baseDirectory: string, relativePath: string): string | nul
     return null;
   }
   return normalizeAbsolutePath(`${directory}/${relative}`);
-}
-
-function isHomeRelativePath(value: string): boolean {
-  return value === "~" || value.startsWith("~/") || value.startsWith("~\\");
 }
 
 export function resolveMarkdownFileDirectory(input: {

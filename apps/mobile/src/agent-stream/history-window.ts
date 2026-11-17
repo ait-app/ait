@@ -6,7 +6,7 @@ type MountedRecentStreamItemsE2ETestGlobals = typeof globalThis & {
   __PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS?: unknown;
 };
 
-function readPositiveIntegerOverride(value: unknown): number | null {
+export function readPositiveIntegerOverride(value: unknown): number | null {
   if (!Number.isFinite(value)) {
     return null;
   }

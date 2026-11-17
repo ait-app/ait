@@ -1,3 +1,5 @@
+import { isRecord } from "../../is-record.js";
+
 export interface BrowserShortcutPrefix {
   alt: boolean;
   code: string;
@@ -39,10 +41,6 @@ export interface BrowserShortcutMatchInput {
 }
 
 export type BrowserReservedShortcut = "focus-url" | "reload" | "force-reload";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function hasValidOptionalPrefixFields(value: Record<string, unknown>): boolean {
   return (

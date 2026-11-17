@@ -82,6 +82,7 @@ import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
+import { resolveAgentTitleLabel } from "@/utils/agent-title-label";
 import { RenderProfile } from "@/utils/render-profiler";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
@@ -269,20 +270,6 @@ function renderChatAgentNonReadyView(args: {
   return null;
 }
 
-function resolveWorkspaceAgentTabLabel(title: string | null | undefined): string | null {
-  if (typeof title !== "string") {
-    return null;
-  }
-  const normalized = title.trim();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.toLowerCase() === "new agent") {
-    return null;
-  }
-  return normalized;
-}
-
 function shouldStoreFetchedAgentInActiveDirectory(agent: Agent): boolean {
   return !agent.archivedAt && Boolean(agent.projectPlacement);
 }
@@ -353,7 +340,7 @@ function useAgentPanelDescriptor(
     }),
   );
   const provider = descriptorState.provider;
-  const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
+  const label = resolveAgentTitleLabel(descriptorState.title);
   const icon = getProviderIcon(provider, context.serverId);
 
   const subtitle = formatAgentPanelSubtitle(provider);

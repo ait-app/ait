@@ -59,6 +59,7 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
+import { toErrorMessage } from "@/utils/error-messages";
 import type { TerminalProfile } from "@ait/protocol/messages";
 import { DEFAULT_TERMINAL_PROFILES, getTerminalProfileIcon } from "@ait/protocol/terminal-profiles";
 import type { TFunction } from "i18next";
@@ -632,10 +633,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       try {
         await request;
       } catch (error) {
-        Alert.alert(
-          t("settings.host.daemon.restart.requestFailedTitle"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("settings.host.daemon.restart.requestFailedTitle"), toErrorMessage(error));
       } finally {
         if (isMountedRef.current) setIsRestarting(false);
       }
@@ -1013,7 +1011,7 @@ function DaemonConfigSwitchCard({
     (next: boolean) => {
       void patchConfig({ [configKey]: next }).catch((error) => {
         console.error(`[HostPage] Failed to update ${logLabel}`, error);
-        Alert.alert(labels.updateFailed, error instanceof Error ? error.message : String(error));
+        Alert.alert(labels.updateFailed, toErrorMessage(error));
       });
     },
     [configKey, labels.updateFailed, logLabel, patchConfig],
@@ -1593,10 +1591,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         try {
           await saveProfiles(profiles.filter((p) => p.id !== id));
         } catch (error) {
-          Alert.alert(
-            t("common.errors.unableToSave"),
-            error instanceof Error ? error.message : String(error),
-          );
+          Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
         }
         return;
       });
@@ -1616,10 +1611,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
-          t("common.errors.unableToSave"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
       }
     },
     [profiles, saveProfiles, t],

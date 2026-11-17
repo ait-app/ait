@@ -14,6 +14,7 @@ import { DaemonClient } from "@ait/client/internal/daemon-client";
 import { resolveAppVersion } from "./app-version";
 import { getOrCreateClientId } from "./client-id";
 import { trimNonEmpty } from "./string";
+import { toErrorMessage } from "./error-messages";
 
 export interface DaemonProbeClient {
   readonly lastError: string | null;
@@ -206,7 +207,7 @@ function connectAndProbe(
         })
         .catch((error) => {
           clearTimeout(timer);
-          const reason = trimNonEmpty(error instanceof Error ? error.message : String(error));
+          const reason = trimNonEmpty(toErrorMessage(error));
           const lastError = trimNonEmpty(client.lastError);
           const message = isIncorrectPasswordFailure({ config, reason, lastError })
             ? "Incorrect password"

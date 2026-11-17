@@ -33,16 +33,7 @@ import {
   ScrollView as GestureScrollView,
   type GestureType,
 } from "react-native-gesture-handler";
-import {
-  ExternalLink,
-  Settings,
-  MoreVertical,
-  Plus,
-  Share2,
-  Trash2,
-  Pin,
-  PinOff,
-} from "lucide-react-native";
+import { ExternalLink, Settings, Plus, Share2, Trash2, Pin, PinOff } from "lucide-react-native";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
@@ -88,7 +79,10 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
-import { SidebarWorkspaceContextMenu } from "@/components/sidebar/sidebar-workspace-menu";
+import {
+  renderKebabTriggerIcon,
+  SidebarWorkspaceContextMenu,
+} from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -143,7 +137,6 @@ const INITIAL_VISIBLE_PROJECT_WORKSPACES = 5;
 const PROJECT_WORKSPACE_PAGE_SIZE = 10;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedPlus = withUnistyles(Plus);
-const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedSettings = withUnistyles(Settings);
 
@@ -307,15 +300,6 @@ const shareLeadingIcon = <ThemedShare2 size={14} uniProps={mutedIconColorMapping
 const openInNewWindowLeadingIcon = (
   <ThemedExternalLink size={14} uniProps={mutedIconColorMapping} />
 );
-
-function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
-  return (
-    <ThemedMoreVertical
-      size={14}
-      uniProps={hovered ? foregroundIconColorMapping : mutedIconColorMapping}
-    />
-  );
-}
 
 function ProjectKebabMenu({
   projectViewKey,
