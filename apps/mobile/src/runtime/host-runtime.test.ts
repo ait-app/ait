@@ -1,3 +1,4 @@
+import "fake-indexeddb/auto";
 import { queryClient } from "@/data/query-client";
 import { isAgentArchiving, setAgentArchiving } from "@/data/archive-agent-pending";
 import { defaultHostAppearance } from "@/hosts/appearance";
