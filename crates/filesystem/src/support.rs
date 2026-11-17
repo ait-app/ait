@@ -5,4 +5,3 @@ pub(crate) mod directory;
 pub(crate) mod error;
 pub(crate) mod git_command;
 pub(crate) mod process;
-pub(crate) mod rpc;

@@ -13,7 +13,7 @@ use crate::daemon::protocol::{
 };
 use crate::daemon::service::{Daemon, DaemonError};
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
+use model::rpc::{decode, encode};
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

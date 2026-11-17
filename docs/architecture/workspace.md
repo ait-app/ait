@@ -18,7 +18,9 @@
   `ports` 与 `protocol`，`support` 不依赖任何组；各自的 `tests/module_boundaries.rs` 强制执行
   （[ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)、
   [ADR-131](../decisions/workspace/adr-131-metadata-capability-groups.md)、
-  [ADR-136](../decisions/workspace/adr-136-single-area-layer-flattening.md)）。
+  [ADR-136](../decisions/workspace/adr-136-single-area-layer-flattening.md)、
+  [ADR-283](../decisions/workspace/adr-283-shared-rpc-codecs.md)）。RPC JSON 编解码统一从
+  `model::rpc` 导入。
 - 单连接调度中，只有归属 crate 已声明的 `workspace.worktree.`、`workspace.recovery.`、
   `workspace.github.`、`project.github.` 方法进入文件操作队列，长时间 clone/checkout 不阻塞目录读取
   （[ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)）。

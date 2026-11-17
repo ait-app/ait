@@ -11,7 +11,6 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
 use crate::worktrees::protocol::workspace_recovery::{
     WorkspaceRecoveryAction, WorkspaceRecoveryInspectResult, WorkspaceRecoveryRequest,
@@ -22,6 +21,7 @@ use crate::worktrees::service::workspace_recovery::{
     WorkspaceRecoveryState as ApplicationRecoveryState,
     WorkspaceRecoveryUnavailableReason as ApplicationUnavailableReason,
 };
+use model::rpc::{decode, encode};
 /// Recovery result and update to publish after its response.
 pub(crate) struct Dispatched {
     /// Serialized response.

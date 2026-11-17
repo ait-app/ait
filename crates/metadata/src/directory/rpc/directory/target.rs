@@ -7,8 +7,8 @@ use serde_json::Value;
 use crate::directory::protocol::directory::{
     WorkspaceGetRequest, WorkspaceGetResult, WorkspaceGetState,
 };
-use crate::support::rpc::encode;
 use crate::support::time::now_timestamp;
+use model::rpc::encode;
 
 use super::{Directory, ErrorCode, directory_error, runtime};
 

@@ -56,8 +56,8 @@ use crate::directory::protocol::project_icon::{
 };
 use crate::directory::service::directory::{Directory, DirectoryError, normalize_optional_text};
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use model::rpc::{decode, encode};
 
 pub(crate) mod listing;
 mod pagination;

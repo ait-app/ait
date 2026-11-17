@@ -73,6 +73,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 工作区、文件与 Git
 
+- [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
 - [ADR-229：Workspace 脚本运行记录、输出与参数](workspace/adr-229-workspace-script-runs.md)
 - [ADR-223：Linux 沙箱化 Worktree](workspace/adr-223-linux-worktree-sandbox.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
@@ -81,7 +82,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
-- [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)
+- [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)（经 [ADR-283](workspace/adr-283-shared-rpc-codecs.md) 修订）
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)
 - [ADR-131：metadata 按能力组组织模块](workspace/adr-131-metadata-capability-groups.md)（经 [ADR-136](workspace/adr-136-single-area-layer-flattening.md) 修订）
 - [ADR-130：Workspace 与 Project 方法归 metadata，filesystem 只保留本地适配器](workspace/adr-130-workspace-methods-owned-by-metadata.md)（经 [ADR-131](workspace/adr-131-metadata-capability-groups.md) 修订）

@@ -16,8 +16,8 @@ use crate::directory::protocol::workspace_state::{
 };
 use crate::directory::service::workspace_state::{WorkspaceAttentionBatch, WorkspaceState};
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use model::rpc::{decode, encode};
 
 /// Decode and execute a business request.
 ///

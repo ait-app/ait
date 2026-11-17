@@ -24,7 +24,7 @@ use crate::forge::protocol;
 use crate::forge::service::Forge;
 use crate::git::protocol::{CheckoutError, CheckoutErrorCode};
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
+use model::rpc::{decode, encode};
 
 /// Execute a filesystem request.
 ///

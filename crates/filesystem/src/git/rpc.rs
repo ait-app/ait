@@ -11,7 +11,7 @@ use crate::git::protocol;
 use crate::git::service::checkout::Checkout;
 use crate::support::budget::fits as fits_diff_output_budget;
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
+use model::rpc::{decode, encode};
 
 /// Client methods implemented by this component; consumed by capability discovery.
 pub const METHODS: &[MethodSpec] = &[

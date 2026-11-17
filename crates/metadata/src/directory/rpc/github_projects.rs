@@ -26,8 +26,8 @@ use crate::directory::protocol::github_projects::{
 };
 use crate::directory::service::github_projects::GithubProjects;
 use crate::support::error::ErrorCode;
-use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
+use model::rpc::{decode, encode};
 
 /// Execute a GitHub repository search or clone request.
 ///
