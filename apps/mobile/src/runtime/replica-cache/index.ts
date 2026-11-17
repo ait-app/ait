@@ -75,6 +75,26 @@ export interface CachedTimeline {
 const PERSIST_DELAY_MS = 1_000;
 const MAX_TIMELINE_ITEMS = 50;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
+
+export interface ReplicaCacheInvalidRowEvent extends ReplicaRowKey {
+  reason: string;
+}
+
+export class ReplicaCacheReadError extends Error {
+  readonly serverId: string;
+  readonly operation: string;
+  readonly cause: unknown;
+
+  constructor(serverId: string, operation: string, cause: unknown) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    super(`Replica cache unavailable for host ${serverId} while ${operation}: ${message}`);
+    this.name = "ReplicaCacheReadError";
+    this.serverId = serverId;
+    this.operation = operation;
+    this.cause = cause;
+  }
+}
+
 const IsoDateSchema = z.iso.datetime();
 const TimelinePositionSchema = z.strictObject({
   epoch: z.string(),
@@ -379,6 +399,7 @@ type StoredProject = z.infer<typeof StoredProjectSchema>;
 interface ReplicaCacheOptions {
   maxBytes?: number;
   clearLegacyCache?: () => Promise<void>;
+  onInvalidRow?: (event: ReplicaCacheInvalidRowEvent) => void;
 }
 
 type StructuredReplicaUpsert =
@@ -851,8 +872,46 @@ function parseJsonPayload(payload: string): unknown {
   return JSON.parse(payload);
 }
 
-function parseStoredPayload<Value>(schema: z.ZodType<Value>, payload: string): Value {
-  const parsed = schema.safeParse(parseJsonPayload(payload));
+class ReplicaProjectionMismatchError extends Error {
+  readonly expectedVersion: number;
+  readonly actualVersion: number | undefined;
+
+  constructor(expectedVersion: number, actualVersion: number | undefined) {
+    super(
+      `Replica row projection version ${actualVersion ?? "missing"} does not match ${expectedVersion}`,
+    );
+    this.name = "ReplicaProjectionMismatchError";
+    this.expectedVersion = expectedVersion;
+    this.actualVersion = actualVersion;
+  }
+}
+
+interface ProjectionVersionCheck {
+  expected: number;
+}
+
+function readProjectionVersion(value: unknown): number | undefined | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  if (!Object.prototype.hasOwnProperty.call(value, "projectionVersion")) return undefined;
+  const version = (value as { projectionVersion?: unknown }).projectionVersion;
+  return typeof version === "number" && Number.isInteger(version) ? version : null;
+}
+
+function parseStoredPayload<Value>(
+  schema: z.ZodType<Value>,
+  payload: string,
+  projection?: ProjectionVersionCheck,
+): Value {
+  const value = parseJsonPayload(payload);
+  if (projection) {
+    const actualVersion = readProjectionVersion(value);
+    // A valid JSON object without a version is an older projection. A malformed version
+    // remains a corrupt row and is handled by the schema below.
+    if (actualVersion !== null && actualVersion !== projection.expected) {
+      throw new ReplicaProjectionMismatchError(projection.expected, actualVersion);
+    }
+  }
+  const parsed = schema.safeParse(value);
   if (!parsed.success) throw new Error("Invalid replica row payload");
   return parsed.data;
 }
@@ -870,6 +929,11 @@ interface PendingReplicaChanges {
   baselines: Set<string>;
 }
 
+interface PersistResult {
+  ok: boolean;
+  error: unknown | null;
+}
+
 function applyDirectoryRow(
   serverId: string,
   row: ReplicaRow,
@@ -883,7 +947,9 @@ function applyDirectoryRow(
       return;
     }
     case "workspace": {
-      const stored = parseStoredPayload(StoredWorkspaceSchema, row.payload);
+      const stored = parseStoredPayload(StoredWorkspaceSchema, row.payload, {
+        expected: WORKSPACE_PROJECTION_VERSION,
+      });
       if (stored.id !== row.id) throw new Error("Replica workspace row id mismatch");
       result.workspaces.set(row.id, normalizeWorkspaceDescriptor(stored));
       return;
@@ -938,6 +1004,7 @@ export class ReplicaCache {
   private pendingBaselines = new Set<string>();
   private readonly invalidatedHosts = new Set<string>();
   private readonly maxBytes: number;
+  private readonly onInvalidRow: (event: ReplicaCacheInvalidRowEvent) => void;
   private totalBytes = 0;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
@@ -950,6 +1017,9 @@ export class ReplicaCache {
   ) {
     this.maxBytes = Math.max(options.maxBytes ?? MAX_CACHE_BYTES, 0);
     this.clearLegacyCache = options.clearLegacyCache ?? clearLegacyReplicaCache;
+    this.onInvalidRow =
+      options.onInvalidRow ??
+      ((event) => console.warn("[ReplicaCache] Dropping invalid row", event));
   }
 
   private readonly clearLegacyCache: () => Promise<void>;
@@ -962,8 +1032,8 @@ export class ReplicaCache {
       const stored = parseStoredPayload(StoredAgentSchema, row.payload);
       if (stored.snapshot.id !== row.id) throw new Error("Replica agent row id mismatch");
       return deserializeAgent(serverId, stored);
-    } catch {
-      await this.deleteInvalidRow(row);
+    } catch (error) {
+      await this.deleteInvalidRow(row, error);
       return undefined;
     }
   }
@@ -973,11 +1043,14 @@ export class ReplicaCache {
     if (!workspaceRow) return undefined;
     let workspace: WorkspaceDescriptor;
     try {
-      const stored = parseStoredPayload(StoredWorkspaceSchema, workspaceRow.payload);
+      const stored = parseStoredPayload(StoredWorkspaceSchema, workspaceRow.payload, {
+        expected: WORKSPACE_PROJECTION_VERSION,
+      });
       if (stored.id !== workspaceRow.id) throw new Error("Replica workspace row id mismatch");
       workspace = normalizeWorkspaceDescriptor(stored);
-    } catch {
-      await this.deleteInvalidRow(workspaceRow);
+    } catch (error) {
+      if (error instanceof ReplicaProjectionMismatchError) return undefined;
+      await this.deleteInvalidRow(workspaceRow, error);
       return undefined;
     }
 
@@ -988,8 +1061,8 @@ export class ReplicaCache {
         const stored = parseStoredPayload(StoredProjectSchema, projectRow.payload);
         if (stored.projectId !== projectRow.id) throw new Error("Replica project row id mismatch");
         project = normalizeProjectDescriptor(stored);
-      } catch {
-        await this.deleteInvalidRow(projectRow);
+      } catch (error) {
+        await this.deleteInvalidRow(projectRow, error);
       }
     }
 
@@ -1004,21 +1077,28 @@ export class ReplicaCache {
       projects: new Map(),
     };
     const invalidEntities = new Set<keyof DirectoryCheckpoint>();
+    const staleEntities = new Set<keyof DirectoryCheckpoint>();
     const invalidRows: ReplicaRow[] = [];
     for (const row of rows) {
       try {
         applyDirectoryRow(serverId, row, result);
-      } catch {
+      } catch (error) {
         const invalidEntity = directoryEntityForRow(row);
-        if (invalidEntity) invalidEntities.add(invalidEntity);
-        invalidRows.push(row);
+        if (error instanceof ReplicaProjectionMismatchError) {
+          if (invalidEntity) staleEntities.add(invalidEntity);
+        } else {
+          if (invalidEntity) invalidEntities.add(invalidEntity);
+          this.reportInvalidRow(row, error);
+          invalidRows.push(row);
+        }
       }
     }
-    if (result.checkpoint && invalidEntities.size > 0) {
+    const invalidatedEntities = new Set([...invalidEntities, ...staleEntities]);
+    if (result.checkpoint && invalidatedEntities.size > 0) {
       result.checkpoint = { ...result.checkpoint };
-      for (const entity of invalidEntities) delete result.checkpoint[entity];
+      for (const entity of invalidatedEntities) delete result.checkpoint[entity];
     }
-    if (invalidRows.length > 0) {
+    if (invalidRows.length > 0 || staleEntities.size > 0) {
       await this.repairInvalidDirectoryRows(serverId, invalidRows, result.checkpoint);
     }
     return result;
@@ -1029,11 +1109,14 @@ export class ReplicaCache {
     const row = rows[0];
     if (!row) return undefined;
     try {
-      const stored = parseStoredPayload(StoredTimelineSchema, row.payload);
+      const stored = parseStoredPayload(StoredTimelineSchema, row.payload, {
+        expected: TIMELINE_PROJECTION_VERSION,
+      });
       if (stored.agentId !== agentId) return undefined;
       return deserializeTimeline(stored) ?? undefined;
-    } catch {
-      await this.deleteInvalidRow(row);
+    } catch (error) {
+      if (error instanceof ReplicaProjectionMismatchError) return undefined;
+      await this.deleteInvalidRow(row, error);
       return undefined;
     }
   }
@@ -1046,35 +1129,53 @@ export class ReplicaCache {
     if (!this.activeServerIds.has(serverId)) return [];
     try {
       await this.prepareStore();
-      while (this.activeServerIds.has(serverId)) {
-        // A read may only answer from rows the store already holds, so it waits for this host's
-        // accepted commits to land. A store that rejects them will keep rejecting them: fail closed
-        // rather than re-attempt the write on every pass. A write rejected for another host leaves
-        // this host's stored rows readable.
-        const read: ReplicaRead = { serverId, kinds, ids, invalidated: false };
-        this.activeReads.add(read);
-        try {
-          if (!(await this.syncPending()) && this.hasPendingHostChanges(serverId)) return [];
-          if (read.invalidated || this.hasPendingReadChanges(read)) continue;
-          const rows = await this.rowStore.read(serverId, kinds, ids);
-          if (
-            this.activeServerIds.has(serverId) &&
-            !read.invalidated &&
-            !this.hasPendingReadChanges(read)
-          ) {
-            return rows;
-          }
-        } finally {
-          this.activeReads.delete(read);
-        }
-      }
-      return [];
-    } catch {
-      return [];
+    } catch (error) {
+      throw new ReplicaCacheReadError(serverId, "opening the row store", error);
     }
+    while (this.activeServerIds.has(serverId)) {
+      // A read may only answer from rows the store already holds, so it waits for this host's
+      // accepted commits to land. A store that rejects them will keep rejecting them: fail closed
+      // rather than re-attempt the write on every pass. A write rejected for another host leaves
+      // this host's stored rows readable.
+      const read: ReplicaRead = { serverId, kinds, ids, invalidated: false };
+      this.activeReads.add(read);
+      try {
+        let persisted: PersistResult;
+        try {
+          persisted = await this.syncPending();
+        } catch (error) {
+          throw new ReplicaCacheReadError(serverId, "synchronizing pending changes", error);
+        }
+        if (!persisted.ok && this.hasPendingHostChanges(serverId)) {
+          throw new ReplicaCacheReadError(
+            serverId,
+            "synchronizing pending changes",
+            persisted.error ?? new Error("pending changes were not persisted"),
+          );
+        }
+        if (read.invalidated || this.hasPendingReadChanges(read)) continue;
+        let rows: ReplicaRow[];
+        try {
+          rows = await this.rowStore.read(serverId, kinds, ids);
+        } catch (error) {
+          throw new ReplicaCacheReadError(serverId, "reading rows", error);
+        }
+        if (
+          this.activeServerIds.has(serverId) &&
+          !read.invalidated &&
+          !this.hasPendingReadChanges(read)
+        ) {
+          return rows;
+        }
+      } finally {
+        this.activeReads.delete(read);
+      }
+    }
+    return [];
   }
 
-  private async deleteInvalidRow(row: ReplicaRow): Promise<void> {
+  private async deleteInvalidRow(row: ReplicaRow, error: unknown): Promise<void> {
+    this.reportInvalidRow(row, error);
     const invalidEntity = directoryEntityForRow(row);
     if (!invalidEntity) {
       const changes = { upserts: [], deletes: [row] } satisfies ReplicaRowChanges;
@@ -1115,6 +1216,15 @@ export class ReplicaCache {
     await this.queueOperation(async () => {
       await this.rowStore.apply(changes);
       this.applyStoredChanges(changes);
+    });
+  }
+
+  private reportInvalidRow(row: ReplicaRow, error: unknown): void {
+    this.onInvalidRow({
+      serverId: row.serverId,
+      kind: row.kind,
+      id: row.id,
+      reason: error instanceof Error ? error.message : String(error),
     });
   }
 
@@ -1254,8 +1364,8 @@ export class ReplicaCache {
     await this.syncPending();
   }
 
-  /** Resolves to whether every pending change reached the store. */
-  private async syncPending(): Promise<boolean> {
+  /** Resolves with whether every pending change reached the store and why it did not. */
+  private async syncPending(): Promise<PersistResult> {
     const persisted = await this.persist();
     await this.writeQueue.catch(() => undefined);
     return persisted;
@@ -1265,12 +1375,12 @@ export class ReplicaCache {
     await this.persist();
   }
 
-  private async persist(): Promise<boolean> {
+  private async persist(): Promise<PersistResult> {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    if (!this.hasPendingChanges()) return true;
+    if (!this.hasPendingChanges()) return { ok: true, error: null };
     const write = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
@@ -1287,12 +1397,12 @@ export class ReplicaCache {
           for (const serverId of pending.baselines) {
             if (!evicted.has(serverId)) this.invalidatedHosts.delete(serverId);
           }
-        } catch {
+        } catch (error) {
           this.restorePendingChanges(pending);
           if (this.hasPendingChanges()) this.schedulePersist();
-          return false;
+          return { ok: false, error };
         }
-        return true;
+        return { ok: true, error: null };
       });
     // The queue only sequences writes; every consumer decides for itself what a failure means.
     this.writeQueue = write.then(

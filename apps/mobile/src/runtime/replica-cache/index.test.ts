@@ -7,7 +7,7 @@ import {
 } from "@/stores/session-store";
 import type { CompactionItem, StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
-import { ReplicaCache } from ".";
+import { ReplicaCache, ReplicaCacheReadError } from ".";
 import type { DirectoryCheckpoint } from "@/runtime/replica-cache";
 import type { ReplicaHostRows, ReplicaRow, ReplicaRowChanges, ReplicaRowStore } from "./row-store";
 
@@ -31,6 +31,8 @@ class MemoryStorage implements ReplicaRowStore {
   }> = [];
   writes = 0;
   cleanups = 0;
+  openFailure: Error | null = null;
+  readFailure: Error | null = null;
   nextWriteFailure: Error | null = null;
   persistentWriteFailure: Error | null = null;
   readGate: Promise<void> | null = null;
@@ -42,13 +44,16 @@ class MemoryStorage implements ReplicaRowStore {
     return `${row.serverId}:${row.kind}:${row.id}`;
   }
 
-  async open(): Promise<void> {}
+  async open(): Promise<void> {
+    if (this.openFailure) throw this.openFailure;
+  }
 
   async read(
     serverId: string,
     kinds: readonly ReplicaRow["kind"][],
     ids?: readonly string[],
   ): Promise<ReplicaRow[]> {
+    if (this.readFailure) throw this.readFailure;
     this.reads.push({ serverId, kinds, ...(ids ? { ids } : {}) });
     if (this.readLimit !== null && this.reads.length > this.readLimit) {
       throw new Error(
@@ -474,6 +479,8 @@ describe("ReplicaCache", () => {
     { readMode: "workspace", projectionVersion: undefined },
     { readMode: "directory", projectionVersion: 1 },
     { readMode: "workspace", projectionVersion: 1 },
+    { readMode: "directory", projectionVersion: 3 },
+    { readMode: "workspace", projectionVersion: 3 },
   ] as const)(
     "refetches workspace projection $projectionVersion and its cursor through $readMode reads",
     async ({ readMode, projectionVersion }) => {
@@ -512,7 +519,7 @@ describe("ReplicaCache", () => {
       expect(restored.agents).toEqual(baseline.agents);
       expect(restored.projects).toEqual(baseline.projects);
       expect(await reader.readTimeline(SERVER_ID, "agent-1")).toEqual(timeline());
-      expect(storage.rows.has(key)).toBe(false);
+      expect(storage.rows.has(key)).toBe(true);
       expect((await createCache(storage).readDirectory(SERVER_ID)).checkpoint).toEqual(
         restored.checkpoint,
       );
@@ -716,20 +723,21 @@ describe("ReplicaCache", () => {
     expect((await cache.readDirectory(SERVER_ID)).projects.size).toBe(0);
   });
 
-  it("does not return an accepted agent that storage rejected", async () => {
+  it("surfaces a rejected pending write as a host-specific cache error", async () => {
     const storage = new MemoryStorage();
     const cache = createCache(storage);
     storage.persistentWriteFailure = new Error("disk unavailable");
     commitDirectory(cache, SERVER_ID, directory());
     await cache.flush();
 
-    const result = await cache.readAgent(SERVER_ID, "agent-1");
+    await expect(cache.readAgent(SERVER_ID, "agent-1")).rejects.toBeInstanceOf(
+      ReplicaCacheReadError,
+    );
 
     expect(storage.rows.size).toBe(0);
-    expect(result).toBeUndefined();
   });
 
-  it("fails closed when an accepted deletion cannot be persisted before a read", async () => {
+  it("surfaces a failed accepted deletion before reading the cache", async () => {
     const storage = new MemoryStorage();
     const cache = createCache(storage);
     commitDirectory(cache, SERVER_ID, directory());
@@ -738,10 +746,13 @@ describe("ReplicaCache", () => {
 
     deleteDirectory(cache, SERVER_ID);
 
-    expect(await cache.readWorkspace(SERVER_ID, "workspace-1")).toBeUndefined();
+    await expect(cache.readWorkspace(SERVER_ID, "workspace-1")).rejects.toMatchObject({
+      name: "ReplicaCacheReadError",
+      serverId: SERVER_ID,
+    });
   });
 
-  it("gives up a read instead of retrying while the store keeps rejecting writes", async () => {
+  it("does not retry a read while the store keeps rejecting writes", async () => {
     const storage = new MemoryStorage();
     const cache = createCache(storage);
     commitDirectory(cache, SERVER_ID, directory());
@@ -752,8 +763,34 @@ describe("ReplicaCache", () => {
 
     deleteDirectory(cache, SERVER_ID);
 
-    expect(await cache.readWorkspace(SERVER_ID, "workspace-1")).toBeUndefined();
+    await expect(cache.readWorkspace(SERVER_ID, "workspace-1")).rejects.toBeInstanceOf(
+      ReplicaCacheReadError,
+    );
     expect(storage.reads.length).toBeLessThanOrEqual(1);
+  });
+
+  it("surfaces row-store read failures with the host id", async () => {
+    const storage = new MemoryStorage();
+    storage.readFailure = new Error("disk unavailable");
+    const cache = createCache(storage);
+
+    await expect(cache.readAgent(SERVER_ID, "agent-1")).rejects.toMatchObject({
+      name: "ReplicaCacheReadError",
+      serverId: SERVER_ID,
+      operation: "reading rows",
+    });
+  });
+
+  it("surfaces row-store open failures with the host id", async () => {
+    const storage = new MemoryStorage();
+    storage.openFailure = new Error("database unavailable");
+    const cache = createCache(storage);
+
+    await expect(cache.readAgent(SERVER_ID, "agent-1")).rejects.toMatchObject({
+      name: "ReplicaCacheReadError",
+      serverId: SERVER_ID,
+      operation: "opening the row store",
+    });
   });
 
   it("still reads a host whose rows are stored when another host's write is rejected", async () => {
@@ -955,6 +992,7 @@ describe("ReplicaCache", () => {
 
   it("treats a corrupt row as a scoped miss", async () => {
     const storage = new MemoryStorage();
+    const invalidRows: Array<{ serverId: string; kind: ReplicaRow["kind"]; id: string }> = [];
     storage.rows.set(`${SERVER_ID}:agent:agent-1`, {
       serverId: SERVER_ID,
       kind: "agent",
@@ -974,7 +1012,11 @@ describe("ReplicaCache", () => {
         projectKind: "git",
       }),
     });
-    const cache = createCache(storage);
+    const cache = new ReplicaCache(storage, {
+      ...noLegacyCleanup,
+      onInvalidRow: ({ serverId, kind, id }) => invalidRows.push({ serverId, kind, id }),
+    });
+    cache.setHosts([SERVER_ID]);
 
     const restored = await cache.readDirectory(SERVER_ID);
 
@@ -982,6 +1024,7 @@ describe("ReplicaCache", () => {
     expect(restored.projects.get("project-1")?.projectDisplayName).toBe("Paseo");
     expect(storage.rows.has(`${SERVER_ID}:agent:agent-1`)).toBe(false);
     expect(storage.rows.has(`${SERVER_ID}:project:project-1`)).toBe(true);
+    expect(invalidRows).toEqual([{ serverId: SERVER_ID, kind: "agent", id: "agent-1" }]);
   });
 
   it("removes a targeted corrupt row from eviction bookkeeping", async () => {
