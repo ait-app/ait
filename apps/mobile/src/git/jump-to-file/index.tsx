@@ -17,10 +17,11 @@ import {
   FLOATING_ACTION_BUTTON_CLEARANCE,
   FloatingActionButton,
 } from "@/components/ui/floating-action-button";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { ChangedFilesTree } from "@/git/changed-files-tree";
 import type { WorkingDiffMode } from "@/git/diff-document";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
-import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
+import { ICON_SIZE, SPACING } from "@/styles/theme";
 
 // The sheet header indents its leading glyph by the sheet's own content inset,
 // while a tree row indents itself by `treeRowPaddingLeft`. The body carries the
@@ -37,10 +38,6 @@ const TREE_TRAILING_INSET =
   WORKSPACE_PANE_TRAILING_GLYPH_RAIL;
 
 const ThemedFolderTree = withUnistyles(FolderTree);
-
-const foregroundMutedIconColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 /** Scrollable space the diff keeps below its last line while the action is shown. */
 export const JUMP_TO_FILE_CLEARANCE = FLOATING_ACTION_BUTTON_CLEARANCE;
@@ -63,7 +60,7 @@ export function JumpToFile({ files, mode, onSelectFile }: JumpToFileProps) {
   const header = useMemo(
     () => ({
       title,
-      leading: <ThemedFolderTree size={ICON_SIZE.md} uniProps={foregroundMutedIconColorMapping} />,
+      leading: <ThemedFolderTree size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />,
     }),
     [title],
   );

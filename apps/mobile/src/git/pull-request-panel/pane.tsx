@@ -42,6 +42,7 @@ import {
   paneContentToolbarIconSize,
   paneContentToolbarIconButtonStyle,
 } from "@/components/ui/pane-content-toolbar";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
@@ -97,7 +98,6 @@ const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mergedColorMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
 
 const CLIENT_PANE_CONTRIBUTIONS: readonly PaneNativeContribution[] =
@@ -112,7 +112,7 @@ function resolvePaneContribution(
   return CLIENT_PANE_CONTRIBUTIONS.find((contribution) => contribution.guard(facts)) ?? null;
 }
 
-type IconColorMapping = typeof foregroundColorMapping;
+type IconColorMapping = typeof foregroundIconColorMapping;
 
 interface PrStatePresentation {
   Icon: typeof ThemedGitPullRequest;
@@ -156,7 +156,7 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreHorizontal
       size={14}
-      uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+      uniProps={hovered ? foregroundIconColorMapping : foregroundMutedColorMapping}
     />
   );
 }

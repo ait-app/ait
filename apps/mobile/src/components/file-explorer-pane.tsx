@@ -47,7 +47,6 @@ import {
   useOverlayFlatListScrollbar,
   type OverlayFlatListScrollbar,
 } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
-import type { Theme } from "@/styles/theme";
 import type {
   AgentFileExplorerState,
   ExplorerDirectory,
@@ -56,6 +55,7 @@ import type {
 import { useSessionStore } from "@/stores/session-store";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
@@ -89,16 +89,13 @@ const SORT_OPTIONS: { value: SortOption }[] = [
 ];
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function DirectoryChevronIcon({ loading, expanded }: { loading: boolean; expanded: boolean }) {
   if (loading) {
     return (
       <ThemedLoadingSpinner
         size={WORKSPACE_TREE_LOADING_ICON_SIZE}
-        uniProps={foregroundMutedColorMapping}
+        uniProps={mutedIconColorMapping}
       />
     );
   }
@@ -1247,7 +1244,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   if (showInitialLoading) {
     return (
       <View style={styles.centerState}>
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
         <Text style={styles.loadingText}>{t("workspace.fileExplorer.states.loading")}</Text>
       </View>
     );

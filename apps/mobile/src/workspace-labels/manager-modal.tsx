@@ -20,10 +20,10 @@ import { HostFilter } from "@/components/hosts/host-filter";
 import { Button } from "@/components/ui/button";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
-import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   createWorkspaceLabelManagerModel,
@@ -41,7 +41,6 @@ const EDIT_ICON_SIZE = 14;
 const EDIT_HIT_SLOP = (44 - EDIT_ICON_SIZE) / 2;
 
 const ThemedPencil = withUnistyles(Pencil);
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
  * The whole label catalog of one host, and editing any one of them.
@@ -286,7 +285,7 @@ function WorkspaceLabelManagerRow({
         style={editStyle}
         testID={`workspace-label-manager-edit-${label.name}`}
       >
-        <ThemedPencil size={EDIT_ICON_SIZE} uniProps={mutedMapping} />
+        <ThemedPencil size={EDIT_ICON_SIZE} uniProps={mutedIconColorMapping} />
       </Pressable>
     </View>
   );

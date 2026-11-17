@@ -49,6 +49,7 @@ import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/comp
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { extraMutedIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
@@ -105,7 +106,7 @@ import {
   type HostProjectListItem,
 } from "@/projects/host-projects";
 import { useProjectIcons } from "@/projects/icons";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
@@ -160,10 +161,7 @@ import {
 import { displayInitial } from "@/utils/display-initial";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const addProjectIcon = (
-  <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
+const addProjectIcon = <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
   draftId: string | undefined;
@@ -220,7 +218,6 @@ function noopClearDraft() {}
 
 const PROJECT_ICON_FALLBACK_FONT_SIZE = 10;
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
 
 // Every picker chip on this screen shares one chevron so they stay a single
 // visual family. Extra-muted: the chevron is an affordance, not information,
@@ -228,7 +225,7 @@ const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregr
 function MetaChevron(): ReactElement {
   return (
     <View style={styles.chevronContainer}>
-      <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronExtraMutedMapping} />
+      <ThemedChevronDown size={ICON_SIZE.sm} uniProps={extraMutedIconColorMapping} />
     </View>
   );
 }

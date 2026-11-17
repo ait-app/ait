@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/control-geometry";
 import { Field } from "@/components/ui/form-field";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 
 export interface SelectFieldDisplay {
   label: string;
@@ -84,10 +85,6 @@ export interface SelectFieldTriggerProps {
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-
-const foregroundMutedMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function getSelectedOptionId<TValue>(
   options: readonly SelectFieldOption<TValue>[],
@@ -160,10 +157,10 @@ export function SelectFieldTrigger({
       </Text>
       {loading ? (
         <View style={styles.spinnerSlot}>
-          <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+          <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </View>
       ) : null}
-      <ThemedChevronDown size={ICON_SIZE.md} uniProps={foregroundMutedMapping} />
+      <ThemedChevronDown size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
     </View>
   );
 }

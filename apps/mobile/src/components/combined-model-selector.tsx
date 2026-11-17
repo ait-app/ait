@@ -8,19 +8,16 @@ import type { AgentProfilePicker } from "@/agent-profiles";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { ModelBrowser, ModelProviderGlyph, useModelBrowser } from "@/components/model-browser";
 import { resolveModelBrowserScrolling } from "@/components/model-browser-view";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 
 const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-
-const foregroundMutedMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function noop() {}
 
@@ -199,7 +196,7 @@ export function CombinedModelSelector({
     />
   ) : (
     <View style={styles.sheetLoadingState}>
-      <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+      <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
       <Text style={styles.sheetLoadingText}>{t("modelSelector.loadingSelector")}</Text>
     </View>
   );

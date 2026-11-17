@@ -5,14 +5,8 @@ import { ChevronDown, ChevronUp } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { sidebarWorkspaceRowStyles } from "@/components/sidebar/sidebar-workspace-row-content";
-import type { Theme } from "@/styles/theme";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronUp = withUnistyles(ChevronUp);
 
@@ -65,12 +59,12 @@ export function SidebarGroupToggleRow({
             {expanded ? (
               <ThemedChevronUp
                 size={14}
-                uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+                uniProps={hovered || pressed ? foregroundIconColorMapping : mutedIconColorMapping}
               />
             ) : (
               <ThemedChevronDown
                 size={14}
-                uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+                uniProps={hovered || pressed ? foregroundIconColorMapping : mutedIconColorMapping}
               />
             )}
           </View>

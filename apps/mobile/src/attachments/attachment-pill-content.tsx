@@ -14,7 +14,8 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { isPullRequestContextAttachment } from "@/attachments/workspace-attachment-utils";
 import { getForgePresentation } from "@/git/forge";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 
 export interface AttachmentPillContent {
   icon: ReactNode;
@@ -146,20 +147,18 @@ const ThemedAttachmentCircleDot = withUnistyles(CircleDot);
 const ThemedAttachmentMessageSquareCode = withUnistyles(MessageSquareCode);
 const ThemedAttachmentMousePointer = withUnistyles(MousePointer2);
 
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const attachmentReviewIcon = (
-  <ThemedAttachmentMessageSquareCode size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentMessageSquareCode size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const attachmentGithubPrIcon = (
-  <ThemedAttachmentGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentGitPullRequest size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const attachmentGithubIssueIcon = (
-  <ThemedAttachmentCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentCircleDot size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const attachmentFileIcon = (
-  <ThemedAttachmentFileText size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentFileText size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const attachmentBrowserIcon = (
-  <ThemedAttachmentMousePointer size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentMousePointer size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );

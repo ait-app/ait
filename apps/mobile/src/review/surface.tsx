@@ -23,11 +23,15 @@ import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
+import {
+  accentForegroundIconColorMapping,
+  destructiveIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { createReviewEditorScope } from "./editor";
 import { isWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import type { Theme } from "@/styles/theme";
 import {
   useReviewDraftComments,
   useReviewDraftStore,
@@ -62,11 +66,6 @@ function getWebTextInputElement(input: EditingTextInputHandle | null): HTMLEleme
 }
 
 export const SMALL_ACTION_HIT_SLOP = 8;
-const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const destructiveIconColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
-const accentForegroundIconColorMapping = (theme: Theme) => ({
-  color: theme.colors.accentForeground,
-});
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);
@@ -242,7 +241,7 @@ function CommentRow({
           onPress={handleEdit}
           style={iconButtonStyle}
         >
-          <ThemedPencil size={14} uniProps={foregroundMutedIconColorMapping} />
+          <ThemedPencil size={14} uniProps={mutedIconColorMapping} />
         </Pressable>
         <Pressable
           accessibilityRole="button"

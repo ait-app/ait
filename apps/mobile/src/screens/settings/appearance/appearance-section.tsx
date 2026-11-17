@@ -12,6 +12,7 @@ import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { isNative } from "@/constants/platform";
 import {
   DEFAULT_THEME_PREFERENCE,
@@ -36,7 +37,6 @@ import {
   PLUGIN_THEME_PREFERENCE,
   THEME_OPTIONS,
   THEME_SWATCHES,
-  type Theme,
 } from "@/styles/theme";
 import { SYNTAX_THEME_OPTIONS, type SyntaxThemeId } from "@ait/highlight";
 import type { TFunction } from "i18next";
@@ -58,8 +58,6 @@ const ThemedSun = withUnistyles(Sun);
 const ThemedMoon = withUnistyles(Moon);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 type BuiltInThemePreference = Exclude<AppSettings["theme"], typeof PLUGIN_THEME_PREFERENCE>;
 
@@ -98,11 +96,11 @@ interface ThemeLeadingProps {
 function ThemeLeading({ themeValue }: ThemeLeadingProps) {
   switch (themeValue) {
     case "light":
-      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />;
     case "dark":
-      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />;
     case "auto":
-      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />;
     default:
       return <ThemeSwatch color={THEME_SWATCHES[themeValue]} />;
   }
@@ -160,7 +158,7 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
         >
           <ThemeLeading themeValue={builtInValue} />
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {THEME_OPTIONS.map((option, index) => {
@@ -220,7 +218,7 @@ function ToolCallDetailRow({ value, onChange }: ToolCallDetailRowProps) {
           })}
         >
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {TOOL_CALL_DETAIL_LEVELS.map((option) => (
@@ -478,7 +476,7 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
           })}
         >
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {SYNTAX_THEME_OPTIONS.map((option) => (

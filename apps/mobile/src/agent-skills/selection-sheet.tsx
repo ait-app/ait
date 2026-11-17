@@ -6,9 +6,9 @@ import { Check } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { accentForegroundIconColorMapping } from "@/components/ui/icon-color";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
-import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import type {
   AgentSkillSelection as SkillSelection,
@@ -16,7 +16,6 @@ import type {
 } from "@ait/protocol/messages";
 
 const ThemedCheck = withUnistyles(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 interface SkillSelectionSheetProps {
   visible: boolean;
@@ -243,7 +242,7 @@ function SkillCheckboxRow({
       aria-checked={checked}
     >
       <View style={boxStyle}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={14} uniProps={accentForegroundIconColorMapping} /> : null}
       </View>
       <Text style={settingsStyles.rowTitle}>{name}</Text>
     </Pressable>

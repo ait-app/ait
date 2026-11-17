@@ -4,12 +4,11 @@ import { useTranslation } from "react-i18next";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { FileConflictAlert, type FileConflictAlertState } from "./conflict-alert";
 import type { FileEditorStatus } from "./editor/model";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
-const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export function FilePanelBar({
   size,
@@ -75,7 +74,7 @@ export function FilePanelBar({
             ) : null}
             {editorStatus === "saving" ? (
               <>
-                <ThemedSpinner size={14} uniProps={spinnerMapping} />
+                <ThemedSpinner size={14} uniProps={mutedIconColorMapping} />
                 <Text style={styles.secondary}>{t("panels.file.editor.saving")}</Text>
               </>
             ) : null}

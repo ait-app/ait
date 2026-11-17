@@ -21,9 +21,9 @@ import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { StreamItem } from "@/types/stream";
-import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { estimateStreamItemHeight } from "./web-virtualization";
 import { createReadingAnchor } from "./reading-anchor";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
@@ -55,9 +55,6 @@ const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
 const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADDING_TOP_PX;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 const historyStartSlotStyle: CSSProperties = {
   display: "flex",
@@ -1223,7 +1220,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       <div style={historyStartSlotStyle} data-testid="older-history-slot">
         {isLoadingOperation ? (
           <div data-testid="load-older-history-spinner">
-            <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+            <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
           </div>
         ) : null}
       </div>

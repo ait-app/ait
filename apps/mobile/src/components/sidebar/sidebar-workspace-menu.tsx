@@ -18,7 +18,6 @@ import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
-import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
   DropdownMenu,
@@ -34,6 +33,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
 import { OpenWorkspaceInNewWindowMenuItem } from "@/workspace/open-in-new-window/menu-item";
 import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
@@ -47,11 +47,6 @@ import {
   type WorkspaceLabelTarget,
 } from "@/workspace-labels/picker";
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
@@ -63,22 +58,20 @@ const ThemedPinOff = withUnistyles(PinOff);
 const ThemedShare2 = withUnistyles(Share2);
 const ThemedTag = withUnistyles(Tag);
 
-const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
-const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
-const markAsReadLeadingIcon = (
-  <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
-);
-const markAsUnreadLeadingIcon = <ThemedCircle size={14} uniProps={foregroundMutedColorMapping} />;
-const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
-const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
-const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
-const shareLeadingIcon = <ThemedShare2 size={14} uniProps={foregroundMutedColorMapping} />;
+const copyLeadingIcon = <ThemedCopy size={14} uniProps={mutedIconColorMapping} />;
+const renameLeadingIcon = <ThemedPencil size={14} uniProps={mutedIconColorMapping} />;
+const markAsReadLeadingIcon = <ThemedCircleCheck size={14} uniProps={mutedIconColorMapping} />;
+const markAsUnreadLeadingIcon = <ThemedCircle size={14} uniProps={mutedIconColorMapping} />;
+const archiveLeadingIcon = <ThemedArchive size={14} uniProps={mutedIconColorMapping} />;
+const pinLeadingIcon = <ThemedPin size={14} uniProps={mutedIconColorMapping} />;
+const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={mutedIconColorMapping} />;
+const shareLeadingIcon = <ThemedShare2 size={14} uniProps={mutedIconColorMapping} />;
 
 function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreVertical
       size={14}
-      uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+      uniProps={hovered ? foregroundIconColorMapping : mutedIconColorMapping}
     />
   );
 }
@@ -153,10 +146,7 @@ function SidebarWorkspaceMenuItems({
     () => (archiveShortcutKeys ? <Shortcut chord={archiveShortcutKeys} /> : null),
     [archiveShortcutKeys],
   );
-  const labelLeading = useMemo(
-    () => <ThemedTag size={14} uniProps={foregroundMutedColorMapping} />,
-    [],
-  );
+  const labelLeading = useMemo(() => <ThemedTag size={14} uniProps={mutedIconColorMapping} />, []);
 
   return (
     <>

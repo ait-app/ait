@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { ScrollView as RNScrollView, Text, View } from "react-native";
@@ -32,14 +33,10 @@ import type { FileConflictAlertState } from "./conflict-alert";
 import type { LiveFileModel } from "./live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
-import type { Theme } from "@/styles/theme";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 import { trimNonEmpty } from "@/utils/string";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 interface FilePreviewBodyProps {
   client?: DaemonClient | null;
@@ -156,7 +153,7 @@ function FilePreviewBody({
   if (isLoading && !preview) {
     return (
       <View style={styles.centerState} testID="file-preview-loading">
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
         <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
       </View>
     );
@@ -210,7 +207,7 @@ function FilePreviewBody({
     if (!imagePreviewUri) {
       return (
         <View style={styles.centerState}>
-          <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+          <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
           <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
         </View>
       );

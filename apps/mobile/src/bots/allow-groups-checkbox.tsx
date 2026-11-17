@@ -3,11 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { accentForegroundIconColorMapping } from "@/components/ui/icon-color";
 import { botStyles as styles } from "./styles";
 
 const ThemedCheck = withUnistyles(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 export function BotCheckbox({
   checked,
@@ -35,7 +34,7 @@ export function BotCheckbox({
       testID={testID}
     >
       <View style={[styles.checkbox, checked ? styles.checkboxChecked : null]}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={14} uniProps={accentForegroundIconColorMapping} /> : null}
       </View>
       <Text style={styles.text}>{label}</Text>
     </Pressable>

@@ -26,11 +26,11 @@ import {
   iconButtonChromeStyle,
   useIconButtonChromeStyle,
 } from "@/components/ui/icon-button-chrome";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { getTerminalProfileIcon, resolveTerminalProfiles } from "@ait/protocol/terminal-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
-import type { Theme } from "@/styles/theme";
 import {
   useWorkspaceScriptsMenuPages,
   type UseWorkspaceScriptsMenuPagesInput,
@@ -43,13 +43,11 @@ const ThemedGlobe = withUnistyles(Globe);
 const ThemedImport = withUnistyles(ImportIcon);
 const ThemedSettings = withUnistyles(Settings);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
-const MENU_NEW_SCHEDULE_ICON = <ThemedCalendarClock size={16} uniProps={mutedColorMapping} />;
-const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
-const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
-const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
+const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedIconColorMapping} />;
+const MENU_NEW_SCHEDULE_ICON = <ThemedCalendarClock size={16} uniProps={mutedIconColorMapping} />;
+const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedIconColorMapping} />;
+const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedIconColorMapping} />;
+const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedIconColorMapping} />;
 function WorkspaceHeaderMenuTriggerIcon() {
   return (
     <ThemedEllipsis

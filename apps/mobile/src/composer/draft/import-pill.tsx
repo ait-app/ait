@@ -4,10 +4,9 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Import as ImportIcon } from "lucide-react-native";
 import { composerPillStyles } from "@/composer/pill-styles";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 const ThemedImportIcon = withUnistyles(ImportIcon);
-const iconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 interface ComposerImportPillProps {
   onPress: () => void;
@@ -39,7 +38,7 @@ export function ComposerImportPill({ onPress, disabled = false }: ComposerImport
         onHoverOut={handleHoverOut}
         style={bodyStyle}
       >
-        <ThemedImportIcon size={14} uniProps={iconColorMapping} />
+        <ThemedImportIcon size={14} uniProps={mutedIconColorMapping} />
         <Text style={labelStyle} numberOfLines={1}>
           {t("importSession.title")}
         </Text>

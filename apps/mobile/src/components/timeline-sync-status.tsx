@@ -1,12 +1,11 @@
-import type { Theme } from "@/styles/theme";
 import { useMemo } from "react";
 import type { AgentScreenReadySyncState } from "@/hooks/use-agent-screen-state-machine";
 import { useTranslation } from "react-i18next";
 import { withUnistyles } from "react-native-unistyles";
 import { ToastViewport, type ToastState } from "@/components/toast-host";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 
-const spinnerColor = (theme: Theme) => ({ color: theme.colors.foreground });
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const keepUntilSynchronized = () => {};
 
@@ -30,7 +29,7 @@ export function TimelineSyncStatus({
         ? {
             id: state === "reconnecting" ? 1 : 2,
             content: label,
-            icon: <ThemedLoadingSpinner size={18} uniProps={spinnerColor} />,
+            icon: <ThemedLoadingSpinner size={18} uniProps={foregroundIconColorMapping} />,
             variant: "default",
             durationMs: null,
             testID: `agent-${state}-toast`,

@@ -19,7 +19,8 @@ import {
   useIsolatedBottomSheetVisibility,
   type ContextBridge,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import { SPACING, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { SPACING } from "@/styles/theme";
 import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
 import { MenuPage } from "./menu-item";
@@ -28,7 +29,6 @@ import { AnchoredSurface, MenuOverlay } from "./menu-overlay";
 import type { Alignment, Placement } from "./menu-anchor";
 
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
-const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 // `backgroundStyle` and `handleIndicatorStyle` are style-shaped props the Babel plugin does not
 // track, so the sheet is wrapped rather than reading the theme through a hook.
@@ -422,7 +422,7 @@ function MenuSheetHeader({
           style={styles.sheetBackButton}
           testID="menu-sheet-back"
         >
-          <ThemedChevronLeft size={18} uniProps={mutedIconMapping} />
+          <ThemedChevronLeft size={18} uniProps={mutedIconColorMapping} />
         </Pressable>
       ) : null}
       <Text style={styles.sheetTitle} numberOfLines={1}>

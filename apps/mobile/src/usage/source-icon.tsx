@@ -2,7 +2,7 @@ import { Gauge } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SvgXml } from "react-native-svg";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 function UsageSourceIconBase({
   svg,
@@ -22,8 +22,6 @@ function UsageSourceIconBase({
 
 const ThemedUsageSourceIcon = withUnistyles(UsageSourceIconBase);
 
-const mutedIconColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 /** The source's catalog SVG, or a generic gauge when the source ships none. */
 export function UsageSourceIcon({
   svg,
@@ -35,6 +33,11 @@ export function UsageSourceIcon({
   sourceId?: string;
 }) {
   return (
-    <ThemedUsageSourceIcon svg={svg} size={size} sourceId={sourceId} uniProps={mutedIconColor} />
+    <ThemedUsageSourceIcon
+      svg={svg}
+      size={size}
+      sourceId={sourceId}
+      uniProps={mutedIconColorMapping}
+    />
   );
 }

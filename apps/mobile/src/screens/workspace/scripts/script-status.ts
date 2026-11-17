@@ -1,4 +1,5 @@
 import type { WorkspaceScriptPayload } from "@ait/protocol/messages";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { Theme } from "@/styles/theme";
 
 /**
@@ -44,7 +45,6 @@ function aggregateTone(running: readonly WorkspaceScriptPayload[]): ScriptTone {
   return "running";
 }
 
-const idleColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const runningColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 const healthyColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
 const unhealthyColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
@@ -52,7 +52,7 @@ const unhealthyColorMapping = (theme: Theme) => ({ color: theme.colors.palette.r
 export function scriptToneColorMapping(tone: ScriptTone): (theme: Theme) => { color: string } {
   switch (tone) {
     case "idle":
-      return idleColorMapping;
+      return mutedIconColorMapping;
     case "running":
       return runningColorMapping;
     case "healthy":

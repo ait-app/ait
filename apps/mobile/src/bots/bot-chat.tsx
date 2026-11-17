@@ -11,6 +11,7 @@ import { SyncedLoader } from "@/components/synced-loader";
 import { Button } from "@/components/ui/button";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 import { ComposerDock } from "@/composer/dock";
 import { MessageInput, type MessageInputRef } from "@/composer/input/input";
 import { resolveComposerTrackTailClearance } from "@/composer/pill-styles";
@@ -24,7 +25,6 @@ import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSubagentOpensInSheet } from "@/subagents/opens-in-sheet";
 import type { PaseoSubagentRow } from "@/subagents/select";
 import { SubagentsTrack } from "@/subagents/track";
-import type { Theme } from "@/styles/theme";
 import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
@@ -46,7 +46,6 @@ import { botChatStyles as chatStyles, botStyles as styles } from "./styles";
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedRotateCcw = withUnistyles(RotateCcw);
 const ThemedSquare = withUnistyles(Square);
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const INITIAL_TEXT: TextReplacement = { kind: "initial", key: "bot-chat", text: "" };
 const NO_ATTACHMENTS: never[] = [];
 const NOOP = () => undefined;
@@ -141,7 +140,7 @@ function BotExchange({
       {turn.wake && turn.silent ? <BotSilentNote turnId={turn.id} /> : null}
       {pending ? (
         <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
-          <ThemedSyncedLoader size={14} uniProps={foregroundColorMapping} />
+          <ThemedSyncedLoader size={14} uniProps={foregroundIconColorMapping} />
           <Text style={chatStyles.turnStatusText}>{t(`bots.status.${turn.status}`)}</Text>
         </View>
       ) : turn.status !== "completed" ? (

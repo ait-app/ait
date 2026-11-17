@@ -11,7 +11,12 @@ import type { PrHint } from "@/git/pr-hint";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
-import type { Theme } from "@/styles/theme";
+import {
+  foregroundIconColorMapping,
+  mutedIconColorMapping,
+  statusDangerIconColorMapping,
+  statusSuccessIconColorMapping,
+} from "@/components/ui/icon-color";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { CheckIndicator } from "./check-indicator";
 import type { CheckSummary, CheckSummaryState } from "./check-summary";
@@ -38,10 +43,6 @@ const ThemedGlobe = withUnistyles(Globe);
 
 /** Stable identity so a row without labels doesn't re-select its items on every render. */
 const EMPTY_LABELS: readonly WorkspaceLabelDefinition[] = [];
-
-const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
 
 /**
  * The subtitle under a workspace title: which host it lives on, its change request, that
@@ -134,7 +135,7 @@ function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string
   return (
     <View style={styles.identityItem} testID={`sidebar-workspace-${kind}`}>
       <View style={styles.identityIcon}>
-        <Icon size={META_ICON_SIZE} uniProps={mutedMapping} />
+        <Icon size={META_ICON_SIZE} uniProps={mutedIconColorMapping} />
       </View>
       <Text style={styles.identityText} numberOfLines={1}>
         {name}
@@ -213,7 +214,7 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
       style={pressableItemStyle}
     >
       {isHovered ? (
-        <ThemedExternalLink size={META_ICON_SIZE} uniProps={foregroundMapping} />
+        <ThemedExternalLink size={META_ICON_SIZE} uniProps={foregroundIconColorMapping} />
       ) : (
         <PullRequestStateIcon state={hint.state} size={META_ICON_SIZE} />
       )}
@@ -287,15 +288,16 @@ function ServiceItem({ summary }: { summary: WorkspaceServiceSummary }) {
       accessibilityLabel={t(workspaceServiceLabelKey(summary), { name: summary.name })}
       testID={unhealthy ? "workspace-service-unhealthy" : "workspace-service"}
     >
-      <ThemedGlobe size={META_ICON_SIZE} uniProps={unhealthy ? dangerMapping : successMapping} />
+      <ThemedGlobe
+        size={META_ICON_SIZE}
+        uniProps={unhealthy ? statusDangerIconColorMapping : statusSuccessIconColorMapping}
+      />
       <Text style={unhealthy ? styles.serviceNameUnhealthy : styles.serviceName} numberOfLines={1}>
         {summary.name}
       </Text>
     </View>
   );
 }
-
-const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 
 const PR_STATE_LABEL_KEYS = {
   merged: "workspace.git.pr.states.merged",

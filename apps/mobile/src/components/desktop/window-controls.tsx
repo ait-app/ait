@@ -13,7 +13,7 @@ import {
   type DesktopWindowControlsPresentation,
 } from "@/desktop/window-chrome-presentation";
 import { useCustomDesktopWindowControls } from "@/desktop/desktop-window";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 type WindowControlKind = "minimize" | "maximize" | "restore" | "close";
 
@@ -76,7 +76,6 @@ function WindowControlGlyph({
 }
 
 const ThemedWindowControlGlyph = withUnistyles(WindowControlGlyph);
-const mutedGlyphMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const whiteGlyphMapping = () => ({ color: "#ffffff" });
 
 function WindowControl({
@@ -109,7 +108,7 @@ function WindowControl({
             kind={kind}
             size={presentation.glyphSize}
             strokeWidth={presentation.glyphStrokeWidth}
-            uniProps={closeHighlighted ? whiteGlyphMapping : mutedGlyphMapping}
+            uniProps={closeHighlighted ? whiteGlyphMapping : mutedIconColorMapping}
           />
         </View>
       );

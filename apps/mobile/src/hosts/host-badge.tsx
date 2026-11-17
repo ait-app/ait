@@ -3,6 +3,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Server } from "lucide-react-native";
 import { HOST_COLORS, type HostBadgeModel, type HostColor } from "@/hosts/appearance";
 import { identityForeground } from "@/styles/identity-colors";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { Theme } from "@/styles/theme";
 
 /**
@@ -12,8 +13,6 @@ import type { Theme } from "@/styles/theme";
 export const HOST_BADGE_ICON_SIZE = 12;
 
 const ThemedServer = withUnistyles(Server);
-
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 // One stable mapping per host color for the life of the module — a fresh `uniProps` identity
 // on every render makes withUnistyles re-subscribe each pass. The scheme is read inside the
@@ -26,7 +25,7 @@ const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }>
   for (const color of HOST_COLORS) {
     byColor[color] =
       color === "none"
-        ? mutedMapping
+        ? mutedIconColorMapping
         : (theme: Theme) => ({ color: identityForeground(color, theme.colorScheme) });
   }
   return byColor;

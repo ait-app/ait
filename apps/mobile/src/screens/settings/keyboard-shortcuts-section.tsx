@@ -4,7 +4,6 @@ import { View, Text, type PressableStateCallbackType } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { MoreHorizontal, Pencil, Undo2, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import {
   buildKeyboardShortcutHelpSections,
@@ -42,12 +42,9 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedUndo2 = withUnistyles(Undo2);
 const ThemedX = withUnistyles(X);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-const bindLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
-const clearLeadingIcon = <ThemedX size={14} uniProps={foregroundMutedColorMapping} />;
-const resetLeadingIcon = <ThemedUndo2 size={14} uniProps={foregroundMutedColorMapping} />;
+const bindLeadingIcon = <ThemedPencil size={14} uniProps={mutedIconColorMapping} />;
+const clearLeadingIcon = <ThemedX size={14} uniProps={mutedIconColorMapping} />;
+const resetLeadingIcon = <ThemedUndo2 size={14} uniProps={mutedIconColorMapping} />;
 
 function ShortcutSequence({
   chord,
@@ -137,7 +134,7 @@ function ShortcutActionsMenu({
         {({ hovered, open }) => (
           <ThemedMoreHorizontal
             size={14}
-            uniProps={hovered || open ? foregroundColorMapping : foregroundMutedColorMapping}
+            uniProps={hovered || open ? foregroundIconColorMapping : mutedIconColorMapping}
           />
         )}
       </DropdownMenuTrigger>

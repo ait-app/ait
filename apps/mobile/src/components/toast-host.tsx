@@ -12,6 +12,10 @@ import { AlertTriangle, CheckCircle2, Info } from "lucide-react-native";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
+  destructiveIconColorMapping,
+  foregroundIconColorMapping,
+} from "@/components/ui/icon-color";
+import {
   HEADER_INNER_HEIGHT,
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
@@ -52,11 +56,9 @@ const ThemedCheckCircle = withUnistyles(CheckCircle2);
 const ThemedInfo = withUnistyles(Info);
 const ThemedWarning = withUnistyles(AlertTriangle);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundIcon = (theme: Theme) => ({ color: theme.colors.foreground });
 const infoIcon = (theme: Theme) => ({ color: theme.colors.palette.blue[300] });
 const successIcon = (theme: Theme) => ({ color: theme.colors.primary });
 const warningIcon = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
-const errorIcon = (theme: Theme) => ({ color: theme.colors.destructive });
 
 export function useToastHost(): {
   api: ToastApi;
@@ -90,7 +92,7 @@ export function useToastHost(): {
       copied: (label?: string) =>
         show(label ? t("common.states.copiedLabel", { label }) : t("common.states.copied"), {
           variant: "success",
-          icon: <ThemedCheckCircle size={18} uniProps={foregroundIcon} />,
+          icon: <ThemedCheckCircle size={18} uniProps={foregroundIconColorMapping} />,
         }),
       error: (message: string) => show(message, { variant: "error", durationMs: 3200 }),
     }),
@@ -210,7 +212,7 @@ function ToastCard({
 }) {
   let defaultIcon: ReactNode = null;
   if (toast.variant === "loading") {
-    defaultIcon = <ThemedLoadingSpinner size={18} uniProps={foregroundIcon} />;
+    defaultIcon = <ThemedLoadingSpinner size={18} uniProps={foregroundIconColorMapping} />;
   } else if (toast.variant === "info") {
     defaultIcon = <ThemedInfo size={18} uniProps={infoIcon} />;
   } else if (toast.variant === "success") {
@@ -218,7 +220,7 @@ function ToastCard({
   } else if (toast.variant === "warning") {
     defaultIcon = <ThemedWarning size={18} uniProps={warningIcon} />;
   } else if (toast.variant === "error") {
-    defaultIcon = <ThemedWarning size={18} uniProps={errorIcon} />;
+    defaultIcon = <ThemedWarning size={18} uniProps={destructiveIconColorMapping} />;
   }
   const icon = toast.icon ?? defaultIcon;
 

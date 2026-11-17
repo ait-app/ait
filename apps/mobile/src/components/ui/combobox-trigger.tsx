@@ -18,13 +18,10 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown } from "lucide-react-native";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
-
-const chevronColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 interface TriggerState {
   pressed: boolean;
@@ -90,7 +87,7 @@ export const ComboboxTrigger = forwardRef<View, ComboboxTriggerProps>(function C
         {chevron !== null &&
           (chevron ?? (
             <View style={styles.chevronContainer}>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronColorMapping} />
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
             </View>
           ))}
       </View>

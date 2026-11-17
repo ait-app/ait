@@ -4,13 +4,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import type { Theme } from "@/styles/theme";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { ToolbarLabelSelectTrigger } from "@/components/ui/toolbar-label-trigger";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -21,9 +21,6 @@ interface BranchSwitcherProps {
   testID?: string;
 }
 
-const foregroundMutedIconColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const ThemedGitBranch = withUnistyles(GitBranch);
 
 export function BranchSwitcher({
@@ -56,7 +53,7 @@ export function BranchSwitcher({
   const handleOpen = useCallback(() => setIsOpen(true), [setIsOpen]);
 
   const branchLeadingSlot = useMemo(
-    () => <ThemedGitBranch size={14} uniProps={foregroundMutedIconColorMapping} />,
+    () => <ThemedGitBranch size={14} uniProps={mutedIconColorMapping} />,
     [],
   );
 

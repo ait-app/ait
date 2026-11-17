@@ -18,15 +18,14 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import { destructiveIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 type FileActionGroup = "create" | "open" | "reference" | "manage" | "destructive";
 
 interface FileAction {
@@ -287,7 +286,7 @@ function FileActionMenuItem({ action }: { action: FileAction }): ReactElement {
     return (
       <ThemedIcon
         size={ICON_SIZE.sm}
-        uniProps={action.destructive ? destructiveColorMapping : foregroundMutedColorMapping}
+        uniProps={action.destructive ? destructiveIconColorMapping : mutedIconColorMapping}
       />
     );
   }, [action.destructive, action.icon]);

@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { WorkspaceMetaRow } from "@/components/sidebar/workspace-meta-row";
 import { useToast } from "@/contexts/toast-context";
@@ -25,14 +26,12 @@ import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { identityColor } from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { ValueMenuItem } from "@/components/settings";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedPencil = withUnistyles(Pencil);
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function dropdownTriggerStyle({ pressed }: PressableStateCallbackType) {
   return pressed ? [styles.trigger, styles.triggerPressed] : styles.trigger;
@@ -65,7 +64,7 @@ function HostRenameButton({ host }: { host: HostProfile }) {
         accessibilityLabel={t("settings.host.daemon.rename.editLabel")}
         testID="host-page-label-edit-button"
       >
-        <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
       </Pressable>
 
       <AdaptiveRenameModal
@@ -135,7 +134,7 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
         >
           <ColorSwatch color={color} />
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {HOST_COLORS.map((option) => (
@@ -176,7 +175,7 @@ function BadgeDisplayRow({
           })}
         >
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {HOST_BADGE_DISPLAYS.map((option) => (

@@ -75,6 +75,7 @@ import {
 } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
@@ -101,7 +102,6 @@ import { useHostFeatureMap } from "@/runtime/host-features";
 import { useSessionStore } from "@/stores/session-store";
 import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
 import type { AddProjectFlowRequest } from "@/stores/add-project-flow-store";
-import type { Theme } from "@/styles/theme";
 import { shortenPath } from "@/utils/shorten-path";
 import { buildNewWorkspaceRoute, buildSettingsAddHostRoute } from "@/utils/host-routes";
 
@@ -141,9 +141,6 @@ const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const lastCloneParentByHost = new Map<string, string>();
 const EMPTY_PATHS: string[] = [];
 const NAVIGATION_HINT_KEYS = ["Up", "Down"];
@@ -164,7 +161,7 @@ function FlowBackButton({ onPress }: { onPress: () => void }) {
       {({ hovered, pressed }) => (
         <ThemedArrowLeft
           size={18}
-          uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+          uniProps={hovered || pressed ? foregroundIconColorMapping : mutedIconColorMapping}
         />
       )}
     </Pressable>
@@ -217,7 +214,7 @@ function CloneProgressView({ progress, repository, destination, t }: CloneProgre
   return (
     <View style={styles.progressBlock} testID="add-project-flow-progress">
       <View style={styles.progressHeader}>
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
         <Text style={styles.progressLabel} numberOfLines={1}>
           {t(`addProjectFlow.progress.phases.${phase}`)}
         </Text>
@@ -1021,7 +1018,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
               ) : (
                 <View style={styles.progressBlock} testID="add-project-flow-progress">
                   <View style={styles.progressHeader}>
-                    <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+                    <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
                     <Text style={styles.progressLabel}>{progressText(page, t)}</Text>
                   </View>
                 </View>

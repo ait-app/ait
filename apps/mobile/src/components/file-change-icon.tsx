@@ -2,15 +2,15 @@ import type { ReactElement } from "react";
 import { withUnistyles } from "react-native-unistyles";
 import { SquareDot, SquareMinus, SquarePlus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import type { Theme } from "@/styles/theme";
+import {
+  statusDangerIconColorMapping,
+  statusSuccessIconColorMapping,
+  statusWarningIconColorMapping,
+} from "@/components/ui/icon-color";
 
 const ThemedSquarePlus = withUnistyles(SquarePlus);
 const ThemedSquareMinus = withUnistyles(SquareMinus);
 const ThemedSquareDot = withUnistyles(SquareDot);
-
-const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
-const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
-const warningMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 const ICON_SIZE = 14;
 
@@ -30,7 +30,7 @@ export function FileChangeIcon({
     return (
       <ThemedSquarePlus
         size={ICON_SIZE}
-        uniProps={successMapping}
+        uniProps={statusSuccessIconColorMapping}
         accessibilityLabel={t("workspace.git.diff.newFile")}
       />
     );
@@ -40,7 +40,7 @@ export function FileChangeIcon({
     return (
       <ThemedSquareMinus
         size={ICON_SIZE}
-        uniProps={dangerMapping}
+        uniProps={statusDangerIconColorMapping}
         accessibilityLabel={t("workspace.git.diff.deletedFile")}
       />
     );
@@ -49,7 +49,7 @@ export function FileChangeIcon({
   return (
     <ThemedSquareDot
       size={ICON_SIZE}
-      uniProps={warningMapping}
+      uniProps={statusWarningIconColorMapping}
       accessibilityLabel={t("workspace.git.diff.modifiedFile")}
     />
   );

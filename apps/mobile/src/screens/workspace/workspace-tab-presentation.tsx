@@ -8,7 +8,7 @@ import { ensurePanelsRegistered } from "@/panels/register-panels";
 import { getPanelRegistration, type PanelIconProps } from "@/panels/panel-registry";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { usePanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 
@@ -104,7 +104,6 @@ function WorkspaceTabPresentationResolverInner({
 }
 
 const ThemedCheckIcon = withUnistyles(Check);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 interface WorkspaceTabOptionRowProps {
   presentation: WorkspaceTabPresentation;
   selected: boolean;
@@ -167,7 +166,7 @@ export function WorkspaceTabOptionRow({
       ) : null}
       {selected ? (
         <View style={styles.optionTrailingSlot}>
-          <ThemedCheckIcon size={16} uniProps={mutedColorMapping} />
+          <ThemedCheckIcon size={16} uniProps={mutedIconColorMapping} />
         </View>
       ) : null}
       {trailingAccessory ? (

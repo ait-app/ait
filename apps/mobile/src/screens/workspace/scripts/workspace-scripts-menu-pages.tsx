@@ -8,8 +8,8 @@ import {
   DropdownMenuSubTrigger,
   type MenuPageDefinition,
 } from "@/components/ui/dropdown-menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import type { Theme } from "@/styles/theme";
 import { openServiceUrl } from "@/desktop/open-service-url";
 import { ExitCodeBadge, ScriptIcon } from "./script-marks";
 import { scriptToneColorMapping, summarizeScripts, type ScriptsSummary } from "./script-status";
@@ -27,21 +27,20 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedSquare = withUnistyles(Square);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const playFillTransparent = { fill: "transparent" };
 
 const ROW_ICON_SIZE = 16;
 const TRAILING_ICON_SIZE = 14;
 
-const OPEN_SERVICE_ICON = <ThemedEye size={ROW_ICON_SIZE} uniProps={mutedColorMapping} />;
+const OPEN_SERVICE_ICON = <ThemedEye size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} />;
 const VIEW_TERMINAL_ICON = (
-  <ThemedSquareTerminal size={ROW_ICON_SIZE} uniProps={mutedColorMapping} />
+  <ThemedSquareTerminal size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} />
 );
-const COPY_URL_ICON = <ThemedCopy size={ROW_ICON_SIZE} uniProps={mutedColorMapping} />;
-const RESTART_ICON = <ThemedRotateCw size={ROW_ICON_SIZE} uniProps={mutedColorMapping} />;
-const STOP_ICON = <ThemedSquare size={ROW_ICON_SIZE} uniProps={mutedColorMapping} />;
+const COPY_URL_ICON = <ThemedCopy size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const RESTART_ICON = <ThemedRotateCw size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const STOP_ICON = <ThemedSquare size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} />;
 const RUN_ICON = (
-  <ThemedPlay size={ROW_ICON_SIZE} uniProps={mutedColorMapping} {...playFillTransparent} />
+  <ThemedPlay size={ROW_ICON_SIZE} uniProps={mutedIconColorMapping} {...playFillTransparent} />
 );
 
 const SCRIPTS_PAGE_ID = "workspace-scripts";
@@ -216,7 +215,7 @@ function StoppedScriptRow({
         {exitCode === null ? null : <ExitCodeBadge code={exitCode} />}
         <ThemedPlay
           size={TRAILING_ICON_SIZE}
-          uniProps={mutedColorMapping}
+          uniProps={mutedIconColorMapping}
           {...playFillTransparent}
         />
       </View>

@@ -26,6 +26,7 @@ import {
   useMenuContext,
   type MenuPageDefinition,
 } from "@/components/ui/menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import {
   createWorkspaceLabelPickerModel,
   useWorkspaceLabelProjection,
@@ -33,7 +34,6 @@ import {
   workspaceLabels,
   type WorkspaceLabelPickerRow,
 } from "@/workspace-labels";
-import type { Theme } from "@/styles/theme";
 import { WorkspaceLabelDot, WorkspaceLabelSwatchRow } from "./swatch";
 
 /** The `MenuSubTrigger` on a workspace's menu that opens the assign page. */
@@ -44,12 +44,11 @@ const WORKSPACE_LABEL_CREATE_PAGE_ID = "workspaceLabelsCreate";
 const MENU_ICON_SIZE = 14;
 
 const ThemedPlus = withUnistyles(Plus);
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 // The create row keeps the leading column the label rows above it sit in. Without a mark there
 // its label would start on the text rail while every label starts 24pt further in, and the last
 // row of the page would read as one that slipped out of the list.
-const CREATE_LEADING = <ThemedPlus size={MENU_ICON_SIZE} uniProps={mutedMapping} />;
+const CREATE_LEADING = <ThemedPlus size={MENU_ICON_SIZE} uniProps={mutedIconColorMapping} />;
 
 /** The colour a new label takes until you say otherwise. */
 const DEFAULT_CREATE_COLOR: WorkspaceLabelColor = WORKSPACE_LABEL_COLORS[0];

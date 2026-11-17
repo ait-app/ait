@@ -5,13 +5,10 @@ import { Pressable, Text } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 export function PinnedSectionHeader({
   collapsed,
@@ -37,7 +34,7 @@ export function PinnedSectionHeader({
         <>
           <Text style={styles.title}>{t("sidebar.pinned.title")}</Text>
           {hovered || isNative || isCompact ? (
-            <Chevron size={12} uniProps={foregroundMutedColorMapping} />
+            <Chevron size={12} uniProps={mutedIconColorMapping} />
           ) : null}
         </>
       )}

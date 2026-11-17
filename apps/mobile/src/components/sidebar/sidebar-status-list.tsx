@@ -28,6 +28,7 @@ import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { Theme } from "@/styles/theme";
 import {
   ChevronDown,
@@ -61,9 +62,6 @@ import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
 import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
 
 // Themed icon wrappers
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 // One mapping per bucket, resolved through the status-dot producer so a group header and
 // the rows under it cannot disagree about what "failed" looks like.
 const needsInputColorMapping = (theme: Theme) => ({
@@ -428,9 +426,9 @@ function StatusGroupLeadingVisual({
     return <StatusGroupIcon bucket={leading.bucket} />;
   }
   if (collapsed) {
-    return <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />;
+    return <ThemedChevronRight size={14} uniProps={mutedIconColorMapping} />;
   }
-  return <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />;
+  return <ThemedChevronDown size={14} uniProps={mutedIconColorMapping} />;
 }
 
 function StatusGroupIcon({ bucket }: { bucket: StatusBucket }) {
@@ -444,7 +442,7 @@ function StatusGroupIcon({ bucket }: { bucket: StatusBucket }) {
     case "running":
       return <ThemedCircleDot size={14} uniProps={runningColorMapping} />;
     case "done":
-      return <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
+      return <ThemedCircleCheck size={14} uniProps={mutedIconColorMapping} />;
   }
 }
 

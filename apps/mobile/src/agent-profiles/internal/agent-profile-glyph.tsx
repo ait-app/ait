@@ -32,6 +32,7 @@ import {
   Wrench,
 } from "lucide-react-native";
 import { identityForeground } from "@/styles/identity-colors";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   AGENT_PROFILE_COLORS,
@@ -85,8 +86,6 @@ const THEMED_ICONS: Record<AgentProfileIconKey, typeof ThemedDefaultIcon> = {
   shield: withUnistyles(Shield),
 };
 
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 /**
  * One `uniProps` mapping per colour, built once. Building these inline would
  * hand `withUnistyles` a new function every render and defeat its tracking.
@@ -96,7 +95,7 @@ const COLOR_MAPPINGS: Record<AgentProfileColor, (theme: Theme) => { color: strin
   for (const color of AGENT_PROFILE_COLORS) {
     byColor[color] =
       color === "none"
-        ? mutedMapping
+        ? mutedIconColorMapping
         : (theme: Theme) => ({ color: identityForeground(color, theme.colorScheme) });
   }
   return byColor;

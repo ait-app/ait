@@ -2,6 +2,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Switch } from "@/components/ui/switch";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   builtinSidebarNavLabelKey,
@@ -11,7 +12,7 @@ import {
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import type { TFunction } from "i18next";
 import {
   ArrowDown,
@@ -30,13 +31,11 @@ import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedArrowDown = withUnistyles(ArrowDown);
 
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
@@ -103,7 +102,7 @@ function SidebarNavRow({
   return (
     <View style={rowStyle} testID={`sidebar-nav-item-${item.key}`}>
       <View style={styles.rowMain}>
-        <ThemedNavIcon Icon={navItemIcon(item)} uniProps={mutedColorMapping} />
+        <ThemedNavIcon Icon={navItemIcon(item)} uniProps={mutedIconColorMapping} />
         <Text style={settingsStyles.rowTitle} numberOfLines={1}>
           {label}
         </Text>

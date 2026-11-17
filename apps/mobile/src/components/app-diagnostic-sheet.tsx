@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useToast } from "@/contexts/toast-context";
 import {
   formatAppDiagnosticHeader,
@@ -21,7 +22,7 @@ import { exportDiagnosticReport } from "@/diagnostics/export-diagnostic-report";
 import { collectDesktopDiagnosticSections } from "@/diagnostics/desktop-diagnostic-report";
 import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { getStartupMarks } from "@/runtime/startup-timeline";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -50,9 +51,6 @@ const ThemedDownload = withUnistyles(Download);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 export function AppDiagnosticSheet({
   visible,
@@ -199,7 +197,7 @@ export function AppDiagnosticSheet({
             accessibilityRole="button"
             accessibilityLabel={t("settings.diagnostics.app.exportAccessibility")}
           >
-            <ThemedDownload size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+            <ThemedDownload size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
           </Pressable>
           <Pressable
             onPress={handleCopyPress}
@@ -209,7 +207,7 @@ export function AppDiagnosticSheet({
             accessibilityRole="button"
             accessibilityLabel={t("settings.diagnostics.app.copyAccessibility")}
           >
-            <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+            <ThemedCopy size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
           </Pressable>
           <Pressable
             onPress={handleRefreshPress}
@@ -224,9 +222,9 @@ export function AppDiagnosticSheet({
             }
           >
             {loading ? (
-              <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
             ) : (
-              <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedRotateCw size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
             )}
           </Pressable>
         </View>
@@ -263,17 +261,14 @@ export function AppDiagnosticSheet({
           <View style={styles.progressContent}>
             {progress.length === 0 ? (
               <View style={styles.progressRow}>
-                <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+                <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
                 <Text style={styles.mutedText}>{t("settings.diagnostics.app.running")}</Text>
               </View>
             ) : (
               progress.map((row) => (
                 <View key={row.id} style={styles.progressRow}>
                   {row.status === "running" || row.status === "pending" ? (
-                    <ThemedLoadingSpinner
-                      size={ICON_SIZE.sm}
-                      uniProps={foregroundMutedColorMapping}
-                    />
+                    <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
                   ) : (
                     <View
                       style={row.status === "failed" ? styles.statusDotFailed : styles.statusDot}

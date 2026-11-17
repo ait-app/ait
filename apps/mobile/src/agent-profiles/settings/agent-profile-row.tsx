@@ -6,8 +6,9 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { AgentProfile } from "@ait/protocol/messages";
 import { Button } from "@/components/ui/button";
+import { destructiveIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import { AgentProfileGlyph } from "../internal/agent-profile-glyph";
 import { buildAgentProfileTags } from "../internal/profile-summary";
 
@@ -17,13 +18,10 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedFileText = withUnistyles(FileText);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
-
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const editIcon = <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const removeIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const editIcon = <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const removeIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveIconColorMapping} />;
 
 export interface AgentProfileRowProps {
   profile: AgentProfile;
@@ -97,7 +95,7 @@ export function AgentProfileRow({
           </View>
           {profile.notes ? (
             <View style={styles.notes}>
-              <ThemedFileText size={ICON_SIZE.xs} uniProps={mutedColorMapping} />
+              <ThemedFileText size={ICON_SIZE.xs} uniProps={mutedIconColorMapping} />
               <Text
                 style={styles.notesText}
                 numberOfLines={2}

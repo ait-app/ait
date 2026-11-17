@@ -4,16 +4,13 @@ import { ExternalLink } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { ContextMenuItem } from "@/components/ui/context-menu";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getIsElectron } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { getDesktopHost } from "@/desktop/host";
-import type { Theme } from "@/styles/theme";
 
 const ThemedExternalLink = withUnistyles(ExternalLink);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-const leadingIcon = <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />;
+const leadingIcon = <ThemedExternalLink size={14} uniProps={mutedIconColorMapping} />;
 
 export function OpenWorkspaceInNewWindowMenuItem({
   serverId,

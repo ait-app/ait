@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 import { withUnistyles } from "react-native-unistyles";
 import { CircleCheck, CircleDot, CircleSlash, CircleX } from "lucide-react-native";
 import { ManualStatusIcon } from "@/components/icons/manual-status-icon";
-import type { Theme } from "@/styles/theme";
+import {
+  mutedIconColorMapping,
+  statusDangerIconColorMapping,
+  statusSuccessIconColorMapping,
+  statusWarningIconColorMapping,
+} from "@/components/ui/icon-color";
 import type { CheckPresentation } from "./check-presentation";
 
 const ThemedCircleCheck = withUnistyles(CircleCheck);
@@ -10,11 +15,6 @@ const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleSlash = withUnistyles(CircleSlash);
 const ThemedCircleX = withUnistyles(CircleX);
 const ThemedManualStatusIcon = withUnistyles(ManualStatusIcon);
-
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
-const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
-const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 export type CheckPresentationTone = "success" | "danger" | "warning" | "muted";
 
@@ -27,43 +27,43 @@ const CHECK_PRESENTATION_VIEW_POLICY: Record<CheckPresentation, CheckPresentatio
   success: {
     tone: "success",
     renderIcon(size) {
-      return <ThemedCircleCheck size={size} uniProps={successColorMapping} />;
+      return <ThemedCircleCheck size={size} uniProps={statusSuccessIconColorMapping} />;
     },
   },
   failure: {
     tone: "danger",
     renderIcon(size) {
-      return <ThemedCircleX size={size} uniProps={dangerColorMapping} />;
+      return <ThemedCircleX size={size} uniProps={statusDangerIconColorMapping} />;
     },
   },
   warning: {
     tone: "warning",
     renderIcon(size) {
-      return <ThemedCircleX size={size} uniProps={warningColorMapping} />;
+      return <ThemedCircleX size={size} uniProps={statusWarningIconColorMapping} />;
     },
   },
   actionRequired: {
     tone: "warning",
     renderIcon(size) {
-      return <ThemedManualStatusIcon size={size} uniProps={warningColorMapping} />;
+      return <ThemedManualStatusIcon size={size} uniProps={statusWarningIconColorMapping} />;
     },
   },
   manual: {
     tone: "muted",
     renderIcon(size) {
-      return <ThemedManualStatusIcon size={size} uniProps={foregroundMutedColorMapping} />;
+      return <ThemedManualStatusIcon size={size} uniProps={mutedIconColorMapping} />;
     },
   },
   pending: {
     tone: "warning",
     renderIcon(size) {
-      return <ThemedCircleDot size={size} uniProps={warningColorMapping} />;
+      return <ThemedCircleDot size={size} uniProps={statusWarningIconColorMapping} />;
     },
   },
   ignored: {
     tone: "muted",
     renderIcon(size) {
-      return <ThemedCircleSlash size={size} uniProps={foregroundMutedColorMapping} />;
+      return <ThemedCircleSlash size={size} uniProps={mutedIconColorMapping} />;
     },
   },
 };

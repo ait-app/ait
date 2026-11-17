@@ -18,6 +18,7 @@ import { Check, CheckCircle } from "lucide-react-native";
 import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { Theme } from "@/styles/theme";
 import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { MenuDepthProvider, useMenuContext } from "./menu-context";
@@ -27,8 +28,6 @@ const ThemedCheck = withUnistyles(Check);
 const ThemedCheckCircle = withUnistyles(CheckCircle);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
-const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
 
 /**
@@ -187,7 +186,7 @@ function resolveLeadingContent(input: {
 }): ReactElement | null {
   const { isPending, isSuccess, leading } = input;
   if (isPending) {
-    return <ThemedLoadingSpinner size={16} uniProps={mutedMapping} />;
+    return <ThemedLoadingSpinner size={16} uniProps={mutedIconColorMapping} />;
   }
   if (isSuccess) {
     return <ThemedCheckCircle size={16} uniProps={successMapping} />;
@@ -273,7 +272,9 @@ export function MenuItem({
 
   const trailingContent =
     trailing ??
-    (!showSelectedCheck && selected ? <ThemedCheck size={16} uniProps={mutedMapping} /> : null);
+    (!showSelectedCheck && selected ? (
+      <ThemedCheck size={16} uniProps={mutedIconColorMapping} />
+    ) : null);
 
   const handleItemPress = useCallback(() => {
     if (isDisabled) return;
@@ -346,7 +347,7 @@ export function MenuItem({
     >
       {showSelectedCheck ? (
         <View style={styles.checkSlot}>
-          {selected ? <ThemedCheck size={16} uniProps={foregroundMapping} /> : null}
+          {selected ? <ThemedCheck size={16} uniProps={foregroundIconColorMapping} /> : null}
         </View>
       ) : null}
       {leadingContent ? <View style={styles.leadingSlot}>{leadingContent}</View> : null}

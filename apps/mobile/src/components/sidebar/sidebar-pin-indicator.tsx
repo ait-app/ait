@@ -2,10 +2,9 @@ import { Pin } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 const ThemedPin = withUnistyles(Pin);
-const mutedColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export function SidebarPinIndicator({ testID }: { testID: string }) {
   const { t } = useTranslation();
@@ -16,7 +15,7 @@ export function SidebarPinIndicator({ testID }: { testID: string }) {
       accessibilityLabel={t("sidebar.pinned.title")}
       pointerEvents="none"
     >
-      <ThemedPin size={12} uniProps={mutedColor} />
+      <ThemedPin size={12} uniProps={mutedIconColorMapping} />
     </View>
   );
 }

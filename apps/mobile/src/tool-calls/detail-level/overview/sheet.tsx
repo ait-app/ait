@@ -5,8 +5,8 @@ import { Wrench, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsolatedBottomSheetVisibility } from "@/components/ui/isolated-bottom-sheet-modal";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { ToolCallSheetModal, useToolCallSheetContextBridge } from "@/components/tool-call-sheet";
-import type { Theme } from "@/styles/theme";
 
 interface OverviewToolCallGroupSheetProps {
   visible: boolean;
@@ -18,8 +18,6 @@ interface OverviewToolCallGroupSheetProps {
 const SNAP_POINTS = ["60%", "95%"];
 const ThemedWrench = withUnistyles(Wrench);
 const ThemedX = withUnistyles(X);
-const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export function OverviewToolCallGroupSheet({
   visible,
@@ -61,7 +59,7 @@ export function OverviewToolCallGroupSheet({
       <View style={styles.container} testID="tool-call-group-sheet">
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <ThemedWrench size={20} uniProps={foregroundMapping} />
+            <ThemedWrench size={20} uniProps={foregroundIconColorMapping} />
             <Text
               style={styles.headerTitle}
               numberOfLines={2}
@@ -77,7 +75,7 @@ export function OverviewToolCallGroupSheet({
             accessibilityLabel={t("common.actions.close")}
             testID="tool-call-group-sheet-close"
           >
-            <ThemedX size={20} uniProps={foregroundMutedMapping} />
+            <ThemedX size={20} uniProps={mutedIconColorMapping} />
           </Pressable>
         </View>
         <BottomSheetScrollView ref={scrollRef} style={styles.content}>

@@ -9,14 +9,13 @@ import {
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useMenuContext, useMenuDepth } from "./menu-context";
 import { isSubPageOpen } from "./menu-navigation";
 import { useMenuSurface } from "./menu-surface";
 import { MenuItem } from "./menu-item";
 
 const ThemedChevronRight = withUnistyles(ChevronRight);
-const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
  * A row that leads to a submenu page, showing the decision's current value on the way in
@@ -118,7 +117,7 @@ function MenuSubTrailing({
         </Text>
       ) : null}
       {indicator ? <View style={styles.indicator} testID="menu-sub-indicator" /> : null}
-      <ThemedChevronRight size={14} uniProps={mutedIconMapping} />
+      <ThemedChevronRight size={14} uniProps={mutedIconColorMapping} />
     </View>
   );
 }

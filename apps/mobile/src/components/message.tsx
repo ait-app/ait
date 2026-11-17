@@ -17,6 +17,11 @@ import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mut
 import { TaskListRow } from "@/components/task-list-row";
 import { taskListRowKey } from "@/components/task-list-row-key";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  destructiveIconColorMapping,
+  foregroundIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useRevealedText, type MarkdownPhase } from "@/hooks/use-revealed-text";
@@ -147,14 +152,9 @@ const ThemedNotificationInfo = withUnistyles(Info);
 const ThemedNotificationWarning = withUnistyles(TriangleAlertIcon);
 const ThemedNotificationError = withUnistyles(XCircle);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const mutedForegroundColorMapping = (theme: Theme) => ({
   color: theme.colors.mutedForeground,
 });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const infoColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[300] });
 const warningColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
@@ -1328,7 +1328,7 @@ export const SpeakMessage = memo(function SpeakMessage({ message }: SpeakMessage
   return (
     <View testID="speak-message" style={containerStyle}>
       <View style={speakMessageStylesheet.header}>
-        <ThemedMicVocal size={12} uniProps={foregroundMutedColorMapping} />
+        <ThemedMicVocal size={12} uniProps={mutedIconColorMapping} />
         <Text style={speakMessageStylesheet.headerLabel}>{t("message.speak.header")}</Text>
       </View>
       <Text style={speakMessageStylesheet.text}>{message}</Text>
@@ -1398,7 +1398,7 @@ export const Notification = memo(function Notification({ level, message }: Notif
     },
     error: {
       bg: notificationStylesheet.errorBg,
-      iconColorMapping: destructiveColorMapping,
+      iconColorMapping: destructiveIconColorMapping,
       Icon: ThemedNotificationError,
     },
   };
@@ -1726,7 +1726,7 @@ function ExpandableBadgeLabelRow({
         >
           <ThemedFileSymlinkIcon
             size={14}
-            uniProps={isOpenFileHovered ? foregroundColorMapping : foregroundMutedColorMapping}
+            uniProps={isOpenFileHovered ? foregroundIconColorMapping : mutedIconColorMapping}
           />
         </Pressable>
       ) : null}
@@ -1781,12 +1781,12 @@ function renderExpandableBadgeIcon({
 }: {
   isError: boolean;
   isActive: boolean;
-  ThemedIcon: ComponentType<{ size?: number; uniProps?: typeof foregroundColorMapping }> | null;
+  ThemedIcon: ComponentType<{ size?: number; uniProps?: typeof foregroundIconColorMapping }> | null;
 }): ReactNode {
   if (isError) {
     return (
       <View style={LUCIDE_TOOL_ICON_NUDGE_LEFT}>
-        <ThemedTriangleAlertIcon size={12} opacity={0.8} uniProps={destructiveColorMapping} />
+        <ThemedTriangleAlertIcon size={12} opacity={0.8} uniProps={destructiveIconColorMapping} />
       </View>
     );
   }
@@ -1795,7 +1795,7 @@ function renderExpandableBadgeIcon({
       <View style={LUCIDE_TOOL_ICON_NUDGE_LEFT}>
         <ThemedIcon
           size={12}
-          uniProps={isActive ? foregroundColorMapping : mutedForegroundColorMapping}
+          uniProps={isActive ? foregroundIconColorMapping : mutedForegroundColorMapping}
         />
       </View>
     );
@@ -1815,7 +1815,7 @@ function renderExpandableBadgeIconSlot({
   if (showChevron) {
     return (
       <View style={chevronStyle}>
-        <ThemedChevronRightIcon size={12} uniProps={foregroundColorMapping} />
+        <ThemedChevronRightIcon size={12} uniProps={foregroundIconColorMapping} />
       </View>
     );
   }

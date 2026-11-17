@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
+import { extraMutedIconColorMapping } from "@/components/ui/icon-color";
 import { SPACING, type Theme } from "@/styles/theme";
 
 // Shared presentation primitives for the app's directory trees. Both the Files
@@ -26,20 +27,13 @@ export function treeRowPaddingLeft(depth: number): number {
   return SPACING[3] + depth * TREE_INDENT_PER_LEVEL;
 }
 
-const foregroundExtraMutedIconColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundExtraMuted,
-});
-
 const ThemedChevronRight = withUnistyles(ChevronRight);
 
 /** Rotating disclosure chevron for a directory row (points right; rotates down when expanded). */
 export function TreeChevron({ expanded }: { expanded: boolean }) {
   return (
     <View style={expanded ? [styles.chevron, styles.chevronExpanded] : styles.chevron}>
-      <ThemedChevronRight
-        size={WORKSPACE_TREE_ICON_SIZE}
-        uniProps={foregroundExtraMutedIconColorMapping}
-      />
+      <ThemedChevronRight size={WORKSPACE_TREE_ICON_SIZE} uniProps={extraMutedIconColorMapping} />
     </View>
   );
 }

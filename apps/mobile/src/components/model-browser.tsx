@@ -30,6 +30,7 @@ import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { extraMutedIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
@@ -111,7 +112,7 @@ function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
           accessibilityLabel={t("modelSelector.editProfilesLabel")}
           testID="model-profiles-edit"
         >
-          <ThemedPencil size={ICON_SIZE.xs} uniProps={foregroundExtraMutedMapping} />
+          <ThemedPencil size={ICON_SIZE.xs} uniProps={extraMutedIconColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
@@ -124,14 +125,6 @@ function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
 const IndependentScrollGestureContext = createContext<ReturnType<typeof Gesture.Native> | null>(
   null,
 );
-
-const foregroundMutedMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-
-const foregroundExtraMutedMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundExtraMuted,
-});
 
 const headerSettingsMapping = (disabled: boolean) => (theme: Theme) => ({
   color: disabled ? theme.colors.border : theme.colors.foregroundMuted,
@@ -551,7 +544,7 @@ function ModelBrowserRow({
             {selectionIndicator ? (
               <View style={styles.browserRowSelection}>
                 {selected ? (
-                  <ThemedCheck size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+                  <ThemedCheck size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
                 ) : null}
               </View>
             ) : null}
@@ -619,7 +612,7 @@ function ModelRow({
         <View style={styles.browserRowTrailing}>
           <View style={styles.browserRowSelection}>
             {isSelected ? (
-              <ThemedCheck size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+              <ThemedCheck size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
             ) : null}
           </View>
         </View>
@@ -718,7 +711,7 @@ function GroupProviderButton({
       return (
         <View style={styles.rowStateInline}>
           <View style={styles.rowSpinner}>
-            <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+            <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
           </View>
           <Text style={styles.drillDownCount}>{t("modelSelector.loadingShort")}</Text>
         </View>
@@ -726,7 +719,7 @@ function GroupProviderButton({
     }
     return (
       <View style={styles.rowStateInline}>
-        <ThemedAlertTriangle size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+        <ThemedAlertTriangle size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         <Text style={styles.drillDownCount}>{t("modelSelector.error")}</Text>
       </View>
     );
@@ -739,7 +732,7 @@ function GroupProviderButton({
     () => (
       <View style={styles.drillDownTrailing}>
         {stateNode}
-        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+        <ThemedChevronRight size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
       </View>
     ),
     [stateNode],
@@ -926,7 +919,7 @@ function ProviderErrorEmptyState({
   }, [onRetryProvider, providerId]);
   return (
     <View style={styles.emptyState}>
-      <ThemedAlertTriangle size={ICON_SIZE.md} uniProps={foregroundMutedMapping} />
+      <ThemedAlertTriangle size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
       <Text style={styles.emptyStateText}>{message}</Text>
       {onRetryProvider ? (
         <Button variant="default" size="sm" onPress={handleRetry} disabled={isRetryingProvider}>
@@ -941,7 +934,7 @@ function ModelSearchEmptyState() {
   const { t } = useTranslation();
   return (
     <View style={styles.emptyState}>
-      <ThemedSearch size={ICON_SIZE.md} uniProps={foregroundMutedMapping} />
+      <ThemedSearch size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
       <Text style={styles.emptyStateText}>{t("modelSelector.noMatches")}</Text>
     </View>
   );
@@ -1020,7 +1013,7 @@ function ProviderModelBrowserContent({
     return (
       <View style={styles.emptyState}>
         <View style={styles.rowSpinner}>
-          <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+          <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </View>
         <Text style={styles.emptyStateText}>{t("modelSelector.loadingShort")}</Text>
       </View>
@@ -1181,7 +1174,7 @@ export function ModelBrowser({
   if (allView.kind === "noSearchMatches") {
     return (
       <View style={styles.emptyState} testID="model-search-empty">
-        <ThemedSearch size={ICON_SIZE.md} uniProps={foregroundMutedMapping} />
+        <ThemedSearch size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
         <Text style={styles.emptyStateText}>
           {t("modelSelector.noMatchesForQuery", { query: searchQuery.trim() })}
         </Text>

@@ -36,6 +36,7 @@ import {
   MenuTrigger,
   type MenuPageDefinition,
 } from "@/components/ui/menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
@@ -61,8 +62,6 @@ import { useWorkspaceLabelProjection } from "@/workspace-labels";
 import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
 
-const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const ThemedSettings2 = withUnistyles(Settings2);
 /** CI's mark: the subject of the checks row, and the shape the icon-only option leaves behind. */
 const ThemedCircleCheck = withUnistyles(CircleCheck);
@@ -79,7 +78,7 @@ const MENU_WIDTH = 232;
  * circle inside it, so the ring's outer edge lands on the dots' edge at 11 and 1pt short at 10.
  * The glyphs are what have to agree here, not the boxes they are centred in.
  */
-const UNLABELLED_MARK = <ThemedCircle size={11} uniProps={mutedIconMapping} />;
+const UNLABELLED_MARK = <ThemedCircle size={11} uniProps={mutedIconColorMapping} />;
 
 type OptionIcon = ComponentType<{
   size: number;
@@ -294,7 +293,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
           accessibilityLabel={t("sidebar.display.trigger")}
           testID="sidebar-display-preferences-menu"
         >
-          <ThemedSettings2 size={14} uniProps={mutedIconMapping} />
+          <ThemedSettings2 size={14} uniProps={mutedIconColorMapping} />
         </MenuTrigger>
         <MenuSurface
           align="end"
@@ -495,7 +494,7 @@ function OptionItem<Value extends string>({
 }): ReactElement {
   const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
   const leading = useMemo(
-    () => <Icon size={OPTION_ICON_SIZE} uniProps={mutedIconMapping} />,
+    () => <Icon size={OPTION_ICON_SIZE} uniProps={mutedIconColorMapping} />,
     [Icon],
   );
   return (
@@ -592,7 +591,7 @@ function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
 function ChecksSubTrigger(): ReactElement {
   const { t } = useTranslation();
   const leading = useMemo(
-    () => <ThemedCircleCheck size={OPTION_ICON_SIZE} uniProps={mutedIconMapping} />,
+    () => <ThemedCircleCheck size={OPTION_ICON_SIZE} uniProps={mutedIconColorMapping} />,
     [],
   );
   return (

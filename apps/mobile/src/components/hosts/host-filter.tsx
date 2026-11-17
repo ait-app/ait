@@ -4,7 +4,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { ChevronDown, Server } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { HostProfile } from "@/types/host-connection";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import {
   ALL_HOSTS_OPTION_ID,
   getHostPickerLabel,
@@ -14,7 +14,6 @@ import {
 
 const ThemedServer = withUnistyles(Server);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export interface HostFilterProps {
   hosts: HostProfile[];
@@ -85,14 +84,14 @@ export function HostFilter({
           accessibilityLabel={t("hostPicker.filterLabel", { host: selectedHostLabel })}
         >
           {selectedHost === ALL_HOSTS_OPTION_ID ? (
-            <ThemedServer size={14} uniProps={mutedColorMapping} />
+            <ThemedServer size={14} uniProps={mutedIconColorMapping} />
           ) : (
             <HostStatusDotSlot serverId={selectedHost} />
           )}
           <Text style={styles.filterTriggerText} numberOfLines={1}>
             {selectedHostLabel}
           </Text>
-          <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={14} uniProps={mutedIconColorMapping} />
         </Pressable>
       </View>
     </HostPicker>

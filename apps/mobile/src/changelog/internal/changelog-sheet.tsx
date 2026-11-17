@@ -14,7 +14,8 @@ import {
   iconButtonChromeStyle,
 } from "@/components/ui/icon-button-chrome";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useChangelog, type ChangelogState } from "./changelog-source";
@@ -30,8 +31,7 @@ const WEBSITE_CHANGELOG_URL = "https://github.com/ait-app/ait/releases";
 const ThemedGift = withUnistyles(Gift);
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />;
 const websiteButtonStyle = (state: PressableStateCallbackType & { hovered?: boolean }) =>
   iconButtonChromeStyle({ size: "large", state });
 
@@ -64,7 +64,7 @@ export function ChangelogSheet({ visible, onClose }: ChangelogSheetProps) {
         >
           <ThemedExternalLink
             size={iconButtonChromeGlyphSize("large")}
-            uniProps={mutedColorMapping}
+            uniProps={mutedIconColorMapping}
           />
         </Pressable>
       ),
@@ -103,7 +103,7 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
   if (state.status === "loading") {
     return (
       <View style={styles.centered}>
-        <ThemedLoadingSpinner size="large" uniProps={mutedColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
       </View>
     );
   }

@@ -118,7 +118,6 @@ import {
   shouldShowWorkspaceSetup,
   useWorkspaceSetupStore,
 } from "@/stores/workspace-setup-store";
-import type { Theme } from "@/styles/theme";
 import { resolveCloseAgentTabPolicy } from "@/subagents";
 import { useOpenAgentTabLabels } from "@/subagents/use-open-agent-tab-labels";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
@@ -205,6 +204,7 @@ import {
   useComposerTabFullscreen,
 } from "@/composer/editing-session";
 import { SheetHostScope } from "@/components/ui/isolated-bottom-sheet-modal";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { selectPaneFocusSuspended, type SheetTab } from "@/stores/workspace-layout-store";
 import { EXPLORER_TOGGLE_KEYS } from "@/screens/workspace/workspace-explorer-toggle";
 import { SheetTabs } from "@/screens/workspace/sheet-tabs";
@@ -223,8 +223,6 @@ const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
 const EMPTY_SET = new Set<string>();
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 interface WorkspaceScreenProps {
   serverId: string;
@@ -519,7 +517,7 @@ function renderWorkspaceContent(input: RenderWorkspaceContentInput): React.React
   if (!activeTabDescriptor && (!hasHydratedAgents || !hasLoadedTerminals)) {
     return (
       <View style={styles.emptyState}>
-        <ThemedLoadingSpinner uniProps={mutedColorMapping} />
+        <ThemedLoadingSpinner uniProps={mutedIconColorMapping} />
       </View>
     );
   }

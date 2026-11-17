@@ -12,7 +12,12 @@ import {
 } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import type { BotNotification, BotTurn, BotTurnMessage } from "@ait/protocol/bot/types";
-import type { Theme } from "@/styles/theme";
+import {
+  mutedIconColorMapping,
+  statusDangerIconColorMapping,
+  statusSuccessIconColorMapping,
+  statusWarningIconColorMapping,
+} from "@/components/ui/icon-color";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import {
   botChatStyles as chatStyles,
@@ -30,10 +35,6 @@ const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedHand = withUnistyles(Hand);
 const ThemedListTodo = withUnistyles(ListTodo);
-const mutedColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const successColor = (theme: Theme) => ({ color: theme.colors.statusSuccess });
-const dangerColor = (theme: Theme) => ({ color: theme.colors.statusDanger });
-const warningColor = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 const KIND_LABEL_KEYS: Record<string, string> = {
   agent_finished: "bots.notifications.kind.agent_finished",
@@ -57,19 +58,19 @@ export function NotificationKindIcon({ kind }: { kind: string }) {
     case "agent_finished":
     case "schedule_succeeded":
     case "ticket_done":
-      return <ThemedCircleCheck size={14} uniProps={successColor} />;
+      return <ThemedCircleCheck size={14} uniProps={statusSuccessIconColorMapping} />;
     case "agent_failed":
     case "schedule_failed":
     case "ticket_failed":
-      return <ThemedCircleX size={14} uniProps={dangerColor} />;
+      return <ThemedCircleX size={14} uniProps={statusDangerIconColorMapping} />;
     case "agent_permission":
-      return <ThemedCircleAlert size={14} uniProps={warningColor} />;
+      return <ThemedCircleAlert size={14} uniProps={statusWarningIconColorMapping} />;
     case "ticket_blocked":
-      return <ThemedHand size={14} uniProps={warningColor} />;
+      return <ThemedHand size={14} uniProps={statusWarningIconColorMapping} />;
     case "terminal_attention":
-      return <ThemedSquareTerminal size={14} uniProps={mutedColor} />;
+      return <ThemedSquareTerminal size={14} uniProps={mutedIconColorMapping} />;
     default:
-      return <ThemedBell size={14} uniProps={mutedColor} />;
+      return <ThemedBell size={14} uniProps={mutedIconColorMapping} />;
   }
 }
 
@@ -128,7 +129,7 @@ function WakeTicket({
   });
   return (
     <View style={[chatStyles.wakeEntryLine, ticketStyles.wakeTicket]}>
-      <ThemedListTodo size={14} uniProps={mutedColor} />
+      <ThemedListTodo size={14} uniProps={mutedIconColorMapping} />
       {onOpenTicket ? (
         <Pressable
           style={styles.grow}
@@ -171,7 +172,7 @@ export function BotWakeHeader({
   return (
     <View style={chatStyles.wake} testID={`bot-wake-${turn.id}`}>
       <View style={chatStyles.wakeTitle}>
-        <ThemedBell size={14} uniProps={mutedColor} />
+        <ThemedBell size={14} uniProps={mutedIconColorMapping} />
         <Text style={styles.hint}>{t("bots.notifications.wokeBy")}</Text>
       </View>
       {notifications.map((notification) => {

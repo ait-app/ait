@@ -4,11 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 
 const ThemedInfo = withUnistyles(Info);
-
-const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 interface SettingsInfoTipProps {
   /** Header the tip belongs to; used for the accessibility label. */
@@ -33,7 +32,7 @@ export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
           hitSlop={8}
           style={styles.button}
         >
-          <ThemedInfo size={ICON_SIZE.sm} uniProps={mutedIconMapping} />
+          <ThemedInfo size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="start" offset={8}>

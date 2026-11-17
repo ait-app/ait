@@ -4,9 +4,9 @@ import { FolderOpen } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ContextMenuItem } from "@/components/ui/context-menu";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getIsElectron } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
-import type { Theme } from "@/styles/theme";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 
 interface OpenInFileManagerMenuItemProps {
@@ -17,11 +17,7 @@ interface OpenInFileManagerMenuItemProps {
 
 const ThemedFolderOpen = withUnistyles(FolderOpen);
 
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-
-const leadingIcon = <ThemedFolderOpen size={14} uniProps={foregroundMutedColorMapping} />;
+const leadingIcon = <ThemedFolderOpen size={14} uniProps={mutedIconColorMapping} />;
 
 export function OpenInFileManagerMenuItem({
   path,

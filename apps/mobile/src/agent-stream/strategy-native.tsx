@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { StreamItem } from "@/types/stream";
-import type { Theme } from "@/styles/theme";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeyboardStreamInset } from "@/keyboard/shift";
 import { useRevisedHistoryRows } from "./history-row-revision";
@@ -34,9 +34,6 @@ const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
 });
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const historyStartSlotStyle: ViewStyle = {
   alignItems: "center",
   justifyContent: "center",
@@ -481,7 +478,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         <View style={historyStartSlotStyle} testID="older-history-slot">
           {isLoadingOperation ? (
             <View testID="load-older-history-spinner">
-              <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+              <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
             </View>
           ) : null}
         </View>

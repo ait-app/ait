@@ -6,7 +6,7 @@ import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 // Every attachment pill body — image thumbnail or labelled — renders at this
 // height so mixed attachment trays line up.
@@ -68,7 +68,7 @@ export function AttachmentPill({
         accessibilityLabel={removeAccessibilityLabel}
         style={closeButtonStyle}
       >
-        <ThemedX size={12} uniProps={iconForegroundMutedMapping} />
+        <ThemedX size={12} uniProps={mutedIconColorMapping} />
       </Pressable>
     </View>
   );
@@ -142,7 +142,6 @@ export function AttachmentThumbnail({ metadata }: { metadata: AttachmentMetadata
 }
 
 const ThemedX = withUnistyles(X);
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const styles = StyleSheet.create((theme) => ({
   wrapper: {

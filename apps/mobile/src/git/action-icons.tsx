@@ -8,7 +8,7 @@ import {
   RefreshCcw,
   Upload,
 } from "lucide-react-native";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
 const ThemedDownload = withUnistyles(Download);
@@ -18,14 +18,12 @@ const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 export const GIT_ACTION_ICONS = {
-  commit: <ThemedGitCommitHorizontal size={16} uniProps={mutedColorMapping} />,
-  pull: <ThemedDownload size={16} uniProps={mutedColorMapping} />,
-  push: <ThemedUpload size={16} uniProps={mutedColorMapping} />,
-  pullAndPush: <ThemedArrowDownUp size={16} uniProps={mutedColorMapping} />,
-  merge: <ThemedGitMerge size={16} uniProps={mutedColorMapping} />,
-  resetWorkspace: <ThemedRefreshCcw size={16} uniProps={mutedColorMapping} />,
-  archive: <ThemedArchive size={16} uniProps={mutedColorMapping} />,
+  commit: <ThemedGitCommitHorizontal size={16} uniProps={mutedIconColorMapping} />,
+  pull: <ThemedDownload size={16} uniProps={mutedIconColorMapping} />,
+  push: <ThemedUpload size={16} uniProps={mutedIconColorMapping} />,
+  pullAndPush: <ThemedArrowDownUp size={16} uniProps={mutedIconColorMapping} />,
+  merge: <ThemedGitMerge size={16} uniProps={mutedIconColorMapping} />,
+  resetWorkspace: <ThemedRefreshCcw size={16} uniProps={mutedIconColorMapping} />,
+  archive: <ThemedArchive size={16} uniProps={mutedIconColorMapping} />,
 };

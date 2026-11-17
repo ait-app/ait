@@ -17,22 +17,18 @@ import { parseQuestionFormQuestions } from "@/components/question-form-card-core
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import {
+  accentForegroundIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import type { Theme } from "@/styles/theme";
 import type { PendingPermission } from "@/types/shared";
 import { toErrorMessage } from "@/utils/error-messages";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCheckIcon = withUnistyles(Check);
 const ThemedXIcon = withUnistyles(X);
-
-const primaryColorMapping = (theme: Theme) => ({
-  color: theme.colors.accentForeground,
-});
-const mutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 const pressableStyle = ({
   pressed,
@@ -72,7 +68,7 @@ function PermissionActionButton({
   const optionTextStyle = isPrimary
     ? [permissionStyles.optionText, permissionStyles.optionTextPrimary]
     : permissionStyles.optionText;
-  const colorMapping = isPrimary ? primaryColorMapping : mutedColorMapping;
+  const colorMapping = isPrimary ? accentForegroundIconColorMapping : mutedIconColorMapping;
   return (
     <Pressable
       accessibilityRole="button"

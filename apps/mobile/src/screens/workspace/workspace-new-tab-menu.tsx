@@ -8,9 +8,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import type { Theme } from "@/styles/theme";
 import {
   useWorkspaceTabLaunchCatalog,
   type WorkspaceTabLaunchItem,
@@ -19,8 +19,6 @@ import {
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { PanelIconProps } from "@/panels/panel-registry";
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function LaunchItemIconGlyph({
   Icon,
@@ -36,7 +34,7 @@ const ThemedLaunchItemIconGlyph = withUnistyles(LaunchItemIconGlyph);
 
 function LaunchItemIcon({ item }: { item: WorkspaceTabLaunchItem }): ReactElement | null {
   if (item.Icon) {
-    return <ThemedLaunchItemIconGlyph Icon={item.Icon} uniProps={mutedColorMapping} />;
+    return <ThemedLaunchItemIconGlyph Icon={item.Icon} uniProps={mutedIconColorMapping} />;
   }
   if (item.terminalIconKey) {
     return (

@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { AgentRouteResolution } from "@/navigation/agent-route-resolution";
 import { formatConnectionStatus } from "@/utils/daemons";
-import type { Theme } from "@/styles/theme";
 
 type VisibleAgentRouteResolution = Extract<
   AgentRouteResolution,
@@ -14,9 +14,6 @@ type VisibleAgentRouteResolution = Extract<
 >;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 export function AgentRouteResolutionView({
   resolution,
@@ -38,7 +35,7 @@ export function AgentRouteResolutionView({
   if (resolution.kind === "fetchingAgent") {
     return (
       <View style={styles.emptyState} testID="agent-route-fetching">
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
         <View style={styles.textStack}>
           <Text style={styles.title}>
             {t("agentPanel.unavailable.preparingSession", { serverLabel: hostName })}
@@ -79,9 +76,7 @@ export function AgentRouteResolutionView({
 
   return (
     <View style={styles.emptyState} testID="agent-route-waiting-for-host">
-      {isConnecting ? (
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
-      ) : null}
+      {isConnecting ? <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} /> : null}
       <View style={styles.textStack}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>

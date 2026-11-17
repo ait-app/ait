@@ -2,7 +2,7 @@ import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { isElectronRuntime } from "@/desktop/host";
 import { AccountHostPanel } from "./account-host-panel";
 import { supportsAccountRelay } from "@/runtime/account-state";
-import type { Theme } from "@/styles/theme";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 import { Globe, Link2, Terminal } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,6 @@ import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 const ThemedLink2 = withUnistyles(Link2);
 const ThemedTerminal = withUnistyles(Terminal);
 const ThemedGlobe = withUnistyles(Globe);
-const foregroundIconMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 const styles = StyleSheet.create((theme) => ({
   option: {
@@ -104,7 +103,7 @@ export function AddHostMethodModal({
             accessibilityLabel={t("pairing.connectionMethods.direct.title")}
             testID="add-host-method-direct"
           >
-            <ThemedLink2 size={18} uniProps={foregroundIconMapping} />
+            <ThemedLink2 size={18} uniProps={foregroundIconColorMapping} />
             <View style={styles.optionBody}>
               <Text style={styles.optionText}>{t("pairing.connectionMethods.direct.title")}</Text>
               <Text style={styles.optionSubtext}>
@@ -121,7 +120,7 @@ export function AddHostMethodModal({
               accessibilityLabel={t("onlineService.title")}
               testID="add-host-method-online-service"
             >
-              <ThemedGlobe size={18} uniProps={foregroundIconMapping} />
+              <ThemedGlobe size={18} uniProps={foregroundIconColorMapping} />
               <View style={styles.optionBody}>
                 <Text style={styles.optionText}>{t("onlineService.title")}</Text>
                 <Text style={styles.optionSubtext}>{t("onlineService.connectionDescription")}</Text>
@@ -137,7 +136,7 @@ export function AddHostMethodModal({
               accessibilityLabel={t("pairing.connectionMethods.remoteSsh.title")}
               testID="add-host-method-remote-ssh"
             >
-              <ThemedTerminal size={18} uniProps={foregroundIconMapping} />
+              <ThemedTerminal size={18} uniProps={foregroundIconColorMapping} />
               <View style={styles.optionBody}>
                 <Text style={styles.optionText}>
                   {t("pairing.connectionMethods.remoteSsh.title")}

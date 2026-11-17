@@ -34,7 +34,11 @@ import {
 } from "@/utils/workspace-script-links";
 import type { Theme } from "@/styles/theme";
 import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-color";
+import {
+  extraMutedIconColorMapping,
+  foregroundIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
 
 type RowActionIcon = "copy" | "open" | "restart" | "start" | "stop" | "terminal";
 
@@ -57,12 +61,6 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedSquare = withUnistyles(Square);
 
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
-const mutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const blueColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.blue[500],
 });
@@ -105,7 +103,7 @@ function RowActionIconElement({
   hovered?: boolean;
   icon: RowActionIcon;
 }): ReactElement {
-  const colorMapping = hovered ? foregroundColorMapping : mutedColorMapping;
+  const colorMapping = hovered ? foregroundIconColorMapping : mutedIconColorMapping;
   switch (icon) {
     case "copy":
       return <ThemedCopy size={11} uniProps={colorMapping} />;
@@ -227,10 +225,10 @@ function resolveScriptIconColorMapping(args: {
     if (isRunning && script.health === "healthy") return greenColorMapping;
     if (isRunning && script.health === "unhealthy") return redColorMapping;
     if (isRunning) return blueColorMapping;
-    return mutedColorMapping;
+    return mutedIconColorMapping;
   }
   if (isRunning) return blueColorMapping;
-  return mutedColorMapping;
+  return mutedIconColorMapping;
 }
 
 function ScriptRow({
@@ -411,7 +409,7 @@ export function WorkspaceScriptsButton({
   }
 
   const hasAnyRunning = scripts.some((s) => s.lifecycle === "running");
-  const triggerPlayMapping = hasAnyRunning ? blueColorMapping : mutedColorMapping;
+  const triggerPlayMapping = hasAnyRunning ? blueColorMapping : mutedIconColorMapping;
 
   return (
     <View style={styles.row}>

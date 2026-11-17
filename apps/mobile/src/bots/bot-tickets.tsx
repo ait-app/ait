@@ -13,7 +13,12 @@ import {
 } from "@/composer/tracks";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import type { Theme } from "@/styles/theme";
+import {
+  mutedIconColorMapping,
+  statusDangerIconColorMapping,
+  statusSuccessIconColorMapping,
+  statusWarningIconColorMapping,
+} from "@/components/ui/icon-color";
 import { botKeys } from "./queries";
 import { botTicketStyles as ticketStyles } from "./styles";
 import {
@@ -31,10 +36,6 @@ const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleSlash = withUnistyles(CircleSlash);
 const ThemedCircleX = withUnistyles(CircleX);
-const mutedColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const successColor = (theme: Theme) => ({ color: theme.colors.statusSuccess });
-const dangerColor = (theme: Theme) => ({ color: theme.colors.statusDanger });
-const warningColor = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 /** Open tickets fit in one default page: the host keeps at most 32 open per Bot. */
 const OPEN_LIMIT = 50;
@@ -81,15 +82,15 @@ export function useBotTickets(
 export function TicketStatusIcon({ status }: { status: string }) {
   switch (status) {
     case "waiting":
-      return <ThemedCircleAlert size={14} uniProps={warningColor} />;
+      return <ThemedCircleAlert size={14} uniProps={statusWarningIconColorMapping} />;
     case "done":
-      return <ThemedCircleCheck size={14} uniProps={successColor} />;
+      return <ThemedCircleCheck size={14} uniProps={statusSuccessIconColorMapping} />;
     case "failed":
-      return <ThemedCircleX size={14} uniProps={dangerColor} />;
+      return <ThemedCircleX size={14} uniProps={statusDangerIconColorMapping} />;
     case "cancelled":
-      return <ThemedCircleSlash size={14} uniProps={mutedColor} />;
+      return <ThemedCircleSlash size={14} uniProps={mutedIconColorMapping} />;
     default:
-      return <ThemedCircleDot size={14} uniProps={mutedColor} />;
+      return <ThemedCircleDot size={14} uniProps={mutedIconColorMapping} />;
   }
 }
 

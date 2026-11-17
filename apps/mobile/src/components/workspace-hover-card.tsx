@@ -23,7 +23,6 @@ import {
 } from "lucide-react-native";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
-import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { Pressable } from "react-native";
 import type {
@@ -53,6 +52,7 @@ import { formatCheckPresentationCountsLabel } from "@/git/check-presentation-cop
 import { CheckPresentationIcon, getCheckPresentationTone } from "@/git/check-presentation.view";
 import { buildForgeChecksUrl } from "@/git/forge-url";
 import { measureElement } from "@/components/ui/menu/menu-anchor";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 
 interface Rect {
   x: number;
@@ -287,7 +287,7 @@ function WorkspaceHoverCardContent({
           {prHint ? <PrBadge hint={prHint} style={styles.cardInfoRow} /> : null}
           {workspace.diffStat ? (
             <View style={styles.cardInfoRow}>
-              <ThemedFileDiff size={12} uniProps={foregroundMutedColorMapping} />
+              <ThemedFileDiff size={12} uniProps={mutedIconColorMapping} />
               <DiffStat
                 additions={workspace.diffStat.additions}
                 deletions={workspace.diffStat.deletions}
@@ -348,9 +348,6 @@ const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedCheck = withUnistyles(Check);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 function InfoRow({
   icon: Icon,
   value,
@@ -362,7 +359,7 @@ function InfoRow({
 }) {
   return (
     <View style={styles.cardInfoRow}>
-      <Icon size={12} uniProps={foregroundMutedColorMapping} />
+      <Icon size={12} uniProps={mutedIconColorMapping} />
       <Text style={styles.cardInfoText} numberOfLines={1} testID={testID}>
         {value}
       </Text>
@@ -370,7 +367,10 @@ function InfoRow({
   );
 }
 
-function renderChecksSummaryForgeIcon(icon: string, iconUniProps: typeof foregroundColorMapping) {
+function renderChecksSummaryForgeIcon(
+  icon: string,
+  iconUniProps: typeof foregroundIconColorMapping,
+) {
   return <ForgeBrandIcon iconKind={icon} size={12} uniProps={iconUniProps} />;
 }
 
@@ -415,9 +415,9 @@ function CopyableInfoRow({
   const handleHoverIn = useCallback(() => setIsHovered(true), []);
   const handleHoverOut = useCallback(() => setIsHovered(false), []);
 
-  let iconUniProps = foregroundMutedColorMapping;
+  let iconUniProps = mutedIconColorMapping;
   if (copied || isHovered) {
-    iconUniProps = foregroundColorMapping;
+    iconUniProps = foregroundIconColorMapping;
   }
   const textStyle =
     copied || isHovered ? [styles.cardInfoText, styles.cardInfoTextHovered] : styles.cardInfoText;
@@ -488,7 +488,7 @@ function ChecksSummaryContent({
   const labelStyle = hovered
     ? [styles.checksSummaryLabel, styles.checksSummaryLabelHovered]
     : styles.checksSummaryLabel;
-  const iconUniProps = hovered ? foregroundColorMapping : foregroundMutedColorMapping;
+  const iconUniProps = hovered ? foregroundIconColorMapping : mutedIconColorMapping;
   const icon = getForgePresentation(normalizeForge(forge)).icon;
 
   return (
@@ -606,7 +606,7 @@ function PrBadge({ hint, style }: { hint: PrHint; style?: StyleProp<ViewStyle> }
       style={pressableStyle}
     >
       {isHovered ? (
-        <ThemedExternalLink size={12} uniProps={foregroundColorMapping} />
+        <ThemedExternalLink size={12} uniProps={foregroundIconColorMapping} />
       ) : (
         <PullRequestStateIcon state={hint.state} size={12} />
       )}

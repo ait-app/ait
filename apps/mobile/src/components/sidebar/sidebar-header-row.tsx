@@ -4,12 +4,9 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
 import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
 import { ICON_SIZE } from "@/styles/theme";
-import type { Theme } from "@/styles/theme";
 import { Shortcut } from "@/components/ui/shortcut";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 type SidebarHeaderRowVariant = "header" | "compact";
 
@@ -65,7 +62,7 @@ export function SidebarHeaderRow({
         <>
           <ThemedIcon
             size={ICON_SIZE.sm}
-            uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
+            uniProps={isHighlighted ? foregroundIconColorMapping : mutedIconColorMapping}
           />
           <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
           {trailingText ? <Text style={styles.trailingText}>{trailingText}</Text> : null}

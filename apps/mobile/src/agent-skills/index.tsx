@@ -7,9 +7,10 @@ import { Blocks, Check, Settings2 } from "lucide-react-native";
 import type { AgentSkillOperation, AgentSkillsStatus } from "@ait/protocol/messages";
 import type { TFunction } from "i18next";
 import { Button } from "@/components/ui/button";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { SkillSelectionSheet } from "./selection-sheet";
 import { useAgentSkills } from "./use-agent-skills";
@@ -22,8 +23,6 @@ const OP_KIND_ORDER: Record<AgentSkillOperation["kind"], number> = {
 const ThemedBlocks = withUnistyles(Blocks);
 const ThemedCheck = withUnistyles(Check);
 const ThemedSettings = withUnistyles(Settings2);
-const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function formatUpdateMessage(ops: readonly AgentSkillOperation[], t: TFunction): string {
   return [...ops]
@@ -81,7 +80,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     if (confirmed) await skills.uninstall();
   }, [skills, t]);
   const chooseIcon = useMemo(
-    () => <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedMapping} />,
+    () => <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />,
     [],
   );
   const handleOpen = useCallback(() => setIsChoosing(true), []);
@@ -117,7 +116,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <View style={styles.rowTitleRow}>
-              <ThemedBlocks size={ICON_SIZE.md} uniProps={foregroundMapping} />
+              <ThemedBlocks size={ICON_SIZE.md} uniProps={foregroundIconColorMapping} />
               <Text style={settingsStyles.rowTitle}>{t("settings.host.skills.title")}</Text>
             </View>
             <Text style={settingsStyles.rowHint}>
@@ -179,7 +178,7 @@ function SkillsActions({
     return (
       <View style={styles.actionsRow}>
         <View style={styles.installedLabel}>
-          <ThemedCheck size={14} uniProps={mutedMapping} />
+          <ThemedCheck size={14} uniProps={mutedIconColorMapping} />
           <Text style={styles.mutedText}>{t("settings.host.skills.actions.installed")}</Text>
         </View>
         <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>

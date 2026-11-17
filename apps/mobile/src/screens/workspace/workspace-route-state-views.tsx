@@ -5,14 +5,11 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { formatConnectionStatus } from "@/utils/daemons";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
-import type { Theme } from "@/styles/theme";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 interface WorkspaceRouteStateActions {
   onRetryHost: () => void;
@@ -106,7 +103,7 @@ function WorkspaceConnecting({ hostName }: { hostName: string }) {
 
   return (
     <View style={styles.emptyState}>
-      <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+      <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
       <View style={styles.textStack}>
         <Text style={styles.title}>{t("workspace.route.loading")}</Text>
         <Text style={styles.description}>{hostName}</Text>
@@ -144,9 +141,7 @@ function ArchivedWorkspaceRecovery({
 
   return (
     <View style={styles.emptyState}>
-      {isRestoring ? (
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
-      ) : null}
+      {isRestoring ? <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} /> : null}
       <View style={styles.textStack}>
         <Text style={styles.title}>
           {isRestoring
@@ -219,7 +214,7 @@ function WorkspaceUnreachable({
   return (
     <View style={styles.emptyState}>
       {state.connectionStatus === "connecting" || state.connectionStatus === "idle" ? (
-        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="small" uniProps={mutedIconColorMapping} />
       ) : null}
       <View style={styles.textStack}>
         <Text style={styles.title}>{getWorkspaceHostStateTitle(state, t)}</Text>

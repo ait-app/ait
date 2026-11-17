@@ -7,6 +7,7 @@ import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 
 const ThemedSearch = withUnistyles(Search);
 const ThemedX = withUnistyles(X);
@@ -15,8 +16,6 @@ const ThemedTextInput = withUnistyles(TextInput, (theme: Theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
   selectionColor: theme.colors.foreground,
 }));
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export interface SearchFieldProps {
   value: string;
@@ -54,7 +53,7 @@ export function SearchField({
 
   return (
     <View style={[styles.field, isFocused && styles.fieldFocused]}>
-      <ThemedSearch size={14} uniProps={mutedColorMapping} />
+      <ThemedSearch size={14} uniProps={mutedIconColorMapping} />
       <ThemedTextInput
         testID={testID}
         ref={inputRef}
@@ -77,7 +76,7 @@ export function SearchField({
           accessibilityLabel={clearAccessibilityLabel}
           hitSlop={8}
         >
-          <ThemedX size={14} uniProps={mutedColorMapping} />
+          <ThemedX size={14} uniProps={mutedIconColorMapping} />
         </Pressable>
       ) : null}
     </View>

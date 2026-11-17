@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, type ReactElement } from "react";
 import { Info } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getForgePresentation, type Forge } from "@/git/forge";
 import { ForgeBrandIcon, getForgeBrandColorMapping } from "@/git/forge-icon";
 import { type CheckoutGitActionStatus, useCheckoutGitActionsStore } from "@/git/actions-store";
@@ -32,7 +32,6 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { deriveWorkspaceActionState, hasActiveWorkspaceAgents } from "./workspace-action-state";
 import { GIT_ACTION_ICONS as icons } from "./action-icons";
 
-const forgeMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedInfo = withUnistyles(Info, (theme) => ({ color: theme.colors.foreground }));
 
 export function useGitActionRunner(): (action: GitAction) => void {
@@ -66,7 +65,7 @@ function renderForgePrIcon(forge: Forge): ReactElement {
     <ForgeBrandIcon
       iconKind={icon}
       size={16}
-      uniProps={getForgeBrandColorMapping(icon) ?? forgeMutedColorMapping}
+      uniProps={getForgeBrandColorMapping(icon) ?? mutedIconColorMapping}
     />
   );
 }

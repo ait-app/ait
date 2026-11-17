@@ -11,6 +11,7 @@ import {
   type FieldControlSize,
 } from "@/components/ui/control-geometry";
 import { Field } from "@/components/ui/form-field";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { identityForeground } from "@/styles/identity-colors";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { AgentProfileGlyph } from "../internal/agent-profile-glyph";
@@ -37,7 +38,6 @@ const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCheck = withUnistyles(Check);
 
-const foregroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const onIdentityMapping = (theme: Theme) => ({ color: theme.colors.background });
 
 /**
@@ -125,7 +125,7 @@ function ColorCell({
         {selected ? (
           <ThemedCheck
             size={ICON_SIZE.sm}
-            uniProps={color === "none" ? foregroundMutedMapping : onIdentityMapping}
+            uniProps={color === "none" ? mutedIconColorMapping : onIdentityMapping}
           />
         ) : null}
       </View>
@@ -221,7 +221,7 @@ export function AgentProfileAppearanceField({
             color={selectedColor}
             size={ICON_SIZE.md}
           />
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
         </Pressable>
       </View>
       <Combobox

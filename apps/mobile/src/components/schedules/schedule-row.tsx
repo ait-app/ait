@@ -13,11 +13,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  destructiveIconColorMapping,
+  foregroundIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
 import { getProviderIcon } from "@/components/provider-icons";
 import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
-import type { Theme } from "@/styles/theme";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
 import {
   formatCadence,
@@ -36,10 +40,6 @@ const ThemedPlay = withUnistyles(Play);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedKebab = withUnistyles(MoreVertical);
-
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 
 const MENU_ICON_SIZE = 14;
 const PROVIDER_ICON_SIZE = 16;
@@ -273,11 +273,11 @@ export function ScheduleRow({
   );
 }
 
-const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
-const pauseLeading = <ThemedPause size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
-const resumeLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
-const runLeading = <ThemedRotateCw size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
-const deleteLeading = <ThemedTrash2 size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
+const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const pauseLeading = <ThemedPause size={MENU_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const resumeLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const runLeading = <ThemedRotateCw size={MENU_ICON_SIZE} uniProps={mutedIconColorMapping} />;
+const deleteLeading = <ThemedTrash2 size={MENU_ICON_SIZE} uniProps={destructiveIconColorMapping} />;
 
 function ScheduleExecutionMenuItems({
   schedule,
@@ -347,7 +347,7 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }): ReactElemen
   return (
     <ThemedKebab
       size={MENU_ICON_SIZE}
-      uniProps={hovered ? foregroundColorMapping : mutedColorMapping}
+      uniProps={hovered ? foregroundIconColorMapping : mutedIconColorMapping}
     />
   );
 }

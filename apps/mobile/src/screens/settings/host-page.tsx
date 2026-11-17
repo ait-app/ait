@@ -17,6 +17,7 @@ import {
 } from "@/components/sharing/share-manager-sheet";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
+import { destructiveIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getIsElectron } from "@/constants/platform";
 import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
 import {
@@ -110,14 +111,15 @@ function DynamicProviderIcon({ iconKey, size, color = "" }: DynamicProviderIconP
 
 const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
-
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const editProfileIcon = <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const removeProfileIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
-const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const editProfileIcon = (
+  <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
+);
+const removeProfileIcon = (
+  <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveIconColorMapping} />
+);
+const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 function formatHostConnectionLabel(connection: HostConnection, t: TFunction): string {
   if (connection.type === "directSocket" || connection.type === "directPipe") {
@@ -1437,10 +1439,10 @@ function TerminalProfileRow({
           <ThemedDynamicProviderIcon
             iconKey={icon}
             size={ICON_SIZE.md}
-            uniProps={mutedColorMapping}
+            uniProps={mutedIconColorMapping}
           />
         ) : (
-          <ThemedProfileSquareTerminal size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+          <ThemedProfileSquareTerminal size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />
         )}
       </View>
       <View style={settingsStyles.rowContent}>

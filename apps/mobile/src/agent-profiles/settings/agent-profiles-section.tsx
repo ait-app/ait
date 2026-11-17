@@ -5,19 +5,19 @@ import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildAgentProfileCreateRoute, buildAgentProfileEditRoute } from "@/utils/host-routes";
 import { useAgentProfiles } from "../internal/use-agent-profiles";
 import { AgentProfileRow } from "./agent-profile-row";
 
 const ThemedPlus = withUnistyles(Plus);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const addIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const addIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 export function AgentProfilesSection({ serverId }: { serverId: string }): ReactElement {
   const { t } = useTranslation();

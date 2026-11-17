@@ -13,6 +13,7 @@ import { Code, Workflow, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 import type { Theme } from "@/styles/theme";
 import type { MarkdownFenceRendererProps } from "./types";
 import type { MermaidRenderRequest } from "./render-model";
@@ -213,9 +214,9 @@ function MermaidDiagramViewer({
             hitSlop={12}
           >
             {showSource ? (
-              <ThemedDiagramIcon size={20} uniProps={closeIconColor} />
+              <ThemedDiagramIcon size={20} uniProps={foregroundIconColorMapping} />
             ) : (
-              <ThemedSourceIcon size={20} uniProps={closeIconColor} />
+              <ThemedSourceIcon size={20} uniProps={foregroundIconColorMapping} />
             )}
           </Pressable>
           <Pressable
@@ -225,7 +226,7 @@ function MermaidDiagramViewer({
             accessibilityLabel={t("common.actions.close")}
             hitSlop={12}
           >
-            <ThemedCloseIcon size={20} uniProps={closeIconColor} />
+            <ThemedCloseIcon size={20} uniProps={foregroundIconColorMapping} />
           </Pressable>
         </View>
       </View>
@@ -236,7 +237,6 @@ function MermaidDiagramViewer({
 const ThemedCloseIcon = withUnistyles(X);
 const ThemedSourceIcon = withUnistyles(Code);
 const ThemedDiagramIcon = withUnistyles(Workflow);
-const closeIconColor = (theme: Theme) => ({ color: theme.colors.foreground });
 
 const viewerStyles = StyleSheet.create((theme, runtime) => ({
   backdrop: { flex: 1, backgroundColor: theme.colors.surface0 },

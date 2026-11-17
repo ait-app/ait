@@ -9,9 +9,9 @@ import { isWeb } from "@/constants/platform";
 import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
 import type { AcpProviderCatalogItem } from "@/hooks/use-acp-provider-catalog";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 
 interface ProviderCatalogListProps {
   serverId: string;
@@ -30,11 +30,6 @@ const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
-
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function matchesSearch(entry: AcpProviderCatalogItem, query: string): boolean {
   const normalized = query.trim().toLowerCase();
@@ -71,10 +66,13 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
             xml={entry.iconSvg}
             width={PROVIDER_REMOTE_ICON_SIZE}
             height={PROVIDER_REMOTE_ICON_SIZE}
-            uniProps={foregroundColorMapping}
+            uniProps={foregroundIconColorMapping}
           />
         ) : (
-          <ThemedPackagePlus size={PROVIDER_FALLBACK_ICON_SIZE} uniProps={foregroundColorMapping} />
+          <ThemedPackagePlus
+            size={PROVIDER_FALLBACK_ICON_SIZE}
+            uniProps={foregroundIconColorMapping}
+          />
         )}
       </View>
       <View style={styles.textColumn}>
@@ -100,7 +98,7 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
           <Text style={styles.installLinkText} numberOfLines={1}>
             {t("providerCatalog.actions.installInstructions")}
           </Text>
-          <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
+          <ThemedExternalLink size={12} uniProps={mutedIconColorMapping} />
         </Pressable>
       </View>
       <Button
@@ -144,7 +142,7 @@ export function ProviderCatalogList({
     <View>
       <View style={styles.searchField}>
         <View style={styles.searchIcon}>
-          <ThemedSearch size={SEARCH_ICON_SIZE} uniProps={foregroundMutedColorMapping} />
+          <ThemedSearch size={SEARCH_ICON_SIZE} uniProps={mutedIconColorMapping} />
         </View>
         <ThemedTextInput
           testID="provider-catalog-search"

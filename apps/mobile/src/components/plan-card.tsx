@@ -1,6 +1,6 @@
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { isWeb } from "@/constants/platform";
-import type { Theme } from "@/styles/theme";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { ChevronRight } from "lucide-react-native";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,7 +20,6 @@ interface PlanCardProps {
 }
 
 const ThemedChevron = withUnistyles(ChevronRight);
-const chevronColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export function PlanCard(props: PlanCardProps) {
   // A resolution starts its own presentation state; subsequent taps stay local.
@@ -71,7 +70,7 @@ function PlanCardContent({
         style={styles.header}
       >
         <View style={chevronStyle}>
-          <ThemedChevron size={16} uniProps={chevronColor} />
+          <ThemedChevron size={16} uniProps={mutedIconColorMapping} />
         </View>
         <Text style={styles.title}>{resolvedTitle}</Text>
       </Pressable>

@@ -27,7 +27,6 @@ import {
   type ActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
 import {
   RefreshControl as GestureRefreshControl,
@@ -110,6 +109,7 @@ import { selectWorkspaceServiceSummary } from "@/components/sidebar/workspace-me
 import { useSidebarWorkspaceTrailing } from "@/components/sidebar/workspace-trailing";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   buildSidebarProjectRowModel,
@@ -146,13 +146,6 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedSettings = withUnistyles(Settings);
-
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function isWorkspaceSelected(input: {
   selection: ActiveWorkspaceSelection | null;
@@ -307,19 +300,19 @@ function ProjectRowTrailingActions({
   );
 }
 
-const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
-const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
+const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={mutedIconColorMapping} />;
+const settingsLeadingIcon = <ThemedSettings size={14} uniProps={mutedIconColorMapping} />;
 const ThemedShare2 = withUnistyles(Share2);
-const shareLeadingIcon = <ThemedShare2 size={14} uniProps={foregroundMutedColorMapping} />;
+const shareLeadingIcon = <ThemedShare2 size={14} uniProps={mutedIconColorMapping} />;
 const openInNewWindowLeadingIcon = (
-  <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
+  <ThemedExternalLink size={14} uniProps={mutedIconColorMapping} />
 );
 
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
     <ThemedMoreVertical
       size={14}
-      uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+      uniProps={hovered ? foregroundIconColorMapping : mutedIconColorMapping}
     />
   );
 }
@@ -429,7 +422,7 @@ function ProjectMenuItems({
       <ProjectMenuItem
         surface={surface}
         testID={`sidebar-project-menu-pin-${projectViewKey}`}
-        leading={<PinIcon size={14} uniProps={foregroundMutedColorMapping} />}
+        leading={<PinIcon size={14} uniProps={mutedIconColorMapping} />}
         onSelect={() => toggleProjectPin(projectViewKey)}
       >
         {t(isPinned ? "sidebar.workspace.actions.unpin" : "sidebar.workspace.actions.pin")}
@@ -532,7 +525,7 @@ function NewWorktreeButton({
             {({ hovered, pressed }) => (
               <ThemedPlus
                 size={15}
-                uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+                uniProps={hovered || pressed ? foregroundIconColorMapping : mutedIconColorMapping}
               />
             )}
           </Pressable>
@@ -599,7 +592,7 @@ function NewWorkspaceGhostRow({
           <View style={styles.newWorkspaceGhostIconSlot}>
             <ThemedPlus
               size={14}
-              uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+              uniProps={hovered || pressed ? foregroundIconColorMapping : mutedIconColorMapping}
             />
           </View>
           <Text

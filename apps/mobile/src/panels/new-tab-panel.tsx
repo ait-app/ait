@@ -13,13 +13,14 @@ import { Pencil, Plus } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { Shortcut } from "@/components/ui/shortcut";
+import { extraMutedIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { isWeb } from "@/constants/platform";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelIconProps } from "@/panels/panel-registry";
-import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
+import { ICON_SIZE, SPACING } from "@/styles/theme";
 import {
   useWorkspaceTabLaunchCatalog,
   type WorkspaceTabLaunchItem,
@@ -27,10 +28,6 @@ import {
 
 const ThemedPlus = withUnistyles(Plus);
 const ThemedPencil = withUnistyles(Pencil);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const extraMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundExtraMuted,
-});
 /** Every launcher row leads with the same glyph box so labels share one rail. */
 const LAUNCHER_ICON_SIZE = ICON_SIZE.md;
 const LAUNCHER_MAX_WIDTH = 380;
@@ -81,7 +78,7 @@ function EditProfilesButton({ label, onPress }: { label: string; onPress: () => 
       testID="workspace-new-tab-edit-terminal-profiles"
     >
       <View style={styles.editProfilesGlyph}>
-        <ThemedPencil size={ICON_SIZE.xs} uniProps={extraMutedColorMapping} />
+        <ThemedPencil size={ICON_SIZE.xs} uniProps={extraMutedIconColorMapping} />
       </View>
     </Pressable>
   );
@@ -104,7 +101,7 @@ function LauncherRow({ item }: { item: WorkspaceTabLaunchItem }) {
       tabIndex={-1}
       testID={`workspace-new-tab-${item.id}`}
     >
-      {item.Icon ? <ThemedLauncherIcon Icon={item.Icon} uniProps={mutedColorMapping} /> : null}
+      {item.Icon ? <ThemedLauncherIcon Icon={item.Icon} uniProps={mutedIconColorMapping} /> : null}
       {item.terminalIconKey ? (
         <TerminalProfileIcon iconKey={item.terminalIconKey} size={LAUNCHER_ICON_SIZE} />
       ) : null}

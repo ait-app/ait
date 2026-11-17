@@ -3,6 +3,7 @@ import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, CircleAlert, SquareTerminal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -65,7 +66,7 @@ type CommandStatus = "running" | "completed" | "failed";
 
 function CommandStatusIcon({ status }: { status: CommandStatus }) {
   if (status === "running") {
-    return <ThemedLoadingSpinner size={14} uniProps={foregroundColorMapping} />;
+    return <ThemedLoadingSpinner size={14} uniProps={foregroundIconColorMapping} />;
   }
   if (status === "completed") {
     return <ThemedCheckCircle2 size={14} uniProps={greenColorMapping} />;
@@ -360,7 +361,7 @@ function SetupPanelBody(props: SetupPanelBodyProps) {
   if (props.isWaiting) {
     return (
       <View style={styles.waitingContainer}>
-        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
         <Text style={styles.waitingText}>{t("workspace.setup.waiting")}</Text>
       </View>
     );
@@ -513,9 +514,7 @@ function SetupCommandChevron({ showDetail }: { showDetail: boolean }) {
     () => [styles.chevron, showDetail && styles.chevronExpanded],
     [showDetail],
   );
-  return (
-    <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} style={chevronStyle} />
-  );
+  return <ThemedChevronRight size={14} uniProps={mutedIconColorMapping} style={chevronStyle} />;
 }
 
 function StandaloneLogView({ commands, log }: { commands: SetupCommand[]; log: string }) {
@@ -560,12 +559,6 @@ const ThemedCheckCircle2 = withUnistyles(CheckCircle2);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const greenColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.green[500],
 });

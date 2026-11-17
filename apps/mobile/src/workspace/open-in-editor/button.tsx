@@ -24,11 +24,11 @@ import { isWeb } from "@/constants/platform";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
-import type { Theme } from "@/styles/theme";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { getForgePresentation } from "@/git/forge";
 import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
 import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 
 interface WorkspaceOpenInEditorButtonProps {
   serverId: string;
@@ -49,11 +49,8 @@ const ThemedEditorTargetIcon = withUnistyles(EditorTargetIcon);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCheckIcon = withUnistyles(Check);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 function renderForgeOpenTargetIcon(icon: string): ReactElement {
-  return <ForgeBrandIcon iconKind={icon} size={16} uniProps={mutedColorMapping} />;
+  return <ForgeBrandIcon iconKind={icon} size={16} uniProps={mutedIconColorMapping} />;
 }
 
 interface OpenTargetMenuItemProps {
@@ -65,7 +62,8 @@ interface OpenTargetMenuItemProps {
 function OpenTargetMenuItem({ target, isPreferred, onSelect }: OpenTargetMenuItemProps) {
   const handleSelect = useCallback(() => onSelect(target), [onSelect, target]);
   const trailing = useMemo(
-    () => (isPreferred ? <ThemedCheckIcon size={16} uniProps={mutedColorMapping} /> : undefined),
+    () =>
+      isPreferred ? <ThemedCheckIcon size={16} uniProps={mutedIconColorMapping} /> : undefined,
     [isPreferred],
   );
   return (
@@ -143,7 +141,7 @@ export function WorkspaceOpenInEditorButton({
           id: target.id,
           label: target.label,
           icon: (
-            <ThemedEditorTargetIcon icon={target.icon} size={16} uniProps={mutedColorMapping} />
+            <ThemedEditorTargetIcon icon={target.icon} size={16} uniProps={mutedIconColorMapping} />
           ),
           onOpen: () => openDesktopTarget(target.openInput),
         };
@@ -240,7 +238,7 @@ export function WorkspaceOpenInEditorButton({
           {openMutation.isPending ? (
             <ThemedLoadingSpinner
               size="small"
-              uniProps={foregroundColorMapping}
+              uniProps={foregroundIconColorMapping}
               style={styles.splitButtonSpinnerOnly}
             />
           ) : (

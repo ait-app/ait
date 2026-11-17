@@ -15,12 +15,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -33,22 +34,14 @@ const ThemedCircleHelp = withUnistyles(CircleHelp);
 const ThemedGift = withUnistyles(Gift);
 const ThemedKeyboard = withUnistyles(Keyboard);
 const ThemedGitHubIcon = withUnistyles(GitHubIcon);
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const diagnosticLeadingIcon = (
-  <ThemedActivity size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+  <ThemedActivity size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const shortcutsLeadingIcon = (
-  <ThemedKeyboard size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+  <ThemedKeyboard size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
-const githubLeadingIcon = (
-  <ThemedGitHubIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
-const changelogLeadingIcon = (
-  <ThemedGift size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
+const githubLeadingIcon = <ThemedGitHubIcon size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const changelogLeadingIcon = <ThemedGift size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 function HostVersionHint({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
@@ -102,7 +95,7 @@ export function SidebarHelpMenu() {
               {({ hovered }) => (
                 <ThemedCircleHelp
                   size={ICON_SIZE.md}
-                  uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+                  uniProps={hovered ? foregroundIconColorMapping : mutedIconColorMapping}
                 />
               )}
             </DropdownMenuTrigger>

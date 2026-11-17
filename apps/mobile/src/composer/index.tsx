@@ -51,6 +51,11 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  accentForegroundIconColorMapping,
+  foregroundIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-color";
+import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
   editQueuedComposerMessage,
@@ -635,7 +640,7 @@ function QueuedMessageRow({
           accessibilityLabel={editLabel}
           accessibilityRole="button"
         >
-          <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
+          <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundIconColorMapping} />
         </Pressable>
         <Pressable
           onPress={handleSendNow}
@@ -643,7 +648,7 @@ function QueuedMessageRow({
           accessibilityLabel={sendNowLabel}
           accessibilityRole="button"
         >
-          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
+          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={accentForegroundIconColorMapping} />
         </Pressable>
       </View>
     </View>
@@ -839,9 +844,9 @@ function GithubPickerOption({
   const leadingSlot = useMemo(
     () =>
       item.kind === "change_request" ? (
-        <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
       ) : (
-        <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedCircleDot size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
       ),
     [item.kind],
   );
@@ -1132,7 +1137,7 @@ function ComposerVoiceModeButton({
       if (isVoiceSwitching) {
         return <LoadingSpinner size="small" color="white" />;
       }
-      const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
+      const colorMapping = hovered ? foregroundIconColorMapping : mutedIconColorMapping;
       return <ThemedAudioLines size={buttonIconSize} uniProps={colorMapping} />;
     },
     [buttonIconSize, isVoiceSwitching],
@@ -2156,7 +2161,7 @@ function ComposerContentImpl({
       {
         id: "image",
         label: t("composer.attachments.addImage"),
-        icon: <ThemedImageIcon size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedImageIcon size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />,
         onSelect: () => {
           void handlePickImage();
         },
@@ -2166,7 +2171,7 @@ function ComposerContentImpl({
       items.push({
         id: "camera",
         label: t("composer.attachments.takePhoto"),
-        icon: <ThemedCamera size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedCamera size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />,
         onSelect: () => {
           void handleTakePhoto();
         },
@@ -2174,7 +2179,7 @@ function ComposerContentImpl({
       items.push({
         id: "paste-image",
         label: t("composer.attachments.pasteImage"),
-        icon: <ThemedClipboardPaste size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedClipboardPaste size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />,
         onSelect: () => {
           void handlePasteImage();
         },
@@ -2195,7 +2200,7 @@ function ComposerContentImpl({
       {
         id: "file",
         label: t("composer.attachments.addFile"),
-        icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />,
         onSelect: () => {
           void handlePickFile();
         },
@@ -2723,24 +2728,17 @@ const ThemedImageIcon = withUnistyles(ImageIcon);
 const ThemedCamera = withUnistyles(Camera);
 const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
 const ThemedFileText = withUnistyles(FileText);
-const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 function renderForgeAttachmentIcon(icon: string): ReactElement {
-  return (
-    <ForgeBrandIcon iconKind={icon} size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />
-  );
+  return <ForgeBrandIcon iconKind={icon} size={ICON_SIZE.md} uniProps={mutedIconColorMapping} />;
 }
 
 const githubPrPillIcon = (
-  <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
 const githubIssuePillIcon = (
-  <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedCircleDot size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />
 );
-const filePillIcon = <ThemedFileText size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />;
+const filePillIcon = <ThemedFileText size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
-const pendingFilePillIcon = (
-  <ThemedAttachmentSpinner size={18} uniProps={iconForegroundMutedMapping} />
-);
+const pendingFilePillIcon = <ThemedAttachmentSpinner size={18} uniProps={mutedIconColorMapping} />;

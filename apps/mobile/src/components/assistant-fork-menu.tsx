@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
+import { ICON_SIZE } from "@/styles/theme";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -20,9 +21,6 @@ interface AssistantForkMenuProps {
 }
 
 const ThemedSplit = withUnistyles(Split);
-
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export const AssistantForkMenu = memo(function AssistantForkMenu({
   onFork,
@@ -70,7 +68,7 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
   );
 
   const forkIcon = useMemo(
-    () => <ThemedSplit size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
+    () => <ThemedSplit size={ICON_SIZE.sm} uniProps={foregroundIconColorMapping} />,
     [],
   );
 
@@ -89,7 +87,7 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
               {({ hovered, open }) => (
                 <ThemedSplit
                   size={ICON_SIZE.sm}
-                  uniProps={hovered || open ? foregroundColorMapping : foregroundMutedColorMapping}
+                  uniProps={hovered || open ? foregroundIconColorMapping : mutedIconColorMapping}
                 />
               )}
             </DropdownMenuTrigger>

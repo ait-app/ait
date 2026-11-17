@@ -7,11 +7,11 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { ToolbarButton, paneContentToolbarIconSize } from "@/components/ui/pane-content-toolbar";
+import { foregroundIconColorMapping } from "@/components/ui/icon-color";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import type { WorkspaceTabPresentation } from "@/screens/workspace/workspace-tab-presentation";
 import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
-import type { Theme } from "@/styles/theme";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { getPanelManifest } from "@/panels/panel-manifest";
 import type { SubagentRow } from "./select";
@@ -24,11 +24,6 @@ import {
 
 const ThemedArchive = withUnistyles(Archive);
 const ThemedUnlink = withUnistyles(Unlink);
-
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 export interface SubagentsTrackProps {
   serverId: string;
@@ -136,7 +131,7 @@ function ArchiveFinishedRow({
       <>
         <ThemedArchive
           size={ROW_ICON_SIZE}
-          uniProps={active ? foregroundColorMapping : foregroundMutedColorMapping}
+          uniProps={active ? foregroundIconColorMapping : mutedIconColorMapping}
         />
         <Text style={styles.rowLabel} numberOfLines={1}>
           {t("subagents.archiveFinishedAction")}
