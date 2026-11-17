@@ -1,5 +1,18 @@
 # Ait changelog
 
+## 0.2.16 - 2026-11-18
+
+- The side-question (BTW) window is now an independent floating panel: drag it by the title bar and it stops at the window edge, it opens against the right edge by default, and the input area starts collapsed behind a Follow button. Send and stop became round buttons and the window is capped at 384x420. A draft you already typed stays in place when the input is collapsed again.
+- The desktop workspace browser runs in its own WebContentsView, so a page opened in the workspace browser is rendered by the new embedded surface.
+- DeepSeek Harness sessions that are not running can be browsed and previewed read-only from the import sheet: the preview shows the older messages in full and in order across native page boundaries, taken from a fixed cut of the session. Previewing never creates, resumes or activates a session, and hosts without the preview method keep the previous behavior.
+- The mobile input recalls a previous prompt with the arrow keys.
+- Claude Code exposes its native switches as model roles: subagent, workflow, subagent-effort, small-fast, opus, sonnet, haiku and fable can be turned on and off in the provider settings. Saving them no longer flashes an error or flips the switches back, and the daemon no longer serializes every request behind a single lock, so the settings stay responsive.
+- A side question that fails to send no longer reports an error while the answer is still on its way.
+- A slow native provider operation no longer blocks the connection of a remote session.
+- OMP slash commands answer with a command card instead of assistant text: the reply is shown as a tool call that can be expanded, the command is not written to the provider, and it no longer interrupts a running turn.
+- TODO cards keep the same spacing on all four sides.
+- The mobile app keeps the projections it already has while the host is briefly out of date, instead of dropping them.
+
 ## 0.2.15 - 2026-11-17
 
 - An experimental Workspace notebook tab lets a workspace keep shared notes and TODOs in `.ait-notebook.md`, with live collaboration between the people who have it. Guests who only have the file see a read-only view, and a conflicting write is shown instead of being applied over someone else's change.
