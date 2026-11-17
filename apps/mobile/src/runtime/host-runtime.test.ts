@@ -146,7 +146,10 @@ class FakeDaemonClient {
       serverId: "srv_test",
       hostname: "test",
       version: "0.8.0",
-      features: { ownedSubscriptions: this.ownedSubscriptions },
+      features: {
+        directorySubscriptions: true,
+        ownedSubscriptions: this.ownedSubscriptions,
+      },
     };
   }
 

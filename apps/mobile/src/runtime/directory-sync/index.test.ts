@@ -227,8 +227,13 @@ const serverIds = new Set<string>();
 
 function currentServerInfo(serverId: string, client: FakeDirectoryClient): DaemonServerInfo {
   const stored = useSessionStore.getState().sessions[serverId]?.serverInfo;
-  if (stored) return stored;
   const wire = client.getLastServerInfoMessage();
+  if (stored) {
+    return {
+      ...stored,
+      features: { ...wire.features, ...stored.features },
+    };
+  }
   return {
     serverId,
     hostname: null,
@@ -358,6 +363,7 @@ function targetDirectory(serverId: string, checkpoints?: DirectoryCheckpointStor
     version: "test",
     features: { workspaceTargetRead: true, projectList: true },
   });
+  refreshDirectoryServerInfo(context.directory, serverId, context.client);
   return context;
 }
 
@@ -499,6 +505,7 @@ describe("target workspace reads", () => {
     expect(await directory.prepareWorkspaceRoute("cached")).toBe("ready");
     expect(client.getWorkspaceCalls).toBe(0);
     client.supportsWorkspaceTargetRead = false;
+    refreshDirectoryServerInfo(directory, serverId, client, 2);
     expect(await directory.prepareWorkspaceRoute("uncached")).toBeNull();
     expect(client.getWorkspaceCalls).toBe(0);
     directory.dispose();

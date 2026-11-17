@@ -171,6 +171,7 @@ export class DirectorySync {
   private readonly workspaceReads = new Map<string, Promise<WorkspaceRoutePreparation>>();
   private readonly agentReads = new Map<string, Promise<void>>();
   private readonly workspaceAgentReads = new Map<string, Promise<boolean>>();
+  private readonly sessionWaitChecks = new Set<() => void>();
 
   constructor(
     private readonly serverId: string,
@@ -197,6 +198,7 @@ export class DirectorySync {
     const wentOffline = this.connection.status === "online" && connection.status === "offline";
     if (!changed && !wentOffline) {
       this.connection = connection;
+      for (const check of this.sessionWaitChecks) check();
       return false;
     }
     this.flushAbortedTransactions();
@@ -1085,6 +1087,7 @@ export class DirectorySync {
         settled = true;
         unsubscribe();
         this.abortSessionWaits.delete(abort);
+        this.sessionWaitChecks.delete(check);
         if (result === "ready") resolve();
         else reject(new DirectoryRefreshSupersededError("session wait no longer current"));
       };
@@ -1097,6 +1100,7 @@ export class DirectorySync {
         }
       };
       this.abortSessionWaits.add(abort);
+      this.sessionWaitChecks.add(check);
       unsubscribe = useSessionStore.subscribe(check);
       check();
     });
