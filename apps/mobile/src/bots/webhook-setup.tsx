@@ -78,7 +78,7 @@ export function CopyField({
 }
 
 /** The endpoint with its secret, which the host cannot show again after this. */
-export function WebhookSecret({
+function WebhookSecret({
   url,
   secret,
   onDone,

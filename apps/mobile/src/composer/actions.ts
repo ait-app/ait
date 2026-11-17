@@ -405,7 +405,7 @@ export function openComposerAttachment(input: OpenComposerAttachmentInput): void
   input.openExternalUrl(input.attachment.item.url);
 }
 
-export function buildForgeAttachment(item: ForgeSearchItem): UserComposerAttachment {
+function buildForgeAttachment(item: ForgeSearchItem): UserComposerAttachment {
   return item.kind === "change_request"
     ? { kind: "forge_change_request", item }
     : { kind: "forge_issue", item };

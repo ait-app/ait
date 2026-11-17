@@ -11,7 +11,7 @@ export interface ProviderPreferences {
 }
 
 /** New workspace isolation levels; `sandboxed-worktree` adds OS write confinement (ADR-215). */
-export const WORKSPACE_ISOLATIONS = ["local", "worktree", "sandboxed-worktree"] as const;
+const WORKSPACE_ISOLATIONS = ["local", "worktree", "sandboxed-worktree"] as const;
 
 export type WorkspaceIsolation = (typeof WORKSPACE_ISOLATIONS)[number];
 

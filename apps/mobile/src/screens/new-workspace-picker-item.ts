@@ -212,7 +212,7 @@ export function pickerItemToCheckoutRequest(
   }
 }
 
-export function prPickerOptionId(number: number): string {
+function prPickerOptionId(number: number): string {
   return `${PR_OPTION_PREFIX}${number}`;
 }
 

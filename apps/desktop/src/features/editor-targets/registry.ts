@@ -29,7 +29,7 @@ import { vscodeInsidersTarget } from "./targets/vscode-insiders.js";
 import { vscodeTarget } from "./targets/vscode.js";
 import { zedTarget } from "./targets/zed.js";
 
-export const EDITOR_TARGETS: readonly EditorTarget[] = [
+const EDITOR_TARGETS: readonly EditorTarget[] = [
   cursorTarget,
   traeTarget,
   kiroTarget,
@@ -69,7 +69,7 @@ export async function listAvailableEditorTargets(
   return descriptors;
 }
 
-export function getEditorTarget(
+function getEditorTarget(
   id: string,
   targets: readonly EditorTarget[] = EDITOR_TARGETS,
 ): EditorTarget {

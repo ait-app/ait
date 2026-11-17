@@ -60,7 +60,7 @@ export function createFixedBrowserViewport(width: number, height: number): Brows
   };
 }
 
-export function normalizeBrowserViewport(value: unknown): BrowserViewport {
+function normalizeBrowserViewport(value: unknown): BrowserViewport {
   const result = BrowserViewportSchema.safeParse(value);
   return result.success && result.data.mode === "fixed"
     ? createFixedBrowserViewport(result.data.width, result.data.height)

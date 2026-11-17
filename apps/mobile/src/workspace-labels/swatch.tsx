@@ -21,7 +21,7 @@ const DOT_SIZE = 10;
 /** Big enough to judge a color by, and the swatch grid's only unit — see `hitSlop` below. */
 const SWATCH_SIZE = 20;
 
-export function workspaceLabelColorName(color: WorkspaceLabelColor): string {
+function workspaceLabelColorName(color: WorkspaceLabelColor): string {
   return i18n.t(`workspaceLabels.colors.${color}`);
 }
 

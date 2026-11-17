@@ -50,7 +50,7 @@ export function useBotTicketsSupported(serverId: string): boolean {
 }
 
 /** The Bot's tickets, refreshed as often as the Bot itself while the tab is shown. */
-export function useBotTickets(
+function useBotTickets(
   serverId: string,
   workspaceId: string,
   bot: BotView,

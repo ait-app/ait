@@ -123,10 +123,7 @@ export function updateCurrentAddProjectPage(
   };
 }
 
-export function pushAddProjectPage(
-  state: AddProjectFlowState,
-  page: AddProjectPage,
-): AddProjectFlowState {
+function pushAddProjectPage(state: AddProjectFlowState, page: AddProjectPage): AddProjectFlowState {
   return { ...state, pages: [...state.pages, page] };
 }
 

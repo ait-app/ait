@@ -7,7 +7,7 @@ interface I18nLanguageController {
 
 type I18nErrorReporter = (message: string, error: unknown) => void;
 
-export const reportI18nError: I18nErrorReporter = (message, error) => {
+const reportI18nError: I18nErrorReporter = (message, error) => {
   console.error(message, error);
 };
 

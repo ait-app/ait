@@ -9,7 +9,7 @@ import {
 import { applyBrowserGuestPermissionPolicy } from "../browser-profile.js";
 import type { PaseoBrowserWebviewRegistry } from "./registry.js";
 
-export const BROWSER_VIEW_EVENT = "paseo:event:browser-view";
+const BROWSER_VIEW_EVENT = "paseo:event:browser-view";
 
 export type BrowserViewEventType =
   | "did-fail-load"

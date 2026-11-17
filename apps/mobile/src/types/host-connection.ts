@@ -73,11 +73,11 @@ export interface HostProfile {
   updatedAt: string;
 }
 
-export function defaultLifecycle(): HostLifecycle {
+function defaultLifecycle(): HostLifecycle {
   return {};
 }
 
-export function normalizeHostLabel(value: string | null | undefined, serverId: string): string {
+function normalizeHostLabel(value: string | null | undefined, serverId: string): string {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : serverId;
 }
@@ -534,7 +534,7 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   };
 }
 
-export function hostHasConnection(host: HostProfile, connection: HostConnection): boolean {
+function hostHasConnection(host: HostProfile, connection: HostConnection): boolean {
   return host.connections.some((existing) => hostConnectionEquals(existing, connection));
 }
 

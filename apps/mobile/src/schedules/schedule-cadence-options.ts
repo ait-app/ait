@@ -12,7 +12,7 @@ export interface CadencePresetOption {
   expression: string;
 }
 
-export const CUSTOM_CRON_PRESET_ID = "custom";
+const CUSTOM_CRON_PRESET_ID = "custom";
 
 export const CADENCE_PRESET_OPTIONS: CadencePresetOption[] = [
   { id: "every-minute", label: "Every minute", expression: "* * * * *" },

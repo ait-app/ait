@@ -5,9 +5,9 @@ export const COMPOSER_PILL_CLEARANCE = {
   compact: SPACING[2],
   wide: 10,
 } as const;
-export const COMPOSER_PILL_MIN_HEIGHT = 32;
+const COMPOSER_PILL_MIN_HEIGHT = 32;
 
-export function resolveComposerPillClearance(isCompact: boolean): number {
+function resolveComposerPillClearance(isCompact: boolean): number {
   return isCompact ? COMPOSER_PILL_CLEARANCE.compact : COMPOSER_PILL_CLEARANCE.wide;
 }
 

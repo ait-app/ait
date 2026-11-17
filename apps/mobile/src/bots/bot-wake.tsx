@@ -21,7 +21,7 @@ import {
 } from "./styles";
 
 /** The exact reply a Bot gives when a wake-up needs no message (ADR-271 §8). */
-export const SILENT_REPLY = "NO_REPLY";
+const SILENT_REPLY = "NO_REPLY";
 
 const ThemedBell = withUnistyles(Bell);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
@@ -77,7 +77,7 @@ export function NotificationKindIcon({ kind }: { kind: string }) {
  * Where a notification's subject opens in this Workspace, if the app can show it. Subjects in
  * another Workspace of the Bot's scope stay plain text, because this tab's layout cannot hold them.
  */
-export function notificationTarget(
+function notificationTarget(
   notification: BotNotification,
   workspaceId: string,
 ): WorkspaceTabTarget | null {

@@ -23,7 +23,7 @@ export function continuesResponse(previous: StreamItem | null, next: StreamItem 
   return continuesTurn(previous, next) || next.kind !== "user_message";
 }
 
-export function isTurnBoundary(previous: StreamItem | null, next: StreamItem | null): boolean {
+function isTurnBoundary(previous: StreamItem | null, next: StreamItem | null): boolean {
   return previous !== null && next !== null && !continuesTurn(previous, next);
 }
 

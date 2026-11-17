@@ -64,7 +64,7 @@ export interface HostPickerOptionProps {
   testID?: string;
 }
 
-export function HostPickerOption({
+function HostPickerOption({
   serverId,
   label,
   showActiveConnection,

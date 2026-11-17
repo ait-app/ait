@@ -81,7 +81,7 @@ export function useVoiceTelemetry() {
   return telemetry;
 }
 
-export function useVoiceTelemetryOptional(): VoiceRuntimeTelemetrySnapshot | null {
+function useVoiceTelemetryOptional(): VoiceRuntimeTelemetrySnapshot | null {
   const runtime = useContext(VoiceRuntimeContext);
   const snapshot = useSyncExternalStore(
     runtime ? runtime.subscribeTelemetry.bind(runtime) : noopSubscribe,

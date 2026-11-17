@@ -62,7 +62,7 @@ export function describeToolCall(item: ToolCallItem): ToolCallDescriptor {
   };
 }
 
-export function isGroupableToolCall(item: StreamItem): item is ToolCallItem {
+function isGroupableToolCall(item: StreamItem): item is ToolCallItem {
   if (item.kind !== "tool_call") {
     return false;
   }

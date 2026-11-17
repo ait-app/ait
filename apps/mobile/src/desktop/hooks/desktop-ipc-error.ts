@@ -21,7 +21,7 @@ interface DesktopIpcErrorReporterInput {
   error: unknown;
 }
 
-export function reportDesktopIpcError(input: DesktopIpcErrorReport): void {
+function reportDesktopIpcError(input: DesktopIpcErrorReport): void {
   console.error(input.logLabel, input.error);
   input.toast.error(input.message);
 }

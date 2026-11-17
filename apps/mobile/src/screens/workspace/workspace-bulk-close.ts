@@ -19,7 +19,7 @@ export interface BulkCloseConfirmationLabels {
   agents: (input: { agents: number }) => string;
 }
 
-export const DEFAULT_BULK_CLOSE_CONFIRMATION_LABELS: BulkCloseConfirmationLabels = {
+const DEFAULT_BULK_CLOSE_CONFIRMATION_LABELS: BulkCloseConfirmationLabels = {
   all: ({ agents, terminals, tabs }) =>
     `This will archive ${agents} agent(s), close ${terminals} terminal(s), and close ${tabs} tab(s). Any running process in a closed terminal will be stopped immediately.`,
   agentsAndTerminals: ({ agents, terminals }) =>

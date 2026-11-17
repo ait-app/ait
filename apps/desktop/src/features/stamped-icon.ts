@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const STAMP_CACHE_VERSION = "v4-swift";
 
-export const MONOSPACE_FONT_CANDIDATES = [
+const MONOSPACE_FONT_CANDIDATES = [
   "Menlo-Bold",
   "SFMono-Bold",
   "Consolas-Bold",
@@ -179,7 +179,7 @@ async function getImageDimensions(
   return null;
 }
 
-export async function getStampedIconPath(options: {
+async function getStampedIconPath(options: {
   baseIconPath: string;
   label: string;
   cacheDir: string;

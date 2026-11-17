@@ -101,7 +101,7 @@ export function createShortcutOverrideStore({
  * `null` (unassigned) and absent (use the default) are distinct states, so
  * dropping an override cannot go through a spread.
  */
-export function withOverride(
+function withOverride(
   overrides: ShortcutOverrides,
   bindingId: string,
   value: ShortcutOverrideValue,

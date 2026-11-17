@@ -6,7 +6,7 @@ export interface LanguageOption {
   labelKey: string;
 }
 
-export const DEFAULT_LOCALE: SupportedLocale = "en";
+const DEFAULT_LOCALE: SupportedLocale = "en";
 
 export const LANGUAGE_OPTIONS: LanguageOption[] = [
   { value: "system", labelKey: "settings.general.language.options.system" },

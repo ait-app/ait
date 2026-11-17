@@ -12,7 +12,7 @@ export interface ScheduleTimelineGroup {
   events: ScheduleTimelineEvent[];
 }
 
-export const SCHEDULE_TIMELINE_PAGE_SIZE = 20;
+const SCHEDULE_TIMELINE_PAGE_SIZE = 20;
 
 export interface ScheduleTimelinePage {
   groups: ScheduleTimelineGroup[];

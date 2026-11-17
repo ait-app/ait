@@ -113,7 +113,7 @@ export function advancesFor(measurer: TextMeasurer): (graphemes: readonly string
 }
 
 /** Cumulative advances summed from per-grapheme widths, each measured once. */
-export function createAdditiveAdvances(
+function createAdditiveAdvances(
   measure: (text: string) => number,
 ): (graphemes: readonly string[]) => number[] {
   return additiveAdvances(cachedWidths(measure));

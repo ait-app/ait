@@ -4,7 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 // theme path so the Unistyles Babel plugin tracks the dependency and updates
 // native style values on theme changes — no React re-render of consumers.
 // Used by message code blocks (hot path), file preview, and the diff viewer.
-export const syntaxTokenStyles = StyleSheet.create((theme) => ({
+const syntaxTokenStyles = StyleSheet.create((theme) => ({
   base: { color: theme.colors.foreground },
   keyword: { color: theme.colors.syntax.keyword },
   comment: { color: theme.colors.syntax.comment },

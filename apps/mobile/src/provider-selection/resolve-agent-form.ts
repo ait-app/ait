@@ -208,7 +208,7 @@ function resolvePreferredModeId(input: {
   return modes[0]?.id ?? "";
 }
 
-export function hasFormStateChanged(prev: FormState, next: FormState): boolean {
+function hasFormStateChanged(prev: FormState, next: FormState): boolean {
   return (
     prev.provider !== next.provider ||
     prev.modeId !== next.modeId ||

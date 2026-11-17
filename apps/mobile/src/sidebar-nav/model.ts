@@ -1,4 +1,4 @@
-export const BUILTIN_SIDEBAR_NAV_IDS = [
+const BUILTIN_SIDEBAR_NAV_IDS = [
   "new-workspace",
   "tasks",
   "history",

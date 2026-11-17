@@ -13,7 +13,7 @@ import { agentCommandsQueryRoot } from "@/data/agent-commands-query";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import { normalizeWorkspacePath } from "@/utils/workspace-identity";
 
-export const PROVIDERS_SNAPSHOT_QUERY_ROOT = "providersSnapshot";
+const PROVIDERS_SNAPSHOT_QUERY_ROOT = "providersSnapshot";
 
 export function normalizeProvidersSnapshotCwd(cwd?: string | null): string | null {
   return normalizeWorkspacePath(cwd);

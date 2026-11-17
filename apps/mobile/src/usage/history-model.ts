@@ -94,12 +94,12 @@ export function sumAll(rows: readonly LedgerRow[]): LedgerRow {
 }
 
 /** Heaviest first by tokens, then by calls; ties keep their order. */
-export function byUsage(a: LedgerRow, b: LedgerRow): number {
+function byUsage(a: LedgerRow, b: LedgerRow): number {
   return totalTokens(b) - totalTokens(a) || b.calls - a.calls;
 }
 
 /** Newest day first. */
-export function byDayDescending(a: LedgerRow, b: LedgerRow): number {
+function byDayDescending(a: LedgerRow, b: LedgerRow): number {
   return (b.key.day ?? "").localeCompare(a.key.day ?? "");
 }
 

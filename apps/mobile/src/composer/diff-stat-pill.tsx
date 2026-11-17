@@ -11,7 +11,7 @@ interface ComposerDiffStatPillProps {
   onPress: () => void;
 }
 
-export function ComposerDiffStatPill({ additions, deletions, onPress }: ComposerDiffStatPillProps) {
+function ComposerDiffStatPill({ additions, deletions, onPress }: ComposerDiffStatPillProps) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const handleHoverIn = useCallback(() => setIsHovered(true), []);

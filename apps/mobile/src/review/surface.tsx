@@ -61,7 +61,7 @@ function getWebTextInputElement(input: EditingTextInputHandle | null): HTMLEleme
   return element instanceof HTMLElement ? element : null;
 }
 
-export const SMALL_ACTION_HIT_SLOP = 8;
+const SMALL_ACTION_HIT_SLOP = 8;
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveIconColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const accentForegroundIconColorMapping = (theme: Theme) => ({

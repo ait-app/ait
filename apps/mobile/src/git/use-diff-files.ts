@@ -25,7 +25,7 @@ export interface CommitDiffFilesResult {
   capabilityMissing: boolean;
 }
 
-export function resolveCommitDiffFile(
+function resolveCommitDiffFile(
   file: CheckoutCommitFile,
   resolved: ParsedDiffFile | null | undefined,
 ): ParsedDiffFile | null {

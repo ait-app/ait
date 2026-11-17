@@ -23,7 +23,7 @@ export interface SerializedReviewDraftState {
 }
 
 const IsoDateTimeSchema = z.string().datetime({ offset: true });
-export const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictObject({
+const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictObject({
   id: z.string(),
   filePath: z.string(),
   side: z.enum(["old", "new"]),

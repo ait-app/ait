@@ -10,7 +10,7 @@ import { StyleSheet, View } from "react-native";
 import { PortalHost } from "@gorhom/portal";
 import { measureElement } from "@/components/ui/menu/menu-anchor";
 
-export const DEFAULT_FLOATING_PANEL_PORTAL_HOST = "content-floating-panels";
+const DEFAULT_FLOATING_PANEL_PORTAL_HOST = "content-floating-panels";
 
 const FloatingPanelPortalHostNameContext = createContext(DEFAULT_FLOATING_PANEL_PORTAL_HOST);
 
