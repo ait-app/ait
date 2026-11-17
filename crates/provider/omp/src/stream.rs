@@ -148,6 +148,8 @@ struct LocalPrompt {
 struct PromptOutput {
     /// Text Ait submitted for the turn, echoed if OMP handles it locally.
     text: Option<String>,
+    /// The slash command Ait submitted, naming the cards of the output OMP shows for it.
+    command: Option<String>,
     /// OMP handled the prompt locally (`agentInvoked: false`) without echoing it.
     local: Option<LocalPrompt>,
     /// The turn's native run started (`agent_start`).
@@ -331,14 +333,16 @@ impl Stream {
         self.images.render(&resolved).map_err(|_| Error::Image)
     }
 
-    /// Start display state for `turn`; `prompt` is the text Ait submitted, if any.
-    pub(super) fn begin(&mut self, turn: String, prompt: Option<String>) {
+    /// Start display state for `turn`; `prompt` is the text Ait submitted, if any, and
+    /// `command` the slash command that text invokes.
+    pub(super) fn begin(&mut self, turn: String, prompt: Option<String>, command: Option<String>) {
         self.turn = Some(turn);
         self.failed = false;
         self.aborted = false;
         self.last_text = None;
         self.output = PromptOutput {
             text: prompt,
+            command,
             ..PromptOutput::default()
         };
     }
@@ -975,13 +979,28 @@ impl Stream {
     }
 
     /// Show an adapter-owned answer to a slash command, such as `/autocompact`, as the
-    /// assistant message Paseo emits. It never becomes the turn's final text.
-    pub(super) fn command_note(&mut self, text: &str) {
-        let key = self.notice_key();
+    /// command card Paseo's tool rows use: `name` is the command, so the row reads as
+    /// "Advisor". It never becomes the turn's final text.
+    pub(super) fn command_note(&mut self, name: &str, text: &str) {
+        self.command_card(name, text, "slash_command");
+    }
+
+    /// Show one command row: the summary names the command and its first line, and the
+    /// expandable body carries the whole text, so the answer is a timeline card rather than
+    /// assistant prose.
+    fn command_card(&mut self, name: &str, text: &str, native_type: &str) {
+        let call_id = format!(
+            "native:omp:{}:command:{}",
+            self.session,
+            uuid::Uuid::new_v4()
+        );
+        let label = command_label(name, text);
         self.push_notice(
-            key.clone(),
-            json!({"type":"assistant_message","messageId":key,"text":preview(text),
-                "metadata":{"nativeType":"slash_command","transient":true}}),
+            call_id.clone(),
+            json!({"type":"tool_call","callId":call_id,"name":name,"status":"completed",
+                "detail":{"type":"plain_text","label":label,"text":preview(text)},
+                "metadata":{"synthetic":true,"source":"omp_command","nativeType":native_type},
+                "error":null}),
         );
     }
 
@@ -1133,14 +1152,18 @@ impl Stream {
         Ok(())
     }
 
+    /// Show OMP's own output for the turn's slash command. The prompt names the command; a
+    /// turn that submitted none, such as output arriving after an abort, shows as
+    /// "command". The output is also the turn's last message, as before the card existed, so
+    /// an idle status or a notification still shows what the command answered.
     fn command_text(&mut self, text: &str) {
         self.last_text = Some(text.to_owned());
-        let key = self.notice_key();
-        self.push_notice(
-            key.clone(),
-            json!({"type":"assistant_message","messageId":key,"text":text,
-                "metadata":{"nativeType":"command_output","transient":true}}),
-        );
+        let name = self
+            .output
+            .command
+            .clone()
+            .unwrap_or_else(|| "command".to_owned());
+        self.command_card(&name, text, "command_output");
     }
 
     fn notice_key(&self) -> String {
@@ -1382,6 +1405,22 @@ pub(super) fn preview(text: &str) -> String {
         text.to_owned()
     } else {
         format!("{}\n[Truncated; full output remains in OMP.]", &text[..end])
+    }
+}
+
+/// The one-line summary of a command card: its first nonblank line, or the command's name
+/// when the text has none. The client shortens the line further.
+fn command_label(name: &str, text: &str) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+    let line = &line[..line.floor_char_boundary(line.len().min(120))];
+    if line.is_empty() {
+        name.to_owned()
+    } else {
+        line.to_owned()
     }
 }
 

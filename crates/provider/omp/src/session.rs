@@ -547,6 +547,7 @@ impl Session {
     ) -> Result<String, AgentSessionError> {
         self.transport.diagnostics.clear();
         let preview = stream::preview(&payload.text);
+        let command = commands::slash_name(&payload.text);
         let prompt_id = self
             .transport
             .begin("prompt", payload.fields(streaming_behavior))
@@ -555,7 +556,7 @@ impl Session {
             .pending_inputs
             .push_back((prompt_id.clone(), client_message_id));
         let turn = Uuid::new_v4().to_string();
-        self.stream.begin(turn.clone(), Some(preview));
+        self.stream.begin(turn.clone(), Some(preview), command);
         self.active = Some(turn.clone());
         self.prompt_id = Some(prompt_id);
         self.phase = TurnPhase::AwaitingAdmission;
@@ -740,7 +741,7 @@ impl Session {
     /// Start a host turn for native work Ait did not submit, such as a resumed queue.
     fn begin_autonomous(&mut self) {
         let turn = Uuid::new_v4().to_string();
-        self.stream.begin(turn.clone(), None);
+        self.stream.begin(turn.clone(), None, None);
         self.stream.start_run();
         self.active = Some(turn.clone());
         self.phase = TurnPhase::AwaitingSettlement;

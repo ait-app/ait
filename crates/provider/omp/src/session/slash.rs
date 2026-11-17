@@ -46,6 +46,19 @@ impl Session {
         prompt: &AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         prompt.validate()?;
+        if let Some((name, managed)) = commands::gui_managed(&prompt.text) {
+            if self.closed || prompt.output_schema.is_some() {
+                return Err(AgentSessionError::Rejected);
+            }
+            // Nothing is written to OMP: the answer is Ait's, so a native handler cannot
+            // change a GUI-owned setting or run a capability Ait has not taken over.
+            // Answering out of band also leaves a running turn alone, where refusing the
+            // text would interrupt it.
+            self.live = true;
+            let note = commands::gui_managed_note(name, managed);
+            self.stream.command_note(name, &note);
+            return Ok(());
+        }
         let (command, args) = commands::builtin(&prompt.text).ok_or(AgentSessionError::Rejected)?;
         if self.closed || prompt.output_schema.is_some() || self.pending.len() >= MAX_PENDING {
             return Err(AgentSessionError::Rejected);
@@ -68,7 +81,7 @@ impl Session {
                 ),
                 AutoCompact::Toggle => ("get_state", json!({}), Some(Pending::AutoCompactState)),
                 AutoCompact::Unknown => {
-                    self.stream.command_note(AUTOCOMPACT_USAGE);
+                    self.stream.command_note("autocompact", AUTOCOMPACT_USAGE);
                     return Ok(());
                 }
             },
@@ -134,7 +147,7 @@ impl Session {
                 if success {
                     self.usage.refresh();
                 } else {
-                    self.command_failed("Failed to compact context", &event["error"]);
+                    self.command_failed("compact", "Failed to compact context", &event["error"]);
                 }
             }
             Pending::AutoCompactState => {
@@ -143,23 +156,32 @@ impl Session {
                     .filter(|_| success)
                 {
                     Some(enabled) => self.set_auto_compaction(!enabled),
-                    None => self.stream.command_note(AUTOCOMPACT_UNKNOWN),
+                    None => self.stream.command_note("autocompact", AUTOCOMPACT_UNKNOWN),
                 }
             }
             Pending::AutoCompact(enabled) if success => {
                 self.state["autoCompactionEnabled"] = json!(enabled);
-                self.stream.command_note(if enabled {
-                    "Auto-compaction enabled."
-                } else {
-                    "Auto-compaction disabled."
-                });
+                self.stream.command_note(
+                    "autocompact",
+                    if enabled {
+                        "Auto-compaction enabled."
+                    } else {
+                        "Auto-compaction disabled."
+                    },
+                );
             }
             Pending::AutoCompact(_) => {
-                self.command_failed("Failed to set auto-compaction", &event["error"]);
+                self.command_failed(
+                    "autocompact",
+                    "Failed to set auto-compaction",
+                    &event["error"],
+                );
             }
             // A handoff replaces the context with its summary.
             Pending::Handoff if success => self.usage.refresh(),
-            Pending::Handoff => self.command_failed("Failed to hand off turn", &event["error"]),
+            Pending::Handoff => {
+                self.command_failed("handoff", "Failed to hand off turn", &event["error"]);
+            }
         }
     }
 
@@ -173,12 +195,15 @@ impl Session {
             Ok(id) => {
                 self.pending.insert(id, Pending::AutoCompact(enabled));
             }
-            Err(_) => self.command_failed("Failed to set auto-compaction", &Value::Null),
+            Err(_) => {
+                self.command_failed("autocompact", "Failed to set auto-compaction", &Value::Null);
+            }
         }
     }
 
-    /// Show Paseo's `[Error] <action>: <reason>` note with OMP's bounded, redacted reason.
-    fn command_failed(&mut self, action: &str, error: &Value) {
+    /// Show Paseo's `[Error] <action>: <reason>` note for command `name`, with OMP's bounded,
+    /// redacted reason.
+    fn command_failed(&mut self, name: &str, action: &str, error: &Value) {
         let text = native_reason(error, "command").map_or_else(
             || format!("[Error] {action}."),
             |reason| {
@@ -189,7 +214,7 @@ impl Session {
                 format!("[Error] {action}: {reason}")
             },
         );
-        self.stream.command_note(&text);
+        self.stream.command_note(name, &text);
     }
 }
 

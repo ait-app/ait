@@ -272,8 +272,11 @@ impl AgentClient for OmpClient {
     }
 
     fn handles_out_of_band(&self, text: &str) -> bool {
-        // Paseo's built-ins run beside foreground input; other slash text is a prompt (M5).
-        commands::builtin(text).is_some()
+        // Paseo's built-ins and the commands Ait blocks run beside foreground input; other
+        // slash text is a prompt (M5). Answering a blocked command out of band also keeps a
+        // running turn alive: steering it would be refused, and the runtime answers a refusal
+        // by interrupting the native turn.
+        commands::builtin(text).is_some() || commands::gui_managed(text).is_some()
     }
 
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {

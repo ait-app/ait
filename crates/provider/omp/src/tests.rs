@@ -5,6 +5,7 @@ use super::*;
 use provider_core::ports::agent_session::AgentTurnEvent;
 use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod blocked_commands;
 mod capabilities;
 mod commands;
 mod diagnostics;
@@ -353,6 +354,8 @@ async fn discovery_commands_and_diagnostics_do_not_create_history_or_prompt() {
     assert!(client.handles_out_of_band("/steer go on"));
     assert!(!client.handles_out_of_band("/steer"));
     assert!(!client.handles_out_of_band("/review"));
+    // A GUI-owned command is answered out of band, never steered into a running turn.
+    assert!(client.handles_out_of_band("/advisor off"));
     assert!(
         client
             .diagnostic()
@@ -664,6 +667,7 @@ async fn questions_require_exact_answers_and_unsupported_input_never_reaches_nat
             .is_err()
     );
     session.start_turn("/local", &spec.config).await.unwrap();
+    // A command's output is a card, and the turn still reports it as its last text.
     assert!(matches!(
         complete(session.as_mut()).await.last(),
         Some(AgentTurnEvent::Completed(Some(output))) if output == "Session: local"
@@ -899,8 +903,10 @@ async fn local_commands_settle_with_an_echo_and_clean_output_with_or_without_a_r
         assert_eq!(items[0]["type"], "user_message");
         assert_eq!(items[0]["text"], command);
         assert_eq!(items[0]["clientMessageId"], format!("client-{index}"));
-        assert_eq!(items[1]["type"], "assistant_message");
-        assert_eq!(items[1]["text"], "Session: local");
+        assert_eq!(items[1]["type"], "tool_call");
+        assert_eq!(items[1]["name"], &command[1..]);
+        assert_eq!(items[1]["detail"]["text"], "Session: local");
+        assert_eq!(items[1]["metadata"]["source"], "omp_command");
         assert_eq!(
             events.last(),
             Some(&AgentTurnEvent::Completed(Some(

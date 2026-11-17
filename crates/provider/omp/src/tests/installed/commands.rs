@@ -85,8 +85,15 @@ async fn until(
     }
 }
 
+/// Whether `event` shows `text`: assistant prose as its text, a command answer as its card's
+/// detail text.
 fn says(text: &str) -> impl Fn(&AgentTurnEvent) -> bool + '_ {
-    move |event| matches!(event, AgentTurnEvent::Timeline(entry) if entry.item["text"] == text)
+    move |event| {
+        let AgentTurnEvent::Timeline(entry) = event else {
+            return false;
+        };
+        entry.item["text"] == text || entry.item["detail"]["text"] == text
+    }
 }
 
 fn is_usage(event: &AgentTurnEvent) -> bool {

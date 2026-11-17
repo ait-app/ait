@@ -161,7 +161,7 @@ fn arbitrary_extension_messages_share_projection_without_plugin_name_rules() {
 #[test]
 fn native_command_output_and_plugin_notifications_are_visible_without_history_messages() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), None);
+    stream.begin("turn".to_owned(), None, None);
     stream.start_run();
     for frame in [
         json!({"type":"command_output","text":"Native command result"}),
@@ -176,18 +176,22 @@ fn native_command_output_and_plugin_notifications_are_visible_without_history_me
             panic!("expected visible native output");
         };
         assert_eq!(entry.turn_id.as_deref(), Some("turn"));
-        assert_eq!(entry.item["metadata"]["transient"], true);
-        assert_eq!(entry.item["metadata"]["nativeType"], frame["type"]);
-        assert_eq!(
-            entry.item.get("text").unwrap_or(&entry.item["message"]),
-            frame.get("text").unwrap_or(&frame["message"])
-        );
-        if frame["type"] == "extension_ui_request" {
+        if frame["type"] == "command_output" {
+            // A command's answer is a card, not assistant prose.
+            assert_eq!(entry.item["type"], "tool_call");
+            assert_eq!(entry.item["name"], "command");
+            assert_eq!(entry.item["detail"]["text"], "Native command result");
+            assert_eq!(entry.item["metadata"]["nativeType"], "command_output");
+            assert_eq!(entry.item["metadata"]["source"], "omp_command");
+            // The card carries the output and the turn still reports it as its last text.
+            assert_eq!(stream.last_text.as_deref(), Some("Native command result"));
+        } else {
             assert_eq!(entry.item["type"], "notification");
             assert_eq!(entry.item["level"], "warning");
+            assert_eq!(entry.item["message"], "Plugin notification");
+            assert_eq!(entry.item["metadata"]["transient"], true);
         }
     }
-    assert_eq!(stream.last_text.as_deref(), Some("Native command result"));
     assert!(
         stream
             .command_output(&json!({"type":"command_output","text":null}))
@@ -226,7 +230,7 @@ fn background_results_are_notifications_that_do_not_end_the_turn() {
 #[test]
 fn command_output_waits_for_the_run_and_a_local_prompt_is_echoed_with_its_client_identity() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), Some("/session".to_owned()));
+    stream.begin("turn".to_owned(), Some("/session".to_owned()), None);
     stream
         .pending_inputs
         .push_back(("prompt".to_owned(), Some("client-1".to_owned())));
@@ -251,8 +255,10 @@ fn command_output_waits_for_the_run_and_a_local_prompt_is_echoed_with_its_client
     assert_eq!(items[0]["type"], "user_message");
     assert_eq!(items[0]["text"], "/session");
     assert_eq!(items[0]["clientMessageId"], "client-1");
-    assert_eq!(items[1]["type"], "assistant_message");
-    assert_eq!(items[1]["text"], "Session: local");
+    assert_eq!(items[1]["type"], "tool_call");
+    assert_eq!(items[1]["name"], "command");
+    assert_eq!(items[1]["detail"]["text"], "Session: local");
+    assert_eq!(items[1]["detail"]["label"], "Session: local");
     assert_eq!(stream.last_text.as_deref(), Some("Session: local"));
     // A second settlement neither echoes again nor repeats output.
     stream.settle_prompt();
@@ -262,14 +268,19 @@ fn command_output_waits_for_the_run_and_a_local_prompt_is_echoed_with_its_client
 #[test]
 fn a_native_user_message_replaces_the_local_echo_and_started_runs_show_output_at_once() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), Some("/compact".to_owned()));
+    stream.begin(
+        "turn".to_owned(),
+        Some("/compact".to_owned()),
+        Some("compact".to_owned()),
+    );
     stream.pending_inputs.push_back(("prompt".to_owned(), None));
     stream
         .command_output(&json!({"type":"command_output","text":"before"}))
         .unwrap();
     stream.start_run();
     assert!(
-        matches!(stream.events.pop_front(), Some(AgentTurnEvent::Timeline(entry)) if entry.item["text"] == "before")
+        matches!(stream.events.pop_front(), Some(AgentTurnEvent::Timeline(entry))
+            if entry.item["detail"]["text"] == "before" && entry.item["name"] == "compact")
     );
     stream
         .command_output(&json!({"type":"command_output","text":"after"}))
@@ -664,7 +675,7 @@ fn todo_result(id: &str, timestamp: i64, phases: Value) -> Value {
 #[test]
 fn todo_results_and_reminders_show_lists_without_tool_rows_or_repeats() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), None);
+    stream.begin("turn".to_owned(), None, None);
     let phases = json!([{"name":"Build","tasks":[{"content":"one","status":"in_progress"},
         {"content":"two","status":"pending"}]}]);
     stream
@@ -710,7 +721,7 @@ fn todo_results_and_reminders_show_lists_without_tool_rows_or_repeats() {
 #[test]
 fn telemetry_events_show_rows_and_compactions_pair_their_lifecycle() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), None);
+    stream.begin("turn".to_owned(), None, None);
     for frame in [
         json!({"type":"notice","level":"warning","message":"Cost warning","source":"cost-gate"}),
         json!({"type":"auto_compaction_start","reason":"overflow","action":"shake"}),
@@ -868,7 +879,7 @@ fn task_cards_name_their_first_child_by_its_qualified_identity() {
 fn a_local_prompt_keeps_its_client_identity_from_a_later_steer() {
     let mut stream =
         Stream::new("session".to_owned(), ImageStore::default()).with_identity_lookups();
-    stream.begin("turn".to_owned(), Some("/session".to_owned()));
+    stream.begin("turn".to_owned(), Some("/session".to_owned()), None);
     stream.pending_inputs.extend([
         ("prompt".to_owned(), Some("local-input".to_owned())),
         ("steer".to_owned(), Some("steer-input".to_owned())),
@@ -926,7 +937,7 @@ fn client_identities_keep_only_the_newest_messages() {
 #[test]
 fn a_completed_turn_closes_tools_whose_results_never_arrived() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
-    stream.begin("turn".to_owned(), None);
+    stream.begin("turn".to_owned(), None, None);
     stream
         .consume(
             &json!({"type":"tool_execution_start","toolCallId":"ended","toolName":"bash",
@@ -995,7 +1006,7 @@ fn live_stream() -> (tempfile::TempDir, Stream) {
         "session".to_owned(),
         ImageStore::new(root.path().join("images")),
     );
-    stream.begin("turn".to_owned(), None);
+    stream.begin("turn".to_owned(), None, None);
     (root, stream)
 }
 
