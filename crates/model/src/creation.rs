@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use domain::creation::protocol::{Kind, Snapshot};
+use domain::creation::protocol::{Kind, Phase, Snapshot};
 use domain::creation::{Admission, Receipt};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -100,7 +100,7 @@ impl Creations {
             kind,
             idempotency_key: key.to_owned(),
             revision: 0,
-            phase: "accepted".to_owned(),
+            phase: Phase::Accepted,
             workspace_id: if kind == Kind::Workspace {
                 Some(resource_id.clone())
             } else {
@@ -164,7 +164,7 @@ impl Creations {
                 .revision
                 .checked_add(1)
                 .ok_or(ErrorCode::ResourceExhausted)?;
-            "workspace_ready".clone_into(&mut receipt.snapshot.phase);
+            receipt.snapshot.phase = Phase::WorkspaceReady;
             receipt.snapshot.error = None;
             let id = receipt.id.clone();
             self.write(state, receipt.clone())?;
@@ -188,7 +188,7 @@ impl Creations {
         let mut receipt = self.read(&state, &id)?.ok_or(ErrorCode::InvalidMessage)?;
         if snapshot.kind != Kind::Workspace
             || receipt.snapshot.revision != snapshot.revision
-            || receipt.snapshot.phase != "failed"
+            || receipt.snapshot.phase != Phase::Failed
             || receipt.snapshot.agent.is_some()
             || receipt.snapshot.agent_id.is_none()
             || receipt.snapshot.workspace.is_none()
@@ -206,20 +206,17 @@ impl Creations {
     pub fn advance(
         &self,
         snapshot: &Snapshot,
-        phase: &str,
+        phase: Phase,
         result: Option<Value>,
         error: Option<String>,
     ) -> Result<Snapshot, ErrorCode> {
-        if !matches!(
-            phase,
-            "workspace_ready" | "agent_ready" | "prompt_started" | "completed" | "failed"
-        ) {
+        if phase == Phase::Accepted {
             return Err(ErrorCode::InvalidMessage);
         }
         let id = identity(snapshot.kind, &snapshot.idempotency_key);
         let mut state = self.state.lock().map_err(io)?;
         let mut receipt = self.read(&state, &id)?.ok_or(ErrorCode::InvalidMessage)?;
-        if terminal(&receipt.snapshot.phase) || receipt.snapshot.revision != snapshot.revision {
+        if receipt.snapshot.phase.is_terminal() || receipt.snapshot.revision != snapshot.revision {
             return Err(ErrorCode::IdempotencyConflict);
         }
         receipt.snapshot.revision = receipt
@@ -227,7 +224,7 @@ impl Creations {
             .revision
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
-        phase.clone_into(&mut receipt.snapshot.phase);
+        receipt.snapshot.phase = phase;
         receipt.snapshot.error = error;
         if let Some(result) = result {
             if let Some(agent) = result.get("agent").filter(|value| !value.is_null()) {
@@ -241,10 +238,11 @@ impl Creations {
             }
         }
         // Once an Agent is ready, a failure may follow acceptance of the initial prompt.
-        receipt.snapshot.outcome_unknown = phase == "failed" && receipt.snapshot.agent.is_some();
+        receipt.snapshot.outcome_unknown =
+            phase == Phase::Failed && receipt.snapshot.agent.is_some();
         let snapshot = receipt.snapshot.clone();
         self.write(&mut state, receipt)?;
-        if terminal(phase) {
+        if phase.is_terminal() {
             state.active.remove(&id);
         }
         self.publish(&id, &snapshot);
@@ -355,13 +353,10 @@ pub fn validate_key(key: &str) -> Result<(), ErrorCode> {
 fn identity(kind: Kind, key: &str) -> String {
     format!("{}:{:x}", kind.name(), Sha256::digest(key.as_bytes()))
 }
-fn terminal(phase: &str) -> bool {
-    matches!(phase, "completed" | "failed")
-}
 fn observed(mut snapshot: Snapshot, active: bool) -> Snapshot {
-    if !terminal(&snapshot.phase) && !active {
+    if !snapshot.phase.is_terminal() && !active {
         snapshot.outcome_unknown = true;
-        "failed".clone_into(&mut snapshot.phase);
+        snapshot.phase = Phase::Failed;
         snapshot.error = Some("Creation was interrupted; inspect the reserved resource before retrying with a new key".to_owned());
     }
     snapshot

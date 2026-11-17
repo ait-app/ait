@@ -17,6 +17,7 @@ mod tests;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use domain::creation::protocol::Phase;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -399,7 +400,7 @@ impl ExecutionState {
         let creations = self.manager.creations();
         let admission = creations.begin(domain::creation::protocol::Kind::Agent, &key, intent)?;
         if !admission.execute {
-            if admission.snapshot.phase == "completed"
+            if admission.snapshot.phase == Phase::Completed
                 && let Some(id) = &admission.snapshot.agent_id
                 && !self
                     .directory
@@ -420,7 +421,7 @@ impl ExecutionState {
         {
             creations.advance(
                 &admission.snapshot,
-                "failed",
+                Phase::Failed,
                 None,
                 Some("Agent ID is already in use".into()),
             )?;
@@ -429,7 +430,12 @@ impl ExecutionState {
         let (workspace_id, created_worktree) = match self.creation_placement(&mut request).await {
             Ok(placement) => placement,
             Err(error) => {
-                creations.advance(&admission.snapshot, "failed", None, Some(error.to_string()))?;
+                creations.advance(
+                    &admission.snapshot,
+                    Phase::Failed,
+                    None,
+                    Some(error.to_string()),
+                )?;
                 return Err(error);
             }
         };
@@ -514,7 +520,7 @@ impl ExecutionState {
             } else {
                 error.to_string()
             };
-            creations.advance(admission, "failed", None, Some(message))?;
+            creations.advance(admission, Phase::Failed, None, Some(message))?;
             return Err(map_manager(&error));
         }
         if created_worktree {
@@ -534,18 +540,18 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
         let result = json!({"agent":self.snapshot(id)?});
-        let mut progress = creations.advance(admission, "agent_ready", Some(result), None)?;
+        let mut progress = creations.advance(admission, Phase::AgentReady, Some(result), None)?;
         if let Some(prompt) = prompt {
             if let Err(error) = self.manager.send_input(id, &prompt).await {
-                creations.advance(&progress, "failed", None, Some(error.to_string()))?;
+                creations.advance(&progress, Phase::Failed, None, Some(error.to_string()))?;
                 return Err(map_manager(&error));
             }
-            progress = creations.advance(&progress, "prompt_started", None, None)?;
+            progress = creations.advance(&progress, Phase::PromptStarted, None, None)?;
         }
         let snapshot = self.snapshot(id)?;
         progress = creations.advance(
             &progress,
-            "completed",
+            Phase::Completed,
             Some(json!({"agent":snapshot})),
             None,
         )?;

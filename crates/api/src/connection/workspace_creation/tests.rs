@@ -21,19 +21,21 @@ async fn replays_wait_for_the_in_flight_creation_to_finish() {
     let state = api.shared.clone();
     let waiter = tokio::spawn(async move { await_finished(&state, "replayed".to_owned()).await });
     let ready = creations
-        .advance(&admission.snapshot, "workspace_ready", None, None)
+        .advance(&admission.snapshot, Phase::WorkspaceReady, None, None)
         .unwrap();
     for _ in 0..10 {
         tokio::task::yield_now().await;
     }
     assert!(!waiter.is_finished());
-    creations.advance(&ready, "completed", None, None).unwrap();
+    creations
+        .advance(&ready, Phase::Completed, None, None)
+        .unwrap();
     let finished = tokio::time::timeout(Duration::from_secs(5), waiter)
         .await
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_eq!(finished.phase, "completed");
+    assert_eq!(finished.phase, Phase::Completed);
     api.begin_shutdown();
     api.wait_closed().await;
 }

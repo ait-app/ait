@@ -433,7 +433,7 @@ fn create_workspace_intent(
     mut params: Value,
     agent_intent: Option<Value>,
 ) -> Result<WorkspaceCreated, ErrorCode> {
-    use domain::creation::protocol::Kind;
+    use domain::creation::protocol::{Kind, Phase};
     let mut request: WorkspaceCreateRequest = decode(params.clone())?;
     let is_worktree = matches!(request.source, WorkspaceCreateSource::Worktree(_));
     if (request.agent.is_some() && agent_intent.is_none())
@@ -464,7 +464,7 @@ fn create_workspace_intent(
     }
     let creations = directory.creations();
     let admission = creations.begin(Kind::Workspace, &key, params)?;
-    if admission.snapshot.phase == "completed"
+    if admission.snapshot.phase == Phase::Completed
         && let Some(id) = &admission.snapshot.workspace_id
         && !directory
             .contains_workspace_directory(id)
@@ -487,22 +487,27 @@ fn create_workspace_intent(
         Ok(mut value) => {
             let error = value["error"].as_str().map(str::to_owned);
             let progress = if error.is_some() {
-                creations.advance(&admission.snapshot, "failed", Some(value.clone()), error)?
+                creations.advance(
+                    &admission.snapshot,
+                    Phase::Failed,
+                    Some(value.clone()),
+                    error,
+                )?
             } else {
                 let ready = creations.advance(
                     &admission.snapshot,
-                    "workspace_ready",
+                    Phase::WorkspaceReady,
                     Some(value.clone()),
                     None,
                 )?;
                 if has_agent {
                     ready
                 } else {
-                    creations.advance(&ready, "completed", None, None)?
+                    creations.advance(&ready, Phase::Completed, None, None)?
                 }
             };
             let pending_agent =
-                (has_agent && progress.phase == "workspace_ready").then(|| progress.clone());
+                (has_agent && progress.phase == Phase::WorkspaceReady).then(|| progress.clone());
             value["creation"] =
                 serde_json::to_value(progress).map_err(|_| ErrorCode::RegistryIo)?;
             let created_worktree_id = is_worktree
@@ -517,7 +522,7 @@ fn create_workspace_intent(
         Err(error) => {
             creations.advance(
                 &admission.snapshot,
-                "failed",
+                Phase::Failed,
                 None,
                 Some(model::ErrorCode::from(error).message().to_owned()),
             )?;

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use domain::creation::protocol::{Kind, Snapshot, SubscribeRequest};
+use domain::creation::protocol::{Kind, Phase, Snapshot, SubscribeRequest};
 use model::{ErrorCode, Request};
 
 use crate::Shared;
@@ -17,7 +17,7 @@ pub(super) async fn validate(request: &Request, state: &Shared) -> Result<(), Er
             creations.snapshot(request.kind, &request.idempotency_key)
         })
         .await?;
-    let Some(snapshot) = snapshot.filter(|snapshot| snapshot.phase == "completed") else {
+    let Some(snapshot) = snapshot.filter(|snapshot| snapshot.phase == Phase::Completed) else {
         return Ok(());
     };
     if snapshot.kind == Kind::Workspace
@@ -44,7 +44,7 @@ pub(super) async fn validate(request: &Request, state: &Shared) -> Result<(), Er
 }
 
 pub(super) async fn validate_agent(state: &Shared, snapshot: &Snapshot) -> Result<(), ErrorCode> {
-    if snapshot.phase == "completed"
+    if snapshot.phase == Phase::Completed
         && let Some(id) = snapshot.agent_id.clone()
         && !provider::dispatch::contains_identity(&state.provider, id).await?
     {

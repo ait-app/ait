@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use domain::creation::protocol::{Kind, Snapshot};
+use domain::creation::protocol::{Kind, Phase, Snapshot};
 use metadata::directory::rpc::directory::WorkspaceCreated;
 use model::creation::Creations;
 use model::events::Subscription;
@@ -227,7 +227,7 @@ fn current(creations: &Creations, key: &str) -> Result<Snapshot, ErrorCode> {
 }
 
 fn finished(snapshot: &Snapshot) -> bool {
-    matches!(snapshot.phase.as_str(), "completed" | "failed")
+    snapshot.phase.is_terminal()
 }
 
 async fn finish(
@@ -257,10 +257,10 @@ async fn finish(
                 .snapshot(Kind::Workspace, &receipt.idempotency_key)?
                 .ok_or(ErrorCode::RegistryIo)?;
             if let Err(error) = result
-                && snapshot.phase != "failed"
-                && snapshot.phase != "completed"
+                && !snapshot.phase.is_terminal()
             {
-                snapshot = creations.advance(&snapshot, "failed", None, Some(error.to_string()))?;
+                snapshot =
+                    creations.advance(&snapshot, Phase::Failed, None, Some(error.to_string()))?;
             }
             Ok(snapshot)
         })

@@ -1,4 +1,4 @@
-use domain::creation::protocol::Kind;
+use domain::creation::protocol::{Kind, Phase};
 use model::ErrorCode;
 use model::creation::{Creations, validate_key};
 use model::outbound::Outbound;
@@ -31,7 +31,12 @@ fn operation_progress_is_untagged_and_ends_with_its_guard() {
     assert!(event["params"].get("subscriptionId").is_none());
     drop(operation);
     creations
-        .advance(&admitted.snapshot, "failed", None, Some("failed".into()))
+        .advance(
+            &admitted.snapshot,
+            Phase::Failed,
+            None,
+            Some("failed".into()),
+        )
         .unwrap();
     assert!(receiver.try_recv().is_err());
 }
@@ -79,11 +84,11 @@ fn different_intents_cannot_claim_the_same_resources_even_after_restart() {
 fn committed_agent_records_placement_and_uncertain_prompt_failure() {
     let creations = Creations::default();
     let admission = creations.begin(Kind::Agent, "prompt", json!({})).unwrap();
-    let ready = creations.advance(&admission.snapshot, "agent_ready",
+    let ready = creations.advance(&admission.snapshot, Phase::AgentReady,
         Some(json!({"agent":{"id":admission.snapshot.agent_id,"workspaceId":"wks_0123456789abcdef"}})), None).unwrap();
     assert_eq!(ready.workspace_id.as_deref(), Some("wks_0123456789abcdef"));
     let failed = creations
-        .advance(&ready, "failed", None, Some("uncertain prompt".into()))
+        .advance(&ready, Phase::Failed, None, Some("uncertain prompt".into()))
         .unwrap();
     assert!(failed.outcome_unknown);
     assert_eq!(
@@ -107,7 +112,7 @@ fn proven_initial_agent_startup_failure_retries_reserved_ids_after_restart() {
     let failed = creations
         .advance(
             &admission.snapshot,
-            "failed",
+            Phase::Failed,
             Some(json!({"workspace":{"id":admission.snapshot.workspace_id}})),
             Some("startup".into()),
         )
@@ -127,7 +132,7 @@ fn proven_initial_agent_startup_failure_retries_reserved_ids_after_restart() {
     assert!(resumed.execute);
     assert_eq!(resumed.snapshot.workspace_id, failed.workspace_id);
     assert_eq!(resumed.snapshot.agent_id, failed.agent_id);
-    assert_eq!(resumed.snapshot.phase, "workspace_ready");
+    assert_eq!(resumed.snapshot.phase, Phase::WorkspaceReady);
     assert!(resumed.snapshot.error.is_none());
     assert!(
         !creations
@@ -150,7 +155,7 @@ fn creation_replays_committed_results_without_repeating_effects_and_rejects_conf
     let completed = creations
         .advance(
             &admitted.snapshot,
-            "completed",
+            Phase::Completed,
             Some(json!({"agent":{"id":admitted.snapshot.agent_id}})),
             None,
         )
@@ -167,7 +172,7 @@ fn creation_replays_committed_results_without_repeating_effects_and_rejects_conf
     assert_eq!(replay.snapshot, completed);
     assert!(
         creations
-            .advance(&completed, "completed", None, None)
+            .advance(&completed, Phase::Completed, None, None)
             .is_err()
     );
     assert!(
@@ -218,7 +223,7 @@ fn observer_can_arrive_before_creation_and_releases_without_affecting_work() {
     creations
         .advance(
             &admitted.snapshot,
-            "failed",
+            Phase::Failed,
             None,
             Some("failed".to_owned()),
         )

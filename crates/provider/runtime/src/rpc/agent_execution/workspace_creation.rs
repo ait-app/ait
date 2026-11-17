@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use domain::creation::protocol::Snapshot;
+use domain::creation::protocol::{Phase, Snapshot};
 use domain::workspace::protocol::directory::WorkspaceCreateSource;
 use serde::Deserialize;
 use serde_json::Value;
@@ -61,8 +61,9 @@ impl ExecutionState {
             if let Some(mut latest) =
                 creations.snapshot(input.creation.kind, &input.creation.idempotency_key)?
             {
-                if latest.phase != "failed" && latest.phase != "completed" {
-                    latest = creations.advance(&latest, "failed", None, Some(error.to_string()))?;
+                if !latest.phase.is_terminal() {
+                    latest =
+                        creations.advance(&latest, Phase::Failed, None, Some(error.to_string()))?;
                 }
                 if let Some(id) = latest.agent_id.as_deref()
                     && latest.agent.is_none()
