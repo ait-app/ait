@@ -95,6 +95,7 @@ import {
   type SettingsSectionSlug,
 } from "@/utils/host-routes";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
+import { toErrorMessage } from "@/utils/error-messages";
 import { useFocusEffect } from "@react-navigation/native";
 import { Buffer } from "buffer";
 import { useRouter, type Href } from "expo-router";
@@ -556,7 +557,7 @@ function ExperimentalFeaturesRow() {
     try {
       await updateSettings({ experimentalFeatures });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(toErrorMessage(cause));
     } finally {
       setSaving(false);
     }
@@ -1251,7 +1252,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
       });
       setPlaybackTestResult(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       console.error("[Settings] Playback test failed", error);
       setPlaybackTestResult(t("settings.diagnostics.playbackFailed", { message }));
     } finally {

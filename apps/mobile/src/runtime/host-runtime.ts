@@ -2516,7 +2516,7 @@ export class HostRuntimeStore {
             : {},
         )
         .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = toErrorMessage(error);
           controller.markStartupError(message);
         });
       this.emit(host.serverId);

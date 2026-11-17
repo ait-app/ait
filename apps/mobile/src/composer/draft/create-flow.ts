@@ -16,6 +16,7 @@ import {
 } from "@/types/stream";
 import type { AgentAttachment } from "@ait/protocol/messages";
 import type { PendingMessageSubmission } from "@/stores/message-submission-model";
+import { toErrorMessage } from "@/utils/error-messages";
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 
@@ -72,7 +73,7 @@ function prepareCreateAttempt<TDraftAgent>(
   try {
     return { tag: "creating", attempt, draftAgent: buildDraftAgent(attempt) };
   } catch (error) {
-    return { tag: "draft", errorMessage: error instanceof Error ? error.message : String(error) };
+    return { tag: "draft", errorMessage: toErrorMessage(error) };
   }
 }
 

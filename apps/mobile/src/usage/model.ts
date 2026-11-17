@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { i18n } from "@/i18n/i18next";
+import { toErrorMessage } from "@/utils/error-messages";
 import { formatUsageTimeAgo, usageCopy, type UsageCopy } from "./copy";
 import type { UsageDisplayAs } from "./preferences";
 import type { UsageReportEntry, UsageView, UsageWindow } from "./types";
@@ -135,7 +136,7 @@ export function resolveUsageView(
   if (query?.error) {
     return {
       kind: "error",
-      message: query.error instanceof Error ? query.error.message : String(query.error),
+      message: toErrorMessage(query.error),
     };
   }
   return { kind: "loading" };
@@ -160,7 +161,7 @@ export function resolveAgentUsageView(
   // A failed request keeps the reports from before it, or those that streamed in before it failed;
   // shown alone they would pass for the agent's complete, current usage.
   if (query.error) {
-    const reason = query.error instanceof Error ? query.error.message : String(query.error);
+    const reason = toErrorMessage(query.error);
     return { kind: "error", message: copy.agentError(reason) };
   }
   if (query.data) {

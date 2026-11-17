@@ -12,6 +12,7 @@ import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildAgentProfileCreateRoute, buildAgentProfileEditRoute } from "@/utils/host-routes";
+import { toErrorMessage } from "@/utils/error-messages";
 import { useAgentProfiles } from "../internal/use-agent-profiles";
 import { AgentProfileRow } from "./agent-profile-row";
 
@@ -52,10 +53,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
-          t("common.errors.unableToSave"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
       }
     },
     [profiles, saveProfiles, t],
@@ -83,10 +81,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         try {
           await saveProfiles(profiles.filter((entry) => entry.id !== id));
         } catch (error) {
-          Alert.alert(
-            t("common.errors.unableToSave"),
-            error instanceof Error ? error.message : String(error),
-          );
+          Alert.alert(t("common.errors.unableToSave"), toErrorMessage(error));
         }
         return;
       });

@@ -27,6 +27,7 @@ import {
 } from "./session-stream-reducers";
 import { isTimelineResumeSnapshotAuthoritative } from "./timeline-sync-plan";
 import { replaceWithCanonicalStream, type StreamItem, type TodoEntry } from "@/types/stream";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export interface TimelineReplicaStorage {
   readTimeline(serverId: string, agentId: string): Promise<CachedTimeline | undefined>;
@@ -623,7 +624,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
   };
 
   const setVisibilityCatchUpError = (agentIds: string[], error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     let changed = false;
     for (const agentId of agentIds) {
       if (manualRetries.delete(agentId)) changed = true;

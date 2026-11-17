@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { toErrorMessage } from "@/utils/error-messages";
 import { formatFileLinkTooltipPath } from "./tooltip-path";
 import type { InlinePathTarget } from "./parse";
 import {
@@ -188,10 +189,7 @@ function openAssistantFileLink(input: {
       context: input.context,
     }).catch((error: unknown) => {
       // The platform opener rejects when no app can handle the link.
-      input.context.configRef.current.toast?.show(
-        error instanceof Error ? error.message : String(error),
-        { variant: "error" },
-      );
+      input.context.configRef.current.toast?.show(toErrorMessage(error), { variant: "error" });
     });
     return;
   }
@@ -327,7 +325,7 @@ async function dispatchFileTarget(input: {
     try {
       if (await openDirectory({ path: input.target.path, cwd: current.workspaceRoot })) return;
     } catch (error) {
-      current.toast?.show(error instanceof Error ? error.message : String(error), {
+      current.toast?.show(toErrorMessage(error), {
         variant: "error",
       });
       return;

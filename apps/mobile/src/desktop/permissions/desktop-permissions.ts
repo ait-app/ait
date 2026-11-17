@@ -1,6 +1,7 @@
 import { type DesktopHostBridge, getDesktopHost } from "@/desktop/host";
 import { isNative, isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type DesktopPermissionKind = "notifications" | "microphone";
 
@@ -64,13 +65,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") {
-    return error.message;
-  }
-  return String(error);
-}
-
 function getErrorName(error: unknown): string | null {
   if (!isObject(error)) {
     return null;
@@ -80,7 +74,7 @@ function getErrorName(error: unknown): string | null {
 }
 
 function isPermissionsQueryRuntimeUnsupported(error: unknown): boolean {
-  const message = getErrorMessage(error);
+  const message = toErrorMessage(error);
   return (
     message.includes("Can only call Permissions.query on instances of Permissions") ||
     message.includes("Illegal invocation")
@@ -207,7 +201,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
         return {
           state: "unknown",
           detail: i18n.t("desktop.permissions.microphone.queryFailed", {
-            message: getErrorMessage(error),
+            message: toErrorMessage(error),
           }),
         };
       }
@@ -246,7 +240,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
         return {
           state: "unknown",
           detail: i18n.t("desktop.permissions.notifications.requestFailed", {
-            message: getErrorMessage(error),
+            message: toErrorMessage(error),
           }),
         };
       }
@@ -300,7 +294,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
       return {
         state: "unknown",
         detail: i18n.t("desktop.permissions.microphone.requestFailed", {
-          message: getErrorMessage(error),
+          message: toErrorMessage(error),
         }),
       };
     }

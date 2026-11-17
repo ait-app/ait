@@ -12,6 +12,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
+import { toErrorMessage } from "@/utils/error-messages";
 
 type SelectionMode = "automatic" | "preferred";
 
@@ -55,10 +56,7 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
         await patchConfig({ metadataGeneration: { providers: providersPatch } });
       } catch (error) {
         setDraftMode(null);
-        Alert.alert(
-          t("settings.metadataGeneration.saveError"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("settings.metadataGeneration.saveError"), toErrorMessage(error));
       } finally {
         setIsSaving(false);
       }

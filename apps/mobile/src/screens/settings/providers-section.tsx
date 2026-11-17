@@ -37,6 +37,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
+import { toErrorMessage } from "@/utils/error-messages";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
@@ -361,10 +362,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert(
-          t("settings.providers.updateErrorTitle"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("settings.providers.updateErrorTitle"), toErrorMessage(error));
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
@@ -390,10 +388,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
 
         await patchConfig({ removeProviders: [providerId] });
       } catch (error) {
-        Alert.alert(
-          t("settings.providers.remove.errorTitle"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("settings.providers.remove.errorTitle"), toErrorMessage(error));
       } finally {
         if (removingProviderIdRef.current === providerId) {
           removingProviderIdRef.current = null;
@@ -412,10 +407,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         await patchConfig(buildAcpProviderConfigPatch(entry));
         await refresh([entry.id]);
       } catch (error) {
-        Alert.alert(
-          t("settings.providers.addErrorTitle"),
-          error instanceof Error ? error.message : String(error),
-        );
+        Alert.alert(t("settings.providers.addErrorTitle"), toErrorMessage(error));
       } finally {
         setInstallingProviderId((current) => (current === entry.id ? null : current));
       }

@@ -12,6 +12,7 @@ import { replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
 import { agentCommandsQueryRoot } from "@/data/agent-commands-query";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import { normalizeWorkspacePath } from "@/utils/workspace-identity";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export const PROVIDERS_SNAPSHOT_QUERY_ROOT = "providersSnapshot";
 
@@ -342,7 +343,7 @@ export async function refreshProvidersOnAccess(input: {
           if (!controller.signal.aborted && !(error instanceof CancelledError)) {
             input.queryClient.setQueryData<Snapshot>(queryKey, (latest) => {
               if (!latest) return latest;
-              const message = error instanceof Error ? error.message : String(error);
+              const message = toErrorMessage(error);
               return {
                 ...latest,
                 entries: latest.entries.map((entry) =>

@@ -1,4 +1,5 @@
 import type { FileVersion, FileWriteResult } from "@ait/protocol/messages";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type FileEditorStatus = "clean" | "dirty" | "saving" | "conflict" | "error";
 export type FileLineSeparator = "\n" | "\r\n" | "\r";
@@ -256,7 +257,7 @@ export class FileEditorModel {
       });
     } catch (error) {
       if (this.disposed || sequence !== this.saveSequence) return;
-      this.failWrite(error instanceof Error ? error.message : String(error));
+      this.failWrite(toErrorMessage(error));
       return;
     }
     if (this.disposed || sequence !== this.saveSequence) return;

@@ -1,5 +1,6 @@
 import type { ProviderUsageLedgerResponseMessage } from "@ait/protocol/messages";
 import { AGENT_PROVIDER_DEFINITIONS } from "@ait/protocol/provider-manifest";
+import { toErrorMessage } from "@/utils/error-messages";
 
 /** One host's ledger summary for a range, as `provider.usage.ledger` answers it. */
 export type LedgerSummary = ProviderUsageLedgerResponseMessage["payload"];
@@ -164,10 +165,6 @@ export interface UsageHistory {
   isRefreshing: boolean;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** A failed summary request, unless the host has its data from before. */
 function failure(query: LedgerQueryState): unknown {
   return query.data ? null : query.error || null;
@@ -201,7 +198,7 @@ export function combineUsageHistory(hosts: readonly LedgerHostInput[]): UsageHis
     const error = failure(host.byModel) ?? failure(host.byDay);
     if (error) {
       if (isLedgerUnsupported(error)) history.notRecorded.push(host.label);
-      else history.failed.push({ label: host.label, message: errorMessage(error) });
+      else history.failed.push({ label: host.label, message: toErrorMessage(error) });
       continue;
     }
     const byModel = host.byModel.data;
@@ -247,7 +244,7 @@ export function resolveHostHistoryTotals(input: {
   if (error) {
     return isLedgerUnsupported(error)
       ? { kind: "notRecorded" }
-      : { kind: "error", message: errorMessage(error) };
+      : { kind: "error", message: toErrorMessage(error) };
   }
   if (!query.data) return { kind: "loading" };
   const { rows, since, from } = query.data;

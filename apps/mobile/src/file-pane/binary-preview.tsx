@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import { getDesktopHost } from "@/desktop/host";
 import { fileUriToPath } from "@/attachments/utils";
+import { toErrorMessage } from "@/utils/error-messages";
 import { canPreviewPdf, FilePdfPreview } from "./pdf-preview";
 
 export function FileBinaryPreview({
@@ -46,7 +47,7 @@ export function FileBinaryPreview({
         link.click();
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(toErrorMessage(cause));
     } finally {
       setOpening(false);
     }
