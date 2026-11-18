@@ -252,6 +252,10 @@ export const workspace = {
       reloadedAgent: "エージェントを再読み込みしました",
       failedToReloadAgent: "エージェントの再読み込みに失敗しました",
       failedToCloseAgent: "エージェントを閉じられませんでした",
+      scheduledAgentCloseBlocked:
+        "このエージェントはスケジュールタスクの実行エージェントに選択されています。閉じる前にタスクを変更または削除してください。",
+      scheduledAgentCheckFailed:
+        "スケジュールタスクを確認できなかったため、エージェントを開いたままにしました。",
     },
     confirmations: {
       unsavedTitle: "未保存の変更",

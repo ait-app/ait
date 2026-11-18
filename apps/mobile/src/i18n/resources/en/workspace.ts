@@ -249,6 +249,9 @@ export const workspace = {
       reloadedAgent: "Reloaded agent",
       failedToReloadAgent: "Failed to reload agent",
       failedToCloseAgent: "Failed to close agent",
+      scheduledAgentCloseBlocked:
+        "This agent is selected as the execution agent for a scheduled task. Change or delete the task before closing it.",
+      scheduledAgentCheckFailed: "Couldn't check scheduled tasks, so the agent was kept open.",
     },
     confirmations: {
       close: "Close",

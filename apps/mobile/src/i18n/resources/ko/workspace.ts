@@ -249,6 +249,10 @@ export const workspace = {
       reloadedAgent: "에이전트를 다시 로드했습니다",
       failedToReloadAgent: "에이전트를 다시 로드하지 못했습니다",
       failedToCloseAgent: "에이전트를 닫지 못했습니다",
+      scheduledAgentCloseBlocked:
+        "이 에이전트는 예약된 작업의 실행 에이전트로 선택되어 있습니다. 닫기 전에 작업을 변경하거나 삭제하세요.",
+      scheduledAgentCheckFailed:
+        "예약된 작업을 확인할 수 없어 에이전트를 열린 상태로 유지했습니다.",
     },
     confirmations: {
       close: "닫기",

@@ -248,6 +248,9 @@ export const workspace = {
       reloadedAgent: "已重新加载 Agent",
       failedToReloadAgent: "重新加载 Agent 失败",
       failedToCloseAgent: "关闭 Agent 失败",
+      scheduledAgentCloseBlocked:
+        "此 Agent 已被定时任务选为执行 Agent，无法关闭。请先修改或删除该定时任务。",
+      scheduledAgentCheckFailed: "无法检查定时任务，因此保留此 Agent 处于打开状态。",
     },
     confirmations: {
       unsavedTitle: "未保存的更改",

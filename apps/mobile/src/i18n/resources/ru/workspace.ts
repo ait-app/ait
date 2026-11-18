@@ -252,6 +252,10 @@ export const workspace = {
       reloadedAgent: "Агент перезагружен",
       failedToReloadAgent: "Не удалось перезагрузить агента",
       failedToCloseAgent: "Не удалось закрыть агента",
+      scheduledAgentCloseBlocked:
+        "Этот агент выбран исполнителем запланированной задачи. Измените или удалите задачу перед закрытием агента.",
+      scheduledAgentCheckFailed:
+        "Не удалось проверить запланированные задачи, поэтому агент оставлен открытым.",
     },
     confirmations: {
       unsavedTitle: "Несохранённые изменения",

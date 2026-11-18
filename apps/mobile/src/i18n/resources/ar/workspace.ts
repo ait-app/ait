@@ -249,6 +249,9 @@ export const workspace = {
       reloadedAgent: "تمت إعادة تحميل الوكيل",
       failedToReloadAgent: "فشل في إعادة تحميل الوكيل",
       failedToCloseAgent: "فشل في إغلاق الوكيل",
+      scheduledAgentCloseBlocked:
+        "تم اختيار هذا الوكيل كوكيل تنفيذ لمهمة مجدولة. غيّر المهمة أو احذفها قبل إغلاقه.",
+      scheduledAgentCheckFailed: "تعذر التحقق من المهام المجدولة، لذلك أبقينا الوكيل مفتوحًا.",
     },
     confirmations: {
       unsavedTitle: "تغييرات غير محفوظة",

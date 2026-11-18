@@ -251,6 +251,10 @@ export const workspace = {
       reloadedAgent: "Agente recargado",
       failedToReloadAgent: "No se pudo recargar el agente",
       failedToCloseAgent: "No se pudo cerrar el agente",
+      scheduledAgentCloseBlocked:
+        "Este agente es el agente de ejecución de una tarea programada. Cambia o elimina la tarea antes de cerrarlo.",
+      scheduledAgentCheckFailed:
+        "No se pudieron comprobar las tareas programadas; el agente seguirá abierto.",
     },
     confirmations: {
       unsavedTitle: "Cambios sin guardar",

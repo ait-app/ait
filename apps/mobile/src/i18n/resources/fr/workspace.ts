@@ -251,6 +251,10 @@ export const workspace = {
       reloadedAgent: "Agent rechargé",
       failedToReloadAgent: "Échec du rechargement de l'agent",
       failedToCloseAgent: "Échec de la fermeture de l'agent",
+      scheduledAgentCloseBlocked:
+        "Cet agent est sélectionné comme agent d'exécution d'une tâche planifiée. Modifiez ou supprimez la tâche avant de le fermer.",
+      scheduledAgentCheckFailed:
+        "Impossible de vérifier les tâches planifiées ; l'agent est donc resté ouvert.",
     },
     confirmations: {
       unsavedTitle: "Modifications non enregistrées",
