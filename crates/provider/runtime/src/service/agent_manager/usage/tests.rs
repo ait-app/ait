@@ -45,6 +45,69 @@ fn quota_cache_reuses_bounded_facts_and_force_refresh_bypasses_them() {
     assert!(cache.get("provider-64", &account, false).is_some());
 }
 
+#[tokio::test(start_paused = true)]
+async fn quota_retry_delay_preserves_history_and_blocks_forced_polls_until_expiry() {
+    let cache = UsageCache::default();
+    let account = identity("account");
+    let first = cache.put("codex", Some(account.clone()), available(), "first");
+    let retry_at = (chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc3339();
+    let throttled = cache.put(
+        "codex",
+        Some(account.clone()),
+        json!({"status":"error","error":"rate limited","nextRefreshAt":retry_at}),
+        "second",
+    );
+    assert_eq!(
+        throttled["lastSuccessful"]["fetchedAt"],
+        first["successfulAt"]
+    );
+    tokio::time::advance(Duration::from_secs(61)).await;
+    for force in [false, true] {
+        assert_eq!(cache.get("codex", &account, force), Some(throttled.clone()));
+        assert!(cache.get("codex", &identity("other"), force).is_none());
+    }
+    tokio::time::advance(Duration::from_secs(60)).await;
+    assert!(cache.get("codex", &account, false).is_none());
+    assert!(cache.get("codex", &account, true).is_none());
+}
+
+#[test]
+fn missing_invalid_or_elapsed_retry_times_do_not_block_forced_refresh() {
+    let cache = UsageCache::default();
+    let account = identity("account");
+    for retry_at in [Value::Null, json!("invalid"), json!("2000-01-01T00:00:00Z")] {
+        cache.put(
+            "codex",
+            Some(account.clone()),
+            json!({"status":"error","nextRefreshAt":retry_at}),
+            "attempt",
+        );
+        assert!(cache.get("codex", &account, true).is_none());
+    }
+    let mut report = available();
+    report["nextRefreshAt"] =
+        json!((chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc3339());
+    cache.put("codex", Some(account.clone()), report, "success");
+    assert!(cache.get("codex", &account, true).is_none());
+}
+
+#[tokio::test(start_paused = true)]
+async fn retry_delays_cannot_block_usage_for_more_than_one_hour() {
+    let cache = UsageCache::default();
+    let account = identity("account");
+    cache.put(
+        "codex",
+        Some(account.clone()),
+        json!({"status":"error",
+            "nextRefreshAt":(chrono::Utc::now() + chrono::Duration::days(1)).to_rfc3339()}),
+        "attempt",
+    );
+    tokio::time::advance(Duration::from_secs(3599)).await;
+    assert!(cache.get("codex", &account, true).is_some());
+    tokio::time::advance(Duration::from_secs(1)).await;
+    assert!(cache.get("codex", &account, true).is_none());
+}
+
 #[test]
 fn failures_retain_success_without_promoting_attempt_time_and_recovery_replaces_it() {
     let cache = UsageCache::default();

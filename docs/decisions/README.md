@@ -108,6 +108,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-285：账号用量查询遵守上游重试时间](providers/adr-285-account-usage-retry-delay.md)
 - [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)
 - [ADR-278：共享 BTW 侧会话与完整会话交接](providers/adr-278-shared-btw-sessions.md)
 - [ADR-277：Provider 原生 TODO 统一为完整快照](providers/adr-277-provider-todo-snapshots.md)
@@ -123,7 +124,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-232：OpenCode、Pi 与 DSH 原生 Host 的 Agent MCP 单会话交付](providers/adr-232-agent-mcp-session-delivery.md)
 - [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
-- [ADR-219：共享套餐缓存与 Codex 查询进程](providers/adr-219-shared-account-usage-cache.md)
+- [ADR-219：共享套餐缓存与 Codex 查询进程](providers/adr-219-shared-account-usage-cache.md)（经 [ADR-285](providers/adr-285-account-usage-retry-delay.md) 修订）
 - [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
 - [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
 - [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)

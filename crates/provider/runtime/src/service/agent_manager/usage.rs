@@ -44,29 +44,49 @@ const MAX_AGE: Duration = Duration::from_secs(300);
 #[derive(Debug)]
 struct CachedUsage {
     fetched: Instant,
+    retry_until: Option<Instant>,
     source: Option<UsageIdentity>,
     identity: Option<UsageIdentity>,
     value: Value,
     successful: Option<Value>,
 }
 
+impl CachedUsage {
+    fn retry_pending(&self) -> bool {
+        self.retry_until
+            .is_some_and(|retry_until| Instant::now() < retry_until)
+    }
+}
+
+/// Convert an error's retry time once so wall-clock changes cannot extend the cooldown.
+fn retry_deadline(value: &Value) -> Option<Instant> {
+    if value["status"] != "error" {
+        return None;
+    }
+    let retry_at = chrono::DateTime::parse_from_rfc3339(value["nextRefreshAt"].as_str()?).ok()?;
+    let delay = retry_at
+        .signed_duration_since(chrono::Utc::now())
+        .to_std()
+        .ok()?;
+    Instant::now().checked_add(delay.min(Duration::from_secs(3600)))
+}
+
 impl UsageCache {
     fn get(&self, provider: &str, identity: &UsageIdentity, force: bool) -> Option<Value> {
-        if force {
-            return None;
-        }
         self.entries
             .lock()
             .ok()?
             .get(provider)
             .filter(|cached| {
                 cached.identity.as_ref() == Some(identity)
-                    && cached.fetched.elapsed()
-                        < if cached.value["status"] == "error" {
-                            Duration::from_secs(15)
-                        } else {
-                            MAX_AGE
-                        }
+                    && (cached.retry_pending()
+                        || (!force
+                            && cached.fetched.elapsed()
+                                < if cached.value["status"] == "error" {
+                                    Duration::from_secs(15)
+                                } else {
+                                    MAX_AGE
+                                }))
             })
             .map(|cached| cached.value.clone())
     }
@@ -118,6 +138,7 @@ impl UsageCache {
                 provider.to_owned(),
                 CachedUsage {
                     fetched: Instant::now(),
+                    retry_until: retry_deadline(&value),
                     source: None,
                     identity: Some(identity),
                     value: value.clone(),

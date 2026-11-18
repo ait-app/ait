@@ -4,6 +4,57 @@ use serde_json::json;
 mod transport;
 
 #[test]
+fn usage_user_agent_identifies_ait_and_rejects_untrusted_version_output() {
+    assert_eq!(
+        user_agent(Some("2.1.999 (Claude Code)\n")),
+        format!(
+            "claude-cli/2.1.999 (external, ait/{})",
+            env!("CARGO_PKG_VERSION")
+        )
+    );
+    for version in [
+        None,
+        Some(""),
+        Some("private-command-error"),
+        Some("2.1.999-injected"),
+        Some("2..999"),
+        Some("2.1"),
+        Some("2.1.999.0"),
+        Some("111111111111111111111111111111111.1.1"),
+    ] {
+        assert_eq!(
+            user_agent(version),
+            format!("ait/{}", env!("CARGO_PKG_VERSION"))
+        );
+    }
+}
+
+#[test]
+fn retry_after_accepts_seconds_and_http_dates_with_bounded_fallbacks() {
+    let now = chrono::DateTime::parse_from_rfc3339("2026-11-18T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    for (header, expected) in [
+        (None, 60),
+        (Some("invalid"), 60),
+        (Some("0"), 60),
+        (Some("-1"), 60),
+        (Some("120"), 120),
+        (Some("7200"), 3600),
+        (Some("999999999999999999999999"), 60),
+        (Some("Wed, 18 Nov 2026 00:02:00 GMT"), 120),
+        (Some("Wed, 18 Nov 2026 00:00:00 GMT"), 60),
+        (Some("Wed, 18 Nov 2026 02:00:00 GMT"), 3600),
+    ] {
+        assert_eq!(
+            retry_delay(header, now).num_seconds(),
+            expected,
+            "{header:?}"
+        );
+    }
+}
+
+#[test]
 fn credentials_and_diagnostics_never_expose_native_account_or_token_fields() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join(".credentials.json");

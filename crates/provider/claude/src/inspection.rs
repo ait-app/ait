@@ -137,8 +137,18 @@ impl ClaudeClient {
                 &json!({"kind":"expired","expiresAt":expiry.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),"refreshedBy":"claude /login"}),
             ));
         }
-        let response = fetch(endpoint, &credentials.token, self.deadline).await?;
+        let user_agent = self.usage_user_agent().await;
+        let response = fetch(endpoint, &credentials.token, &user_agent, self.deadline).await?;
         if let Some(status) = response["httpStatus"].as_u64() {
+            if status == 429 {
+                return Ok(
+                    json!({"providerId":"claude","displayName":"Claude","status":"error",
+                    "planLabel":credentials.plan,"windows":[],
+                    "error":"Claude usage is temporarily rate limited (HTTP 429). Please try again later.",
+                    "fetchedAt":chrono::Utc::now().to_rfc3339(),
+                    "nextRefreshAt":response["nextRefreshAt"].clone()}),
+                );
+            }
             if matches!(status, 401 | 403) {
                 return Ok(unavailable(
                     &json!({"kind":"rejected","status":status,"refreshedBy":"claude /login"}),
@@ -147,6 +157,16 @@ impl ClaudeClient {
             return Err(AgentSessionError::Failed);
         }
         quota::project(&response, credentials.plan.as_deref())
+    }
+
+    /// Match the native client header while identifying Ait as the caller.
+    async fn usage_user_agent(&self) -> String {
+        let mut command = tokio::process::Command::new(&self.program);
+        command.arg("--version");
+        let version = output(command, self.deadline.min(Duration::from_secs(2)))
+            .await
+            .ok();
+        user_agent(version.as_ref().map(ExposeSecret::expose_secret))
     }
 
     async fn credentials(&self) -> Result<Option<Credentials>, AgentSessionError> {
@@ -376,6 +396,7 @@ fn keychain() -> std::future::Ready<Result<Option<Credentials>, AgentSessionErro
 async fn fetch(
     endpoint: &str,
     token: &SecretString,
+    user_agent: &str,
     deadline: Duration,
 ) -> Result<Value, AgentSessionError> {
     let client = reqwest::Client::builder()
@@ -386,13 +407,27 @@ async fn fetch(
     let mut response = client
         .get(endpoint)
         .bearer_auth(token.expose_secret())
+        .header(reqwest::header::USER_AGENT, user_agent)
         .header("Accept", "application/json")
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
         .header("anthropic-beta", "oauth-2025-04-20")
         .send()
         .await
         .map_err(|_| AgentSessionError::Failed)?;
     if !response.status().is_success() {
-        return Ok(json!({"httpStatus":response.status().as_u16()}));
+        let mut failure = json!({"httpStatus":response.status().as_u16()});
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let now = chrono::Utc::now();
+            let delay = retry_delay(
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok()),
+                now,
+            );
+            failure["nextRefreshAt"] = json!((now + delay).to_rfc3339());
+        }
+        return Ok(failure);
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
@@ -406,6 +441,40 @@ async fn fetch(
         bytes.extend_from_slice(&chunk);
     }
     serde_json::from_slice(&bytes).map_err(|_| AgentSessionError::Failed)
+}
+
+/// Accept only a bounded numeric CLI version, never arbitrary native command output.
+fn user_agent(version_output: Option<&str>) -> String {
+    let version = version_output
+        .and_then(|output| output.split_whitespace().next())
+        .filter(|version| {
+            version.len() <= 32
+                && version.split('.').count() == 3
+                && version
+                    .split('.')
+                    .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        });
+    match version {
+        Some(version) => format!(
+            "claude-cli/{version} (external, ait/{})",
+            env!("CARGO_PKG_VERSION")
+        ),
+        None => format!("ait/{}", env!("CARGO_PKG_VERSION")),
+    }
+}
+
+/// Honor delta-seconds or HTTP dates, with a one-minute minimum and one-hour maximum.
+fn retry_delay(header: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> chrono::Duration {
+    let seconds = header
+        .and_then(|value| {
+            value.parse::<i64>().ok().or_else(|| {
+                chrono::DateTime::parse_from_rfc2822(value)
+                    .ok()
+                    .map(|retry_at| retry_at.signed_duration_since(now).num_seconds())
+            })
+        })
+        .unwrap_or(60);
+    chrono::Duration::seconds(seconds.clamp(60, 3600))
 }
 
 #[cfg(test)]

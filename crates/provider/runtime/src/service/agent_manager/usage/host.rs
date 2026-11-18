@@ -31,8 +31,8 @@ impl UsageCache {
         let Ok(source) = tokio::time::timeout_at(deadline, client.usage_cache_key()).await else {
             return failure(&provider, AgentSessionError::Failed);
         };
-        if !force && let Some((cached, age)) = self.snapshot(&provider, source.as_ref()) {
-            if age >= REFRESH_AFTER {
+        if let Some((cached, age)) = self.snapshot(&provider, source.as_ref(), force) {
+            if age >= REFRESH_AFTER && cached["status"] != "error" {
                 // Own the refresh independently of the RPC/UI connection lifetime.
                 let _ = self.refresh_host(client, source, deadline, true);
             }
@@ -66,6 +66,7 @@ impl UsageCache {
         &self,
         provider: &str,
         source: Option<&UsageIdentity>,
+        force: bool,
     ) -> Option<(Value, Duration)> {
         let source = source?;
         let entries = self.entries.lock().ok()?;
@@ -76,7 +77,8 @@ impl UsageCache {
         } else {
             MAX_AGE
         };
-        (entry.source.as_ref() == Some(source) && age < ttl).then(|| (entry.value.clone(), age))
+        (entry.source.as_ref() == Some(source) && (entry.retry_pending() || (!force && age < ttl)))
+            .then(|| (entry.value.clone(), age))
     }
 
     fn commit_host(
@@ -113,6 +115,7 @@ impl UsageCache {
                     provider.to_owned(),
                     super::CachedUsage {
                         fetched: Instant::now(),
+                        retry_until: super::retry_deadline(&value),
                         source: source.clone(),
                         identity: None,
                         value: value.clone(),
@@ -188,15 +191,14 @@ impl UsageCache {
                 let prepared = client.prepare_usage().await?;
                 // A changed local credential/config generation must collect again even
                 // if native account labels match (for example another workspace).
-                if !force
-                    && source.is_none()
+                if source.is_none()
                     && cache.entries.lock().is_ok_and(|entries| {
                         entries
                             .get(&provider)
                             .is_some_and(|entry| entry.source == source)
                     })
                     && let Some(identity) = &prepared.identity
-                    && let Some(value) = cache.get(&provider, identity, false)
+                    && let Some(value) = cache.get(&provider, identity, force)
                 {
                     if client.usage_cache_key().await != source {
                         known_identity = None;

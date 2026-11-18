@@ -15,6 +15,7 @@ struct Client {
     preparations: AtomicUsize,
     polls: AtomicUsize,
     delay: AtomicUsize,
+    rate_limited: AtomicBool,
 }
 
 #[async_trait::async_trait]
@@ -76,12 +77,70 @@ impl AgentClient for Client {
                 self.polls.fetch_add(1, Ordering::SeqCst);
                 tokio::time::sleep(Duration::from_secs(self.delay.load(Ordering::SeqCst) as u64))
                     .await;
+                if self.rate_limited.load(Ordering::SeqCst) {
+                    return Ok(json!({"providerId":"codex","status":"error",
+                        "error":"rate limited","windows":[],
+                        "nextRefreshAt":(chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc3339()}));
+                }
                 Ok(
                     json!({"providerId":"codex","status":"available","windows":[],"generation":generation}),
                 )
             }),
         })
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn host_rate_limit_delay_blocks_background_and_forced_refreshes_until_expiry() {
+    let cache = UsageCache::default();
+    let client = Arc::new(Client::default());
+    let first = cache.host(client.clone(), false, Instant::now()).await;
+    client.rate_limited.store(true, Ordering::SeqCst);
+    let throttled = cache.host(client.clone(), true, Instant::now()).await;
+    assert_eq!(throttled["status"], "error");
+    assert_eq!(
+        throttled["lastSuccessful"]["fetchedAt"],
+        first["successfulAt"]
+    );
+    tokio::time::advance(Duration::from_secs(61)).await;
+    for force in [false, true] {
+        assert_eq!(
+            cache.host(client.clone(), force, Instant::now()).await,
+            throttled
+        );
+        tokio::task::yield_now().await;
+        assert_eq!(client.polls.load(Ordering::SeqCst), 2);
+    }
+    client.rate_limited.store(false, Ordering::SeqCst);
+    tokio::time::advance(Duration::from_secs(60)).await;
+    let recovered = cache.host(client.clone(), false, Instant::now()).await;
+    assert_eq!(recovered["status"], "available");
+    assert!(recovered["lastSuccessful"].is_null());
+    assert_eq!(client.polls.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn unknown_sources_verify_identity_but_honor_rate_limit_delay_on_forced_refresh() {
+    let cache = UsageCache::default();
+    let client = Arc::new(Client::default());
+    client.unknown_source.store(true, Ordering::SeqCst);
+    client.rate_limited.store(true, Ordering::SeqCst);
+    let throttled = cache.host(client.clone(), false, Instant::now()).await;
+    for force in [false, true] {
+        assert_eq!(
+            cache.host(client.clone(), force, Instant::now()).await,
+            throttled
+        );
+        assert_eq!(client.polls.load(Ordering::SeqCst), 1);
+    }
+    assert_eq!(client.preparations.load(Ordering::SeqCst), 3);
+    client.identity.store(1, Ordering::SeqCst);
+    client.rate_limited.store(false, Ordering::SeqCst);
+    assert_eq!(
+        cache.host(client.clone(), true, Instant::now()).await["generation"],
+        1
+    );
+    assert_eq!(client.polls.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test(start_paused = true)]

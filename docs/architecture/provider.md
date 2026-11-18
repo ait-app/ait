@@ -308,6 +308,13 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   25 秒截止时间（[ADR-119](../decisions/providers/adr-119-native-account-usage-and-codex-speed.md)
   的缓存策略已由 [ADR-167](../decisions/providers/adr-167-account-scoped-successful-usage.md)、
   [ADR-219](../decisions/providers/adr-219-shared-account-usage-cache.md) 修订）。
+- 错误报告的有效未来 `nextRefreshAt` 暂停同账号轮询，最长一小时；Runtime 在收到报告时转为
+  单调时钟截止时间，普通读取、后台刷新和手动强刷均遵守，账号或凭据源变化仍先隔离历史。
+  Claude HTTP 429 显示明确的临时限流错误，按 `Retry-After` 秒数或 HTTP 日期等待；缺失、无效、
+  零或过期值至少等待六十秒，最长一小时。同账号 `lastSuccessful` 保留原成功时间，正常报告的
+  `nextRefreshAt` 不限制强刷（[ADR-285](../decisions/providers/adr-285-account-usage-retry-delay.md)）。
+- Claude 用量 GET 使用原生客户端格式的 `User-Agent` 和 JSON 请求头，版本来自有界的
+  `claude --version`，同时标明 Ait 调用者；版本读取失败时只发送 Ait 标识，不猜测 CLI 版本。
 
 ## Harness 用量账本
 

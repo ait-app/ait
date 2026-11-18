@@ -101,6 +101,10 @@ Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成�
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
 
+账号用量的上游限流由 adapter 投影安全错误和重试时间，`provider` 按已验证账号在内存中遵守
+等待期限，手动强刷也不能提前轮询；同账号成功快照继续保留
+（[ADR-285](../decisions/providers/adr-285-account-usage-retry-delay.md)）。
+
 BTW 侧会话的共享端口和 DTO 归 `provider-core`，辅助执行归 adapter，冻结显示上下文、
 持久话题、收据与恢复归 `provider`。客户端浮窗调用同一协议，展开时将话题交给新会话草稿，
 不复用或切换原主 writer，见 [ADR-278](../decisions/providers/adr-278-shared-btw-sessions.md)。
