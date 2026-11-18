@@ -51,6 +51,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 每轮正常结束后释放（`Release`）原生会话但保留其身份，下一轮重新打开；reset 与退役改为关闭（`Close`）并归档会话
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
+- 内置指令要求问候与普通聊天直接回复，仅在需要工作区信息或操作时查询 `workspace_overview`。
+  Ait 工具未暴露给当前会话时说明能力限制，不通过 shell、本地文件、凭据或 HTTP 重建缺失的工具。
+  这是模型行为指引，Provider 的能力降级与权限约束仍按现有规则执行。
 - 输出只来自 Provider timeline 中输入游标之后的 `assistant_message`：同一 `messageId` 的片段合并为一条，
   无身份的记录用 timeline 序号作 ID。`Turn.messages` 保存每条消息，`reply` 是最新一条的兼容字段；
   不支持游标的执行器回退到 `lastMessage`
@@ -329,6 +332,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
+- QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
+  原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
 
 ### 中心托管的 Webhook
 

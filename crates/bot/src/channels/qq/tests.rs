@@ -59,7 +59,34 @@ fn private_messages_route_to_the_sender() {
     assert_eq!(routed.peer, "c2c:user-open");
     assert_eq!(routed.sender, "user-open");
     assert_eq!(routed.text, "hello");
+    assert_eq!(routed.message_id, "msg-1");
     assert_eq!(routed.reply_to.as_deref(), Some("msg-1"));
+}
+
+#[test]
+fn long_message_ids_use_distinct_stable_keys_in_private_and_group_chats() {
+    let channel = channel(true);
+    let first_id = format!("ROBOT1.0 {}first", "a".repeat(128));
+    let second_id = format!("ROBOT1.0 {}second", "a".repeat(128));
+    for event in [PRIVATE_MESSAGE, GROUP_AT_MESSAGE, GROUP_ALL_MESSAGE] {
+        let mut data = if event == PRIVATE_MESSAGE {
+            private_event()
+        } else {
+            group_event()
+        };
+        data["id"] = json!(first_id);
+        let first = inbound(&channel, event, &data).unwrap().unwrap();
+        let repeated = inbound(&channel, event, &data).unwrap().unwrap();
+        data["id"] = json!(second_id);
+        let second = inbound(&channel, event, &data).unwrap().unwrap();
+
+        assert!(model::valid_id(&first.message_id));
+        assert!(model::valid_id(&second.message_id));
+        assert_eq!(first.message_id, repeated.message_id);
+        assert_ne!(first.message_id, second.message_id);
+        assert_eq!(first.reply_to.as_deref(), Some(first_id.as_str()));
+        assert_eq!(second.reply_to.as_deref(), Some(second_id.as_str()));
+    }
 }
 
 #[test]
@@ -508,12 +535,24 @@ async fn drive_until<V>(
 
 #[tokio::test]
 async fn a_private_message_is_queued_and_answered_as_a_reply() {
+    assert_private_reply("msg-1").await;
+}
+
+#[tokio::test]
+async fn a_long_private_message_id_is_deduplicated_and_preserved_for_replies() {
+    let message_id = format!("ROBOT1.0 {}", "a".repeat(137));
+    assert_private_reply(&message_id).await;
+}
+
+async fn assert_private_reply(message_id: &str) {
     let fixture = Fixture::new();
     let bots = fixture.bots();
     let channel = registered_channel(&fixture, &bots, json!(["user-open"])).await;
     let platform = platform(vec![json!({"id":"sent-1"})]).await;
-    let event = json!({"op":0,"s":2,"t":PRIVATE_MESSAGE,"d":private_event()});
-    let address = gateway(vec![event]).await;
+    let mut data = private_event();
+    data["id"] = json!(message_id);
+    let event = json!({"op":0,"s":2,"t":PRIVATE_MESSAGE,"d":data});
+    let address = gateway(vec![event.clone(), event]).await;
     let (fixture_view, platform_view) = (&fixture, &platform);
     drive_until(&bots, &channel, &platform, address, |cancel| async move {
         platform_view.delivered.notified().await;
@@ -529,10 +568,14 @@ async fn a_private_message_is_queued_and_answered_as_a_reply() {
     })
     .await;
     let sent = platform.sent.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].0, "users");
     assert_eq!(sent[0].1["content"], "reply:hello");
-    assert_eq!(sent[0].1["msg_id"], "msg-1");
+    assert_eq!(sent[0].1["msg_id"], message_id);
     assert_eq!(sent[0].1["msg_seq"], 1);
+    let conversations = fixture.store.conversations().unwrap();
+    assert_eq!(conversations.len(), 1);
+    assert_eq!(fixture.store.turns(conversations[0].id).unwrap().len(), 1);
     bots.shutdown().await.unwrap();
 }
 

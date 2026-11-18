@@ -24,6 +24,8 @@
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)；Bot 的 Ait 能力由下文“权限”授予。
 
 输入落盘后才确认平台消息或推进游标；模型完成与平台投递是独立状态。
+问候与普通聊天由 Bot 直接回复，不先查询工作区。需要的 Ait 工具在当前 Provider 会话中不可用时，
+Bot 会说明能力限制并继续对话，不自行搜索本地配置或绕行 HTTP 接口。
 一次执行中的每条可见 assistant 消息都会进入同一个 turn 的 `messages` 数组并在运行期间更新；同一 `messageId` 的流式片段更新原消息，不同 `messageId` 保持独立。tool call、reasoning 和其他内部记录不会进入 Bot 对话。`reply` 仍保留为旧客户端读取最新消息的兼容字段。
 重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
@@ -403,6 +405,7 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 手动接入的 Channel 起初没有允许的发送者，开启群聊的 Channel 也可能无法在群里识别扫码者。此时在该 Channel 所在行点击“获取配对码”，把配对码私聊发给机器人，或在群里 @ 机器人并发送它，发送者即加入允许列表。配对码只能使用一次，10 分钟后过期，daemon 重启后失效。
 
 QQ 只接受带原消息 `msg_id` 的被动回复；每条入站消息最多回复 5 次，窗口过期后无法补发，投递会记为 `uncertain`。
+QQ 返回的长消息 ID 会转换为有界的内部去重键，回复仍携带完整原消息 ID。
 如果群主开启了“接收群内全部消息”，QQ 会用 `GROUP_MESSAGE_CREATE` 推送群内消息，Ait 会把这些普通消息也送进 Bot；未开启时继续使用 `GROUP_AT_MESSAGE_CREATE`，只接收 @ 机器人的消息。
 
 ### iMessage 接入

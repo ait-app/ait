@@ -10,6 +10,7 @@ use model::ErrorCode;
 use reqwest::header::AUTHORIZATION;
 use secrecy::SecretString;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_util::sync::CancellationToken;
@@ -510,7 +511,13 @@ fn inbound(channel: &Channel, event: &str, data: &Value) -> Result<Option<Incomi
         peer,
         sender: sender.to_owned(),
         thread: None,
-        message_id: message_id.to_owned(),
+        // QQ's opaque IDs can exceed Ait's correlation-ID limit. Keep existing short keys
+        // stable for deduplication across upgrades, and retain the full passive-reply anchor.
+        message_id: if model::valid_id(message_id) {
+            message_id.to_owned()
+        } else {
+            format!("qq:{:x}", Sha256::digest(message_id.as_bytes()))
+        },
         text: text.to_owned(),
         reply_to: Some(message_id.to_owned()),
     }))

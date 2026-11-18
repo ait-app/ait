@@ -18,6 +18,22 @@ fn compose_with_empty_memory_has_placeholder() {
 }
 
 #[test]
+fn compose_keeps_conversation_direct_and_missing_tools_unavailable() {
+    let text = compose("", &BotPermissions::default());
+
+    for phrase in [
+        "Answer greetings and ordinary conversation directly",
+        "only when the user's request needs workspace information or action",
+        "Use only the Ait tools exposed in this session",
+        "Do not use shell commands, local files, credentials or raw HTTP requests",
+        "briefly explain the limitation and continue the conversation",
+    ] {
+        assert!(text.contains(phrase), "missing: {phrase}");
+    }
+    assert!(!text.contains("At the start of every turn"));
+}
+
+#[test]
 fn prefix_wraps_instructions_before_the_input() {
     assert_eq!(
         prefix("rules", "hello"),
