@@ -27,10 +27,9 @@ async fn installed_mcode_creates_sessions_for_every_selectable_model() {
             confinement: None,
         };
         let mut session = client.create_session(&spec).await.unwrap();
-        assert_eq!(
-            session.runtime_info().await.unwrap().model,
-            spec.config.model
-        );
+        let runtime = session.runtime_info().await.unwrap();
+        assert_eq!(runtime.model, spec.config.model);
+        assert_eq!(runtime.thinking_option_id, spec.config.thinking_option_id);
         session.close().await.unwrap();
         created += 1;
     }
@@ -147,24 +146,31 @@ async fn installed_latest_mcode_confirms_model_thinking_mode_and_permission_choi
             .as_array()
             .unwrap()
             .iter()
-            .any(|option| { option["id"] == "low" })
+            .any(|option| { option["id"] == "thinking:low" })
     );
     let alternate = details
         .models
         .iter()
         .find(|model| {
             model["isDefault"] == false
-                && model["id"]
-                    .as_str()
-                    .is_some_and(|id| id.ends_with(":thinking"))
+                && model["thinkingOptions"]
+                    .as_array()
+                    .is_some_and(|options| options.iter().any(|option| option["id"] == "off"))
         })
-        .expect("latest mcode advertises an alternate thinking model");
+        .expect("latest mcode advertises an alternate model with optional thinking");
+    assert!(
+        details
+            .models
+            .iter()
+            .all(|model| !model["id"].as_str().unwrap().contains(":v:")),
+        "reasoning variants are thinking options, not models"
+    );
     let spec = AgentSessionSpec {
         provider: PROVIDER.into(),
         cwd: cwd.into(),
         config: StoredAgentConfig {
             model: Some(model["id"].as_str().unwrap().into()),
-            thinking_option_id: Some("low".into()),
+            thinking_option_id: Some("thinking:low".into()),
             mode_id: Some("plan".into()),
             feature_values: Some(std::collections::BTreeMap::from([(
                 "permissionMode".into(),
@@ -177,7 +183,7 @@ async fn installed_latest_mcode_confirms_model_thinking_mode_and_permission_choi
     let mut session = client.create_session(&spec).await.unwrap();
     let runtime = session.runtime_info().await.unwrap();
     assert_eq!(runtime.model, spec.config.model);
-    assert_eq!(runtime.thinking_option_id.as_deref(), Some("low"));
+    assert_eq!(runtime.thinking_option_id.as_deref(), Some("thinking:low"));
     assert_eq!(runtime.mode_id.as_deref(), Some("plan"));
     assert_eq!(
         session.control_settings(&spec.config).unwrap()["features"][0]["value"],
@@ -187,11 +193,15 @@ async fn installed_latest_mcode_confirms_model_thinking_mode_and_permission_choi
 
     let mut alternate_spec = spec;
     alternate_spec.config.model = Some(alternate["id"].as_str().unwrap().into());
-    alternate_spec.config.thinking_option_id = None;
-    let mut session = client.create_session(&alternate_spec).await.unwrap();
-    assert_eq!(
-        session.runtime_info().await.unwrap().model,
-        alternate_spec.config.model
-    );
-    session.close().await.unwrap();
+    for thinking in [None, Some("off")] {
+        alternate_spec.config.thinking_option_id = thinking.map(str::to_owned);
+        let mut session = client.create_session(&alternate_spec).await.unwrap();
+        let runtime = session.runtime_info().await.unwrap();
+        assert_eq!(runtime.model, alternate_spec.config.model);
+        assert_eq!(
+            runtime.thinking_option_id.as_deref(),
+            Some(thinking.unwrap_or("thinking"))
+        );
+        session.close().await.unwrap();
+    }
 }

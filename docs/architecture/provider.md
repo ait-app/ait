@@ -108,6 +108,9 @@
   `AgentManager` 的场景使用 `provider::testing`
   （[ADR-197](../decisions/providers/adr-197-minimax-code-acp.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+  原生模型目录按推理变体（`m:<厂商>:<模型>:v:<变体>`）重复列出同一模型；adapter 只向 AIT 列出模型，
+  把变体与原生思考等级合并为该模型的思考选项（`off`、`thinking`、`thinking:<等级>`），旧配置中的
+  完整原生值仍按原值应用（[MiniMax Code 操作手册](../operations/minimax-code.md)）。
 - Oh My Pi 的 adapter 在 `crates/provider/omp`，生产依赖为 `provider-core`、`provider-native` 与 `domain`
   （`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `OmpClient` 与
   `installed_program`；`provider` 与 daemon 都不依赖它，它也不依赖 daemon。`provider-builtin` 用

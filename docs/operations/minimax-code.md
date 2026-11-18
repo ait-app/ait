@@ -13,7 +13,7 @@ mcode --version
 mcode login
 ```
 
-当前验证版本为 **0.7.1**（2026-10-28 查询 npm 的 latest）。如果 npm 阻止安装脚本，
+当前验证版本为 **0.7.7**（2026-11-18 本机安装版本）。如果 npm 阻止安装脚本，
 MiniMax Code 的 SQLite 组件需要显式允许；支持 `--allow-scripts` 的 npm 可执行：
 
 ```sh
@@ -24,18 +24,30 @@ npm install --global @minimax-ai/code@latest --include=optional --ignore-scripts
 重新启动包含此实现的 AIT daemon，刷新 Provider 目录，选择 MiniMax Code 创建会话。
 模型、思考等级、工作模式和权限选项取自已登录的原生程序。
 `Default`/`Plan` 是工作模式，`Permissions` 是原生工具审批策略，两者分别设置。
-思考等级取决于当前模型：本次原生程序为 M3.1-Flash thinking 提供等级选择，
-切换至 M3 thinking 后不再提供该选项；AIT 不向不支持的模型强行传入思考等级。
+原生模型目录把每个模型按推理变体分别列出（如 `M3`、`M3 · thinking`，值为
+`m:minimax:MiniMax-M3:v:` 与 `m:minimax:MiniMax-M3:v:thinking`），思考等级又是另一个
+只对部分变体提供的选项。AIT 把两者拆开：模型选择器每个模型只列一次，思考选择器列出
+该模型被原生确认的变体与等级：
 
-模型目录会在临时原生会话中验证每个选项，并分别读取该模型确认的思考等级。
+| 思考选项 ID       | 原生选择                                   |
+| ----------------- | ------------------------------------------ |
+| `off`             | 非推理变体（值以 `:v:` 结尾）              |
+| `thinking`        | `thinking` 变体，不设置思考等级            |
+| `thinking:<等级>` | `thinking` 变体，并把思考等级设为 `<等级>` |
+
+以 `mcode 0.7.7` 为例：`M3.1-Flash` 提供 Default/Low/Medium/High/Xhigh/Max，`M3` 提供
+Off/Thinking。未指定思考选项时，AIT 优先保持当前变体，原生拒绝时依次尝试该模型的其他
+变体。旧会话保存的完整原生模型值仍按原值应用，运行时信息会报告拆分后的模型与思考选项。
+不使用 `:v:` 标记的模型值保持原样，思考选项就是原生思考等级。
+
+模型目录会在临时原生会话中验证每个变体，并分别读取该变体确认的思考等级。
 验证不发送提示词、不执行工具，也不修改原生默认模型或权限；整轮验证最多 30 秒。
-原生明确拒绝的模型标为不可选，传输断开或超时仍作为发现失败处理。
+原生明确拒绝的变体不出现在思考选项中，全部变体被拒绝的模型标为不可选；
+传输断开或超时仍作为发现失败处理。
 
-`mcode 0.7.1` 存在目录与配置接口不一致的问题：本机列出的非 thinking 版
-`M3.1-Flash` 在 `session/set_config_option` 返回 `Invalid model reasoning`，导致
-旧版 AIT 创建会话失败。AIT 会根据实际确认结果屏蔽该项，不硬编码模型黑名单，也不
-擅自替换用户所选模型。已缓存此选项时，请运行修复后的 daemon、刷新 Provider 目录，
-重新选择可用模型；本机验证可用的是 `M3.1-Flash · thinking`、`M3` 和 `M3 · thinking`。
+`mcode` 0.7.1 至 0.7.7 列出的非 thinking 版 `M3.1-Flash` 在
+`session/set_config_option` 返回 `Invalid model reasoning`。AIT 根据实际确认结果
+去掉该项（`M3.1-Flash` 不提供 Off），不硬编码模型黑名单，也不擅自替换用户所选模型。
 
 daemon 默认从 PATH 查找 `mcode`。自定义安装位置使用：
 

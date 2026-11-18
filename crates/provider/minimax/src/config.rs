@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use provider_native::acp_config::{choices, option, text};
 
 use super::PROVIDER;
+use super::catalog::{self, Probe, Selection};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use provider_core::protocol::provider::Details;
 use provider_native::acp_transport::Transport;
@@ -63,76 +64,40 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
     validate(&spec.config)
 }
 
-/// Project native model, reasoning and mode choices; malformed catalogs fail closed.
-pub(super) fn details(options: &Value) -> Result<Details, AgentSessionError> {
-    let Some(models) = option(options, "model") else {
-        return Ok(Details {
-            modes: modes(options)?,
-            features: features(options)?,
-            ..Details::default()
-        });
+/// Project probed native models, plus mode and permission choices from `options`.
+///
+/// `options` is the native catalog before probing and `probes` records each advertised model
+/// choice; models split native reasoning variants into thinking options.
+///
+/// # Errors
+///
+/// Returns `AgentSessionError::Failed` for malformed catalogs.
+pub(super) fn details(options: &Value, probes: &[Probe]) -> Result<Details, AgentSessionError> {
+    let models = match option(options, "model") {
+        Some(native) => catalog::models(text(native, "currentValue")?, probes)?,
+        None => Vec::new(),
     };
     Ok(Details {
-        models: choices(models)?
-            .into_iter()
-            .map(|choice| {
-                let mut model = json!({"provider":PROVIDER,
-                    "id":choice["value"],"label":choice["name"],
-                    "isDefault":choice["value"] == models["currentValue"],"isSelectable":true});
-                if let Some(description) = choice["description"].as_str() {
-                    model["description"] = json!(description);
-                }
-                update_thinking(&mut model, options)?;
-                Ok(model)
-            })
-            .collect::<Result<Vec<_>, AgentSessionError>>()?,
+        models,
         modes: modes(options)?,
         features: features(options)?,
     })
 }
 
-/// Set `model` reasoning choices from its confirmed native `options`, preserving default identity.
-/// Returns failure for malformed choices; unselected models have no confirmed reasoning controls.
-pub(super) fn update_thinking(model: &mut Value, options: &Value) -> Result<(), AgentSessionError> {
-    let thinking = option(options, "model")
-        .filter(|selected| selected["currentValue"] == model["id"])
-        .and_then(|_| option(options, "thought_level"));
-    let choices = thinking
-        .map(|option| {
-            choices(option).map(|choices| {
-                choices
-                    .into_iter()
-                    .map(|choice| {
-                        json!({"id":choice["value"],"label":choice["name"],
-                            "isDefault":choice["value"] == option["currentValue"]})
-                    })
-                    .collect::<Vec<_>>()
-            })
-        })
-        .transpose()?
-        .unwrap_or_default();
-    model["thinkingOptions"] = json!(choices);
-    if let Some(default) = thinking.and_then(|option| option["currentValue"].as_str()) {
-        model["defaultThinkingOptionId"] = json!(default);
-    } else if let Some(model) = model.as_object_mut() {
-        model.remove("defaultThinkingOptionId");
-    }
-    Ok(())
-}
-
 /// Return confirmed native selections and modes for the supplied session identity.
 pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
-    let selection = |category| {
-        option(options, category)
-            .and_then(|option| option["currentValue"].as_str())
-            .map(str::to_owned)
-    };
+    let selection =
+        |category| option(options, category).and_then(|option| option["currentValue"].as_str());
+    let (model, variant) = selection("model").map_or((None, None), |model| {
+        let (model, variant) = catalog::split(model);
+        (Some(model.to_owned()), variant)
+    });
     StoredAgentRuntimeInfo {
         provider: PROVIDER.to_owned(),
         session_id: Some(id.to_owned()),
-        model: selection("model"),
-        thinking_option_id: selection("thought_level"),
-        mode_id: selection("mode"),
+        model,
+        thinking_option_id: catalog::thinking_id(variant, selection("thought_level")),
+        mode_id: selection("mode").map(str::to_owned),
         extra: Some(std::collections::BTreeMap::from([(
             "availableModes".into(),
             json!(modes(options).unwrap_or_default()),
@@ -142,6 +107,7 @@ pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
 
 /// Apply selected ACP options and verify their confirmed values; unsupported choices reject.
 /// Uses `transport` and native session `id`; updates `options` with acknowledged `config`.
+/// The host model and thinking choice resolve to a native model variant and effort first.
 /// Returns a transport/protocol error if native acknowledgement fails.
 pub(super) async fn apply(
     transport: &mut Transport,
@@ -150,46 +116,77 @@ pub(super) async fn apply(
     config: &StoredAgentConfig,
 ) -> Result<(), AgentSessionError> {
     validate(config)?;
+    let model = config.model.as_deref();
+    let thinking = config.thinking_option_id.as_deref();
+    let selection = match option(options, "model") {
+        Some(native) => catalog::resolve(native, model, thinking)?,
+        None if model.is_some() => return Err(AgentSessionError::Rejected),
+        None => Selection {
+            models: Vec::new(),
+            effort: thinking.map(str::to_owned),
+        },
+    };
+    let last = selection.models.len().saturating_sub(1);
+    for (index, value) in selection.models.iter().enumerate() {
+        match select(transport, id, options, "model", value).await {
+            Err(AgentSessionError::Rejected) if index < last => {}
+            result => {
+                result?;
+                break;
+            }
+        }
+    }
     let permission = config
         .feature_values
         .as_ref()
         .and_then(|features| features.get("permissionMode"))
         .and_then(Value::as_str);
     for (category, selected) in [
-        ("model", config.model.as_deref()),
-        ("thought_level", config.thinking_option_id.as_deref()),
+        ("thought_level", selection.effort.as_deref()),
         ("mode", config.mode_id.as_deref()),
         ("_permission", permission),
     ] {
-        let Some(value) = selected else { continue };
-        let selected_option = option(options, category).ok_or(AgentSessionError::Rejected)?;
-        if !choices(selected_option)?
-            .iter()
-            .any(|choice| choice["value"] == *value)
-        {
-            return Err(AgentSessionError::Rejected);
+        if let Some(value) = selected {
+            select(transport, id, options, category, value).await?;
         }
-        if selected_option["currentValue"] == *value {
-            continue;
-        }
-        if category == "mode" {
-            transport
-                .request("session/set_mode", json!({"sessionId":id,"modeId":value}))
-                .await?;
-            update_mode(options, value)?;
-            continue;
-        }
-        let result = transport
-            .request(
-                "session/set_config_option",
-                json!({
-            "sessionId":id,"configId":text(selected_option, "id")?,"value":value}),
-            )
+    }
+    Ok(())
+}
+
+/// Select native `value` for the option in `category` and verify the acknowledgement.
+/// Unknown choices reject without a native request; `options` takes the confirmed state.
+async fn select(
+    transport: &mut Transport,
+    id: &str,
+    options: &mut Value,
+    category: &str,
+    value: &str,
+) -> Result<(), AgentSessionError> {
+    let selected_option = option(options, category).ok_or(AgentSessionError::Rejected)?;
+    if !choices(selected_option)?
+        .iter()
+        .any(|choice| choice["value"] == *value)
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    if selected_option["currentValue"] == *value {
+        return Ok(());
+    }
+    if category == "mode" {
+        transport
+            .request("session/set_mode", json!({"sessionId":id,"modeId":value}))
             .await?;
-        *options = state(&result, Some(options))?;
-        if option(options, category).is_none_or(|option| option["currentValue"] != *value) {
-            return Err(AgentSessionError::Failed);
-        }
+        return update_mode(options, value);
+    }
+    let result = transport
+        .request(
+            "session/set_config_option",
+            json!({"sessionId":id,"configId":text(selected_option, "id")?,"value":value}),
+        )
+        .await?;
+    *options = state(&result, Some(options))?;
+    if option(options, category).is_none_or(|option| option["currentValue"] != *value) {
+        return Err(AgentSessionError::Failed);
     }
     Ok(())
 }

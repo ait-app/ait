@@ -9,7 +9,16 @@ from pathlib import Path
 assert sys.argv[1] == "acp"
 root = Path.cwd()
 scenario = (root / "scenario").read_text() if (root / "scenario").exists() else "normal"
-model = "minimax/flash"
+# Native 0.7.7 lists each model per reasoning variant; non-thinking Flash is rejected.
+FLASH_OFF = "m:minimax:MiniMax-M3.1-Flash:v:"
+FLASH_THINKING = "m:minimax:MiniMax-M3.1-Flash:v:thinking"
+VARIANTS = [
+    {"value": FLASH_OFF, "name": "M3.1-Flash"},
+    {"value": FLASH_THINKING, "name": "M3.1-Flash \u00b7 thinking"},
+    {"value": "m:minimax:MiniMax-M3:v:", "name": "M3"},
+    {"value": "m:minimax:MiniMax-M3:v:thinking", "name": "M3 \u00b7 thinking"},
+]
+model = FLASH_THINKING if scenario == "variants" else "minimax/flash"
 mode = "default"
 permission_mode = "auto"
 thinking_effort = "default"
@@ -45,7 +54,9 @@ def options():
         result[1]["options"].extend(
             {"value": f"minimax/pro-{index}", "name": f"Pro {index}"} for index in range(140)
         )
-    if model == "minimax/flash":
+    if scenario == "variants":
+        result[1]["options"] = VARIANTS
+    if model in ("minimax/flash", FLASH_THINKING):
         result.append({"id": "thinkingEffort", "category": "thought_level", "type": "select",
                        "name": "Thinking effort", "currentValue": thinking_effort, "options": [
                            {"value": "default", "name": "Default"},
@@ -94,7 +105,7 @@ for line in sys.stdin:
         reply(identity, {})
     elif method == "session/set_config_option":
         if params["configId"] == "model":
-            if params["value"] == "minimax/rejected":
+            if params["value"] in ("minimax/rejected", FLASH_OFF):
                 send({"id": identity, "error": {"code": -32603, "message": "Internal error",
                                                 "data": {"details": "Invalid model reasoning"}}})
                 continue
@@ -104,7 +115,7 @@ for line in sys.stdin:
                 time.sleep(0.02)
             model = params["value"]
         elif params["configId"] == "thinkingEffort":
-            assert model == "minimax/flash"
+            assert model in ("minimax/flash", FLASH_THINKING)
             thinking_effort = params["value"]
         else:
             permission_mode = params["value"]

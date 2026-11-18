@@ -5,7 +5,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{MiniMaxClient, PROVIDER, config};
+use super::{MiniMaxClient, PROVIDER, catalog, config};
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -14,7 +14,10 @@ use provider_core::protocol::prompt::AgentPrompt;
 use provider_native::acp_streaming::Stream;
 use provider_native::usage::requests::MAX_SEGMENT_ID;
 use provider_native::{
-    acp_config::text, acp_permissions, acp_session, acp_transport::Transport, prompt_blocks,
+    acp_config::{self, text},
+    acp_permissions, acp_session,
+    acp_transport::Transport,
+    prompt_blocks,
 };
 
 /// One native ACP session with bounded control requests and a single active prompt.
@@ -101,20 +104,32 @@ impl Session {
     pub(super) async fn discover(
         &mut self,
     ) -> Result<provider_core::protocol::provider::Details, AgentSessionError> {
-        let mut details = config::details(&self.options)?;
-        for model in &mut details.models {
+        let initial = self.options.clone();
+        let advertised = match acp_config::option(&initial, "model") {
+            Some(native) => acp_config::choices(native)?,
+            None => Vec::new(),
+        };
+        let mut probes = Vec::with_capacity(advertised.len());
+        for choice in advertised {
             let selected = StoredAgentConfig {
-                model: Some(text(model, "id")?.to_owned()),
+                model: Some(text(choice, "value")?.to_owned()),
                 ..StoredAgentConfig::default()
             };
-            match config::apply(&mut self.transport, &self.id, &mut self.options, &selected).await {
-                Ok(()) => config::update_thinking(model, &self.options)?,
-                Err(AgentSessionError::Rejected) => {
-                    model["isSelectable"] = json!(false);
-                    model["isDefault"] = json!(false);
-                }
-                Err(error) => return Err(error),
-            }
+            let accepted =
+                match config::apply(&mut self.transport, &self.id, &mut self.options, &selected)
+                    .await
+                {
+                    Ok(()) => true,
+                    Err(AgentSessionError::Rejected) => false,
+                    Err(error) => return Err(error),
+                };
+            probes.push(catalog::Probe {
+                choice: choice.clone(),
+                accepted,
+                efforts: accepted
+                    .then(|| acp_config::option(&self.options, "thought_level").cloned())
+                    .flatten(),
+            });
             // Configuration notifications belong to this disposable session. Drain them
             // between probes so a large catalog cannot fill the transport's bounded queue.
             while let Some(message) = self.transport.poll()? {
@@ -122,7 +137,7 @@ impl Session {
             }
             self.stream.events.clear();
         }
-        Ok(details)
+        config::details(&initial, &probes)
     }
 
     async fn start(

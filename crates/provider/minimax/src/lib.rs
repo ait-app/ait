@@ -1,5 +1,6 @@
 //! `MiniMax` Code over its official ACP interface, matching Paseo's integration.
 
+mod catalog;
 mod config;
 mod session;
 
