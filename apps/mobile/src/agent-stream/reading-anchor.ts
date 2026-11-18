@@ -7,6 +7,19 @@ interface RowGeometry {
 // A row must clear the reading line before the next row takes ownership.
 const READING_POSITION_OFFSET_PX = 8;
 
+// The virtualizer needs the offset the browser accepted. At a scroll boundary
+// the requested correction can be clamped to the current position.
+export function applyReadingAnchorCorrection(
+  viewport: Pick<HTMLElement, "scrollTop">,
+  correctedTop: number,
+): number | null {
+  const previousTop = viewport.scrollTop;
+  if (Math.abs(correctedTop - previousTop) <= 0.5) return null;
+  viewport.scrollTop = correctedTop;
+  const appliedTop = viewport.scrollTop;
+  return appliedTop === previousTop ? null : appliedTop;
+}
+
 // Content coordinates survive user scrolling. Layout commits replace the geometry;
 // scroll events reuse it, without another DOM measurement pass.
 export function createReadingAnchor() {

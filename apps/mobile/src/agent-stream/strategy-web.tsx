@@ -24,7 +24,7 @@ import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { estimateStreamItemHeight } from "./web-virtualization";
-import { createReadingAnchor } from "./reading-anchor";
+import { applyReadingAnchorCorrection, createReadingAnchor } from "./reading-anchor";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { useRevisedHistoryRows } from "./history-row-revision";
 import { createStreamStrategy } from "./strategy";
@@ -341,7 +341,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const readingAnchor = useMemo(createReadingAnchor, []);
   const measuredRowHeights = useRef(new Map<string, { width: number; height: number }>());
   const pendingRowMeasureFrameRef = useRef<number | null>(null);
-  const lastReconcileCorrectionRef = useRef<number | null>(null);
   const lastActiveFollowOutputLayoutRef = useRef<ActiveFollowOutputLayout | null>(null);
   const lastObservedViewportGeometryRef = useRef<ObservedViewportGeometry | null>(null);
   const wasFollowOutputLayoutActiveRef = useRef(false);
@@ -703,29 +702,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       readingAnchor.reset();
       return;
     }
-    // Convergence guard: when the same correction fails to move the reader to
-    // the projected position, further corrections come from a layout loop rather
-    // than real content movement. Stop pinning and let the browser anchor the
-    // viewport natively until the user scrolls again.
-    const correction = correctedTop - container.scrollTop;
-    if (Math.abs(correction) > 0.5) {
-      if (
-        lastReconcileCorrectionRef.current !== null &&
-        Math.abs(correction - lastReconcileCorrectionRef.current) < 0.5
-      ) {
-        readingAnchor.reset();
-        lastReconcileCorrectionRef.current = null;
-        return;
-      }
-      lastReconcileCorrectionRef.current = correction;
-      container.scrollTop = correctedTop;
-      lastKnownScrollTopRef.current = container.scrollTop;
-      // The DOM scroll event arrives later. Fill the corrected virtual range in
-      // this layout so the reader does not get a frame containing only the pin.
-      virtualOffsetListener.current?.(container.scrollTop, false);
-    } else {
-      lastReconcileCorrectionRef.current = null;
-    }
+    const appliedTop = applyReadingAnchorCorrection(container, correctedTop);
+    if (appliedTop === null) return;
+    lastKnownScrollTopRef.current = appliedTop;
+    // The DOM scroll event arrives later. Fill the corrected virtual range in
+    // this layout so the reader does not get a frame containing only the pin.
+    virtualOffsetListener.current?.(appliedTop, false);
   });
 
   // Apply row positions and their scroll correction in the same paint, including
@@ -928,18 +910,20 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       evaluateHistoryStart();
     }
     let pendingViewportWorkFrame: number | null = null;
+    let needsMeasurement = false;
     const runViewportWork = () => {
       pendingViewportWorkFrame = null;
-      measureVirtualizedRows();
-      reconcileReadingPosition();
-      if (historyStartPagination.isSettling()) {
-        scheduleHistoryStartPrependSettle();
+      if (needsMeasurement) {
+        needsMeasurement = false;
+        measureVirtualizedRows();
+        reconcileReadingPosition();
+        if (historyStartPagination.isSettling()) {
+          scheduleHistoryStartPrependSettle();
+        }
+        updateScrollMetrics();
+        evaluateHistoryStart();
       }
-      updateScrollMetrics();
-      evaluateHistoryStart();
       if (followOutputRef.current) {
-        // ResizeObserver runs before paint. Following in the next frame exposes
-        // the newly grown row at the old offset for one painted frame.
         forceStickToBottom();
       }
     };
@@ -962,20 +946,17 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       } else {
         lastObservedViewportGeometryRef.current = nextGeometry;
       }
+      needsMeasurement = true;
       scheduleViewportWork();
     });
     observer.observe(scrollContainer);
     if (contentNode) {
       observer.observe(contentNode);
     }
-    // Paced reveal commits inside a message without rerendering this viewport.
-    // Observe those commits too, so the next frame sees the grown content at
-    // the bottom instead of waiting for the resize notification after animation
-    // frames. Coalesce to one stick per animation frame; streaming commits can
-    // fire this observer dozens of times per frame.
+    // Keep following paced text updates. ResizeObserver requests row measurements
+    // when the content or viewport changes size.
     const contentChanges = new MutationObserver(() => {
-      if (!isActiveRef.current || !followOutputRef.current) return;
-      scheduleViewportWork();
+      if (followOutputRef.current) scheduleViewportWork();
     });
     if (contentNode)
       contentChanges.observe(contentNode, { childList: true, characterData: true, subtree: true });

@@ -479,7 +479,7 @@ describe("createWebStreamStrategy", () => {
     expect(unmounted).not.toHaveBeenCalled();
   });
 
-  it("reports the live-head row as the reading position", () => {
+  it("reports the live-head position and follows text updates without remeasuring history", async () => {
     const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
     const viewportRef = React.createRef<StreamViewportHandle>();
     const onReadingPositionChange = vi.fn();
@@ -520,6 +520,24 @@ describe("createWebStreamStrategy", () => {
     });
 
     expect(onReadingPositionChange).toHaveBeenLastCalledWith("message-2");
+
+    const scroll = container.querySelector<HTMLElement>('[data-testid="agent-chat-scroll"]')!;
+    const history = scroll.querySelector<HTMLElement>('[data-history-row-id="message-1"]')!;
+    const liveText = scroll.querySelector('[data-history-row-id="message-2"] > div')!.firstChild!;
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 800 });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    const measure = vi.spyOn(history, "getBoundingClientRect");
+    const scrollTo = vi.spyOn(scroll, "scrollTo").mockClear();
+    await act(async () => {
+      liveText.nodeValue += " more text";
+      await Promise.resolve(); // Deliver the DOM mutation before waiting for its frame.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 800, behavior: "auto" });
+    expect(measure).not.toHaveBeenCalled();
   });
 
   it("keeps bottom anchoring through subpixel browser rounding", () => {
@@ -1564,5 +1582,53 @@ describe("createWebStreamStrategy", () => {
     });
     expect(container.querySelector('[data-testid="agent-chat-scroll"]')).toBe(scrollContainer);
     expect(scrollTo).toHaveBeenCalledWith({ top: 2200, behavior: "auto" });
+  });
+
+  it("keeps the reader in place across consecutive equal row height changes", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const input: StreamRenderInput = {
+      agentId: "agent",
+      segments: { historyVirtualized: [], historyMounted: [userMessage(1)], liveHead: [] },
+      boundary: { hasVirtualizedHistory: false, hasMountedHistory: true, hasLiveHead: false },
+      renderers: createRenderers(vi.fn()),
+      listEmptyComponent: null,
+      viewportRef: React.createRef<StreamViewportHandle>(),
+      routeBottomAnchorRequest: null,
+      isAuthoritativeHistoryReady: true,
+      onNearBottomChange: vi.fn(),
+      onNearHistoryStart: vi.fn(),
+      isLoadingOlderHistory: false,
+      hasOlderHistory: false,
+      olderHistoryProgressKey: null,
+      listStyle: null,
+      baseListContentContainerStyle: null,
+      contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const commitLayout = () =>
+      act(() => root?.render(strategy.render({ ...input, segments: { ...input.segments } })));
+    commitLayout();
+    const viewport = container.querySelector<HTMLElement>('[data-testid="agent-chat-scroll"]')!;
+    const row = viewport.querySelector<HTMLElement>('[data-history-row-id="message-1"]')!;
+    let rowTop = 80;
+    row.getBoundingClientRect = () =>
+      ({ top: rowTop - viewport.scrollTop, height: 100 }) as DOMRect;
+    Object.defineProperty(viewport, "clientHeight", { value: 100 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 1000 });
+    viewport.scrollTop = 900;
+    act(() => viewport.dispatchEvent(new Event("scroll")));
+    act(() => {
+      viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -800 }));
+      viewport.scrollTop = 100;
+      viewport.dispatchEvent(new Event("scroll"));
+    });
+    commitLayout();
+    for (const nextTop of [104, 128]) {
+      rowTop = nextTop;
+      commitLayout();
+      expect(row.getBoundingClientRect().top).toBe(-20);
+    }
   });
 });

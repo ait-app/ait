@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createReadingAnchor } from "./reading-anchor";
+import { applyReadingAnchorCorrection, createReadingAnchor } from "./reading-anchor";
 
 describe("reading anchor", () => {
   const rows = [
@@ -7,6 +7,21 @@ describe("reading anchor", () => {
     { id: "reading", top: 500, height: 500 },
     { id: "below", top: 1000, height: 500 },
   ];
+
+  it("reports only the scroll movement the browser accepts at a boundary", () => {
+    let offset = 90;
+    const viewport = {
+      get scrollTop() {
+        return offset;
+      },
+      set scrollTop(top: number) {
+        offset = Math.min(top, 100);
+      },
+    };
+    expect(applyReadingAnchorCorrection(viewport, 114)).toBe(100);
+    expect(applyReadingAnchorCorrection(viewport, 124)).toBeNull();
+    expect(applyReadingAnchorCorrection(viewport, 76)).toBe(76);
+  });
 
   it("preserves wheel movement during an asynchronous prepend", () => {
     const anchor = createReadingAnchor();
