@@ -119,7 +119,7 @@ for (const mobile of [false, true]) {
         provider: "omp",
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
-        model: JSON.stringify(["other", "model"]),
+        model: JSON.stringify(["test", "model"]),
         thinkingOptionId: "high",
         featureValues: { "modelRole.task": "unset", fastMode: true },
         title: "Provider preset browser verification",
@@ -146,7 +146,7 @@ for (const mobile of [false, true]) {
       await page.getByTestId("provider-preset-name").fill(presetName);
       await page.getByTestId("provider-preset-model-options").getByRole("button").click();
       await page
-        .getByRole("button", { name: /test \/ Fixture model/ })
+        .getByRole("button", { name: /other \/ Other/ })
         .last()
         .click();
       await page.getByTestId("provider-preset-thinking-options").getByRole("button").click();
@@ -164,7 +164,7 @@ for (const mobile of [false, true]) {
       await expect(editor).toBeVisible();
       await expect(page.getByTestId("provider-preset-name")).toHaveValue(presetName);
       await expect(page.getByTestId("provider-preset-model-options")).toContainText(
-        "test / Fixture model",
+        "other / Other",
       );
       await expect(page.getByTestId("provider-preset-thinking-options")).toContainText("Low");
       await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
@@ -198,7 +198,7 @@ for (const mobile of [false, true]) {
           };
         })
         .toEqual({
-          model: JSON.stringify(["test", "model"]),
+          model: JSON.stringify(["other", "model"]),
           thinking: "low",
           role: "native",
           fast: true,

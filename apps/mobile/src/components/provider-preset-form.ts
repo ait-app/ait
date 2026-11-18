@@ -94,11 +94,7 @@ export function qualifyModelLabel(vendor: string | null | undefined, label: stri
   if (!normalizedLabel) return normalizedVendor;
   const lowerLabel = normalizedLabel.toLowerCase();
   const lowerVendor = normalizedVendor.toLowerCase();
-  if (
-    lowerLabel.startsWith(`${lowerVendor} / `) ||
-    lowerLabel.startsWith(`${lowerVendor}/`) ||
-    lowerLabel === lowerVendor
-  ) {
+  if (lowerLabel.startsWith(`${lowerVendor} / `) || lowerLabel.startsWith(`${lowerVendor}/`)) {
     return normalizedLabel;
   }
   return `${normalizedVendor} / ${normalizedLabel}`;

@@ -111,11 +111,18 @@ it("qualifies multi-vendor models with upstream supplier while keeping single-ve
       description: "tokencake-2/deepseek/deepseek-v4.1-flash-1017",
       metadata: { provider: "tokencake-2", modelId: "deepseek/deepseek-v4.1-flash-1017" },
     },
+    {
+      provider: "omp",
+      id: '["other","model"]',
+      label: "Other",
+      metadata: { provider: "other", modelId: "model" },
+    },
     { provider: "claude", id: "claude-opus-5", label: "Opus" },
   ]);
   expect(presetModelLabel('["tokencake-2","deepseek/deepseek-v4.1-flash-1017"]', index)).toBe(
     "tokencake-2 / deepseek-v4.1-flash-1017",
   );
+  expect(presetModelLabel('["other","model"]', index)).toBe("other / Other");
   expect(presetModelLabel("claude-opus-5", index)).toBe("Opus");
   expect(presetModelLabel('["native","other"]', index)).toBe("native / other");
 
