@@ -732,6 +732,12 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
+        <ProviderPresetsSection
+          provider={provider}
+          serverId={serverId}
+          cwd={cwd}
+          models={discoveredModels}
+        />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}
@@ -745,12 +751,6 @@ export function ProviderDiagnosticSheet({
           onRefresh={handleRefreshModels}
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
-        />
-        <ProviderPresetsSection
-          provider={provider}
-          serverId={serverId}
-          cwd={cwd}
-          models={discoveredModels}
         />
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet

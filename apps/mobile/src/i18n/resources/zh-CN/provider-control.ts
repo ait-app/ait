@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ 备选模型",
   addRole: "添加角色",
   defaultThinking: "使用 Provider 默认值",
   deletePreset: "删除",
@@ -6,7 +7,11 @@ export const providerControl = {
   deletePresetTitle: "删除预设 {{name}}？",
   deletePresetWarning: "将永久删除此模型、思考等级和角色组合，无法撤销。",
   deletingPreset: "正在删除…",
+  fallbacks: "备选模型",
+  inheritedFallbacks: "默认备选：{{model}}",
   modelRoles: "模型角色",
+  moveFallbackDown: "下移备选模型",
+  moveFallbackUp: "上移备选模型",
   newRole: "+ 添加角色…",
   noModels: "暂无可选模型，请刷新 Provider。",
   presetChecking: "正在校验权限…",
@@ -15,6 +20,7 @@ export const providerControl = {
   presetOwnershipUnknown: "来源尚未确认，请刷新后再编辑。",
   presetReadOnly: "预设来源尚未确认或为只读，请刷新后再编辑。",
   projectPresetReadOnly: "项目预设由 OMP 管理，在此仅可查看。",
+  removeFallback: "移除备选模型",
   removeRole: "移除此角色配置",
   role: "角色",
   roleChoicesFailed: "角色候选读取失败，请刷新重试。",
@@ -31,4 +37,5 @@ export const providerControl = {
   sourceProject: "项目 · 只读",
   sourceUnknown: "来源未知",
   viewPreset: "查看 {{name}}",
+  wildcardProvider: "{{provider}} 全部模型",
 };

@@ -13,7 +13,10 @@ import {
 } from "@/provider-selection/provider-selection";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { OptimisticFormPreferences } from "@/create-agent-preferences/optimistic-preferences";
-import { applyAgentProfilePreferences } from "@/create-agent-preferences/preferences";
+import {
+  applyAgentProfilePreferences,
+  applyModelPresetPreferences,
+} from "@/create-agent-preferences/preferences";
 import { useProvidersSnapshot } from "./use-providers-snapshot";
 import {
   useFormPreferences,
@@ -306,14 +309,12 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       const next = resolveAgentForm({ form: formState, userModified, resolution }, action);
       dispatch(action);
       void updateCurrentPreferences((current) =>
-        mergeProviderPreferences({
+        applyModelPresetPreferences({
           preferences: current,
           provider,
-          updates: {
-            model: next.form.model,
-            thinkingByModel: { [next.form.model]: next.form.thinkingOptionId },
-            featureValues: configuration.featureValues,
-          },
+          modelId: next.form.model,
+          thinkingOptionId: next.form.thinkingOptionId,
+          featureValues: configuration.featureValues,
         }),
       ).catch((error) => console.warn("[useAgentFormState] persist model preset failed", error));
     },

@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ نموذج احتياطي",
   addRole: "إضافة دور",
   defaultThinking: "استخدام إعداد المزوّد",
   deletePreset: "حذف",
@@ -6,7 +7,11 @@ export const providerControl = {
   deletePresetTitle: "حذف الإعداد {{name}}؟",
   deletePresetWarning: "سيُحذف تركيب النموذج والتفكير والأدوار نهائياً. لا يمكن التراجع.",
   deletingPreset: "جارٍ الحذف…",
+  fallbacks: "النماذج الاحتياطية",
+  inheritedFallbacks: "الاحتياطي الافتراضي: {{model}}",
   modelRoles: "أدوار النماذج",
+  moveFallbackDown: "تحريك النموذج الاحتياطي لأسفل",
+  moveFallbackUp: "تحريك النموذج الاحتياطي لأعلى",
   newRole: "+ إضافة دور…",
   noModels: "لا توجد نماذج متاحة. حدّث المزوّد.",
   presetChecking: "جارٍ فحص الأذونات…",
@@ -15,6 +20,7 @@ export const providerControl = {
   presetOwnershipUnknown: "المصدر غير مؤكد. حدّث قبل التحرير.",
   presetReadOnly: "مصدر الإعداد المسبق غير مؤكد أو للقراءة فقط. حدّث قبل التعديل.",
   projectPresetReadOnly: "يدير OMP إعدادات المشروع. يمكنك عرضها هنا.",
+  removeFallback: "إزالة النموذج الاحتياطي",
   removeRole: "إزالة إعداد الدور",
   role: "الدور",
   roleChoicesFailed: "تعذر تحميل الأدوار. أعد التحديث.",
@@ -31,4 +37,5 @@ export const providerControl = {
   sourceProject: "المشروع · للقراءة فقط",
   sourceUnknown: "مصدر غير معروف",
   viewPreset: "عرض {{name}}",
+  wildcardProvider: "جميع نماذج {{provider}}",
 };

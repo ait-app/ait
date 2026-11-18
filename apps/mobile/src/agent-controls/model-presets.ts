@@ -3,9 +3,15 @@ import type { AgentConfigApply, ProviderPreset } from "@ait/protocol/messages";
 import { findModelByReference } from "@/provider-selection/model-catalog";
 
 const ROLE_PREFIX = "modelRole.";
-const INTERNAL_PRESET_FIELDS = new Set(["modelPreset", "modelPresetThinking", "modelPresetRoles"]);
+const FALLBACK_PREFIX = "modelFallback.";
+const INTERNAL_PRESET_FIELDS = new Set([
+  "modelPreset",
+  "modelPresetThinking",
+  "modelPresetRoles",
+  "modelPresetFallbacks",
+]);
 
-/** A preset replaces the model, thinking and complete role snapshot in one operation. */
+/** A preset replaces the model, thinking and complete role/fallback snapshot in one operation. */
 export interface ModelPresetConfiguration extends AgentConfigApply {
   modelId: string;
   thinkingOptionId: string | null;
@@ -25,6 +31,19 @@ export function supportsModelRoles(features: readonly AgentFeature[] | undefined
   );
 }
 
+/** Whether the provider's discovered role controls advertise ordered fallback chains. */
+export function supportsModelFallbacks(features: readonly AgentFeature[] | undefined): boolean {
+  return Boolean(
+    features?.some(
+      (feature) =>
+        feature.type === "select" &&
+        feature.id.startsWith(ROLE_PREFIX) &&
+        feature.options.find((option) => option.id === "native")?.metadata?.supportsFallbacks ===
+          true,
+    ),
+  );
+}
+
 /** Unknown stored selections remain editable, but cannot promise an applicable configuration. */
 export function isModelPresetAvailable(
   preset: ProviderPreset,
@@ -40,21 +59,26 @@ export function isModelPresetAvailable(
 }
 
 /**
- * Expand the same saved snapshot the settings page edits. Roles omitted from a snapshot return
- * to provider inheritance; an explicit `unset` remains explicit. Permissions and tools never
- * become part of this patch, even if an older preset happened to store those fields.
+ * Expand the same saved snapshot the settings page edits. Roles and fallbacks omitted from a
+ * snapshot return to provider inheritance; an explicit `unset` remains explicit. Permissions and
+ * tools never become part of this patch, even if an older preset happened to store those fields.
  */
 export function modelPresetConfiguration(
   preset: ProviderPreset,
   features: readonly AgentFeature[],
+  models: readonly AgentModelDefinition[] = [],
 ): ModelPresetConfiguration {
+  const resolvedModel = models.length > 0 ? findModelByReference(models, preset.model) : null;
   const featureValues: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(preset.featureValues ?? {})) {
-    if (key.startsWith(ROLE_PREFIX)) featureValues[key] = value;
+    if (key === "modelRole.default") continue;
+    if (key.startsWith(ROLE_PREFIX) || key.startsWith(FALLBACK_PREFIX)) {
+      featureValues[key] = value;
+    }
   }
   return withModelPresetRoleDefaults(
     {
-      modelId: preset.model,
+      modelId: resolvedModel?.id ?? preset.model,
       thinkingOptionId: preset.thinkingOptionId ?? null,
       featureValues,
     },
@@ -62,27 +86,41 @@ export function modelPresetConfiguration(
   );
 }
 
-/** Clear omitted roles from both the live catalog and the agent's older stored role set. */
+/** Clear omitted roles and fallbacks from both the live catalog and older stored role sets. */
 export function withModelPresetRoleDefaults(
   configuration: ModelPresetConfiguration,
   features: readonly AgentFeature[],
 ): ModelPresetConfiguration {
   const defaults: Record<string, unknown> = {};
+  const hasFallbacks = supportsModelFallbacks(features);
   for (const feature of features) {
     if (feature.type !== "select" || !feature.id.startsWith(ROLE_PREFIX)) continue;
     defaults[feature.id] = feature.options.find((option) => option.isDefault)?.id ?? "native";
+    if (hasFallbacks) {
+      defaults[`${FALLBACK_PREFIX}${feature.id.slice(ROLE_PREFIX.length)}`] = "native";
+    }
   }
-  return { ...configuration, featureValues: { ...defaults, ...configuration.featureValues } };
+  if (hasFallbacks) {
+    defaults[`${FALLBACK_PREFIX}default`] = "native";
+  }
+  const featureValues = { ...defaults, ...configuration.featureValues };
+  if ("modelRole.default" in featureValues) {
+    featureValues["modelRole.default"] = defaults["modelRole.default"] ?? "native";
+  }
+  return { ...configuration, featureValues };
 }
 
-/** Preserve unrelated current settings while replacing the complete model-role snapshot. */
+/** Preserve unrelated current settings while replacing the complete role and fallback snapshot. */
 export function mergeModelPresetFeatureValues(
   current: Record<string, unknown> | undefined,
   configuration: ModelPresetConfiguration,
 ): Record<string, unknown> {
   const retained = Object.fromEntries(
     Object.entries(current ?? {}).filter(
-      ([key]) => !key.startsWith(ROLE_PREFIX) && !INTERNAL_PRESET_FIELDS.has(key),
+      ([key]) =>
+        !key.startsWith(ROLE_PREFIX) &&
+        !key.startsWith(FALLBACK_PREFIX) &&
+        !INTERNAL_PRESET_FIELDS.has(key),
     ),
   );
   return { ...retained, ...configuration.featureValues };

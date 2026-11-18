@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ Respaldo",
   addRole: "Añadir rol",
   defaultThinking: "Usar valor del proveedor",
   deletePreset: "Eliminar",
@@ -7,7 +8,11 @@ export const providerControl = {
   deletePresetWarning:
     "Se eliminará permanentemente esta combinación de modelo, razonamiento y roles. No se puede deshacer.",
   deletingPreset: "Eliminando…",
+  fallbacks: "Modelos de respaldo",
+  inheritedFallbacks: "Respaldo predeterminado: {{model}}",
   modelRoles: "Roles de modelos",
+  moveFallbackDown: "Bajar modelo de respaldo",
+  moveFallbackUp: "Subir modelo de respaldo",
   newRole: "+ Añadir rol…",
   noModels: "No hay modelos disponibles. Actualiza el proveedor.",
   presetChecking: "Comprobando permisos…",
@@ -17,6 +22,7 @@ export const providerControl = {
   presetReadOnly:
     "El origen del ajuste no está confirmado o es de solo lectura. Actualiza antes de editar.",
   projectPresetReadOnly: "OMP gestiona los preajustes del proyecto. Aquí puedes consultarlos.",
+  removeFallback: "Quitar respaldo",
   removeRole: "Eliminar este rol",
   role: "Rol",
   roleChoicesFailed: "No se pudieron cargar los roles. Actualiza.",
@@ -33,4 +39,5 @@ export const providerControl = {
   sourceProject: "Proyecto · solo lectura",
   sourceUnknown: "Origen desconocido",
   viewPreset: "Ver {{name}}",
+  wildcardProvider: "Todos los modelos de {{provider}}",
 };

@@ -163,8 +163,10 @@ export function useProviderPresets(input: {
     retry: false,
     queryFn: async (): Promise<PresetStoreAnswer | null> => {
       if (!client || !provider) return null;
-      const described = await client.describeProviderPresets(provider, cwd ?? undefined);
-      const listed = await client.listProviderPresets(provider, cwd ?? undefined);
+      const [described, listed] = await Promise.all([
+        client.describeProviderPresets(provider, cwd ?? undefined),
+        client.listProviderPresets(provider, cwd ?? undefined),
+      ]);
       return {
         snapshot: { descriptor: described.descriptor, presets: listed.presets },
         error: listed.error ?? null,

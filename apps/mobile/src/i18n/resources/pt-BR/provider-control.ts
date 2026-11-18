@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ Alternativo",
   addRole: "Adicionar papel",
   defaultThinking: "Usar padrão do provedor",
   deletePreset: "Excluir",
@@ -7,7 +8,11 @@ export const providerControl = {
   deletePresetWarning:
     "Esta combinação de modelo, raciocínio e papéis será excluída permanentemente. Não é possível desfazer.",
   deletingPreset: "Excluindo…",
+  fallbacks: "Modelos alternativos",
+  inheritedFallbacks: "Alternativos padrão: {{model}}",
   modelRoles: "Funções dos modelos",
+  moveFallbackDown: "Mover modelo alternativo para baixo",
+  moveFallbackUp: "Mover modelo alternativo para cima",
   newRole: "+ Adicionar função…",
   noModels: "Nenhum modelo disponível. Atualize o provedor.",
   presetChecking: "Verificando permissões…",
@@ -17,6 +22,7 @@ export const providerControl = {
   presetReadOnly:
     "A origem da predefinição não foi confirmada ou é só de leitura. Atualize antes de editar.",
   projectPresetReadOnly: "OMP gerencia as predefinições do projeto. Aqui você pode visualizá-las.",
+  removeFallback: "Remover modelo alternativo",
   removeRole: "Remover este papel",
   role: "Papel",
   roleChoicesFailed: "Não foi possível carregar os papéis. Atualize.",
@@ -33,4 +39,5 @@ export const providerControl = {
   sourceProject: "Projeto · somente leitura",
   sourceUnknown: "Origem desconhecida",
   viewPreset: "Ver {{name}}",
+  wildcardProvider: "Todos os modelos de {{provider}}",
 };

@@ -1,6 +1,6 @@
 import type { AgentModelDefinition } from "@ait/protocol/agent-types";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react-native";
@@ -8,25 +8,23 @@ import type { ProviderPreset, ProviderPresetEntry } from "@ait/protocol/messages
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
   invalidatePresetCaches,
-  providerPresetsQueryKey,
   useProviderPresets,
   useProviderPresetFeatures,
-  type ProviderPresetsSnapshot,
 } from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
 import { ProviderPresetEditor } from "./provider-preset-editor";
-import { presetModelLabel } from "./provider-preset-form";
+import { buildModelCatalogIndex, presetModelLabel } from "./provider-preset-form";
 
 /**
  * One preset editor for every provider.
  *
- * The store descriptor and each listed entry's ownership decide which controls are enabled, so a native store (OMP) and an
- * Ait-managed store look identical here. Creating, editing and deleting always go through the
- * same daemon request, and the difference in storage never reaches this component.
+ * The store descriptor and each listed entry's ownership decide which controls are enabled, so a
+ * native store (OMP) and an Ait-managed store share the same controls and daemon RPCs.
  */
 export function ProviderPresetsSection({
   provider,
@@ -42,8 +40,6 @@ export function ProviderPresetsSection({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
-  // The editor reads the same cache entry as every picker, so a write invalidates one entry and
-  // all readers refetch. Mutation preflights publish fresh ownership back to this same cache.
   const { snapshot, isSupported, isLoading, error } = useProviderPresets({
     serverId,
     provider,
@@ -51,14 +47,14 @@ export function ProviderPresetsSection({
   });
   const descriptor = snapshot?.descriptor ?? null;
   const presets = snapshot?.presets ?? [];
+  const catalogIndex = useMemo(() => buildModelCatalogIndex(models), [models]);
   const [editing, setEditing] = useState<ProviderPresetEntry | null>(null);
   const roleFeatures = useProviderPresetFeatures(serverId, provider, cwd, isSupported);
   const [deleteTarget, setDeleteTarget] = useState<ProviderPresetEntry | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  // Bumped on every scope change so a delete still in flight from the previous scope can neither
-  // keep this scope's buttons disabled nor report its result here.
+
   const scopeGeneration = useRef(0);
   useEffect(() => {
     scopeGeneration.current += 1;
@@ -70,7 +66,7 @@ export function ProviderPresetsSection({
   }, [serverId, provider, cwd]);
 
   const ready = snapshot !== null && !isLoading && error === null;
-  const canSave = ready && descriptor?.canCreate === true;
+  const canCreate = ready && descriptor?.canCreate === true;
   const editingAllowed =
     ready &&
     (editing?.name
@@ -78,43 +74,6 @@ export function ProviderPresetsSection({
         writable(presets.find((preset) => preset.name === editing.name))
       : descriptor?.canCreate === true);
 
-  const checkLatest = useCallback(
-    async (name: string, creating: boolean) => {
-      if (!client || !ready) throw new Error(t("providerControl.presetReadOnly"));
-      const key = providerPresetsQueryKey(serverId, provider, cwd);
-      type Store = { snapshot: ProviderPresetsSnapshot; error: string | null };
-      let listed: { presets: ProviderPresetEntry[]; error?: string | null };
-      try {
-        listed = await client.listProviderPresets(provider, cwd);
-        queryClient.setQueryData<Store>(key, (current) =>
-          current
-            ? {
-                snapshot: { ...current.snapshot, presets: listed.presets },
-                error: listed.error ?? null,
-              }
-            : current,
-        );
-      } catch (cause) {
-        queryClient.setQueryData<Store>(key, (current) =>
-          current ? { ...current, error: toErrorMessage(cause) } : current,
-        );
-        throw cause;
-      }
-      if (listed.error) throw new Error(listed.error);
-      const current = listed.presets.find((preset) => preset.name === name);
-      if (creating ? current !== undefined : !writable(current)) {
-        throw new Error(t("providerControl.presetReadOnly"));
-      }
-    },
-    [client, ready, t, provider, cwd, queryClient, serverId],
-  );
-
-  /**
-   * Drop dependent caches.
-   *
-   * The invalidation also refetches this section's own entry. A rejected invalidation must not
-   * hide the write that already succeeded, so the failure only warns.
-   */
   const refreshAfterWrite = useCallback(async () => {
     try {
       await invalidatePresetCaches(queryClient, serverId, provider);
@@ -126,19 +85,19 @@ export function ProviderPresetsSection({
   const handleSave = useCallback(
     async (preset: ProviderPreset) => {
       if (!client || !editingAllowed) throw new Error(t("providerControl.presetReadOnly"));
-      await checkLatest(editing?.name || preset.name, !editing?.name);
-      // The list was read for `cwd`, so the write must use the same directory: a native store
-      // would otherwise save into the daemon's own directory and miss project-scoped roles.
       const result = await client.saveProviderPreset(
         provider,
         preset,
         cwd,
         editing?.name ? { original: editing.name } : {},
       );
-      if (result.error) throw new Error(result.error);
+      if (result.error) {
+        await refreshAfterWrite();
+        throw new Error(result.error);
+      }
       await refreshAfterWrite();
     },
-    [client, cwd, editing?.name, editingAllowed, checkLatest, refreshAfterWrite, provider, t],
+    [client, cwd, editing?.name, editingAllowed, refreshAfterWrite, provider, t],
   );
 
   const handleDelete = useCallback(
@@ -148,16 +107,17 @@ export function ProviderPresetsSection({
         !ready ||
         !descriptor?.canDelete ||
         !writable(presets.find((preset) => preset.name === name))
-      )
+      ) {
         return;
+      }
       const generation = scopeGeneration.current;
       const isStale = () => generation !== scopeGeneration.current;
       setDeleting(name);
       setDeleteError(null);
       try {
-        await checkLatest(name, false);
         const result = await client.deleteProviderPreset(provider, name, cwd);
         if (result.error) {
+          await refreshAfterWrite();
           if (!isStale()) setDeleteError(result.error);
           return;
         }
@@ -166,22 +126,13 @@ export function ProviderPresetsSection({
         setDeleteTarget(null);
         setNotice(t("providerControl.presetDeleted", { name }));
       } catch (cause) {
+        await refreshAfterWrite();
         if (!isStale()) setDeleteError(toErrorMessage(cause));
       } finally {
         if (!isStale()) setDeleting((current) => (current === name ? null : current));
       }
     },
-    [
-      client,
-      cwd,
-      ready,
-      descriptor?.canDelete,
-      presets,
-      checkLatest,
-      refreshAfterWrite,
-      provider,
-      t,
-    ],
+    [client, cwd, ready, descriptor?.canDelete, presets, refreshAfterWrite, provider, t],
   );
 
   if (!isSupported) return null;
@@ -189,8 +140,11 @@ export function ProviderPresetsSection({
   return (
     <View style={styles.section} testID="provider-presets-section">
       <View style={styles.header}>
-        <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
-        {canSave && presets.length > 0 ? (
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
+          {presets.length > 0 ? <Text style={styles.count}>{presets.length}</Text> : null}
+        </View>
+        {canCreate && presets.length > 0 ? (
           <Button
             variant="ghost"
             size="sm"
@@ -202,9 +156,6 @@ export function ProviderPresetsSection({
           </Button>
         ) : null}
       </View>
-      <Text style={styles.rowTitle} testID="provider-presets-scope" numberOfLines={1} selectable>
-        {cwd || t("providerControl.sourceGlobal")}
-      </Text>
       {notice ? (
         <Text
           accessibilityLiveRegion="polite"
@@ -215,18 +166,18 @@ export function ProviderPresetsSection({
         </Text>
       ) : null}
       {roleFeatures.error ? (
-        <Text style={styles.muted}>{t("providerControl.roleChoicesFailed")}</Text>
+        <Text style={styles.errorText}>{t("providerControl.roleChoicesFailed")}</Text>
       ) : null}
-      {error ? <Text style={styles.muted}>{error}</Text> : null}
-      {isLoading ? (
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {isLoading && snapshot === null ? (
         <Text style={styles.muted}>{t("settings.providers.presets.loading")}</Text>
       ) : null}
       {!isLoading && snapshot && presets.length === 0 ? (
-        <View style={styles.empty} testID="provider-presets-empty">
+        <View style={styles.emptyCard} testID="provider-presets-empty">
           <Text style={styles.muted}>{t("settings.providers.presets.empty")}</Text>
-          {canSave ? (
+          {canCreate ? (
             <Button
-              variant="default"
+              variant="secondary"
               size="sm"
               leftIcon={Plus}
               onPress={() => setEditing({ name: "", model: "" })}
@@ -239,60 +190,75 @@ export function ProviderPresetsSection({
       ) : null}
       {presets.length > 0 ? (
         <View style={styles.card}>
-          {presets.map((preset) => (
-            <View key={preset.name} style={styles.row} testID={`provider-preset-${preset.name}`}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>{preset.name}</Text>
-                <Text style={styles.muted}>{presetModelLabel(preset.model, models)}</Text>
-                <Text style={styles.badge}>
-                  {t(
-                    preset.source === "project"
-                      ? "providerControl.sourceProject"
-                      : preset.source === "global" || preset.source === "ait"
-                        ? "providerControl.sourceGlobal"
-                        : "providerControl.sourceUnknown",
-                  )}
-                </Text>
-                {(!ready || !writable(preset)) && preset.source !== "project" ? (
-                  <Text style={styles.muted}>
-                    {t(
-                      error
-                        ? "providerControl.presetLoadFailed"
-                        : isLoading
-                          ? "providerControl.presetChecking"
-                          : "providerControl.presetOwnershipUnknown",
-                    )}
+          {presets.map((preset, index) => {
+            const modelSummary = presetModelLabel(preset.model, catalogIndex);
+            const thinkingLabel = preset.thinkingOptionId
+              ? formatThinkingOptionLabel({ id: preset.thinkingOptionId }, t)
+              : null;
+            const summary = thinkingLabel ? `${modelSummary} · ${thinkingLabel}` : modelSummary;
+            const isProject = preset.source === "project";
+            const isUnconfirmed = !isProject && (!ready || !writable(preset));
+            return (
+              <View
+                key={preset.name}
+                style={[styles.row, index < presets.length - 1 ? styles.rowDivider : null]}
+                testID={`provider-preset-${preset.name}`}
+              >
+                <View style={styles.rowText}>
+                  <View style={styles.rowHeader}>
+                    <Text style={styles.rowTitle} numberOfLines={1}>
+                      {preset.name}
+                    </Text>
+                    {isProject ? (
+                      <Text style={styles.badge}>{t("providerControl.sourceProject")}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.rowSubtitle} numberOfLines={1}>
+                    {summary}
                   </Text>
-                ) : null}
-              </View>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={ready && writable(preset) && descriptor?.canEdit ? Pencil : Eye}
-                onPress={() => setEditing(preset)}
-                accessibilityLabel={t(
-                  ready && writable(preset) && descriptor?.canEdit
-                    ? "settings.providers.presets.edit"
-                    : "providerControl.viewPreset",
-                  { name: preset.name },
-                )}
-              />
-              {descriptor?.canDelete ? (
+                  {isUnconfirmed ? (
+                    <Text style={styles.rowSubtitle}>
+                      {t(
+                        error
+                          ? "providerControl.presetLoadFailed"
+                          : isLoading
+                            ? "providerControl.presetChecking"
+                            : "providerControl.presetOwnershipUnknown",
+                      )}
+                    </Text>
+                  ) : null}
+                </View>
                 <Button
                   variant="ghost"
                   size="sm"
-                  leftIcon={Trash2}
-                  loading={deleting === preset.name}
-                  disabled={deleting !== null || !ready || !writable(preset)}
-                  onPress={() => {
-                    setDeleteError(null);
-                    setDeleteTarget(preset);
-                  }}
-                  accessibilityLabel={t("settings.providers.presets.remove", { name: preset.name })}
+                  leftIcon={ready && writable(preset) && descriptor?.canEdit ? Pencil : Eye}
+                  onPress={() => setEditing(preset)}
+                  accessibilityLabel={t(
+                    ready && writable(preset) && descriptor?.canEdit
+                      ? "settings.providers.presets.edit"
+                      : "providerControl.viewPreset",
+                    { name: preset.name },
+                  )}
                 />
-              ) : null}
-            </View>
-          ))}
+                {descriptor?.canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Trash2}
+                    loading={deleting === preset.name}
+                    disabled={deleting !== null || !ready || !writable(preset)}
+                    onPress={() => {
+                      setDeleteError(null);
+                      setDeleteTarget(preset);
+                    }}
+                    accessibilityLabel={t("settings.providers.presets.remove", {
+                      name: preset.name,
+                    })}
+                  />
+                ) : null}
+              </View>
+            );
+          })}
         </View>
       ) : null}
       {editing ? (
@@ -303,7 +269,7 @@ export function ProviderPresetsSection({
           preset={editing}
           canRename={descriptor?.canRename === true}
           native={descriptor?.backend === "native"}
-          canSave={editingAllowed && roleFeatures.isSuccess && !roleFeatures.isFetching}
+          canSave={editingAllowed && !roleFeatures.isError && roleFeatures.data !== undefined}
           readOnlyReason={
             descriptor?.reason ??
             t(
@@ -379,13 +345,22 @@ function writable(preset: ProviderPresetEntry | undefined): boolean {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  details: { gap: theme.spacing[3] },
-  badge: { fontSize: theme.fontSize.sm, color: theme.colors.foregroundMuted },
-  section: { marginBottom: theme.spacing[4], gap: theme.spacing[2] },
+  details: {
+    gap: theme.spacing[3],
+  },
+  section: {
+    marginBottom: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[2],
   },
   title: {
@@ -393,14 +368,32 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
-  muted: {
-    fontSize: theme.fontSize.base,
+  count: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
-  empty: { paddingVertical: theme.spacing[6], alignItems: "center", gap: theme.spacing[3] },
+  muted: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
+  emptyCard: {
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
   card: {
     backgroundColor: theme.colors.surface2,
     borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   row: {
@@ -410,16 +403,41 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
-  rowText: { flex: 1, minWidth: 0 },
+  rowDivider: {
+    borderBottomWidth: RNStyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border,
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  rowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   rowTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
+    flexShrink: 1,
+  },
+  rowSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  badge: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
   },
   formActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: theme.spacing[2],
   },
-  errorText: { fontSize: theme.fontSize.sm, color: theme.colors.destructive },
+  errorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.destructive,
+  },
 }));

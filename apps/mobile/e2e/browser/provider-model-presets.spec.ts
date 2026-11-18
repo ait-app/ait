@@ -119,7 +119,7 @@ for (const mobile of [false, true]) {
         provider: "omp",
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
-        model: JSON.stringify(["test", "model"]),
+        model: JSON.stringify(["other", "model"]),
         thinkingOptionId: "high",
         featureValues: { "modelRole.task": "unset", fastMode: true },
         title: "Provider preset browser verification",
@@ -145,7 +145,10 @@ for (const mobile of [false, true]) {
       await expect(editor).toBeVisible();
       await page.getByTestId("provider-preset-name").fill(presetName);
       await page.getByTestId("provider-preset-model-options").getByRole("button").click();
-      await page.getByRole("button", { name: "Fixture model", exact: true }).last().click();
+      await page
+        .getByRole("button", { name: /test \/ Fixture model/ })
+        .last()
+        .click();
       await page.getByTestId("provider-preset-thinking-options").getByRole("button").click();
       await page.getByRole("button", { name: "Low", exact: true }).last().click();
       await page.getByTestId("provider-preset-save").click();
@@ -161,7 +164,7 @@ for (const mobile of [false, true]) {
       await expect(editor).toBeVisible();
       await expect(page.getByTestId("provider-preset-name")).toHaveValue(presetName);
       await expect(page.getByTestId("provider-preset-model-options")).toContainText(
-        "Fixture model",
+        "test / Fixture model",
       );
       await expect(page.getByTestId("provider-preset-thinking-options")).toContainText("Low");
       await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
@@ -169,7 +172,7 @@ for (const mobile of [false, true]) {
       await page.getByLabel("Close", { exact: true }).filter({ visible: true }).last().click();
       await expect(settings).not.toBeVisible();
       // A cold agent route starts fresh model and role discovery together. Presets saved from
-      // global settings must still appear when that discovery refresh finishes.
+      // global settings must appear above Default model and override the selected default model.
       await openAgentRoute(page, { workspaceId: workspace.workspaceId, agentId: agent.id });
       await expectComposerVisible(page);
       await openProviderModelCard(page, mobile);
@@ -181,20 +184,25 @@ for (const mobile of [false, true]) {
       const presetBox = await group.boundingBox();
       expect(defaultBox).not.toBeNull();
       expect(presetBox).not.toBeNull();
-      expect(defaultBox!.y).toBeLessThan(presetBox!.y);
-      await group.scrollIntoViewIfNeeded();
+      expect(presetBox!.y).toBeLessThan(defaultBox!.y);
       await page.screenshot({ path: testInfo.outputPath("model-preset-card.png"), fullPage: true });
       await page.getByTestId(`provider-model-preset-omp-${presetName}`).click();
       await expect
         .poll(async () => {
           const snapshot = (await client.fetchAgent(agent.id))?.agent;
           return {
+            model: snapshot?.model,
             thinking: snapshot?.thinkingOptionId,
             role: snapshot?.features?.find((feature) => feature.id === "modelRole.task")?.value,
             fast: snapshot?.features?.find((feature) => feature.id === "fastMode")?.value,
           };
         })
-        .toEqual({ thinking: "low", role: "native", fast: true });
+        .toEqual({
+          model: JSON.stringify(["test", "model"]),
+          thinking: "low",
+          role: "native",
+          fast: true,
+        });
     } finally {
       await client
         .deleteProviderPreset("omp", presetName, workspace.repoPath)

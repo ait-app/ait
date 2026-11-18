@@ -1,7 +1,13 @@
 import { z } from "zod";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 
-const featureValuesSchema = z.record(z.string(), z.union([z.boolean(), z.string(), z.null()]));
+const featureValuesSchema = z.record(
+  z.string(),
+  z.union([z.boolean(), z.string(), z.null(), z.array(z.string())]),
+);
+
+const MODEL_ROLE_PREFIX = "modelRole.";
+const MODEL_FALLBACK_PREFIX = "modelFallback.";
 
 export interface ProviderPreferences {
   model?: string;
@@ -223,4 +229,44 @@ export function applyAgentProfilePreferences(args: {
       featureValues: args.featureValues,
     },
   });
+}
+
+export function applyModelPresetPreferences(args: {
+  preferences: FormPreferences;
+  provider: AgentProvider;
+  modelId: string;
+  thinkingOptionId: string | null | undefined;
+  featureValues: Record<string, unknown>;
+}): FormPreferences {
+  const existingProviderPreferences = args.preferences.providerPreferences ?? {};
+  const existing = existingProviderPreferences[args.provider] ?? {};
+  const retainedFeatures = Object.fromEntries(
+    Object.entries(existing.featureValues ?? {}).filter(
+      ([key]) => !key.startsWith(MODEL_ROLE_PREFIX) && !key.startsWith(MODEL_FALLBACK_PREFIX),
+    ),
+  );
+  const nextThinkingByModel = { ...existing.thinkingByModel };
+  if (args.modelId) {
+    if (args.thinkingOptionId) {
+      nextThinkingByModel[args.modelId] = args.thinkingOptionId;
+    } else {
+      delete nextThinkingByModel[args.modelId];
+    }
+  }
+  return {
+    ...args.preferences,
+    provider: args.provider,
+    providerPreferences: {
+      ...existingProviderPreferences,
+      [args.provider]: {
+        ...existing,
+        ...(args.modelId ? { model: args.modelId } : {}),
+        thinkingByModel: nextThinkingByModel,
+        featureValues: {
+          ...retainedFeatures,
+          ...args.featureValues,
+        },
+      },
+    },
+  };
 }

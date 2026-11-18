@@ -15,6 +15,10 @@ pub const MAX_PRESETS: usize = 64;
 pub const MAX_PRESET_BYTES: usize = 64 * 1024;
 /// Largest accepted number of feature values in one preset.
 const MAX_PRESET_FEATURES: usize = 128;
+/// Largest accepted fallback chain length per role or target.
+const MAX_FALLBACK_CHAIN: usize = 32;
+/// Largest accepted fallback selector length.
+const MAX_FALLBACK_SELECTOR: usize = 2048;
 
 /// One named model selection, shaped like the client bundle so applying it is a copy.
 ///
@@ -30,7 +34,7 @@ pub struct ProviderPreset {
     /// Optional thinking or effort option.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thinking_option_id: Option<String>,
-    /// Provider feature values, including `modelRole.*` entries.
+    /// Provider feature values, including `modelRole.*` and `modelFallback.*` entries.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub feature_values: BTreeMap<String, Value>,
 }
@@ -43,10 +47,13 @@ pub fn valid_text(value: &str) -> bool {
         && !value.chars().any(char::is_control)
 }
 
-/// Whether `key` is a bounded feature name: a letter followed by up to 64 name bytes.
+/// Whether `key` is a bounded feature name: a role/fallback target or a feature identifier.
 fn valid_feature_key(key: &str) -> bool {
-    if let Some(role) = key.strip_prefix("modelRole.") {
-        return !role.is_empty() && role.len() <= 128 && !role.chars().any(char::is_control);
+    if let Some(target) = key
+        .strip_prefix("modelRole.")
+        .or_else(|| key.strip_prefix("modelFallback."))
+    {
+        return !target.is_empty() && target.len() <= 128 && !target.chars().any(char::is_control);
     }
     let mut characters = key.chars();
     characters
@@ -54,6 +61,24 @@ fn valid_feature_key(key: &str) -> bool {
         .is_some_and(|first| first.is_ascii_alphabetic())
         && key.len() <= 65
         && characters.all(|value| value.is_ascii_alphanumeric() || matches!(value, '.' | '_' | '-'))
+}
+
+/// Whether a `modelFallback.*` value is `"native"` or a bounded array of selector strings.
+fn valid_fallback_value(value: &Value) -> bool {
+    if value.as_str() == Some("native") {
+        return true;
+    }
+    let Some(items) = value.as_array() else {
+        return false;
+    };
+    items.len() <= MAX_FALLBACK_CHAIN
+        && items.iter().all(|item| {
+            item.as_str().is_some_and(|selector| {
+                !selector.trim().is_empty()
+                    && selector.len() <= MAX_FALLBACK_SELECTOR
+                    && !selector.chars().any(char::is_control)
+            })
+        })
 }
 
 impl ProviderPreset {
@@ -85,6 +110,11 @@ impl ProviderPreset {
             }
             if value.is_null() {
                 return Err(format!("Preset feature {key:?} must not be null"));
+            }
+            if key.starts_with("modelFallback.") && !valid_fallback_value(value) {
+                return Err(format!(
+                    "Preset fallback chain {key:?} must be \"native\" or up to 32 model selectors"
+                ));
             }
         }
         let bytes = serde_json::to_vec(&self.feature_values)

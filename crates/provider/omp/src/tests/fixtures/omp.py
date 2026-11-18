@@ -54,6 +54,7 @@ if args[:2] in (['config', 'list'], ['config', 'get']):
         scope = args[args.index('--scope') + 1]
         print(json.dumps({'modelPresets': {'value': global_presets if scope == 'global' else project_presets}}))
         sys.exit(0)
+    fallback_chains = json.loads(os.environ.get('OMP_FIXTURE_FALLBACK_CHAINS', 'null'))
     settings = {
         'modelRoles': {'value': overrides.get('modelRoles',
             {'default': 'test/model', 'task': 'test/model:high'})},
@@ -61,6 +62,7 @@ if args[:2] in (['config', 'list'], ['config', 'get']):
             {'default': {'name': 'Director'}, 'task': {'name': 'Worker'}})},
         'cycleOrder': {'value': overrides.get('cycleOrder', ['default', 'task'])},
         'modelPresets': {'value': {**global_presets, **project_presets}},
+        'retry.fallbackChains': {'value': fallback_chains},
     }
     print(json.dumps(settings))
     sys.exit(0)
@@ -71,6 +73,8 @@ if args == ['models', '--kind', 'all', '--json']:
     print(json.dumps({'models': [
         {'selector': 'test/model', 'name': 'Fixture model', 'kind': 'chat',
          'input': ['text', 'image'], 'thinking': ['low', 'high']},
+        {'selector': 'other/model', 'name': 'Other', 'kind': 'chat',
+         'input': ['text'], 'thinking': ['low', 'high', 'max']},
         {'selector': 'test/image', 'name': 'Fixture image', 'kind': 'image',
          'input': ['text'], 'thinking': []},
     ]}))

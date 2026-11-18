@@ -640,16 +640,19 @@ export function resolveAgentForm(
       return applyProfile(state, action);
     }
 
-    case "APPLY_MODEL_PRESET_FROM_USER":
+    case "APPLY_MODEL_PRESET_FROM_USER": {
+      const normalizedModelId =
+        resolveCanonicalModelId(action.providerModels, action.modelId) ||
+        normalizeSelectedModelId(action.modelId);
       return {
         ...state,
         form: {
           ...state.form,
           provider: action.provider,
-          model: action.modelId,
+          model: normalizedModelId,
           thinkingOptionId: resolveThinkingOptionId({
             availableModels: action.providerModels,
-            modelId: action.modelId,
+            modelId: normalizedModelId,
             requestedThinkingOptionId: action.thinkingOptionId ?? "",
           }),
           modeId:
@@ -664,6 +667,7 @@ export function resolveAgentForm(
           thinkingOptionId: true,
         },
       };
+    }
 
     case "SET_MODE_FROM_USER":
       return {

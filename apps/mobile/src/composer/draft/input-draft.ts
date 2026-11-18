@@ -10,6 +10,7 @@ import {
 } from "@/hooks/use-agent-form-state";
 import {
   mergeModelPresetFeatureValues,
+  withModelPresetRoleDefaults,
   type ModelPresetConfiguration,
 } from "@/agent-controls/model-presets";
 import { useDraftAgentFeatures } from "@/hooks/use-draft-agent-features";
@@ -312,16 +313,20 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
 
   const applyDraftModelPreset = useCallback(
     (provider: string, configuration: ModelPresetConfiguration) => {
-      formState.applyModelPresetFromUser(provider, configuration);
+      const complete =
+        provider === formState.selectedProvider
+          ? withModelPresetRoleDefaults(configuration, draftFeatures)
+          : configuration;
+      formState.applyModelPresetFromUser(provider, complete);
       applyProfileFeatureValues(
         mergeModelPresetFeatureValues(
           provider === formState.selectedProvider ? draftFeatureValues : undefined,
-          configuration,
+          complete,
         ),
         provider,
       );
     },
-    [applyProfileFeatureValues, draftFeatureValues, formState],
+    [applyProfileFeatureValues, draftFeatureValues, draftFeatures, formState],
   );
 
   const commandDraftConfig = useMemo(

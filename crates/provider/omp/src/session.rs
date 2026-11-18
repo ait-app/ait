@@ -361,8 +361,7 @@ impl Session {
     /// cannot resolve stays display-only, so re-submitting it (other than "inherit") is
     /// rejected until a native read resolves it again.
     async fn validate_roles(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-        let proposed = roles::overrides(config);
-        if proposed.is_empty() || proposed == roles::overrides(&self.config) {
+        if !roles::has_overrides(config) || roles::same_overlay(&self.config, config) {
             return Ok(());
         }
         match self.client.role_catalog(&self.cwd).await {
@@ -397,7 +396,8 @@ impl Session {
             && self.config.provider_options == config.provider_options
             && roles::same_overlay(&self.config, config)
         {
-            self.state = config::apply(&mut self.transport, &self.config, config).await?;
+            self.state =
+                config::apply(&mut self.transport, &self.config, config, &self.state).await?;
             self.config.clone_from(config);
             return Ok(());
         }
@@ -1035,6 +1035,7 @@ impl Session {
         }
         let previous = std::mem::replace(&mut self.state, state.clone());
         if let Ok(info) = self.runtime() {
+            self.config.model.clone_from(&info.model);
             self.stream
                 .events
                 .push_back(AgentTurnEvent::RuntimeInfo(info));

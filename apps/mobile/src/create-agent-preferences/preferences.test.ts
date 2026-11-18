@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CreateAgentPreferencesService } from "./service";
 import {
   applyAgentProfilePreferences,
+  applyModelPresetPreferences,
   mergeCreateAgentSelectionPreferences,
   mergeProviderPreferences,
   parseFormPreferences,
@@ -281,5 +282,53 @@ describe("create agent preferences", () => {
 
   it("rejects an unknown launch target kind as invalid stored preferences", () => {
     expect(parseFormPreferences({ launchTarget: { kind: "shell" } })).toEqual({});
+  });
+
+  it("replaces stale model roles and fallback arrays when applying a model preset while keeping unrelated features", () => {
+    const updated = applyModelPresetPreferences({
+      preferences: {
+        provider: "omp",
+        providerPreferences: {
+          omp: {
+            model: '["tokencake-2","deepseek-v4"]',
+            mode: "full",
+            thinkingByModel: {
+              '["tokencake-2","deepseek-v4"]': "high",
+              '["openai-codex","gpt-6-astra"]': "max",
+            },
+            featureValues: {
+              fastMode: true,
+              "modelRole.default": "tokencake-2/deepseek-v4",
+              "modelRole.task": "tokencake-2/deepseek-v4:high",
+              "modelFallback.default": ["tokencake-2/*"],
+            },
+          },
+        },
+      },
+      provider: "omp",
+      modelId: '["openai-codex","gpt-6-astra"]',
+      thinkingOptionId: null,
+      featureValues: {
+        "modelRole.smol": "openai-codex/gpt-6-astra:auto",
+        "modelFallback.default": ["openai-codex/*"],
+      },
+    });
+    expect(parseFormPreferences(updated)).toEqual({
+      provider: "omp",
+      providerPreferences: {
+        omp: {
+          model: '["openai-codex","gpt-6-astra"]',
+          mode: "full",
+          thinkingByModel: {
+            '["tokencake-2","deepseek-v4"]': "high",
+          },
+          featureValues: {
+            fastMode: true,
+            "modelRole.smol": "openai-codex/gpt-6-astra:auto",
+            "modelFallback.default": ["openai-codex/*"],
+          },
+        },
+      },
+    });
   });
 });

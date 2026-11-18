@@ -40,10 +40,12 @@ fn discovery_union_includes_custom_role_beyond_any_fixed_list() {
         ids.contains(&"custom-role"),
         "discovered custom role must appear"
     );
-    assert!(ids.contains(&"default") && ids.contains(&"task"));
-    // Label comes from the native tag, not a hardcoded marketing name.
+    assert!(ids.contains(&"default") && ids.contains(&"task") && ids.contains(&"smol"));
+    // Label comes from the native tag when present, falling back to OMP's built-in role name.
     let task = catalog.roles.iter().find(|role| role.id == "task").unwrap();
     assert_eq!(task.name, "Worker");
+    let smol = catalog.roles.iter().find(|role| role.id == "smol").unwrap();
+    assert_eq!(smol.name, "Fast");
     let custom = catalog
         .roles
         .iter()
@@ -76,10 +78,22 @@ fn features_render_native_inherit_and_model_effort_options() {
         .unwrap();
     assert_eq!(task["type"], "select");
     assert_eq!(task["value"], "native");
+    assert!(task.get("description").is_none());
     let options = task["options"].as_array().unwrap();
     assert_eq!(options[0]["id"], "native");
     assert_eq!(options[0]["metadata"]["nativeSelector"], "test/model:high");
+    assert_eq!(options[0]["metadata"]["supportsFallbacks"], true);
     assert!(options.iter().any(|option| option["id"] == "test/model"));
+    assert!(
+        options
+            .iter()
+            .any(|option| option["id"] == "test/model:auto")
+    );
+    assert!(
+        options
+            .iter()
+            .any(|option| option["id"] == "test/model:off")
+    );
     assert!(
         options
             .iter()
@@ -93,14 +107,57 @@ fn features_render_native_inherit_and_model_effort_options() {
 fn validate_accepts_known_assignment_and_rejects_unknown() {
     let (roles, tags, cycle, models) = catalog_json();
     let catalog = Catalog::parse(&roles, &tags, &cycle, &models).unwrap();
-    let good = config_with(&[("modelRole.task", "test/model:high")]);
-    assert!(catalog.validate(&good).is_ok());
+    for effort in ["auto", "off", "low", "high"] {
+        let good = config_with(&[("modelRole.task", &format!("test/model:{effort}"))]);
+        assert!(catalog.validate(&good).is_ok(), "{effort}");
+    }
     let unknown_model = config_with(&[("modelRole.task", "test/missing")]);
     assert!(catalog.validate(&unknown_model).is_err());
     let unknown_role = config_with(&[("modelRole.ghost", "test/model")]);
     assert!(catalog.validate(&unknown_role).is_err());
     let inherit = config_with(&[("modelRole.task", "native")]);
     assert!(catalog.validate(&inherit).is_ok());
+}
+
+#[tokio::test]
+async fn fallbacks_validate_selectors_and_materialize_retry_fallback_chains() {
+    let (roles, tags, cycle, models) = catalog_json();
+    let catalog = Catalog::parse(&roles, &tags, &cycle, &models).unwrap();
+    let valid_fallbacks = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([
+            (
+                "modelFallback.default".to_owned(),
+                json!(["test/model:auto", "test/*", "@task"]),
+            ),
+            ("modelFallback.task".to_owned(), json!("native")),
+        ])),
+        ..StoredAgentConfig::default()
+    };
+    assert!(catalog.validate(&valid_fallbacks).is_ok());
+
+    for invalid in [
+        BTreeMap::from([("modelFallback.default".to_owned(), json!(["@default"]))]),
+        BTreeMap::from([("modelFallback.default".to_owned(), json!(["missing/*"]))]),
+        BTreeMap::from([("modelFallback.ghost".to_owned(), json!(["test/model"]))]),
+        BTreeMap::from([("modelFallback.default".to_owned(), json!(["test/image"]))]),
+    ] {
+        let rejected = StoredAgentConfig {
+            feature_values: Some(invalid.clone()),
+            ..StoredAgentConfig::default()
+        };
+        assert!(catalog.validate(&rejected).is_err(), "{invalid:?}");
+    }
+
+    let file = overlay(&valid_fallbacks)
+        .await
+        .unwrap()
+        .expect("fallback overlay");
+    let bytes = std::fs::read(file.path()).unwrap();
+    let value: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        value,
+        json!({"retry":{"fallbackChains":{"default":["test/model:auto","test/*","@task"]}}})
+    );
 }
 
 #[test]

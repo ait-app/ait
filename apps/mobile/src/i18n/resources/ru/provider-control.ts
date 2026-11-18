@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ Резервная модель",
   addRole: "Добавить роль",
   defaultThinking: "Настройка провайдера",
   deletePreset: "Удалить",
@@ -7,7 +8,11 @@ export const providerControl = {
   deletePresetWarning:
     "Сочетание модели, рассуждения и ролей будет удалено навсегда. Отменить нельзя.",
   deletingPreset: "Удаление…",
+  fallbacks: "Резервные модели",
+  inheritedFallbacks: "Резерв по умолчанию: {{model}}",
   modelRoles: "Роли моделей",
+  moveFallbackDown: "Переместить резервную модель ниже",
+  moveFallbackUp: "Переместить резервную модель выше",
   newRole: "+ Добавить роль…",
   noModels: "Нет доступных моделей. Обновите провайдер.",
   presetChecking: "Проверка прав…",
@@ -17,6 +22,7 @@ export const providerControl = {
   presetReadOnly:
     "Источник пресета не подтверждён или доступен только для чтения. Обновите перед редактированием.",
   projectPresetReadOnly: "Пресетами проекта управляет OMP. Здесь доступен просмотр.",
+  removeFallback: "Удалить резервную модель",
   removeRole: "Удалить настройку роли",
   role: "Роль",
   roleChoicesFailed: "Не удалось загрузить роли. Обновите.",
@@ -33,4 +39,5 @@ export const providerControl = {
   sourceProject: "Проект · только чтение",
   sourceUnknown: "Источник неизвестен",
   viewPreset: "Просмотр {{name}}",
+  wildcardProvider: "Все модели {{provider}}",
 };

@@ -50,13 +50,19 @@ flowchart LR
 
 ## 模型角色与预设
 
-- 角色目录来自现有的公开配置与模型元数据；预设库由 `provider-omp` 实现
-  `provider-core` 的预设端口，读取原生全局与项目 `modelPresets`，项目同名条目优先且只读。
-- 管理界面经统一预设 RPC 保存或删除全局记录；使用 OMP 的公开 `config` 命令，不直接编辑
-  用户配置文件，不为元数据启动 RPC 探针。原生库读取失败时显示原因，不回退到 Ait 存储。
-- 预设切换复用现有角色 `modelRole.*` 和 `--config` overlay：遗漏角色回继承 `native`，
-  显式 `unset` 保持清空，默认模型与思考等级随预设一起应用；会话仍用 `rpc-ui`
-  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
+- 角色目录并发读取公开的 `omp config list --json` 与 `omp models --kind all --json`，合并 OMP 内置角色集、
+  `modelTags`/`modelRoles`/`cycleOrder` 以及预设或 `retry.fallbackChains` 引用的自定义角色；推理模型补齐
+  `auto` 与 `off` 等级。预设库由 `provider-omp` 实现 `provider-core` 的预设端口，复用按工作目录缓存的角色目录，
+  读取原生全局与项目 `modelPresets`，项目同名条目优先且只读。
+- 管理界面经统一预设 RPC 保存或删除全局记录，双向投影 `modelRoles`（`modelRole.<role>`）与按角色有序备选模型链
+  `fallbackChains`（`modelFallback.<role>`，支持 `provider/model[:effort]`、`provider/*` 通配与 `@role` 别名）；
+  使用 OMP 的公开 `config` 命令，不直接编辑用户配置文件，不为元数据启动 RPC 探针。原生库读取失败时显示原因，
+  不回退到 Ait 存储。
+- 预设切换复用私有 `--config` overlay，按需生成 `modelRoles` 与 `retry.fallbackChains`：遗漏角色与备选链回继承
+  `native`（不写入 overlay），显式 `unset` 写 `null`，默认模型与思考等级随预设一起应用；原生 `model_changed`
+  同步更新会话已选模型快照，确保切回原预设默认模型时仍触发切换；会话仍用 `rpc-ui`
+  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)，已由
+  [ADR-286](../decisions/providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）。
 
 ## 会话与恢复
 

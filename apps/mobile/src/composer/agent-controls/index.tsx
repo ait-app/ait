@@ -38,7 +38,11 @@ import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
-import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
+import {
+  applyModelPresetPreferences,
+  mergeProviderPreferences,
+  useFormPreferences,
+} from "@/hooks/use-form-preferences";
 import {
   Combobox,
   ComboboxItem,
@@ -436,10 +440,15 @@ function ControlledAgentControls({
   const { t } = useTranslation();
   const features = useMemo(
     () =>
-      nativeFeatures?.map((feature) => {
-        const label = formatAgentFeatureLabel(feature, t);
-        return label === feature.label ? feature : { ...feature, label };
-      }),
+      nativeFeatures
+        ?.filter(
+          (feature) =>
+            feature.id !== "modelRole.default" && !feature.id.startsWith("modelFallback."),
+        )
+        .map((feature) => {
+          const label = formatAgentFeatureLabel(feature, t);
+          return label === feature.label ? feature : { ...feature, label };
+        }),
     [nativeFeatures, t],
   );
   const isCompactFormFactor = useIsCompactFormFactor();
@@ -480,14 +489,16 @@ function ControlledAgentControls({
   });
   const featureControls = useMemo(
     () =>
-      (features ?? []).map((feature) => {
-        if (feature.type === "toggle") return { type: "toggle" as const };
-        const selectedOption = feature.options.find((option) => option.id === feature.value);
-        return {
-          type: "select" as const,
-          label: selectedOption?.label ?? feature.label,
-        };
-      }),
+      (features ?? [])
+        .filter((feature) => !feature.id.startsWith("modelRole."))
+        .map((feature) => {
+          if (feature.type === "toggle") return { type: "toggle" as const };
+          const selectedOption = feature.options.find((option) => option.id === feature.value);
+          return {
+            type: "select" as const,
+            label: selectedOption?.label ?? feature.label,
+          };
+        }),
     [features],
   );
   const controlPresence = useMemo(
@@ -885,51 +896,62 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} onClose={onDropdownClose} /> : null}
 
-      {presentation.aggregateFeatures && features?.length ? (
-        <>
-          <Pressable
-            onPress={handleOpenFeatures}
-            disabled={disabled}
-            style={styles.modeIconBadge}
-            accessibilityRole="button"
-            accessibilityLabel={t("agentControls.features.open")}
-            testID="agent-controls-features"
-          >
-            <ComposerToolbarGlyph size={glyphSize}>
-              <Settings2 size={glyphSize} color={theme.colors.foregroundMuted} />
-            </ComposerToolbarGlyph>
-          </Pressable>
-          <AdaptiveModalSheet
-            header={featuresSheetHeader}
-            visible={activeSheet === "features"}
-            onClose={handleCloseSheet}
-            testID="agent-features-sheet"
-          >
-            {features.map((feature) => (
-              <SheetFeatureItem
+      {(() => {
+        const inlineFeatures = presentation.aggregateFeatures
+          ? []
+          : (features?.filter((feature) => !feature.id.startsWith("modelRole.")) ?? []);
+        const sheetFeatures = presentation.aggregateFeatures
+          ? (features ?? [])
+          : (features?.filter((feature) => feature.id.startsWith("modelRole.")) ?? []);
+        return (
+          <>
+            {inlineFeatures.map((feature) => (
+              <DesktopFeatureItem
                 key={`feature-${feature.id}`}
                 feature={feature}
                 disabled={disabled}
                 openSelector={openSelector}
-                handleOpenChange={handleNestedOpenChange}
+                handleOpenChange={handleOpenChange}
                 onSetFeature={onSetFeature}
+                onActionComplete={onDropdownClose}
               />
             ))}
-          </AdaptiveModalSheet>
-        </>
-      ) : (
-        features?.map((feature) => (
-          <DesktopFeatureItem
-            key={`feature-${feature.id}`}
-            feature={feature}
-            disabled={disabled}
-            openSelector={openSelector}
-            handleOpenChange={handleOpenChange}
-            onSetFeature={onSetFeature}
-            onActionComplete={onDropdownClose}
-          />
-        ))
-      )}
+            {sheetFeatures.length > 0 ? (
+              <>
+                <Pressable
+                  onPress={handleOpenFeatures}
+                  disabled={disabled}
+                  style={styles.modeIconBadge}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("agentControls.features.open")}
+                  testID="agent-controls-features"
+                >
+                  <ComposerToolbarGlyph size={glyphSize}>
+                    <Settings2 size={glyphSize} color={theme.colors.foregroundMuted} />
+                  </ComposerToolbarGlyph>
+                </Pressable>
+                <AdaptiveModalSheet
+                  header={featuresSheetHeader}
+                  visible={activeSheet === "features"}
+                  onClose={handleCloseSheet}
+                  testID="agent-features-sheet"
+                >
+                  {sheetFeatures.map((feature) => (
+                    <SheetFeatureItem
+                      key={`feature-${feature.id}`}
+                      feature={feature}
+                      disabled={disabled}
+                      openSelector={openSelector}
+                      handleOpenChange={handleNestedOpenChange}
+                      onSetFeature={onSetFeature}
+                    />
+                  ))}
+                </AdaptiveModalSheet>
+              </>
+            ) : null}
+          </>
+        );
+      })()}
     </>
   );
 }
@@ -1474,11 +1496,32 @@ export const AgentControls = memo(function AgentControls({
     });
   }, [agentProviderDefinitions, agentProviderModels, snapshotSelectedEntry]);
 
+  const [optimisticPreset, setOptimisticPreset] = useState<{
+    agentId: string;
+    modelId: string;
+    thinkingOptionId: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (
+      optimisticPreset &&
+      (optimisticPreset.agentId !== agentId ||
+        (agent?.model === optimisticPreset.modelId &&
+          (agent?.thinkingOptionId ?? null) === optimisticPreset.thinkingOptionId))
+    ) {
+      setOptimisticPreset(null);
+    }
+  }, [agent?.model, agent?.thinkingOptionId, agentId, optimisticPreset]);
+
   const modelSelection = resolveAgentModelSelection({
     models,
     runtimeModelId: agent?.runtimeModelId,
-    configuredModelId: agent?.model,
-    explicitThinkingOptionId: agent?.thinkingOptionId,
+    configuredModelId:
+      optimisticPreset?.agentId === agentId ? optimisticPreset.modelId : agent?.model,
+    explicitThinkingOptionId:
+      optimisticPreset?.agentId === agentId
+        ? optimisticPreset.thinkingOptionId
+        : agent?.thinkingOptionId,
   });
 
   const thinkingOptions = useMemo<AgentControlOption[]>(() => {
@@ -1496,6 +1539,7 @@ export const AgentControls = memo(function AgentControls({
       if (!client || !agentProvider) {
         return;
       }
+      setOptimisticPreset(null);
       try {
         const notice = await client.setAgentModel(agentId, modelId);
         showProviderNoticeToast(toast, notice);
@@ -1542,25 +1586,29 @@ export const AgentControls = memo(function AgentControls({
       apply: (provider, configuration) => {
         if (!client || provider !== agentProvider) return;
         const complete = withModelPresetRoleDefaults(configuration, agent?.features ?? []);
+        setOptimisticPreset({
+          agentId,
+          modelId: complete.modelId,
+          thinkingOptionId: complete.thinkingOptionId,
+        });
         void client
           .applyAgentConfig(agentId, complete)
           .then(async (notice) => {
             showProviderNoticeToast(toast, notice);
             await updatePreferences((current) =>
-              mergeProviderPreferences({
+              applyModelPresetPreferences({
                 preferences: current,
                 provider,
-                updates: {
-                  model: configuration.modelId,
-                  thinkingByModel: {
-                    [configuration.modelId]: configuration.thinkingOptionId ?? "",
-                  },
-                  featureValues: complete.featureValues,
-                },
+                modelId: complete.modelId,
+                thinkingOptionId: complete.thinkingOptionId,
+                featureValues: complete.featureValues,
               }),
             );
           })
-          .catch((error) => toast.error(toErrorMessage(error)));
+          .catch((error) => {
+            setOptimisticPreset(null);
+            toast.error(toErrorMessage(error));
+          });
       },
     }),
     [agent?.cwd, agent?.features, agentId, agentProvider, client, toast, updatePreferences],
@@ -1571,6 +1619,7 @@ export const AgentControls = memo(function AgentControls({
       if (!client || !agentProvider) {
         return;
       }
+      setOptimisticPreset(null);
       if (activeModelId) {
         void updatePreferences((current) =>
           mergeProviderPreferences({

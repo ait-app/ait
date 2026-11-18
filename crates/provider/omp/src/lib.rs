@@ -241,6 +241,10 @@ impl AgentClient for OmpClient {
         true
     }
 
+    fn preset_backend(&self) -> provider_core::ports::preset::PresetBackend {
+        provider_core::ports::preset::PresetBackend::Native
+    }
+
     async fn preset_descriptor(&self, cwd: &str) -> provider_core::ports::preset::PresetDescriptor {
         roles::presets::describe(self, cwd).await
     }
@@ -289,7 +293,7 @@ impl AgentClient for OmpClient {
     /// process is created, so an unresolvable assignment never reaches a `--config` overlay.
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         config::validate_spec(spec)?;
-        if roles::overrides(&spec.config).is_empty() {
+        if !roles::has_overrides(&spec.config) {
             return Ok(());
         }
         match self.role_catalog(&spec.cwd).await {

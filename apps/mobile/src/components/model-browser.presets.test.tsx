@@ -119,7 +119,7 @@ const state: ModelBrowserState = {
 };
 
 it.each(["sheet", "independent"] as const)(
-  "renders actual provider presets below default models and keeps Profiles separate (%s)",
+  "renders provider presets above default models for immediate access and keeps Profiles separate (%s)",
   (scrolling) => {
     const apply = vi.fn();
     const applyProfile = vi.fn();
@@ -132,14 +132,14 @@ it.each(["sheet", "independent"] as const)(
         scrolling={scrolling}
       />,
     );
+    const presetHeading = screen.getByText("modelSelector.modelPresets");
     const defaultHeading = screen.getByText("modelSelector.defaultModelHeading");
     const defaultModel = screen.getByText("Default large");
-    const presetHeading = screen.getByText("modelSelector.modelPresets");
     expect(
-      defaultHeading.compareDocumentPosition(defaultModel) & Node.DOCUMENT_POSITION_FOLLOWING,
+      presetHeading.compareDocumentPosition(defaultHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      defaultModel.compareDocumentPosition(presetHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+      defaultHeading.compareDocumentPosition(defaultModel) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByText("modelSelector.profiles")).toBeTruthy();
     fireEvent.click(screen.getByTestId("provider-model-preset-omp-Fast preset"));
@@ -152,23 +152,33 @@ it.each(["sheet", "independent"] as const)(
   },
 );
 
-it.each(["presets", "roles"] as const)(
-  "preserves the original model layout when %s are unavailable",
-  (missing) => {
-    available[missing] = false;
-    render(
-      <ModelBrowser
-        state={state}
-        onSelect={vi.fn()}
-        modelPresets={{ cwd: "/project", apply: vi.fn() }}
-      />,
-    );
-    expect(screen.queryByText("modelSelector.defaultModelHeading")).toBeNull();
-    expect(screen.queryByText("modelSelector.modelPresets")).toBeNull();
-    expect(screen.getByText("Default large")).toBeTruthy();
-    expect(screen.getByText("modelSelector.profiles")).toBeTruthy();
-  },
-);
+it("preserves the original model layout when no presets exist", () => {
+  available.presets = false;
+  render(
+    <ModelBrowser
+      state={state}
+      onSelect={vi.fn()}
+      modelPresets={{ cwd: "/project", apply: vi.fn() }}
+    />,
+  );
+  expect(screen.queryByText("modelSelector.defaultModelHeading")).toBeNull();
+  expect(screen.queryByText("modelSelector.modelPresets")).toBeNull();
+  expect(screen.getByText("Default large")).toBeTruthy();
+  expect(screen.getByText("modelSelector.profiles")).toBeTruthy();
+});
+
+it("still renders presets when the provider has no role features", () => {
+  available.roles = false;
+  render(
+    <ModelBrowser
+      state={state}
+      onSelect={vi.fn()}
+      modelPresets={{ cwd: "/project", apply: vi.fn() }}
+    />,
+  );
+  expect(screen.getByText("modelSelector.modelPresets")).toBeTruthy();
+  expect(screen.getByText("modelSelector.defaultModelHeading")).toBeTruthy();
+});
 
 it("renders an unresolved model preset as disabled in the actual model browser row", () => {
   available.unresolved = true;

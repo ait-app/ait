@@ -450,6 +450,11 @@ pub trait AgentClient: Debug + Send + Sync {
     /// Default no-op; adapters with a discovery cache (e.g. the OMP role catalog) override it.
     fn refresh_discovery_cache(&self, _cwd: &str) {}
 
+    /// Store that owns this provider's presets without performing discovery I/O.
+    fn preset_backend(&self) -> super::preset::PresetBackend {
+        super::preset::PresetBackend::Ait
+    }
+
     /// Report this provider's preset store and the operations it supports.
     ///
     /// Ait-managed presets are served by the caller, so adapters answer only for a native store.

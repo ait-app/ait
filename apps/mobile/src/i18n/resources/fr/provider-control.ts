@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ Secours",
   addRole: "Ajouter un rôle",
   defaultThinking: "Utiliser le réglage du fournisseur",
   deletePreset: "Supprimer",
@@ -7,7 +8,11 @@ export const providerControl = {
   deletePresetWarning:
     "Cette combinaison de modèle, raisonnement et rôles sera supprimée définitivement. Cette action est irréversible.",
   deletingPreset: "Suppression…",
+  fallbacks: "Modèles de secours",
+  inheritedFallbacks: "Secours par défaut : {{model}}",
   modelRoles: "Rôles des modèles",
+  moveFallbackDown: "Descendre le modèle de secours",
+  moveFallbackUp: "Monter le modèle de secours",
   newRole: "+ Ajouter un rôle…",
   noModels: "Aucun modèle disponible. Actualisez le fournisseur.",
   presetChecking: "Vérification des droits…",
@@ -17,6 +22,7 @@ export const providerControl = {
   presetReadOnly:
     "L’origine du préréglage est inconnue ou en lecture seule. Actualisez avant de modifier.",
   projectPresetReadOnly: "Les préréglages du projet sont gérés par OMP. Consultation possible ici.",
+  removeFallback: "Retirer le secours",
   removeRole: "Retirer ce rôle",
   role: "Rôle",
   roleChoicesFailed: "Chargement des rôles impossible. Actualisez.",
@@ -33,4 +39,5 @@ export const providerControl = {
   sourceProject: "Projet · lecture seule",
   sourceUnknown: "Source inconnue",
   viewPreset: "Voir {{name}}",
+  wildcardProvider: "Tous les modèles de {{provider}}",
 };

@@ -63,6 +63,38 @@ fn explicit_unassignment_and_inheritance_remain_distinct_values() {
 }
 
 #[test]
+fn fallback_chains_accept_native_and_bounded_selector_arrays_only() {
+    let mut value = preset();
+    value.feature_values = BTreeMap::from([
+        (
+            "modelFallback.default".to_owned(),
+            json!(["openai/gpt-5:high", "anthropic/*"]),
+        ),
+        ("modelFallback.smol".to_owned(), json!("native")),
+        ("modelFallback.custom".to_owned(), json!([])),
+    ]);
+    assert!(value.validate().is_ok());
+
+    for invalid in [
+        json!("openai/gpt-5"),
+        json!([""]),
+        json!(["bad\nselector"]),
+        json!([123]),
+        json!(
+            (0..33)
+                .map(|index| format!("p/m{index}"))
+                .collect::<Vec<_>>()
+        ),
+    ] {
+        let mut rejected = preset();
+        rejected
+            .feature_values
+            .insert("modelFallback.default".to_owned(), invalid);
+        assert!(rejected.validate().is_err());
+    }
+}
+
+#[test]
 fn stored_lists_reject_duplicate_names_and_too_many_presets() {
     assert!(validate_presets(&[]).is_ok());
     assert!(validate_presets(&[preset(), preset()]).is_err());

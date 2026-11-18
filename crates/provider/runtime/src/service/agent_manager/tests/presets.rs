@@ -56,6 +56,10 @@ impl AgentClient for NativePresetClient {
         descriptor
     }
 
+    fn preset_backend(&self) -> PresetBackend {
+        PresetBackend::Native
+    }
+
     async fn save_native_preset(&self, _cwd: &str, _preset: &Preset) -> Result<(), PresetError> {
         *self.writes.lock().unwrap() += 1;
         Ok(())

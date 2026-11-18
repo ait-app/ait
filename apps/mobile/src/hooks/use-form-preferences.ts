@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_FORM_PREFERENCES,
+  applyModelPresetPreferences,
   mergeProviderPreferences,
   type FormPreferences,
   type ProviderPreferences,
@@ -15,7 +16,7 @@ const FORM_PREFERENCES_QUERY_KEY = ["form-preferences"];
 
 export type { FormPreferences, ProviderPreferences };
 
-export { mergeProviderPreferences };
+export { applyModelPresetPreferences, mergeProviderPreferences };
 
 async function loadFormPreferences(): Promise<FormPreferences> {
   return createAgentPreferencesService.load();

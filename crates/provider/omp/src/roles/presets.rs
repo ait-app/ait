@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value, json};
 
-use super::{Catalog, INHERIT, PREFIX, UNSET, selected, valid_role};
+use super::{
+    Catalog, FALLBACK_PREFIX, INHERIT, MAX_FALLBACK_CHAIN, PREFIX, UNSET, selected, valid_role,
+};
 use crate::{OmpClient, config};
 use provider_core::ports::preset::{
     Preset, PresetBackend, PresetDescriptor, PresetEntry, PresetError, PresetSource,
@@ -21,35 +23,32 @@ const READ_ERROR: &str =
 /// Describe the official native store without creating a conversation or changing settings.
 pub(crate) async fn describe(client: &OmpClient, cwd: &str) -> PresetDescriptor {
     let available = async {
-        let setting = super::read(client, cwd, &["config", "get", "modelPresets", "--json"])
-            .await
-            .map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
-        if setting["key"] != "modelPresets" {
-            return Err(PresetError::Unavailable(READ_ERROR.to_owned()));
-        }
-        layers(client, cwd).await
+        let read_key = async {
+            let setting = super::read(client, cwd, &["config", "get", "modelPresets", "--json"])
+                .await
+                .map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
+            if setting["key"] != "modelPresets" {
+                return Err(PresetError::Unavailable(READ_ERROR.to_owned()));
+            }
+            Ok(())
+        };
+        tokio::try_join!(read_key, layers(client, cwd))
     };
     match available.await {
-        Ok(_) => {
-            let mut descriptor = PresetDescriptor::managed(PresetBackend::Native);
-            descriptor.reason = Some(
-                "OMP preset names cannot be renamed here; create a new preset and delete the old one".to_owned(),
-            );
-            descriptor
-        }
+        Ok(_) => PresetDescriptor::managed(PresetBackend::Native),
         Err(error) => PresetDescriptor::unavailable(PresetBackend::Native, error.message()),
     }
 }
 
 /// List native global and project definitions with each project's whole-record override.
 ///
-/// Returns a readable error for malformed or unresolved native definitions; no entries are
-/// silently omitted and no user configuration is rewritten during discovery.
+/// Reuses `OmpClient`'s cached role catalog concurrently with layer reads so opening the picker
+/// or settings editor does not spawn redundant `omp models --kind all` subprocesses.
 pub(crate) async fn list(client: &OmpClient, cwd: &str) -> Result<Vec<PresetEntry>, PresetError> {
-    let (global, project) = layers(client, cwd).await?;
-    let catalog = Catalog::read(client, cwd)
-        .await
-        .map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
+    let (layers_result, catalog_result) =
+        tokio::join!(layers(client, cwd), client.role_catalog(cwd));
+    let (global, project) = layers_result?;
+    let catalog = catalog_result.map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
     let mut owned: BTreeMap<_, _> = global
         .into_iter()
         .filter(|(_, value)| !value.is_null())
@@ -87,12 +86,25 @@ pub(crate) async fn save(
     check_name(&preset.name)?;
     preset.validate().map_err(PresetError::Rejected)?;
     let _guard = client.preset_writes.lock().await;
-    let (mut global, project) = layers(client, cwd).await?;
+    let (layers_result, catalog_result) =
+        tokio::join!(layers(client, cwd), client.role_catalog(cwd));
+    let (mut global, project) = layers_result?;
     check_global(&project, &preset.name)?;
-    let catalog = Catalog::read(client, cwd)
-        .await
-        .map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
-    let raw = definition(&catalog, preset, global.get(&preset.name))?;
+    let catalog = catalog_result.map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
+    let raw = match definition(&catalog, preset, global.get(&preset.name)) {
+        Ok(raw) => raw,
+        Err(PresetError::Rejected(_)) => {
+            // An external native config edit may have added a custom role or model since the
+            // directory catalog was cached; refresh once before rejecting.
+            client.invalidate_role_catalog(cwd);
+            let fresh = client
+                .role_catalog(cwd)
+                .await
+                .map_err(|_| PresetError::Unavailable(READ_ERROR.to_owned()))?;
+            definition(&fresh, preset, global.get(&preset.name))?
+        }
+        Err(error) => return Err(error),
+    };
     global.insert(preset.name.clone(), raw);
     write(client, cwd, global).await?;
     client.invalidate_all_role_catalogs();
@@ -241,7 +253,7 @@ fn record(catalog: &Catalog, name: &str, raw: &Value) -> Result<Preset, PresetEr
         .map(|value| value.as_str().ok_or_else(reject))
         .transpose()?
         .or(effort);
-    let feature_values = roles
+    let mut feature_values: BTreeMap<String, Value> = roles
         .iter()
         .filter(|(role, _)| role.as_str() != "default")
         .map(|(role, value)| {
@@ -259,6 +271,33 @@ fn record(catalog: &Catalog, name: &str, raw: &Value) -> Result<Preset, PresetEr
             Ok((format!("{PREFIX}{role}"), assignment))
         })
         .collect::<Result<_, PresetError>>()?;
+    if let Some(fallbacks) = raw.get("fallbackChains").filter(|value| !value.is_null()) {
+        let chains = fallbacks.as_object().ok_or_else(reject)?;
+        if chains.len() > super::MAX_ROLES || chains.keys().any(|role| !valid_role(role)) {
+            return Err(reject());
+        }
+        for (role, chain) in chains {
+            let items = chain.as_array().ok_or_else(reject)?;
+            if items.len() > MAX_FALLBACK_CHAIN {
+                return Err(reject());
+            }
+            let selectors: Vec<Value> = items
+                .iter()
+                .map(|item| {
+                    let selector = item
+                        .as_str()
+                        .filter(|text| {
+                            !text.trim().is_empty()
+                                && text.len() <= super::MAX_SELECTOR
+                                && !text.chars().any(char::is_control)
+                        })
+                        .ok_or_else(reject)?;
+                    Ok(json!(selector))
+                })
+                .collect::<Result<_, PresetError>>()?;
+            feature_values.insert(format!("{FALLBACK_PREFIX}{role}"), Value::Array(selectors));
+        }
+    }
     let preset = Preset {
         name: name.to_owned(),
         model,
@@ -353,13 +392,19 @@ fn definition(
             "OMP does not support the preset's thinking level".to_owned(),
         ));
     }
-    let mut roles = feature_roles(catalog, preset, original, previous.as_ref(), &route)?;
+    let (mut roles, fallbacks) =
+        feature_roles_and_fallbacks(catalog, preset, original, previous.as_ref(), &route)?;
     roles.insert("default".to_owned(), json!(route));
     let mut value = original
         .filter(|value| value.is_object())
         .cloned()
         .unwrap_or_else(|| json!({}));
     value["modelRoles"] = json!(roles);
+    if !fallbacks.is_empty() {
+        value["fallbackChains"] = json!(fallbacks);
+    } else if let Some(fields) = value.as_object_mut() {
+        fields.remove("fallbackChains");
+    }
     if let Some(thinking) = &preset.thinking_option_id {
         value["defaultThinkingLevel"] = json!(thinking);
     } else if let Some(fields) = value.as_object_mut() {
@@ -368,17 +413,42 @@ fn definition(
     Ok(value)
 }
 
-fn feature_roles(
+type RoleAndFallbackMaps = (Map<String, Value>, Map<String, Value>);
+
+fn feature_roles_and_fallbacks(
     catalog: &Catalog,
     preset: &Preset,
     original: Option<&Value>,
     previous: Option<&Preset>,
     route: &str,
-) -> Result<Map<String, Value>, PresetError> {
+) -> Result<RoleAndFallbackMaps, PresetError> {
     let mut roles = Map::new();
+    let mut fallbacks = Map::new();
     for (key, value) in &preset.feature_values {
+        if let Some(role) = key.strip_prefix(FALLBACK_PREFIX) {
+            if value.as_str() == Some(INHERIT) {
+                continue;
+            }
+            let unchanged = previous.is_some_and(|old| old.feature_values.get(key) == Some(value));
+            if !unchanged {
+                let selection = domain::agent_runtime::StoredAgentConfig {
+                    feature_values: Some(BTreeMap::from([(key.clone(), value.clone())])),
+                    ..Default::default()
+                };
+                catalog.validate(&selection).map_err(|_| {
+                    PresetError::Rejected(
+                        "A preset fallback role or model is not available in the OMP catalog"
+                            .to_owned(),
+                    )
+                })?;
+            }
+            fallbacks.insert(role.to_owned(), value.clone());
+            continue;
+        }
         let role = key.strip_prefix(PREFIX).ok_or_else(|| {
-            PresetError::Rejected("OMP native presets store model-role assignments only".to_owned())
+            PresetError::Rejected(
+                "OMP native presets store model-role and fallback assignments only".to_owned(),
+            )
         })?;
         let unchanged = previous.is_some_and(|old| old.feature_values.get(key) == Some(value));
         if unchanged && !value.is_string() {
@@ -421,7 +491,7 @@ fn feature_roles(
             );
         }
     }
-    Ok(roles)
+    Ok((roles, fallbacks))
 }
 
 #[cfg(test)]

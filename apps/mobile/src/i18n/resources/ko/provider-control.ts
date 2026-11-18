@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ 대체 모델",
   addRole: "역할 추가",
   defaultThinking: "공급자 기본값 사용",
   deletePreset: "삭제",
@@ -6,7 +7,11 @@ export const providerControl = {
   deletePresetTitle: "프리셋 {{name}}을 삭제할까요?",
   deletePresetWarning: "모델, 추론, 역할 조합이 영구 삭제되며 취소할 수 없습니다.",
   deletingPreset: "삭제 중…",
+  fallbacks: "대체 모델",
+  inheritedFallbacks: "기본 대체 모델: {{model}}",
   modelRoles: "용도별 모델",
+  moveFallbackDown: "대체 모델 아래로 이동",
+  moveFallbackUp: "대체 모델 위로 이동",
   newRole: "+ 역할 추가…",
   noModels: "모델이 없습니다. 공급자를 새로 고치세요.",
   presetChecking: "권한 확인 중…",
@@ -15,6 +20,7 @@ export const providerControl = {
   presetOwnershipUnknown: "출처가 확인되지 않았습니다. 편집 전에 새로 고치세요.",
   presetReadOnly: "프리셋 출처를 확인할 수 없거나 읽기 전용입니다. 새로 고친 후 편집하세요.",
   projectPresetReadOnly: "프로젝트 프리셋은 OMP가 관리합니다. 여기서는 보기만 가능합니다.",
+  removeFallback: "대체 모델 제거",
   removeRole: "역할 설정 제거",
   role: "역할",
   roleChoicesFailed: "역할 목록을 불러오지 못했습니다. 새로 고치세요.",
@@ -31,4 +37,5 @@ export const providerControl = {
   sourceProject: "프로젝트 · 읽기 전용",
   sourceUnknown: "알 수 없는 출처",
   viewPreset: "{{name}} 보기",
+  wildcardProvider: "{{provider}}의 모든 모델",
 };

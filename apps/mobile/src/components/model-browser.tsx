@@ -1029,7 +1029,7 @@ function ProviderModelBrowserContent({
       />
     );
   }
-  const presetFooter = modelPresets ? (
+  const presetSection = modelPresets ? (
     <ProviderModelPresets
       choices={presetChoices}
       provider={view.providerId}
@@ -1069,20 +1069,17 @@ function ProviderModelBrowserContent({
         isRetryingProvider={isRetryingProvider}
       />
       {profileHeader}
+      {presetSection}
     </>
   ) : (
     <>
       {profileHeader}
+      {presetSection}
       {modelRowsHeading}
     </>
   );
   if (visibleRows.length === 0) {
-    return (
-      <View>
-        {header}
-        {presetFooter}
-      </View>
-    );
+    return <View>{header}</View>;
   }
   return (
     <ModelRowList
@@ -1092,7 +1089,6 @@ function ProviderModelBrowserContent({
       selectedModel={selectedModel}
       onSelect={onSelect}
       header={header}
-      footer={presetFooter}
       scrolling={scrolling}
     />
   );

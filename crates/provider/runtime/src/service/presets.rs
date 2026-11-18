@@ -118,11 +118,9 @@ impl PresetService {
         cwd: &str,
         client: Option<&Arc<dyn AgentClient>>,
     ) -> Result<Vec<PresetEntry>, PresetError> {
-        let descriptor = self.describe(cwd, client).await;
-        if descriptor.backend == PresetBackend::Native {
-            let client = client.ok_or_else(|| {
-                PresetError::Unavailable("This provider is not installed on the host".to_owned())
-            })?;
+        if let Some(client) = client
+            && client.preset_backend() == PresetBackend::Native
+        {
             // A native store reports its private overlay; the editor may only see what a user
             // can actually edit.
             return client.native_presets(cwd).await.map(|presets| {
@@ -167,19 +165,14 @@ impl PresetService {
     ) -> Result<(), PresetError> {
         let preset = &editable(preset.clone());
         preset.validate().map_err(PresetError::Rejected)?;
-        let descriptor = self.describe(cwd, client).await;
-        if descriptor.backend == PresetBackend::Native {
+        if let Some(client) = client
+            && client.preset_backend() == PresetBackend::Native
+        {
             if original.is_some_and(|original| original != preset.name) {
                 return Err(PresetError::Rejected(
                     "This native preset store does not support rename".to_owned(),
                 ));
             }
-            if !descriptor.can_edit && !descriptor.can_create {
-                return Err(PresetError::Unavailable(reason(&descriptor)));
-            }
-            let client = client.ok_or_else(|| {
-                PresetError::Unavailable("This provider is not installed on the host".to_owned())
-            })?;
             return client.save_native_preset(cwd, preset).await;
         }
         // The lock spans the read-modify-write, not just the write: two concurrent saves of
@@ -210,14 +203,9 @@ impl PresetService {
                 "Preset name must be 1-256 characters without control bytes".to_owned(),
             ));
         }
-        let descriptor = self.describe(cwd, client).await;
-        if descriptor.backend == PresetBackend::Native {
-            if !descriptor.can_delete {
-                return Err(PresetError::Unavailable(reason(&descriptor)));
-            }
-            let client = client.ok_or_else(|| {
-                PresetError::Unavailable("This provider is not installed on the host".to_owned())
-            })?;
+        if let Some(client) = client
+            && client.preset_backend() == PresetBackend::Native
+        {
             return client.delete_native_preset(cwd, name).await;
         }
         // Deleting is the same list-wide rewrite as saving, so it takes the same fence.
@@ -228,13 +216,6 @@ impl PresetService {
         })
         .await
     }
-}
-
-fn reason(descriptor: &PresetDescriptor) -> String {
-    descriptor
-        .reason
-        .clone()
-        .unwrap_or_else(|| "This provider does not support that preset operation".to_owned())
 }
 
 /// Whether a request's provider identifier is usable.

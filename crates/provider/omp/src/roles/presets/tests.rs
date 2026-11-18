@@ -22,10 +22,15 @@ async fn native_presets_round_trip_without_a_session_or_global_role_change() {
     assert_eq!(descriptor.backend, PresetBackend::Native);
     assert!(descriptor.can_create && descriptor.can_edit && descriptor.can_delete);
     assert!(!descriptor.can_rename);
+    assert!(descriptor.reason.is_none());
     let mut saved = preset("Team");
     saved
         .feature_values
         .insert("modelRole.task".to_owned(), json!("unset"));
+    saved.feature_values.insert(
+        "modelFallback.default".to_owned(),
+        json!(["other/model:auto", "other/*"]),
+    );
 
     client.save_native_preset(&spec.cwd, &saved).await.unwrap();
     let listed = client.native_presets(&spec.cwd).await.unwrap();
@@ -40,6 +45,10 @@ async fn native_presets_round_trip_without_a_session_or_global_role_change() {
     .unwrap();
     assert!(stored["Team"]["modelRoles"]["task"].is_null());
     assert_eq!(stored["Team"]["modelRoles"]["default"], "test/model");
+    assert_eq!(
+        stored["Team"]["fallbackChains"]["default"],
+        json!(["other/model:auto", "other/*"])
+    );
     let calls = calls_after(root.path(), 0);
     assert!(calls.iter().all(|call| call["args"][0] != "--mode"));
     assert!(
@@ -316,6 +325,10 @@ async fn a_native_snapshot_applies_through_the_existing_private_overlay() {
     saved
         .feature_values
         .insert("modelRole.task".to_owned(), json!("unset"));
+    saved.feature_values.insert(
+        "modelFallback.default".to_owned(),
+        json!(["other/model:auto"]),
+    );
     client.save_native_preset(&spec.cwd, &saved).await.unwrap();
     let listed = client.native_presets(&spec.cwd).await.unwrap();
     let selected = &listed[0].preset;
@@ -339,7 +352,10 @@ async fn a_native_snapshot_applies_through_the_existing_private_overlay() {
     let value: Value =
         serde_json::from_slice(&std::fs::read(args[overlay + 1].as_str().unwrap()).unwrap())
             .unwrap();
-    assert_eq!(value, json!({"modelRoles":{"task":null}}));
+    assert_eq!(
+        value,
+        json!({"modelRoles":{"task":null},"retry":{"fallbackChains":{"default":["other/model:auto"]}}})
+    );
     session.close().await.unwrap();
 }
 

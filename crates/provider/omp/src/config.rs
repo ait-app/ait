@@ -74,6 +74,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             if super::roles::is_key(key) {
                 return !super::roles::valid(key, value);
             }
+            if super::roles::is_fallback_key(key) {
+                return !super::roles::valid_fallback(key, value);
+            }
             (key != FAST_MODE && !LEGACY_FEATURES.contains(&key.as_str())) || !value.is_boolean()
         })
     {
@@ -314,8 +317,8 @@ pub(super) fn launch_arguments(config: &StoredAgentConfig, launch: &Launch<'_>) 
     args
 }
 
-/// Apply `next`'s selections that differ from `previous` to a live process between turns,
-/// then return OMP's refreshed state.
+/// Apply `next`'s selections that differ from `previous` or the live `current` state to a
+/// running process between turns, then return OMP's refreshed state.
 ///
 /// # Errors
 ///
@@ -324,18 +327,22 @@ pub(super) async fn apply(
     transport: &mut Transport,
     previous: &StoredAgentConfig,
     next: &StoredAgentConfig,
+    current: &Value,
 ) -> Result<Value, AgentSessionError> {
     validate(next)?;
-    if next.model != previous.model
-        && let Some(model) = &next.model
-    {
-        let [provider, model] = model_route(model)?;
-        transport
-            .request("set_model", json!({"provider":provider,"modelId":model}))
-            .await?;
+    if let Some(model) = &next.model {
+        let [provider, model_id] = model_route(model)?;
+        let route = format!("{provider}/{model_id}");
+        if next.model != previous.model || state_model(current)?.as_deref() != Some(route.as_str())
+        {
+            transport
+                .request("set_model", json!({"provider":provider,"modelId":model_id}))
+                .await?;
+        }
     }
-    if next.thinking_option_id != previous.thinking_option_id
-        && let Some(level) = next.thinking_option_id.as_deref().and_then(thinking_level)
+    if let Some(level) = next.thinking_option_id.as_deref().and_then(thinking_level)
+        && (next.thinking_option_id != previous.thinking_option_id
+            || current["thinkingLevel"].as_str() != Some(level))
     {
         transport
             .request("set_thinking_level", json!({"level":level}))

@@ -24,7 +24,19 @@ vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => client,
   useHostRuntimeIsConnected: () => true,
 }));
-vi.mock("react-native-unistyles", () => ({ StyleSheet: { create: () => ({}) } }));
+vi.mock("@/constants/platform", () => ({ isWeb: true }));
+vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
+vi.mock("react-native-unistyles", () => ({
+  StyleSheet: {
+    create: (factory: (theme: unknown) => unknown) =>
+      factory({
+        colors: { foregroundMuted: "#888" },
+        spacing: { 1: 4, 2: 8, 3: 12, 6: 24 },
+        fontSize: { xs: 11, sm: 12 },
+        fontWeight: { medium: "500" },
+      }),
+  },
+}));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("react-native", () => ({
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
@@ -71,14 +83,18 @@ beforeEach(() => {
       id: "modelRole.advisor",
       label: "Advisor",
       value: "old",
-      options: [{ id: "native", label: "Inherit", isDefault: true }],
+      options: [
+        { id: "native", label: "Inherit", isDefault: true, metadata: { supportsFallbacks: true } },
+      ],
     },
     {
       type: "select",
       id: "modelRole.worker",
       label: "Worker",
       value: "old",
-      options: [{ id: "native", label: "Inherit", isDefault: true }],
+      options: [
+        { id: "native", label: "Inherit", isDefault: true, metadata: { supportsFallbacks: true } },
+      ],
     },
   ];
   client.describeProviderPresets.mockResolvedValue({
@@ -128,7 +144,7 @@ function showPicker(
   return { ...view, apply, queryClient };
 }
 
-it("shows a preset saved in settings after shared-cache invalidation and applies the full role snapshot", async () => {
+it("shows vendor-qualified preset rows after shared-cache invalidation and applies roles and fallbacks", async () => {
   const { apply, queryClient } = showPicker();
   await waitFor(() => expect(client.listProviderPresets).toHaveBeenCalledTimes(1));
   expect(screen.queryByText("modelSelector.modelPresets")).toBeNull();
@@ -138,27 +154,41 @@ it("shows a preset saved in settings after shared-cache invalidation and applies
       model: '["test","fast"]',
       source: "ait",
       editable: true,
-      featureValues: { "modelRole.worker": "unset" },
+      featureValues: {
+        "modelRole.worker": "unset",
+        "modelFallback.default": ["test/fast:off"],
+      },
     },
   ];
   await act(async () => {
     await invalidatePresetCaches(queryClient, "host", "omp");
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Quick fast" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Quick test / fast" }));
   expect(apply).toHaveBeenCalledExactlyOnceWith("omp", {
     modelId: '["test","fast"]',
     thinkingOptionId: null,
-    featureValues: { "modelRole.advisor": "native", "modelRole.worker": "unset" },
+    featureValues: {
+      "modelRole.advisor": "native",
+      "modelRole.worker": "unset",
+      "modelFallback.advisor": "native",
+      "modelFallback.worker": "native",
+      "modelFallback.default": ["test/fast:off"],
+    },
   });
   expect(client.listProviderFeatures).toHaveBeenCalledWith({ provider: "omp", cwd: "/project" });
 });
 
-it("keeps the preset group hidden for a provider that has no role capability", async () => {
+it("also shows Ait-managed presets for providers without separate role features", async () => {
   presets = [{ name: "Quick", model: "fast", source: "ait", editable: true }];
   features = [];
-  showPicker();
-  await waitFor(() => expect(client.listProviderFeatures).toHaveBeenCalledTimes(1));
-  expect(screen.queryByText("modelSelector.modelPresets")).toBeNull();
+  const { apply } = showPicker();
+  const row = await screen.findByTestId("provider-model-preset-omp-Quick");
+  fireEvent.click(row);
+  expect(apply).toHaveBeenCalledExactlyOnceWith("omp", {
+    modelId: '["test","fast"]',
+    thinkingOptionId: null,
+    featureValues: {},
+  });
 });
 
 it("does not advertise stale cached presets when the store fails", async () => {
@@ -191,7 +221,7 @@ it.each([
 });
 
 it.each([undefined, "off", "high"])(
-  "applies a known model alias with its supported/default thinking (%s)",
+  "canonicalizes a known model alias with its supported/default thinking (%s)",
   async (thinkingOptionId) => {
     presets = [
       { name: "Available", model: "fast", source: "global", editable: true, thinkingOptionId },
@@ -202,7 +232,10 @@ it.each([undefined, "off", "high"])(
     fireEvent.click(row);
     expect(apply).toHaveBeenCalledWith(
       "omp",
-      expect.objectContaining({ modelId: "fast", thinkingOptionId: thinkingOptionId ?? null }),
+      expect.objectContaining({
+        modelId: '["test","fast"]',
+        thinkingOptionId: thinkingOptionId ?? null,
+      }),
     );
   },
 );

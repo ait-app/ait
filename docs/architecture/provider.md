@@ -7,18 +7,23 @@
 ## 模型预设
 
 - `domain::preset` 定义内容与存储限额，`provider-core::ports::preset` 定义存储能力、来源与错误；
-  运行时 `PresetService` 经 daemon 注入的配置端口管理 Ait 库，adapter 管理原生库。
+  `AgentClient::preset_backend` 无 I/O 声明存储归属，运行时 `PresetService` 经 daemon 注入的配置端口管理
+  Ait 库，adapter 管理原生库，读写不再重复调用 `describe`。
   `provider.presets.describe/list/save/delete.request` 是统一管理入口，SDK 仅在四个方法齐全时暴露
   `server_info.features.providerPresets`，旧 Host 不显示新增功能
-  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)）。
+  （[ADR-279](../decisions/providers/adr-279-provider-model-presets.md)，已由
+  [ADR-286](../decisions/providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）。
 - Ait 库位于 `providers.<id>.modelPresets`，每个 Provider 至多 64 项；名字与思考选项最多
-  256 字节，模型路由最多 16 KiB，每项特性至多 128 个且序列化后不超过 64 KiB。写入前校验，重复名字拒绝；
-  同一 daemon 的读改写共用串行锁。列表中的 `source`、`editable` 仅是读取投影，不写回预设内容。
-- 设置与模型卡片共享按 Host、Provider、cwd 分隔的查询，写入后失效。模型卡片先显示默认模型，
-  再为支持角色配置且已有预设的 Provider 显示预设；AgentProfile 继续独立提供启动配置。
+  256 字节，模型路由最多 16 KiB，每项特性至多 128 个且序列化后不超过 64 KiB。除布尔值与角色字符串外，
+  `modelFallback.<role>` 接受 `"native"` 或至多 32 项（单项不超过 2048 字节、无控制字符）的有序备选模型选择器数组。
+  写入前校验，重复名字拒绝；同一 daemon 的读改写共用串行锁。列表中的 `source`、`editable` 仅是读取投影，不写回预设内容。
+- 设置与模型卡片共享按 Host、Provider、cwd 分隔的查询，并发读取 `describe` 与 `list`，写入后失效相关缓存。
+  Provider 设置页与模型卡片均在模型列表上方显示模型预设，只要当前 Provider 存有预设且存储未报错即可直接选择，
+  多供应商模型统一展示上游供应商与模型名；AgentProfile 继续独立提供启动配置。
 - 失效模型或不支持的思考等级在模型卡片中标为不可用并禁止应用；记录仍能在设置中查看、修复或删除，
   不因一条旧记录阻断整个预设库。
-- 预设点击一次提交默认模型、思考等级和整套角色分配。未指定的角色恢复继承，显式清空保留清空；
+- 预设点击一次提交规范化后的默认模型、思考等级及整套角色与备选模型链：遗漏的角色与备选链恢复继承 `native`，
+  `modelRole.default` 始终归一为继承以避免遮蔽主模型，显式清空保留清空，表单偏好中的旧角色与备选链同步替换；
   非模型的模式、权限、工具等配置保持原值。草稿先更新待创建配置，已运行 Agent 经现有
   `agent.config.apply.request` 提交；失败遵循该入口的原子校验与错误返回。
 - Claude Code 的角色来自其原生环境变量，不由 adapter 自造词汇：`modelRole.` 前缀下共 8 个开关，

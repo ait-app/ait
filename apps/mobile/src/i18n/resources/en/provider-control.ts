@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ Fallback",
   addRole: "Add role",
   defaultThinking: "Use provider default",
   deletePreset: "Delete",
@@ -7,7 +8,11 @@ export const providerControl = {
   deletePresetWarning:
     "This permanently removes the model, thinking and role combination. This cannot be undone.",
   deletingPreset: "Deleting…",
+  fallbacks: "Fallbacks",
+  inheritedFallbacks: "Default fallbacks: {{model}}",
   modelRoles: "Model roles",
+  moveFallbackDown: "Move fallback down",
+  moveFallbackUp: "Move fallback up",
   newRole: "+ New role…",
   noModels: "No models available. Refresh the provider.",
   presetChecking: "Checking permissions…",
@@ -16,6 +21,7 @@ export const providerControl = {
   presetOwnershipUnknown: "Source not confirmed. Refresh before editing.",
   presetReadOnly: "Preset ownership is unconfirmed or read-only. Refresh before editing.",
   projectPresetReadOnly: "Project presets are managed by OMP. You can view this preset here.",
+  removeFallback: "Remove fallback",
   removeRole: "Remove role",
   role: "Role",
   roleChoicesFailed: "Role choices could not load. Refresh to retry.",
@@ -32,4 +38,5 @@ export const providerControl = {
   sourceProject: "Project · read-only",
   sourceUnknown: "Source unknown",
   viewPreset: "View {{name}}",
+  wildcardProvider: "All models from {{provider}}",
 };

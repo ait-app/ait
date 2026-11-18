@@ -1,4 +1,5 @@
 export const providerControl = {
+  addFallback: "+ フォールバック",
   addRole: "役割を追加",
   defaultThinking: "プロバイダーの既定値を使用",
   deletePreset: "削除",
@@ -6,7 +7,11 @@ export const providerControl = {
   deletePresetTitle: "プリセット {{name}} を削除しますか？",
   deletePresetWarning: "モデル、思考、役割の組み合わせを完全に削除します。元に戻せません。",
   deletingPreset: "削除中…",
+  fallbacks: "フォールバックモデル",
+  inheritedFallbacks: "既定フォールバック: {{model}}",
   modelRoles: "用途別モデル",
+  moveFallbackDown: "フォールバックを下へ移動",
+  moveFallbackUp: "フォールバックを上へ移動",
   newRole: "+ ロールを追加…",
   noModels: "モデルがありません。プロバイダーを更新してください。",
   presetChecking: "権限を確認中…",
@@ -16,6 +21,7 @@ export const providerControl = {
   presetReadOnly:
     "プリセットの保存元が未確認、または読み取り専用です。更新してから編集してください。",
   projectPresetReadOnly: "プロジェクトのプリセットは OMP が管理します。ここでは表示のみ可能です。",
+  removeFallback: "フォールバックを削除",
   removeRole: "役割設定を削除",
   role: "役割",
   roleChoicesFailed: "役割候補の読み込みに失敗しました。更新してください。",
@@ -32,4 +38,5 @@ export const providerControl = {
   sourceProject: "プロジェクト · 読み取り専用",
   sourceUnknown: "不明なソース",
   viewPreset: "{{name}} を表示",
+  wildcardProvider: "{{provider}} の全モデル",
 };

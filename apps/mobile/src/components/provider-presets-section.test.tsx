@@ -34,7 +34,7 @@ vi.mock("@/components/ui/select-field", () => ({
       data-testid={testID}
       disabled={disabled}
       aria-label={selectedDisplay?.label}
-      value={value}
+      value={value ?? ""}
       onChange={(event) => onChange(event.target.value)}
     >
       {options.map((option) => (
@@ -86,11 +86,17 @@ vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: (theme: unknown) => unknown) =>
       factory({
-        colors: { foreground: "#fff", foregroundMuted: "#888", destructive: "#f00" },
-        fontSize: { sm: 12, base: 14 },
-        fontWeight: { medium: "500" },
-        spacing: { 2: 8, 3: 12, 4: 16, 6: 24 },
-        borderRadius: { lg: 8 },
+        colors: {
+          foreground: "#fff",
+          foregroundMuted: "#888",
+          destructive: "#f00",
+          surface2: "#222",
+          border: "#333",
+        },
+        fontSize: { xs: 11, sm: 12, base: 14 },
+        fontWeight: { medium: "500", semibold: "600" },
+        spacing: { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24 },
+        borderRadius: { md: 6, lg: 8 },
         border: "#333",
       }),
   },
@@ -302,11 +308,8 @@ it("edits the name and sends the original when the descriptor allows renaming", 
   );
 });
 
-it("keeps the name read-only and explains why when renaming is withheld", async () => {
-  await ready(
-    descriptor({ backend: "native", canRename: false, reason: "OMP has no rename command" }),
-    [preset("team")],
-  );
+it("keeps the name read-only without extra helper clutter when renaming is withheld", async () => {
+  await ready(descriptor({ backend: "native", canRename: false }), [preset("team")]);
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
@@ -315,9 +318,7 @@ it("keeps the name read-only and explains why when renaming is withheld", async 
   const nameInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
   expect(nameInput.readOnly).toBe(true);
   expect(nameInput.value).toBe("team");
-  expect(screen.getByTestId("preset-name-readonly-reason").textContent).toBe(
-    "settings.providers.presets.noRename",
-  );
+  expect(screen.queryByText("settings.providers.presets.noRename")).toBeNull();
   expect(screen.queryByText("providerControl.roleRoutingHint")).toBeNull();
 });
 
@@ -422,7 +423,7 @@ it("offers catalog models and reasoning levels while allowing role overrides to 
   fireEvent.change(screen.getByTestId("provider-preset-add-role"), {
     target: { value: "modelRole.advisor" },
   });
-  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("ADVISOR");
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("Advisor");
   expect(screen.getByTestId(/^preset-role-name-/).tagName).toBe("SPAN");
   expect(screen.queryByTestId("provider-preset-roles")).toBeNull();
   fireEvent.click(screen.getByTestId("provider-preset-save"));
@@ -441,13 +442,13 @@ it("offers catalog models and reasoning levels while allowing role overrides to 
   );
 });
 
-it("shows project scope and prevents global writes to an overriding project preset", async () => {
+it("shows project badge and prevents global writes to an overriding project preset", async () => {
   await ready(descriptor({ backend: "native" }), [
     { ...preset("team"), source: "project", editable: false },
   ]);
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" cwd="/repo/project" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
-  expect(screen.getByTestId("provider-presets-scope").textContent).toBe("/repo/project");
+  expect(screen.getByText("providerControl.sourceProject")).toBeTruthy();
   expect(client.listProviderPresets).toHaveBeenCalledWith("omp", "/repo/project");
   expect(client.listProviderFeatures).toHaveBeenCalledWith({
     provider: "omp",
@@ -524,13 +525,23 @@ it("keeps cached rows and an open editor read-only after an ownership query fail
 });
 
 it.each(["save", "delete"] as const)(
-  "rechecks ownership before %s when a project override appears during editing",
+  "refreshes ownership and surfaces the error when the backend rejects %s due to a project override",
   async (operation) => {
     await ready(descriptor({ backend: "native" }), [preset("team")]);
     renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
     await screen.findByText("team");
-    if (operation === "save")
+    if (operation === "save") {
       fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+      client.saveProviderPreset.mockResolvedValueOnce({
+        saved: null,
+        error: "Project presets are read-only here",
+      });
+    } else {
+      client.deleteProviderPreset.mockResolvedValueOnce({
+        deleted: null,
+        error: "Project presets are read-only here",
+      });
+    }
     client.listProviderPresets.mockResolvedValueOnce({
       presets: [{ ...preset("team"), source: "project", editable: false }],
     });
@@ -539,42 +550,117 @@ it.each(["save", "delete"] as const)(
         ? screen.getByTestId("provider-preset-save")
         : screen.getByLabelText("settings.providers.presets.remove"),
     );
-    if (operation === "delete")
+    if (operation === "delete") {
       fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
-    await waitFor(() => expect(client.listProviderPresets).toHaveBeenCalledTimes(2));
-    await act(async () => {});
-    expect(client.saveProviderPreset).not.toHaveBeenCalled();
-    expect(client.deleteProviderPreset).not.toHaveBeenCalled();
-  },
-);
-
-it.each(["save", "delete"] as const)(
-  "disables mutations when the final %s ownership check fails",
-  async (operation) => {
-    await ready(descriptor({ backend: "native" }), [preset("team")]);
-    renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
-    await screen.findByText("team");
-    if (operation === "save")
-      fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
-    client.listProviderPresets.mockRejectedValueOnce(new Error("Ownership check failed"));
-    fireEvent.click(
-      operation === "save"
-        ? screen.getByTestId("provider-preset-save")
-        : screen.getByLabelText("settings.providers.presets.remove"),
+    }
+    await waitFor(() =>
+      expect(screen.getByText(/Project presets are read-only here/)).toBeTruthy(),
     );
-    if (operation === "delete")
-      fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
     await waitFor(() =>
       expect(
         (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
       ).toBe(true),
     );
-    if (operation === "save")
-      expect((screen.getByTestId("provider-preset-save") as HTMLButtonElement).disabled).toBe(true);
-    expect(client.saveProviderPreset).not.toHaveBeenCalled();
-    expect(client.deleteProviderPreset).not.toHaveBeenCalled();
   },
 );
+
+it("edits ordered OMP fallback model chains with upstream vendor labels", async () => {
+  await ready(descriptor({ backend: "native" }), []);
+  client.listProviderFeatures.mockResolvedValue({
+    features: [
+      {
+        type: "select",
+        id: "modelRole.default",
+        label: "Default model (default)",
+        value: "native",
+        options: [
+          {
+            id: "native",
+            label: "Use OMP setting",
+            metadata: {
+              supportsFallbacks: true,
+              inheritedFallbacks: ["tokencake-2/deepseek-v4:auto"],
+            },
+          },
+          {
+            id: "openai-codex/gpt-6-astra",
+            label: "gpt-6-astra · openai-codex/gpt-6-astra",
+            metadata: {
+              provider: "openai-codex",
+              modelId: "gpt-6-astra",
+              efforts: ["auto", "high"],
+            },
+          },
+          {
+            id: "tokencake-2/deepseek-v4",
+            label: "deepseek-v4 · tokencake-2/deepseek-v4",
+            metadata: {
+              provider: "tokencake-2",
+              modelId: "deepseek-v4",
+              efforts: ["auto", "low"],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  client.saveProviderPreset.mockResolvedValue({ saved: "resilient" });
+  renderSection(
+    <ProviderPresetsSection
+      provider="omp"
+      serverId="host-a"
+      models={[
+        {
+          provider: "omp",
+          id: '["openai-codex","gpt-6-astra"]',
+          label: "gpt-6-astra",
+          thinkingOptions: [{ id: "auto", label: "Auto" }],
+        },
+        {
+          provider: "omp",
+          id: '["tokencake-2","deepseek-v4"]',
+          label: "deepseek-v4",
+          thinkingOptions: [{ id: "low", label: "Low" }],
+        },
+      ]}
+    />,
+  );
+  fireEvent.click(await screen.findByTestId("provider-presets-empty-create"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "resilient" } });
+  const mainModelSelect = screen.getByTestId("provider-preset-model-options") as HTMLSelectElement;
+  expect(Array.from(mainModelSelect.options).map((opt) => opt.textContent)).toEqual([
+    "openai-codex / gpt-6-astra",
+    "tokencake-2 / deepseek-v4",
+  ]);
+  fireEvent.change(mainModelSelect, {
+    target: { value: '["openai-codex","gpt-6-astra"]' },
+  });
+  fireEvent.change(screen.getByTestId("preset-add-fallback-default"), {
+    target: { value: "tokencake-2/deepseek-v4" },
+  });
+  fireEvent.change(screen.getByTestId("preset-fallback-thinking-default-0"), {
+    target: { value: "low" },
+  });
+  fireEvent.change(screen.getByTestId("preset-add-fallback-default"), {
+    target: { value: "openai-codex/*" },
+  });
+  fireEvent.click(screen.getByTestId("preset-fallback-up-default-1"));
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() =>
+    expect(client.saveProviderPreset).toHaveBeenCalledWith(
+      "omp",
+      {
+        name: "resilient",
+        model: '["openai-codex","gpt-6-astra"]',
+        featureValues: {
+          "modelFallback.default": ["openai-codex/*", "tokencake-2/deepseek-v4:low"],
+        },
+      },
+      undefined,
+      {},
+    ),
+  );
+});
 
 it("requires confirmation, allows cancel and shows deletion progress and completion", async () => {
   await ready(descriptor(), [preset("team")]);
@@ -711,7 +797,7 @@ it("creates and reopens a native preset using only model, role and effort choice
     target: { value: "native/model" },
   });
   fireEvent.change(screen.getByTestId(/^preset-role-thinking-/), { target: { value: "high" } });
-  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("ADVISOR");
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("Advisor");
   expect(screen.getByTestId(/^preset-role-name-/).tagName).toBe("SPAN");
   expect(screen.queryByTestId("provider-preset-roles")).toBeNull();
   expect(screen.getAllByRole("textbox")).toHaveLength(1);
@@ -771,7 +857,7 @@ it("starts native presets with a fixed roster of configured roles and resolved d
   await screen.findByTestId("provider-presets-empty-create");
   fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
   const identity = await screen.findByTestId("preset-role-name-initial-modelRole.smol");
-  expect(identity.textContent).toBe("SMOL");
+  expect(identity.textContent).toBe("Fast");
   expect(identity.tagName).toBe("SPAN");
   expect((screen.getByTestId(/^preset-role-model-/) as HTMLSelectElement).value).toBe("native");
   expect((screen.getByTestId(/^preset-role-thinking-/) as HTMLSelectElement).disabled).toBe(true);
@@ -780,7 +866,7 @@ it("starts native presets with a fixed roster of configured roles and resolved d
   fireEvent.change(screen.getByTestId("provider-preset-add-role"), {
     target: { value: "modelRole.smol" },
   });
-  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("SMOL");
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("Fast");
 });
 
 it("does not show OMP worker routing in an Ait-managed provider editor", async () => {

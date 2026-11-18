@@ -1383,4 +1383,42 @@ describe("APPLY_MODEL_PRESET_FROM_USER", () => {
       modeId: "auto",
     });
   });
+
+  it("canonicalizes model aliases against the target provider catalog so presets override the active model", () => {
+    const models = [
+      {
+        provider: "omp" as const,
+        id: '["openai-codex","gpt-6-astra"]',
+        aliases: ["astra"],
+        label: "gpt-6-astra",
+        defaultThinkingOptionId: "medium",
+        thinkingOptions: [
+          { id: "auto", label: "Auto" },
+          { id: "medium", label: "Medium" },
+        ],
+      },
+    ];
+    const next = resolveAgentForm(
+      makeState({
+        provider: "omp",
+        model: '["tokencake-2","deepseek-v4"]',
+        thinkingOptionId: "high",
+        modeId: "full",
+      }),
+      {
+        type: "APPLY_MODEL_PRESET_FROM_USER",
+        provider: "omp",
+        modelId: "astra",
+        thinkingOptionId: "auto",
+        providerDef: undefined,
+        providerModels: models,
+      },
+    );
+    expect(next.form).toEqual({
+      provider: "omp",
+      model: '["openai-codex","gpt-6-astra"]',
+      thinkingOptionId: "auto",
+      modeId: "full",
+    });
+  });
 });
