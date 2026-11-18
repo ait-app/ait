@@ -37,6 +37,7 @@ paths:
   第二修复轮收窄了“同一轮只唤醒一次”的规则，让自动关闭只依据最近一次重新打开之后的汇报、并取消全部 Agent 已归档的等待中工单，
   在 `send_agent_prompt` 的重新打开受上限所阻时先自动关闭再重试并告知 Bot，让分离执行的 `create_agent` 一直占用调用额度并有自身上限，
   并在预授权为追加式的 Provider（Claude）上为工作者预授权 `report_progress`（第 2、4–7、10 节）。
+  2026-11-18 修订第 2、4、6 节：达到上限时另删除崩溃留下、超过 1 小时仍没有任何 Agent 的遗留工单。
 - 关系：扩展 [ADR-271](adr-271-bot-notification-inbox-and-wake-turns.md) 的通知记录、通知类型、唤醒输入与第 14 节的观察规则；
   扩展 [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 第 3 节的保留标签与工具访问分类；扩展 [ADR-213](adr-213-single-workspace-manager-bot.md) 的生命周期与 v2 方法；
   扩展 [ADR-202](../providers/adr-202-agent-mcp-injection.md) 的会话绑定：工作者凭据在有效配置中追加 `report_progress` 的预授权（第 10 节），
@@ -107,17 +108,31 @@ ADR-271 之后，Bot 启动的 Agent 完成、失败或等待审批时会在发�
   等待中的工单在全部 Agent 归档后已无人能回答其受阻或审批请求，同样处理。
 - 对每个候选以 `agent.list.request` 按标签 `ait.bot.ticket = <id>` 读未归档 Agent；结果为空且没有下一页（完整读取）时才算“全部 Agent 已归档”，
   包括带标签而未被指派的 Agent。读取失败或不完整时不关闭（未知状态从不关闭任何工单）。已删除的 Agent 不在目录中，与归档同样计。
+- **遗留工单**：同一次处理中，状态为 `open` 或 `waiting`、没有指派、`createdAt` 早于 `ORPHAN_GRACE`（1 小时，`domain::bot::ticket`）的工单，
+  以 `agent.list.request` 按同一标签并带 `includeArchived: true` 完整读取，没有任何 Agent（含已归档）带其标签时，
+  经 `Bots::remove_orphaned_ticket` 删除，不通知、不唤醒 Bot。Bot 内再次检查 `Ticket::orphaned`：未关闭、没有指派、没有任何带 `agentId` 的汇报
+  （Agent 带标签而尚未被指派时，它的 attention 或汇报会在工单上留下这样的汇报）、已过宽限期；不再满足时不动。
+  读取失败或不完整时不删除。Bot 的备注与状态变化不算 Agent 的痕迹。
+  - 宽限期取 1 小时：远大于分离执行的 `create_agent` 从打开工单到创建 Agent 的最长 5 分钟（`DETACHED_TIMEOUT`，第 6 节），
+    Agent 一经创建就带标签，因此宽限期内工单可能只是在等它的第一个 Agent；处理只在达到上限时发生，没有理由更短。
+  - 删除而不是取消：遗留工单正是第 6 节第 5 步 `abandon_ticket` 在进程存活时会删除的工单，删除只是补完被崩溃打断的那一步；
+    其上从未有过 Agent，没有值得保留的历史，取消则会占用已关闭工单的 64 个名额并挤掉真实的历史，
+    还会给第 4 节增加一条系统关闭的路径（系统只关闭全部 Agent 已归档的工单）。
+  - 选择在达到上限时处理，而不是载入时或定时清理：遗留工单只在上限时造成损害（平时只在列表与概览中多一项），
+    而判断需要读 Agent 目录；`crates/api` 已在这里读目录，`crates/bot` 不依赖 `provider`，载入或定时清理需要新的跨 crate 端口。
+  - 已删除的 Agent，以及所在 Workspace 或项目已被移除的 Agent，不在目录结果中，与没有 Agent 同样计；
+    只有既未被指派、也没有在工单上留下任何汇报的这类 Agent 的工单会因此被删除，工单上本就没有它的记录。
 - 关闭经 `Bots::close_finished_ticket`（系统来源）。`open` 工单只看最近一次重新打开（已关闭状态之后的 `status: open`；结束等待不算）之后保留的工作者汇报：
   每个被指派的 Agent 以及其间汇报过的每个工作者，最近一条都是 `done` 时关为 `done`，否则为 `cancelled`。
   因此重新打开之前的 `done`、或只有一个工作者完成而另一个无声归档，都不算完成。`waiting` 工单一律关为 `cancelled`。
   结论与系统 `status` 汇报的文本都说明是 Ait 自动关闭及原因：`open` 为全部 Agent 已归档且已达未关闭上限；等待受阻者与等待审批的分别说明在等哪一种、
   全部 Agent 已归档所以无人能继续或回答。入口在 Bot 内再次检查状态，期间已关闭或没有指派的工单不动。
-- 没有能关闭的工单时照旧拒绝：工具错误 `bot::tickets::OPEN_LIMIT_MESSAGE`
+- 没有能关闭或删除的工单时照旧拒绝：工具错误 `bot::tickets::OPEN_LIMIT_MESSAGE`
   （“Too many open tickets, and none could be closed automatically. Call bot_tickets and close the tickets whose work is finished or no longer needed with bot_ticket_update (status done or cancelled), then try again”），
   告诉 Bot 关闭哪一类工单。第 7 节的 `send_agent_prompt` 重新打开达到上限时同样先自动关闭再重试一次；
   Bot 与用户的显式重新打开达到上限时不做自动关闭，直接返回同一错误。
 
-关闭依据在 `crates/api`（Agent 目录归它读），`crates/bot` 只提供系统来源的关闭入口，不读 Agent 目录。
+关闭与删除的依据在 `crates/api`（Agent 目录归它读），`crates/bot` 只提供系统来源的关闭与删除入口，不读 Agent 目录。
 
 ### 3. 存储
 
@@ -156,6 +171,8 @@ Agent 结束一轮只是汇报，不是关闭，因为 Bot 可能还会继续给
 | `open`、`waiting`        | `done`、`cancelled`           | 系统（第 2 节）               | 达到上限时自动关闭全部 Agent 已归档的工单；`waiting` 只关为 `cancelled` |
 | 已关闭                   | `open`                        | Bot、用户                     | 重新打开：清除 `closedAt` 与 `outcome`；受 `OPEN_LIMIT` 限制            |
 | 已关闭                   | `open`                        | 系统（第 7 节）               | Bot 会话向该工单的 Agent `send_agent_prompt`；受 `OPEN_LIMIT` 限制      |
+
+系统删除遗留工单（第 2 节）不是状态转换：工单连同文件被删除，与 `abandon_ticket` 相同。
 
 - 工单记下每个最近一次汇报为 `blocked` 的工作者（`blocked`）。工作者汇报 `blocked` 时：工单为 `open` 或在等审批（任何 Agent 的）时等待改为该工作者受阻；
   已因另一工作者受阻而等待时保持原等待，只把该工作者加入 `blocked`。工作者汇报其他种类时移出 `blocked`；工单正等它时交给 `blocked` 中最早的一个，
@@ -257,7 +274,9 @@ pub enum WorkerReportKind { Progress, Blocked, Done, Failed }
 本流程留下的不一致窗口：
 
 - 第 1 步之后、Agent 创建前进程崩溃或 `abandon_ticket` 失败：留下没有指派的 `open` 工单（键是生成的时，Bot 不会以同一键重试）。
-  它出现在 `bot_tickets` 与概览中（`agents` 为空），由 Bot 或用户关闭；第 2 节的自动关闭不处理没有指派的工单。
+  它出现在 `bot_tickets` 与概览中（`agents` 为空），可由 Bot 或用户关闭；超过 1 小时后，达到上限时由第 2 节删除。
+- 第 2 节读完 Agent 目录后、删除遗留工单前，Bot 以 `ticketId` 为该工单创建 Agent：工单仍被删除，新 Agent 的指派失败（记 `warn` 日志），
+  其汇报返回工单不存在。需要 Bot 为超过 1 小时没有 Agent 的工单加 Agent，且恰与达到上限同时发生。
 - 调用超时后 Bot 收到 `ResourceExhausted`；键由 MCP 层生成时，Bot 的重试会用新键再开一个工单，而第一次调用仍会完成创建。
 - 自动关闭（第 2 节）读完 Agent 目录后、关闭前，Bot 以 `ticketId` 给该工单新加的 Agent：工单仍被关闭，新 Agent 的汇报被拒绝，
   直到 Bot 以 `send_agent_prompt` 给它更多工作（第 7 节）或重新打开。需要并发的同工单创建与达到上限同时发生。
@@ -432,7 +451,8 @@ Agent 完成、失败、需要审批或汇报时会唤醒它；预计一分钟�
 - 每条汇报重写一个工单文件（通常数 KiB）；系统汇报只在工单所属 Bot 接纳通知时发生。
 - 未配置与暂停的 Workspace 成本不变；工单不增加模型调用，工作者汇报的唤醒受 ADR-271 的合并与预算约束。
 - 一个 Agent 的工单只由标签决定；没有指派的 Agent 的系统汇报与工作者汇报都照常记录，指派只是记录（列表、概览与自动关闭依据它）。
-- 未关闭上限在常规使用中能自行恢复，但只限全部 Agent 已归档的工单；仍有未归档 Agent 而工作已结束的工单仍要 Bot 或用户关闭。
+- 未关闭上限在常规使用中能自行恢复，但只限全部 Agent 已归档的工单与超过 1 小时仍没有任何 Agent 的遗留工单；
+  仍有未归档 Agent 而工作已结束的工单仍要 Bot 或用户关闭。
 
 ## 验证
 
@@ -458,6 +478,10 @@ Agent 创建失败不留工单，`ticketId` 为同一工单加 Agent、已关闭
 分离执行持有许可直到结束、卡住的创建在自身上限时被丢弃并释放许可（`api::mcp::bounded`）；工作者凭据只在追加式适配器上预授权 `report_progress`、
 保留用户的预授权与 `allowedTools`、不改持久记录（`crates/provider/runtime`），经离线 Claude 得到 `--allowedTools=Read,mcp__ait__report_progress`（`crates/provider/claude`），
 经离线 Codex 的工作者 `ait` 配置不含 `enabled_tools` 等（`crates/provider/codex`），不具备该能力的 Pi、OpenCode、MiniMax、DSH 照常启动工作者（共享的 `provider::testing::agent_mcp::verify`）。
+2026-11-18 的修订覆盖：`Ticket::orphaned` 的宽限期边界，以及备注不算、指派、Agent 汇报与关闭都排除（`crates/domain`）；
+Bot 只删除仍为遗留的工单、不写通知日志、不唤醒，并空出名额（`crates/bot`）；`crates/api` 按状态、指派与年龄选出候选（单元测试），
+已有的真实服务测试仍证明未过宽限期的无 Agent 工单在上限时不被删除。超过宽限期的工单在真实服务中被删除没有端到端测试：
+该测试夹具不能在不重启 Bot 服务的情况下让工单变旧。
 
 ## Test coverage
 

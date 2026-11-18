@@ -1,10 +1,13 @@
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use bot::mcp::Scopes;
 use bot::ports::{Credentials, Executor};
 use bot::service::{Bots, Dependencies};
+use chrono::{DateTime, Utc};
 use domain::ConversationId;
 use domain::bot::{BOT_CONVERSATION_LABEL, BOT_SCOPE_LABEL, SessionOwner};
+use domain::schedule::Schedule;
 use filesystem::forge::local::forge::LocalForge;
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use filesystem::git::local::worktrees::LocalManagedWorktrees;
@@ -18,17 +21,24 @@ use schedule::service::Schedules;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 
-use super::{AgentRpc, AgentRunner, REVOKED, available_agent};
-use crate::host::notifications::Notifier;
+use super::{AgentRpc, AgentRunner, REVOKED, available_agent, recover_interrupted, settle};
+use crate::host::notifications::{Notifier, SCHEDULE_RUN_ENDED_LABEL};
 
 const AGENT: &str = "11111111-1111-4111-8111-111111111111";
 
 /// Agent RPCs answered as an idle Agent that finishes every prompt, recording each call.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Recorded {
     calls: Mutex<Vec<(String, Value)>>,
     /// Workspace of the existing heartbeat target Agent.
     workspace: String,
+    /// Whether every prompt stops at a permission request instead of finishing.
+    asks_permission: AtomicBool,
+    /// Whether a turn was cancelled; its end is then reported after `turn_end_delay` waits.
+    cancelled: AtomicBool,
+    /// Completion waits after a cancellation that still report the cancelled turn running, as
+    /// adapters whose turn end arrives asynchronously do.
+    turn_end_delay: AtomicUsize,
 }
 
 #[async_trait::async_trait]
@@ -44,6 +54,24 @@ impl AgentRpc for Recorded {
             "agent.get.request" => json!({"agent":{"id":AGENT,"archivedAt":null,
                 "workspaceId":self.workspace}}),
             "agent.message.send.request" => json!({"accepted":true}),
+            "agent.cancel.request" => {
+                self.cancelled.store(true, Ordering::Relaxed);
+                json!({})
+            }
+            "agent.finish.wait.request"
+                if self.cancelled.load(Ordering::Relaxed)
+                    && self
+                        .turn_end_delay
+                        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                            left.checked_sub(1)
+                        })
+                        .is_ok() =>
+            {
+                json!({"status":"running","final":{"status":"running"}})
+            }
+            "agent.finish.wait.request" if self.asks_permission.load(Ordering::Relaxed) => {
+                json!({"status":"permission","final":{"pendingPermissions":[{"id":"p"}]}})
+            }
             "agent.finish.wait.request" => json!({"status":"idle","lastMessage":"done"}),
             _ => json!({}),
         })
@@ -80,6 +108,27 @@ impl Credentials for Idle {
     }
 }
 
+/// A Workspace directory over registries stored in `data`, with those registries.
+fn directory(
+    data: &std::path::Path,
+) -> (
+    Directory,
+    FileBackedProjectRegistry,
+    FileBackedWorkspaceRegistry,
+) {
+    let projects = FileBackedProjectRegistry::new(data.join("projects.json"));
+    let workspaces = FileBackedWorkspaceRegistry::new(data.join("workspaces.json"));
+    let directory = Directory::new(DirectoryDependencies {
+        projects: Box::new(projects.clone()),
+        workspaces: Box::new(workspaces.clone()),
+        source: Box::new(LocalDirectorySource),
+        config_store: Box::new(LocalProjectConfigStore),
+        icon_store: Box::new(LocalProjectIconStore::new(data.join("icons"))),
+        server_id: "test-server".into(),
+    });
+    (directory, projects, workspaces)
+}
+
 /// A schedule worker running through `AgentRunner` in one Workspace with a Workspace Bot.
 struct Fixture {
     agents: Arc<Recorded>,
@@ -97,16 +146,7 @@ impl Fixture {
         for directory in [&data, &cwd] {
             std::fs::create_dir_all(directory).unwrap();
         }
-        let projects = FileBackedProjectRegistry::new(data.join("projects.json"));
-        let workspaces = FileBackedWorkspaceRegistry::new(data.join("workspaces.json"));
-        let directory = Directory::new(DirectoryDependencies {
-            projects: Box::new(projects.clone()),
-            workspaces: Box::new(workspaces.clone()),
-            source: Box::new(LocalDirectorySource),
-            config_store: Box::new(LocalProjectConfigStore),
-            icon_store: Box::new(LocalProjectIconStore::new(data.join("icons"))),
-            server_id: "test-server".into(),
-        });
+        let (directory, projects, workspaces) = directory(&data);
         let workspace = directory
             .open_workspace(cwd.to_str().unwrap(), "2026-11-06T00:00:00Z")
             .unwrap()
@@ -122,8 +162,8 @@ impl Fixture {
         })
         .unwrap();
         let agents = Arc::new(Recorded {
-            calls: Mutex::default(),
             workspace: workspace.clone(),
+            ..Recorded::default()
         });
         let worktrees = Worktrees::new(
             Box::new(projects),
@@ -406,4 +446,163 @@ async fn each_bot_schedule_run_notifies_its_conversation_once() {
     );
     assert_eq!(logged[1]["notification"]["agentId"], AGENT);
     fixture.stop().await;
+}
+
+/// Index of the last recorded call of `method`.
+fn last_call(agents: &Recorded, method: &str) -> usize {
+    agents
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .rposition(|(called, _)| called == method)
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_kept_schedule_agent_is_marked_with_the_time_its_run_ended() {
+    let fixture = Fixture::start();
+    let kept = json!({"type":"new-agent","config":{"provider":"codex","archiveOnFinish":false}});
+    let task = fixture.schedule(kept, false).await;
+    let before = Utc::now();
+    let (run, _) = fixture.run(&task).await;
+
+    let updates = fixture.agents.calls("agent.update.request");
+    assert_eq!(updates.len(), 1, "{updates:?}");
+    assert_eq!(updates[0]["agentId"], AGENT);
+    let ended: DateTime<Utc> = updates[0]["labels"][SCHEDULE_RUN_ENDED_LABEL]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let settled: DateTime<Utc> = run["endedAt"].as_str().unwrap().parse().unwrap();
+    assert!(before - chrono::TimeDelta::milliseconds(1) <= ended && ended <= settled);
+    assert!(
+        last_call(&fixture.agents, "agent.finish.wait.request")
+            < last_call(&fixture.agents, "agent.update.request"),
+        "marked only after the run's turn ended"
+    );
+    assert!(fixture.agents.calls("agent.archive.request").is_empty());
+
+    // A permission request fails the run; the Agent is marked only after its turn is cancelled.
+    fixture
+        .agents
+        .asks_permission
+        .store(true, Ordering::Relaxed);
+    let (failed, _) = fixture.run(&task).await;
+    assert_eq!(failed["error"], "Scheduled agent is waiting for permission");
+    assert_eq!(fixture.agents.calls("agent.update.request").len(), 2);
+    assert!(
+        last_call(&fixture.agents, "agent.cancel.request")
+            < last_call(&fixture.agents, "agent.update.request")
+    );
+    fixture
+        .agents
+        .asks_permission
+        .store(false, Ordering::Relaxed);
+
+    // An archived run Agent needs no marker.
+    let archived = fixture.schedule(codex(None), false).await;
+    fixture.run(&archived).await;
+    assert_eq!(fixture.agents.calls("agent.update.request").len(), 2);
+    assert_eq!(fixture.agents.calls("agent.archive.request").len(), 1);
+    fixture.stop().await;
+}
+
+#[test]
+fn recovery_marks_the_kept_agent_of_an_interrupted_run_as_ended() {
+    let root = tempfile::tempdir().unwrap();
+    let (directory, _, _) = directory(root.path());
+    let schedule = |id: &str, config: Value, agent: &str| -> Schedule {
+        serde_json::from_value(json!({
+            "id":id,"workspaceId":"wks_0123456789abcdef","prompt":"report",
+            "cadence":{"type":"cron","expression":"0 9 * * *"},
+            "target":{"type":"new-agent","config":config},"status":"active",
+            "createdAt":"2026-11-12T00:00:00Z","updatedAt":"2026-11-12T00:00:00Z",
+            "nextRunAt":null,"lastRunAt":null,"pausedAt":null,"expiresAt":null,"maxRuns":null,
+            "runs":[{"id":"run","scheduledFor":"2026-11-12T08:00:00Z",
+                "startedAt":"2026-11-12T08:00:00Z","endedAt":null,"status":"running",
+                "agentId":agent,"workspaceId":null,"output":null,"error":null}]}))
+        .unwrap()
+    };
+    let schedules = [
+        schedule(
+            "kept",
+            json!({"provider":"codex","archiveOnFinish":false}),
+            AGENT,
+        ),
+        schedule("archived", json!({"provider":"codex"}), "archived-agent"),
+    ];
+    let agents = Recorded::default();
+    let before = Utc::now();
+
+    recover_interrupted(&schedules, &agents, &directory).unwrap();
+
+    let updates = agents.calls("agent.update.request");
+    assert_eq!(updates.len(), 1, "{updates:?}");
+    assert_eq!(updates[0]["agentId"], AGENT);
+    let ended: DateTime<Utc> = updates[0]["labels"][SCHEDULE_RUN_ENDED_LABEL]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(before - chrono::TimeDelta::milliseconds(1) <= ended && ended <= Utc::now());
+    let archived = agents.calls("agent.archive.request");
+    assert_eq!(archived, [json!({"agentId":"archived-agent"})]);
+}
+
+#[tokio::test]
+async fn a_kept_agent_is_marked_only_after_its_cancelled_turn_has_ended() {
+    let fixture = Fixture::start();
+    fixture
+        .agents
+        .asks_permission
+        .store(true, Ordering::Relaxed);
+    fixture.agents.turn_end_delay.store(1, Ordering::Relaxed);
+    let kept = json!({"type":"new-agent","config":{"provider":"codex","archiveOnFinish":false}});
+    let task = fixture.schedule(kept, false).await;
+
+    let (failed, _) = fixture.run(&task).await;
+
+    assert_eq!(failed["error"], "Scheduled agent is waiting for permission");
+    let calls: Vec<String> = fixture
+        .agents
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(method, _)| method.clone())
+        .collect();
+    let cancel = calls
+        .iter()
+        .position(|method| method == "agent.cancel.request")
+        .unwrap();
+    let after: Vec<&str> = calls[cancel + 1..].iter().map(String::as_str).collect();
+    // One wait still sees the cancelled turn running; the next sees it ended, then the marker.
+    assert_eq!(
+        after,
+        [
+            "agent.finish.wait.request",
+            "agent.finish.wait.request",
+            "agent.update.request"
+        ]
+    );
+    assert_eq!(fixture.agents.turn_end_delay.load(Ordering::Relaxed), 0);
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn waiting_for_a_cancelled_turn_gives_up_at_its_limit() {
+    let agents = Recorded {
+        cancelled: AtomicBool::new(true),
+        turn_end_delay: AtomicUsize::new(usize::MAX),
+        ..Recorded::default()
+    };
+
+    let settled = settle(&agents, AGENT, std::time::Duration::from_millis(100)).await;
+
+    assert!(!settled);
+    assert!(!agents.calls("agent.finish.wait.request").is_empty());
+    agents.turn_end_delay.store(0, Ordering::Relaxed);
+    assert!(settle(&agents, AGENT, std::time::Duration::from_millis(100)).await);
 }

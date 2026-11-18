@@ -6,9 +6,10 @@ use bot::service::Bots;
 use bot::tickets::{
     AssignTicket, OPEN_LIMIT_MESSAGE, OpenTicket, OpenedTicket, PULL_LIMIT_MESSAGE, WorkerReport,
 };
+use chrono::{DateTime, Utc};
 use domain::bot::BOT_TICKET_LABEL;
 use domain::bot::ticket::{
-    ASSIGNMENT_LIMIT, TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind,
+    ASSIGNMENT_LIMIT, ORPHAN_GRACE, TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind,
 };
 use domain::{ConversationId, TicketId};
 use model::ErrorCode;
@@ -194,7 +195,8 @@ fn bots(state: &Shared) -> Result<&Bots, ErrorCode> {
 ///
 /// The ticket records the session's `conversation`; a session whose conversation the Bot no
 /// longer has opens it without one rather than failing. At the open ticket limit, the tickets
-/// whose work is evidently over are closed first and the opening is retried once.
+/// whose work is evidently over are closed, and those a crash left without an Agent removed,
+/// first, and the opening is retried once.
 /// # Errors
 /// Returns the open-ticket limit refusal and other Bot failures.
 async fn open(
@@ -231,7 +233,7 @@ async fn open(
         other => other,
     };
     let opened = match opened {
-        Err(ErrorCode::ResourceExhausted) if close_finished(state, bots, &request.root).await => {
+        Err(ErrorCode::ResourceExhausted) if free_open_slots(state, bots, &request.root).await => {
             bots.open_ticket(request).await
         }
         other => other,
@@ -242,12 +244,18 @@ async fn open(
     }
 }
 
-/// Close `root`'s open or waiting tickets whose work is evidently over: tickets with at least
-/// one Agent, none of which is still unarchived according to a complete read of the Agent
-/// directory; a waiting ticket's block or permission request then has nobody left to answer it.
-/// Runs only at the open ticket limit; a read that fails or is incomplete closes nothing.
-/// Returns whether any ticket was closed.
-async fn close_finished(state: &Shared, bots: &Bots, root: &str) -> bool {
+/// Free open ticket slots of `root`'s Bot by settling the tickets a [`leftover`] read of the
+/// open tickets finds, each only after a complete read of the Agent directory:
+///
+/// - [`Leftover::Finished`] tickets are closed when no unarchived Agent carries their label; a
+///   waiting ticket's block or permission request then has nobody left to answer it.
+/// - [`Leftover::Orphaned`] tickets are removed when no Agent at all, archived included,
+///   carries their label: a crash between opening the ticket and creating its first Agent left
+///   them, and an Agent can carry the label before it is assigned.
+///
+/// Runs only at the open ticket limit; a read that fails or is incomplete settles nothing, and
+/// nothing wakes the Bot. Returns whether any slot was freed.
+async fn free_open_slots(state: &Shared, bots: &Bots, root: &str) -> bool {
     let listed = rpc::execute(
         state,
         "bot.ticket.list.request",
@@ -257,41 +265,69 @@ async fn close_finished(state: &Shared, bots: &Bots, root: &str) -> bool {
     let Ok(listed) = listed else {
         return false;
     };
-    let mut closed = false;
-    let candidates = listed["tickets"]
+    let now = Utc::now();
+    let mut freed = false;
+    let leftovers = listed["tickets"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|ticket| {
-            matches!(ticket["status"].as_str(), Some("open" | "waiting"))
-                && ticket["assignments"]
-                    .as_array()
-                    .is_some_and(|assignments| !assignments.is_empty())
-        });
-    for ticket in candidates {
-        let Some(id) = ticket["id"]
-            .as_str()
-            .and_then(|id| id.parse::<TicketId>().ok())
-        else {
-            continue;
-        };
-        if !agents_archived(state, id).await {
+        .filter_map(|ticket| leftover(ticket, now));
+    for (id, kind) in leftovers {
+        let orphaned = kind == Leftover::Orphaned;
+        if !unlabelled(state, id, orphaned).await {
             continue;
         }
-        match bots.close_finished_ticket(root.to_owned(), id).await {
-            Ok(status) => closed |= status.is_some(),
-            Err(error) => tracing::warn!(?error, %id, "finished ticket was not closed"),
+        let settled = if orphaned {
+            bots.remove_orphaned_ticket(root.to_owned(), id).await
+        } else {
+            bots.close_finished_ticket(root.to_owned(), id)
+                .await
+                .map(|status| status.is_some())
+        };
+        match settled {
+            Ok(done) => freed |= done,
+            Err(error) => tracing::warn!(?error, %id, "leftover ticket was not settled"),
         }
     }
-    closed
+    freed
 }
 
-/// Whether no unarchived Agent carries `ticket`'s label, from a complete directory read.
-async fn agents_archived(state: &Shared, ticket: TicketId) -> bool {
+/// An unclosed ticket that may hold an open slot for nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Leftover {
+    /// It has Agents, which may all be archived.
+    Finished,
+    /// It has had no Agent for at least [`ORPHAN_GRACE`].
+    Orphaned,
+}
+
+/// What listed `ticket` may be at `now`: an open or waiting ticket with assignments is
+/// [`Leftover::Finished`] once its Agents are gone, and one without is [`Leftover::Orphaned`]
+/// once it is older than [`ORPHAN_GRACE`], before which its first Agent may still be on the
+/// way. The Bot checks again before it changes anything.
+fn leftover(ticket: &Value, now: DateTime<Utc>) -> Option<(TicketId, Leftover)> {
+    if !matches!(ticket["status"].as_str(), Some("open" | "waiting")) {
+        return None;
+    }
+    let id = ticket["id"].as_str()?.parse().ok()?;
+    if ticket["assignments"]
+        .as_array()
+        .is_some_and(|assignments| !assignments.is_empty())
+    {
+        return Some((id, Leftover::Finished));
+    }
+    let created: DateTime<Utc> = serde_json::from_value(ticket["createdAt"].clone()).ok()?;
+    (created + ORPHAN_GRACE <= now).then_some((id, Leftover::Orphaned))
+}
+
+/// Whether no Agent carries `ticket`'s label, from a complete directory read; archived Agents
+/// count only when `archived` is set.
+async fn unlabelled(state: &Shared, ticket: TicketId, archived: bool) -> bool {
     let page = rpc::execute(
         state,
         "agent.list.request",
-        json!({"filter":{"labels":{BOT_TICKET_LABEL:ticket}},"page":{"limit":1}}),
+        json!({"filter":{"labels":{BOT_TICKET_LABEL:ticket},"includeArchived":archived},
+            "page":{"limit":1}}),
     )
     .await;
     page.is_ok_and(|page| {
@@ -361,7 +397,8 @@ async fn originated(state: &Shared, scope: &Scope, ticket: &Value) -> Result<(),
 }
 
 /// Delete the ticket this call opened for an Agent that could not be created; a failure only
-/// leaves an open ticket without Agents, which the Bot or the user can close.
+/// leaves an open ticket without Agents, which the Bot or the user can close and which the
+/// open ticket limit removes once it is orphaned.
 async fn abandon(bots: &Bots, root: &str, ticket: TicketId) {
     if let Err(error) = bots.abandon_ticket(root.to_owned(), ticket).await {
         tracing::warn!(?error, %ticket, "ticket of an Agent that was not created was kept");
@@ -471,10 +508,10 @@ async fn report(
 
 /// Before a Bot session's `send_agent_prompt` reaches confined Agent `arguments.agentId`,
 /// reopen that Agent's closed ticket, so its reports on the new work are recorded. At the open
-/// ticket limit the tickets whose work is evidently over are closed first and the reopen is
-/// retried once. Best effort: the prompt goes through either way, and a ticket reopened for a
-/// prompt that then fails stays open. Returns a note for the Bot when the ticket stays closed
-/// because of the limit.
+/// ticket limit open slots are freed as for opening a ticket and the reopen is retried once.
+/// Best effort: the prompt goes through either way, and a ticket reopened for a prompt that
+/// then fails stays open. Returns a note for the Bot when the ticket stays closed because of
+/// the limit.
 pub(super) async fn reopen_for_prompt(
     state: &Shared,
     scope: &Scope,
@@ -493,7 +530,7 @@ pub(super) async fn reopen_for_prompt(
     let root = &scope.caller.root;
     let reopen = || bots.reopen_ticket(root.clone(), ticket, agent.to_owned());
     let reopened = match reopen().await {
-        Err(ErrorCode::ResourceExhausted) if close_finished(state, bots, root).await => {
+        Err(ErrorCode::ResourceExhausted) if free_open_slots(state, bots, root).await => {
             reopen().await
         }
         other => other,

@@ -1,7 +1,9 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use domain::bot::Turn;
 use domain::bot::notification::{Notification, NotificationKind};
-use domain::bot::ticket::{TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind};
+use domain::bot::ticket::{
+    ORPHAN_GRACE, TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind,
+};
 use domain::{ConversationId, TicketId};
 use model::ErrorCode;
 use model::bot::Store;
@@ -335,6 +337,77 @@ fn abandoning_deletes_only_a_ticket_without_assignments() {
     assert_eq!(listed[0]["id"], json!(kept));
     assert_eq!(
         state.abandon_ticket(WORKSPACE, failed),
+        Err(ErrorCode::BotNotFound)
+    );
+}
+
+#[test]
+fn ait_removes_an_orphaned_ticket_without_waking_the_bot_and_frees_its_slot() {
+    let fixture = Fixture::new();
+    let mut state = active(&fixture);
+    let conversation = owner(&mut state);
+    let long_ago = Utc::now() - ORPHAN_GRACE - TimeDelta::seconds(1);
+    let mut open = |key: &str, at: DateTime<Utc>| {
+        state
+            .open_ticket(request(key, Some(conversation)), at)
+            .unwrap()
+            .ticket_id
+    };
+    let orphan = open("orphan", long_ago);
+    let young = open("young", Utc::now());
+    let assigned = open("assigned", long_ago);
+    let heard = open("heard", long_ago);
+    for index in 0..28 {
+        open(&format!("fill-{index}"), Utc::now());
+    }
+    state
+        .assign_ticket(&assignment(assigned, "agent-1"), Utc::now())
+        .unwrap();
+    // A labelled Agent that was never assigned left a report on its ticket.
+    state
+        .notify(
+            labelled("finished", NotificationKind::AgentFinished, heard),
+            Utc::now(),
+        )
+        .unwrap();
+    assert_eq!(
+        state.open_ticket(request("33", None), Utc::now()),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    let logged = |state: &mut State| {
+        state
+            .execute(
+                "bot.notifications.list.request",
+                json!({"workspaceId":WORKSPACE}),
+            )
+            .unwrap()["headSequence"]
+            .clone()
+    };
+    let before = logged(&mut state);
+
+    for kept in [young, assigned, heard] {
+        assert_eq!(
+            state.remove_orphaned_ticket(WORKSPACE, kept, Utc::now()),
+            Ok(false)
+        );
+    }
+    assert_eq!(
+        state.remove_orphaned_ticket(WORKSPACE, orphan, Utc::now()),
+        Ok(true)
+    );
+
+    let listed = list(&state, &json!({"includeClosed":true}));
+    assert!(listed.iter().all(|ticket| ticket["id"] != json!(orphan)));
+    assert_eq!(listed.len(), 31);
+    let files = std::fs::read_dir(tickets_dir(&fixture))
+        .unwrap()
+        .map(|bot| bot.unwrap().path().join(format!("{orphan}.json")));
+    assert!(files.into_iter().all(|file| !file.exists()));
+    assert_eq!(logged(&mut state), before, "nothing is notified");
+    assert!(wake_turns(&fixture).is_empty());
+    assert!(state.open_ticket(request("33", None), Utc::now()).is_ok());
+    assert_eq!(
+        state.remove_orphaned_ticket(WORKSPACE, orphan, Utc::now()),
         Err(ErrorCode::BotNotFound)
     );
 }

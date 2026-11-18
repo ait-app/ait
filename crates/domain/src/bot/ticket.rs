@@ -4,12 +4,10 @@
 //! These records are new, so they accept unknown fields: a later daemon can extend them without
 //! making an earlier one refuse the Bot store.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeSet;
-
-use chrono::TimeDelta;
 
 use crate::bot::follow::{
     BoundBy, Delivery, Lookups, PULL_LIMIT, PullBinding, PullEvent, bot_title, data, outside_text,
@@ -49,6 +47,10 @@ const DELIVERY_FAILURE_LIMIT: u32 = 8;
 /// and with no busy reply between, before it goes to the Bot; comfortably longer than a
 /// provider restart (ADR-287).
 const DELIVERY_FAILURE_WINDOW: TimeDelta = TimeDelta::minutes(10);
+/// How long an unclosed ticket without assignments may wait for its first Agent before Ait may
+/// remove it as left behind by a crash (ADR-274 section 6): well past the five minutes a
+/// detached scoped `create_agent` may take between opening the ticket and creating the Agent.
+pub const ORPHAN_GRACE: TimeDelta = TimeDelta::hours(1);
 
 /// Where a ticket stands; `done`, `failed` and `cancelled` are closed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -736,6 +738,19 @@ impl Ticket {
                 .filter(|report| report.source == ReportSource::Agent)
                 .filter_map(|report| report.agent_id.as_deref())
                 .all(|agent| done(latest(agent)))
+    }
+
+    /// Whether this ticket, at `at`, looks like what a crash between opening it and creating
+    /// its first Agent leaves behind: unclosed, without assignments, without any report about
+    /// an Agent, and opened at least [`ORPHAN_GRACE`] ago. Bot notes and status changes are no
+    /// sign of an Agent. An Agent can carry the ticket's label before it is assigned, so the
+    /// caller must also know that no Agent, archived or not, carries it.
+    #[must_use]
+    pub fn orphaned(&self, at: DateTime<Utc>) -> bool {
+        !self.status.is_closed()
+            && self.assignments.is_empty()
+            && self.reports.iter().all(|report| report.agent_id.is_none())
+            && self.created_at + ORPHAN_GRACE <= at
     }
 
     /// Reopen this closed ticket on Ait's behalf at `at`, recording `reason` as a system

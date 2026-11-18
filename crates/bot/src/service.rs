@@ -181,6 +181,7 @@ enum TicketOperation {
     Report(WorkerReport),
     Update(String, TicketId, TicketUpdate),
     CloseFinished(String, TicketId),
+    RemoveOrphaned(String, TicketId),
     Reopen(String, TicketId, String),
 }
 /// Outcome of channel input that the Bot did not refuse.
@@ -636,6 +637,26 @@ impl Bots {
     ) -> Result<Option<TicketStatus>, ErrorCode> {
         decode(
             self.ticket(TicketOperation::CloseFinished(root, ticket))
+                .await?,
+        )
+    }
+
+    /// Delete a ticket of the Bot of `root` on Ait's behalf because a crash left it without
+    /// its first Agent: it is unclosed, has no assignment and no report about an Agent, was
+    /// opened at least [`domain::bot::ticket::ORPHAN_GRACE`] ago, and the caller found no
+    /// Agent, archived or not, carrying its label in a complete read of the Agent directory.
+    /// Nothing is notified. Returns whether it was deleted; `false` when it no longer
+    /// qualifies.
+    /// # Errors
+    /// Returns `BotNotFound` for a ticket of another Bot, `BotConflict` when the Bot is not
+    /// active, and persistence or lifecycle failures.
+    pub async fn remove_orphaned_ticket(
+        &self,
+        root: String,
+        ticket: TicketId,
+    ) -> Result<bool, ErrorCode> {
+        decode(
+            self.ticket(TicketOperation::RemoveOrphaned(root, ticket))
                 .await?,
         )
     }
@@ -1161,6 +1182,9 @@ fn apply_ticket(state: &mut State, operation: TicketOperation) -> Result<Value, 
             serde_json::to_value(state.close_finished_ticket(&root, ticket, now)?)
                 .map_err(|_| ErrorCode::BotIo)
         }
+        TicketOperation::RemoveOrphaned(root, ticket) => state
+            .remove_orphaned_ticket(&root, ticket, now)
+            .map(Value::Bool),
         TicketOperation::Reopen(root, ticket, agent) => state
             .reopen_ticket(&root, ticket, &agent, now)
             .map(Value::Bool),

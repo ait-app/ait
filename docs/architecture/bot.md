@@ -95,7 +95,10 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   调用者不能自行提供或修改二者（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
 - 事件源：daemon 订阅 `SessionEvents::subscribe_committed_attention()`（焦点与中心投递之前的全部 attention），
   按 Agent 当前记录生成 `agent:<agentId>:<timestamp>` 通知，跳过内部会话、已归档、被更新 attention 取代、无 Workspace，
-  以及定时任务运行创建的 Agent 的全部 attention（含等待审批）；终端 attention 生成 `terminal:<terminalId>:<毫秒>`，只在 `wakeScope: all` 时唤醒。
+  以及定时任务运行自身的 attention（含等待审批）：带 `paseo.schedule-run` 的 Agent 在运行结束标记 `paseo.schedule-run-ended` 之前或同时的 attention，
+  未标记时为全部。`archiveOnFinish: false` 保留的 Agent 由运行器在 Agent 不再执行一轮之后写入该标记（运行失败时先等至多 20 秒、关闭时 5 秒，
+  到期仍写入并记日志；恢复中断的运行时在启动时写入），之后的轮次照常通知；
+  终端 attention 生成 `terminal:<terminalId>:<毫秒>`，只在 `wakeScope: all` 时唤醒。
   每次定时任务运行结算（含创建 Agent 前的失败与重启中断）经 `schedule::ports::Runner::settled` 生成一条 `schedule:<scheduleId>:<runId>` 通知，
   心跳（已有 Agent 目标）的成功运行除外；通知经 `Bots::offer` 提交
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
@@ -122,7 +125,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   作用域 `create_agent` 打开工单达到上限时，先关闭全部 Agent 已归档（按 `ait.bot.ticket` 标签完整读取未归档 Agent 目录为空）且有指派的 `open` 或 `waiting` 工单
   （`Bots::close_finished_ticket`，系统来源：`open` 工单只在最近一次重新打开之后，每个被指派的 Agent 与其间汇报过的工作者最近一条都是 `done` 时为 `done`，
   否则 `cancelled`；`waiting` 工单无人能再回答，一律 `cancelled`；仍有打开 PR 的工单一律 `done`，以继续跟随该 PR；结论说明自动关闭的原因），
-  再重试一次；读取失败或不完整时不关闭。
+  并删除崩溃留下的遗留工单（未关闭、没有指派、`createdAt` 早于 `ORPHAN_GRACE` 即 1 小时，且含已归档在内没有任何 Agent 带其标签；
+  `Bots::remove_orphaned_ticket` 再检查没有关于 Agent 的汇报，不通知、不唤醒），再重试一次；读取失败或不完整时不关闭也不删除。
   仍无空位时返回 `ResourceExhausted`（工具错误 `bot::tickets::OPEN_LIMIT_MESSAGE`，说明应关闭哪类工单）；
   Bot 与用户的重新打开到上限不做自动关闭（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 1、2 节）。
 - 状态为 `open`、`waiting`、`done`、`failed`、`cancelled`。Agent 等待审批使 `open` 进入 `waiting(permission)`，由该 Agent 完成或失败一轮结束。

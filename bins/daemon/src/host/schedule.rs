@@ -23,10 +23,15 @@ use schedule::service::Schedules;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
-use super::notifications::{Notifier, schedule_notification};
+use super::notifications::{Notifier, SCHEDULE_RUN_ENDED_LABEL, schedule_notification};
 
 /// Upper bound for one completion wait; pending permissions are re-checked after each wait.
 const FINISH_WAIT_MS: u64 = 1_000;
+/// Longest wait for a kept Agent's turn to end after an occurrence failed, before the Agent is
+/// marked ended anyway (ADR-271 section 13).
+const SETTLE_LIMIT: Duration = Duration::from_secs(20);
+/// [`SETTLE_LIMIT`] while the daemon shuts down, inside its 15-second shutdown deadline.
+const SHUTDOWN_SETTLE_LIMIT: Duration = Duration::from_secs(5);
 /// Failure of an occurrence whose Bot no longer grants its schedule; the task stays active.
 const REVOKED: &str = "Workspace Bot permissions no longer allow this schedule";
 
@@ -95,7 +100,8 @@ pub(super) fn compose(
     )
     .context("start schedule worker")
 }
-/// Clean up resources owned by occurrences that were running when the daemon stopped.
+/// Clean up resources owned by occurrences that were running when the daemon stopped, and
+/// mark the Agents such occurrences keep as ended (see [`mark_run_ended`]).
 ///
 /// Cleanup is best effort: an Agent or Workspace that is already gone counts as recovered, and
 /// other failures are logged so a stale run record can never prevent the daemon from starting.
@@ -103,7 +109,7 @@ pub(super) fn compose(
 /// Returns an error only when the recovery runtime cannot be created.
 fn recover_interrupted(
     schedules: &[Schedule],
-    execution: &AgentExecution,
+    execution: &dyn AgentRpc,
     directory: &Directory,
 ) -> anyhow::Result<()> {
     let interrupted = schedules
@@ -116,16 +122,14 @@ fn recover_interrupted(
             schedule
                 .runs
                 .iter()
-                .filter(move |run| {
-                    run.status == RunStatus::Running
-                        && (run.agent_id.is_none() || config["archiveOnFinish"] != false)
-                })
+                .filter(|run| run.status == RunStatus::Running)
                 .map(move |run| {
+                    let kept = kept_agent(config, run.agent_id.as_deref());
                     let workspace = run
                         .workspace_id
                         .as_deref()
-                        .filter(|_| schedule.workspace_id.is_none());
-                    (run.agent_id.as_deref(), workspace)
+                        .filter(|_| kept.is_none() && schedule.workspace_id.is_none());
+                    (run.agent_id.as_deref(), kept, workspace)
                 })
         })
         .collect::<Vec<_>>();
@@ -137,10 +141,13 @@ fn recover_interrupted(
         .enable_all()
         .build()
         .context("start scheduled run recovery")?;
-    let archived_at = chrono::Utc::now().to_rfc3339();
-    for (agent, workspace) in interrupted {
-        if let Some(id) = agent {
-            runtime.block_on(archive_agent(execution, id));
+    let now = chrono::Utc::now();
+    let archived_at = now.to_rfc3339();
+    for (agent, kept, workspace) in interrupted {
+        match (kept, agent) {
+            (Some(id), _) => runtime.block_on(mark_run_ended(execution, id, now)),
+            (None, Some(id)) => runtime.block_on(archive_agent(execution, id)),
+            (None, None) => {}
         }
         if let Some(id) = workspace
             && let Err(error) = directory.archive_workspace(id, &archived_at)
@@ -163,6 +170,81 @@ async fn archive_agent(execution: &dyn AgentRpc, id: &str) {
         }
     }
 }
+/// The Agent `agent_id` a new-Agent occurrence with `config` keeps after it ends
+/// (`archiveOnFinish: false`); `None` when the occurrence archives it or created none.
+fn kept_agent<'a>(config: &Value, agent_id: Option<&'a str>) -> Option<&'a str> {
+    agent_id.filter(|_| config["archiveOnFinish"] == false)
+}
+
+/// Mark kept Agent `id` with the time `ended_at` its schedule run ended, so attention it raises
+/// in later turns notifies the Bot again (ADR-271 section 13). A failure is logged; the Agent's
+/// attention then stays suppressed, as for the run, rather than duplicating the run result.
+/// An Agent that no longer exists refuses the update and needs no marker.
+async fn mark_run_ended(
+    execution: &dyn AgentRpc,
+    id: &str,
+    ended_at: chrono::DateTime<chrono::Utc>,
+) {
+    let ended = ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let labels = json!({ SCHEDULE_RUN_ENDED_LABEL: ended });
+    match execution
+        .execute(
+            "agent.update.request",
+            json!({"agentId":id,"labels":labels}),
+        )
+        .await
+    {
+        Ok(updated) if updated["accepted"] == false => {
+            tracing::debug!(agent_id = id, "kept scheduled agent refused its end marker");
+        }
+        Ok(_) => {}
+        Err(error) => {
+            tracing::warn!(error_code = ?error, agent_id = id, "kept scheduled agent not marked");
+        }
+    }
+}
+
+/// Wait at most `limit` until Agent `id` no longer runs a turn, so the end of a turn the
+/// occurrence cancelled, which some adapters report only after the cancellation returned, is
+/// recorded with its attention before the Agent is marked ended. Returns whether the Agent
+/// settled; `false` when the limit expired or a wait failed, which is logged.
+async fn settle(execution: &dyn AgentRpc, id: &str, limit: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + limit;
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            tracing::warn!(
+                agent_id = id,
+                "kept scheduled agent still runs; marking it ended"
+            );
+            return false;
+        }
+        let timeout = u64::try_from(remaining.as_millis()).map_or(FINISH_WAIT_MS, |remaining| {
+            remaining.clamp(1, FINISH_WAIT_MS)
+        });
+        let waited = execution
+            .execute(
+                "agent.finish.wait.request",
+                json!({"agentId":id,"timeoutMs":timeout}),
+            )
+            .await;
+        match waited.as_ref().map(|waited| waited["status"].as_str()) {
+            // A timed-out wait already blocked for its whole interval.
+            Ok(Some("timeout")) => {}
+            Ok(Some("running")) => tokio::time::sleep(Duration::from_millis(25)).await,
+            Ok(_) => return true,
+            Err(error) => {
+                tracing::warn!(
+                    error_code = ?error,
+                    agent_id = id,
+                    "kept scheduled agent wait failed"
+                );
+                return false;
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl Runner for AgentRunner {
     async fn resolve(
@@ -216,9 +298,22 @@ impl Runner for AgentRunner {
         if let Err(error) = result {
             outcome.error = Some(error.to_owned());
         }
-        if let Target::NewAgent { config } = &schedule.target
-            && (outcome.agent_id.is_none() || config["archiveOnFinish"] != false)
-        {
+        let Target::NewAgent { config } = &schedule.target else {
+            return outcome;
+        };
+        if let Some(id) = kept_agent(config, outcome.agent_id.as_deref()) {
+            // A succeeded run saw its turn end; a failed one may have cancelled a turn whose end
+            // is still on its way, so wait for it before marking.
+            if outcome.error.is_some() {
+                let limit = if cancel.is_cancelled() {
+                    SHUTDOWN_SETTLE_LIMIT
+                } else {
+                    SETTLE_LIMIT
+                };
+                settle(self.execution.as_ref(), id, limit).await;
+            }
+            mark_run_ended(self.execution.as_ref(), id, chrono::Utc::now()).await;
+        } else {
             if let Some(id) = &outcome.agent_id {
                 archive_agent(self.execution.as_ref(), id).await;
             }

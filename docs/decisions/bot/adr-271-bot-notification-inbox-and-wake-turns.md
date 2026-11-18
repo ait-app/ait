@@ -31,6 +31,7 @@ paths:
 - 状态说明：接受。本 ADR 落地 Bot 能力内的收件箱、唤醒与路由（工作包 A）与 daemon 事件源接线（工作包 B，第 13 节）；客户端协议、展示与唤醒范围设置（工作包 C）按本文契约实现，规则见 [Bot 规格](../../architecture/bot.md#访客与客户端契约)。
   合入前的修复轮修订了第 2–5、11–13 节并新增第 14 节：已观察的 Agent 不再重复唤醒、卡住的目标不再占满收件箱、被重启打断的唤醒轮次重试、
   关闭与重启时的定时任务结果不再丢失、去重覆盖重放窗口，以及心跳与定时任务 Agent 的审批请求不再重复通知。
+  2026-11-18 修订第 13 节：定时任务运行保留的 Agent（`archiveOnFinish: false`）只跳过运行自身的 attention，之后的轮次照常通知。
 - 关系：实现[管理者重设计](../../plans/workspace-bot-manager.md)阶段 4“通知与唤醒”；扩展 [ADR-213](adr-213-single-workspace-manager-bot.md) 的生命周期与 v2 方法、
   [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 第 3 节的保留标签与 `botScope`、[ADR-227](adr-227-bot-multi-message-output.md) 的轮次记录。
 
@@ -186,10 +187,26 @@ Bot 存储加载失败，daemon 启动报错 `start Bot service`。新字段在�
   在焦点判断与中心投递之前收到每个已提交的 attention 事件；ADR-177 的推送通道（`subscribe_attention`）行为不变。
   daemon 的转发任务（`bins/daemon/src/host/notifications.rs`）按 Agent 当前记录生成通知，id 为 `agent:<agentId>:<事件 timestamp>`，
   `scope`、`conversationId` 取自标签，失败时 `summary` 为 `lastError`。跳过：内部会话（Bot 自身会话）、已归档、记录中已有不同 attention 时间戳（被更新的 attention 取代）、
-  没有 Workspace，以及带 `paseo.schedule-run` 的 Agent 的全部 attention（完成、失败与等待审批）：其运行结果就是通知，
+  没有 Workspace，以及定时任务运行自身产生的 attention（完成、失败与等待审批）：其运行结果就是通知，
   而运行器在该 Agent 等待审批时会取消它并使运行失败（错误为 “Scheduled agent is waiting for permission”，默认随后归档），单独的审批通知只会让用户去批准一个已归档的 Agent。
   客户端已清除的 attention（时间戳为空）仍通知。
   终端 attention 的 id 为 `terminal:<terminalId>:<接收毫秒>`，没有来源，只在 `wakeScope: all` 时唤醒。
+- **运行保留的 Agent**：运行自身的 attention 指带 `paseo.schedule-run` 的 Agent 中，时间戳不晚于运行结束标记 `paseo.schedule-run-ended`
+  （RFC 3339，毫秒）的 attention；没有该标记（运行仍在进行）或标记无法解析时为全部 attention。`archiveOnFinish: false` 的运行结束时，
+  运行器以当时时间经 `agent.update.request` 写入该标记；之后由用户或 Bot 发起的轮次照常通知。
+  Agent 的一轮结束与其 attention 在同一次注册表提交中写入，而标记只在 Agent 不再执行一轮之后写入：运行成功时运行器已看到这一轮结束；
+  运行失败时（因审批取消、关闭时取消、等待失败或更早的错误），运行器先以 `agent.finish.wait.request` 等到 Agent 不再执行
+  （至多 20 秒，daemon 关闭时至多 5 秒，以留在 15 秒的关闭期限内），因为 Codex、OpenCode、OMP 的取消在一轮结束记录之前就返回，
+  其结束（可能带仍待处理的审批或失败）随后才到达。因此只要等到了，运行自身的 attention 都不晚于标记，与转发任务先处理运行结果还是 attention 无关。
+  等待到期或失败时仍写入标记并记 `warn` 日志：其后才记录的一轮结束若产生 attention，会作为 Agent 通知送达（可能重复运行结果）。
+  选择这一边是因为不写标记会让该 Agent 以后的所有轮次都不再通知，而到期只发生在取消迟迟没有结束一轮时。
+  Agent 已不存在时 `agent.update.request` 返回 `accepted: false`，不需要标记，只记 `debug` 日志。
+  启动时恢复被中断的运行也为保留的 Agent 写入标记（恢复时刻；Agent 运行时在此之前已把中断的一轮记为失败），运行随后按下文“定时任务结果”记为中断失败。
+  标记随 Agent 记录持久化，所以 15 分钟重扫按同一规则跳过运行自身的 attention、送达之后的。
+  选择标记而不是查询定时任务存储中运行的结束时间：转发任务在定时任务服务之前启动，读取存储要跨组件且读取失败时无从判断，而标记与 attention 在同一条 Agent 记录中读取。
+  仍有的情形：标记写入失败（记 `warn` 日志）、或本版本之前已保留的 Agent 没有标记时，其 attention 照旧全部跳过，宁可漏报之后的轮次也不重复运行结果；
+  Codex 在重启后续跑被中断的一轮时，续跑结束的 attention 晚于恢复标记，作为 Agent 通知送达（运行已记为中断失败，这是新的结果；来自代码阅读，没有复现）；
+  运行因 `agent.finish.wait.request` 失败而失败、且上述等待也失败或到期时同样如此：一轮仍在执行，其结束晚于标记，作为 Agent 通知送达。
 - **重放边界**：转发任务先订阅再扫描；启动时与接收方报告 `Lagged` 时扫描 Agent 注册表，只重放当前仍需 attention 且时间戳在
   `RESCAN_WINDOW = 15 min` 内的记录，依靠 Bot 侧按 id 去重。更早的 attention 不重放，因此长期等待的 Agent 不会在每次重启后再次唤醒。
 - **定时任务结果**：`schedule::ports::Runner` 新增默认空实现的 `settled(&Schedule, &Run)`，在每次运行结算写盘后调用，
@@ -243,6 +260,9 @@ Bot 会按指令用 `wait_for_agent` 等待交办的 Agent 并在同一轮次回
 且不阻塞其他对话、关闭与崩溃打断的唤醒轮次各重试一次而用户取消的不重试、关闭与启动时在每次写入后崩溃仍只重试一次、日志淘汰后的重放仍去重、
 已观察的 Agent 不唤醒且观察轮次未完成时照常唤醒（Bot 状态与经作用域 MCP 的端到端）、快照中审批请求的 attention 时间计入观察、
 停止后提交的通知在关闭前写入、启动时重报近期结束的运行、心跳与定时任务 Agent 的规则，以及 daemon 端到端测试中真实重启后的重放。
+2026-11-18 的修订由 `bins/daemon` 单元测试覆盖：保留的 Agent 在运行结束标记之前或同时的 attention 被跳过、之后的送达（含重扫），
+运行成功与因审批失败时都在运行的一轮结束或取消之后写入标记，归档的 Agent 不写，恢复被中断的运行为保留的 Agent 写入标记；
+取消后先等到一轮结束才写入标记（模拟取消后仍报告执行中一次的适配器），等待到期时放弃等待。
 按仓库规则只运行受影响 crate 的测试。
 
 ## Test coverage

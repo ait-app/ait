@@ -2,8 +2,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use serde_json::json;
 
 use super::{
-    ReportKind, ReportSource, Ticket, TicketDraft, TicketError, TicketStatus, TicketUpdate,
-    WaitReason, WorkerReportKind,
+    ORPHAN_GRACE, ReportKind, ReportSource, Ticket, TicketDraft, TicketError, TicketStatus,
+    TicketUpdate, WaitReason, WorkerReportKind,
 };
 use crate::bot::notification::{Notification, NotificationKind};
 use crate::{BotId, ConversationId, TicketId};
@@ -554,6 +554,39 @@ fn ait_cancels_a_waiting_ticket_nobody_can_answer_any_more() {
         assert_eq!(waiting.outcome.as_deref(), Some(reason));
         assert_eq!(waiting.closed_at, Some(at(2)));
     }
+}
+
+#[test]
+fn only_an_unclosed_ticket_no_agent_ever_touched_is_orphaned_after_the_grace_period() {
+    let grace = ORPHAN_GRACE.num_seconds();
+    let opened = Ticket::open(TicketId::generate(), BotId::generate(), draft(), at(0)).unwrap();
+    assert!(
+        !opened.orphaned(at(grace - 1)),
+        "its first Agent may still be on the way"
+    );
+    assert!(opened.orphaned(at(grace)));
+
+    // A Bot note or the user's status change is no sign of an Agent.
+    let mut noted = opened.clone();
+    let note = TicketUpdate {
+        note: Some("waiting for the Agent".into()),
+        ..TicketUpdate::default()
+    };
+    noted.update(ReportSource::Bot, &note, at(1)).unwrap();
+    assert!(noted.orphaned(at(grace)));
+
+    let mut assigned = opened.clone();
+    assigned.assign("agent-1", "wks_1", at(1)).unwrap();
+    assert!(!assigned.orphaned(at(grace)));
+    // An Agent carried the label without being assigned: its attention left a report.
+    let mut reported = opened.clone();
+    reported.record_notification(&event(NotificationKind::AgentFinished, "agent-1"), at(1));
+    assert!(!reported.orphaned(at(grace)));
+    let mut closed = opened;
+    closed
+        .update(ReportSource::User, &status(TicketStatus::Cancelled), at(1))
+        .unwrap();
+    assert!(!closed.orphaned(at(grace)));
 }
 
 #[test]

@@ -270,6 +270,24 @@ impl State {
         Ok(Some(status))
     }
 
+    /// Delete a ticket of `root`'s Bot that a crash left without its first Agent, on Ait's
+    /// behalf (ADR-274 section 6), when it is still [`Ticket::orphaned`] at `now`; the caller
+    /// found no Agent, archived or not, carrying its label. Deleting notifies nothing, so the
+    /// Bot is not woken. Returns whether it was deleted.
+    pub(crate) fn remove_orphaned_ticket(
+        &mut self,
+        root: &str,
+        id: TicketId,
+        now: DateTime<Utc>,
+    ) -> Result<bool, ErrorCode> {
+        let bot = self.ticket_bot(root)?;
+        if !self.load_ticket(bot, id)?.orphaned(now) {
+            return Ok(false);
+        }
+        self.delete_ticket(bot, id)?;
+        Ok(true)
+    }
+
     /// Reopen a closed ticket of `root`'s Bot because the Bot gave `agent` more work; `false`
     /// when it is not closed.
     pub(crate) fn reopen_ticket(

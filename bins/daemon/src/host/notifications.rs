@@ -25,9 +25,12 @@ use tokio::sync::broadcast;
 /// Attention older than this is never replayed, so an Agent left waiting for days does not wake
 /// the Bot again after every daemon restart; the Bot's own dedupe covers the window.
 const RESCAN_WINDOW: TimeDelta = TimeDelta::minutes(15);
-/// Label on Agents created by a schedule run; their run result is the notification instead,
-/// including for permission requests, which fail the run.
+/// Label on Agents created by a schedule run; the run result is the notification for the
+/// attention the run raised, including a permission request, which fails the run.
 const SCHEDULE_RUN_LABEL: &str = "paseo.schedule-run";
+/// Label the runner writes on an Agent its schedule run keeps (`archiveOnFinish: false`) when
+/// the run ends: the RFC 3339 end time. Attention raised after it belongs to later turns.
+pub(super) const SCHEDULE_RUN_ENDED_LABEL: &str = "paseo.schedule-run-ended";
 /// Largest schedule output or error copied into a notification; the Bot keeps no more.
 const SUMMARY_BYTES: usize = 1024;
 
@@ -165,9 +168,8 @@ fn recent_attention(
 /// The notification for `record`'s attention `reason` raised at `timestamp`.
 ///
 /// Returns `None` for internal sessions (the Bot's own), archived Agents, attention superseded
-/// by a newer one, Agents without a Workspace, an unparsable timestamp, and any attention of an
-/// Agent a schedule run created: its run result notifies instead, and a permission request
-/// fails that run, whose Agent nobody can approve any more.
+/// by a newer one, Agents without a Workspace, an unparsable timestamp, and attention a
+/// schedule run raised (see [`raised_by_schedule_run`]).
 /// Attention a client already cleared still notifies: the Bot needs it regardless.
 fn agent_notification(
     record: &PersistedAgentRuntimeRecord,
@@ -178,14 +180,16 @@ fn agent_notification(
         .attention_timestamp
         .as_deref()
         .is_some_and(|current| current != timestamp);
-    let scheduled = record.labels.contains_key(SCHEDULE_RUN_LABEL);
-    if record.internal || record.archived_at.is_some() || superseded || scheduled {
+    if record.internal || record.archived_at.is_some() || superseded {
         return None;
     }
-    let workspace_id = record.workspace_id.clone()?;
     let at = DateTime::parse_from_rfc3339(timestamp)
         .ok()?
         .with_timezone(&Utc);
+    if raised_by_schedule_run(record, at) {
+        return None;
+    }
+    let workspace_id = record.workspace_id.clone()?;
     let ended = reason != AgentAttentionReason::Permission;
     let (kind, outcome) = match reason {
         AgentAttentionReason::Finished => (NotificationKind::AgentFinished, "finished"),
@@ -229,6 +233,24 @@ fn agent_notification(
             .and_then(|started| DateTime::parse_from_rfc3339(started).ok())
             .map(|started| started.with_timezone(&Utc)),
     })
+}
+
+/// Whether attention raised at `at` belongs to the schedule run that created `record`'s Agent,
+/// whose run result notifies instead.
+///
+/// That is all attention of an Agent with the run label until the runner marks the run ended
+/// with [`SCHEDULE_RUN_ENDED_LABEL`]; an Agent the run keeps then notifies again for attention
+/// raised after that time, in turns the user or the Bot started later. The runner marks the
+/// Agent only after the run's turn ended or was cancelled, so the run's own attention is never
+/// later than the marker, whichever of the two this forwarder reads first. An unreadable
+/// marker counts as absent.
+fn raised_by_schedule_run(record: &PersistedAgentRuntimeRecord, at: DateTime<Utc>) -> bool {
+    record.labels.contains_key(SCHEDULE_RUN_LABEL)
+        && record
+            .labels
+            .get(SCHEDULE_RUN_ENDED_LABEL)
+            .and_then(|ended| DateTime::parse_from_rfc3339(ended).ok())
+            .is_none_or(|ended| at <= ended)
 }
 
 /// The notification for a terminal attention `payload` received at `now`; terminals have no

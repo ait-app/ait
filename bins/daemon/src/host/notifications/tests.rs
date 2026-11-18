@@ -123,6 +123,58 @@ fn internal_archived_stale_and_scheduled_attention_is_skipped() {
 }
 
 #[test]
+fn a_kept_schedule_agent_notifies_only_for_attention_after_its_run_ended() {
+    const ENDED: &str = "2026-11-12T08:00:00.500Z";
+    const LATER: &str = "2026-11-12T08:00:00.501Z";
+    let kept = record(&json!({"labels":{SCHEDULE_RUN_LABEL:"run",
+        SCHEDULE_RUN_ENDED_LABEL:ENDED}}));
+    for reason in [
+        AgentAttentionReason::Finished,
+        AgentAttentionReason::Error,
+        AgentAttentionReason::Permission,
+    ] {
+        // The run's own attention: its run result is the notification.
+        assert!(
+            agent_notification(&kept, reason, AT).is_none(),
+            "{reason:?}"
+        );
+        assert!(
+            agent_notification(&kept, reason, ENDED).is_none(),
+            "{reason:?}"
+        );
+        // A later turn of the kept Agent notifies like any other Agent.
+        let later = agent_notification(&kept, reason, LATER).expect("a later turn notifies");
+        assert_eq!(later.id, format!("agent:{AGENT}:{LATER}"));
+    }
+    let unreadable = record(&json!({"labels":{SCHEDULE_RUN_LABEL:"run",
+        SCHEDULE_RUN_ENDED_LABEL:"never"}}));
+    assert!(agent_notification(&unreadable, AgentAttentionReason::Finished, LATER).is_none());
+}
+
+#[test]
+fn the_rescan_does_not_replay_the_attention_of_a_kept_schedule_agents_run() {
+    let now: DateTime<Utc> = "2026-11-12T08:10:00Z".parse().unwrap();
+    let ended = "2026-11-12T08:05:00Z";
+    let records: Vec<_> = [
+        json!({"id":"run","requiresAttention":true,"attentionReason":"permission",
+            "attentionTimestamp":"2026-11-12T08:04:59Z",
+            "labels":{SCHEDULE_RUN_LABEL:"run",SCHEDULE_RUN_ENDED_LABEL:ended}}),
+        json!({"id":"later","requiresAttention":true,"attentionReason":"finished",
+            "attentionTimestamp":"2026-11-12T08:09:00Z",
+            "labels":{SCHEDULE_RUN_LABEL:"run",SCHEDULE_RUN_ENDED_LABEL:ended}}),
+    ]
+    .iter()
+    .map(|fields| Arc::new(record(fields)))
+    .collect();
+    let replayed = recent_attention(&records, now);
+    let ids: Vec<_> = replayed
+        .iter()
+        .map(|notification| notification.agent_id.as_deref().unwrap())
+        .collect();
+    assert_eq!(ids, ["later"]);
+}
+
+#[test]
 fn the_rescan_only_replays_recent_current_attention() {
     let now: DateTime<Utc> = "2026-11-12T08:00:00Z".parse().unwrap();
     let at = |minutes: i64| (now - TimeDelta::minutes(minutes)).to_rfc3339();
