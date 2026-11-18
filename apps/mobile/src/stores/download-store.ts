@@ -111,8 +111,6 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       // Exactly one generation per explicit click, including failures and expired tokens.
       artifact = await generate();
       signal.throwIfAborted();
-      if (artifact.size > TIMELINE_EXPORT_MAX_BYTES)
-        throw new Error(i18n.t("timelineExport.tooLarge"));
       set((state) => {
         const download = state.downloads.get(id);
         return download
@@ -191,10 +189,8 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     }));
 
     try {
-      const connections = activeConnectionId
-        ? daemonProfile?.connections.filter((connection) => connection.id === activeConnectionId)
-        : daemonProfile?.connections;
-      const relay = connections?.find((connection) => connection.type === "accountRelay");
+      const profile = scopedConnections(daemonProfile, activeConnectionId);
+      const relay = profile?.connections.find((connection) => connection.type === "accountRelay");
       if (relay?.type === "accountRelay") {
         if (!getDesktopHost()?.invoke && supportsBrowserAccount()) {
           const result = await requestFileDownloadToken(path);
@@ -323,9 +319,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
       }
 
-      const downloadTarget = resolveDaemonDownloadTarget(
-        daemonProfile && connections ? { ...daemonProfile, connections } : daemonProfile,
-      );
+      const downloadTarget = resolveDaemonDownloadTarget(profile);
       if (!downloadTarget.baseUrl) {
         throw new Error(i18n.t("downloads.hostUnavailable"));
       }
@@ -458,6 +452,18 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
   },
 }));
 
+/** The host profile narrowed to the active connection, or all connections when none is active. */
+function scopedConnections(
+  daemonProfile: HostProfile | undefined,
+  activeConnectionId?: string | null,
+): HostProfile | undefined {
+  if (!daemonProfile || !activeConnectionId) return daemonProfile;
+  const connections = daemonProfile.connections.filter(
+    (connection) => connection.id === activeConnectionId,
+  );
+  return connections.length ? { ...daemonProfile, connections } : daemonProfile;
+}
+
 const TIMELINE_EXPORT_MAX_BYTES = 16 * 1024 * 1024;
 
 /** Browser handoff confirms received bytes, not the browser's eventual disk save. */
@@ -472,17 +478,9 @@ async function downloadTimelineArtifact(input: {
   progress(bytesWritten: number, totalBytes: number): void;
 }): Promise<TimelineDownloadOutcome> {
   const { artifact, signal, progress } = input;
-  const connections = input.activeConnectionId
-    ? input.daemonProfile?.connections.filter(
-        (connection) => connection.id === input.activeConnectionId,
-      )
-    : input.daemonProfile?.connections;
-  const relay = connections?.find((connection) => connection.type === "accountRelay");
-  const direct = resolveDaemonDownloadTarget(
-    input.daemonProfile && connections
-      ? { ...input.daemonProfile, connections }
-      : input.daemonProfile,
-  );
+  const profile = scopedConnections(input.daemonProfile, input.activeConnectionId);
+  const relay = profile?.connections.find((connection) => connection.type === "accountRelay");
+  const direct = resolveDaemonDownloadTarget(profile);
   const desktop = getDesktopHost();
   const invoke = desktop?.invoke;
   if (desktop && invoke) {
@@ -631,8 +629,6 @@ async function streamTimelineDownload(
   const reader = response.body.getReader();
   let bytes = 0;
   try {
-    const length = Number(response.headers.get("content-length"));
-    if (length > TIMELINE_EXPORT_MAX_BYTES) throw new Error(i18n.t("timelineExport.tooLarge"));
     while (true) {
       signal.throwIfAborted();
       const chunk = await reader.read();

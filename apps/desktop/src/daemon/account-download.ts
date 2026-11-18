@@ -264,14 +264,6 @@ export class AccountDownloadManager {
       let bytes = 0;
       const total = Number(response.headers.get("content-length"));
       try {
-        if (total > (download.maxBytes ?? Infinity))
-          throw new Error("Download size limit exceeded.");
-        if (
-          download.expectedSize !== undefined &&
-          response.headers.has("content-length") &&
-          total !== download.expectedSize
-        )
-          throw new Error("File size mismatch.");
         while (true) {
           controller.signal.throwIfAborted();
           const chunk = await reader.read();
@@ -484,14 +476,6 @@ export class AccountDownloadManager {
               )
                 throw new Error("Invalid file size.");
               total = message.content_length ?? null;
-              if (total !== null && total > (input.maxBytes ?? Infinity))
-                throw new Error("Download size limit exceeded.");
-              if (
-                input.expectedSize !== undefined &&
-                total !== null &&
-                total !== input.expectedSize
-              )
-                throw new Error("File size mismatch.");
               stage = "body";
               return;
             }

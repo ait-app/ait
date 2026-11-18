@@ -132,8 +132,7 @@ impl Files {
         if self.downloads.len() >= 256 || self.downloads.contains_key(&token) {
             return Err(FileError("Download token capacity exhausted".to_owned()));
         }
-        if artifact.size > model::download::MAX_ARTIFACT_BYTES
-            || artifact.file.metadata()?.len() != artifact.size
+        if artifact.file.metadata()?.len() > model::download::MAX_ARTIFACT_BYTES
             || artifact.file.stream_position()? != 0
         {
             return Err(FileError(
@@ -144,6 +143,7 @@ impl Files {
             .try_acquire_owned()
             .map_err(|_| FileError("Generated download capacity exhausted".to_owned()))?;
         let finished = CancellationToken::new();
+        let length = artifact.file.metadata()?.len();
         let info = FileInfo {
             // Generated artifacts have no publicly addressable filesystem location.
             root: String::new(),
@@ -152,7 +152,7 @@ impl Files {
             file_name: artifact.file_name.clone(),
             mime_type: artifact.mime_type,
             kind: FileKind::Text,
-            size: artifact.size,
+            size: length,
             modified_at: String::new(),
             revision: token.clone(),
         };

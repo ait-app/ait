@@ -6,15 +6,12 @@ import { TimelineExport } from "./timeline-export";
 
 const fixture = vi.hoisted(() => ({
   supported: true,
-  epoch: 1,
   start: vi.fn(),
   client: { exportAgentTimeline: vi.fn(), cancelAgentTimelineExport: vi.fn() },
 }));
 vi.mock("@/runtime/host-runtime", () => {
   const snapshot = () => ({
     connectionStatus: "online",
-    clientGeneration: 1,
-    connectionEpoch: fixture.epoch,
     activeConnectionId: "direct",
   });
   return {
@@ -52,7 +49,6 @@ beforeEach(async () => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   fixture.supported = true;
-  fixture.epoch = 1;
   fixture.client.cancelAgentTimelineExport.mockResolvedValue({ released: true });
   container = document.createElement("div");
   document.body.append(container);
@@ -66,36 +62,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("rechecks a capability downgrade at click time without issuing an unsupported RPC", async () => {
+it("hides the download control and shows unavailability on an old host", async () => {
   fixture.supported = false;
-  await act(async () =>
-    container.querySelector<HTMLElement>('[data-testid="timeline-export-download"]')!.click(),
-  );
-  expect(fixture.start).not.toHaveBeenCalled();
-  expect(fixture.client.exportAgentTimeline).not.toHaveBeenCalled();
   await act(async () => root.render(<TimelineExport serverId="host" agentId="agent" />));
   expect(container.textContent).toContain("Export unavailable");
+  expect(container.querySelector('[data-testid="timeline-export-download"]')).toBeNull();
+  expect(fixture.start).not.toHaveBeenCalled();
 });
 
-it("releases a late result from a previous connection instead of downloading or regenerating it", async () => {
-  const result = { token: "late-token" };
-  const pending = Promise.withResolvers<typeof result>();
-  fixture.client.exportAgentTimeline.mockReturnValueOnce(pending.promise);
+it("starts an export with the selected format and scope", async () => {
   await act(async () =>
     container.querySelector<HTMLElement>('[data-testid="timeline-export-download"]')!.click(),
   );
-  const generate = fixture.start.mock.calls[0]![0].generate as () => Promise<unknown>;
-  const generation = generate();
-  const failed = expect(generation).rejects.toThrow("Export unavailable");
-  fixture.epoch += 1;
-  pending.resolve(result);
-  await failed;
+  expect(fixture.start).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      serverId: "host",
+      agentId: "agent",
+      activeConnectionId: "direct",
+      generate: expect.any(Function),
+      release: expect.any(Function),
+    }),
+  );
+  const { generate, release } = fixture.start.mock.calls[0]![0];
+  generate();
   expect(fixture.client.exportAgentTimeline).toHaveBeenCalledExactlyOnceWith("agent", {
     format: "markdown",
     scope: "conversation",
   });
+  release("token");
   expect(fixture.client.cancelAgentTimelineExport).toHaveBeenCalledExactlyOnceWith(
     "agent",
-    "late-token",
+    "token",
   );
 });

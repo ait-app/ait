@@ -28,41 +28,14 @@ export function TimelineExport({ serverId, agentId }: { serverId: string; agentI
   const available = supported && runtime?.connectionStatus === "online";
   const start = () => {
     const store = getHostRuntimeStore();
-    const snapshot = store.getSnapshot(serverId);
     const client = store.getClient(serverId);
-    if (
-      !client ||
-      snapshot?.connectionStatus !== "online" ||
-      useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.agentTimelineExport !==
-        true ||
-      Array.from(useDownloadStore.getState().downloads.values()).some(
-        (download) =>
-          download.serverId === serverId &&
-          download.scopeId === agentId &&
-          download.status === "downloading",
-      )
-    )
-      return;
+    if (!client) return;
     void useDownloadStore.getState().startTimelineExport({
       serverId,
       agentId,
       daemonProfile: hosts.find((host) => host.serverId === serverId),
-      activeConnectionId: snapshot.activeConnectionId,
-      generate: async () => {
-        const result = await client.exportAgentTimeline(agentId, { format, scope });
-        const current = store.getSnapshot(serverId);
-        if (
-          store.getClient(serverId) !== client ||
-          current?.connectionEpoch !== snapshot.connectionEpoch ||
-          current?.clientGeneration !== snapshot.clientGeneration ||
-          useSessionStore.getState().sessions[serverId]?.serverInfo?.features
-            ?.agentTimelineExport !== true
-        ) {
-          await client.cancelAgentTimelineExport(agentId, result.token).catch(() => undefined);
-          throw new Error(t("timelineExport.unavailable"));
-        }
-        return result;
-      },
+      activeConnectionId: runtime?.activeConnectionId,
+      generate: () => client.exportAgentTimeline(agentId, { format, scope }),
       release: (token) => client.cancelAgentTimelineExport(agentId, token),
     });
   };

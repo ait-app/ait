@@ -290,16 +290,14 @@ export function createAccountIpc(
               (direct.authHeader !== null && typeof direct.authHeader !== "string"))
           )
             throw new Error("Invalid download target");
-          if (args.maxBytes !== undefined && args.maxBytes !== 16 * 1024 * 1024)
-            throw new Error("Invalid download limit");
-          if (
-            args.expectedSize !== undefined &&
-            (typeof args.expectedSize !== "number" ||
-              !Number.isSafeInteger(args.expectedSize) ||
-              args.expectedSize < 0 ||
-              args.expectedSize > 16 * 1024 * 1024)
-          )
-            throw new Error("Invalid expected download size");
+          for (const bound of ["maxBytes", "expectedSize"] as const) {
+            const value = args[bound];
+            if (
+              value !== undefined &&
+              (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+            )
+              throw new Error("Invalid download bound");
+          }
           return downloads.prepare(event.sender, {
             hostId: args.hostId,
             center: args.center,

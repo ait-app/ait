@@ -118,7 +118,7 @@ function info(methods: string[]) {
 }
 it("emits every server-info feature schema key as an explicit boolean", () => {
   const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
-  expect(Object.keys(payload.features ?? {})).toHaveLength(94);
+  expect(Object.keys(payload.features ?? {})).toHaveLength(95);
   expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
     true,
   );

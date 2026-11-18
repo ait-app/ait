@@ -224,14 +224,14 @@ fn generated_artifact_cancel_expiry_and_dropped_transfer_release_owned_files() {
 }
 
 #[test]
-fn generated_artifacts_reject_false_size_position_and_oversized_files() {
+fn generated_artifacts_reject_oversized_and_mispositioned_files() {
     let mut files = Files::new(Box::new(MemoryFiles));
-    let mut wrong = artifact();
-    wrong.size = 0;
-    assert!(files.issue_artifact("wrong".to_owned(), wrong).is_err());
     let mut large = artifact();
-    large.size = model::download::MAX_ARTIFACT_BYTES + 1;
-    large.file.set_len(large.size).unwrap();
+    large
+        .file
+        .set_len(model::download::MAX_ARTIFACT_BYTES + 1)
+        .unwrap();
+    large.size = large.file.metadata().unwrap().len();
     assert!(files.issue_artifact("large".to_owned(), large).is_err());
     let mut offset = artifact();
     offset.file.seek(std::io::SeekFrom::Start(1)).unwrap();

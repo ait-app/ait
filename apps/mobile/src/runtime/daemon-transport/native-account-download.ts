@@ -123,10 +123,6 @@ export function streamNativeAccountDownload(
             throw new Error("Invalid file size.");
           }
           total = message.content_length as number | null;
-          if (total !== null && total > (input.maxBytes ?? Infinity))
-            throw new Error("Download size limit exceeded.");
-          if (input.expectedSize !== undefined && total !== null && total !== input.expectedSize)
-            throw new Error("File size mismatch.");
           stage = "body";
           return;
         }
