@@ -1,32 +1,10 @@
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { test as base, expect, type Page } from "../support/fixtures";
-import { repoRoot } from "../support/helpers/ait-daemon";
+import { expect, type Page } from "../support/fixtures";
+import { test } from "../support/helpers/omp-test-peer";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { clickNewChat, gotoWorkspace } from "../support/helpers/launcher";
 import { expectComposerVisible } from "../support/helpers/composer";
-
-const test = base.extend<{}, { ompAgentDirectory: string }>({
-  ompAgentDirectory: [
-    // oxlint-disable-next-line no-empty-pattern -- Playwright fixture dependency declaration.
-    async ({}, use) => {
-      const directory = await mkdtemp(path.join(tmpdir(), "ait-codex-switch-omp-"));
-      try {
-        await use(directory);
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
-    },
-    { scope: "worker" },
-  ],
-  e2eDaemonEnvironment: async ({ ompAgentDirectory }, use) => {
-    await use({
-      AIT_SERVER_OMP_BIN: path.join(repoRoot, "crates/provider/omp/src/tests/fixtures/omp.py"),
-      PI_CODING_AGENT_DIR: ompAgentDirectory,
-    });
-  },
-});
 
 test.use({ actionTimeout: 15_000 });
 

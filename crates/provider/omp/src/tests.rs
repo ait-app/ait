@@ -9,6 +9,7 @@ mod blocked_commands;
 mod capabilities;
 mod commands;
 mod diagnostics;
+mod fixture_program;
 mod installed;
 mod interactions;
 mod native_history;
@@ -209,8 +210,7 @@ async fn native_modes_questions_children_and_chunked_frames() {
 /// Create an isolated offline native peer, client and default session specification.
 pub(super) fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
-    let program =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/omp.py");
+    let program = fixture_program::program().to_owned();
     let client = OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([(
             "PI_CODING_AGENT_DIR".to_owned(),
@@ -689,14 +689,7 @@ async fn garbage_output_is_skipped_without_failing_or_resending_input() {
         Some(AgentTurnEvent::Completed(Some(reply))) if reply == "Hello world"
     ));
     session.close().await.unwrap();
-    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
-    assert_eq!(
-        calls
-            .lines()
-            .filter(|line| line.contains("\"type\": \"prompt\""))
-            .count(),
-        1
-    );
+    assert_eq!(count(&calls_after(root.path(), 0), "prompt"), 1);
 }
 
 #[tokio::test]

@@ -1,35 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { test as base, expect, type Page } from "../support/fixtures";
-import { repoRoot } from "../support/helpers/ait-daemon";
+import { expect, type Page } from "../support/fixtures";
+import { test } from "../support/helpers/omp-test-peer";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { openAgentRoute } from "../support/helpers/mock-agent";
 import { expectComposerVisible, submitMessage } from "../support/helpers/composer";
 import { clickNewChat, gotoWorkspace } from "../support/helpers/launcher";
-
-const test = base.extend<{}, { ompAgentDirectory: string }>({
-  ompAgentDirectory: [
-    // oxlint-disable-next-line no-empty-pattern -- Playwright fixture dependency declaration.
-    async ({}, use) => {
-      const directory = await mkdtemp(path.join(tmpdir(), "ait-preset-browser-"));
-      try {
-        await use(directory);
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
-    },
-    { scope: "worker" },
-  ],
-  e2eDaemonEnvironment: async ({ ompAgentDirectory }, use) => {
-    await use({
-      AIT_SERVER_OMP_BIN: path.join(repoRoot, "crates/provider/omp/src/tests/fixtures/omp.py"),
-      PI_CODING_AGENT_DIR: ompAgentDirectory,
-    });
-  },
-});
 
 test.use({ actionTimeout: 15_000 });
 

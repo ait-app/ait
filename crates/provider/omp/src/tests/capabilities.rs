@@ -151,16 +151,20 @@ async fn fast_is_restored_at_launch_and_follows_live_model_changes() {
     assert_eq!(toggle["value"], false);
     assert!(toggle.get("description").is_none());
     session.close().await.unwrap();
-    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
+    let calls = calls_after(root.path(), 0);
     let fast: Vec<_> = calls
-        .lines()
-        .filter(|line| line.contains("\"set_fast_mode\""))
+        .iter()
+        .filter(|call| call["type"] == "set_fast_mode")
+        .map(|call| call["enabled"].as_bool().unwrap())
         .collect();
-    assert_eq!(fast.len(), 2);
-    assert!(fast[0].contains("\"enabled\": true"));
-    assert!(fast[1].contains("\"enabled\": false"));
-    assert_eq!(calls.matches("\"set_model\"").count(), 1);
-    assert!(!calls.contains("set_slow_mode") && !calls.contains("set_auto_"));
+    assert_eq!(fast, [true, false]);
+    assert_eq!(count(&calls, "set_model"), 1);
+    assert!(
+        calls
+            .iter()
+            .filter_map(|call| call["type"].as_str())
+            .all(|kind| kind != "set_slow_mode" && !kind.starts_with("set_auto_"))
+    );
 }
 
 #[tokio::test]
