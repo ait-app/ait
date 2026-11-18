@@ -4,6 +4,8 @@ export const message = {
     scheduleUnnamed: "スケジュール · 実行 {{runId}}",
     botWake: "Ait の通知",
     botInstructions: "Ait から送信",
+    ticketPull: "プルリクエスト #{{pull}} · Ait",
+    ticketAnswer: "あなたの質問への回答 · Ait",
   },
   diagram: {
     diagram: "図",

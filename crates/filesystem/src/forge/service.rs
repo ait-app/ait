@@ -142,6 +142,31 @@ impl Forge {
             .pull_request_timeline(cwd, pr_number, repo_owner, repo_name)
     }
 
+    /// Read pull request `number` of `cwd`'s origin repository with its checks and newest
+    /// review activity, for Bot tickets that follow it (ADR-287). The CLI call blocks; run it
+    /// on a blocking thread.
+    ///
+    /// # Errors
+    /// Returns `NotFound` for a missing pull request, and local Git, CLI, authentication or
+    /// forge failures.
+    pub fn pull_request(
+        &self,
+        cwd: &str,
+        number: u64,
+    ) -> Result<domain::forge::PullSnapshot, ForgeRuntimeError> {
+        self.runtime.pull_request(cwd, number)
+    }
+
+    /// Whether `login` can write to `cwd`'s origin repository, for authors of pull request
+    /// entries whose write access a read leaves to confirm (ADR-287). The CLI call blocks; run
+    /// it on a blocking thread.
+    ///
+    /// # Errors
+    /// Returns local Git, CLI, authentication or forge failures.
+    pub fn can_write(&self, cwd: &str, login: &str) -> Result<bool, ForgeRuntimeError> {
+        self.runtime.can_write(cwd, login)
+    }
+
     /// Read detailed check data.
     ///
     /// # Errors

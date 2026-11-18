@@ -8,6 +8,11 @@ use super::{
 use crate::bot::notification::{Notification, NotificationKind};
 use crate::{BotId, ConversationId, TicketId};
 
+mod follow;
+mod regressions;
+mod routing;
+mod third_review;
+
 fn at(seconds: i64) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-11-13T08:00:00Z")
         .unwrap()
@@ -167,6 +172,7 @@ fn a_blocked_worker_waits_until_it_reports_again_not_when_its_turn_ends() {
             "agent-1",
             WorkerReportKind::Blocked,
             "Which database?",
+            None,
             at(1),
         )
         .unwrap();
@@ -177,6 +183,7 @@ fn a_blocked_worker_waits_until_it_reports_again_not_when_its_turn_ends() {
             "agent-1",
             WorkerReportKind::Progress,
             "Using Postgres",
+            None,
             at(3),
         )
         .unwrap();
@@ -195,12 +202,16 @@ fn done_and_failed_reports_end_the_reporters_wait_but_never_close() {
         let mut ticket = ticket();
         ticket.assign("agent-2", "wks_1", at(0)).unwrap();
         ticket
-            .report("agent-1", WorkerReportKind::Blocked, "stuck", at(1))
+            .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(1))
             .unwrap();
 
-        ticket.report("agent-2", kind, "other part", at(2)).unwrap();
+        ticket
+            .report("agent-2", kind, "other part", None, at(2))
+            .unwrap();
         let other = ticket.status;
-        ticket.report("agent-1", kind, "my part", at(3)).unwrap();
+        ticket
+            .report("agent-1", kind, "my part", None, at(3))
+            .unwrap();
 
         assert_eq!(other, TicketStatus::Waiting);
         assert_eq!(ticket.status, TicketStatus::Open);
@@ -212,7 +223,7 @@ fn a_waiting_ticket_keeps_its_first_cause() {
     let mut ticket = ticket();
     ticket.assign("agent-2", "wks_1", at(0)).unwrap();
     ticket
-        .report("agent-1", WorkerReportKind::Blocked, "stuck", at(1))
+        .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(1))
         .unwrap();
 
     ticket.record_notification(&event(NotificationKind::AgentPermission, "agent-2"), at(2));
@@ -231,7 +242,7 @@ fn reports_on_closed_tickets_are_refused_and_unassigned_agents_are_heard() {
 
     // The daemon-written label, not the assignment, authorizes a worker (ADR-274 section 7).
     assert_eq!(
-        ticket.report("agent-9", WorkerReportKind::Done, "x", at(1)),
+        ticket.report("agent-9", WorkerReportKind::Done, "x", None, at(1)),
         Ok(1)
     );
     assert!(!ticket.assigned("agent-9"));
@@ -239,7 +250,7 @@ fn reports_on_closed_tickets_are_refused_and_unassigned_agents_are_heard() {
         .update(ReportSource::Bot, &status(TicketStatus::Done), at(2))
         .unwrap();
     assert_eq!(
-        ticket.report("agent-1", WorkerReportKind::Progress, "x", at(3)),
+        ticket.report("agent-1", WorkerReportKind::Progress, "x", None, at(3)),
         Err(TicketError::Closed)
     );
     ticket.record_notification(&event(NotificationKind::AgentPermission, "agent-1"), at(4));
@@ -269,6 +280,7 @@ fn a_blocked_report_upgrades_the_reporters_permission_wait_and_outlives_its_turn
             "agent-1",
             WorkerReportKind::Blocked,
             "Need the API key",
+            None,
             at(2),
         )
         .unwrap();
@@ -296,6 +308,7 @@ fn another_agents_block_takes_over_a_permission_wait() {
             "agent-2",
             WorkerReportKind::Blocked,
             "Which account?",
+            None,
             at(2),
         )
         .unwrap();
@@ -310,18 +323,30 @@ fn every_blocked_worker_keeps_the_ticket_waiting_until_it_reports_again() {
     let mut ticket = ticket();
     ticket.assign("agent-2", "wks_1", at(0)).unwrap();
     ticket
-        .report("agent-1", WorkerReportKind::Blocked, "stuck", at(1))
+        .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(1))
         .unwrap();
     ticket
-        .report("agent-2", WorkerReportKind::Blocked, "stuck too", at(2))
+        .report(
+            "agent-2",
+            WorkerReportKind::Blocked,
+            "stuck too",
+            None,
+            at(2),
+        )
         .unwrap();
 
     ticket
-        .report("agent-1", WorkerReportKind::Progress, "unblocked", at(3))
+        .report(
+            "agent-1",
+            WorkerReportKind::Progress,
+            "unblocked",
+            None,
+            at(3),
+        )
         .unwrap();
     let handed_over = ticket.clone();
     ticket
-        .report("agent-2", WorkerReportKind::Done, "finished", at(4))
+        .report("agent-2", WorkerReportKind::Done, "finished", None, at(4))
         .unwrap();
 
     assert_eq!(handed_over.status, TicketStatus::Waiting);
@@ -340,7 +365,7 @@ fn every_blocked_worker_keeps_the_ticket_waiting_until_it_reports_again() {
         .unwrap();
     cleared.record_notification(&event(NotificationKind::AgentFinished, "agent-1"), at(6));
     cleared
-        .report("agent-1", WorkerReportKind::Done, "done", at(7))
+        .report("agent-1", WorkerReportKind::Done, "done", None, at(7))
         .unwrap();
     assert_eq!(
         (cleared.status, cleared.waiting),
@@ -388,18 +413,19 @@ fn ait_closes_finished_work_as_done_and_the_rest_as_cancelled() {
     let reason = "Closed automatically: every Agent on it was archived";
     let mut finished = ticket();
     finished
-        .report("agent-1", WorkerReportKind::Done, "fixed", at(1))
+        .report("agent-1", WorkerReportKind::Done, "fixed", None, at(1))
         .unwrap();
     finished.record_notification(&event(NotificationKind::AgentFinished, "agent-1"), at(2));
     let mut abandoned = ticket();
     abandoned
-        .report("agent-1", WorkerReportKind::Done, "fixed", at(1))
+        .report("agent-1", WorkerReportKind::Done, "fixed", None, at(1))
         .unwrap();
     abandoned
         .report(
             "agent-1",
             WorkerReportKind::Progress,
             "one more thing",
+            None,
             at(2),
         )
         .unwrap();
@@ -451,18 +477,24 @@ fn ait_closes_as_done_only_when_every_worker_finished_since_the_last_reopen() {
     // A `done` from before the ticket was reopened says nothing about the follow-up.
     let mut reopened = ticket();
     reopened
-        .report("agent-1", WorkerReportKind::Done, "fixed", at(1))
+        .report("agent-1", WorkerReportKind::Done, "fixed", None, at(1))
         .unwrap();
     reopened.update(ReportSource::Bot, &close, at(2)).unwrap();
     reopened.reopen("more work", at(3));
     let mut redone = reopened.clone();
     redone
-        .report("agent-1", WorkerReportKind::Done, "follow-up fixed", at(4))
+        .report(
+            "agent-1",
+            WorkerReportKind::Done,
+            "follow-up fixed",
+            None,
+            at(4),
+        )
         .unwrap();
     // One worker finished and the other never did.
     let mut half = ticket();
     half.assign("agent-2", "wks_1", at(0)).unwrap();
-    half.report("agent-1", WorkerReportKind::Done, "my part", at(1))
+    half.report("agent-1", WorkerReportKind::Done, "my part", None, at(1))
         .unwrap();
     // Ending a wait is not a reopen: both workers finished.
     let mut both = half.clone();
@@ -470,12 +502,13 @@ fn ait_closes_as_done_only_when_every_worker_finished_since_the_last_reopen() {
         "agent-2",
         WorkerReportKind::Blocked,
         "which account?",
+        None,
         at(2),
     )
     .unwrap();
     both.update(ReportSource::Bot, &status(TicketStatus::Open), at(3))
         .unwrap();
-    both.report("agent-2", WorkerReportKind::Done, "my part", at(4))
+    both.report("agent-2", WorkerReportKind::Done, "my part", None, at(4))
         .unwrap();
 
     assert_eq!(
@@ -502,6 +535,7 @@ fn ait_cancels_a_waiting_ticket_nobody_can_answer_any_more() {
             "agent-1",
             WorkerReportKind::Blocked,
             "which account?",
+            None,
             at(1),
         )
         .unwrap();
@@ -572,13 +606,19 @@ fn a_turn_end_is_spared_only_by_its_own_turns_outcome_report() {
     let mut ticket = ticket();
     ticket.assign("agent-2", "wks_1", at(0)).unwrap();
     ticket
-        .report("agent-1", WorkerReportKind::Progress, "halfway", at(2))
+        .report(
+            "agent-1",
+            WorkerReportKind::Progress,
+            "halfway",
+            None,
+            at(2),
+        )
         .unwrap();
     ticket
-        .report("agent-2", WorkerReportKind::Done, "mine", at(3))
+        .report("agent-2", WorkerReportKind::Done, "mine", None, at(3))
         .unwrap();
     ticket
-        .report("agent-1", WorkerReportKind::Blocked, "stuck", at(5))
+        .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(5))
         .unwrap();
     let finished =
         |started, end| turn_end(NotificationKind::AgentFinished, "agent-1", started, end);
@@ -612,7 +652,7 @@ fn a_turn_end_is_spared_only_by_its_own_turns_outcome_report() {
 fn a_later_turn_with_a_stale_start_is_never_spared_by_an_earlier_turns_report() {
     let mut ticket = ticket();
     ticket
-        .report("agent-1", WorkerReportKind::Done, "fixed", at(2))
+        .report("agent-1", WorkerReportKind::Done, "fixed", None, at(2))
         .unwrap();
     let first = turn_end(
         NotificationKind::AgentFinished,
@@ -636,7 +676,7 @@ fn a_later_turn_with_a_stale_start_is_never_spared_by_an_earlier_turns_report() 
         ticket.spares_turn_end(&second_failed),
     );
     ticket
-        .report("agent-1", WorkerReportKind::Failed, "gave up", at(7))
+        .report("agent-1", WorkerReportKind::Failed, "gave up", None, at(7))
         .unwrap();
     let third = turn_end(NotificationKind::AgentFailed, "agent-1", Some(at(1)), at(8));
 
@@ -649,21 +689,39 @@ fn a_later_turn_with_a_stale_start_is_never_spared_by_an_earlier_turns_report() 
 fn only_the_latest_outcome_of_a_turn_spares_its_end_and_a_failed_end_needs_a_failed_report() {
     let mut recovered = ticket();
     recovered
-        .report("agent-1", WorkerReportKind::Blocked, "need the key", at(2))
+        .report(
+            "agent-1",
+            WorkerReportKind::Blocked,
+            "need the key",
+            None,
+            at(2),
+        )
         .unwrap();
     recovered
-        .report("agent-1", WorkerReportKind::Progress, "found it", at(3))
+        .report(
+            "agent-1",
+            WorkerReportKind::Progress,
+            "found it",
+            None,
+            at(3),
+        )
         .unwrap();
     let mut done = ticket();
-    done.report("agent-1", WorkerReportKind::Done, "fixed", at(2))
+    done.report("agent-1", WorkerReportKind::Done, "fixed", None, at(2))
         .unwrap();
     let mut blocked = ticket();
     blocked
-        .report("agent-1", WorkerReportKind::Blocked, "need the key", at(2))
+        .report(
+            "agent-1",
+            WorkerReportKind::Blocked,
+            "need the key",
+            None,
+            at(2),
+        )
         .unwrap();
     let mut failed = ticket();
     failed
-        .report("agent-1", WorkerReportKind::Failed, "gave up", at(2))
+        .report("agent-1", WorkerReportKind::Failed, "gave up", None, at(2))
         .unwrap();
     let finished = turn_end(
         NotificationKind::AgentFinished,
@@ -692,7 +750,7 @@ fn the_bot_and_the_user_close_reopen_and_end_waits() {
     ] {
         let mut ticket = ticket();
         ticket
-            .report("agent-1", WorkerReportKind::Blocked, "stuck", at(1))
+            .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(1))
             .unwrap();
         let mut close = status(target);
         close.outcome = Some("Merged #12".into());
@@ -729,7 +787,7 @@ fn the_bot_and_the_user_close_reopen_and_end_waits() {
     }
     let mut waiting = ticket();
     waiting
-        .report("agent-1", WorkerReportKind::Blocked, "stuck", at(1))
+        .report("agent-1", WorkerReportKind::Blocked, "stuck", None, at(1))
         .unwrap();
     assert!(
         waiting
@@ -760,7 +818,7 @@ fn repeating_a_status_changes_nothing_and_conflicting_or_malformed_updates_are_r
             .update(ReportSource::User, &status(TicketStatus::Done), at(3))
             .unwrap()
     );
-    let mut retitled = status(TicketStatus::Cancelled);
+    let mut retitled = status(TicketStatus::Failed);
     retitled.title = Some("Other".into());
     assert_eq!(
         ticket.update(ReportSource::User, &retitled, at(3)),
@@ -834,6 +892,7 @@ fn only_the_newest_reports_are_kept_with_monotonic_sequences() {
                 "agent-1",
                 WorkerReportKind::Progress,
                 &index.to_string(),
+                None,
                 at(index),
             )
             .unwrap();

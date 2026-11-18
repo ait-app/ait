@@ -1,8 +1,9 @@
 //! Requests through which the scoped MCP opens, assigns and reports on a Bot's tickets
-//! (ADR-274); see [`crate::service::Bots`].
+//! (ADR-274, ADR-287); see [`crate::service::Bots`].
 
 use domain::TicketId;
 use domain::bot::ticket::{TicketDraft, WorkerReportKind};
+use domain::forge::PullSnapshot;
 use serde::{Deserialize, Serialize};
 
 /// Tool error for a refused [`crate::service::Bots::open_ticket`] or reopening at the open
@@ -11,6 +12,14 @@ use serde::{Deserialize, Serialize};
 pub const OPEN_LIMIT_MESSAGE: &str = "Too many open tickets, and none could be closed \
     automatically. Call bot_tickets and close the tickets whose work is finished or no longer \
     needed with bot_ticket_update (status done or cancelled), then try again";
+
+/// Tool error for binding a pull request beyond the per-ticket or per-Workspace bound, which
+/// the report or update returns as `ResourceExhausted`.
+pub const PULL_LIMIT_MESSAGE: &str = "This ticket or Workspace already follows the most pull \
+    requests it can (4 per ticket, 16 per Workspace); the report was not recorded. Report \
+    without pullRequest. Closed tickets keep following open pull requests and, for 7 days, \
+    merged ones; the Bot frees a place by setting such a done or failed ticket to cancelled with \
+    bot_ticket_update, which stops following its pull requests";
 
 /// Open a ticket for the first Agent a Bot session starts for a task.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,4 +68,8 @@ pub struct WorkerReport {
     pub kind: WorkerReportKind,
     /// Its text; truncated to the report bound.
     pub text: String,
+    /// The one question a `blocked` report asks the user (ADR-287).
+    pub question: Option<String>,
+    /// A pull request to follow, already read with [`crate::service::Bots::read_pull`].
+    pub pull: Option<PullSnapshot>,
 }

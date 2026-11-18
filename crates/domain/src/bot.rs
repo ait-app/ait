@@ -9,6 +9,7 @@ use self::permissions::BotPermissions;
 
 use crate::{BotId, BotTurnId, ChannelId, ConversationId};
 
+pub mod follow;
 pub mod notification;
 pub mod permissions;
 pub mod ticket;

@@ -5998,6 +5998,26 @@ export class DaemonClient {
     });
   }
 
+  /**
+   * Answer the question of `agentId`, the blocked worker a Workspace Bot ticket waits on (ADR-287).
+   * The answer is recorded on the ticket and delivered to that worker; `delivered` is false when the
+   * worker could not take it yet, in which case the host delivers it later. The host refuses it with
+   * a conflict when the ticket no longer waits on `agentId`.
+   */
+  async answerWorkspaceBotTicket(
+    workspaceId: string,
+    ticketId: string,
+    agentId: string,
+    answer: string,
+  ): Promise<BotResult<"bot.ticket.answer.request">> {
+    return this.botRequest("bot.ticket.answer.request", {
+      workspaceId,
+      ticketId,
+      agentId,
+      answer,
+    });
+  }
+
   async scheduleList(
     options?: string | { requestId?: string; workspaceId?: string },
   ): Promise<ScheduleListPayload> {

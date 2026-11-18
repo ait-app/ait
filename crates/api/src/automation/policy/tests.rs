@@ -32,6 +32,7 @@ async fn only_webhook_and_turn_methods_pass() {
         "bot.ticket.list.request",
         "bot.ticket.get.request",
         "bot.ticket.update.request",
+        "bot.ticket.answer.request",
         "bot.channel.update.request",
         "terminal.create.request",
         "automation.settings.set.request",

@@ -37,6 +37,10 @@ export const BOT_NOTIFICATION_KINDS = [
   "ticket_blocked",
   "ticket_done",
   "ticket_failed",
+  "pull_merged",
+  "pull_closed",
+  "pull_checks_passed",
+  "pull_activity",
 ] as const;
 export const BotNotificationKindSchema = z.enum(BOT_NOTIFICATION_KINDS);
 /** A Workspace event offered to the Bot; optional subject fields are `null` when absent. */
@@ -110,6 +114,8 @@ export const BOT_TICKET_REPORT_KINDS = [
   "agent_permission",
   "note",
   "status",
+  "pull",
+  "answer",
 ] as const;
 // Statuses, wait reasons, report sources and kinds a later host adds are kept as text, so one
 // new value never makes the whole ticket list unreadable.
@@ -119,6 +125,29 @@ export const BotTicketWaitingSchema = z.object({
   reason: z.union([z.enum(BOT_TICKET_WAIT_REASONS), z.string()]),
   agentId: z.string(),
   since: z.string(),
+  // The one question a blocked worker asked (ADR-287); absent on older hosts and other waits.
+  question: z.string().nullish(),
+});
+export const BOT_PULL_STATES = ["open", "merged", "closed"] as const;
+/** A pull request a ticket follows (ADR-287), with what the last read showed. */
+export const BotTicketPullSchema = z.object({
+  number: z.number().int().positive(),
+  url: z.string(),
+  title: z.string(),
+  boundBy: z.union([z.enum(["agent", "bot"]), z.string()]),
+  agentId: z.string().nullish(),
+  boundAt: z.string(),
+  state: z.union([z.enum(BOT_PULL_STATES), z.string()]),
+  checks: z
+    .object({
+      failing: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+    })
+    .nullish(),
+  polledAt: z.string().nullish(),
+  // Why the last read failed; cleared by the next successful read.
+  error: z.string().nullish(),
 });
 /** An Agent working on a ticket; its live state comes from the Agent directory. */
 export const BotTicketAssignmentSchema = z.object({
@@ -147,6 +176,8 @@ const BotTicketFieldsSchema = z.object({
   closedAt: z.string().nullish(),
   outcome: z.string().nullish(),
   assignments: z.array(BotTicketAssignmentSchema).default([]),
+  // Absent on hosts that predate followed pull requests.
+  pulls: z.array(BotTicketPullSchema).default([]),
 });
 /** A ticket as `bot.ticket.list` returns it: no request or history, only the newest report. */
 export const BotTicketSummarySchema = BotTicketFieldsSchema.extend({
@@ -279,6 +310,7 @@ export type BotLoggedNotification = z.infer<typeof BotLoggedNotificationSchema>;
 export type BotTicketUserStatus = z.infer<typeof BotTicketUserStatusSchema>;
 export type BotTicketWaiting = z.infer<typeof BotTicketWaitingSchema>;
 export type BotTicketAssignment = z.infer<typeof BotTicketAssignmentSchema>;
+export type BotTicketPull = z.infer<typeof BotTicketPullSchema>;
 export type BotTicketReport = z.infer<typeof BotTicketReportSchema>;
 export type BotTicketSummary = z.infer<typeof BotTicketSummarySchema>;
 export type BotTicket = z.infer<typeof BotTicketSchema>;

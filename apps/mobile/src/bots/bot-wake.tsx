@@ -46,6 +46,10 @@ const KIND_LABEL_KEYS: Record<string, string> = {
   ticket_blocked: "bots.notifications.kind.ticket_blocked",
   ticket_done: "bots.notifications.kind.ticket_done",
   ticket_failed: "bots.notifications.kind.ticket_failed",
+  pull_merged: "bots.notifications.kind.pull_merged",
+  pull_closed: "bots.notifications.kind.pull_closed",
+  pull_checks_passed: "bots.notifications.kind.pull_checks_passed",
+  pull_activity: "bots.notifications.kind.pull_activity",
 };
 
 /** Localized name of a notification kind; kinds from later hosts read as a generic update. */
@@ -58,6 +62,8 @@ export function NotificationKindIcon({ kind }: { kind: string }) {
     case "agent_finished":
     case "schedule_succeeded":
     case "ticket_done":
+    case "pull_merged":
+    case "pull_checks_passed":
       return <ThemedCircleCheck size={14} uniProps={statusSuccessIconColorMapping} />;
     case "agent_failed":
     case "schedule_failed":
@@ -66,6 +72,7 @@ export function NotificationKindIcon({ kind }: { kind: string }) {
     case "agent_permission":
       return <ThemedCircleAlert size={14} uniProps={statusWarningIconColorMapping} />;
     case "ticket_blocked":
+    case "pull_activity":
       return <ThemedHand size={14} uniProps={statusWarningIconColorMapping} />;
     case "terminal_attention":
       return <ThemedSquareTerminal size={14} uniProps={mutedIconColorMapping} />;

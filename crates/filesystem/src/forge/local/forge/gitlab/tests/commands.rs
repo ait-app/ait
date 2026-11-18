@@ -8,6 +8,7 @@ use domain::workspace::protocol::workspace::ChecksStatus;
 
 use super::*;
 use crate::forge::ports::{CheckDetailsQuery, ForgeRuntime};
+use domain::forge::AuthorAccess;
 use model::workspace::worktrees::ChangeRequestResolver;
 
 struct Fixture {
@@ -58,6 +59,9 @@ case "$1 $2" in
   api*)
     case "$2" in
       */approvals) cat "$root/approvals.json" ;;
+      user) cat "$root/user.json" ;;
+      *members/all*) cat "$root/members.json" ;;
+      *notes*) cat "$root/notes.json" ;;
       *discussions*page=101) cat "$root/next.json" ;;
       *discussions*) cat "$root/discussions.json" ;;
       *) echo 'unexpected api call' >&2; exit 2 ;;
@@ -90,6 +94,9 @@ esac
             }),
         );
         fixture.payload("discussions", &json!([]));
+        fixture.payload("user", &json!({"username": "owner"}));
+        fixture.payload("notes", &json!([]));
+        fixture.payload("members", &json!([]));
         fixture.payload("next", &json!([]));
         fixture
     }
@@ -619,4 +626,126 @@ fn reset_detaches_existing_mrs_and_allows_new_mrs_on_the_same_branch() {
     request["source_branch"] = json!("another-workspace");
     fixture.payload("list", &json!([request]));
     assert!(fixture.status().status.is_some());
+}
+
+#[test]
+fn a_merge_request_read_by_number_projects_jobs_and_marks_the_signed_in_users_notes() {
+    let fixture = Fixture::new();
+    let mut merged = mr();
+    merged["state"] = json!("merged");
+    merged["sha"] = json!("abc");
+    fixture.payload("mr", &merged);
+    fixture.payload(
+        "notes",
+        &json!([
+            {"id": 5, "body": "coverage 80%", "created_at": "2026-11-14T08:04:00Z",
+             "author": {"id": 5, "username": "project_7_bot_3f9a"}, "system": false},
+            {"id": 4, "body": "try this", "created_at": "2026-11-14T08:03:00Z",
+             "author": {"id": 4, "username": "visitor"}, "system": false},
+            {"id": 3, "body": "changed the description", "created_at": "2026-11-14T08:02:00Z",
+             "author": {"id": 1, "username": "owner"}, "system": true},
+            {"id": 2, "body": "Done", "created_at": "2026-11-14T08:01:00Z",
+             "author": {"id": 1, "username": "owner"}, "system": false},
+            {"id": 1, "body": "please rename", "created_at": "2026-11-14T08:00:00Z",
+             "type": "DiffNote", "position": {"new_path": "src/a.rs", "new_line": 7},
+             "author": {"id": 2, "username": "alice"}, "system": false}
+        ]),
+    );
+    fixture.payload(
+        "members",
+        &json!([
+            {"id": 1, "username": "owner", "access_level": 50},
+            {"id": 2, "username": "alice", "access_level": 30},
+            {"id": 4, "username": "visitor", "access_level": 20},
+            {"id": 5, "username": "project_7_bot_3f9a", "access_level": 40}
+        ]),
+    );
+
+    let snapshot = fixture.forge.pull_request(fixture.cwd(), 42).unwrap();
+
+    assert_eq!(snapshot.state, domain::forge::PullState::Merged);
+    assert_eq!(snapshot.head.as_deref(), Some("abc"));
+    assert_eq!(snapshot.checks[0].name, "test");
+    assert_eq!(
+        snapshot.checks[0].status,
+        domain::forge::CheckStatus::Success
+    );
+    let notes: Vec<_> = snapshot
+        .items
+        .iter()
+        .map(|item| (item.id.as_str(), item.own, item.access))
+        .collect();
+    assert_eq!(
+        notes,
+        [
+            ("5", false, AuthorAccess::Bot),
+            ("4", false, AuthorAccess::Other),
+            ("2", true, AuthorAccess::Writer),
+            ("1", false, AuthorAccess::Writer),
+        ]
+    );
+    let inline = &snapshot.items[3];
+    assert_eq!(
+        (inline.kind, inline.path.as_deref(), inline.line),
+        (
+            domain::forge::PullItemKind::ReviewComment,
+            Some("src/a.rs"),
+            Some(7)
+        )
+    );
+    let calls = fixture.calls();
+    assert_eq!(calls.matches("view").count(), 1, "one mr view: {calls}");
+    assert!(
+        calls.contains("notes?sort=desc&order_by=created_at&per_page=100"),
+        "{calls}"
+    );
+    assert!(calls.contains("user_ids[]=2"), "{calls}");
+    assert!(!calls.contains("discussions"), "{calls}");
+}
+
+#[test]
+fn a_failed_pipeline_or_user_read_fails_the_whole_merge_request_read() {
+    let fixture = Fixture::new();
+    fixture.error("ci-get", "502 Bad Gateway");
+
+    assert!(fixture.forge.pull_request(fixture.cwd(), 42).is_err());
+
+    let fixture = Fixture::new();
+    fixture.error("api-user", "connection reset");
+
+    assert!(fixture.forge.pull_request(fixture.cwd(), 42).is_err());
+}
+
+#[test]
+fn a_locked_merge_request_is_still_open() {
+    let fixture = Fixture::new();
+    let mut locked = mr();
+    locked["state"] = json!("locked");
+    fixture.payload("mr", &locked);
+
+    let snapshot = fixture.forge.pull_request(fixture.cwd(), 42).unwrap();
+
+    assert_eq!(snapshot.state, domain::forge::PullState::Open);
+}
+
+#[test]
+fn a_missing_merge_request_is_not_found() {
+    let fixture = Fixture::new();
+    fixture.error("mr-view", "404 Not Found");
+
+    let error = fixture.forge.pull_request(fixture.cwd(), 404).unwrap_err();
+
+    assert!(error.is_not_found(), "{error}");
+}
+
+/// Verify 3, V1: GitLab answers a deleted project, or one the account cannot see, with
+/// "404 Project Not Found", which the follow read already takes as not found.
+#[test]
+fn a_project_gitlab_cannot_find_is_not_found() {
+    let fixture = Fixture::new();
+    fixture.error("mr-view", "ERROR: 404 Project Not Found");
+
+    let error = fixture.forge.pull_request(fixture.cwd(), 7).unwrap_err();
+
+    assert!(error.is_not_found(), "{error}");
 }

@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 mod bot;
 mod catalog;
+mod follow;
 mod hub;
 #[cfg(unix)]
 mod mcp_socket;
@@ -509,6 +510,21 @@ fn compose_background(
         notifier.forward_attention(&execution.events(), Arc::new(agents.clone()));
     } else {
         tracing::warn!("no async runtime; Workspace Bot notifications are disabled");
+    }
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        bots.attach_follow(
+            &runtime,
+            Arc::new(follow::ForgePulls {
+                forge: Arc::new(Mutex::new(Forge::new(Box::new(LocalForge::new())))),
+                workspaces: Arc::new(workspaces.clone()),
+            }),
+            Arc::new(follow::AgentWorkers {
+                agents: Arc::new(agents.clone()),
+                execution: execution.clone(),
+            }),
+        );
+    } else {
+        tracing::warn!("no async runtime; Workspace Bot tickets do not follow pull requests");
     }
     let schedules = schedule::compose(
         &config.data_dir,

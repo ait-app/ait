@@ -120,6 +120,13 @@ Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent
   属于工单的 Agent 用 `report_progress`（`kind` 为 `progress`、`blocked`、`done`、`failed`，`text` 必填）汇报，工单与 Agent 取自凭据；`blocked`、`done`、`failed` 唤醒 Bot。
   Claude 工作者的会话预授权 `report_progress` 与只读的 `ticket_read`（只此两个工具，持久配置不变），不再为它们请求审批；Codex 与其他 Provider 的工作者没有预授权，
   在会请求审批的模式中调用 `report_progress` 可能先请求审批，见 [Workspace Bot](bots.md#任务)。
+- 拉取请求与提问（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md)）：`report_progress` 另接受可选 `pullRequest`
+  （PR 编号、`#编号` 或 URL，1–512 字符）与只配 `blocked` 的 `question`（1–512 字符）；`bot_ticket_update` 另接受 `pullRequest` 与 `answer`（`{agentId,text}`，`text` 1–2048 字符，不能与 `status` 同用）。
+  `pullRequest` 先用主机的 `gh`／`glab` 在 Bot 的检出中读取，读不到（CLI 缺失或未登录、PR 不存在、属于别的仓库、超过每工单 4 个或每 Workspace 16 个）时返回说明，
+  汇报或更新都不记录；超过跟随上限时的说明写明把仍跟随的 `done` 或 `failed` 工单改为 `cancelled` 可以腾出名额。之后 Ait 跟随该 PR：
+  能写入仓库的人（GitHub 上所有者或经权限查询确认的 admin、maintain、write 角色）的审查意见、请求修改与失败的检查在 Agent 空闲时作为新的一轮直接发给工单的 Agent
+  （全部标为来自 Forge 的数据而不是指令，Forge 提供的字段以带引号的单行出现），其他人的评论只通知 Bot，合并、关闭与检查恢复唤醒 Bot。PR 仍打开的工单在合并时自行关闭，Bot 以 `done` 或 `failed`
+  关闭它后仍继续跟随，`cancelled` 停止跟随，已关闭的 `done` 或 `failed` 工单也可以改为 `cancelled`。`answer` 只在工单仍等待 `agentId` 这个受阻的 Agent 时接受，在它空闲时送达，结果带 `delivered`。
 - 按 id 回读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）：Bot 会话用 `bot_read`（`resource`、可选 `offset`、`limit`）读取工单、对话、轮次、通知与 Agent，
   属于工单的 Agent 用 `ticket_read` 只读自己的工单。列表默认 20 条、至多 50 条，文本页默认 4000 字符、至多 8000 字符，以 `nextOffset` 续读；
   被截断的文本为 `{"preview","chars","read"}`，`read` 即读取全文的资源。Workspace 所有者在 Ait 中的对话可读 Bot 的全部对话，

@@ -214,6 +214,10 @@ pub(super) async fn serve_frames<K>(
     outbound_failure.cancel();
 }
 
+/// The capability clients that know the origins of Bot ticket inputs offer (ADR-287); timeline
+/// pages for other clients omit those origins, which their closed origin schema would reject.
+const TICKET_ORIGINS_CAPABILITY: &str = "bot.ticket.answer.request";
+
 enum Receiver {
     Legacy(tokio::sync::mpsc::Receiver<model::outbound::Queued>),
     Fair(model::outbound::FairReceiver),
@@ -258,7 +262,11 @@ async fn read(
     })?;
     let mut subscriptions = ConnectionSubscriptions {
         metadata: metadata::connection::Connection::new(session),
-        provider: provider::connection::Connection::new(&hello.client_id),
+        provider: provider::connection::Connection::new(&hello.client_id).with_ticket_origins(
+            capabilities
+                .iter()
+                .any(|capability| capability == TICKET_ORIGINS_CAPABILITY),
+        ),
         ..Default::default()
     };
     if hello.requires_single_connection() {

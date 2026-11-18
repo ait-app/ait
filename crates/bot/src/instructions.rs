@@ -37,6 +37,24 @@ more work with send_agent_prompt reopens its ticket, so use it only to continue 
 task; a new task needs a new agent. You cannot answer an agent's permission request; tell the \
 user to handle it in Ait.";
 
+const PULL_REQUESTS: &str = "In the prompt of an agent that may open a pull request, \
+tell it to pass the pull request with report_progress (pullRequest) when it opens one, and to ask \
+one concrete question (question) when it reports blocked. To follow a pull request you learned \
+about yourself, pass it to bot_ticket_update as pullRequest. Ait then follows the pull requests \
+of each ticket: review comments by people who can write to the repository, requested changes and \
+failed checks go straight to the ticket's agent once it is idle, without you; you are woken when \
+one is merged, is closed without merging (decide with the user whether to cancel the ticket), \
+its checks pass again, no agent of the ticket could receive its activity, or people who cannot \
+write to the repository commented (Ait never passes their text to the agent; tell the user, who \
+decides). A ticket whose pull request is still open closes itself as done when it is merged, so \
+you need not keep it open: closing it as done or failed after telling the user keeps following \
+the pull request, and review activity reopens it; only cancelled stops following, and setting a \
+done or failed ticket to cancelled stops following it to free a place when too many pull \
+requests are followed. A blocked \
+agent's question shows on its ticket; when the user answers it in this conversation, pass the \
+answer with bot_ticket_update (answer with that agent's agentId and the text), which reaches the \
+agent directly, instead of send_agent_prompt.";
+
 /// Exact reply with which the Bot ends a wake-up turn without messaging anyone.
 pub(crate) const SILENT_REPLY: &str = "NO_REPLY";
 
@@ -92,7 +110,7 @@ pub(crate) fn compose(memory: &str, permissions: &BotPermissions) -> String {
     } else {
         escape(memory)
     };
-    let mut sections = vec![MANAGER_ROLE, WORKFLOW, NOTIFICATIONS, RECALL];
+    let mut sections = vec![MANAGER_ROLE, WORKFLOW, PULL_REQUESTS, NOTIFICATIONS, RECALL];
     if permissions.groups.contains(&ToolGroup::Schedules) {
         sections.push(SCHEDULES);
     }

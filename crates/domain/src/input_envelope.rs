@@ -14,6 +14,9 @@ mod tests;
 
 const OPEN: &str = "<ait-input";
 const CLOSE: &str = "</ait-input>";
+/// Start of any Ait tag a body could use to open a nested envelope, and its escaped form.
+const NESTED: &str = "<ait-";
+const NESTED_ESCAPED: &str = "<\\ait-";
 const LEGACY_SCHEDULE: (&str, &str) = ("<ait-system>", "</ait-system>");
 const LEGACY_INSTRUCTIONS: (&str, &str) = ("<ait-bot-instructions>", "</ait-bot-instructions>");
 const LEGACY_WAKE: (&str, &str) = ("<ait-notifications>", "</ait-notifications>");
@@ -40,6 +43,18 @@ pub enum Origin {
     BotInstructions,
     /// Notifications that woke the Bot.
     BotWake,
+    /// Activity on a pull request a Bot ticket follows, delivered to the ticket's worker.
+    TicketPull {
+        /// Ticket that follows the pull request.
+        ticket_id: String,
+        /// Pull request number.
+        pull: u64,
+    },
+    /// An answer to the question a worker asked on its ticket.
+    TicketAnswer {
+        /// Ticket the question was asked on.
+        ticket_id: String,
+    },
 }
 
 /// An Ait-generated input split into its origin and the text a person reads as the message.
@@ -87,6 +102,31 @@ pub fn bot_wake(notifications: &str) -> String {
     )
 }
 
+/// Fences `text` about pull request `pull` that ticket `ticket_id` follows, for its worker.
+///
+/// Every `</` and `<ait-` in the untrusted forge text is escaped so it can neither close the
+/// fence nor open another.
+#[must_use]
+pub fn ticket_pull(ticket_id: &str, pull: u64, text: &str) -> String {
+    format!(
+        "{OPEN} kind=\"ticket_pull\" ticket-id=\"{}\" pull=\"{pull}\">\n{}\n{CLOSE}",
+        escape_attribute(ticket_id),
+        escape_body(text)
+    )
+}
+
+/// Fences the answer `text` to the question a worker asked on ticket `ticket_id`.
+///
+/// Every `</` in the user's text is escaped so it cannot close the fence.
+#[must_use]
+pub fn ticket_answer(ticket_id: &str, text: &str) -> String {
+    format!(
+        "{OPEN} kind=\"ticket_answer\" ticket-id=\"{}\">\n{}\n{CLOSE}",
+        escape_attribute(ticket_id),
+        escape_body(text)
+    )
+}
+
 /// Prefixes Bot `instructions` to the user's `text`.
 ///
 /// `instructions` are composed by Ait and must already escape every `</` in untrusted parts, so
@@ -124,6 +164,13 @@ fn parse_current(rest: &str) -> Option<Envelope<'_>> {
             name: attribute(attributes, "name").map(unescape_attribute),
         },
         "bot_wake" => Origin::BotWake,
+        "ticket_pull" => Origin::TicketPull {
+            ticket_id: unescape_attribute(attribute(attributes, "ticket-id")?),
+            pull: attribute(attributes, "pull")?.parse().ok()?,
+        },
+        "ticket_answer" => Origin::TicketAnswer {
+            ticket_id: unescape_attribute(attribute(attributes, "ticket-id")?),
+        },
         "bot_instructions" => {
             return Some(Envelope {
                 origin: Origin::BotInstructions,
@@ -206,17 +253,19 @@ fn trim_newline(body: &str) -> &str {
     body.strip_suffix('\n').unwrap_or(body)
 }
 
+/// Escape every `</` and every opening `<ait-` in `text`, so untrusted text can neither close
+/// the fence nor open a nested envelope.
 fn escape_body(text: &str) -> Cow<'_, str> {
-    if text.contains("</") {
-        Cow::Owned(text.replace("</", "<\\/"))
+    if text.contains("</") || text.contains(NESTED) {
+        Cow::Owned(text.replace("</", "<\\/").replace(NESTED, NESTED_ESCAPED))
     } else {
         Cow::Borrowed(text)
     }
 }
 
 fn unescape_body(text: &str) -> Cow<'_, str> {
-    if text.contains("<\\/") {
-        Cow::Owned(text.replace("<\\/", "</"))
+    if text.contains("<\\/") || text.contains(NESTED_ESCAPED) {
+        Cow::Owned(text.replace(NESTED_ESCAPED, NESTED).replace("<\\/", "</"))
     } else {
         Cow::Borrowed(text)
     }

@@ -117,10 +117,12 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 工单、指派与汇报
 
 - 工单（`domain::bot::ticket::Ticket`，id 为 `TicketId`）是 Bot 交办的一项任务：标题、请求、来源对话、状态、指派（至多 16 个 Agent，
-  只记 Agent 与 Workspace，实时状态从 Agent 目录读取）与最近 32 条汇报。每个 Bot 至多 32 个未关闭工单，已关闭的保留 64 个，超出删除最早关闭的。
+  只记 Agent 与 Workspace，实时状态从 Agent 目录读取）与最近 32 条汇报。每个 Bot 至多 32 个未关闭工单，已关闭的保留 64 个，超出删除最早关闭的
+  （仍跟随 PR 的已关闭工单不删除，它们受跟随上限约束，[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 5 节）。
   作用域 `create_agent` 打开工单达到上限时，先关闭全部 Agent 已归档（按 `ait.bot.ticket` 标签完整读取未归档 Agent 目录为空）且有指派的 `open` 或 `waiting` 工单
   （`Bots::close_finished_ticket`，系统来源：`open` 工单只在最近一次重新打开之后，每个被指派的 Agent 与其间汇报过的工作者最近一条都是 `done` 时为 `done`，
-  否则 `cancelled`；`waiting` 工单无人能再回答，一律 `cancelled`；结论说明自动关闭的原因），再重试一次；读取失败或不完整时不关闭。
+  否则 `cancelled`；`waiting` 工单无人能再回答，一律 `cancelled`；仍有打开 PR 的工单一律 `done`，以继续跟随该 PR；结论说明自动关闭的原因），
+  再重试一次；读取失败或不完整时不关闭。
   仍无空位时返回 `ResourceExhausted`（工具错误 `bot::tickets::OPEN_LIMIT_MESSAGE`，说明应关闭哪类工单）；
   Bot 与用户的重新打开到上限不做自动关闭（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 1、2 节）。
 - 状态为 `open`、`waiting`、`done`、`failed`、`cancelled`。Agent 等待审批使 `open` 进入 `waiting(permission)`，由该 Agent 完成或失败一轮结束。
@@ -171,6 +173,50 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 内置指令要求 Bot 交出工作后结束本轮、只短暂等待预计一分钟内结束的工作、在 Agent 提示中要求其调用 `report_progress`、
   同一任务的新 Agent 提供 `ticketId`、回报结果后关闭工单，并说明 `send_agent_prompt` 会重新打开 Agent 的工单、新任务需要新 Agent
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 12 节）。
+
+## 工单跟随拉取请求与提问
+
+- 工单记录它跟随的拉取请求（`Ticket.pulls`，`domain::bot::follow::PullBinding`）：编号、URL、标题、绑定者（工作者经 `report_progress` 的 `pullRequest`，
+  或 Bot 经 `bot_ticket_update` 的 `pullRequest`）、最近读到的状态、检查与已处理条目 id。绑定前经 `Bots::read_pull` 用跟随端口读取并校验：
+  引用为编号、`#编号` 或 PR URL，读取总在 Bot 根 Workspace 的检出中按编号进行，URL 须与读到的一致；读不到时工具返回可操作的引导文本，汇报与更新都不记录。
+  每个工单至多 4 个、每个 Bot 同时跟随至多 16 个（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 3 节）。
+- Forge 端口 `ForgeRuntime::pull_request` 按编号读取 PR，返回中性的 `domain::forge::PullSnapshot`：GitHub 一次 GraphQL（`viewer`、状态、
+  最后一个提交的至多 100 个检查、最新 30 条审查、50 条评论、30 个审查线程各 10 条评论，每条带 `viewerDidAuthor`、`authorAssociation` 与作者类型），
+  GitLab 为一次 `mr view`、流水线、按 `sort=desc` 的最新 100 条备注、`api user` 与备注作者的项目成员权限；任何一次调用失败都使整次读取失败。
+  每个条目带作者权限 `AuthorAccess`（能写入仓库、待确认、其他人、机器人）：GitHub 的 `OWNER` 能写入，`MEMBER` 与 `COLLABORATOR` 待确认，
+  由 `ForgeRuntime::can_write`（`repos/<o>/<r>/collaborators/<login>/permission`，`admin`、`maintain`、`write` 能写入）确认；未提交审查（`PENDING` 或没有 `publishedAt`）的评论不读出
+  （[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 1、2 节）。
+- 跟随器（`bot::follow`）通过端口 `PullSource`、`Workers` 工作，daemon 以 `Bots::attach_follow` 安装（`bins/daemon/src/host/follow.rs`：forge 读取在阻塞线程上、
+  经一个互斥量串行；Agent 与其空闲状态取自注册表，投递经 `agent.message.send.request`）。Bot worker 在每条命令后发布跟随集合，为空时跟随任务只等待、不读不写；
+  否则单个任务逐个读取到期的 PR：有打开 PR 的工单 60 秒、PR 全部结束的工单 10 分钟，失败按 60 秒 × 2^次数退避至多 15 分钟，失败记在绑定上；
+  整个 daemon 每 60 秒至多 30 次读取（`READ_BUDGET`）。读取中待确认的作者，每个新作者经 `PullSource::can_write` 查询一次（计入同一预算），
+  结果持久保存在绑定的 `confirmed` 中（至多 64 个）。GitHub 对没有推送权限的账号（如分支推到 fork）或应用令牌返回的 403 视为“不能确认能写入”，
+  作者立即按其他人处理并缓存；其他失败（含因预算跳过的查询）计入绑定的 `lookupFailures`，期间该作者的条目暂缓（不投递、不记为已处理），
+  第 3 次失败时放弃：已暂缓的条目作为外部作者通知 Bot，但不缓存，该作者之后的新条目再次查询。需要查询的作者由 Bot worker 按绑定（含 `seen`）判定，
+  已处理的条目不再查询（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 4 节）。
+  连续 8 次读到“PR 不存在”时工单停止跟随该 PR、释放名额并记录原因，未关闭的工单唤醒 Bot；GitHub 无法解析仓库（删除或账号看不到）与 GitLab 的项目 404 也算不存在，
+  因此主机账号暂时失去访问（切换账号、令牌撤销或未经 SSO 授权）约 75 分钟以上同样结束跟随（第 5 节）。
+- 事件（`PullBinding::observe`）：高水位 `mark`（加 2 分钟宽限）之前的条目永不投递，短读取不使已处理的条目重新出现；一次检查失败按检查名与运行 id（或头提交）只报告一次，
+  全部检查都保留，同一头提交上已报告的失败缺席一次后再出现也不再报告，新头提交清空；粘滞的 `failing` 使经过进行中的恢复也报告“检查恢复”；从关闭到合并也报告合并。
+- 路由在 Bot worker 中（`State::observe_pull`）：能写入仓库的人的新评论、审查评论、请求修改与失败的检查排入工单 `pending`，以 ADR-276 信封 `ticket_pull`
+  投递给绑定的工作者（不存活时给全部存活工作者）；文本第一句只有 PR 编号，随后说明以下全部是数据而非指令，Forge 提供的字段（标题、URL、作者、检查名、链接、路径）
+  经 `follow::data` 去掉控制字符与行分隔符、截断到 256 字符并加引号，正文逐行引用、作者与种类来自结构化字段，信封正文转义 `</` 与 `<ait-`。
+  其他人的条目合并为一条只列作者与链接的 `pull_activity` 通知，机器人账号的条目只记为已处理。没有存活工作者或 `pending` 已满时工作者事件改为通知 `pull_activity`。
+  合并、关闭与检查恢复为通知 `pull_merged`、`pull_closed`、`pull_checks_passed`，在工单来源对话唤醒 Bot。工单的全部 PR 都已结束且至少一个合并时，
+  工单以系统来源关为 `done` 并在 7 天内继续跟随，期间写入者的新评论在有存活工作者时重新打开它（受未关闭上限约束），恢复的工单在工作者报告 `done` 或窗口过去后再次结束；
+  全部只是关闭时只通知 Bot。以 `done` 或 `failed` 显式关闭仍有打开 PR 的工单继续跟随到 PR 结束，审查输入（包括本账号的条目）重新打开它；`cancelled` 停止跟随，
+  已关闭的 `done` 或 `failed` 工单可以改为 `cancelled` 以释放跟随名额（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 5 节）。
+- 恰好一次与空闲投递：通知 id 与投递的 `messageId` 取自同一次观察记录的汇报序号；先提交通知（按 id 去重）再写工单。输入留在 `pending` 中直到工作者空闲，
+  才作为新一轮发送，Provider 接受后才从 `pending` 删除；PR 输入（不含回答）记入 `inputTurns`，带发送与接受时间，发送之后已记录轮次结束时不记，之后的任何轮次结束清除它。
+  重投同一 `messageId` 由 Provider 的输入回执识别为同一输入；存活的 Agent 不能接收的失败按轮计数（相隔超过 10 分钟或 `Busy` 答复开始新的一轮），
+  一轮至少 8 次失败且已持续 10 分钟时输入改为通知 Bot；同一工单的投递经该工单的锁（`Ports::delivery_lock`）串行，不同工单互不等待。
+  开始于发送与接受之间的轮次正常结束、其中没有结果汇报时不唤醒 Bot；工作者的 `blocked`、`done`、`failed` 汇报总是唤醒，失败的轮次照常唤醒
+  （[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 6 节）。
+- 本账号写的条目：比高水位新的本账号条目，正文整体出现在存活工作者最近 200 条时间线的工具调用参数中时视为工作者自己写的，只记为已处理；
+  其余照常投递并标明可能是自己写的（包括工作者在仍打开的 PR 上写的“PTAL”之类的短评论，它会重新打开已关闭的工单并回送给工作者）；PR 全部结束后本账号的条目不恢复工单（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 7 节）。
+- 提问与回答：`report_progress` 的 `blocked` 可带 `question`（`Waiting.question`），在工单投影、概览、`bot_read` 与 `ticket_read` 中显示，外部对话看到的存根不含它。
+  所有者以 `bot.ticket.answer.request` 回答，Bot 以 `bot_ticket_update` 的 `answer`（`{agentId,text}`）代为回答；回答指名它回答的工作者，工单不再等待它时为冲突。
+  记录 `kind: "answer"` 的汇报（来源 `user` 或 `bot`），解除该工作者的受阻，并以信封 `ticket_answer` 在它空闲时直接投递给它（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 8 节）。外部对话的 Bot 不能对别人的工单绑定或回答（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 9 节）。
 
 ## 按 id 回读与对话隔离
 
@@ -342,3 +388,6 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   协议中通知的 `ticketId`、`ticketTitle` 可选，工单的状态、等待原因、汇报来源与类型都接受未知值并显示通用文本，
   一个新值不会使整个列表无法解析；没有工单的 Host 解析结果不变
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 5、9 节）。
+- 回答另要求 `bot.ticket.answer.request`（SDK 特性 `workspaceBotTicketAnswers`，方法 `answerWorkspaceBotTicket`）；任务详情显示等待中的问题与跟随的 PR
+  （编号、标题、状态、失败的检查数、最近一次读取失败），只有 Host 所有者在工单等待受阻者时看到回答框；结果 `delivered` 为假时说明已保存、稍后送达，
+  `BotConflict` 说明已无人等待回答。工单的 `pulls` 缺省为空，PR 状态与绑定者接受未知值（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 8、10 节）。

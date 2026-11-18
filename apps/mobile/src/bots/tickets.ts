@@ -1,4 +1,5 @@
 import {
+  BOT_PULL_STATES,
   BOT_TICKET_REPORT_KINDS,
   BOT_TICKET_REPORT_SOURCES,
   BOT_TICKET_STATUSES,
@@ -66,4 +67,9 @@ export function reportSourceKey(source: string): string {
 /** Translation key of what a report says. */
 export function reportKindKey(kind: string): string {
   return `bots.tickets.report.${known(BOT_TICKET_REPORT_KINDS, kind)}`;
+}
+
+/** Translation key of a followed pull request's state. */
+export function pullStateKey(state: string): string {
+  return `bots.tickets.pullState.${known(BOT_PULL_STATES, state)}`;
 }

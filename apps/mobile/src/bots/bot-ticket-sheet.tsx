@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BotTicket,
   BotTicketAssignment,
+  BotTicketPull,
   BotTicketReport,
   BotTicketUserStatus,
 } from "@ait/protocol/bot/types";
@@ -14,6 +15,7 @@ import { FormTextInput } from "@/components/ui/form-field";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { openExternalUrl } from "@/utils/open-external-url";
 import { formatMessageTimestamp } from "@/utils/time";
 import { TicketStatusIcon } from "./bot-tickets";
 import { BotLoadingSpinner } from "./loading";
@@ -21,6 +23,7 @@ import { botKeys, hasBotErrorCode, isBotConflict } from "./queries";
 import { botStyles as styles, botTicketStyles as ticketStyles } from "./styles";
 import {
   isTicketClosed,
+  pullStateKey,
   reportKindKey,
   reportSourceKey,
   ticketStatusKey,
@@ -110,6 +113,27 @@ function TicketHistory({ serverId, reports }: { serverId: string; reports: BotTi
   );
 }
 
+/** A pull request the ticket follows: number and title open it, then its state and checks. */
+function FollowedPull({ pull }: { pull: BotTicketPull }) {
+  const { t } = useTranslation();
+  const facts = [t(pullStateKey(pull.state))];
+  if (pull.checks && pull.checks.failing > 0)
+    facts.push(t("bots.tickets.checksFailing", { count: pull.checks.failing }));
+  return (
+    <View testID={`bot-ticket-pull-${pull.number}`}>
+      <Pressable onPress={() => void openExternalUrl(pull.url)} accessibilityRole="link">
+        <Text style={[styles.text, styles.link]} numberOfLines={1}>
+          {`#${pull.number} ${pull.title}`}
+        </Text>
+      </Pressable>
+      <Text style={styles.hint}>{facts.join(" · ")}</Text>
+      {pull.error ? (
+        <Text style={styles.warning}>{t("bots.tickets.pullError", { error: pull.error })}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function TicketBody({
   serverId,
   workspaceId,
@@ -135,6 +159,14 @@ function TicketBody({
             : t(ticketStatusKey(ticket.status))}
         </Text>
       </View>
+      {ticket.status === "waiting" && ticket.waiting?.question ? (
+        <View style={ticketStyles.section}>
+          <Text style={ticketStyles.heading}>{t("bots.tickets.question")}</Text>
+          <Text style={styles.text} selectable testID="bot-ticket-question">
+            {ticket.waiting.question}
+          </Text>
+        </View>
+      ) : null}
       {isTicketClosed(ticket.status) ? (
         <View style={ticketStyles.section}>
           <Text style={ticketStyles.heading}>{t("bots.tickets.outcome")}</Text>
@@ -165,6 +197,14 @@ function TicketBody({
           ))
         )}
       </View>
+      {ticket.pulls.length > 0 ? (
+        <View style={ticketStyles.section}>
+          <Text style={ticketStyles.heading}>{t("bots.tickets.pulls")}</Text>
+          {ticket.pulls.map((pull) => (
+            <FollowedPull key={pull.number} pull={pull} />
+          ))}
+        </View>
+      ) : null}
       <View style={ticketStyles.section}>
         <Text style={ticketStyles.heading}>{t("bots.tickets.history")}</Text>
         <TicketHistory serverId={serverId} reports={ticket.reports} />
@@ -232,6 +272,41 @@ function TicketActions({
           testID="bot-ticket-done"
         >
           {t("bots.tickets.markDone")}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+/** The owner's answer to the question of the blocked worker the ticket waits on. */
+function TicketAnswer({
+  pending,
+  onAnswer,
+}: {
+  pending: boolean;
+  onAnswer: (answer: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [answer, setAnswer] = useState("");
+  return (
+    <View style={ticketStyles.footer}>
+      <FormTextInput
+        initialValue=""
+        onChangeText={setAnswer}
+        placeholder={t("bots.tickets.answerPlaceholder")}
+        accessibilityLabel={t("bots.tickets.answerPlaceholder")}
+        editable={!pending}
+        maxLength={2048}
+        testID="bot-ticket-answer-input"
+      />
+      <View style={ticketStyles.actions}>
+        <Button
+          size="sm"
+          disabled={pending || !answer.trim()}
+          onPress={() => onAnswer(answer.trim())}
+          testID="bot-ticket-answer"
+        >
+          {t("bots.tickets.sendAnswer")}
         </Button>
       </View>
     </View>
@@ -312,7 +387,32 @@ export function BotTicketSheet({
       void queryClient.invalidateQueries({ queryKey: ["bot-tickets", serverId, workspaceId] });
     },
   });
+  const answerable = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceBotTicketAnswers === true,
+  );
+  const answer = useMutation({
+    // The answer names the worker whose question the sheet showed, so the host refuses it if the
+    // wait passed to another worker meanwhile.
+    mutationFn: async ({ agentId, text }: { agentId: string; text: string }) => {
+      if (readOnly) throw new Error(t("bots.requestFailed"));
+      if (!client) throw new Error(t("bots.disconnected"));
+      try {
+        return await client.answerWorkspaceBotTicket(workspaceId, ticketId, agentId, text);
+      } catch (cause) {
+        if (isBotConflict(cause)) {
+          void detail.refetch();
+          throw new Error(t("bots.tickets.answerConflict"));
+        }
+        throw cause;
+      }
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKey, result.ticket);
+      void queryClient.invalidateQueries({ queryKey: ["bot-tickets", serverId, workspaceId] });
+    },
+  });
   const ticket = detail.data;
+  const asked = ticket?.status === "waiting" && ticket.waiting?.reason === "blocked";
   const footer =
     ticket && !readOnly ? (
       <View style={ticketStyles.footer}>
@@ -320,6 +420,27 @@ export function BotTicketSheet({
           <Text style={styles.error} accessibilityRole="alert">
             {update.error.message}
           </Text>
+        ) : null}
+        {answer.error ? (
+          <Text style={styles.error} accessibilityRole="alert">
+            {answer.error.message}
+          </Text>
+        ) : null}
+        {answer.data && !answer.data.delivered ? (
+          <Text style={styles.hint} testID="bot-ticket-answer-queued">
+            {t("bots.tickets.answerQueued")}
+          </Text>
+        ) : null}
+        {answerable && asked ? (
+          <TicketAnswer
+            // A new wait starts a fresh answer draft.
+            key={ticket.waiting?.since}
+            pending={answer.isPending}
+            onAnswer={(text) => {
+              const agentId = ticket.waiting?.agentId;
+              if (agentId) answer.mutate({ agentId, text });
+            }}
+          />
         ) : null}
         <TicketActions
           // A new status starts a fresh outcome draft.

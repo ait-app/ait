@@ -350,6 +350,17 @@ export const BOT_REQUEST_SCHEMAS = [
     // Only with a closing status.
     outcome: z.string().optional(),
   }),
+  z.strictObject({
+    type: z.literal("bot.ticket.answer.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    ticketId: z.guid(),
+    // The blocked worker whose question this answers, as the client showed it; the host refuses
+    // the answer with a conflict when the ticket no longer waits on that worker (ADR-287).
+    agentId: z.string().min(1),
+    // The owner's answer to that worker's question.
+    answer: z.string().min(1).max(2048),
+  }),
 ] as const;
 
 export const BOT_RESPONSE_SCHEMAS = [
@@ -647,6 +658,11 @@ export const BOT_RESPONSE_SCHEMAS = [
     type: z.literal("bot.ticket.update.response"),
     payload: z.object({ requestId: z.string(), ticket: BotTicketSchema, changed: z.boolean() }),
   }),
+  z.object({
+    type: z.literal("bot.ticket.answer.response"),
+    // `delivered` is false when the worker could not take it now; the host retries.
+    payload: z.object({ requestId: z.string(), ticket: BotTicketSchema, delivered: z.boolean() }),
+  }),
 ] as const;
 
 export const BotRequestSchema = z.discriminatedUnion("type", BOT_REQUEST_SCHEMAS);
@@ -675,6 +691,8 @@ export const BOT_TICKET_METHODS = [
   "bot.ticket.get.request",
   "bot.ticket.update.request",
 ] as const;
+/** The owner's answer to a blocked worker (ADR-287); older hosts show the question without it. */
+export const BOT_TICKET_ANSWER_METHODS = ["bot.ticket.answer.request"] as const;
 export const BOT_FEISHU_SETUP_METHODS = [
   "bot.channel.feishu.scan.start.request",
   "bot.channel.feishu.scan.status.request",
@@ -712,6 +730,7 @@ const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_NOTIFICATION_METHODS,
   ...BOT_TICKET_METHODS,
+  ...BOT_TICKET_ANSWER_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
   ...BOT_LARK_SETUP_METHODS,
   ...BOT_TELEGRAM_SETUP_METHODS,

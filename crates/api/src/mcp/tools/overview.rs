@@ -461,6 +461,13 @@ fn ticket_entries(sources: &Sources<'_>, tickets: &[Value]) -> Vec<Value> {
                 "read":format!("ticket/{id}")});
             if !readable {
                 entry["restricted"] = json!(true);
+            } else if let Some(pulls) = ticket["pulls"].as_array().filter(|pulls| !pulls.is_empty())
+            {
+                entry["pulls"] = pulls
+                    .iter()
+                    .map(|pull| json!({"number":pull["number"],"state":pull["state"],
+                        "error":pull["error"]}))
+                    .collect();
             }
             entry
         })

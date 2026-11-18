@@ -7,11 +7,16 @@ import type { BotTicket, BotTicketSummary, BotView } from "@ait/protocol/bot/typ
 import { BotTicketSheet } from "./bot-ticket-sheet";
 import { BotTicketsTrack } from "./bot-tickets";
 
-const { botRequest, confirmDialog } = vi.hoisted(() => ({
+const { botRequest, answerWorkspaceBotTicket, confirmDialog, openExternalUrl } = vi.hoisted(() => ({
   botRequest: vi.fn(),
+  answerWorkspaceBotTicket: vi.fn(),
   confirmDialog: vi.fn(async (_options: unknown) => true),
+  openExternalUrl: vi.fn(async (_url: string) => undefined),
 }));
-vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => ({ botRequest, answerWorkspaceBotTicket }),
+}));
+vi.mock("@/utils/open-external-url", () => ({ openExternalUrl }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
@@ -26,7 +31,7 @@ vi.mock("@/stores/session-store", () => ({
     select({
       sessions: {
         host: {
-          serverInfo: { features: { workspaceBotTickets: true } },
+          serverInfo: { features: { workspaceBotTickets: true, workspaceBotTicketAnswers: true } },
           agents: new Map([["agt_1", { title: "Login fixer" }]]),
         },
       },
@@ -149,6 +154,7 @@ function summary(id: string, patch: Partial<BotTicketSummary> = {}): BotTicketSu
     closedAt: null,
     outcome: null,
     assignments: [],
+    pulls: [],
     latestReport: null,
     ...patch,
   };
@@ -169,6 +175,7 @@ function ticket(patch: Partial<BotTicket> = {}): BotTicket {
       { agentId: "agt_1", workspaceId: "workspace", assignedAt: at },
       { agentId: "agt_elsewhere", workspaceId: "other", assignedAt: at },
     ],
+    pulls: [],
     request: "Fix the login form",
     reports: [
       {
@@ -198,6 +205,8 @@ let queryClient: QueryClient;
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   botRequest.mockReset();
+  answerWorkspaceBotTicket.mockReset();
+  openExternalUrl.mockClear();
   confirmDialog.mockClear();
   confirmDialog.mockResolvedValue(true);
 });
@@ -451,10 +460,90 @@ describe("Bot task detail", () => {
     expect(screen.queryByTestId("bot-ticket-outcome")).toBeNull();
   });
 
+  it("shows the blocked worker's question and the pull requests the task follows", async () => {
+    botRequest.mockResolvedValue({
+      ticket: ticket({
+        waiting: { reason: "blocked", agentId: "agt_1", since: at, question: "GitHub or GitLab?" },
+        pulls: [
+          {
+            number: 12,
+            url: "https://github.com/acme/app/pull/12",
+            title: "Fix login",
+            boundBy: "agent",
+            agentId: "agt_1",
+            boundAt: at,
+            state: "merged",
+            checks: { failing: 2, pending: 0, total: 3 },
+            polledAt: at,
+            error: "gh: HTTP 502",
+          },
+        ],
+      }),
+    });
+    renderSheet();
+    expect((await screen.findByTestId("bot-ticket-question")).textContent).toBe(
+      "GitHub or GitLab?",
+    );
+    const pull = screen.getByTestId("bot-ticket-pull-12");
+    expect(pull.textContent).toContain("#12 Fix login");
+    expect(pull.textContent).toContain("bots.tickets.pullState.merged");
+    expect(pull.textContent).toContain('bots.tickets.checksFailing {"count":2}');
+    expect(pull.textContent).toContain('bots.tickets.pullError {"error":"gh: HTTP 502"}');
+    fireEvent.click(screen.getByText("#12 Fix login"));
+    expect(openExternalUrl).toHaveBeenCalledWith("https://github.com/acme/app/pull/12");
+  });
+
+  it("sends the owner's answer to the waiting worker and says when it is only saved", async () => {
+    botRequest.mockResolvedValue({ ticket: ticket() });
+    answerWorkspaceBotTicket.mockResolvedValue({
+      ticket: ticket({ status: "open", waiting: null }),
+      delivered: false,
+    });
+    renderSheet();
+    const send = await screen.findByTestId("bot-ticket-answer");
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("bot-ticket-answer-input"), {
+      target: { value: "  Use GitHub  " },
+    });
+    fireEvent.click(screen.getByTestId("bot-ticket-answer"));
+    await screen.findByTestId("bot-ticket-answer-queued");
+    expect(answerWorkspaceBotTicket).toHaveBeenCalledWith(
+      "workspace",
+      ticketId,
+      "agt_1",
+      "Use GitHub",
+    );
+    // The task no longer waits, so the answer box goes away.
+    expect(screen.queryByTestId("bot-ticket-answer-input")).toBeNull();
+  });
+
+  it("explains an answer the host refuses because nobody waits any more", async () => {
+    botRequest.mockResolvedValue({ ticket: ticket() });
+    answerWorkspaceBotTicket.mockRejectedValue(
+      Object.assign(new Error("Bot conflict"), { code: "bot_conflict" }),
+    );
+    renderSheet();
+    fireEvent.change(await screen.findByTestId("bot-ticket-answer-input"), {
+      target: { value: "Use GitHub" },
+    });
+    fireEvent.click(screen.getByTestId("bot-ticket-answer"));
+    await screen.findByText("bots.tickets.answerConflict");
+  });
+
+  it("offers no answer for a permission wait", async () => {
+    botRequest.mockResolvedValue({
+      ticket: ticket({ waiting: { reason: "permission", agentId: "agt_1", since: at } }),
+    });
+    renderSheet();
+    await screen.findByTestId(`bot-ticket-${ticketId}`);
+    expect(screen.queryByTestId("bot-ticket-answer-input")).toBeNull();
+  });
+
   it("shows guests the task without any action", async () => {
     botRequest.mockResolvedValue({ ticket: ticket() });
     renderSheet(true);
     await screen.findByTestId(`bot-ticket-${ticketId}`);
+    expect(screen.queryByTestId("bot-ticket-answer-input")).toBeNull();
     expect(screen.queryByTestId("bot-ticket-done")).toBeNull();
     expect(screen.queryByTestId("bot-ticket-cancel")).toBeNull();
     expect(screen.queryByTestId("bot-ticket-outcome-input")).toBeNull();

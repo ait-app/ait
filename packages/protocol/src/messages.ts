@@ -720,7 +720,7 @@ export const VoiceTranscriptSchema = z
   .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
   .max(256);
 
-export const UserMessageOriginSchema = z.discriminatedUnion("kind", [
+const KnownUserMessageOriginSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("schedule"),
     scheduleId: z.string(),
@@ -729,6 +729,22 @@ export const UserMessageOriginSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("bot_instructions") }),
   z.object({ kind: z.literal("bot_wake") }),
+  // Activity on a pull request a Bot ticket follows, and an answer to a worker's question (ADR-287).
+  z.object({ kind: z.literal("ticket_pull"), ticketId: z.string(), pull: z.number().int() }),
+  z.object({ kind: z.literal("ticket_answer"), ticketId: z.string() }),
+]);
+
+/** Origin kinds this client knows; a malformed origin of one of them is still rejected. */
+const KNOWN_USER_MESSAGE_ORIGIN_KIND =
+  /^(?!(?:schedule|bot_instructions|bot_wake|ticket_pull|ticket_answer|other)$)/;
+
+// An origin kind a newer daemon added: kept as `other`, so one such row degrades to an unlabelled
+// item instead of failing the timeline page or stream message that carries it.
+export const UserMessageOriginSchema = z.union([
+  KnownUserMessageOriginSchema,
+  z
+    .object({ kind: z.string().regex(KNOWN_USER_MESSAGE_ORIGIN_KIND) })
+    .transform(({ kind }) => ({ kind: "other" as const, other: kind })),
 ]);
 
 export const VoiceTimelineItemSchema = z.intersection(
@@ -3626,6 +3642,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceBotPermissions: z.boolean().optional(),
         workspaceBotNotifications: z.boolean().optional(),
         workspaceBotTickets: z.boolean().optional(),
+        workspaceBotTicketAnswers: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
         workspaceBotLarkSetup: z.boolean().optional(),
         workspaceBotTelegramSetup: z.boolean().optional(),

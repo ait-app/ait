@@ -143,7 +143,15 @@ pub(super) async fn timeline(
             serde_json::json!({"request":context.request.params,"plugin":plugin});
         "internal.timeline.append".clone_into(&mut context.request.method);
     }
-    super::agent_execution::request(context, state).map_err(Into::into)
+    if connection.knows_ticket_origins() {
+        return super::agent_execution::request(context, state).map_err(Into::into);
+    }
+    super::agent_execution::request_projected(
+        context,
+        state,
+        crate::timeline_projection::hide_ticket_origins,
+    )
+    .map_err(Into::into)
 }
 
 /// Try the catalog request branch and consume `pending` only on a match.

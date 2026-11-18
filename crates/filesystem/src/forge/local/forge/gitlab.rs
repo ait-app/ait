@@ -16,6 +16,7 @@ use super::{
 };
 
 pub(super) mod checkout;
+pub(super) mod follow;
 pub(super) mod pipeline;
 mod status;
 pub(super) mod timeline;

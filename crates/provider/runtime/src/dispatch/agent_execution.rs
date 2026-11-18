@@ -52,6 +52,18 @@ pub(super) fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueE
     respond_admitted(context, state, AgentExecution::admit_request)
 }
 
+/// Admit ordered native work like [`request`], then apply `project` to a successful result
+/// before delivery, such as hiding origins the client did not negotiate.
+/// # Errors
+/// Returns delivery failure; admission and execution errors use the original request ID.
+pub(super) fn request_projected(
+    context: Context<'_>,
+    state: &Shared,
+    project: fn(&mut Value),
+) -> Result<(), QueueError> {
+    respond_projected(context, state, AgentExecution::admit_request, Some(project))
+}
+
 /// Admit `context` through `admit` on the installed executor, then deliver its response from a
 /// tracked task so the connection's capability worker is never held.
 ///
@@ -66,6 +78,16 @@ pub(super) fn respond_admitted(
     context: Context<'_>,
     state: &Shared,
     admit: fn(&AgentExecution, &str, Value) -> Result<AdmittedResponse, crate::rpc::ErrorCode>,
+) -> Result<(), QueueError> {
+    respond_projected(context, state, admit, None)
+}
+
+/// [`respond_admitted`] that applies `project`, when given, to a successful result before delivery.
+fn respond_projected(
+    context: Context<'_>,
+    state: &Shared,
+    admit: fn(&AgentExecution, &str, Value) -> Result<AdmittedResponse, crate::rpc::ErrorCode>,
+    project: Option<fn(&mut Value)>,
 ) -> Result<(), QueueError> {
     let admission = state
         .admission
@@ -91,7 +113,10 @@ pub(super) fn respond_admitted(
     // outbound delivery. Dropping the socket cannot cancel accepted work, such as a catalog
     // cache or refresh update.
     state.tasks.spawn(async move {
-        let result = response.receive().await.map_err(Into::into);
+        let mut result = response.receive().await.map_err(Into::into);
+        if let (Some(project), Ok(value)) = (project, &mut result) {
+            project(value);
+        }
         let _ = outbound.respond(request_id, result);
         drop(response);
     });

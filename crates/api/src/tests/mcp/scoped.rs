@@ -7,6 +7,7 @@ use domain::bot::permissions::{BotPermissions, Holder, ToolGroup};
 use super::*;
 
 mod confinement;
+mod follow;
 mod notifications;
 mod recall;
 mod schedules;

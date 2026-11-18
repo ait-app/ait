@@ -419,6 +419,12 @@ function useUserMessageOriginLabel(origin?: UserMessageOrigin): string | null {
         return t("message.origin.botWake");
       case "bot_instructions":
         return t("message.origin.botInstructions");
+      case "ticket_pull":
+        return t("message.origin.ticketPull", { pull: origin.pull });
+      case "ticket_answer":
+        return t("message.origin.ticketAnswer");
+      case "other":
+        return null;
     }
   }, [origin, t]);
 }

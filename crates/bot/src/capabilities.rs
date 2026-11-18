@@ -50,6 +50,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.ticket.list.request"),
     MethodSpec::request("bot.ticket.get.request"),
     MethodSpec::request("bot.ticket.update.request"),
+    MethodSpec::request("bot.ticket.answer.request"),
     MethodSpec::request("bot.webhook.message.send.request"),
     MethodSpec::request("bot.webhook.delivery.ack.request"),
     MethodSpec::request("bot.webhook.conversation.close.request"),

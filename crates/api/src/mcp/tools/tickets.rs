@@ -3,9 +3,13 @@
 
 use bot::mcp::CallerKind;
 use bot::service::Bots;
-use bot::tickets::{AssignTicket, OPEN_LIMIT_MESSAGE, OpenTicket, OpenedTicket, WorkerReport};
+use bot::tickets::{
+    AssignTicket, OPEN_LIMIT_MESSAGE, OpenTicket, OpenedTicket, PULL_LIMIT_MESSAGE, WorkerReport,
+};
 use domain::bot::BOT_TICKET_LABEL;
-use domain::bot::ticket::{ASSIGNMENT_LIMIT, TicketDraft, TicketUpdate, WorkerReportKind};
+use domain::bot::ticket::{
+    ASSIGNMENT_LIMIT, TicketDraft, TicketStatus, TicketUpdate, WorkerReportKind,
+};
 use domain::{ConversationId, TicketId};
 use model::ErrorCode;
 use serde_json::{Value, json};
@@ -38,6 +42,18 @@ const REPORT_REFUSED: &str = "Your ticket is closed or the Workspace Bot is paus
 /// Refusal for changing or joining a ticket another conversation originated (ADR-280).
 const FOREIGN_TICKET: &str = "This ticket belongs to another conversation of the Workspace \
     Bot; only that conversation or the workspace owner's Ait conversation can change it";
+/// Refusal for a question on a report other than `blocked`.
+const QUESTION_REFUSED: &str = "question is only for kind blocked: ask the user one concrete \
+    question when you cannot continue without them. The report was not recorded";
+/// Refusal for reopening a ticket beyond the open-ticket limit or the per-Workspace limit of
+/// followed pull requests (ADR-287).
+const REOPEN_LIMIT: &str = "The ticket was not reopened: too many tickets are open, or \
+    reopening it would make this Workspace follow more than 16 pull requests. Close or cancel \
+    tickets whose work is finished or no longer needed with bot_ticket_update, then try again";
+/// Refusal for an answer to a worker the ticket does not wait on.
+const NO_QUESTION: &str = "That agent is not waiting for an answer on this ticket: the wait may \
+    have passed to another agent or ended. Read the ticket with bot_read and answer the agent \
+    in its waiting.agentId, and do not combine answer with status";
 /// Refusal for a report whose ticket the Bot no longer has.
 const REPORT_GONE: &str = "Your ticket no longer exists, so the report was not recorded; finish \
     your current work and reply normally";
@@ -362,16 +378,41 @@ async fn update(bots: &Bots, root: &str, mut arguments: Value) -> Result<Value, 
         .and_then(Value::as_str)
         .and_then(|ticket| ticket.parse().ok())
         .ok_or(Failure::Refused(UNKNOWN_TICKET))?;
-    let update: TicketUpdate =
+    let reference = take(&mut arguments, "pullRequest")?;
+    let mut update: TicketUpdate =
         serde_json::from_value(arguments).map_err(|_| Failure::Refused(EMPTY_UPDATE))?;
+    if let Some(reference) = reference {
+        update.pull = Some(pull(bots, root, &reference).await?);
+    }
+    let (binding, answering) = (update.pull.is_some(), update.answer.is_some());
+    let reopening = update.status == Some(TicketStatus::Open);
     match bots.update_ticket(root.to_owned(), ticket, update).await {
         Ok(result) => Ok(result),
         Err(ErrorCode::BotNotFound) => Err(Failure::Refused(UNKNOWN_TICKET)),
+        Err(ErrorCode::BotConflict | ErrorCode::InvalidMessage) if answering => {
+            Err(Failure::Refused(NO_QUESTION))
+        }
         Err(ErrorCode::BotConflict) => Err(Failure::Refused(CLOSED_CONFLICT)),
         Err(ErrorCode::InvalidMessage) => Err(Failure::Refused(EMPTY_UPDATE)),
+        Err(ErrorCode::ResourceExhausted) if binding => Err(Failure::Refused(PULL_LIMIT_MESSAGE)),
+        Err(ErrorCode::ResourceExhausted) if reopening => Err(Failure::Refused(REOPEN_LIMIT)),
         Err(ErrorCode::ResourceExhausted) => Err(Failure::Refused(OPEN_LIMIT_MESSAGE)),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Read the pull request `reference` names in `root`'s checkout for binding it (ADR-287).
+/// # Errors
+/// Returns the guided refusal of a reference the forge cannot confirm.
+async fn pull(
+    bots: &Bots,
+    root: &str,
+    reference: &Value,
+) -> Result<domain::forge::PullSnapshot, Failure> {
+    let reference = reference.as_str().ok_or(ErrorCode::InvalidMessage)?;
+    bots.read_pull(root, reference)
+        .await
+        .map_err(|refusal| Failure::Refused(refusal.message()))
 }
 
 /// `report_progress`: a subtree Agent reports on the ticket its own label names.
@@ -397,6 +438,15 @@ async fn report(
     };
     let kind: WorkerReportKind =
         serde_json::from_value(arguments["kind"].clone()).map_err(|_| ErrorCode::InvalidMessage)?;
+    let question = arguments["question"].as_str().map(str::to_owned);
+    if question.is_some() && kind != WorkerReportKind::Blocked {
+        return Err(Failure::Refused(QUESTION_REFUSED));
+    }
+    let pull = match arguments.get("pullRequest") {
+        Some(reference) => Some(pull(bots, &scope.caller.root, reference).await?),
+        None => None,
+    };
+    let binding = pull.is_some();
     let report = WorkerReport {
         root: scope.caller.root.clone(),
         ticket_id: *ticket,
@@ -407,11 +457,14 @@ async fn report(
             .to_owned(),
         kind,
         text: arguments["text"].as_str().unwrap_or_default().to_owned(),
+        question,
+        pull,
     };
     match bots.report_progress(report).await {
         Ok(status) => Ok(json!({"ticketId":ticket,"ticketStatus":status})),
         Err(ErrorCode::BotConflict) => Err(Failure::Refused(REPORT_REFUSED)),
         Err(ErrorCode::BotNotFound) => Err(Failure::Refused(REPORT_GONE)),
+        Err(ErrorCode::ResourceExhausted) if binding => Err(Failure::Refused(PULL_LIMIT_MESSAGE)),
         Err(error) => Err(error.into()),
     }
 }

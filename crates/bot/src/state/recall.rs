@@ -289,6 +289,9 @@ impl Reading<'_> {
         let mut card = json!({"id":ticket.id,"title":ticket.title,"status":ticket.status,
             "waiting":ticket.waiting,"updatedAt":ticket.updated_at,
             "read":self.paths.ticket(ticket.id, "")});
+        if !ticket.pulls.is_empty() {
+            card["pulls"] = super::tickets::pulls_view(ticket);
+        }
         if let Some(reader) = self.viewer.conversation() {
             card["thisConversation"] = json!(ticket.conversation_id == Some(reader));
             card["conversation"] = json!(

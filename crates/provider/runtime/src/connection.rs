@@ -19,6 +19,8 @@ pub struct Connection {
     directories: BTreeMap<String, model::polling::Subscription>,
     subscriptions: BTreeMap<String, Subscription>,
     plugin: Option<String>,
+    /// Whether the client knows the origins of Bot ticket inputs (ADR-287).
+    ticket_origins: bool,
 }
 
 impl Connection {
@@ -40,6 +42,18 @@ impl Connection {
             plugin,
             ..Self::default()
         }
+    }
+
+    /// Whether the client negotiated the capability that came with the origins of Bot ticket
+    /// inputs (ADR-287); timeline pages for a client that did not omit those origins.
+    #[must_use]
+    pub const fn with_ticket_origins(mut self, known: bool) -> Self {
+        self.ticket_origins = known;
+        self
+    }
+
+    pub(crate) const fn knows_ticket_origins(&self) -> bool {
+        self.ticket_origins
     }
 
     /// Count active observers toward the transport's shared subscription budget.

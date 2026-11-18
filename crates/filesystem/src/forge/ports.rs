@@ -44,6 +44,28 @@ pub struct ForgeRuntimeError {
     pub(crate) message: String,
 }
 
+impl ForgeRuntimeError {
+    /// Whether the forge has no such object, such as a pull request number it does not know.
+    #[must_use]
+    pub fn is_not_found(&self) -> bool {
+        self.kind == ForgeFailureKind::NotFound
+    }
+
+    /// Whether the host cannot use a forge here at all: the CLI is missing or signed out, or
+    /// the directory is not a Git checkout with a supported remote.
+    #[must_use]
+    pub fn is_unavailable(&self) -> bool {
+        matches!(
+            self.kind,
+            ForgeFailureKind::CliMissing
+                | ForgeFailureKind::Unauthenticated
+                | ForgeFailureKind::NoRemote
+                | ForgeFailureKind::NotGitRepository
+                | ForgeFailureKind::NotAllowed
+        )
+    }
+}
+
 /// Forge availability state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ForgeAuthState {
@@ -475,6 +497,38 @@ pub trait ForgeRuntime: std::fmt::Debug + Send {
         repo_owner: &str,
         repo_name: &str,
     ) -> Result<PullRequestTimeline, ForgeRuntimeError>;
+
+    /// Read pull request `number` of `cwd`'s origin repository by number, with its checks and
+    /// newest review activity (ADR-287). Adapters without it refuse.
+    ///
+    /// # Errors
+    /// Returns `NotFound` for a missing pull request, and local Git, CLI, authentication or
+    /// forge failures.
+    fn pull_request(
+        &self,
+        _cwd: &str,
+        _number: u64,
+    ) -> Result<domain::forge::PullSnapshot, ForgeRuntimeError> {
+        Err(ForgeRuntimeError {
+            forge: None,
+            kind: ForgeFailureKind::Unknown,
+            message: "Reading a pull request by number is not supported".to_owned(),
+        })
+    }
+
+    /// Whether `login` can write to `cwd`'s origin repository, for the authors of pull request
+    /// entries whose write access a read leaves to confirm (ADR-287). Adapters without it
+    /// refuse.
+    ///
+    /// # Errors
+    /// Returns local Git, CLI, authentication or forge failures.
+    fn can_write(&self, _cwd: &str, _login: &str) -> Result<bool, ForgeRuntimeError> {
+        Err(ForgeRuntimeError {
+            forge: None,
+            kind: ForgeFailureKind::Unknown,
+            message: "Looking up write access is not supported".to_owned(),
+        })
+    }
 
     /// Read detailed CI check data.
     ///

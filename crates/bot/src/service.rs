@@ -24,12 +24,16 @@ use crate::channels::photon::onboarding::Onboarding as ImessageOnboarding;
 use crate::channels::qq::onboarding::Onboarding as QqOnboarding;
 use crate::channels::telegram::onboarding::Onboarding as TelegramOnboarding;
 use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
+use crate::follow::{FollowTarget, Ports, PullRead, Targets};
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
+use crate::protocol::TicketAnswer;
 use crate::protocol::{ChannelCreate, decode};
 use crate::recall::{Origin, Read, Sight};
 use crate::state::{State, StoredChannel};
 use crate::tickets::{AssignTicket, OpenTicket, OpenedTicket, WorkerReport};
+use domain::bot::follow::Delivery;
+use domain::forge::PullSnapshot;
 
 /// One enabled Webhook channel whose endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -107,6 +111,10 @@ struct Worker {
     webhooks: watch::Sender<Vec<WebhookBot>>,
     /// This Host's serve link, through which webhook endpoints are requested.
     center: OnceLock<Arc<dyn Center>>,
+    /// Pull request reads and Agent delivery for tickets that follow pull requests.
+    follow: OnceLock<Ports>,
+    /// Tickets the follower serves; empty while none follows anything.
+    follows: watch::Sender<Vec<FollowTarget>>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -151,6 +159,18 @@ enum Operation {
     Ticket(Box<TicketOperation>),
     Read(Box<Read>),
     Sight(String, Origin),
+    Follow(Box<FollowOperation>),
+}
+
+/// A step of following pull requests (ADR-287).
+enum FollowOperation {
+    Observe(PullRead),
+    Confirm(String, TicketId, PullSnapshot),
+    Failed(String, TicketId, u64, String, bool),
+    Settle(String, TicketId, Vec<String>),
+    Delivered(String, TicketId, Vec<String>, chrono::DateTime<chrono::Utc>),
+    Undelivered(String, TicketId, Vec<String>, Vec<String>),
+    Answer(TicketAnswer),
 }
 
 /// A ticket entry point of the scoped MCP (ADR-274).
@@ -214,6 +234,8 @@ impl Bots {
             imessage: ImessageOnboarding::default(),
             webhooks: hub,
             center: OnceLock::new(),
+            follow: OnceLock::new(),
+            follows: watch::Sender::new(Vec::new()),
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -233,6 +255,7 @@ impl Bots {
         let (feishu, telegram) = (&self.0.feishu, &self.0.telegram);
         let (weixin, qq) = (&self.0.weixin, &self.0.qq);
         match method {
+            "bot.ticket.answer.request" => self.answer(decode(params)?).await,
             "bot.channel.feishu.scan.start.request" => feishu.start(self, decode(params)?).await,
             // Status runs detached so a client disconnecting mid-poll cannot lose an approval.
             "bot.channel.feishu.scan.status.request" => {
@@ -322,6 +345,136 @@ impl Bots {
 
     pub(crate) fn center(&self) -> Option<Arc<dyn Center>> {
         self.0.center.get().cloned()
+    }
+
+    /// Install the follow ports; `false` when they were installed before.
+    pub(crate) fn set_follow(&self, ports: Ports) -> bool {
+        self.0.follow.set(ports).is_ok()
+    }
+
+    pub(crate) fn follow_ports(&self) -> Option<&Ports> {
+        self.0.follow.get()
+    }
+
+    /// Observe the tickets the follower serves.
+    pub(crate) fn follow_targets(&self) -> Targets {
+        self.0.follows.subscribe()
+    }
+
+    pub(crate) fn is_stopping(&self) -> bool {
+        self.0.cancellation.is_cancelled()
+    }
+
+    /// The authors of `snapshot`, read for `root`'s ticket `ticket`, whose write access the
+    /// binding needs looked up.
+    pub(crate) async fn authors_to_confirm(
+        &self,
+        root: &str,
+        ticket: TicketId,
+        snapshot: &PullSnapshot,
+    ) -> Result<BTreeSet<String>, ErrorCode> {
+        decode(
+            self.follow(FollowOperation::Confirm(
+                root.to_owned(),
+                ticket,
+                snapshot.clone(),
+            ))
+            .await?,
+        )
+    }
+
+    /// Apply one read of a followed pull request; returns the inputs to deliver now.
+    pub(crate) async fn observe_pull(&self, read: PullRead) -> Result<Vec<Delivery>, ErrorCode> {
+        decode(self.follow(FollowOperation::Observe(read)).await?)
+    }
+
+    /// Record that reading pull request `number` of `root`'s ticket `ticket` failed with
+    /// `error`, `missing` when the forge found no such pull request.
+    pub(crate) async fn pull_failed(
+        &self,
+        root: &str,
+        ticket: TicketId,
+        number: u64,
+        error: String,
+        missing: bool,
+    ) -> Result<(), ErrorCode> {
+        self.follow(FollowOperation::Failed(
+            root.to_owned(),
+            ticket,
+            number,
+            error,
+            missing,
+        ))
+        .await
+        .map(|_| ())
+    }
+
+    /// The inputs waiting on `root`'s ticket `ticket` for the `live` Agents, after handing
+    /// those for other Agents to the Bot.
+    pub(crate) async fn settle(
+        &self,
+        root: &str,
+        ticket: TicketId,
+        live: Vec<String>,
+    ) -> Result<Vec<Delivery>, ErrorCode> {
+        decode(
+            self.follow(FollowOperation::Settle(root.to_owned(), ticket, live))
+                .await?,
+        )
+    }
+
+    /// Forget the inputs `ids` of `root`'s ticket `ticket`, sent from `sent` on and delivered.
+    pub(crate) async fn delivered(
+        &self,
+        root: &str,
+        ticket: TicketId,
+        ids: Vec<String>,
+        sent: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), ErrorCode> {
+        self.follow(FollowOperation::Delivered(
+            root.to_owned(),
+            ticket,
+            ids,
+            sent,
+        ))
+        .await
+        .map(|_| ())
+    }
+
+    /// Count a failed delivery against each input `failed` of `root`'s ticket `ticket`, and
+    /// start a new run of failures for each input `busy`, whose Agent answered it is busy.
+    pub(crate) async fn undelivered(
+        &self,
+        root: &str,
+        ticket: TicketId,
+        failed: Vec<String>,
+        busy: Vec<String>,
+    ) -> Result<(), ErrorCode> {
+        self.follow(FollowOperation::Undelivered(
+            root.to_owned(),
+            ticket,
+            failed,
+            busy,
+        ))
+        .await
+        .map(|_| ())
+    }
+
+    /// `bot.ticket.answer.request`: record the owner's answer to the blocked worker the ticket
+    /// waits on and deliver it; `delivered` tells whether it reached the worker now.
+    async fn answer(&self, request: TicketAnswer) -> Result<Value, ErrorCode> {
+        let root = request.workspace_id.clone();
+        let ticket = request.ticket_id;
+        let mut result = self.follow(FollowOperation::Answer(request)).await?;
+        result["delivered"] = Value::Bool(self.flush(&root, ticket).await);
+        Ok(result)
+    }
+
+    async fn follow(&self, operation: FollowOperation) -> Result<Value, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        self.send(Operation::Follow(Box::new(operation))).await
     }
 
     /// Observe the enabled center channels of Bots the Ait center may reach.
@@ -459,8 +612,14 @@ impl Bots {
         ticket: TicketId,
         update: TicketUpdate,
     ) -> Result<Value, ErrorCode> {
-        self.ticket(TicketOperation::Update(root, ticket, update))
-            .await
+        let answered = update.answer.is_some();
+        let mut result = self
+            .ticket(TicketOperation::Update(root.clone(), ticket, update))
+            .await?;
+        if answered {
+            result["delivered"] = Value::Bool(self.flush(&root, ticket).await);
+        }
+        Ok(result)
     }
 
     /// Close a ticket of the Bot of `root` on Ait's behalf because every Agent working on it
@@ -826,9 +985,11 @@ async fn serve(
                 );
                 // Before replying, so a caller sees the Webhook channels its change produced.
                 publish_webhooks(&hub, &state, stopping);
+                publish_follows(&hub, &state, stopping);
                 let _ = command.reply.send(result);
             }
             publish_webhooks(&hub, &state, stopping);
+            publish_follows(&hub, &state, stopping);
             for channel in std::mem::take(&mut state.released_credentials) {
                 if let Err(error) = host_credentials.delete(channel) {
                     tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
@@ -970,6 +1131,7 @@ fn apply(
             serde_json::to_value(notified).map_err(|_| ErrorCode::BotIo)
         }
         Operation::Ticket(operation) => apply_ticket(state, *operation),
+        Operation::Follow(operation) => apply_follow(state, *operation),
         Operation::Read(read) => state.read(&read),
         Operation::Sight(root, origin) => {
             serde_json::to_value(state.sight(&root, origin)?).map_err(|_| ErrorCode::BotIo)
@@ -1003,6 +1165,47 @@ fn apply_ticket(state: &mut State, operation: TicketOperation) -> Result<Value, 
             .reopen_ticket(&root, ticket, &agent, now)
             .map(Value::Bool),
     }
+}
+
+fn apply_follow(state: &mut State, operation: FollowOperation) -> Result<Value, ErrorCode> {
+    let now = chrono::Utc::now();
+    let encoded = |value: Vec<Delivery>| serde_json::to_value(value).map_err(|_| ErrorCode::BotIo);
+    match operation {
+        FollowOperation::Observe(read) => encoded(state.observe_pull(&read, now)?),
+        FollowOperation::Confirm(root, ticket, snapshot) => {
+            serde_json::to_value(state.authors_to_confirm(&root, ticket, &snapshot)?)
+                .map_err(|_| ErrorCode::BotIo)
+        }
+        FollowOperation::Failed(root, ticket, number, error, missing) => state
+            .pull_failed(&root, ticket, number, &error, missing, now)
+            .map(|()| Value::Null),
+        FollowOperation::Settle(root, ticket, live) => {
+            encoded(state.settle_pending(&root, ticket, &live, now)?)
+        }
+        FollowOperation::Delivered(root, ticket, ids, sent) => state
+            .delivered(&root, ticket, &ids, sent, now)
+            .map(|()| Value::Null),
+        FollowOperation::Undelivered(root, ticket, failed, busy) => state
+            .undelivered(&root, ticket, &failed, &busy, now)
+            .map(|()| Value::Null),
+        FollowOperation::Answer(request) => state.answer_ticket(&request, now),
+    }
+}
+
+/// Publish the tickets the follower serves, if they changed; none while stopping or frozen.
+fn publish_follows(bots: &Bots, state: &State, stopping: bool) {
+    let targets = if stopping || state.frozen {
+        Vec::new()
+    } else {
+        state.follow_targets(chrono::Utc::now())
+    };
+    bots.0.follows.send_if_modified(|current| {
+        let changed = *current != targets;
+        if changed {
+            *current = targets;
+        }
+        changed
+    });
 }
 
 /// Publish the Bots the center may reach, if they changed; none while stopping or frozen.

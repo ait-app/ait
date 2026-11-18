@@ -135,6 +135,8 @@ fn report(state: &mut State, ticket: TicketId, agent: &str, kind: WorkerReportKi
                 workspace_id: WORKSPACE.into(),
                 kind,
                 text: text.into(),
+                question: None,
+                pull: None,
             },
             Utc::now(),
         )

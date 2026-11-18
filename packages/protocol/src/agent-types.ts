@@ -396,7 +396,11 @@ export type UserMessageOrigin =
       name?: string;
     }
   | { kind: "bot_instructions" }
-  | { kind: "bot_wake" };
+  | { kind: "bot_wake" }
+  | { kind: "ticket_pull"; ticketId: string; pull: number }
+  | { kind: "ticket_answer"; ticketId: string }
+  /** An origin kind a newer daemon wrote that this client does not know. */
+  | { kind: "other"; other: string };
 
 export type AgentTimelineItem =
   | VoiceTimelineItem

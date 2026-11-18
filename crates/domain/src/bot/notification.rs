@@ -30,6 +30,14 @@ pub enum NotificationKind {
     TicketDone,
     /// An Agent reported its part of a ticket failed.
     TicketFailed,
+    /// A pull request a ticket follows was merged (ADR-287).
+    PullMerged,
+    /// A pull request a ticket follows was closed without merging.
+    PullClosed,
+    /// The checks of a pull request a ticket follows pass again after a failure.
+    PullChecksPassed,
+    /// Activity on a followed pull request that no live worker of the ticket could receive.
+    PullActivity,
 }
 
 /// One Workspace event offered to the Bots that may care about it.

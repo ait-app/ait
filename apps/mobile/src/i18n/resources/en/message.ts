@@ -4,6 +4,8 @@ export const message = {
     scheduleUnnamed: "Schedule · run {{runId}}",
     botWake: "Ait notifications",
     botInstructions: "Sent by Ait",
+    ticketPull: "Pull request #{{pull}} · Ait",
+    ticketAnswer: "Answer to your question · Ait",
   },
   diagram: {
     diagram: "Diagram",

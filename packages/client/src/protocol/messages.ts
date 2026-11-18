@@ -8,6 +8,7 @@ import {
   BOT_PERMISSION_METHODS,
   BOT_QQ_SETUP_METHODS,
   BOT_TELEGRAM_SETUP_METHODS,
+  BOT_TICKET_ANSWER_METHODS,
   BOT_TICKET_METHODS,
   BOT_WEIXIN_SETUP_METHODS,
 } from "@ait/protocol/bot/rpc-schemas";
@@ -75,6 +76,11 @@ export function serverInfo(
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&
       BOT_TICKET_METHODS.every(has),
+    workspaceBotTicketAnswers:
+      serverFeatures.has("workspace-bots-v2") &&
+      BOT_METHODS.every(has) &&
+      BOT_TICKET_METHODS.every(has) &&
+      BOT_TICKET_ANSWER_METHODS.every(has),
     workspaceBotFeishuSetup:
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&

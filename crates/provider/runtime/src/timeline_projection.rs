@@ -101,6 +101,31 @@ pub(crate) fn ait_input(item: &Value) -> Option<Value> {
     Some(Value::Object(projected))
 }
 
+/// Origin kinds of inputs to Bot ticket workers (ADR-287), which clients older than that stage
+/// reject: their closed origin schema fails the whole page or message that carries one.
+const TICKET_ORIGINS: [&str; 2] = ["ticket_pull", "ticket_answer"];
+
+/// Remove the origin of every `user_message` in `value` that a Bot ticket wrote, at any depth,
+/// for a client that did not negotiate those origins; the item then shows as a plain message.
+pub(crate) fn hide_ticket_origins(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            let ticket = fields.get("type").and_then(Value::as_str) == Some("user_message")
+                && fields
+                    .get("origin")
+                    .and_then(|origin| origin.get("kind"))
+                    .and_then(Value::as_str)
+                    .is_some_and(|kind| TICKET_ORIGINS.contains(&kind));
+            if ticket {
+                fields.remove("origin");
+            }
+            fields.values_mut().for_each(hide_ticket_origins);
+        }
+        Value::Array(values) => values.iter_mut().for_each(hide_ticket_origins),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
 fn normalize_item(mut item: Value) -> Value {
     if let Some(projected) = ait_input(&item) {
         return projected;

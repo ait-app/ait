@@ -243,7 +243,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(47);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(48);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",
@@ -630,6 +630,20 @@ describe("Bot wire contract", () => {
       closedAt: null,
       outcome: null,
       assignments: [{ agentId: "agt_1", workspaceId: "w", assignedAt: at }],
+      pulls: [
+        {
+          number: 12,
+          url: "https://github.com/acme/app/pull/12",
+          title: "Fix login",
+          boundBy: "agent",
+          agentId: "agt_1",
+          boundAt: at,
+          state: "open",
+          checks: { failing: 1, pending: 0, total: 3 },
+          polledAt: at,
+          error: null,
+        },
+      ],
       latestReport: report,
     };
     const { latestReport: _latest, ...fields } = summary;
@@ -656,12 +670,17 @@ describe("Bot wire contract", () => {
         type: "bot.ticket.update.response",
         payload: { requestId: "r", ticket: { ...full, status: "done" }, changed: true },
       },
+      {
+        type: "bot.ticket.answer.response",
+        payload: { requestId: "r", ticket: { ...full, status: "open" }, delivered: false },
+      },
     ];
     for (const response of responses) {
       expect(validateWSOutboundMessage({ type: "session", message: response }).success).toBe(true);
     }
     expect(BotResponseSchema.parse(responses[1])).toEqual(responses[1]);
     expect(BotResponseSchema.parse(responses[2])).toEqual(responses[2]);
+    expect(BotResponseSchema.parse(responses[3])).toEqual(responses[3]);
     const parsed = BotResponseSchema.parse(responses[0]);
     expect(parsed.type === "bot.ticket.list.response" && parsed.payload.tickets[0]).toEqual(
       summary,
@@ -680,7 +699,32 @@ describe("Bot wire contract", () => {
         createdAt: at,
         updatedAt: at,
       }),
-    ).toMatchObject({ assignments: [] });
+    ).toMatchObject({ assignments: [], pulls: [] });
+    // A blocked worker's question and a pull request state from a newer host both parse.
+    expect(
+      BotTicketSummarySchema.parse({
+        ...summary,
+        status: "waiting",
+        waiting: { reason: "blocked", agentId: "agt_1", since: at, question: "Which region?" },
+        pulls: [{ ...summary.pulls[0], state: "state_from_a_newer_host", checks: null }],
+      }),
+    ).toMatchObject({
+      waiting: { question: "Which region?" },
+      pulls: [{ state: "state_from_a_newer_host" }],
+    });
+    const answer = {
+      type: "bot.ticket.answer.request",
+      requestId: "r",
+      workspaceId: "w",
+      ticketId,
+      agentId: "agt_1",
+      answer: "eu-west-1",
+    };
+    expect(BotRequestSchema.parse(answer)).toEqual(answer);
+    const { agentId: _unnamed, ...unnamed } = answer;
+    expect(BotRequestSchema.safeParse(unnamed).success).toBe(false);
+    expect(BotRequestSchema.safeParse({ ...answer, answer: "" }).success).toBe(false);
+    expect(BotRequestSchema.safeParse({ ...answer, status: "open" }).success).toBe(false);
   });
 
   it("parses schedules that record the Bot conversation that created them", () => {

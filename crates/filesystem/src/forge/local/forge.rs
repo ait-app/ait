@@ -1,5 +1,6 @@
 //! Bounded GitHub and GitLab CLI adapters for forge operations.
 
+mod follow;
 mod worktree_checkout;
 
 use std::collections::BTreeMap;
@@ -474,6 +475,36 @@ impl ForgeRuntime for LocalForge {
             }
             Err(error) => Err(error),
         }
+    }
+
+    fn pull_request(
+        &self,
+        cwd: &str,
+        number: u64,
+    ) -> Result<domain::forge::PullSnapshot, ForgeRuntimeError> {
+        let cwd = require_git_directory(cwd)?;
+        let context = self.forge_context(&cwd)?;
+        if context.kind == ForgeKind::Gitlab {
+            return gitlab::follow::pull_request(self, &cwd, &context, number).map_err(
+                |mut error| {
+                    error.forge = Some("gitlab".to_owned());
+                    error
+                },
+            );
+        }
+        follow::github(self, &cwd, &context, number)
+    }
+
+    fn can_write(&self, cwd: &str, login: &str) -> Result<bool, ForgeRuntimeError> {
+        let cwd = require_git_directory(cwd)?;
+        let context = self.forge_context(&cwd)?;
+        if context.kind == ForgeKind::Gitlab {
+            return Err(forge_error(
+                ForgeFailureKind::Unknown,
+                "GitLab reads confirm write access themselves",
+            ));
+        }
+        follow::github_can_write(self, &cwd, &context, login)
     }
 
     fn check_details(

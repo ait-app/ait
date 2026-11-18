@@ -13,10 +13,11 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Bot
 
-- [ADR-280：Bot 按 id 回读（Chain of Recall）、内联与溢出指针](bot/adr-280-bot-recall-reads-and-spill.md)
-- [ADR-274：Bot 工单、指派与汇报](bot/adr-274-bot-tickets-assignments-and-reports.md)（经 [ADR-280](bot/adr-280-bot-recall-reads-and-spill.md) 修订）
+- [ADR-287：工单跟随拉取请求、直接投递给工作者，以及结构化提问与回答](bot/adr-287-ticket-pull-request-follow-and-answers.md)
+- [ADR-280：Bot 按 id 回读（Chain of Recall）、内联与溢出指针](bot/adr-280-bot-recall-reads-and-spill.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
+- [ADR-274：Bot 工单、指派与汇报](bot/adr-274-bot-tickets-assignments-and-reports.md)（经 [ADR-280](bot/adr-280-bot-recall-reads-and-spill.md)、[ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-272：国际版 Lark Channel 与区域隔离](bot/adr-272-lark-channel.md)
-- [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-276](providers/adr-276-ait-input-envelope-and-origin.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md) 修订）
+- [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-276](providers/adr-276-ait-input-envelope-and-origin.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md)、[ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-233：中心托管的 Workspace Bot Webhook Channel](bot/adr-233-webhook-channel-center-endpoints.md)
 - [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
 - [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)
@@ -97,7 +98,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-071：在 Rust checkout adapter 生成 Diff 语法 token](workspace/adr-071-checkout-diff-syntax-highlighting.md)
 - [ADR-069：活跃工作区的后台 Git fetch](workspace/adr-069-background-git-fetch.md)（经 [ADR-083](workspace/adr-083-reset-workspace-to-origin-default.md) 修订）
 - [ADR-068：Workspace 侧边栏运行时摘要](workspace/adr-068-workspace-runtime-summaries.md)（经 [ADR-217](workspace/adr-217-event-driven-workspace-runtime.md) 修订）
-- [ADR-066：通过 glab 支持 GitLab Forge](workspace/adr-066-gitlab-forge.md)
+- [ADR-066：通过 glab 支持 GitLab Forge](workspace/adr-066-gitlab-forge.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-065：Paseo 目录、时间线与会话 API 兼容行为](workspace/adr-065-paseo-directory-and-timeline-projections.md)（经 [ADR-082](workspace/adr-082-canonical-nullable-workspace-fields.md) 修订）
 - [ADR-060：统一 Workspace 创建入口支持 Worktree](workspace/adr-060-workspace-create-worktree.md)
 - [ADR-043：独立 server 的 Skills 选择与文件安装](workspace/adr-043-daemon-skills.md)（经 [ADR-056](clients/adr-056-paseo-coexistence.md)、[ADR-129](providers/adr-129-provider-owned-skills.md)、[ADR-199](providers/adr-199-bundled-skill-distribution.md) 修订）
@@ -112,7 +113,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)
 - [ADR-278：共享 BTW 侧会话与完整会话交接](providers/adr-278-shared-btw-sessions.md)
 - [ADR-277：Provider 原生 TODO 统一为完整快照](providers/adr-277-provider-todo-snapshots.md)
-- [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)
+- [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
 - [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）

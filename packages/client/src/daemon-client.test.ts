@@ -7154,6 +7154,7 @@ test("Bot ticket requests validate the user's status and resolve the full ticket
     closedAt: at,
     outcome: "Shipped",
     assignments: [],
+    pulls: [],
     request: "Fix the login form",
     reports: [
       {
@@ -7174,6 +7175,83 @@ test("Bot ticket requests validate the user's status and resolve the full ticket
     }),
   );
   await expect(pending).resolves.toEqual({ requestId: request.requestId, ticket, changed: true });
+});
+
+test("answering a Bot ticket sends the owner's answer and resolves the delivered ticket", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "bot-ticket-answer-test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const ticketId = "11111111-1111-4111-8111-111111111111";
+  await expect(
+    client.answerWorkspaceBotTicket("workspace-a", ticketId, "agt_1", ""),
+  ).rejects.toThrow();
+  expect(mock.sent).toHaveLength(0);
+
+  const pending = client.answerWorkspaceBotTicket("workspace-a", ticketId, "agt_1", "Use staging");
+
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "bot.ticket.answer.request",
+    workspaceId: "workspace-a",
+    ticketId,
+    agentId: "agt_1",
+    answer: "Use staging",
+  });
+  const at = "2026-11-14T08:00:00Z";
+  const ticket = {
+    id: ticketId,
+    title: "Fix login",
+    status: "open",
+    waiting: null,
+    conversationId: null,
+    createdAt: at,
+    updatedAt: at,
+    closedAt: null,
+    outcome: null,
+    assignments: [],
+    pulls: [
+      {
+        number: 12,
+        url: "https://github.com/acme/app/pull/12",
+        title: "Fix login",
+        boundBy: "agent",
+        agentId: "agent-1",
+        boundAt: at,
+        state: "open",
+        checks: { failing: 1, pending: 0, total: 2 },
+        polledAt: at,
+        error: null,
+      },
+    ],
+    request: "Fix the login form",
+    reports: [
+      {
+        sequence: 2,
+        at,
+        source: "user",
+        kind: "answer",
+        agentId: "agent-1",
+        text: "Use staging",
+        status: "open",
+      },
+    ],
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.ticket.answer.response",
+      payload: { requestId: request.requestId, ticket, delivered: true },
+    }),
+  );
+  await expect(pending).resolves.toEqual({ requestId: request.requestId, ticket, delivered: true });
 });
 
 test.each(["retry", "close", "reject"])(

@@ -8,11 +8,13 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Utc};
+use domain::bot::follow::BoundBy;
 use domain::bot::notification::{Notification, NotificationKind};
 use domain::bot::ticket::{
     Report, ReportKind, ReportSource, Ticket, TicketError, TicketStatus, TicketUpdate, WaitReason,
 };
 use domain::bot::{BotState, Catalog};
+use domain::forge::CheckStatus;
 use domain::{BotId, TicketId};
 use model::ErrorCode;
 use model::bot::{StorageError, Store};
@@ -24,12 +26,17 @@ use crate::protocol::{TicketList, TicketRequest, TicketUserUpdate};
 use crate::tickets::{AssignTicket, OpenTicket, OpenedTicket, WorkerReport};
 
 /// Most tickets that are not closed per Bot; opening or reopening one more is refused.
-const OPEN_LIMIT: usize = 32;
+pub(super) const OPEN_LIMIT: usize = 32;
 /// Most closed tickets kept per Bot; the earliest closed are deleted first.
-const CLOSED_LIMIT: usize = 64;
+pub(super) const CLOSED_LIMIT: usize = 64;
 /// Outcome and system report of an open ticket Ait closed to make room under [`OPEN_LIMIT`].
 const CLOSED_FINISHED: &str = "Closed automatically: every Agent working on it was archived and \
     the Bot had reached its open ticket limit";
+/// Outcome and system report of a ticket following an open pull request that Ait closed as done
+/// to make room under [`OPEN_LIMIT`]; it keeps following the pull request (ADR-287).
+const CLOSED_FOLLOWING: &str = "Closed automatically as done to keep following its open pull \
+    request: every Agent working on it was archived and the Bot had reached its open ticket \
+    limit. Its merge or new review activity reaches the Bot";
 /// Outcome and system report of a ticket waiting on a blocked worker that Ait cancelled to make
 /// room under [`OPEN_LIMIT`].
 const CLOSED_BLOCKED: &str = "Cancelled automatically: it waited on a worker that reported it \
@@ -182,17 +189,34 @@ impl State {
             Ok(_) | Err(TicketError::Full) => {}
             Err(error) => return Err(refused(error)),
         }
+        if let Some(snapshot) = &report.pull {
+            self.check_follow_limit(bot, ticket.id, snapshot.number, now)?;
+            ticket
+                .bind_pull(snapshot, BoundBy::Agent, Some(&report.agent_id), now)
+                .map_err(refused)?;
+        }
         ticket
-            .report(&report.agent_id, report.kind, &report.text, now)
+            .report(
+                &report.agent_id,
+                report.kind,
+                &report.text,
+                report.question.as_deref(),
+                now,
+            )
             .map_err(refused)?;
         let status = ticket.status;
         let notification = ticket
             .reports
-            .last()
+            .iter()
+            .rev()
+            .find(|recorded| recorded.source == ReportSource::Agent)
             .and_then(|recorded| report_notification(&ticket, recorded, &scope));
         // The report is durable before the wake-up; a crash in between keeps the report, and
         // loading offers its wake-up again.
         self.save_ticket(ticket)?;
+        if status.is_closed() {
+            self.evict_closed(bot, now)?;
+        }
         if let Some(notification) = notification {
             self.notify(notification, now)?;
         }
@@ -218,7 +242,8 @@ impl State {
     }
 
     /// Close a ticket of `root`'s Bot whose Agents are all archived, as the caller judged, on
-    /// Ait's behalf (ADR-274 section 2), with an outcome that says why; a waiting ticket is
+    /// Ait's behalf (ADR-274 section 2), with an outcome that says why; a ticket following an
+    /// open pull request closes as done and keeps following it, any other waiting ticket is
     /// cancelled, and closed and Agent-less tickets stay. Returns the new status, if any.
     pub(crate) fn close_finished_ticket(
         &mut self,
@@ -228,16 +253,20 @@ impl State {
     ) -> Result<Option<TicketStatus>, ErrorCode> {
         let bot = self.ticket_bot(root)?;
         let mut ticket = self.load_ticket(bot, id)?;
-        let reason = match ticket.waiting.as_ref().map(|waiting| waiting.reason) {
-            None => CLOSED_FINISHED,
-            Some(WaitReason::Blocked) => CLOSED_BLOCKED,
-            Some(WaitReason::Permission) => CLOSED_PERMISSION,
+        let reason = if ticket.follows_open_pull() {
+            CLOSED_FOLLOWING
+        } else {
+            match ticket.waiting.as_ref().map(|waiting| waiting.reason) {
+                None => CLOSED_FINISHED,
+                Some(WaitReason::Blocked) => CLOSED_BLOCKED,
+                Some(WaitReason::Permission) => CLOSED_PERMISSION,
+            }
         };
         let Some(status) = ticket.close_finished(reason, now) else {
             return Ok(None);
         };
         self.save_ticket(ticket)?;
-        self.evict_closed(bot)?;
+        self.evict_closed(bot, now)?;
         Ok(Some(status))
     }
 
@@ -258,6 +287,7 @@ impl State {
             return Err(ErrorCode::ResourceExhausted);
         }
         let mut ticket = self.load_ticket(bot, id)?;
+        self.check_reopen_follow_limit(bot, &ticket, now)?;
         let reason = format!("Reopened automatically: the Bot gave Agent {agent} more work");
         if !ticket.reopen(&reason, now) {
             return Ok(false);
@@ -396,9 +426,15 @@ impl State {
         now: DateTime<Utc>,
     ) -> Result<Value, ErrorCode> {
         let mut ticket = self.load_ticket(bot, id)?;
+        if let Some(snapshot) = &update.pull {
+            self.check_follow_limit(bot, id, snapshot.number, now)?;
+        }
         let reopening = update.status == Some(TicketStatus::Open) && ticket.status.is_closed();
-        if reopening && self.open_tickets(bot) >= OPEN_LIMIT {
-            return Err(ErrorCode::ResourceExhausted);
+        if reopening {
+            if self.open_tickets(bot) >= OPEN_LIMIT {
+                return Err(ErrorCode::ResourceExhausted);
+            }
+            self.check_reopen_follow_limit(bot, &ticket, now)?;
         }
         let changed = ticket.update(source, update, now).map_err(refused)?;
         let view = full_view(&ticket);
@@ -406,14 +442,14 @@ impl State {
             let closed = ticket.status.is_closed();
             self.save_ticket(ticket)?;
             if closed {
-                self.evict_closed(bot)?;
+                self.evict_closed(bot, now)?;
             }
         }
         Ok(json!({"ticket":view,"changed":changed}))
     }
 
     /// The id of `root`'s current Bot, which must be active to work on tickets.
-    fn ticket_bot(&self, root: &str) -> Result<BotId, ErrorCode> {
+    pub(super) fn ticket_bot(&self, root: &str) -> Result<BotId, ErrorCode> {
         let bot = self.current(root)?;
         if !matches!(bot.state, BotState::Active) {
             return Err(ErrorCode::BotConflict);
@@ -434,14 +470,14 @@ impl State {
         self.store.ticket(bot, id).map_err(|_| ErrorCode::BotIo)
     }
 
-    fn open_tickets(&self, bot: BotId) -> usize {
+    pub(super) fn open_tickets(&self, bot: BotId) -> usize {
         self.tickets
             .values()
             .filter(|ticket| ticket.bot_id == bot && !ticket.status.is_closed())
             .count()
     }
 
-    fn save_ticket(&mut self, ticket: Ticket) -> Result<(), ErrorCode> {
+    pub(super) fn save_ticket(&mut self, ticket: Ticket) -> Result<(), ErrorCode> {
         self.ensure_writable()?;
         if self.store.save_ticket(&ticket).is_err() {
             self.frozen = true;
@@ -461,12 +497,15 @@ impl State {
         Ok(())
     }
 
-    /// Delete `bot`'s earliest closed tickets beyond [`CLOSED_LIMIT`].
-    fn evict_closed(&mut self, bot: BotId) -> Result<(), ErrorCode> {
+    /// Delete `bot`'s earliest closed tickets beyond [`CLOSED_LIMIT`] at `now`; closed tickets
+    /// that still follow pull requests stay, bounded by the follow limit (ADR-287).
+    pub(super) fn evict_closed(&mut self, bot: BotId, now: DateTime<Utc>) -> Result<(), ErrorCode> {
         let mut closed: Vec<(Option<DateTime<Utc>>, TicketId)> = self
             .tickets
             .values()
-            .filter(|ticket| ticket.bot_id == bot && ticket.status.is_closed())
+            .filter(|ticket| {
+                ticket.bot_id == bot && ticket.status.is_closed() && !ticket.follows_pulls(now)
+            })
             .map(|ticket| (ticket.closed_at, ticket.id))
             .collect();
         let excess = closed.len().saturating_sub(CLOSED_LIMIT);
@@ -480,19 +519,28 @@ impl State {
     }
 }
 
-/// `ticket` as the index keeps it: everything but its reports, of which only the newest.
+/// `ticket` as the index keeps it: everything but its reports, of which only the newest, the
+/// follower's handled entry ids and the text of waiting inputs; changes read the file.
 fn indexed(mut ticket: Ticket) -> Ticket {
     let older = ticket.reports.len().saturating_sub(1);
     ticket.reports.drain(..older);
+    for pull in &mut ticket.pulls {
+        pull.seen = Vec::new();
+    }
+    for delivery in &mut ticket.pending {
+        delivery.text = String::new();
+    }
     ticket
 }
 
 /// The inbox notification for `report` of `ticket`, whose Bot's root Workspace is `scope`:
-/// worker `blocked`, `done` and `failed` reports wake the Bot; others do not.
+/// worker `blocked`, `done` and `failed` reports wake the Bot, also in a turn a delivered input
+/// started (ADR-287); others do not.
 fn report_notification(ticket: &Ticket, report: &Report, scope: &str) -> Option<Notification> {
     if report.source != ReportSource::Agent {
         return None;
     }
+    let agent = report.agent_id.as_deref()?;
     let kind = match report.kind {
         ReportKind::Blocked => NotificationKind::TicketBlocked,
         ReportKind::Done => NotificationKind::TicketDone,
@@ -502,9 +550,10 @@ fn report_notification(ticket: &Ticket, report: &Report, scope: &str) -> Option<
         | ReportKind::AgentFailed
         | ReportKind::AgentPermission
         | ReportKind::Note
-        | ReportKind::Status => return None,
+        | ReportKind::Status
+        | ReportKind::Pull
+        | ReportKind::Answer => return None,
     };
-    let agent = report.agent_id.as_deref()?;
     let workspace_id = ticket
         .assignments
         .iter()
@@ -529,12 +578,34 @@ fn report_notification(ticket: &Ticket, report: &Report, scope: &str) -> Option<
     })
 }
 
-/// Client projection shared by summaries and full tickets, without the Bot or the key.
+/// Client projection shared by summaries and full tickets, without the Bot, the key, the
+/// follower's cursors or the inputs waiting for delivery.
 fn view(ticket: &Ticket) -> Value {
     json!({"id":ticket.id,"title":ticket.title,"status":ticket.status,"waiting":ticket.waiting,
         "conversationId":ticket.conversation_id,"createdAt":ticket.created_at,
         "updatedAt":ticket.updated_at,"closedAt":ticket.closed_at,"outcome":ticket.outcome,
-        "assignments":ticket.assignments})
+        "assignments":ticket.assignments,"pulls":pulls_view(ticket)})
+}
+
+/// The pull requests `ticket` follows as clients and the Bot see them (ADR-287).
+pub(super) fn pulls_view(ticket: &Ticket) -> Value {
+    ticket
+        .pulls
+        .iter()
+        .map(|pull| {
+            let count = |status: CheckStatus| {
+                pull.checks
+                    .values()
+                    .filter(|check| **check == status)
+                    .count()
+            };
+            json!({"number":pull.number,"url":pull.url,"title":pull.title,
+                "boundBy":pull.bound_by,"agentId":pull.agent_id,"boundAt":pull.bound_at,
+                "state":pull.state,"checks":{"failing":count(CheckStatus::Failure),
+                    "pending":count(CheckStatus::Pending),"total":pull.checks.len()},
+                "polledAt":pull.polled_at,"error":pull.error})
+        })
+        .collect()
 }
 
 /// List projection: the shared fields and the newest report.
@@ -545,7 +616,7 @@ fn summary_view(ticket: &Ticket) -> Value {
 }
 
 /// Full projection: the shared fields, the request and every kept report.
-fn full_view(ticket: &Ticket) -> Value {
+pub(super) fn full_view(ticket: &Ticket) -> Value {
     let mut value = view(ticket);
     value["request"] = json!(ticket.request);
     value["reports"] = json!(ticket.reports);
@@ -553,7 +624,7 @@ fn full_view(ticket: &Ticket) -> Value {
 }
 
 /// The error code of a refused ticket change.
-fn refused(error: TicketError) -> ErrorCode {
+pub(super) fn refused(error: TicketError) -> ErrorCode {
     match error {
         TicketError::Invalid => ErrorCode::InvalidMessage,
         TicketError::Closed | TicketError::Conflict => ErrorCode::BotConflict,

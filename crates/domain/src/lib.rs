@@ -5,6 +5,7 @@ pub mod agent_runtime;
 pub mod bot;
 pub mod creation;
 pub mod directory_sync;
+pub mod forge;
 pub mod input_envelope;
 pub mod pagination;
 pub mod preset;

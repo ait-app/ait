@@ -58,6 +58,13 @@
   （[ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)，修订
   [ADR-036](../decisions/daemon/adr-036-daemon-crate-dispatch.md)、
   [ADR-037](../decisions/daemon/adr-037-daemon-model-context.md)）。
+- 建立连接时按协商的能力设置 Provider 连接的 `with_ticket_origins`：没有协商 `bot.ticket.answer.request` 的旧客户端，
+  其 `agent.timeline.get`／`search` 结果中 Bot 工单输入（`ticket_pull`、`ticket_answer`）的用户消息不带 `origin`，
+  因为旧客户端封闭的来源 schema 会使整页失败；新客户端的来源 schema 把未知种类降级为 `other`。
+  标志按每条物理连接自己协商的能力计算：分连接模式下时间线在第 0 条连接、`bot.ticket.answer.request` 在第 3 条，
+  所以退回分连接的新客户端在分页时间线中也看不到这两种来源（实时事件仍带）。hello 的 `client_id` 只是诊断标签，不能用来在连接之间共享标志，
+  第 0 条连接已有 64 个能力（分连接上限），因此这是已记录的限制
+  （[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 13 节）。
 - hello 的 `required_capabilities` 含 `connection.single.v1` 时，一个 socket 承载四个有界 worker
   （默认、终端与语音、文件与长耗时操作、Provider）。worker 按所属 crate 的方法声明选择，只负责
   并发与订阅隔离，worker 内仍走同一 Context 处理链（[ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)）。

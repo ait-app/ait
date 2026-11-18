@@ -4,6 +4,8 @@ export const message = {
     scheduleUnnamed: "定时任务 · 运行 {{runId}}",
     botWake: "Ait 通知",
     botInstructions: "由 Ait 发送",
+    ticketPull: "拉取请求 #{{pull}} · Ait",
+    ticketAnswer: "对你的问题的回答 · Ait",
   },
   diagram: {
     diagram: "图表",

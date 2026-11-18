@@ -230,6 +230,16 @@ pub(crate) struct TicketUserUpdate {
     #[serde(default)]
     pub(crate) outcome: Option<String>,
 }
+/// The owner answers the question of the blocked worker a ticket waits on (ADR-287).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TicketAnswer {
+    pub(crate) workspace_id: String,
+    pub(crate) ticket_id: TicketId,
+    /// The blocked worker whose question this answers, as the client showed it.
+    pub(crate) agent_id: String,
+    pub(crate) answer: String,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct MemoryUpdate {

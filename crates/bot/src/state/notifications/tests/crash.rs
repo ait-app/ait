@@ -232,6 +232,8 @@ fn done(ticket: TicketId) -> crate::tickets::WorkerReport {
         workspace_id: WORKSPACE.into(),
         kind: domain::bot::ticket::WorkerReportKind::Done,
         text: "merged".into(),
+        question: None,
+        pull: None,
     }
 }
 

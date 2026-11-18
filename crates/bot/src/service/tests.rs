@@ -725,6 +725,8 @@ async fn ticket_entry_points_open_assign_report_and_wake_the_tickets_conversatio
             workspace_id: WORKSPACE.into(),
             kind: WorkerReportKind::Done,
             text: "Merged #12".into(),
+            question: None,
+            pull: None,
         })
         .await
         .unwrap();

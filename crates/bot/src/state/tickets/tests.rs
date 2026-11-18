@@ -72,6 +72,8 @@ fn report(ticket: TicketId, kind: WorkerReportKind, text: &str) -> WorkerReport 
         workspace_id: WORKSPACE.into(),
         kind,
         text: text.into(),
+        question: None,
+        pull: None,
     }
 }
 

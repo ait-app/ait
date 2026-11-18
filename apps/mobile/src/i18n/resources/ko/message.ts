@@ -4,6 +4,8 @@ export const message = {
     scheduleUnnamed: "일정 · 실행 {{runId}}",
     botWake: "Ait 알림",
     botInstructions: "Ait에서 보냄",
+    ticketPull: "풀 리퀘스트 #{{pull}} · Ait",
+    ticketAnswer: "질문에 대한 답변 · Ait",
   },
   diagram: {
     diagram: "다이어그램",

@@ -249,3 +249,35 @@ fn ait_inputs_display_their_message_text_and_origin() {
         None
     );
 }
+
+#[test]
+fn ticket_origins_are_hidden_from_clients_that_do_not_know_them() {
+    let mut page = json!({"entries":[
+        {"item":{"type":"user_message","text":"Review","origin":{"kind":"ticket_pull",
+            "ticketId":"t","pull":12}}},
+        {"item":{"type":"user_message","text":"Answer","origin":{"kind":"ticket_answer",
+            "ticketId":"t"}}},
+        {"item":{"type":"user_message","text":"Nightly","origin":{"kind":"schedule",
+            "scheduleId":"s","runId":"r"}}},
+        {"item":{"type":"assistant_message","text":"Done"}}
+    ]});
+
+    hide_ticket_origins(&mut page);
+
+    let origins: Vec<_> = page["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["item"].get("origin").cloned())
+        .collect();
+    assert_eq!(
+        origins,
+        [
+            None,
+            None,
+            Some(json!({"kind":"schedule","scheduleId":"s","runId":"r"})),
+            None
+        ]
+    );
+    assert_eq!(page["entries"][0]["item"]["text"], "Review");
+}

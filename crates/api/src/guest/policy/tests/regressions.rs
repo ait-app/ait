@@ -43,6 +43,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.remove.request",
         "bot.memory.update.request",
         "bot.ticket.update.request",
+        "bot.ticket.answer.request",
     ] {
         assert_eq!(
             guest.refused(method, json!({})).await,

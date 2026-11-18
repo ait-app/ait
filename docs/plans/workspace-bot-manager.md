@@ -237,6 +237,22 @@ Bot 标签页可只读查看外部对话。契约见 [ADR-280](../decisions/bot/
 - **外部对话的显示名**：Ait 不保存外部平台的聊天与发送者名称，对话只以 Channel 种类与 id 标识。
 - **真实会话验收**：Bot 是否按指针读取、跟进任务前是否先读任务，尚未在真实 Provider 会话中验证；对话选择未在真机或浏览器端到端用例中检查。
 
+### 任务跟随拉取请求与提问
+
+原计划没有这一阶段，在按 id 回读之后加入，对照 DeepSeek 的 Thread 订阅、扇出与 Attention。所有者决定保留共享检出：Bot 不为任务创建 Workspace 或 worktree，
+任务只因工作者或 Bot 报告才知道哪个拉取请求属于它。任务跟随报告的 PR：审查意见与失败的检查直接投递给任务的 Agent，合并、关闭与检查恢复唤醒 Bot，
+合并后任务自动完成并在 7 天内可被新评论恢复；受阻的 Agent 可以提一个问题，所有者在任务详情中回答或由 Bot 转交，回答直接送达 Agent。
+契约见 [ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md)，用户可见行为见 [Workspace Bot](../operations/bots.md#任务)。
+
+截至 2026-11-14 已实现，由 `crates/domain`、`crates/filesystem`、`crates/provider/runtime`、`crates/bot`、`crates/api`、`bins/daemon`、`packages/protocol`、
+`packages/client` 与 `apps/mobile/src/bots` 的测试覆盖。尚未完成：
+
+- **真实 Forge 验收**：GitHub 与 GitLab 的读取只经离线的伪 CLI 验证，未对真实仓库运行；GitHub GraphQL 的 `last:` 窗口、GitLab 讨论只读一页（100 条）的限制未在大型 PR 上检查。
+- **Webhook 来源**：跟随目前只轮询；草稿 PR #671 的 GitHub App 通道可以产生同样的快照交给 `Bots::observe_pull`，尚未接入。
+- **本账号评论的判定**：按工作者时间线中的文字匹配，经文件或大量转义发出的评论会被当作可能是用户的评论投递（ADR-287 第 7 节）。
+- **真实会话验收**：工作者是否报告 PR 与问题、收到审查意见后是否处理，尚未在真实 Provider 会话中验证；任务详情的回答框未在真机或浏览器端到端用例中检查。
+- **观察与告警**：读取失败只记在绑定上并退避，没有面向用户的主动提醒；长期失败的 PR 是否应通知 Bot 尚未决定。
+
 ### Channel 与对话
 
 - 保留内置 Ait Channel、Telegram、飞书，以及现有的持久接纳、`messageId` 去重、uncertain 恢复规则。

@@ -43,6 +43,8 @@ pulldown-cmark.workspace = true
 persistence.workspace = true
 tempfile.workspace = true
 axum.workspace = true
+tokio.workspace = true
+tokio.features = ["test-util"]
 
 [lints]
 workspace = true

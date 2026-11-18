@@ -1,6 +1,7 @@
 mod catalog;
 mod conversations;
 mod execution;
+mod follow;
 mod notifications;
 mod recall;
 mod tickets;

@@ -4,6 +4,8 @@ export const message = {
     scheduleUnnamed: "جدولة · التشغيل {{runId}}",
     botWake: "إشعارات Ait",
     botInstructions: "أُرسلت من Ait",
+    ticketPull: "طلب السحب رقم {{pull}} · Ait",
+    ticketAnswer: "إجابة عن سؤالك · Ait",
   },
   diagram: {
     diagram: "مخطط",

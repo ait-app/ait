@@ -4,6 +4,7 @@ pub mod capabilities;
 mod channels;
 pub mod dispatch;
 mod execution;
+pub mod follow;
 mod instructions;
 pub mod legacy;
 pub mod mcp;

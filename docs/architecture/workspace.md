@@ -58,6 +58,13 @@
   `gh-merge-base`。Forge 读取（GitHub `createdAt`、GitLab `created_at`）不再关联创建时间早于或等于
   该时间、或缺少创建时间的 PR/MR
   （[ADR-146](../decisions/workspace/adr-146-reset-workspace-change-request-association.md)）。
+- `Forge::pull_request(cwd, number)` 按编号读取 `cwd` 的 origin 仓库中的一个 PR/MR，供跟随它的 Bot 工单使用：
+  状态（合并、关闭、打开；GitLab 的 `locked` 为打开）、头提交、至多 100 个检查与最新的审查活动，本账号写的条目带标记，
+  每个条目带作者在仓库中的权限（能写入、其他人、机器人）；结果为中性的 `domain::forge::PullSnapshot`。
+  GitHub 为一次 `gh api graphql`，GitLab 为一次 `glab mr view`、流水线、按 `sort=desc` 的最新备注、`glab api user` 与备注作者的成员权限，
+  其中任何一次失败都使整次读取失败。PR 不存在为 `NotFound`，
+  CLI 缺失、未登录或没有支持的远端为“不可用”；调用会阻塞，调用方在阻塞线程上执行。该读取不受 ADR-146 的重置时间过滤，
+  因为调用方点名了编号（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 2 节）。
 - 后台 fetch 只服务于已激活的目录订阅，按规范化 `git-common-dir` 合并仓库，每 180 秒执行一次
   `git fetch origin --prune --quiet`。全进程最多两个并发，单次限 120 秒并禁用凭据提示；
   它从不修改 HEAD、索引或工作树。无 origin 的目录跳过

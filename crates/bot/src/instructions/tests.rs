@@ -201,3 +201,12 @@ fn compose_points_the_bot_at_bot_read_for_recall() {
         assert!(text.contains(phrase), "missing: {phrase}");
     }
 }
+
+#[test]
+fn compose_says_a_ticket_with_an_open_pull_request_closes_itself_on_merge() {
+    let text = compose("", &BotPermissions::default());
+    assert!(text.contains("closes itself as done when it is merged"));
+    assert!(text.contains("only cancelled stops following"));
+    assert!(text.contains("people who cannot write to the repository"));
+    assert!(text.contains("agentId"));
+}
