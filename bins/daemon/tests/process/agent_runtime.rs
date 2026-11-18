@@ -149,10 +149,12 @@ async fn assert_archive_close_delete(client: &mut Socket) {
 }
 
 fn assert_persisted_state(state: &std::path::Path) {
-    let records: Vec<PersistedAgentRuntimeRecord> = serde_json::from_slice(
+    let mut document: serde_json::Value = serde_json::from_slice(
         &std::fs::read(state.join("agents/agents.json")).expect("registry should persist"),
     )
     .expect("registry should decode");
+    let records: Vec<PersistedAgentRuntimeRecord> =
+        serde_json::from_value(document["agents"].take()).expect("records should decode");
     assert!(!records.iter().any(|record| record.id == "agent-child"));
     let parent = records
         .iter()

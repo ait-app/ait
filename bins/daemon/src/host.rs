@@ -78,6 +78,8 @@ pub(super) struct Server {
     publication: hub::Worker,
     /// Host usage ledger, closed off the async runtime after the API has stopped.
     usage_ledger: Option<Arc<SqliteUsageLedger>>,
+    /// Agent records closed, with their deferred status written, before the lease is released.
+    agent_status: FileBackedAgentRuntimeRegistry,
 }
 
 /// Process-owned listener and data-directory lease, retained across runtime restarts and diagnostics.
@@ -171,27 +173,29 @@ impl Server {
             None => None,
         };
         let launch_instance = instance.clone();
-        let (services, sources, device, usage_ledger) = tokio::task::spawn_blocking(move || {
-            let device = crate::device::load_state(&config.data_dir, launch_instance.server_id)?;
-            let usage_ledger = open_usage_ledger(&config.data_dir);
-            let (mut services, sources) = compose_services(
-                &config,
-                address,
-                &launch_instance,
-                launch_mcp_token,
-                usage_ledger.as_ref(),
-            )?;
-            if let Some(diagnostics) = diagnostics {
-                services.metadata = services.metadata.map(|service| {
-                    let mut dependencies = service.into_dependencies();
-                    dependencies.daemon = dependencies.daemon.with_diagnostics(diagnostics);
-                    metadata::Service::new(dependencies)
-                });
-            }
-            Ok::<_, anyhow::Error>((services, sources, device, usage_ledger))
-        })
-        .await
-        .context("join server initialization")??;
+        let (services, sources, device, usage_ledger, agent_status) =
+            tokio::task::spawn_blocking(move || {
+                let device =
+                    crate::device::load_state(&config.data_dir, launch_instance.server_id)?;
+                let usage_ledger = open_usage_ledger(&config.data_dir);
+                let (mut services, sources, agent_status) = compose_services(
+                    &config,
+                    address,
+                    &launch_instance,
+                    launch_mcp_token,
+                    usage_ledger.as_ref(),
+                )?;
+                if let Some(diagnostics) = diagnostics {
+                    services.metadata = services.metadata.map(|service| {
+                        let mut dependencies = service.into_dependencies();
+                        dependencies.daemon = dependencies.daemon.with_diagnostics(diagnostics);
+                        metadata::Service::new(dependencies)
+                    });
+                }
+                Ok::<_, anyhow::Error>((services, sources, device, usage_ledger, agent_status))
+            })
+            .await
+            .context("join server initialization")??;
         let mut api = Api::new(
             address,
             instance.server_id.to_string(),
@@ -235,6 +239,7 @@ impl Server {
             managed,
             publication,
             usage_ledger,
+            agent_status,
         })
     }
 
@@ -257,6 +262,7 @@ impl Server {
             managed,
             publication,
             usage_ledger,
+            agent_status,
         } = self;
         let cancel = tokio_util::sync::CancellationToken::new();
         let manager_cancel = cancel.clone();
@@ -338,6 +344,7 @@ impl Server {
         {
             tracing::error!("usage ledger close failed");
         }
+        persist_agent_status(agent_status, result.is_ok()).await;
         drop(instance);
         // The serving error explains a failed shutdown better than its consequences.
         result?;
@@ -346,13 +353,42 @@ impl Server {
     }
 }
 
+/// Write deferred Agent status while this process still owns the data directory.
+///
+/// After a complete shutdown (`finished`), closing stops owners that outlive this runtime from
+/// overwriting a later runtime's file. A shutdown that timed out may still have the provider
+/// worker settling sessions, so the store stays open for those writes and the next start
+/// recovers from the unclosed file. Failures are logged; shutdown continues.
+async fn persist_agent_status(agent_status: FileBackedAgentRuntimeRegistry, finished: bool) {
+    let persisted = tokio::task::spawn_blocking(move || {
+        if finished {
+            agent_status.close()
+        } else {
+            agent_status.flush()
+        }
+    });
+    match persisted.await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            tracing::error!(%error, "Agent status could not be written on shutdown");
+        }
+        Err(_) => tracing::error!("Agent status write did not complete"),
+    }
+}
+/// Installed services, Hub publication sources and the Agent registry the host closes on exit.
+type ComposedServices = (
+    Services,
+    hub::sources::Sources,
+    FileBackedAgentRuntimeRegistry,
+);
+
 fn compose_services(
     config: &Config,
     address: SocketAddr,
     instance: &Arc<InstanceLease>,
     mcp_token: secrecy::SecretString,
     usage_ledger: Option<&Arc<SqliteUsageLedger>>,
-) -> anyhow::Result<(Services, hub::sources::Sources)> {
+) -> anyhow::Result<ComposedServices> {
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
@@ -421,7 +457,7 @@ fn compose_services(
     let filesystem = compose_filesystem(config, &storage.workspaces, &storage.agents);
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
-        push_tokens: compose_push(&config.data_dir, Arc::new(storage.agents))?,
+        push_tokens: compose_push(&config.data_dir, Arc::new(storage.agents.clone()))?,
         daemon,
         github_projects: GithubProjects::new(
             directory.clone(),
@@ -451,7 +487,41 @@ fn compose_services(
             terminal: Some(terminals),
         },
         publication_sources,
+        storage.agents,
     ))
+}
+
+/// Rebuild input activity that deferred `agents.json` writes lost in a crash, then persist it.
+/// A cleanly closed or legacy file needs no recovery. It must run before Agent execution starts,
+/// because `recover_turns` derives restart keys from the input timestamps. Recovery only restores
+/// timestamps, so a failure is logged and startup continues with the stored state.
+fn recover_agent_status(
+    agents: &FileBackedAgentRuntimeRegistry,
+    timeline: &provider::storage::timeline::Timeline,
+) {
+    let since = match agents.interrupted_since() {
+        Ok(Some(since)) => since,
+        Ok(None) => return,
+        Err(error) => {
+            tracing::warn!(%error, "Agent status change time is unreadable; skipping recovery");
+            return;
+        }
+    };
+    match provider::service::agent_runtime::status_recovery::recover_status(
+        agents, timeline, &since,
+    ) {
+        Ok(0) => {}
+        Ok(recovered) => {
+            tracing::info!(
+                recovered,
+                "Recovered Agent input activity from the timeline"
+            );
+            if let Err(error) = agents.flush() {
+                tracing::warn!(%error, "Recovered Agent status could not be written yet");
+            }
+        }
+        Err(error) => tracing::warn!(?error, "Agent status recovery failed"),
+    }
 }
 
 /// Open the Agent catalog while retaining the host's instance lease for its consumers.
@@ -824,6 +894,7 @@ fn compose_provider(
 ) -> anyhow::Result<AgentExecution> {
     let (directory, generator, names, workspace_automation, presets) = metadata;
     let (agent_runtime_registry, timeline, mcp, usage_ledger) = agent_runtime;
+    recover_agent_status(&agent_runtime_registry, &timeline);
     let (workspace_registry, project_registry, data_dir) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)

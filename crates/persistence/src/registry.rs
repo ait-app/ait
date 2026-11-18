@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Largest registry file the loader accepts, like the other document stores.
-const MAX_REGISTRY_BYTES: u64 = 32 * 1024 * 1024;
+pub(crate) const MAX_REGISTRY_BYTES: u64 = 32 * 1024 * 1024;
 
 /// A registry load, validation, or commit failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

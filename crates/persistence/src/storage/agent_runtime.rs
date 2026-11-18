@@ -1,4 +1,4 @@
-//! Durable Agent snapshots backed by the shared atomic file engine.
+//! Durable Agent snapshots cached in memory by [`status::AgentsStatus`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -6,60 +6,130 @@ use std::sync::Arc;
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 
-use crate::registry::{Error as RegistryError, FileRegistry};
+use status::{AgentsStatus, Durability};
 
-/// Atomically persisted registry of Paseo Agent runtime snapshots.
+mod status;
+
+/// Agent runtime snapshots cached in memory and persisted to one JSON document.
+/// Status updates are written within one flush interval; other mutations are written at once.
 #[derive(Debug, Clone)]
 pub struct FileBackedAgentRuntimeRegistry {
-    file: Arc<FileRegistry<PersistedAgentRuntimeRecord>>,
+    status: Arc<AgentsStatus>,
     changes: Option<model::changes::Changes>,
 }
 
 impl FileBackedAgentRuntimeRegistry {
-    /// Create a lazy registry backed by one JSON array.
+    /// Create a lazy registry backed by the JSON document at `path`.
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
-            file: Arc::new(FileRegistry::new(path, |record| &record.id)),
+            status: Arc::new(AgentsStatus::new(path)),
             changes: None,
         }
     }
 
-    /// Signal subscribed Workspace projections after durable Agent mutations.
+    /// Signal subscribed Workspace projections after Agent mutations.
     #[must_use]
     pub fn with_changes(mut self, changes: model::changes::Changes) -> Self {
         self.changes = Some(changes);
         self
     }
+
+    /// Write deferred status updates now. The last owner also writes them when it drops.
+    ///
+    /// # Errors
+    /// Returns `Io` when the write fails; the updates stay pending for the next flush.
+    pub fn flush(&self) -> Result<(), AgentRuntimeRegistryError> {
+        self.status.flush()
+    }
+
+    /// Write the final document marked as cleanly closed, then reject later mutations from
+    /// every clone. Hosts call this before releasing the data directory, so a lingering owner
+    /// cannot overwrite the file a later runtime owns.
+    ///
+    /// # Errors
+    /// Returns `Io` when the final write fails; the registry is closed regardless.
+    pub fn close(&self) -> Result<(), AgentRuntimeRegistryError> {
+        self.status.close()
+    }
+
+    /// Return the loaded file's last change time when its writer did not close it, as a UTC
+    /// RFC 3339 timestamp. Deferred status updates made after that time may be missing. A
+    /// cleanly closed, legacy or missing file reports `None`.
+    ///
+    /// # Errors
+    /// Returns load failures.
+    pub fn interrupted_since(&self) -> Result<Option<String>, AgentRuntimeRegistryError> {
+        self.status.interrupted_since()
+    }
+
+    fn change(
+        &self,
+        agent_id: &str,
+        update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
+        durability: Durability,
+    ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
+        let result = self.status.update(
+            agent_id,
+            |current| {
+                let next = update(current);
+                validate_record(&next)?;
+                if next.id == agent_id {
+                    Ok(next)
+                } else {
+                    Err(AgentRuntimeRegistryError::InvalidRecord)
+                }
+            },
+            durability,
+        )?;
+        if result.is_some() {
+            self.notify();
+        }
+        Ok(result)
+    }
+
+    fn notify(&self) {
+        if let Some(changes) = &self.changes {
+            changes.notify();
+        }
+    }
 }
 
 impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
     fn initialize(&self) -> Result<(), AgentRuntimeRegistryError> {
-        self.file.initialize().map_err(map_error)
+        self.status.initialize()
     }
 
     fn list(&self) -> Result<Vec<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
-        self.file.list().map_err(map_error)
+        Ok(self
+            .status
+            .snapshot()?
+            .iter()
+            .map(|record| record.as_ref().clone())
+            .collect())
     }
 
     fn snapshot(
         &self,
     ) -> Result<Arc<[Arc<PersistedAgentRuntimeRecord>]>, AgentRuntimeRegistryError> {
-        self.file.snapshot().map_err(map_error)
+        self.status.snapshot()
     }
 
     fn get(
         &self,
         agent_id: &str,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
-        self.file.get(agent_id).map_err(map_error)
+        Ok(self
+            .status
+            .get_shared(agent_id)?
+            .map(|record| record.as_ref().clone()))
     }
 
     fn get_shared(
         &self,
         agent_id: &str,
     ) -> Result<Option<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeRegistryError> {
-        self.file.get_shared(agent_id).map_err(map_error)
+        self.status.get_shared(agent_id)
     }
 
     fn upsert(
@@ -67,15 +137,8 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
         record: &PersistedAgentRuntimeRecord,
     ) -> Result<(), AgentRuntimeRegistryError> {
         validate_record(record)?;
-        self.file
-            .mutate(|records| {
-                records.insert(record.id.clone(), record.clone());
-                Ok(((), true))
-            })
-            .map_err(map_error)?;
-        if let Some(changes) = &self.changes {
-            changes.notify();
-        }
+        self.status.upsert(record.clone())?;
+        self.notify();
         Ok(())
     }
 
@@ -84,39 +147,21 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
         agent_id: &str,
         update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
-        let result = self
-            .file
-            .mutate(|records| {
-                let Some(current) = records.get(agent_id) else {
-                    return Ok((None, false));
-                };
-                let next = update(current);
-                validate_record(&next).map_err(unmap_error)?;
-                if next.id != agent_id {
-                    return Err(RegistryError::InvalidRecord);
-                }
-                records.insert(agent_id.to_owned(), next.clone());
-                Ok((Some(next), true))
-            })
-            .map_err(map_error)?;
-        if result.is_some()
-            && let Some(changes) = &self.changes
-        {
-            changes.notify();
-        }
-        Ok(result)
+        self.change(agent_id, update, Durability::Immediate)
+    }
+
+    fn update_status(
+        &self,
+        agent_id: &str,
+        update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
+    ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
+        self.change(agent_id, update, Durability::Deferred)
     }
 
     fn remove(&self, agent_id: &str) -> Result<bool, AgentRuntimeRegistryError> {
-        let removed = self
-            .file
-            .mutate(|records| {
-                let removed = records.shift_remove(agent_id).is_some();
-                Ok((removed, removed))
-            })
-            .map_err(map_error)?;
-        if removed && let Some(changes) = &self.changes {
-            changes.notify();
+        let removed = self.status.remove(agent_id)?;
+        if removed {
+            self.notify();
         }
         Ok(removed)
     }
@@ -162,22 +207,6 @@ fn validate_record(record: &PersistedAgentRuntimeRecord) -> Result<(), AgentRunt
         return Err(AgentRuntimeRegistryError::InvalidRecord);
     }
     Ok(())
-}
-
-const fn map_error(error: RegistryError) -> AgentRuntimeRegistryError {
-    match error {
-        RegistryError::InvalidRecord => AgentRuntimeRegistryError::InvalidRecord,
-        RegistryError::InvalidFile => AgentRuntimeRegistryError::InvalidFile,
-        RegistryError::Io | RegistryError::Frozen => AgentRuntimeRegistryError::Io,
-    }
-}
-
-const fn unmap_error(error: AgentRuntimeRegistryError) -> RegistryError {
-    match error {
-        AgentRuntimeRegistryError::InvalidRecord => RegistryError::InvalidRecord,
-        AgentRuntimeRegistryError::InvalidFile => RegistryError::InvalidFile,
-        AgentRuntimeRegistryError::Io => RegistryError::Io,
-    }
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 //! Durable append-only display projection. Native Provider history remains authoritative.
 
+pub(crate) mod activity;
 pub(crate) mod inbox;
 mod progress;
 mod projection;

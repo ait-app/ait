@@ -91,7 +91,7 @@ async fn composed_host_publishes_current_attention_and_three_directories_over_se
     let listener = TcpListener::bind(config.listen).await.unwrap();
     let address = listener.local_addr().unwrap();
     let instance = Arc::new(InstanceLease::acquire(directory.path()).unwrap());
-    let (services, sources) = compose_services(
+    let (services, sources, _agent_status) = compose_services(
         &config,
         address,
         &instance,

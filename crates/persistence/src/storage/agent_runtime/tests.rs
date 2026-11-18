@@ -221,3 +221,73 @@ fn committed_agent_mutations_wake_directory_observers() {
     registry.remove("agent-1").expect("remove should persist");
     assert!(receiver.has_changed().expect("sender remains available"));
 }
+
+#[test]
+fn status_updates_wake_observers_before_reaching_disk() {
+    let temp = tempfile::tempdir().expect("temporary directory should exist");
+    let path = temp.path().join("agents.json");
+    let changes = model::changes::Changes::default();
+    let mut receiver = changes.subscribe();
+    let registry = FileBackedAgentRuntimeRegistry::new(path.clone()).with_changes(changes);
+    registry
+        .upsert(&record("agent-1"))
+        .expect("insert should persist");
+    receiver.borrow_and_update();
+
+    let updated = registry
+        .update_status("agent-1", &|current| {
+            let mut next = current.clone();
+            next.last_status = AgentRuntimeStatus::Running;
+            next
+        })
+        .expect("status update should be accepted");
+
+    assert_eq!(
+        updated.map(|record| record.last_status),
+        Some(AgentRuntimeStatus::Running)
+    );
+    assert!(receiver.has_changed().expect("sender remains available"));
+    let on_disk = FileBackedAgentRuntimeRegistry::new(path.clone());
+    assert_eq!(
+        on_disk.get("agent-1").expect("read").map(|r| r.last_status),
+        Some(AgentRuntimeStatus::Closed)
+    );
+    registry.flush().expect("flush should persist");
+    let flushed = FileBackedAgentRuntimeRegistry::new(path);
+    assert_eq!(
+        flushed.get("agent-1").expect("read").map(|r| r.last_status),
+        Some(AgentRuntimeStatus::Running)
+    );
+    assert!(
+        flushed
+            .interrupted_since()
+            .expect("read")
+            .is_some_and(|since| !since.is_empty()),
+        "a flushed but unclosed file reports its change time"
+    );
+    registry.close().expect("close should persist");
+    assert_eq!(
+        FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"))
+            .interrupted_since()
+            .expect("read"),
+        None
+    );
+}
+
+#[test]
+fn status_updates_reject_invalid_records_and_identity_changes() {
+    let temp = tempfile::tempdir().expect("temporary directory should exist");
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"));
+    registry
+        .upsert(&record("agent-1"))
+        .expect("insert should persist");
+
+    let renamed = registry.update_status("agent-1", &|current| {
+        let mut next = current.clone();
+        next.id = "agent-2".to_owned();
+        next
+    });
+
+    assert_eq!(renamed, Err(AgentRuntimeRegistryError::InvalidRecord));
+    assert_eq!(registry.update_status("missing", &Clone::clone), Ok(None));
+}

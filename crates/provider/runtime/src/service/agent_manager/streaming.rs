@@ -227,7 +227,7 @@ fn persist_info(
         return Err(model::ErrorCode::InvalidMessage);
     }
     registry
-        .update(id, &|record| {
+        .update_status(id, &|record| {
             let mut next = record.clone();
             let mut info = info.clone();
             preserve_usage(&mut info, record.runtime_info.as_ref());
@@ -342,7 +342,7 @@ fn persist_usage(
     }
     let value = serde_json::to_value(usage).map_err(|_| ErrorCode::AgentIo)?;
     registry
-        .update(id, &|current| {
+        .update_status(id, &|current| {
             let mut next = current.clone();
             if let Some(info) = &mut next.runtime_info {
                 info.extra
@@ -528,7 +528,7 @@ pub(super) fn persist_input(
         return Ok(());
     };
     registry
-        .update(agent_id, &|current| {
+        .update_status(agent_id, &|current| {
             let mut next = current.clone();
             next.updated_at.clone_from(now);
             next.last_user_message_at = Some(now.clone());

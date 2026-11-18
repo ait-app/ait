@@ -220,10 +220,12 @@ fn agent(
 }
 
 fn assert_persisted(state: &std::path::Path) {
-    let agents: Vec<PersistedAgentRuntimeRecord> = serde_json::from_slice(
+    let mut document: serde_json::Value = serde_json::from_slice(
         &std::fs::read(state.join("agents/agents.json")).expect("Agent registry"),
     )
-    .expect("Agent records");
+    .expect("Agent registry document");
+    let agents: Vec<PersistedAgentRuntimeRecord> =
+        serde_json::from_value(document["agents"].take()).expect("Agent records");
     assert!(
         agents
             .iter()

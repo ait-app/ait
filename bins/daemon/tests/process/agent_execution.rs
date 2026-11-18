@@ -108,7 +108,11 @@ async fn websocket_executes_native_turns_waits_concurrently_and_resumes_after_re
     assert_children_exited(&cwd).await;
     let stored: Value =
         serde_json::from_slice(&std::fs::read(state.join("agents/agents.json")).unwrap()).unwrap();
-    assert_eq!(stored, json!([]));
+    assert_eq!(stored["agents"], json!([]));
+    assert_eq!(
+        stored["closed"], true,
+        "a graceful shutdown closes the Agent registry"
+    );
 }
 
 async fn assert_wait_budget(

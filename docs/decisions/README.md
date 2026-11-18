@@ -32,6 +32,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
 - [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
@@ -128,7 +129,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
 - [ADR-219：共享套餐缓存与 Codex 查询进程](providers/adr-219-shared-account-usage-cache.md)（经 [ADR-285](providers/adr-285-account-usage-retry-delay.md) 修订）
 - [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
-- [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
+- [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)（经 [ADR-288](daemon/adr-288-deferred-agent-status-writes.md) 修订）
 - [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](providers/adr-206-opencode-acp-subagents.md)（经 [ADR-237](providers/adr-237-opencode-child-terminal-readback.md) 修订）
 - [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)

@@ -20,6 +20,7 @@ use serde::Deserialize;
 
 pub(crate) mod archive;
 mod search;
+pub mod status_recovery;
 
 /// Agent label naming the Agent that created or observed this child Agent.
 pub(crate) const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";

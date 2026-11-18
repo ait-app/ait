@@ -72,7 +72,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     let root = tempfile::tempdir().unwrap();
     let configuration = config(root.path());
     let instance = Arc::new(InstanceLease::acquire(root.path()).unwrap());
-    let (mut services, sources) = compose_services(
+    let (mut services, sources, agent_status) = compose_services(
         &configuration,
         "127.0.0.1:7316".parse().unwrap(),
         &instance,
@@ -119,6 +119,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             managed,
             publication,
             usage_ledger: None,
+            agent_status: agent_status.clone(),
         };
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;

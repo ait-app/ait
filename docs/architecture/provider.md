@@ -175,7 +175,10 @@
   动态模式与功能；比较用的配置只存在内存中，不进入响应或事件
   （[ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)）。
 - 目录与单条读取使用 registry 的 `snapshot()` / `get_shared()` 已提交不可变视图
-  （[ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)）。
+  （[ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)）。视图包含
+  尚未落盘的状态更新：`lastUsage`、`runtimeInfo` 与用户输入时间戳经 `update_status` 延迟写入，
+  其余字段立即写入；启动时由 Timeline 的 `user_message` 补齐输入时间戳
+  （[ADR-288](../decisions/daemon/adr-288-deferred-agent-status-writes.md)）。
 - 经 adapter 验证的原生后代登记为只读 observed Agent，身份由 Provider、根原生 session 与原生子 ID
   派生。带 `agentId` 的写操作在原生副作用前返回 `UnsupportedCapability`；未加载的 observed 历史
   路由到根 Agent 的 lane，打开子会话不会启动子 writer

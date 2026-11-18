@@ -84,6 +84,21 @@ pub trait AgentRuntimeRegistry: Debug + Send + Sync {
         update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError>;
 
+    /// Transform the latest record like [`Self::update`], allowing the adapter to defer the
+    /// durable write. Reads observe the change immediately. Callers must limit this to fields
+    /// that providers refresh or that startup recovery rebuilds, because a crash may lose a
+    /// deferred change. The default writes immediately.
+    ///
+    /// # Errors
+    /// Returns an error when validation fails, or when an immediate write fails.
+    fn update_status(
+        &self,
+        agent_id: &str,
+        update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
+    ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
+        self.update(agent_id, update)
+    }
+
     /// Permanently remove one record. Missing identities are idempotent.
     ///
     /// # Errors

@@ -386,7 +386,9 @@ async fn failed_native_imports_leave_no_agents_or_workspaces_and_errors_are_safe
         if state.join(name).exists() {
             let value: Value =
                 serde_json::from_str(&std::fs::read_to_string(state.join(name)).unwrap()).unwrap();
-            assert_eq!(value, json!([]), "{name}: {value}");
+            // agents.json wraps its records in a document with a change time (ADR-288).
+            let records = value.get("agents").unwrap_or(&value);
+            assert_eq!(records, &json!([]), "{name}: {value}");
         }
     }
     std::fs::write(fixture.cwd.join("behavior"), "error").unwrap();

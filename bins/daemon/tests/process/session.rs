@@ -278,7 +278,7 @@ async fn assert_attention_delivery(
         let stored: Value =
             serde_json::from_slice(&std::fs::read(state.join("agents/agents.json")).unwrap())
                 .unwrap();
-        assert_ne!(stored[0]["lastStatus"], "running");
+        assert_ne!(stored["agents"][0]["lastStatus"], "running");
         let latest = request(writer, "agent.get.request", json!({"agentId":id})).await;
         assert_eq!(latest["result"]["agent"]["model"], "test-model");
         // Another connection cannot release this observer.
