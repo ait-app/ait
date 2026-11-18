@@ -18,8 +18,13 @@ async fn replays_wait_for_the_in_flight_creation_to_finish() {
     let admission = creations
         .begin(Kind::Workspace, "replayed", json!({}))
         .unwrap();
-    let state = api.shared.clone();
-    let waiter = tokio::spawn(async move { await_finished(&state, "replayed".to_owned()).await });
+    let composition = Composition {
+        runtime: api.shared.runtime.clone(),
+        metadata: api.shared.metadata.clone(),
+        provider: api.shared.provider.clone(),
+    };
+    let waiter =
+        tokio::spawn(async move { await_finished(&composition, "replayed".to_owned()).await });
     let ready = creations
         .advance(&admission.snapshot, Phase::WorkspaceReady, None, None)
         .unwrap();

@@ -22,5 +22,5 @@ use crate::service::agent_execution::AgentExecution;
 /// # Errors
 /// Returns delivery failure; admission and execution errors use the original request ID.
 pub(super) fn request(context: Context<'_>, state: &State) -> Result<(), QueueError> {
-    super::agent_execution::respond_admitted(context, state, AgentExecution::admit_discovery)
+    super::agent_execution::respond_admitted(context, state, AgentExecution::admit_discovery, ())
 }

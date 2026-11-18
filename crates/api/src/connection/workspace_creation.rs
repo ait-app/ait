@@ -7,6 +7,7 @@ use metadata::directory::rpc::directory::WorkspaceCreated;
 use model::creation::Creations;
 use model::events::Subscription;
 use model::outbound::Outbound;
+use model::runtime::Runtime;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
@@ -36,16 +37,44 @@ pub(super) async fn request(
     if let Some(subscription) = &input.subscription {
         subscription.activate()?;
     }
-    let result = create(&mut context, state, &input).await;
-    match result {
-        Ok(value) => {
-            let event = (!value["workspace"].is_null())
-                .then(|| json!({"kind":"upsert","workspace":value["workspace"]}));
-            context.workspace(value, event)?;
-            Ok(())
+    // Provisioning the Workspace and launching its initial Agent can hold a native process
+    // for seconds. The composition is tracked independently so the metadata worker returns
+    // to its queue while the receipt, the response and the upsert event settle in order.
+    let outbound = context.outbound.clone();
+    let request_id = context.request.id.clone();
+    let params = std::mem::take(&mut context.request.params);
+    let composition = Composition {
+        runtime: state.runtime.clone(),
+        metadata: state.metadata.clone(),
+        provider: state.provider.clone(),
+    };
+    drop(context);
+    state.tasks.spawn(async move {
+        let result = create(&composition, &input, params).await;
+        match result {
+            Ok(value) => {
+                let event = (!value["workspace"].is_null())
+                    .then(|| json!({"kind":"upsert","workspace":value["workspace"]}));
+                let _ = outbound.respond(request_id, Ok(value));
+                if let Some(params) = event {
+                    let _ = outbound.send(&model::ServerMessage::Event {
+                        method: "workspace.update".to_owned(),
+                        params,
+                    });
+                }
+            }
+            Err(error) => {
+                let _ = outbound.respond(request_id, Err(error));
+            }
         }
-        Err(error) => context.respond(Err(error)).map_err(Into::into),
-    }
+    });
+    Ok(())
+}
+/// Owned dependencies retained by one tracked Workspace creation.
+struct Composition {
+    runtime: Arc<Runtime>,
+    metadata: Arc<metadata::dispatch::State>,
+    provider: Arc<provider::dispatch::State>,
 }
 
 struct Input {
@@ -118,16 +147,15 @@ async fn validate_agent_identity(
 }
 
 async fn create(
-    context: &mut Context<'_>,
-    state: &Shared,
+    composition: &Composition,
     input: &Input,
+    params: Value,
 ) -> Result<Value, ErrorCode> {
     let intent = input.intent.clone();
-    let params = std::mem::take(&mut context.request.params);
-    let mut created = context
+    let mut created = composition
         .runtime
         .run(
-            state.metadata.directory.clone(),
+            composition.metadata.directory.clone(),
             ErrorCode::RegistryIo,
             move |directory| {
                 metadata::directory::rpc::directory::workspace_creation_with_agent(
@@ -138,13 +166,13 @@ async fn create(
         )
         .await?;
     if let Some(workspace) = created.created_worktree_id.clone()
-        && state.metadata.workspace_automation.is_some()
+        && composition.metadata.workspace_automation.is_some()
     {
         // Setup is a separate workspace resource; its failure does not erase a provisioned checkout.
-        let _ = state
+        let _ = composition
             .runtime
             .run_queued(
-                state.metadata.workspace_automation.clone(),
+                composition.metadata.workspace_automation.clone(),
                 ErrorCode::RegistryIo,
                 move |automation| {
                     automation
@@ -156,20 +184,28 @@ async fn create(
             .await;
     }
     if let Some(receipt) = created.pending_agent.take() {
-        finish(state, input, &mut created, receipt).await?;
+        finish(composition, input, &mut created, receipt).await?;
     } else {
-        await_replay(state, &mut created).await?;
+        await_replay(composition, &mut created).await?;
     }
     Ok(created.value)
 }
 
-async fn await_replay(state: &Shared, created: &mut WorkspaceCreated) -> Result<(), ErrorCode> {
+async fn await_replay(
+    composition: &Composition,
+    created: &mut WorkspaceCreated,
+) -> Result<(), ErrorCode> {
     let mut snapshot: Snapshot = serde_json::from_value(created.value["creation"].clone())
         .map_err(|_| ErrorCode::RegistryIo)?;
     if !finished(&snapshot) {
-        snapshot = await_finished(state, snapshot.idempotency_key).await?;
+        snapshot = await_finished(composition, snapshot.idempotency_key).await?;
     }
-    super::creation_receipts::validate_agent(state, &snapshot).await?;
+    if snapshot.phase == Phase::Completed
+        && let Some(id) = snapshot.agent_id.clone()
+        && !provider::dispatch::contains_identity(&composition.provider, id).await?
+    {
+        return Err(ErrorCode::AgentNotFound);
+    }
     created.value["agent"] = json!(snapshot.agent);
     created.value["error"] = json!(snapshot.error);
     created.value["creation"] = json!(snapshot);
@@ -180,13 +216,13 @@ async fn await_replay(state: &Shared, created: &mut WorkspaceCreated) -> Result<
 ///
 /// Every committed transition is published to observers, so this re-reads the receipt only
 /// after progress instead of polling the store.
-async fn await_finished(state: &Shared, key: String) -> Result<Snapshot, ErrorCode> {
-    let creations = Arc::new(state.metadata.creations.clone());
+async fn await_finished(composition: &Composition, key: String) -> Result<Snapshot, ErrorCode> {
+    let creations = Arc::new(composition.metadata.creations.clone());
     let (outbound, mut progress) = Outbound::new();
     let failed = outbound.failure();
     let first_key = key.clone();
     // Observe before reading so no later transition goes unnoticed.
-    let (progress_guard, mut snapshot) = state
+    let (progress_guard, mut snapshot) = composition
         .runtime
         .run_shared_queued(
             Some(creations.clone()),
@@ -208,7 +244,7 @@ async fn await_finished(state: &Shared, key: String) -> Result<Snapshot, ErrorCo
             () = failed.cancelled() => return Err(ErrorCode::RegistryIo),
         }
         let key = key.clone();
-        snapshot = state
+        snapshot = composition
             .runtime
             .run_shared_queued(
                 Some(creations.clone()),
@@ -231,12 +267,12 @@ fn finished(snapshot: &Snapshot) -> bool {
 }
 
 async fn finish(
-    state: &Shared,
+    composition: &Composition,
     input: &Input,
     created: &mut WorkspaceCreated,
     receipt: Snapshot,
 ) -> Result<(), ErrorCode> {
-    let execution = state
+    let execution = composition
         .provider
         .agent_execution
         .as_ref()
@@ -249,8 +285,8 @@ async fn finish(
             }),
         )
         .await;
-    let creations = Arc::new(state.metadata.creations.clone());
-    let snapshot = state
+    let creations = Arc::new(composition.metadata.creations.clone());
+    let snapshot = composition
         .runtime
         .run_shared_queued(Some(creations), ErrorCode::RegistryIo, move |creations| {
             let mut snapshot = creations

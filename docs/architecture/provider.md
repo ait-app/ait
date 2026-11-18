@@ -162,8 +162,9 @@
   [ADR-088](../decisions/providers/adr-088-provider-catalog-startup-isolation.md)、
   [ADR-032](../decisions/providers/adr-032-daemon-native-provider-execution.md) 的全局串行）。
 - 普通原生执行与 Timeline 请求在连接 worker 内同步接纳，再由受追踪的任务等待响应；
-  慢速会话操作不占用该连接的 Provider worker。创建观察、订阅建立和显式历史压缩仍在各自入口
-  完成；同一 Agent 的操作顺序由执行器保持。
+  慢速会话操作不占用该连接的 Provider worker。`agent.create.request` 的原生启动同样只占用执行
+  响应槽，创建观察与订阅建立仍在各自入口完成，掉线不取消已接纳的创建（其收据照常结算）。
+  显式历史压缩仍在原入口完成；同一 Agent 的操作顺序由执行器保持。
 - 执行器使用专用 Tokio current-thread runtime 驱动原生 I/O，会话操作与存储读取经
   `spawn_blocking` 离开 reactor
   （[ADR-091](../decisions/providers/adr-091-independent-session-execution.md)）。

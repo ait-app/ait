@@ -103,6 +103,7 @@ import { getDesktopSettingsStore } from "./settings/desktop-settings-electron.js
 import { clampWindowStateToWorkAreas, createWindowStateStore } from "./settings/window-state.js";
 import { resolveDesktopWindowChromeMode, windowChromeModeArgument } from "./window/chrome.js";
 import { setupDarwinCompositorWatchdog } from "./window/compositor-watchdog/index.js";
+import { setupRendererHangWatchdog } from "./window/renderer-hang-watchdog/index.js";
 import { resolveNewWindowOptions } from "./window/open-new-window.js";
 import {
   createDesktopWindowOwner,
@@ -943,6 +944,7 @@ async function createWindow(
   }
 
   setupDarwinCompositorWatchdog(mainWindow);
+  setupRendererHangWatchdog(mainWindow);
   setupWindowResizeEvents(mainWindow);
   if (windowStateStore) {
     setupWindowStatePersistence(mainWindow, windowStateStore);

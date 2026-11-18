@@ -49,7 +49,7 @@ use model::outbound::{Outbound, QueueError};
 /// # Errors
 /// Returns delivery failure; admission and execution errors use the original request ID.
 pub(super) fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
-    respond_admitted(context, state, AgentExecution::admit_request)
+    respond_admitted(context, state, AgentExecution::admit_request, ())
 }
 
 /// Admit ordered native work like [`request`], then apply `project` to a successful result
@@ -61,7 +61,13 @@ pub(super) fn request_projected(
     state: &Shared,
     project: fn(&mut Value),
 ) -> Result<(), QueueError> {
-    respond_projected(context, state, AgentExecution::admit_request, Some(project))
+    respond_projected(
+        context,
+        state,
+        AgentExecution::admit_request,
+        Some(project),
+        (),
+    )
 }
 
 /// Admit `context` through `admit` on the installed executor, then deliver its response from a
@@ -71,23 +77,27 @@ pub(super) fn request_projected(
 /// * `context` - Pending request whose method and parameters are admitted.
 /// * `state` - Shared admission, cancellation, task tracking and the installed executor.
 /// * `admit` - Executor lane that reserves a bounded response slot for the request.
+/// * `retained` - Guard kept alive until the response is delivered, such as an operation
+///   subscription whose inline events must keep flowing while the work runs.
 ///
 /// # Errors
 /// Returns delivery failure; admission and execution errors use the original request ID.
-pub(super) fn respond_admitted(
+pub(crate) fn respond_admitted<R: Send + 'static>(
     context: Context<'_>,
     state: &Shared,
     admit: fn(&AgentExecution, &str, Value) -> Result<AdmittedResponse, crate::rpc::ErrorCode>,
+    retained: R,
 ) -> Result<(), QueueError> {
-    respond_projected(context, state, admit, None)
+    respond_projected(context, state, admit, None, retained)
 }
 
 /// [`respond_admitted`] that applies `project`, when given, to a successful result before delivery.
-fn respond_projected(
+fn respond_projected<R: Send + 'static>(
     context: Context<'_>,
     state: &Shared,
     admit: fn(&AgentExecution, &str, Value) -> Result<AdmittedResponse, crate::rpc::ErrorCode>,
     project: Option<fn(&mut Value)>,
+    retained: R,
 ) -> Result<(), QueueError> {
     let admission = state
         .admission
@@ -111,7 +121,8 @@ fn respond_projected(
     let request_id = context.request.id;
     // Admission happens before spawn, and the response owner retains its permit until
     // outbound delivery. Dropping the socket cannot cancel accepted work, such as a catalog
-    // cache or refresh update.
+    // cache or refresh update. `retained` stays alive with the response owner, so inline
+    // events observe the whole admitted operation.
     state.tasks.spawn(async move {
         let mut result = response.receive().await.map_err(Into::into);
         if let (Some(project), Ok(value)) = (project, &mut result) {
@@ -119,6 +130,7 @@ fn respond_projected(
         }
         let _ = outbound.respond(request_id, result);
         drop(response);
+        drop(retained);
     });
     drop(admission);
     Ok(())

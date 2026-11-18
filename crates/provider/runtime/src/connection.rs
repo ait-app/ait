@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::dispatch::State;
 use crate::protocol::timeline::SubscriptionRequest;
+use crate::service::agent_execution::AgentExecution;
 
 pub(crate) mod directory;
 
@@ -124,19 +125,18 @@ impl Connection {
         if let Some(subscription) = &pending {
             subscription.activate()?;
         }
-        let result = super::dispatch::agent_execution::dispatch(
-            "agent.create.request",
-            std::mem::take(&mut context.request.params),
+        // Creating a session launches and initializes a native process. Admit it through
+        // the executor's bounded response slots and deliver from a tracked task, so the
+        // connection's Provider worker never waits behind native startup. Dropping the
+        // socket cannot cancel admitted creation work, which still settles its durable
+        // creation receipt. The operation subscription stays alive with the response
+        // owner, so inline progress keeps flowing until the response is delivered.
+        super::dispatch::agent_execution::respond_admitted(
+            context,
             state,
+            AgentExecution::admit_request,
+            pending,
         )
-        .await;
-        match result {
-            Ok(value) => {
-                context.respond(Ok(value))?;
-                Ok(())
-            }
-            Err(error) => context.respond(Err(error)),
-        }
     }
 
     pub(crate) async fn subscribe(

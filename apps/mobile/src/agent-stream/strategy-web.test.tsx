@@ -1503,6 +1503,11 @@ describe("createWebStreamStrategy", () => {
     const viewportObservation = observed.get(scrollContainer);
     expect(viewportObservation).toBeDefined();
     act(() => notifyResize(scrollContainer, contentNode));
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      requestAnimationFrame(() => resolve());
+      await promise;
+    });
     expect(onReadingPositionChange).toHaveBeenLastCalledWith("message-1");
 
     act(() => root?.render(renderWithActivity(false)));
@@ -1512,6 +1517,11 @@ describe("createWebStreamStrategy", () => {
     rowsShifted = true;
     act(() => root?.render(renderWithActivity(true)));
     act(() => notifyResize(scrollContainer, contentNode));
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      requestAnimationFrame(() => resolve());
+      await promise;
+    });
     expect(onReadingPositionChange).toHaveBeenLastCalledWith("message-2");
     expect(scrollTo).not.toHaveBeenCalled();
 

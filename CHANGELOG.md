@@ -8,6 +8,13 @@
 
 ## 0.2.16 - 2026-11-18
 
+- Long streaming sessions no longer freeze the interface: the web stream viewport's scroll
+  reconciliation is convergence-guarded, resize measurements run once per animation frame
+  instead of synchronously inside ResizeObserver and MutationObserver callbacks, and row
+  width validation rounds to whole pixels so cached heights stop churning. When the desktop
+  renderer still hangs, the main process now collects a diagnostic snapshot (URL, process
+  metrics) and force-crashes the renderer to recover the window after repeated
+  unresponsive events.
 - The side-question (BTW) window is now an independent floating panel: drag it by the title bar and it stops at the window edge, it opens against the right edge by default, and the input area starts collapsed behind a Follow button. Send and stop became round buttons and the window is capped at 384x420. A draft you already typed stays in place when the input is collapsed again.
 - The desktop workspace browser runs in its own WebContentsView, so a page opened in the workspace browser is rendered by the new embedded surface.
 - DeepSeek Harness sessions that are not running can be browsed and previewed read-only from the import sheet: the preview shows the older messages in full and in order across native page boundaries, taken from a fixed cut of the session. Previewing never creates, resumes or activates a session, and hosts without the preview method keep the previous behavior.
@@ -15,6 +22,7 @@
 - Claude Code exposes its native switches as model roles: subagent, workflow, subagent-effort, small-fast, opus, sonnet, haiku and fable can be turned on and off in the provider settings. Saving them no longer flashes an error or flips the switches back, and the daemon no longer serializes every request behind a single lock, so the settings stay responsive.
 - A side question that fails to send no longer reports an error while the answer is still on its way.
 - A slow native provider operation no longer blocks the connection of a remote session.
+- Opening a new session no longer freezes the interface while the provider's native process starts: creating an Agent and creating a Workspace with its first Agent are admitted immediately and completed in the background, so workspace lists, directory reads and provider queries stay responsive during native startup, and an interrupted creation still settles its receipt.
 - OMP slash commands answer with a command card instead of assistant text: the reply is shown as a tool call that can be expanded, the command is not written to the provider, and it no longer interrupts a running turn.
 - TODO cards keep the same spacing on all four sides.
 - The mobile app keeps the projections it already has while the host is briefly out of date, instead of dropping them.

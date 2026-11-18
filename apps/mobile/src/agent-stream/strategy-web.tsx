@@ -15,7 +15,6 @@ import {
   type Range as VirtualRange,
   type Virtualizer,
 } from "@tanstack/react-virtual";
-import { flushSync } from "react-dom";
 import { withUnistyles } from "react-native-unistyles";
 import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -341,6 +340,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const historyStartReadyRef = useRef(false);
   const readingAnchor = useMemo(createReadingAnchor, []);
   const measuredRowHeights = useRef(new Map<string, { width: number; height: number }>());
+  const pendingRowMeasureFrameRef = useRef<number | null>(null);
+  const lastReconcileCorrectionRef = useRef<number | null>(null);
   const lastActiveFollowOutputLayoutRef = useRef<ActiveFollowOutputLayout | null>(null);
   const lastObservedViewportGeometryRef = useRef<ObservedViewportGeometry | null>(null);
   const wasFollowOutputLayoutActiveRef = useRef(false);
@@ -422,7 +423,23 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       unsubscribe?.();
     };
   }, []);
-  const contentWidth = contentRef.current?.getBoundingClientRect().width;
+  // Width validation for cached row heights must not chase sub-pixel layout: a
+  // fractional difference makes every cached measurement look stale on every
+  // commit. Round to whole CSS pixels and read the content width only when the
+  // content element resizes, never inside the render body.
+  const [contentWidth, setContentWidth] = useState(() =>
+    Math.round(contentRef.current?.getBoundingClientRect().width ?? 0),
+  );
+  useEffect(() => {
+    const contentNode = contentRef.current;
+    if (!contentNode || typeof ResizeObserver === "undefined") return;
+    const widthObserver = new ResizeObserver(() => {
+      const nextWidth = Math.round(contentNode.getBoundingClientRect().width);
+      setContentWidth((previous) => (previous === nextWidth ? previous : nextWidth));
+    });
+    widthObserver.observe(contentNode);
+    return () => widthObserver.disconnect();
+  }, []);
   const rowVirtualizer = useVirtualizer({
     count: segments.historyVirtualized.length,
     enabled: shouldUseVirtualizer,
@@ -489,13 +506,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return resized;
   });
 
-  // Measure the committed DOM rather than queued observer entries: flushSync can
-  // also commit an image's pending intrinsic dimensions, invalidating those entries.
+  // Measure the committed DOM rather than queued observer entries: queued entries
+  // can describe a pre-commit layout, because an image's pending intrinsic
+  // dimensions only land in the DOM once React commits it. Scheduling the
+  // measurement on the next animation frame keeps observer callbacks cheap and
+  // lets multiple resize notifications from one layout commit coalesce.
   const virtualRowObserver = useMemo(
     () =>
       new ResizeObserver(() => {
         if (!isActiveRef.current) return;
-        flushSync(() => {
+        if (pendingRowMeasureFrameRef.current !== null) return;
+        pendingRowMeasureFrameRef.current = window.requestAnimationFrame(() => {
+          pendingRowMeasureFrameRef.current = null;
+          if (!isActiveRef.current) return;
           measureVirtualizedRows();
         });
       }),
@@ -509,7 +532,16 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     },
     [virtualRowObserver],
   );
-  useEffect(() => () => virtualRowObserver.disconnect(), [virtualRowObserver]);
+  useEffect(
+    () => () => {
+      const pendingFrame = pendingRowMeasureFrameRef.current;
+      if (pendingFrame !== null) {
+        window.cancelAnimationFrame(pendingFrame);
+      }
+      virtualRowObserver.disconnect();
+    },
+    [virtualRowObserver],
+  );
 
   const cancelPendingStickToBottom = useCallback(() => {
     const pendingFrame = pendingAutoScrollFrameRef.current;
@@ -651,9 +683,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     const container = scrollContainerRef.current;
     const content = contentRef.current;
     if (!isActiveRef.current || !container || !content) return;
-    const viewportTop = container.getBoundingClientRect().top;
     const scrollTop = container.scrollTop;
-    const width = content.getBoundingClientRect().width;
+    // The measurement pass feeds both the reading-position report and the
+    // anchor projection; following output just does not pin the reader.
+    const shouldAnchor = !followOutputRef.current && !isJumpSettling();
+    const viewportTop = container.getBoundingClientRect().top;
+    const width = Math.round(content.getBoundingClientRect().width);
     const rows = Array.from(
       content.querySelectorAll<HTMLElement>("[data-history-row-id]"),
       (element) => {
@@ -663,19 +698,33 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         return { id, top: bounds.top - viewportTop + scrollTop, height: bounds.height };
       },
     );
-    const shouldAnchor = !followOutputRef.current && !isJumpSettling();
-    if (!shouldAnchor) readingAnchor.reset();
     const correctedTop = readingAnchor.reconcile(container.scrollTop, rows);
     if (!shouldAnchor) {
       readingAnchor.reset();
       return;
     }
-    if (Math.abs(correctedTop - container.scrollTop) > 0.5) {
+    // Convergence guard: when the same correction fails to move the reader to
+    // the projected position, further corrections come from a layout loop rather
+    // than real content movement. Stop pinning and let the browser anchor the
+    // viewport natively until the user scrolls again.
+    const correction = correctedTop - container.scrollTop;
+    if (Math.abs(correction) > 0.5) {
+      if (
+        lastReconcileCorrectionRef.current !== null &&
+        Math.abs(correction - lastReconcileCorrectionRef.current) < 0.5
+      ) {
+        readingAnchor.reset();
+        lastReconcileCorrectionRef.current = null;
+        return;
+      }
+      lastReconcileCorrectionRef.current = correction;
       container.scrollTop = correctedTop;
       lastKnownScrollTopRef.current = container.scrollTop;
       // The DOM scroll event arrives later. Fill the corrected virtual range in
       // this layout so the reader does not get a frame containing only the pin.
       virtualOffsetListener.current?.(container.scrollTop, false);
+    } else {
+      lastReconcileCorrectionRef.current = null;
     }
   });
 
@@ -878,10 +927,29 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       updateScrollMetrics();
       evaluateHistoryStart();
     }
+    let pendingViewportWorkFrame: number | null = null;
+    const runViewportWork = () => {
+      pendingViewportWorkFrame = null;
+      measureVirtualizedRows();
+      reconcileReadingPosition();
+      if (historyStartPagination.isSettling()) {
+        scheduleHistoryStartPrependSettle();
+      }
+      updateScrollMetrics();
+      evaluateHistoryStart();
+      if (followOutputRef.current) {
+        // ResizeObserver runs before paint. Following in the next frame exposes
+        // the newly grown row at the old offset for one painted frame.
+        forceStickToBottom();
+      }
+    };
+    const scheduleViewportWork = () => {
+      if (!isActiveRef.current) return;
+      if (pendingViewportWorkFrame === null) {
+        pendingViewportWorkFrame = window.requestAnimationFrame(runViewportWork);
+      }
+    };
     const observer = new ResizeObserver(() => {
-      flushSync(() => {
-        measureVirtualizedRows();
-      });
       const nextGeometry = getObservedViewportGeometry(scrollContainer);
       if (pendingResumeGeometryCheckRef.current) {
         pendingResumeGeometryCheckRef.current = false;
@@ -894,32 +962,27 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       } else {
         lastObservedViewportGeometryRef.current = nextGeometry;
       }
-      reconcileReadingPosition();
-      if (historyStartPagination.isSettling()) {
-        scheduleHistoryStartPrependSettle();
-      }
-      updateScrollMetrics();
-      evaluateHistoryStart();
-      if (!followOutputRef.current) {
-        return;
-      }
-      // ResizeObserver runs before paint. Following in the next frame exposes
-      // the newly grown row at the old offset for one painted frame.
-      forceStickToBottom();
+      scheduleViewportWork();
     });
     observer.observe(scrollContainer);
     if (contentNode) {
       observer.observe(contentNode);
     }
     // Paced reveal commits inside a message without rerendering this viewport.
-    // Observe those commits too, so the next frame sees the grown content at the
-    // bottom instead of waiting for the resize notification after animation frames.
+    // Observe those commits too, so the next frame sees the grown content at
+    // the bottom instead of waiting for the resize notification after animation
+    // frames. Coalesce to one stick per animation frame; streaming commits can
+    // fire this observer dozens of times per frame.
     const contentChanges = new MutationObserver(() => {
-      if (isActiveRef.current && followOutputRef.current) forceStickToBottom();
+      if (!isActiveRef.current || !followOutputRef.current) return;
+      scheduleViewportWork();
     });
     if (contentNode)
       contentChanges.observe(contentNode, { childList: true, characterData: true, subtree: true });
     return () => {
+      if (pendingViewportWorkFrame !== null) {
+        window.cancelAnimationFrame(pendingViewportWorkFrame);
+      }
       observer.disconnect();
       contentChanges.disconnect();
     };
