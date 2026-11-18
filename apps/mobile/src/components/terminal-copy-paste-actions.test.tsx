@@ -20,7 +20,7 @@ describe("terminal copy and paste actions", () => {
       </>,
     );
 
-    expect(view.getByTestId("terminal-paste").textContent).toBe("粘贴");
+    // Paste is an icon key, so its name reaches the user through the label alone.
     expect(view.getByTestId("terminal-paste").getAttribute("aria-label")).toBe("粘贴");
     expect(view.getByTestId("terminal-copy").textContent).toBe("复制");
     expect(view.getByTestId("terminal-copy").getAttribute("aria-label")).toBe("复制");

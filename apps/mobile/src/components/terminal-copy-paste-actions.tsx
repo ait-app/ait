@@ -1,7 +1,9 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
+import { ClipboardPaste } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { TerminalKeyCap } from "./terminal-key-cap";
 
 export interface TerminalPasteActionProps {
   hasClipboardText: boolean;
@@ -11,12 +13,13 @@ export interface TerminalPasteActionProps {
 export function TerminalPasteAction({ hasClipboardText, onPaste }: TerminalPasteActionProps) {
   const { t } = useTranslation();
   return (
-    <TerminalActionButton
-      label={t("workspace.terminal.paste")}
+    <TerminalKeyCap
       testID="terminal-paste"
+      accessibilityLabel={t("workspace.terminal.paste")}
+      icon={ClipboardPaste}
+      tone="utility"
       disabled={!hasClipboardText}
       onPress={onPaste}
-      variant="key"
     />
   );
 }
@@ -35,93 +38,37 @@ export function TerminalFloatingCopyAction({
     return null;
   }
 
-  return (
-    <TerminalActionButton
-      label={t("common.actions.copy")}
-      testID="terminal-copy"
-      onPress={onCopy}
-      variant="floating"
-    />
-  );
+  return <FloatingCopyButton label={t("common.actions.copy")} onPress={onCopy} />;
 }
 
-interface TerminalActionButtonProps {
+interface FloatingCopyButtonProps {
   label: string;
-  testID: string;
-  disabled?: boolean;
   onPress: () => void;
-  variant: "key" | "floating";
 }
 
-function TerminalActionButton({
-  label,
-  testID,
-  disabled = false,
-  onPress,
-  variant,
-}: TerminalActionButtonProps) {
+function FloatingCopyButton({ label, onPress }: FloatingCopyButtonProps) {
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      variant === "floating" ? styles.floatingButton : styles.keyButton,
-      disabled && styles.keyButtonDisabled,
-      (Boolean(hovered) || pressed) &&
-        !disabled &&
-        (variant === "floating" ? styles.floatingButtonHovered : styles.keyButtonHovered),
+      styles.floatingButton,
+      (Boolean(hovered) || pressed) && styles.floatingButtonHovered,
     ],
-    [disabled, variant],
+    [],
   );
-  const textStyle = useMemo(
-    () => [variant === "floating" ? styles.floatingButtonText : styles.keyButtonText],
-    [variant],
-  );
-  const accessibilityState = useMemo(() => ({ disabled }), [disabled]);
-
-  const handlePress = useCallback(() => {
-    if (!disabled) {
-      onPress();
-    }
-  }, [disabled, onPress]);
 
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={accessibilityState}
-      disabled={disabled}
-      testID={testID}
-      onPress={handlePress}
+      testID="terminal-copy"
+      onPress={onPress}
       style={pressableStyle}
     >
-      <Text style={textStyle}>{label}</Text>
+      <Text style={styles.floatingButtonText}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  keyButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 34,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
-  },
-  keyButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  keyButtonDisabled: {
-    opacity: 0.45,
-  },
-  keyButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
-    textAlign: "center",
-  },
   floatingButton: {
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing[3],

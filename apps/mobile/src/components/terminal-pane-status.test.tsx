@@ -78,7 +78,6 @@ vi.mock("react-native-reanimated", async () => ({
   runOnJS: <T,>(callback: T) => callback,
 }));
 vi.mock("@/terminal/find", () => ({ TerminalFind: () => null }));
-vi.mock("lucide-react-native", () => ({ Keyboard: () => null, KeyboardOff: () => null }));
 vi.mock("@/components/ui/loading-spinner", () => ({ LoadingSpinner: () => null }));
 vi.mock("./terminal-copy-paste-actions", () => ({
   TerminalFloatingCopyAction: () => null,

@@ -4,10 +4,9 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { Keyboard as KeyboardIcon, KeyboardOff as KeyboardOffIcon } from "lucide-react-native";
 import type { TerminalKeyInput } from "@ait/protocol/terminal-key-input";
 import type { TerminalState } from "@ait/protocol/messages";
 import {
@@ -30,11 +29,8 @@ import {
   type TerminalKeyModifierState,
 } from "@/terminal/runtime/terminal-key-dispatch";
 import {
-  getTerminalVirtualKeyboardControlId,
   shouldShowTerminalFloatingCopyAction,
   shouldShowTerminalPasteAction,
-  TERMINAL_VIRTUAL_KEYBOARD_ROWS,
-  type TerminalVirtualKeyboardControl,
 } from "@/terminal/runtime/terminal-virtual-keyboard";
 import { pasteTerminalClipboard } from "@/terminal/runtime/terminal-paste";
 import { getWorkspaceTerminalSession } from "@/terminal/runtime/workspace-terminal-session";
@@ -55,7 +51,8 @@ import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";
 import { useSessionStore } from "@/stores/session-store";
 import { toXtermTheme } from "@/utils/to-xterm-theme";
 import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";
-import { TerminalFloatingCopyAction, TerminalPasteAction } from "./terminal-copy-paste-actions";
+import { TerminalFloatingCopyAction } from "./terminal-copy-paste-actions";
+import { TerminalKeyStrip } from "./terminal-key-strip";
 import {
   createTerminalResizeDebouncer,
   type TerminalResizeRequest,
@@ -95,12 +92,6 @@ interface TerminalPaneProps {
 const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];
 const TERMINAL_RESIZE_DEBOUNCE_MS = 100;
 
-const MODIFIER_LABELS = {
-  ctrl: "Ctrl",
-  shift: "Shift",
-  alt: "Alt",
-} as const;
-
 type PendingTerminalInput =
   | {
       type: "data";
@@ -113,93 +104,6 @@ type PendingTerminalInput =
 
 function terminalScopeKey(input: { serverId: string; cwd: string }): string {
   return `${input.serverId}:${input.cwd}`;
-}
-
-interface ModifierButtonProps {
-  modifier: keyof TerminalKeyModifierState;
-  active: boolean;
-  onToggle: (modifier: keyof TerminalKeyModifierState) => void;
-}
-
-function ModifierButton({ modifier, active, onToggle }: ModifierButtonProps) {
-  const handlePress = useCallback(() => onToggle(modifier), [onToggle, modifier]);
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.keyButton,
-      active && styles.keyButtonActive,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
-    ],
-    [active],
-  );
-  const textStyle = useMemo(
-    () => [styles.keyButtonText, active && styles.keyButtonTextActive],
-    [active],
-  );
-  return (
-    <Pressable testID={`terminal-key-${modifier}`} onPress={handlePress} style={pressableStyle}>
-      <Text style={textStyle}>{MODIFIER_LABELS[modifier]}</Text>
-    </Pressable>
-  );
-}
-
-interface VirtualKeyButtonProps {
-  id: string;
-  label: string;
-  keyValue: string;
-  onSend: (key: string) => void;
-}
-
-function VirtualKeyButton({ id, label, keyValue, onSend }: VirtualKeyButtonProps) {
-  const handlePress = useCallback(() => onSend(keyValue), [onSend, keyValue]);
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.keyButton,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
-    ],
-    [],
-  );
-  return (
-    <Pressable testID={`terminal-key-${id}`} onPress={handlePress} style={pressableStyle}>
-      <Text style={styles.keyButtonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-interface KeyboardToggleButtonProps {
-  isKeyboardVisible: boolean;
-  iconColor: string;
-  onToggle: () => void;
-}
-
-function KeyboardToggleButton({
-  isKeyboardVisible,
-  iconColor,
-  onToggle,
-}: KeyboardToggleButtonProps) {
-  const { t } = useTranslation();
-  const label = isKeyboardVisible
-    ? t("workspace.terminal.hideKeyboard")
-    : t("workspace.terminal.showKeyboard");
-  const Icon = isKeyboardVisible ? KeyboardOffIcon : KeyboardIcon;
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.keyButton,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
-    ],
-    [],
-  );
-
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      testID="terminal-keyboard-toggle"
-      onPress={onToggle}
-      style={pressableStyle}
-    >
-      <Icon color={iconColor} size={16} />
-    </Pressable>
-  );
 }
 
 export function TerminalPane({
@@ -948,49 +852,6 @@ export function TerminalPane({
     hasSelection,
     isNative,
   });
-  const keyboardToggleIconColor = theme.colors.foregroundMuted;
-
-  const renderVirtualKeyboardControl = (control: TerminalVirtualKeyboardControl) => {
-    const controlId = getTerminalVirtualKeyboardControlId(control);
-    switch (control.type) {
-      case "key":
-        return (
-          <VirtualKeyButton
-            key={controlId}
-            id={control.button.id}
-            label={control.button.label}
-            keyValue={control.button.key}
-            onSend={sendVirtualKey}
-          />
-        );
-      case "modifier":
-        return (
-          <ModifierButton
-            key={controlId}
-            modifier={control.modifier}
-            active={modifiers[control.modifier]}
-            onToggle={toggleModifier}
-          />
-        );
-      case "paste":
-        return showPasteAction ? (
-          <TerminalPasteAction
-            key={controlId}
-            hasClipboardText={hasClipboardText}
-            onPaste={handleTerminalPaste}
-          />
-        ) : null;
-      case "keyboardToggle":
-        return (
-          <KeyboardToggleButton
-            key={controlId}
-            iconColor={keyboardToggleIconColor}
-            isKeyboardVisible={isKeyboardToggleVisible}
-            onToggle={handleKeyboardToggle}
-          />
-        );
-    }
-  };
   const showLoadingOverlay = shouldShowTerminalLoadingOverlay({
     isWorkspaceFocused: isTerminalPresented,
     hasStreamError: Boolean(streamError),
@@ -1088,18 +949,16 @@ export function TerminalPane({
       ) : null}
 
       {hostReady && showTerminalKeyboardControls ? (
-        <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
-          <View style={styles.keyboardRows}>
-            {TERMINAL_VIRTUAL_KEYBOARD_ROWS.map((row) => (
-              <View
-                key={row.map(getTerminalVirtualKeyboardControlId).join(":")}
-                style={styles.keyboardRow}
-              >
-                {row.map(renderVirtualKeyboardControl)}
-              </View>
-            ))}
-          </View>
-        </View>
+        <TerminalKeyStrip
+          modifiers={modifiers}
+          isKeyboardVisible={isKeyboardToggleVisible}
+          showPaste={showPasteAction}
+          hasClipboardText={hasClipboardText}
+          onSendKey={sendVirtualKey}
+          onToggleModifier={toggleModifier}
+          onPaste={handleTerminalPaste}
+          onToggleKeyboard={handleKeyboardToggle}
+        />
       ) : null}
     </Animated.View>
   );
@@ -1143,49 +1002,6 @@ const styles = StyleSheet.create((theme) => ({
   statusError: {
     color: theme.colors.destructive,
     fontSize: theme.fontSize.sm,
-  },
-  keyboardContainer: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-  },
-  keyboardRows: {
-    gap: theme.spacing[1],
-  },
-  keyboardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  keyButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 34,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
-  },
-  keyButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  keyButtonActive: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.surface2,
-  },
-  keyButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
-    textAlign: "center",
-  },
-  keyButtonTextActive: {
-    color: theme.colors.foreground,
   },
   stateText: {
     color: theme.colors.foregroundMuted,
