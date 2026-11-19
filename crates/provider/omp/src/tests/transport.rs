@@ -141,9 +141,17 @@ async fn a_failed_background_write_poisons_the_connection() {
     })
     .await
     .unwrap();
-    let (_, written) = transport.background("get_state").unwrap();
+    // A parallel fork can briefly retain a read end. The whole frame must exceed the pipe buffer.
+    let request = "x".repeat(2 * 1024 * 1024);
+    let (_, written) = transport.background(&request).unwrap();
 
-    assert!(written.await.unwrap().is_err());
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), written)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err(AgentSessionError::Failed)
+    );
 
     assert_eq!(transport.poll(), Err(AgentSessionError::Failed));
     assert!(

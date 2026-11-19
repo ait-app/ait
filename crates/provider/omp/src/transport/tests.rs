@@ -117,8 +117,7 @@ async fn close_retries_a_shutdown_cancelled_during_a_failed_write() {
     let client = OmpClient::new("/bin/sh".into());
     let script = r#"
         trap '' TERM
-        exec 0<&-
-        printf '{"type":"stdin_closed"}\n'
+        printf '{"type":"ready"}\n'
         exec sleep 30
     "#;
     let args = ["-c".to_owned(), script.to_owned()];
@@ -127,18 +126,24 @@ async fn close_retries_a_shutdown_cancelled_during_a_failed_write() {
         root.path().to_str().unwrap(),
         &args,
         None,
-        Timeouts::default(),
+        Timeouts {
+            request: Duration::from_millis(25),
+            ..Timeouts::default()
+        },
     )
     .unwrap();
     let ready = tokio::time::timeout(Duration::from_secs(5), transport.messages.recv())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(ready.value["type"], "stdin_closed");
+    assert_eq!(ready.value["type"], "ready");
 
     let abort = json!({"type":"abort"});
     let closing = Arc::clone(&transport.closing);
     {
+        // Stall the abort write until the transport's own request timeout starts shutdown.
+        let input = Arc::clone(transport.input.as_ref().unwrap());
+        let _blocked = input.lock().await;
         let mut write = std::pin::pin!(transport.send(&abort));
         tokio::time::timeout(
             Duration::from_secs(5),
