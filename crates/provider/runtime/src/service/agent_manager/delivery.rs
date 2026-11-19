@@ -1,12 +1,21 @@
 //! Serialized message admission, native interruption and durable retry receipts.
 
+use std::time::Duration;
+
 use super::{AgentManager, AgentManagerError};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
 use crate::support::time::now_timestamp;
 use model::ErrorCode;
-use provider_core::protocol::prompt::AgentPrompt;
+use provider_core::{ports::agent_session::AgentTurnEvent, protocol::prompt::AgentPrompt};
+
+/// Ceiling for writing a cancellation request while admitting newer input.
+///
+/// A wedged native process can leave cancellation writes waiting for the provider's RPC
+/// deadline (60 s by default for OMP). Close the session when cancellation exceeds this
+/// budget so queued input can be dispatched through a resumed session.
+const INTERRUPT_WRITE_BUDGET: Duration = Duration::from_secs(10);
 
 impl AgentManager {
     pub(crate) async fn deliver_answer(
@@ -201,26 +210,34 @@ impl AgentManager {
         }
     }
 
+    /// Request cancellation before dispatching queued input, closing the session if the
+    /// cancellation budget expires.
     async fn interrupt_for_input(&mut self, id: &str) -> Result<(), ErrorCode> {
         let Some(agent) = self.live.get_mut(id) else {
             return Ok(());
         };
-        agent
-            .session
-            .cancel_pending()
-            .await
-            .map_err(|_| ErrorCode::AgentIo)?;
-        if let Some(turn) = &agent.turn {
-            if agent.interruption_requested {
-                return Ok(());
+        let write = async {
+            agent
+                .session
+                .cancel_pending()
+                .await
+                .map_err(|_| ErrorCode::AgentIo)?;
+            if let Some(turn) = &agent.turn
+                && !agent.interruption_requested
+            {
+                if agent.session.cancel_turn(turn).await.is_err() {
+                    agent.pending = Some(AgentTurnEvent::Failed);
+                    return Err(ErrorCode::AgentIo);
+                }
+                agent.interruption_requested = true;
             }
-            if agent.session.cancel_turn(turn).await.is_err() {
-                agent.pending = Some(provider_core::ports::agent_session::AgentTurnEvent::Failed);
-                return Err(ErrorCode::AgentIo);
-            }
-            agent.interruption_requested = true;
+            Ok(())
+        };
+        if let Ok(result) = tokio::time::timeout(INTERRUPT_WRITE_BUDGET, write).await {
+            return result;
         }
-        Ok(())
+        tracing::warn!(agent_id = %id, "Cancellation write timed out; closing native session");
+        self.close(id).await.map_err(|_| ErrorCode::AgentIo)
     }
 
     /// Submit one FIFO head per idle Agent. Claim commits precede every native write.

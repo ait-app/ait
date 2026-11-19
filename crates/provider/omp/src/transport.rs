@@ -291,7 +291,7 @@ pub(super) struct Transport {
     buffered_bytes: usize,
     sequence: u64,
     timeouts: Timeouts,
-    closed: bool,
+    shutdown_signalled: bool,
 }
 
 impl Transport {
@@ -382,7 +382,7 @@ impl Transport {
             buffered_bytes: 0,
             sequence: 0,
             timeouts,
-            closed: false,
+            shutdown_signalled: false,
         })
     }
 
@@ -676,11 +676,12 @@ impl Transport {
 
     /// Whether the OMP process has exited or this connection was closed.
     pub(super) fn exited(&self) -> bool {
-        self.closed || self.exit.borrow().is_some()
+        self.closing.load(Ordering::Acquire) || self.exit.borrow().is_some()
     }
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
-        if self.poisoned.load(Ordering::Acquire) && !self.closed {
+        let closing = self.closing.load(Ordering::Acquire);
+        if self.poisoned.load(Ordering::Acquire) && !closing {
             self.diagnostics.observe_failure(
                 Diagnostic::new(Category::Closed, "write"),
                 "Ait could not finish writing to OMP, whose input may now hold a partial \
@@ -695,7 +696,7 @@ impl Transport {
         }
         match self.messages.try_recv() {
             Ok(frame) => Ok(Some(frame.value)),
-            Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
+            Err(mpsc::error::TryRecvError::Empty) if !closing => Ok(None),
             Err(_) => Err(AgentSessionError::Failed),
         }
     }
@@ -707,20 +708,22 @@ impl Transport {
     ///
     /// Returns `AgentSessionError::Failed` when OMP has not exited after SIGKILL.
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
-        if self.closed {
+        if self.shutdown_signalled {
             return Ok(());
         }
-        self.closed = true;
-        self.closing.store(true, Ordering::Release);
-        self.diagnostics.flush();
-        self.background_write.take();
-        self.reply_write.take();
-        self.input.take();
-        let group = self.group.take();
-        process_group::signal(group, Signal::Terminate);
+        if !self.closing.swap(true, Ordering::AcqRel) {
+            self.diagnostics.flush();
+            self.background_write.take();
+            self.reply_write.take();
+            self.input.take();
+            process_group::signal(self.group, Signal::Terminate);
+        }
+        // Retain the group across the wait so another close or Drop can still kill it.
         let graceful = self.wait_for_exit().await;
+        let group = self.group.take();
         process_group::signal(group, Signal::Kill);
         self.reader.abort();
+        self.shutdown_signalled = true;
         if graceful {
             return Ok(());
         }

@@ -107,3 +107,61 @@ fn exit_text_reports_codes_and_signals() {
     assert!(exit_text(Some(ExitStatus::from_raw(9))).contains("signal 9"));
     assert!(exit_text(None).contains("closed its output"));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn close_retries_a_shutdown_cancelled_during_a_failed_write() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let client = OmpClient::new("/bin/sh".into());
+    let script = r#"
+        trap '' TERM
+        exec 0<&-
+        printf '{"type":"stdin_closed"}\n'
+        exec sleep 30
+    "#;
+    let args = ["-c".to_owned(), script.to_owned()];
+    let mut transport = Transport::spawn(
+        &client,
+        root.path().to_str().unwrap(),
+        &args,
+        None,
+        Timeouts::default(),
+    )
+    .unwrap();
+    let ready = tokio::time::timeout(Duration::from_secs(5), transport.messages.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(ready.value["type"], "stdin_closed");
+
+    let abort = json!({"type":"abort"});
+    let closing = Arc::clone(&transport.closing);
+    {
+        let mut write = std::pin::pin!(transport.send(&abort));
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            std::future::poll_fn(|cx| {
+                assert!(write.as_mut().poll(cx).is_pending());
+                if closing.load(Ordering::Acquire) {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }),
+        )
+        .await
+        .unwrap();
+    }
+    assert!(transport.exit.borrow().is_none());
+
+    transport.close().await.unwrap();
+
+    assert!(
+        transport
+            .exit
+            .borrow()
+            .is_some_and(|exit| exit.signal() == Some(9))
+    );
+}

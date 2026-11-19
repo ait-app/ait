@@ -12,6 +12,7 @@ use provider_core::ports::agent_session::AgentSessionSpec;
 
 mod auto_archive;
 mod bot_permissions;
+mod delivery;
 mod environment;
 mod generated_titles;
 mod ledger;
@@ -115,6 +116,12 @@ impl AgentRuntimeRegistry for MemoryRegistry {
 }
 
 #[derive(Debug)]
+enum CancellationStall {
+    Pending,
+    Turn,
+}
+
+#[derive(Debug)]
 struct FakeState {
     mcp_support: mcp::Support,
     create_specs: Vec<AgentSessionSpec>,
@@ -133,6 +140,7 @@ struct FakeState {
     events: std::collections::VecDeque<AgentTurnEvent>,
     start_result: Result<(), AgentSessionError>,
     start_calls: usize,
+    cancellation_stall: Option<CancellationStall>,
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
@@ -164,6 +172,7 @@ impl Default for FakeState {
             events: std::collections::VecDeque::new(),
             start_result: Ok(()),
             start_calls: 0,
+            cancellation_stall: None,
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
             poll_error: None,
@@ -333,13 +342,26 @@ impl AgentSession for FakeSession {
         state.steer_result
     }
 
-    async fn cancel_turn(&mut self, _turn_id: &str) -> Result<(), AgentSessionError> {
-        self.0
-            .lock()
-            .unwrap()
-            .events
-            .push_back(AgentTurnEvent::Cancelled);
+    async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
+        let stalled = matches!(
+            self.0.lock().expect("state").cancellation_stall,
+            Some(CancellationStall::Pending)
+        );
+        if stalled {
+            return std::future::pending().await;
+        }
         Ok(())
+    }
+
+    async fn cancel_turn(&mut self, _turn_id: &str) -> Result<(), AgentSessionError> {
+        {
+            let mut state = self.0.lock().expect("state");
+            if !matches!(state.cancellation_stall, Some(CancellationStall::Turn)) {
+                state.events.push_back(AgentTurnEvent::Cancelled);
+                return Ok(());
+            }
+        }
+        std::future::pending().await
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
