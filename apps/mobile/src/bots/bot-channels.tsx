@@ -125,7 +125,7 @@ function ChannelRow({
   });
   const busy = toggle.isPending || remove.isPending;
   const kind = channel.config.kind === "builtin" ? "" : t(KIND_LABELS[channel.config.kind]);
-  // Senders scanned in with QQ may have a different ID in groups, so groups need pairing too.
+  // Pairing trusts a sender for private and full group messages; group @mentions need no pairing.
   const pairable =
     channel.config.kind === "qq" &&
     (channel.config.allowGroups || channel.config.allowedSenders.length === 0);

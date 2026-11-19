@@ -337,24 +337,30 @@ impl Connection<'_> {
         let Some(incoming) = inbound(self.channel, event, &frame["d"])? else {
             return Ok(());
         };
-        if allowed(self.channel, &incoming.sender) {
+        let sender_allowed = allowed(self.channel, &incoming.sender);
+        if !sender_allowed && self.try_pair(&incoming).await? {
+            return Ok(());
+        }
+        if sender_allowed || group_mention(event, &frame["d"]) {
             return self.admit(incoming).await;
         }
-        self.try_pair(&incoming).await
+        Ok(())
     }
 
     /// Add an unknown sender who presents the channel's one-time pairing code.
-    /// The notice goes first because saving the sender restarts this connection.
-    async fn try_pair(&self, incoming: &Incoming) -> Result<(), ErrorCode> {
+    /// Return whether the message claimed a code instead of starting a Bot turn. The notice
+    /// goes first because saving the sender restarts this connection.
+    async fn try_pair(&self, incoming: &Incoming) -> Result<bool, ErrorCode> {
         if !self.bots.claim_qq_pairing(self.channel.id, &incoming.text) {
-            return Ok(());
+            return Ok(false);
         }
         if let Err(error) = self.notice(incoming, PAIRED_NOTICE).await {
             tracing::warn!(channel = %self.channel.id, ?error, "QQ pairing notice failed");
         }
         self.bots
             .add_allowed_sender(self.channel.id, incoming.sender.clone())
-            .await
+            .await?;
+        Ok(true)
     }
 
     async fn admit(&self, incoming: Incoming) -> Result<(), ErrorCode> {
@@ -443,6 +449,19 @@ fn refusal(response: &Value) -> Option<i64> {
 fn allowed(channel: &Channel, sender: &str) -> bool {
     matches!(&channel.config, ChannelConfig::Qq { allowed_senders, .. }
         if allowed_senders.iter().any(|allowed| allowed == sender))
+}
+
+/// Whether QQ identifies this event as a group message mentioning the current bot.
+fn group_mention(event: &str, data: &Value) -> bool {
+    match event {
+        GROUP_AT_MESSAGE => true,
+        GROUP_ALL_MESSAGE => data["mentions"].as_array().is_some_and(|mentions| {
+            mentions
+                .iter()
+                .any(|mention| mention["is_you"].as_bool() == Some(true))
+        }),
+        _ => false,
+    }
 }
 
 /// The REST path for a stored conversation peer, refusing anything QQ did not issue.

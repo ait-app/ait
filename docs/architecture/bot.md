@@ -332,6 +332,11 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
+- QQ 开启 `allowGroups` 后，任意群成员的 `GROUP_AT_MESSAGE_CREATE`，或全量群消息中
+  `mentions[].is_you` 为布尔 `true` 的提及，均无需配对或在发送者白名单中。
+  私聊与未提及机器人的全量群消息仍按 `allowedSenders` 过滤；关闭群聊仍拒绝全部群消息。
+  有效配对码优先处理，普通提及不自动加入白名单，Conversation 仍按发送者隔离
+  （[ADR-289](../decisions/bot/adr-289-qq-group-mention-admission.md)）。
 - QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
   原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
 
