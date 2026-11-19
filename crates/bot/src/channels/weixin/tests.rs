@@ -53,14 +53,24 @@ fn private_messages_from_the_scanner_keep_their_conversation_token() {
 }
 
 #[test]
-fn other_senders_bots_groups_and_non_text_are_dropped() {
+fn all_senders_keep_their_own_conversation_token() {
+    let mut message = message();
+    message["from_user_id"] = json!("another@im.wechat");
+    message["context_token"] = json!("another-context");
+    let routed = incoming(&channel(), &message, ACCOUNT).unwrap().unwrap();
+    assert_eq!(routed.sender, "another@im.wechat");
+    assert_eq!(routed.peer, "another@im.wechat");
+    assert_eq!(routed.reply_to.as_deref(), Some("another-context"));
+}
+
+#[test]
+fn bots_groups_and_non_text_are_dropped() {
     let channel = channel();
     let dropped = |change: fn(&mut Value)| {
         let mut message = message();
         change(&mut message);
         incoming(&channel, &message, ACCOUNT).unwrap().is_none()
     };
-    assert!(dropped(|message| message["from_user_id"] = json!("mallory")));
     assert!(dropped(|message| message["from_user_id"] = json!(ACCOUNT)));
     assert!(dropped(|message| message["message_type"] = json!(2)));
     assert!(dropped(|message| message["room_id"] = json!("room-1")));

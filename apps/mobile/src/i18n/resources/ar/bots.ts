@@ -83,10 +83,9 @@ export const bots = {
   tokenRef: "مرجع رمز Bot",
   secretRef: "مرجع سر التطبيق",
   appId: "معرّف التطبيق",
-  allowedSenders: "المرسلون المسموح بهم (مفصولون بفاصلة أو سطر جديد)",
   allowGroups: "السماح بالدردشات الجماعية",
   channelRefHint:
-    "تأتي بيانات الاعتماد من متغيرات بيئة العملية التي تشغّل الخدمة الخلفية. أدخل مرجع المتغير فقط، مثل env:AIT_SERVER_CREDENTIAL_TELEGRAM، ومرسلًا مسموحًا به واحدًا على الأقل.",
+    "تأتي بيانات الاعتماد من متغيرات بيئة العملية التي تشغّل الخدمة الخلفية. أدخل مرجع المتغير فقط، مثل env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
   channelEnabled: "مفعّلة",
   channelConnected: "متصلة",
   channelIdle: "خاملة",
@@ -111,8 +110,7 @@ export const bots = {
   feishuManualStep1: "أنشئ تطبيقًا مخصصًا على {{developerUrl}} وفعّل إمكانية البوت.",
   feishuManualStep2:
     "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
-  feishuManualStep3:
-    "انسخ App ID وApp Secret هنا، وأضف معرّف Open ID الخاص بك في {{platform}} (ou_...) كمرسل مسموح، ثم أضف القناة.",
+  feishuManualStep3: "انسخ App ID وApp Secret هنا ثم أضف القناة.",
   feishuManualStep4:
     "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في {{platform}}، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ {{platform}} حفظ ذلك إلا بعد اتصال القناة.",
   feishuManualStep5: "انشر إصدارًا من التطبيق حتى يتمكن الآخرون من مراسلة البوت.",
@@ -125,7 +123,7 @@ export const bots = {
   telegramTokenHint: "يتحقق Ait من الرمز المميز مع Telegram ويحفظه بشكل خاص على هذا المضيف.",
   telegramContinue: "متابعة",
   telegramPairWaiting:
-    "امسح هذا الرمز أو افتح الرابط، ثم اضغط Start في المحادثة مع @{{bot}} لتصبح المرسل المسموح به. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    "امسح الرمز أو افتح الرابط، ثم اضغط Start في المحادثة مع @{{bot}} لإكمال الاتصال. أبقِ هذه الصفحة مفتوحة حتى يكتمل.",
   telegramPairOpen: "فتح في Telegram",
   telegramPairQrLabel: "رمز QR لفتح البوت الجديد",
   telegramInvalidToken: "رفض Telegram هذا الرمز المميز. انسخه مرة أخرى من BotFather.",
@@ -158,11 +156,8 @@ export const bots = {
     "هذا الروبوت متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة ثم حاول مرة أخرى.",
   qqManualStep1: "أنشئ روبوتًا على q.qq.com وانسخ App ID وApp Secret هنا.",
   qqManualStep2:
-    "بعد إضافة القناة، احصل على رمز الاقتران من صفها وأرسله إلى الروبوت في QQ. بذلك تصبح مرسلًا مسموحًا به.",
+    "بعد الاتصال، يمكن لأي شخص مراسلة الروبوت على الخاص. فعّل الدردشات الجماعية لتلقي رسائل المجموعات.",
   qqAppSecretHint: "يتحقق Ait من App Secret لدى QQ ويخزنه بشكل خاص على هذا المضيف.",
-  qqPairButton: "الحصول على رمز الاقتران",
-  qqPairHint:
-    "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

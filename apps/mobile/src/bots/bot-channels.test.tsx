@@ -282,8 +282,8 @@ describe("BotChannels", () => {
       expect(screen.getByLabelText("bots.feishuAppSecret")).toHaveProperty("type", "password");
       typeInto("bots.appId", " cli_lark ");
       typeInto("bots.feishuAppSecret", " test-secret ");
-      expect(submitButton()).toHaveProperty("disabled", true);
-      typeInto("bots.allowedSenders", "ou_alice, ou_bob");
+      expect(submitButton()).toHaveProperty("disabled", false);
+
       fireEvent.click(submitButton());
 
       await waitFor(() =>
@@ -292,7 +292,7 @@ describe("BotChannels", () => {
           channelId: randomUUID(),
           appId: "cli_lark",
           appSecret: "test-secret",
-          allowedSenders: ["ou_alice", "ou_bob"],
+          allowedSenders: [],
           allowGroups: false,
         }),
       );
@@ -306,7 +306,7 @@ describe("BotChannels", () => {
       await openLark();
       typeInto("bots.appId", "cli_lark");
       typeInto("bots.feishuAppSecret", "env:AIT_SERVER_CREDENTIAL_LARK");
-      typeInto("bots.allowedSenders", "ou_alice");
+
       fireEvent.click(submitButton());
 
       await waitFor(() =>
@@ -318,7 +318,7 @@ describe("BotChannels", () => {
             kind: "lark",
             appId: "cli_lark",
             secretRef: "env:AIT_SERVER_CREDENTIAL_LARK",
-            allowedSenders: ["ou_alice"],
+            allowedSenders: [],
             allowGroups: false,
           },
         }),
@@ -339,18 +339,17 @@ describe("BotChannels", () => {
     });
   });
 
-  it("channel_form_requires_env_reference_and_senders", async () => {
+  it("channel_form_requires_env_reference_without_sender_ids", async () => {
     renderChannels();
     fireEvent.click(await screen.findByText("bots.addChannel"));
     await screen.findByLabelText("bots.tokenRef");
     typeInto("bots.tokenRef", "123456:plain-token");
-    typeInto("bots.allowedSenders", "42");
+
     expect(submitButton()).toHaveProperty("disabled", true);
     expect(screen.getByText("bots.channelRefHint")).toBeTruthy();
     typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
     expect(submitButton()).toHaveProperty("disabled", false);
-    typeInto("bots.allowedSenders", "");
-    expect(submitButton()).toHaveProperty("disabled", true);
+    expect(screen.queryByLabelText("bots.allowedSenders")).toBeNull();
   });
 
   it("creates a disabled telegram channel with workspaceId", async () => {
@@ -358,7 +357,7 @@ describe("BotChannels", () => {
     fireEvent.click(await screen.findByText("bots.addChannel"));
     await screen.findByLabelText("bots.tokenRef");
     typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
-    typeInto("bots.allowedSenders", "42, 43");
+
     fireEvent.click(submitButton());
     await waitFor(() =>
       expect(botRequest).toHaveBeenCalledWith("bot.channel.create.request", {
@@ -368,7 +367,7 @@ describe("BotChannels", () => {
         config: {
           kind: "telegram",
           tokenRef: "env:AIT_SERVER_CREDENTIAL_TELEGRAM",
-          allowedSenders: ["42", "43"],
+          allowedSenders: [],
           allowGroups: false,
         },
       }),
@@ -382,7 +381,7 @@ describe("BotChannels", () => {
     fireEvent.change(screen.getByTestId("bot-channel-type"), { target: { value: "feishu" } });
     typeInto("bots.appId", "cli_app");
     typeInto("bots.secretRef", "env:AIT_SERVER_CREDENTIAL_FEISHU");
-    typeInto("bots.allowedSenders", "a, b");
+
     fireEvent.click(submitButton());
     await waitFor(() =>
       expect(botRequest).toHaveBeenCalledWith(
@@ -392,7 +391,7 @@ describe("BotChannels", () => {
             kind: "feishu",
             appId: "cli_app",
             secretRef: "env:AIT_SERVER_CREDENTIAL_FEISHU",
-            allowedSenders: ["a", "b"],
+            allowedSenders: [],
             allowGroups: false,
           },
         }),
@@ -411,7 +410,7 @@ describe("BotChannels", () => {
     fireEvent.click(await screen.findByText("bots.addChannel"));
     await screen.findByLabelText("bots.tokenRef");
     typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_T");
-    typeInto("bots.allowedSenders", "1");
+
     fireEvent.click(submitButton());
     expect(await screen.findByText("account already in use")).toBeTruthy();
   });
@@ -431,7 +430,7 @@ describe("BotChannels", () => {
     fireEvent.click(await screen.findByText("bots.addChannel"));
     await screen.findByLabelText("bots.tokenRef");
     typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
-    typeInto("bots.allowedSenders", "42");
+
     fireEvent.click(submitButton());
     await screen.findByText("Response lost");
     fireEvent.click(submitButton());
@@ -452,7 +451,7 @@ describe("BotChannels", () => {
     fireEvent.click(screen.getByText("bots.addChannel"));
     await screen.findByLabelText("bots.tokenRef");
     typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
-    typeInto("bots.allowedSenders", "43");
+
     fireEvent.click(submitButton());
     await waitFor(() => expect(ids()).toHaveLength(4));
     expect(ids()[3]).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
@@ -689,7 +688,7 @@ describe("BotChannels", () => {
       expect(await screen.findByTestId("bot-feishu-manual-guide")).toBeTruthy();
       typeInto("bots.appId", "cli_x");
       typeInto("bots.feishuAppSecret", " pasted-secret\n");
-      typeInto("bots.allowedSenders", "ou_a");
+
       fireEvent.click(submitButton());
 
       await waitFor(() =>
@@ -698,7 +697,7 @@ describe("BotChannels", () => {
           channelId: "33333333-3333-4333-8333-333333333333",
           appId: "cli_x",
           appSecret: "pasted-secret",
-          allowedSenders: ["ou_a"],
+          allowedSenders: [],
           allowGroups: false,
         }),
       );
@@ -710,7 +709,7 @@ describe("BotChannels", () => {
       fireEvent.click(screen.getByTestId("bot-feishu-manual"));
       typeInto("bots.appId", "cli_x");
       typeInto("bots.feishuAppSecret", "env:AIT_SERVER_CREDENTIAL_F");
-      typeInto("bots.allowedSenders", "ou_a");
+
       fireEvent.click(submitButton());
 
       await waitFor(() =>
@@ -747,8 +746,6 @@ describe("BotChannels", () => {
       if (method.endsWith(".scan.start.request"))
         return { scanId: "scan-1", url: "https://example.test/scan", expiresInSeconds: 600 };
       if (method.endsWith(".scan.status.request")) return { state: "waiting" };
-      if (method === "bot.channel.qq.pair.request")
-        return { code: "ABCD2345", expiresInSeconds: 600 };
       return {};
     };
     const openPicker = async (kind: "weixin" | "qq") => {
@@ -824,28 +821,18 @@ describe("BotChannels", () => {
       deleted: false,
     });
 
-    it("issues a pairing code for a QQ channel that takes group messages", async () => {
-      channels = [qqChannel({ allowedSenders: ["a"], allowGroups: true })];
-      renderChannels();
-      fireEvent.click(await screen.findByTestId(`bot-qq-pair-${channelId}`));
-      await screen.findByTestId(`bot-qq-pair-code-${channelId}`);
-      expect(botRequest).toHaveBeenCalledWith("bot.channel.qq.pair.request", {
-        workspaceId: "workspace",
-        channelId,
-      });
-    });
-
-    it("offers pairing to a QQ channel with no senders yet", async () => {
-      channels = [qqChannel({ allowedSenders: [], allowGroups: false })];
-      renderChannels();
-      expect(await screen.findByTestId(`bot-qq-pair-${channelId}`)).toBeTruthy();
-    });
-
-    it("does not offer pairing to a private QQ channel with a sender", async () => {
-      channels = [qqChannel({ allowedSenders: ["a"], allowGroups: false })];
+    it.each([
+      { allowedSenders: ["a"], allowGroups: true },
+      { allowedSenders: [], allowGroups: false },
+      { allowedSenders: ["a"], allowGroups: false },
+    ])("QQ channels need no sender pairing: %j", async (config) => {
+      channels = [qqChannel(config)];
       renderChannels();
       await screen.findByTestId(`bot-channel-${channelId}`);
       expect(screen.queryByTestId(`bot-qq-pair-${channelId}`)).toBeNull();
+      expect(
+        botRequest.mock.calls.some(([method]) => method === "bot.channel.qq.pair.request"),
+      ).toBe(false);
     });
   });
 

@@ -250,16 +250,8 @@ async fn receive(
 }
 
 fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Incoming>, ErrorCode> {
-    let (ChannelConfig::Feishu {
-        allowed_senders,
-        allow_groups,
-        ..
-    }
-    | ChannelConfig::Lark {
-        allowed_senders,
-        allow_groups,
-        ..
-    }) = &channel.config
+    let (ChannelConfig::Feishu { allow_groups, .. } | ChannelConfig::Lark { allow_groups, .. }) =
+        &channel.config
     else {
         return Err(ErrorCode::InvalidMessage);
     };
@@ -270,9 +262,7 @@ fn incoming(channel: &Channel, event: &Value, bot_id: &str) -> Result<Option<Inc
     let Some(sender_id) = sender["sender_id"]["open_id"].as_str() else {
         return Ok(None);
     };
-    if sender["sender_type"] != "user"
-        || !allowed_senders.iter().any(|allowed| allowed == sender_id)
-    {
+    if sender["sender_type"] != "user" {
         return Ok(None);
     }
     let message = &event["event"]["message"];

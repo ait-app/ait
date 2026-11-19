@@ -356,10 +356,7 @@ fn incoming(
     message: &Value,
     account_id: &str,
 ) -> Result<Option<Incoming>, ErrorCode> {
-    let ChannelConfig::Weixin {
-        allowed_senders, ..
-    } = &channel.config
-    else {
+    let ChannelConfig::Weixin { .. } = &channel.config else {
         return Err(ErrorCode::InvalidMessage);
     };
     let Some(sender) = message["from_user_id"].as_str() else {
@@ -367,7 +364,6 @@ fn incoming(
     };
     if message["message_type"] == MESSAGE_FROM_BOT
         || sender == account_id
-        || !allowed_senders.iter().any(|allowed| allowed == sender)
         || is_group(message, account_id)
     {
         return Ok(None);

@@ -1,5 +1,5 @@
 //! Guided Telegram onboarding: the user pastes a bot token, then taps Start in a link carrying
-//! a one-time code, which identifies them as the channel's allowed sender.
+//! a one-time code to verify the connection before creating the channel.
 //!
 //! Until the channel exists, status requests read the bot's updates themselves. See ADR-224.
 

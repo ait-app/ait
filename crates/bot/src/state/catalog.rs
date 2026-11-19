@@ -118,7 +118,7 @@ fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfi
 }
 
 fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCode> {
-    let (reference, senders) = match config {
+    let reference = match config {
         ChannelConfig::Builtin => return Ok(()),
         ChannelConfig::Webhook { endpoint_id, url } => {
             return if model::valid_id(endpoint_id) && valid_webhook_url(url) {
@@ -127,70 +127,51 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
                 Err(ErrorCode::InvalidMessage)
             };
         }
-        ChannelConfig::Telegram {
-            token_ref,
-            allowed_senders,
-            ..
-        } => (token_ref, allowed_senders),
+        ChannelConfig::Telegram { token_ref, .. } => token_ref,
         ChannelConfig::Feishu {
-            app_id,
-            secret_ref,
-            allowed_senders,
-            ..
+            app_id, secret_ref, ..
         }
         | ChannelConfig::Lark {
-            app_id,
-            secret_ref,
-            allowed_senders,
-            ..
+            app_id, secret_ref, ..
         }
         | ChannelConfig::Qq {
-            app_id,
-            secret_ref,
-            allowed_senders,
-            ..
+            app_id, secret_ref, ..
         } => {
             if !model::valid_id(app_id) {
                 return Err(ErrorCode::InvalidMessage);
             }
-            (secret_ref, allowed_senders)
+            secret_ref
         }
         ChannelConfig::Weixin {
             account_id,
             base_url,
             token_ref,
-            allowed_senders,
+            ..
         } => {
             // The base URL receives the bot token, so it must stay on WeChat's own hosts.
             if !model::valid_id(account_id) || !crate::channels::weixin::trusted_base(base_url) {
                 return Err(ErrorCode::InvalidMessage);
             }
-            (token_ref, allowed_senders)
+            token_ref
         }
         ChannelConfig::PhotonImessage {
             project_id,
             key_ref,
-            allowed_senders,
+            ..
         } => {
             // The project ID is interpolated into request paths that carry the API key.
             if !crate::channels::photon::valid_project_id(project_id) {
                 return Err(ErrorCode::InvalidMessage);
             }
-            (key_ref, allowed_senders)
+            key_ref
         }
     };
-    // A QQ channel connected with pasted credentials has no sender until one pairs.
-    let needs_sender = !matches!(config, ChannelConfig::Qq { .. });
     // A stored reference names only its own channel, so no client can borrow another's secret.
     let reference_allowed = match crate::ports::stored_credential_channel(reference) {
         Some(owner) => owner == id,
         None => crate::ports::valid_credential_reference(reference),
     };
-    if !reference_allowed
-        || (needs_sender && senders.is_empty())
-        || senders.len() > 256
-        || senders.iter().any(|sender| !model::valid_id(sender))
-    {
+    if !reference_allowed {
         return Err(ErrorCode::InvalidMessage);
     }
     Ok(())

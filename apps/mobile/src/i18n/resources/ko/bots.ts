@@ -83,10 +83,9 @@ export const bots = {
   tokenRef: "Bot 토큰 참조",
   secretRef: "앱 시크릿 참조",
   appId: "앱 ID",
-  allowedSenders: "허용된 발신자(쉼표 또는 줄바꿈으로 구분)",
   allowGroups: "그룹 채팅 허용",
   channelRefHint:
-    "자격 증명은 데몬을 시작하는 프로세스의 환경 변수에서 가져옵니다. env:AIT_SERVER_CREDENTIAL_TELEGRAM 같은 변수 참조만 입력하고, 허용된 발신자를 한 명 이상 지정하세요.",
+    "자격 증명은 데몬을 시작하는 환경 변수에서 가져옵니다. env:AIT_SERVER_CREDENTIAL_TELEGRAM 같은 변수 참조만 입력하세요.",
   channelEnabled: "사용",
   channelConnected: "연결됨",
   channelIdle: "대기 중",
@@ -112,8 +111,7 @@ export const bots = {
   feishuManualStep1: "{{developerUrl}}에서 사용자 지정 앱을 만들고 봇 기능을 켜세요.",
   feishuManualStep2:
     "권한 관리에서 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly을(를) 추가하세요.",
-  feishuManualStep3:
-    "App ID와 App Secret을 여기에 복사하고, 내 {{platform}} Open ID(ou_...)를 허용된 발신자로 추가한 뒤 채널을 추가하세요.",
+  feishuManualStep3: "App ID와 App Secret을 입력한 다음 채널을 추가하세요.",
   feishuManualStep4:
     "그런 다음 {{platform}}의 이벤트 및 콜백에서 장기 연결을 선택하고 im.message.receive_v1을(를) 구독하세요. 채널이 연결된 후에만 {{platform}}에서 저장할 수 있습니다.",
   feishuManualStep5: "앱 버전을 게시해야 봇에게 메시지를 보낼 수 있습니다.",
@@ -126,7 +124,7 @@ export const bots = {
   telegramTokenHint: "Ait가 Telegram으로 토큰을 확인한 뒤 이 호스트에 비공개로 저장합니다.",
   telegramContinue: "계속",
   telegramPairWaiting:
-    "이 코드를 스캔하거나 링크를 열고 @{{bot}} 채팅에서 Start를 누르면 허용된 발신자가 됩니다. 완료될 때까지 이 페이지를 열어 두세요.",
+    "코드를 스캔하거나 링크를 열고 @{{bot}} 채팅에서 Start를 눌러 연결을 완료하세요. 완료될 때까지 이 페이지를 열어 두세요.",
   telegramPairOpen: "Telegram에서 열기",
   telegramPairQrLabel: "새 봇을 여는 QR 코드",
   telegramInvalidToken: "Telegram이 이 토큰을 거부했습니다. BotFather에서 다시 복사하세요.",
@@ -161,11 +159,8 @@ export const bots = {
     "이 봇은 이미 이 호스트의 채널에 연결되어 있습니다. 해당 채널을 삭제한 후 다시 시도하세요.",
   qqManualStep1: "q.qq.com에서 봇을 만들고 App ID와 App Secret을 여기에 복사하세요.",
   qqManualStep2:
-    "채널을 추가한 후 해당 행에서 페어링 코드를 받아 QQ에서 봇에게 보내세요. 그러면 허용된 발신자가 됩니다.",
+    "연결 후 누구나 봇과 개인 채팅을 할 수 있습니다. 그룹 메시지를 받으려면 그룹 채팅을 켜세요.",
   qqAppSecretHint: "Ait는 QQ에서 App Secret을 확인하고 이 호스트에 비공개로 저장합니다.",
-  qqPairButton: "페어링 코드 받기",
-  qqPairHint:
-    "코드: {{code}}. 비공개 채팅으로 봇에게 보내거나 QQ 그룹에서 봇을 @멘션하여 보내세요. 한 번만 사용할 수 있으며 10분 후 만료됩니다.",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

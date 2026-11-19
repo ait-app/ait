@@ -322,7 +322,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   Unix 上目录 `0700`、文件属主专用；Channel 删除或 Bot 退役后删除，已删除 Channel 的清理在每次启动时重试
   （[ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，修订
   [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 第 8 条）。
-- 除 QQ 外，外部 Channel 至少需要一个允许的发送者。`bot.channel.types` 只返回 `builtin`、`telegram`、`feishu`，
+- 外部消息 Channel 不检查发送者白名单；`allowedSenders` 可省略，旧值仅用于兼容配置，不参与校验或接纳。
+  设置页不再收集发送者 ID，QQ 的发送者配对方法与入口已移除
+  （[ADR-290](../decisions/bot/adr-290-open-channel-senders.md)）。`bot.channel.types` 只返回 `builtin`、`telegram`、`feishu`，
   客户端按接入方法是否实现显示 Lark、微信、QQ 与 iMessage
   （[ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)、
   [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)）。
@@ -332,11 +334,11 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   飞书扫码流程仍只接入中国区应用（[ADR-272](../decisions/bot/adr-272-lark-channel.md)）。
 - QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
   `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
-- QQ 开启 `allowGroups` 后，任意群成员的 `GROUP_AT_MESSAGE_CREATE`，或全量群消息中
-  `mentions[].is_you` 为布尔 `true` 的提及，均无需配对或在发送者白名单中。
-  私聊与未提及机器人的全量群消息仍按 `allowedSenders` 过滤；关闭群聊仍拒绝全部群消息。
-  有效配对码优先处理，普通提及不自动加入白名单，Conversation 仍按发送者隔离
-  （[ADR-289](../decisions/bot/adr-289-qq-group-mention-admission.md)）。
+- Telegram、飞书、Lark、微信、QQ 和 iMessage 私聊向任意发送者开放；Telegram 群聊仍需提及或回复机器人，
+  飞书和 Lark 群聊仍需提及机器人，且均需 `allowGroups`。微信与 iMessage 仍只支持私聊。
+  QQ 开启 `allowGroups` 后接纳任意群成员的提及和平台全量推送中的普通群消息；关闭后拒绝全部群消息。
+  平台鉴权、机器人或自身消息过滤、原生连接验证及按发送者隔离的 Conversation 继续有效
+  （[ADR-290](../decisions/bot/adr-290-open-channel-senders.md)）。
 - QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
   原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
 

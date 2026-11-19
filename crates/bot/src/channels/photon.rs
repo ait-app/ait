@@ -139,10 +139,7 @@ async fn next_text(socket: &mut Socket, limit: Duration) -> Result<Option<String
 
 /// Build a Bot input from an event, or `None` for anything this channel does not accept.
 fn incoming(channel: &Channel, event: &Value) -> Option<Incoming> {
-    let ChannelConfig::PhotonImessage {
-        allowed_senders, ..
-    } = &channel.config
-    else {
+    let ChannelConfig::PhotonImessage { .. } = &channel.config else {
         return None;
     };
     let message = &event["data"]["object"];
@@ -156,12 +153,6 @@ fn incoming(channel: &Channel, event: &Value) -> Option<Incoming> {
         return None;
     }
     let sender = message["sentBy"]["handle"].as_str()?;
-    if !allowed_senders
-        .iter()
-        .any(|allowed| allowed.eq_ignore_ascii_case(sender))
-    {
-        return None;
-    }
     let text = message["content"]["text"]
         .as_str()
         .filter(|text| !text.trim().is_empty() && text.len() <= MAX_TEXT_BYTES)?;

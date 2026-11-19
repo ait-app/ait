@@ -6,7 +6,7 @@ mod transport;
 #[test]
 fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
     for kind in ["feishu", "lark"] {
-        let channel = Channel {
+        let mut channel = Channel {
             id: ChannelId::generate(),
             bot_id: BotId::generate(),
             enabled: true,
@@ -31,10 +31,35 @@ fn feishu_and_lark_scope_user_group_and_thread_before_admission() {
         event["event"]["message"]["chat_type"] = json!("p2p");
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
         event["event"]["sender"]["sender_id"]["open_id"] = json!("ou_stranger");
-        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        assert_eq!(
+            incoming(&channel, &event, "ou_bot")
+                .unwrap()
+                .unwrap()
+                .sender,
+            "ou_stranger"
+        );
+        event["event"]["message"]["chat_type"] = json!("group");
+        event["event"]["message"]["mentions"] = json!([{"id":{"open_id":"ou_bot"}}]);
+        assert_eq!(
+            incoming(&channel, &event, "ou_bot")
+                .unwrap()
+                .unwrap()
+                .sender,
+            "ou_stranger"
+        );
         event["event"]["sender"]["sender_id"]["open_id"] = json!("ou_alice");
         event["event"]["sender"]["sender_type"] = json!("app");
         assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        event["event"]["sender"]["sender_type"] = json!("user");
+        let (ChannelConfig::Feishu { allow_groups, .. } | ChannelConfig::Lark { allow_groups, .. }) =
+            &mut channel.config
+        else {
+            panic!("expected Feishu or Lark channel");
+        };
+        *allow_groups = false;
+        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_none());
+        event["event"]["message"]["chat_type"] = json!("p2p");
+        assert!(incoming(&channel, &event, "ou_bot").unwrap().is_some());
     }
 }
 

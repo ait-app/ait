@@ -15,7 +15,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { FeishuManualGuide, FeishuScanSetup } from "./feishu-setup";
 import { TextLink } from "./channel-setup";
-import { ChannelScanSetup, QqManualSetup, QqPairing } from "./scan-setup";
+import { ChannelScanSetup, QqManualSetup } from "./scan-setup";
 import { ImessageGuidedSetup } from "./imessage-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
@@ -27,7 +27,6 @@ import { WebhookDetails, WebhookSetup } from "./webhook-setup";
 type BotChannel = z.infer<typeof BotChannelSchema>;
 
 const CREDENTIAL_REF = /^env:AIT_SERVER_CREDENTIAL_[A-Z0-9_]{1,96}$/;
-const MAX_SENDERS = 256;
 type ExternalKind =
   | "telegram"
   | "feishu"
@@ -36,13 +35,6 @@ type ExternalKind =
   | "qq"
   | "photon_imessage"
   | "webhook";
-function parseSenders(text: string): string[] {
-  return text
-    .split(/[,\n]/)
-    .map((sender) => sender.trim())
-    .filter(Boolean);
-}
-
 function connectionSummary(connection: unknown, fallback: string): string {
   if (connection && typeof connection === "object") {
     const { error, state } = connection as { error?: unknown; state?: unknown };
@@ -125,10 +117,6 @@ function ChannelRow({
   });
   const busy = toggle.isPending || remove.isPending;
   const kind = channel.config.kind === "builtin" ? "" : t(KIND_LABELS[channel.config.kind]);
-  // Pairing trusts a sender for private and full group messages; group @mentions need no pairing.
-  const pairable =
-    channel.config.kind === "qq" &&
-    (channel.config.allowGroups || channel.config.allowedSenders.length === 0);
   const connection = status.data
     ? connectionSummary(
         status.data,
@@ -169,14 +157,6 @@ function ChannelRow({
           disabled={!interactive || busy}
         />
       ) : null}
-      {pairable && !readOnly ? (
-        <QqPairing
-          serverId={serverId}
-          workspaceId={workspaceId}
-          channelId={channel.id}
-          disabled={!interactive || !active || !channel.enabled}
-        />
-      ) : null}
       {toggle.error ? <Text style={styles.error}>{toggle.error.message}</Text> : null}
       {remove.error ? <Text style={styles.error}>{remove.error.message}</Text> : null}
     </View>
@@ -208,7 +188,6 @@ function ChannelForm({
   const [tokenRef, setTokenRef] = useState("");
   const [appId, setAppId] = useState("");
   const [secretRef, setSecretRef] = useState("");
-  const [senders, setSenders] = useState("");
   const [allowGroups, setAllowGroups] = useState(false);
   const [enterManually, setEnterManually] = useState(false);
   const scanning = kind === "feishu" && feishuSetupSupported && !enterManually;
@@ -220,14 +199,11 @@ function ChannelForm({
   // A pasted App Secret is verified in its own region; a reference still uses the variable.
   const pastedSecret =
     (kind === "feishu" || kind === "lark") && appSetupSupported && !CREDENTIAL_REF.test(secretRef);
-  const allowedSenders = parseSenders(senders);
   const valid =
-    allowedSenders.length > 0 &&
-    allowedSenders.length <= MAX_SENDERS &&
-    (kind === "telegram"
+    kind === "telegram"
       ? CREDENTIAL_REF.test(tokenRef)
       : appId.trim().length > 0 &&
-        (CREDENTIAL_REF.test(secretRef) || (pastedSecret && secretRef.trim().length > 0)));
+        (CREDENTIAL_REF.test(secretRef) || (pastedSecret && secretRef.trim().length > 0));
   const create = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -244,7 +220,7 @@ function ChannelForm({
             channelId,
             appId: appId.trim(),
             appSecret: secretRef.trim(),
-            allowedSenders,
+            allowedSenders: [],
             allowGroups,
           },
         );
@@ -256,8 +232,8 @@ function ChannelForm({
         enabled: false,
         config:
           kind === "telegram"
-            ? { kind, tokenRef, allowedSenders, allowGroups }
-            : { kind, appId: appId.trim(), secretRef, allowedSenders, allowGroups },
+            ? { kind, tokenRef, allowedSenders: [], allowGroups }
+            : { kind, appId: appId.trim(), secretRef, allowedSenders: [], allowGroups },
       });
     },
     onSuccess: onDone,
@@ -415,17 +391,6 @@ function ChannelForm({
         </>
       )}
       {showHint ? <Text style={styles.error}>{t("bots.channelRefHint")}</Text> : null}
-      <Field label={t("bots.allowedSenders")}>
-        <FormTextInput
-          multiline
-          initialValue={senders}
-          onChangeText={setSenders}
-          editable={!create.isPending}
-          accessibilityLabel={t("bots.allowedSenders")}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </Field>
       <AllowGroupsCheckbox
         checked={allowGroups}
         disabled={create.isPending}

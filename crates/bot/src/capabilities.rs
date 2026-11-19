@@ -31,7 +31,6 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.channel.qq.scan.status.request"),
     MethodSpec::request("bot.channel.qq.scan.cancel.request"),
     MethodSpec::request("bot.channel.qq.connect.request"),
-    MethodSpec::request("bot.channel.qq.pair.request"),
     MethodSpec::request("bot.channel.imessage.pair.start.request"),
     MethodSpec::request("bot.channel.imessage.pair.status.request"),
     MethodSpec::request("bot.channel.imessage.pair.cancel.request"),

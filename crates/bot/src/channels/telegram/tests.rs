@@ -24,7 +24,7 @@ fn update() -> Value {
 }
 
 #[test]
-fn telegram_routes_allowlisted_senders_and_mentioned_threads() {
+fn telegram_routes_all_senders_and_mentioned_threads() {
     let channel = channel();
     let value = update();
     let message = incoming(&channel, &value, 2, "ait_bot").unwrap().unwrap();
@@ -34,10 +34,31 @@ fn telegram_routes_allowlisted_senders_and_mentioned_threads() {
     assert_eq!(message.message_id, "10");
     let mut ignored = value.clone();
     ignored["message"]["from"]["id"] = json!(9);
-    assert!(
+    assert_eq!(
         incoming(&channel, &ignored, 2, "ait_bot")
             .unwrap()
+            .unwrap()
+            .sender,
+        "9"
+    );
+    let mut direct_only = channel.clone();
+    let ChannelConfig::Telegram { allow_groups, .. } = &mut direct_only.config else {
+        panic!("expected Telegram channel");
+    };
+    *allow_groups = false;
+    assert!(
+        incoming(&direct_only, &ignored, 2, "ait_bot")
+            .unwrap()
             .is_none()
+    );
+    ignored["message"]["chat"] = json!({"id":9,"type":"private"});
+    ignored["message"]["text"] = json!("hello");
+    assert_eq!(
+        incoming(&direct_only, &ignored, 2, "ait_bot")
+            .unwrap()
+            .unwrap()
+            .peer,
+        "9"
     );
     ignored = value.clone();
     ignored["message"]["text"] = json!("hello");

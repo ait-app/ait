@@ -149,7 +149,7 @@ export const BOT_REQUEST_SCHEMAS = [
     channelId: z.guid(),
     appId: z.string(),
     appSecret: z.string(),
-    allowedSenders: z.array(z.string()),
+    allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().optional(),
   }),
   z.strictObject({
@@ -159,7 +159,7 @@ export const BOT_REQUEST_SCHEMAS = [
     channelId: z.guid(),
     appId: z.string(),
     appSecret: z.string(),
-    allowedSenders: z.array(z.string()),
+    allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().optional(),
   }),
   z.strictObject({
@@ -206,12 +206,6 @@ export const BOT_REQUEST_SCHEMAS = [
     appId: z.string(),
     appSecret: z.string(),
     allowGroups: z.boolean().optional(),
-  }),
-  z.strictObject({
-    type: z.literal("bot.channel.qq.pair.request"),
-    requestId: z.string(),
-    workspaceId: WorkspaceIdSchema,
-    channelId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.channel.webhook.create.request"),
@@ -558,10 +552,6 @@ export const BOT_RESPONSE_SCHEMAS = [
     payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
   }),
   z.object({
-    type: z.literal("bot.channel.qq.pair.response"),
-    payload: z.object({ requestId: z.string(), code: z.string(), expiresInSeconds: z.number() }),
-  }),
-  z.object({
     type: z.literal("bot.channel.imessage.pair.start.response"),
     payload: z.object({
       requestId: z.string(),
@@ -715,7 +705,6 @@ export const BOT_QQ_SETUP_METHODS = [
   "bot.channel.qq.scan.status.request",
   "bot.channel.qq.scan.cancel.request",
   "bot.channel.qq.connect.request",
-  "bot.channel.qq.pair.request",
 ] as const;
 export const BOT_IMESSAGE_SETUP_METHODS = [
   "bot.channel.imessage.pair.start.request",

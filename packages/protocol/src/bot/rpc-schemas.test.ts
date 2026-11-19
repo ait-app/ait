@@ -61,6 +61,49 @@ describe("Bot wire contract", () => {
     );
   });
 
+  it("accepts channels without sender lists and preserves legacy fields", () => {
+    for (const config of [
+      { kind: "telegram", tokenRef: "env:AIT_SERVER_CREDENTIAL_TEST" },
+      { kind: "feishu", appId: "app", secretRef: "env:AIT_SERVER_CREDENTIAL_TEST" },
+      { kind: "lark", appId: "app", secretRef: "env:AIT_SERVER_CREDENTIAL_TEST" },
+      { kind: "qq", appId: "app", secretRef: "env:AIT_SERVER_CREDENTIAL_TEST" },
+      {
+        kind: "weixin",
+        accountId: "bot",
+        baseUrl: "https://ilinkai.weixin.qq.com",
+        tokenRef: "env:AIT_SERVER_CREDENTIAL_TEST",
+      },
+      { kind: "photon_imessage", projectId: "project", keyRef: "env:AIT_SERVER_CREDENTIAL_TEST" },
+    ]) {
+      expect(BotChannelConfigSchema.parse(config)).toMatchObject({ allowedSenders: [] });
+      expect(BotChannelConfigSchema.parse({ ...config, allowedSenders: ["legacy"] })).toMatchObject(
+        {
+          allowedSenders: ["legacy"],
+        },
+      );
+    }
+    for (const kind of ["feishu", "lark"]) {
+      expect(
+        BotRequestSchema.parse({
+          type: `bot.channel.${kind}.connect.request`,
+          requestId: "r",
+          workspaceId: "workspace",
+          channelId: crypto.randomUUID(),
+          appId: "app",
+          appSecret: "test-secret",
+        }),
+      ).toMatchObject({ allowedSenders: [] });
+    }
+    expect(
+      BotRequestSchema.safeParse({
+        type: "bot.channel.qq.pair.request",
+        requestId: "r",
+        workspaceId: "workspace",
+        channelId: crypto.randomUUID(),
+      }).success,
+    ).toBe(false);
+  });
+
   it("preserves distinct assistant messages and defaults legacy turns to an empty list", () => {
     const turn = {
       id: crypto.randomUUID(),
@@ -243,7 +286,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(48);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(47);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

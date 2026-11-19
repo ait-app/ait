@@ -145,7 +145,6 @@ enum Operation {
     AccountAvailable(String),
     CreateStored(StoredChannel, SecretString),
     SyncToken(ChannelId, String),
-    AddSender(ChannelId, String),
     WebhookTurn(String, BotTurnId),
     CreateWebhook(ChannelCreate),
     WebhookChannel(String, ChannelId),
@@ -328,7 +327,6 @@ impl Bots {
             }
             "bot.channel.qq.scan.cancel.request" => qq.cancel(decode(params)?).await,
             "bot.channel.qq.connect.request" => qq.connect(self, decode(params)?).await,
-            "bot.channel.qq.pair.request" => qq.pair(self, decode(params)?).await,
             "bot.channel.webhook.create.request" => {
                 crate::channels::webhook::create(self, decode(params)?).await
             }
@@ -847,28 +845,6 @@ impl Bots {
             .await
             .map(|_| ())
     }
-    /// Allow a QQ sender who presented the channel's pairing code.
-    pub(crate) async fn add_allowed_sender(
-        &self,
-        channel: ChannelId,
-        sender: String,
-    ) -> Result<(), ErrorCode> {
-        self.send(Operation::AddSender(channel, sender))
-            .await
-            .map(|_| ())
-    }
-    /// A channel's status, refusing a channel the requesting Workspace's Bot does not own.
-    pub(crate) async fn channel_status_for(&self, params: Value) -> Result<Value, ErrorCode> {
-        self.call(Operation::Rpc(
-            "bot.channel.status.request".to_owned(),
-            params,
-        ))
-        .await
-    }
-    /// Consume a QQ channel's pairing code if `text` presents it.
-    pub(crate) fn claim_qq_pairing(&self, channel: ChannelId, text: &str) -> bool {
-        self.0.qq.claim(channel, text)
-    }
     pub(crate) async fn cursor(&self, channel: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         self.call(Operation::Cursor(channel, cursor))
             .await
@@ -1084,9 +1060,6 @@ fn apply(
         Operation::SyncToken(channel, token) => {
             state.advance_sync(channel, token).map(|()| Value::Null)
         }
-        Operation::AddSender(channel, sender) => state
-            .add_allowed_sender(channel, sender)
-            .map(|()| Value::Null),
         Operation::Cursor(channel, cursor) => {
             state.advance_cursor(channel, cursor).map(|()| Value::Null)
         }

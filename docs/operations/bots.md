@@ -363,13 +363,13 @@ Bot 运行或恢复模式超出上限的任务会被拒绝；没有存储模式�
 ## Telegram、飞书与 Lark 配置
 
 飞书推荐扫码接入，Telegram 推荐引导接入，都无需下面的配置。使用环境变量时，凭据由启动 daemon 的宿主环境注入，Channel 仅保存引用。
-以下为非秘密配置示例，替换允许的用户 ID 后再启用。
+以下为非秘密配置示例，填好凭据引用后再启用。所有消息平台均接纳任意发送者；旧 `allowedSenders` 值被忽略，无需清空或重新连接。
+群聊需显式开启；Telegram 群聊仍需 @ 或回复机器人，飞书与 Lark 群聊仍需 @ 机器人。平台权限仍决定哪些消息会投递到 Ait。
 
 ```json
 {
   "kind": "telegram",
   "tokenRef": "env:AIT_SERVER_CREDENTIAL_TELEGRAM",
-  "allowedSenders": ["123456"],
   "allowGroups": false
 }
 ```
@@ -382,39 +382,36 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
   "kind": "feishu",
   "appId": "cli_example",
   "secretRef": "env:AIT_SERVER_CREDENTIAL_FEISHU",
-  "allowedSenders": ["ou_example"],
   "allowGroups": false
 }
 ```
 
 ### Telegram 接入
 
-在 Bot 设置页添加 Telegram Channel，按页面步骤在 BotFather 创建机器人并粘贴 Token，daemon 向 Telegram 验证后显示一个二维码和链接。打开后在机器人对话中点击 Start，你会成为唯一允许的发送者，Channel 随后自动启用；群聊需在继续前勾选。链接 10 分钟后过期，daemon 重启后需重新开始。
+在 Bot 设置页添加 Telegram Channel，按页面步骤在 BotFather 创建机器人并粘贴 Token，daemon 向 Telegram 验证后显示一个二维码和链接。打开后在机器人对话中点击 Start 完成连接验证，Channel 随后自动启用，任何人都可私聊；群聊需在继续前勾选。链接 10 分钟后过期，daemon 重启后需重新开始。
 配对期间发给该机器人的其他消息会被丢弃。Token 与飞书 App Secret 保存在同一位置，边界相同。
 
 ### 微信接入
 
-在 Bot 设置页添加微信 Channel，点击“显示二维码”，用微信扫码并在手机上确认，Channel 随后自动启用。只有扫码者可以在单聊中给机器人发消息，不支持群聊，也没有手动接入。
+在 Bot 设置页添加微信 Channel，点击“显示二维码”，用微信扫码并在手机上确认，Channel 随后自动启用。任何人都可以在单聊中给机器人发消息，不支持群聊，也没有手动接入。
 微信结束会话后 Channel 显示已过期，需删除后重新扫码。此流程依赖未公开的 iLink 接口，边界见 [ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)。
 
 ### QQ 接入
 
-在 Bot 设置页添加 QQ Channel，点击“显示二维码”，用 QQ 扫码并同意，Channel 随后自动启用，只有扫码者可以私聊机器人；群聊需在扫码前勾选。
+在 Bot 设置页添加 QQ Channel，点击“显示二维码”，用 QQ 扫码并同意，Channel 随后自动启用，任何人都可私聊机器人；群聊需在扫码前勾选。
 扫码不可用时可选择手动填写 App ID 与 App Secret，daemon 向 QQ 验证后保存。
 
-开启群聊后，所有群友都可以 @ 机器人发起对话，无需逐人配对。各发送者使用独立的对话上下文，回复发回原群。
-
-私聊继续只允许发送者列表中的用户。手动接入的 Channel 起初没有允许的发送者；在该 Channel 所在行点击“获取配对码”，把配对码私聊发给机器人，或在群里 @ 机器人并发送它，发送者即加入允许列表。配对消息只处理配对，不交给模型。配对码只能使用一次，10 分钟后过期，daemon 重启后失效。
+开启群聊后，所有群友都可以 @ 机器人发起对话；使用全量群消息推送时，普通文字也会接纳。私聊和群聊均无需发送者配对，扫码与手动接入行为一致。各发送者使用独立的对话上下文，回复发回原群。
 
 QQ 只接受带原消息 `msg_id` 的被动回复；每条入站消息最多回复 5 次，窗口过期后无法补发，投递会记为 `uncertain`。
 QQ 返回的长消息 ID 会转换为有界的内部去重键，回复仍携带完整原消息 ID。
-如果群主开启了“接收群内全部消息”，QQ 会用 `GROUP_MESSAGE_CREATE` 推送群内消息；其中明确 @ 当前机器人的消息同样接纳所有群友，未 @ 的普通消息继续按允许的发送者列表过滤。未开启时使用 `GROUP_AT_MESSAGE_CREATE`，接收 @ 机器人的消息。
+如果群主开启了“接收群内全部消息”，QQ 会用 `GROUP_MESSAGE_CREATE` 推送群内消息，任意成员的普通文字也会被接纳。未开启时使用 `GROUP_AT_MESSAGE_CREATE`，接收 @ 机器人的消息。
 
 ### iMessage 接入
 
 iMessage 通过 Photon Beta 2.0 的托管线路收发，消息内容经过 Photon 的云服务，不需要 Mac，边界见 [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)。
 
-先在 [Photon 控制台](https://app.beta.photon.codes)创建项目和 API Key，Key 需要 `project:read`、`project:write`、`platforms:read`、`platforms:write` 权限。然后在 Bot 设置页添加 iMessage Channel，填写 Project ID、API Key 和你自己的手机号（E.164）或 iMessage 邮箱。daemon 分配一条共享线路并显示号码和一次性代码，从填写的身份用 iMessage 把代码发给该号码，Channel 随后自动启用，只有该身份可以给 Bot 发消息。代码 10 分钟后过期，daemon 重启后需重新开始。
+先在 [Photon 控制台](https://app.beta.photon.codes)创建项目和 API Key，Key 需要 `project:read`、`project:write`、`platforms:read`、`platforms:write` 权限。然后在 Bot 设置页添加 iMessage Channel，填写 Project ID、API Key 和你自己的手机号（E.164）或 iMessage 邮箱。daemon 分配一条共享线路并显示号码和一次性代码，从填写的身份用 iMessage 把代码发给该号码，验证连接后 Channel 自动启用，随后接纳项目收到的任意发送者的 iMessage 单聊。代码 10 分钟后过期，daemon 重启后需重新开始。
 
 当前只处理单聊文本，不支持群聊和附件，也不支持 Photon 的专用线路。回复被 Photon 接受即显示为已投递，最终失败只能在 Photon 控制台看到。删除 Channel 不释放线路分配。已用真实 Photon Beta 项目验证单聊往返，移动端设置页尚未在真机上验证。
 
@@ -423,28 +420,28 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 ### 飞书接入
 
 在 Bot 设置页添加飞书 Channel，点击“显示二维码”，用飞书 App 扫码并同意。daemon 直接向飞书创建应用，无需开发者后台操作；
-完成后 Channel 自动启用，只有扫码者可以给机器人发消息，群聊需在扫码前勾选。二维码由 daemon 按飞书返回的有效期管理，daemon 重启后需重新扫码。
+完成后 Channel 自动启用，任何人都可给机器人发消息，群聊需在扫码前勾选。二维码由 daemon 按飞书返回的有效期管理，daemon 重启后需重新扫码。
 扫码不可用（例如企业禁止创建应用）时选择手动填写，按页面步骤创建应用，粘贴 App ID 与 App Secret，并填写发送者的 Open ID；daemon 向飞书验证后保存。也可填写 `env:` 引用。
 
 扫码或粘贴的 App Secret 保存在 `<data>/workspace-bots/credentials/<channelId>`（Unix 上仅所有者可读），删除 Channel 或移除 Bot 时一并删除；飞书上的应用需在开发者后台自行删除。
 同一用户运行的进程可以读取此文件，边界见 [ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)。
 
 飞书使用自建应用机器人，配置 IM 接收/发送权限，订阅 `im.message.receive_v1` 并选择长连接。
-默认只接收允许列表中的发送者；群聊需显式开启并提及机器人。当前不支持富媒体和卡片流式回复。
+私聊接纳任意发送者；群聊需显式开启并提及机器人。当前不支持富媒体和卡片流式回复。
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
 实际平台凭据和应用权限需要单独验收，历史模拟服务测试不能证明真实账号已验证。
 
 ### Lark 国际版接入
 
-在 Bot 设置页添加 Channel 并选择 **Lark**，手动填写国际版自建应用的 App ID、App Secret
-和允许发送消息的用户 Open ID（`ou_...`）。daemon 向 `open.larksuite.com` 验证凭据后保存并启用
+在 Bot 设置页添加 Channel 并选择 **Lark**，手动填写国际版自建应用的 App ID、App Secret。
+daemon 向 `open.larksuite.com` 验证凭据后保存并启用
 Channel；凭据存储与清理沿用飞书规则。Lark 入口要求主机支持 `bot.channel.lark.connect.request`，
 旧主机需升级后才能显示。
 
 1. 在 [Lark 开发者后台](https://open.larksuite.com/app)创建自建应用，开启机器人能力。
 2. 添加 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly` 权限。
 3. 在 Ait 中填好上述信息并添加 Channel，然后在应用的事件与回调设置中选择长连接，订阅 `im.message.receive_v1`。
-4. 发布应用版本，使用允许列表内的账号向机器人发消息。群聊需在 Ait 开启群聊并 @ 机器人。
+4. 发布应用版本，使用任意平台允许的账号向机器人发消息。群聊需在 Ait 开启群聊并 @ 机器人。
 
 也可用环境变量引用配置，通过 `bot.channel.create.request` 创建，再启用 Channel：
 
@@ -453,7 +450,6 @@ Channel；凭据存储与清理沿用飞书规则。Lark 入口要求主机支�
   "kind": "lark",
   "appId": "cli_example",
   "secretRef": "env:AIT_SERVER_CREDENTIAL_LARK",
-  "allowedSenders": ["ou_example"],
   "allowGroups": false
 }
 ```

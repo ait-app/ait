@@ -91,10 +91,9 @@ export const bots = {
   tokenRef: "Référence du jeton du Bot",
   secretRef: "Référence du secret de l’application",
   appId: "ID de l’application",
-  allowedSenders: "Expéditeurs autorisés (séparés par des virgules ou des retours à la ligne)",
   allowGroups: "Autoriser les discussions de groupe",
   channelRefHint:
-    "Les identifiants proviennent des variables d’environnement du processus qui démarre le daemon. Saisissez uniquement la référence de la variable, comme env:AIT_SERVER_CREDENTIAL_TELEGRAM, et au moins un expéditeur autorisé.",
+    "Les identifiants proviennent des variables d’environnement du processus qui démarre le daemon. Saisissez uniquement la référence, par exemple env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
   channelEnabled: "Activé",
   channelConnected: "Connecté",
   channelIdle: "Inactif",
@@ -121,8 +120,7 @@ export const bots = {
     "Créez une application personnalisée sur {{developerUrl}} et activez la capacité Bot.",
   feishuManualStep2:
     "Dans Autorisations, ajoutez im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
-  feishuManualStep3:
-    "Copiez ici l'App ID et l'App Secret, ajoutez votre Open ID {{platform}} (ou_...) comme expéditeur autorisé, puis ajoutez le canal.",
+  feishuManualStep3: "Copiez l’App ID et l’App Secret ici, puis ajoutez le canal.",
   feishuManualStep4:
     "Ensuite, dans Événements et rappels de {{platform}}, choisissez Connexion longue et abonnez-vous à im.message.receive_v1. {{platform}} ne peut l'enregistrer qu'une fois le canal connecté.",
   feishuManualStep5: "Publiez une version de l'application pour qu'on puisse écrire au bot.",
@@ -137,7 +135,7 @@ export const bots = {
     "Ait vérifie le jeton auprès de Telegram et le conserve en privé sur cet hôte.",
   telegramContinue: "Continuer",
   telegramPairWaiting:
-    "Scannez ce code ou ouvrez le lien, puis appuyez sur Start dans la conversation avec @{{bot}}. Vous deviendrez l'expéditeur autorisé. Gardez cette page ouverte jusqu'à la fin.",
+    "Scannez ce code ou ouvrez le lien, puis appuyez sur Start dans la conversation avec @{{bot}} pour terminer la connexion. Gardez cette page ouverte jusqu’à la fin.",
   telegramPairOpen: "Ouvrir dans Telegram",
   telegramPairQrLabel: "Code QR qui ouvre votre nouveau bot",
   telegramInvalidToken: "Telegram a refusé ce jeton. Copiez-le à nouveau depuis BotFather.",
@@ -173,12 +171,9 @@ export const bots = {
     "Ce bot est déjà connecté à un canal sur cet hôte. Supprimez ce canal, puis réessayez.",
   qqManualStep1: "Créez un bot sur q.qq.com et copiez ici son App ID et son App Secret.",
   qqManualStep2:
-    "Après avoir ajouté le canal, obtenez un code d’appairage sur sa ligne et envoyez-le au bot dans QQ. Vous deviendrez un expéditeur autorisé.",
+    "Une fois connecté, tout le monde peut écrire au bot en privé. Activez les groupes pour recevoir leurs messages.",
   qqAppSecretHint:
     "Ait vérifie l’App Secret auprès de QQ et le stocke de manière privée sur cet hôte.",
-  qqPairButton: "Obtenir un code d’appairage",
-  qqPairHint:
-    "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

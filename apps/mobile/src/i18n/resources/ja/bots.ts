@@ -86,10 +86,9 @@ export const bots = {
   tokenRef: "Bot トークンの参照",
   secretRef: "アプリシークレットの参照",
   appId: "アプリ ID",
-  allowedSenders: "許可する送信者（カンマまたは改行区切り）",
   allowGroups: "グループチャットを許可",
   channelRefHint:
-    "認証情報は、デーモンを起動するプロセスの環境変数から取得されます。env:AIT_SERVER_CREDENTIAL_TELEGRAM のような変数参照のみを入力し、許可する送信者を少なくとも 1 人指定してください。",
+    "認証情報はデーモンを起動する環境変数から取得します。env:AIT_SERVER_CREDENTIAL_TELEGRAM のような変数参照のみを入力してください。",
   channelEnabled: "有効",
   channelConnected: "接続済み",
   channelIdle: "待機中",
@@ -115,8 +114,7 @@ export const bots = {
   feishuManualStep1: "{{developerUrl}} でカスタムアプリを作成し、ボット機能を有効にします。",
   feishuManualStep2:
     "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly を追加します。",
-  feishuManualStep3:
-    "App ID と App Secret をここにコピーし、自分の {{platform}} Open ID（ou_...）を許可された送信者に追加して、チャンネルを追加します。",
+  feishuManualStep3: "App ID と App Secret をここに入力し、チャンネルを追加します。",
   feishuManualStep4:
     "次に {{platform}} の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで {{platform}} はこの設定を保存できません。",
   feishuManualStep5: "アプリのバージョンを公開すると、ボットにメッセージを送れるようになります。",
@@ -130,7 +128,7 @@ export const bots = {
   telegramTokenHint: "Ait は Telegram でトークンを検証し、このホストに非公開で保存します。",
   telegramContinue: "続行",
   telegramPairWaiting:
-    "このコードをスキャンするかリンクを開き、@{{bot}} とのチャットで Start をタップすると、許可された送信者になります。完了するまでこのページを開いたままにしてください。",
+    "コードをスキャンするかリンクを開き、@{{bot}} とのチャットで Start を押して接続を完了してください。完了までこのページを開いておいてください。",
   telegramPairOpen: "Telegram で開く",
   telegramPairQrLabel: "新しいボットを開く QR コード",
   telegramInvalidToken:
@@ -167,11 +165,8 @@ export const bots = {
     "このボットはこのホストのチャンネルに既に接続されています。そのチャンネルを削除してからもう一度お試しください。",
   qqManualStep1: "q.qq.com でボットを作成し、App ID と App Secret をここにコピーします。",
   qqManualStep2:
-    "チャンネルを追加したら、その行でペアリングコードを取得し、QQ でボットに送信してください。これで許可された送信者になります。",
+    "接続後は誰でもボットと個別にチャットできます。グループメッセージを受信するにはグループチャットを有効にしてください。",
   qqAppSecretHint: "Ait は App Secret を QQ で確認し、このホストに非公開で保存します。",
-  qqPairButton: "ペアリングコードを取得",
-  qqPairHint:
-    "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

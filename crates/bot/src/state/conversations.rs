@@ -14,7 +14,6 @@ const MAX_BACKLOG: usize = 512;
 const MAX_REPLY_REFERENCE: usize = 4096;
 /// Longest opaque update position kept in the catalog.
 const MAX_SYNC_TOKEN: usize = 64 * 1024;
-const MAX_ALLOWED_SENDERS: usize = 256;
 
 fn valid_reply_reference(reference: &str) -> bool {
     !reference.is_empty()
@@ -336,35 +335,6 @@ impl State {
             self.save_catalog(catalog)?;
         }
         Ok(())
-    }
-    pub(crate) fn add_allowed_sender(
-        &mut self,
-        id: ChannelId,
-        sender: String,
-    ) -> Result<(), ErrorCode> {
-        if !model::valid_id(&sender) {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        let mut catalog = self.catalog.clone();
-        let channel = catalog
-            .channels
-            .iter_mut()
-            .find(|channel| channel.id == id)
-            .ok_or(ErrorCode::BotNotFound)?;
-        let ChannelConfig::Qq {
-            allowed_senders, ..
-        } = &mut channel.config
-        else {
-            return Err(ErrorCode::InvalidMessage);
-        };
-        if allowed_senders.contains(&sender) {
-            return Ok(());
-        }
-        if allowed_senders.len() >= MAX_ALLOWED_SENDERS {
-            return Err(ErrorCode::ResourceExhausted);
-        }
-        allowed_senders.push(sender);
-        self.save_catalog(catalog)
     }
     /// Whether any channel not deleted, enabled or not, already uses this Photon project.
     pub(crate) fn photon_project_claimed(&self, project: &str) -> bool {

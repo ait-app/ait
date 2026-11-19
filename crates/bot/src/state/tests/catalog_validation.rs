@@ -77,7 +77,7 @@ fn lark_accounts_are_exclusive_within_their_region_and_survive_reload() {
 }
 
 #[test]
-fn lark_configuration_requires_valid_credentials_and_allowed_senders() {
+fn lark_configuration_requires_valid_credentials() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
     state
@@ -85,11 +85,7 @@ fn lark_configuration_requires_valid_credentials_and_allowed_senders() {
         .unwrap();
     let config = json!({"kind":"lark", "appId":"app-1",
         "secretRef":"env:AIT_SERVER_CREDENTIAL_LARK", "allowedSenders":["ou_alice"]});
-    for patch in [
-        json!({"appId":""}),
-        json!({"secretRef":"raw-secret"}),
-        json!({"allowedSenders":[]}),
-    ] {
+    for patch in [json!({"appId":""}), json!({"secretRef":"raw-secret"})] {
         let mut invalid = config.clone();
         invalid
             .as_object_mut()
@@ -390,4 +386,39 @@ fn reply_references_may_exceed_the_identifier_limit_but_stay_bounded() {
         state.accept(incoming("3", String::new())).err(),
         Some(ErrorCode::InvalidMessage)
     );
+}
+
+#[test]
+fn all_external_channels_accept_missing_or_legacy_sender_lists_and_reload() {
+    for legacy in [None, Some(json!([])), Some(json!(["obsolete sender id"]))] {
+        let fixture = Fixture::new();
+        let mut state = fixture.state();
+        state
+            .execute("bot.setup.request", setup(WORKSPACE))
+            .unwrap();
+        for mut config in [
+            json!({"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+            json!({"kind":"feishu","appId":"app","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+            json!({"kind":"lark","appId":"app","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+            json!({"kind":"qq","appId":"app","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+            json!({"kind":"weixin","accountId":"bot","baseUrl":"https://ilinkai.weixin.qq.com","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+            json!({"kind":"photon_imessage","projectId":"pho_prj_0123456789abcdefghjkmnpqrs","keyRef":"env:AIT_SERVER_CREDENTIAL_TEST"}),
+        ] {
+            if let Some(senders) = &legacy {
+                config["allowedSenders"] = senders.clone();
+            }
+            let created = state.execute("bot.channel.create.request", json!({
+                "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":false,"config":config,
+            })).unwrap();
+            assert_eq!(
+                created["channel"]["config"]["allowedSenders"],
+                legacy.clone().unwrap_or_else(|| json!([]))
+            );
+        }
+        let mut reloaded = fixture.state();
+        let channels = reloaded
+            .execute("bot.channel.list.request", json!({"workspaceId":WORKSPACE}))
+            .unwrap();
+        assert_eq!(channels["channels"].as_array().unwrap().len(), 7);
+    }
 }

@@ -80,10 +80,9 @@ export const bots = {
   tokenRef: "Bot Token 引用",
   secretRef: "App Secret 引用",
   appId: "App ID",
-  allowedSenders: "允许的发送者（逗号或换行分隔）",
   allowGroups: "允许群聊",
   channelRefHint:
-    "凭据由启动 daemon 的环境变量提供，这里只填变量引用，例如 env:AIT_SERVER_CREDENTIAL_TELEGRAM，并至少填写一个允许的发送者。",
+    "凭据由启动 daemon 的环境变量提供，这里只填变量引用，例如 env:AIT_SERVER_CREDENTIAL_TELEGRAM。",
   channelEnabled: "启用",
   channelConnected: "已连接",
   channelIdle: "空闲",
@@ -106,8 +105,7 @@ export const bots = {
   feishuManualStep1: "在 {{developerUrl}} 创建企业自建应用，并开启机器人能力。",
   feishuManualStep2:
     "在权限管理中添加 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly。",
-  feishuManualStep3:
-    "将 App ID 和 App Secret 填到这里，把你的{{platform}} Open ID（ou_...）填为允许的发送者，然后添加 Channel。",
+  feishuManualStep3: "将 App ID 和 App Secret 填到这里，然后添加 Channel。",
   feishuManualStep4:
     "然后在{{platform}}“事件与回调”中选择长连接并订阅 im.message.receive_v1。{{platform}}要求 Channel 已连接后才能保存此设置。",
   feishuManualStep5: "发布应用版本，之后大家才能给机器人发消息。",
@@ -120,7 +118,7 @@ export const bots = {
   telegramTokenHint: "Ait 会向 Telegram 验证 Token，并私密保存在此主机上。",
   telegramContinue: "继续",
   telegramPairWaiting:
-    "扫描此二维码或打开链接，然后在与 @{{bot}} 的对话中点击 Start，你就会成为允许的发送者。完成前请保持此页面打开。",
+    "扫描此二维码或打开链接，然后在与 @{{bot}} 的对话中点击 Start 完成连接。完成前请保持此页面打开。",
   telegramPairOpen: "在 Telegram 中打开",
   telegramPairQrLabel: "打开新机器人的二维码",
   telegramInvalidToken: "Telegram 拒绝了此 Token，请重新从 BotFather 复制。",
@@ -146,12 +144,8 @@ export const bots = {
   qqScanUnavailable: "无法完成 QQ 设置。请重试，或手动填写凭据。",
   scanAlreadyConnected: "此机器人已连接到此主机上的一个 Channel。请先删除该 Channel，然后重试。",
   qqManualStep1: "在 q.qq.com 创建机器人，并将 App ID 和 App Secret 填到这里。",
-  qqManualStep2:
-    "添加 Channel 后，在其所在行获取配对码，并在 QQ 中发给机器人，你就会成为允许的发送者。",
+  qqManualStep2: "连接后，任何人都可以私聊机器人；接收群消息需勾选允许群聊。",
   qqAppSecretHint: "Ait 会向 QQ 验证 App Secret，并私密保存在此主机上。",
-  qqPairButton: "获取配对码",
-  qqPairHint:
-    "配对码：{{code}}。私聊发给机器人，或在 QQ 群里 @ 机器人并发送它。仅可使用一次，10 分钟后过期。",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

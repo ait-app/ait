@@ -316,12 +316,7 @@ fn incoming(
     identity: i64,
     username: &str,
 ) -> Result<Option<Incoming>, ErrorCode> {
-    let ChannelConfig::Telegram {
-        allowed_senders,
-        allow_groups,
-        ..
-    } = &channel.config
-    else {
+    let ChannelConfig::Telegram { allow_groups, .. } = &channel.config else {
         return Err(ErrorCode::InvalidMessage);
     };
     let message = &update["message"];
@@ -329,7 +324,7 @@ fn incoming(
         return Ok(None);
     };
     let sender = sender.to_string();
-    if message["from"]["is_bot"] == true || !allowed_senders.contains(&sender) {
+    if message["from"]["is_bot"] == true {
         return Ok(None);
     }
     let Some(text) = message["text"].as_str().filter(|text| {

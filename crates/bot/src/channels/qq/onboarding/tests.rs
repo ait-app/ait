@@ -5,6 +5,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::{Json, Router, routing::post};
 use domain::ChannelId;
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey};
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::*;
@@ -234,7 +235,7 @@ fn connect_request(channel_id: ChannelId, secret: &str) -> QqConnect {
 }
 
 #[tokio::test]
-async fn pasted_credentials_are_verified_then_stored_awaiting_pairing() {
+async fn pasted_credentials_are_verified_then_stored() {
     let base = portal(vec![pending]).await;
     let harness = harness(&base).await;
     let refused = harness
@@ -273,78 +274,5 @@ async fn pasted_secrets_with_control_characters_are_refused_before_any_request()
             .await;
         assert_eq!(refused.err(), Some(ErrorCode::InvalidMessage));
     }
-    harness.bots.shutdown().await.unwrap();
-}
-
-#[tokio::test]
-async fn pairing_codes_work_once_and_only_for_their_channel() {
-    let base = portal(vec![pending]).await;
-    let harness = harness(&base).await;
-    let created = harness
-        .onboarding
-        .connect(
-            &harness.bots,
-            connect_request(ChannelId::generate(), "good-secret"),
-        )
-        .await
-        .unwrap();
-    let channel_id: ChannelId = created["channel"]["id"].as_str().unwrap().parse().unwrap();
-    let issued = harness
-        .onboarding
-        .pair(
-            &harness.bots,
-            QqPairRequest {
-                workspace_id: WORKSPACE.into(),
-                channel_id,
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(issued["expiresInSeconds"], PAIR_CODE_SECONDS);
-    let code = issued["code"].as_str().unwrap();
-    assert_eq!(code.len(), PAIR_CODE_LENGTH);
-    assert!(code.bytes().all(|byte| PAIR_CODE_ALPHABET.contains(&byte)));
-    assert!(!harness.onboarding.claim(ChannelId::generate(), code));
-    assert!(!harness.onboarding.claim(channel_id, "WRONGCOD"));
-    assert!(
-        harness
-            .onboarding
-            .claim(channel_id, &format!(" {} ", code.to_lowercase()))
-    );
-    assert!(!harness.onboarding.claim(channel_id, code));
-    harness.bots.shutdown().await.unwrap();
-}
-
-#[tokio::test]
-async fn an_expired_pairing_code_is_refused() {
-    let onboarding = Onboarding::at("http://127.0.0.1:1", "http://127.0.0.1:1/token");
-    let channel = ChannelId::generate();
-    onboarding.codes().insert(
-        channel,
-        PairCode {
-            code: "ABCDEFGH".into(),
-            expires: Instant::now(),
-        },
-    );
-    assert!(!onboarding.claim(channel, "ABCDEFGH"));
-    assert!(onboarding.codes().is_empty());
-}
-
-#[tokio::test]
-async fn pairing_is_refused_for_a_channel_the_workspace_does_not_own() {
-    let base = portal(vec![pending]).await;
-    let harness = harness(&base).await;
-    let refused = harness
-        .onboarding
-        .pair(
-            &harness.bots,
-            QqPairRequest {
-                workspace_id: WORKSPACE.into(),
-                channel_id: ChannelId::generate(),
-            },
-        )
-        .await;
-    assert!(refused.is_err());
-    assert!(harness.onboarding.codes().is_empty());
     harness.bots.shutdown().await.unwrap();
 }

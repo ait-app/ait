@@ -140,7 +140,8 @@ pub enum ChannelConfig {
     Telegram {
         /// Runtime environment reference, for example `env:AIT_SERVER_CREDENTIAL_TELEGRAM`.
         token_ref: String,
-        /// Explicit Telegram user IDs allowed to invoke this Bot.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
         /// Whether mentioned group messages are accepted.
         #[serde(default)]
@@ -152,7 +153,8 @@ pub enum ChannelConfig {
         app_id: String,
         /// Runtime environment reference to the application secret.
         secret_ref: String,
-        /// Explicit tenant-scoped sender open IDs.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
         /// Whether mentioned group messages are accepted.
         #[serde(default)]
@@ -164,7 +166,8 @@ pub enum ChannelConfig {
         app_id: String,
         /// Runtime reference to the application secret.
         secret_ref: String,
-        /// Explicit tenant-scoped sender open IDs.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
         /// Whether mentioned group messages are accepted.
         #[serde(default)]
@@ -178,7 +181,8 @@ pub enum ChannelConfig {
         base_url: String,
         /// Runtime reference to the bot token.
         token_ref: String,
-        /// Explicit user IDs allowed to invoke this Bot.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
     },
     /// QQ official bot gateway connection.
@@ -187,9 +191,10 @@ pub enum ChannelConfig {
         app_id: String,
         /// Runtime reference to the application secret.
         secret_ref: String,
-        /// Sender IDs allowed to invoke this Bot; empty until a sender pairs with a code.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
-        /// Whether group @mentions are accepted.
+        /// Whether group messages are accepted.
         #[serde(default)]
         allow_groups: bool,
     },
@@ -199,7 +204,8 @@ pub enum ChannelConfig {
         project_id: String,
         /// Runtime reference to the project API key.
         key_ref: String,
-        /// Phone numbers or iMessage emails allowed to invoke this Bot.
+        /// Legacy compatibility field; ignored when admitting messages.
+        #[serde(default)]
         allowed_senders: Vec<String>,
     },
 }

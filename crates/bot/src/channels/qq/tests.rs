@@ -105,22 +105,6 @@ fn group_mentions_need_the_channel_to_allow_groups() {
 }
 
 #[test]
-fn group_mentions_are_identified_by_the_platform_event_and_self_mention() {
-    assert!(group_mention(GROUP_AT_MESSAGE, &json!({})));
-    let mentioned = json!({"mentions":[{"is_you":false},{"is_you":true}]});
-    assert!(group_mention(GROUP_ALL_MESSAGE, &mentioned));
-    assert!(!group_mention(PRIVATE_MESSAGE, &mentioned));
-    for data in [
-        json!({}),
-        json!({"mentions":[]}),
-        json!({"mentions":[{"bot":true,"is_you":false}]}),
-        json!({"mentions":[{"is_you":"true"}]}),
-    ] {
-        assert!(!group_mention(GROUP_ALL_MESSAGE, &data));
-    }
-}
-
-#[test]
 fn full_group_events_route_even_without_a_bot_mention() {
     let groups_allowed = channel(true);
     let routed = inbound(
@@ -614,7 +598,7 @@ async fn trusted_senders_full_group_messages_still_work_without_mentions() {
 }
 
 #[tokio::test]
-async fn group_mention_admission_preserves_private_and_nonmention_filters() {
+async fn disabled_groups_are_ignored_for_all_senders() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
     let channel = registered_channel(&fixture, &bots, json!(["user-open"])).await;
@@ -626,17 +610,9 @@ async fn group_mention_admission_preserves_private_and_nonmention_filters() {
         token: &token_url,
         api: &platform.base,
     };
-    let mut unknown_private = private_event();
-    unknown_private["author"]["user_openid"] = json!("unknown");
-    unknown_private["mentions"] = json!([{"is_you":true}]);
-    let mut another_bot = group_event();
-    another_bot["mentions"] = json!([{"bot":true,"is_you":false}]);
     let mut mentioned = group_event();
     mentioned["mentions"] = json!([{"is_you":true}]);
     for (event, data, allow_groups) in [
-        (PRIVATE_MESSAGE, unknown_private, true),
-        (GROUP_ALL_MESSAGE, full_group_event("hello everyone"), true),
-        (GROUP_ALL_MESSAGE, another_bot, true),
         (GROUP_AT_MESSAGE, group_event(), false),
         (GROUP_ALL_MESSAGE, mentioned, false),
     ] {
@@ -722,101 +698,6 @@ async fn assert_message_reply(event: &str, data: Value, sender: &str, peer: &str
 }
 
 #[tokio::test]
-async fn an_unknown_private_sender_is_ignored_until_they_present_the_pairing_code() {
-    let mut data = private_event();
-    data["author"]["user_openid"] = json!("member-open");
-    assert_pairing(PRIVATE_MESSAGE, data).await;
-}
-
-#[tokio::test]
-async fn group_pairing_codes_are_claimed_before_admitting_mentions() {
-    assert_pairing(GROUP_AT_MESSAGE, group_event()).await;
-}
-
-#[tokio::test]
-async fn full_group_pairing_codes_are_claimed_before_admitting_mentions() {
-    let mut data = group_event();
-    data["mentions"] = json!([{"is_you":true}]);
-    assert_pairing(GROUP_ALL_MESSAGE, data).await;
-}
-
-async fn assert_pairing(event: &str, data: Value) {
-    let fixture = Fixture::new();
-    let bots = fixture.bots();
-    let channel = registered_channel(&fixture, &bots, json!(["user-open"])).await;
-    let paired = bots
-        .execute(
-            "bot.channel.qq.pair.request",
-            json!({"workspaceId":WORKSPACE,"channelId":channel.id}),
-        )
-        .await
-        .unwrap();
-    let code = paired["code"].as_str().unwrap().to_owned();
-    let platform = platform(vec![json!({"id":"sent-1"})]).await;
-    let mut events = Vec::new();
-    if event == PRIVATE_MESSAGE {
-        let mut wrong = data.clone();
-        wrong["content"] = json!("not-the-code");
-        events.push(json!({"op":0,"s":2,"t":event,"d":wrong}));
-    }
-    let mut right = data;
-    right["id"] = json!("msg-3");
-    right["content"] = if event == PRIVATE_MESSAGE {
-        json!(code)
-    } else {
-        json!(format!("<@!bot> {code}"))
-    };
-    events.push(json!({"op":0,"s":3,"t":event,"d":right}));
-    let address = gateway(events).await;
-    let (fixture_view, platform_view) = (&fixture, &platform);
-    let channel_id = channel.id;
-    drive_until(&bots, &channel, &platform, address, |cancel| async move {
-        platform_view.delivered.notified().await;
-        loop {
-            let catalog = fixture_view.store.catalog().unwrap();
-            let saved = catalog
-                .channels
-                .iter()
-                .find(|c| c.id == channel_id)
-                .unwrap();
-            if matches!(&saved.config, ChannelConfig::Qq { allowed_senders, .. }
-                if allowed_senders.len() == 2)
-            {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        cancel.cancel();
-    })
-    .await;
-    let sent = platform.sent.lock().unwrap().clone();
-    assert_eq!(sent.len(), 1);
-    assert_eq!(
-        sent[0].0,
-        if event == PRIVATE_MESSAGE {
-            "users"
-        } else {
-            "groups"
-        }
-    );
-    assert_eq!(sent[0].1["content"], PAIRED_NOTICE);
-    assert_eq!(sent[0].1["msg_id"], "msg-3");
-    assert!(fixture.store.conversations().unwrap().is_empty());
-    let catalog = fixture.store.catalog().unwrap();
-    let saved = catalog
-        .channels
-        .iter()
-        .find(|c| c.id == channel.id)
-        .unwrap();
-    assert!(
-        matches!(&saved.config, ChannelConfig::Qq { allowed_senders, .. }
-        if allowed_senders == &["user-open".to_owned(), "member-open".to_owned()])
-    );
-    assert!(!bots.claim_qq_pairing(channel.id, &code));
-    bots.shutdown().await.unwrap();
-}
-
-#[tokio::test]
 async fn a_channel_with_pasted_credentials_may_start_without_senders() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
@@ -829,24 +710,27 @@ async fn a_channel_with_pasted_credentials_may_start_without_senders() {
 }
 
 #[tokio::test]
-async fn a_channel_of_another_kind_still_needs_a_sender() {
-    let fixture = Fixture::new();
-    let bots = fixture.bots();
-    bots.execute("bot.setup.request", setup(WORKSPACE))
-        .await
-        .unwrap();
-    let refused = bots
-        .execute(
-            "bot.channel.create.request",
-            json!({
-                "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":false,
-                "config":{"kind":"weixin","accountId":"bot","baseUrl":API_FOR_VALIDATION,
-                    "tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":[]},
-            }),
-        )
-        .await;
-    assert_eq!(refused, Err(ErrorCode::InvalidMessage));
-    bots.shutdown().await.unwrap();
+async fn all_private_senders_receive_replies_without_pairing() {
+    let mut data = private_event();
+    data["author"]["user_openid"] = json!("another-open");
+    assert_message_reply(
+        PRIVATE_MESSAGE,
+        data,
+        "another-open",
+        "c2c:another-open",
+        "reply:hello",
+    )
+    .await;
 }
 
-const API_FOR_VALIDATION: &str = "https://ilinkai.weixin.qq.com";
+#[tokio::test]
+async fn all_group_senders_receive_replies_without_mentions() {
+    assert_message_reply(
+        GROUP_ALL_MESSAGE,
+        full_group_event("hello everyone"),
+        "member-open",
+        "group:group-1",
+        "reply:hello everyone",
+    )
+    .await;
+}

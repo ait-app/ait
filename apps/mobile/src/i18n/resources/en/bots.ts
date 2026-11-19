@@ -86,10 +86,9 @@ export const bots = {
   tokenRef: "Bot token reference",
   secretRef: "App secret reference",
   appId: "App ID",
-  allowedSenders: "Allowed senders (comma or newline separated)",
   allowGroups: "Allow group chats",
   channelRefHint:
-    "Credentials come from environment variables of the process that starts the daemon. Enter only the variable reference, such as env:AIT_SERVER_CREDENTIAL_TELEGRAM, and at least one allowed sender.",
+    "Credentials come from environment variables of the process that starts the daemon. Enter only the variable reference, such as env:AIT_SERVER_CREDENTIAL_TELEGRAM.",
   channelEnabled: "Enabled",
   channelConnected: "Connected",
   channelIdle: "Idle",
@@ -115,8 +114,7 @@ export const bots = {
   feishuManualStep1: "Create a custom app at {{developerUrl}} and turn on the Bot capability.",
   feishuManualStep2:
     "Under Permissions, add im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
-  feishuManualStep3:
-    "Copy the App ID and App Secret here, add your {{platform}} open ID (ou_...) as an allowed sender, and add the channel.",
+  feishuManualStep3: "Copy the App ID and App Secret here, then add the channel.",
   feishuManualStep4:
     "Then, under Events & Callbacks in {{platform}}, choose Long Connection and subscribe to im.message.receive_v1. {{platform}} can only save this once the channel is connected.",
   feishuManualStep5: "Publish a version of the app so people can message the bot.",
@@ -129,7 +127,7 @@ export const bots = {
   telegramTokenHint: "Ait checks the token with Telegram and stores it privately on this host.",
   telegramContinue: "Continue",
   telegramPairWaiting:
-    "Scan this code or open the link, then tap Start in the chat with @{{bot}}. That makes you the allowed sender. Keep this page open until it finishes.",
+    "Scan this code or open the link, then tap Start in the chat with @{{bot}} to finish connecting. Keep this page open until it finishes.",
   telegramPairOpen: "Open in Telegram",
   telegramPairQrLabel: "QR code that opens your new bot",
   telegramInvalidToken: "Telegram rejected this token. Copy it from BotFather again.",
@@ -164,11 +162,8 @@ export const bots = {
     "This bot is already connected to a channel on this host. Delete that channel, then try again.",
   qqManualStep1: "Create a bot at q.qq.com and copy its App ID and App Secret here.",
   qqManualStep2:
-    "After adding the channel, get a pairing code from its row and send it to the bot in QQ. That makes you an allowed sender.",
+    "After connecting, anyone can message the bot privately. Turn on group chats to receive group messages.",
   qqAppSecretHint: "Ait checks the App Secret with QQ and stores it privately on this host.",
-  qqPairButton: "Get pairing code",
-  qqPairHint:
-    "Code: {{code}}. Send it to the bot in a private chat, or @mention the bot with it in a QQ group. It works once and expires in 10 minutes.",
   imessage: "iMessage",
   webhook: "Webhook",
   webhookHint:

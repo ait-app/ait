@@ -68,20 +68,28 @@ fn a_direct_text_routes_to_its_space_and_agent() {
 }
 
 #[test]
-fn email_senders_match_regardless_of_case() {
+fn email_sender_case_is_preserved() {
     let routed = incoming(&channel(), &event("m", "OWNER@example.com", "hi")).unwrap();
     assert_eq!(routed.sender, "OWNER@example.com");
 }
 
 #[test]
+fn all_senders_keep_their_identity_and_reply_destination() {
+    for sender in ["+15559999999", "another@example.com"] {
+        let routed = incoming(&channel(), &event("m", sender, "hi")).unwrap();
+        assert_eq!(routed.sender, sender);
+        assert_eq!(routed.peer, "pho_spc_one/pho_usr_agent");
+    }
+}
+
+#[test]
 fn events_the_channel_does_not_accept_are_ignored() {
     let channel = channel();
-    let cases: [(&str, Value); 8] = [
+    let cases: [(&str, Value); 7] = [
         ("/type", json!("message.updated")),
         ("/data/object/platform", json!("sms")),
         ("/data/object/status", json!("accepted")),
         ("/data/object/sentBy/kind", json!("agent")),
-        ("/data/object/sentBy/handle", json!("+15559999999")),
         ("/data/object/space/kind", json!("group")),
         ("/data/object/content/type", json!("reaction")),
         ("/data/object/receivedBy", Value::Null),
@@ -272,9 +280,9 @@ async fn deliveries_save_their_position_and_a_reconnect_resumes_from_it() {
         SUBSCRIBED,
         vec![
             delivery(3, "pho_msg_1", OWNER),
-            // A replayed position must not reach the Bot, even from another allowed sender.
+            // A replayed position must not reach the Bot, even from another sender.
             delivery(3, "pho_msg_2", SECOND_OWNER),
-            // Refused input still advances the position so it is never read again.
+            // New senders are accepted and advance the saved position too.
             delivery(9, "pho_msg_3", "+15559999999"),
         ],
     )
@@ -294,9 +302,22 @@ async fn deliveries_save_their_position_and_a_reconnect_resumes_from_it() {
         .into_iter()
         .filter(|conversation| conversation.channel_id == channel.id)
         .collect();
-    assert_eq!(conversations.len(), 1);
-    assert_eq!(conversations[0].peer, "pho_spc_one/pho_usr_agent");
-    assert_eq!(conversations[0].sender, OWNER);
+    assert_eq!(conversations.len(), 2);
+    assert!(
+        conversations
+            .iter()
+            .all(|conversation| conversation.peer == "pho_spc_one/pho_usr_agent")
+    );
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.sender == OWNER)
+    );
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.sender == "+15559999999")
+    );
 
     // `channel` is still the stale snapshot, as it is across real reconnects.
     let (base, server) = serve(SUBSCRIBED, Vec::new()).await;

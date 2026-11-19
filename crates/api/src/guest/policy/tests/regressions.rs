@@ -30,7 +30,6 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.channel.qq.scan.status.request",
         "bot.channel.qq.scan.cancel.request",
         "bot.channel.qq.connect.request",
-        "bot.channel.qq.pair.request",
         "bot.channel.imessage.pair.start.request",
         "bot.channel.imessage.pair.status.request",
         "bot.channel.imessage.pair.cancel.request",

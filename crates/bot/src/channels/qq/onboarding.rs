@@ -1,12 +1,9 @@
-//! QQ scan-to-create, manual credentials, and one-time sender pairing; see ADR-225.
+//! QQ scan-to-create and manual credentials; see ADR-225 and ADR-290.
 
-use std::collections::BTreeMap;
-use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use domain::ChannelId;
 use domain::bot::ChannelConfig;
 use model::ErrorCode;
 use reqwest::header::{ACCEPT, USER_AGENT};
@@ -14,7 +11,6 @@ use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use secrecy::SecretString;
 use serde_json::{Value, json};
-use tokio::time::Instant;
 
 use super::{TOKEN_URL, fetch_token};
 use crate::channels::onboarding::{
@@ -23,7 +19,7 @@ use crate::channels::onboarding::{
 };
 use crate::channels::{expose, json_response};
 use crate::ports::stored_credential_reference;
-use crate::protocol::{QqConnect, QqPairRequest, ScanRequest, ScanStart};
+use crate::protocol::{QqConnect, ScanRequest, ScanStart};
 use crate::service::Bots;
 use crate::state::StoredChannel;
 
@@ -40,11 +36,6 @@ const STATUS_EXPIRED: i64 = 3;
 const KEY_BYTES: usize = 32;
 const MAX_SECRET_BYTES: usize = 4096;
 const TAG_BYTES: usize = 16;
-const PAIR_CODE_LENGTH: usize = 8;
-const PAIR_CODE_SECONDS: u64 = 600;
-/// 32 unambiguous characters, so each random byte maps to one without bias.
-const PAIR_CODE_ALPHABET: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
 #[derive(Debug)]
 struct Flow {
     task_id: String,
@@ -66,19 +57,12 @@ enum Poll {
     Failed(&'static str),
 }
 
-#[derive(Debug)]
-struct PairCode {
-    code: String,
-    expires: Instant,
-}
-
-/// One in-memory scan per Workspace and one live pairing code per channel.
+/// One in-memory scan per Workspace.
 #[derive(Debug)]
 pub(crate) struct Onboarding {
     portal: String,
     token_url: String,
     scans: Sessions<Scan<Flow, Approved>>,
-    pair_codes: Mutex<BTreeMap<ChannelId, PairCode>>,
 }
 
 impl Default for Onboarding {
@@ -93,14 +77,7 @@ impl Onboarding {
             portal: portal.to_owned(),
             token_url: token_url.to_owned(),
             scans: Sessions::default(),
-            pair_codes: Mutex::default(),
         }
-    }
-
-    fn codes(&self) -> MutexGuard<'_, BTreeMap<ChannelId, PairCode>> {
-        self.pair_codes
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Begin a scan, replacing any earlier scan for the Workspace.
@@ -219,46 +196,6 @@ impl Onboarding {
         };
         bots.create_stored_channel(channel, secret).await
     }
-
-    /// Issue a channel's one-time pairing code, replacing any earlier code for it.
-    pub(crate) async fn pair(
-        &self,
-        bots: &Bots,
-        request: QqPairRequest,
-    ) -> Result<Value, ErrorCode> {
-        // The status request refuses a channel this Workspace's Bot does not own.
-        bots.channel_status_for(json!({
-            "workspaceId":request.workspace_id,
-            "channelId":request.channel_id,
-        }))
-        .await?;
-        let code = pair_code()?;
-        self.codes().insert(
-            request.channel_id,
-            PairCode {
-                code: code.clone(),
-                expires: Instant::now() + Duration::from_secs(PAIR_CODE_SECONDS),
-            },
-        );
-        Ok(json!({"code":code,"expiresInSeconds":PAIR_CODE_SECONDS}))
-    }
-
-    /// Consume the channel's code if `text` presents it before it expires.
-    pub(crate) fn claim(&self, channel: ChannelId, text: &str) -> bool {
-        let mut codes = self.codes();
-        let Some(entry) = codes.get(&channel) else {
-            return false;
-        };
-        if Instant::now() >= entry.expires {
-            codes.remove(&channel);
-            return false;
-        }
-        if !entry.code.eq_ignore_ascii_case(text.trim()) {
-            return false;
-        }
-        codes.remove(&channel);
-        true
-    }
 }
 
 fn random_bytes<const N: usize>() -> Result<[u8; N], ErrorCode> {
@@ -273,13 +210,6 @@ fn random_key() -> Result<SecretString, ErrorCode> {
     Ok(SecretString::from(
         STANDARD.encode(random_bytes::<KEY_BYTES>()?),
     ))
-}
-
-fn pair_code() -> Result<String, ErrorCode> {
-    Ok(random_bytes::<PAIR_CODE_LENGTH>()?
-        .iter()
-        .map(|byte| char::from(PAIR_CODE_ALPHABET[usize::from(*byte) % PAIR_CODE_ALPHABET.len()]))
-        .collect())
 }
 
 /// POST to QQ's portal, which answers anything but an explicit JSON client with a challenge page.

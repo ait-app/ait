@@ -1,6 +1,6 @@
 ---
 id: ADR-289
-status: accepted
+status: superseded
 date: 2026-11-19
 amends:
   - bot/adr-139-workspace-bots-and-owned-channels.md
@@ -11,6 +11,8 @@ paths:
 ---
 
 # ADR-289：QQ 群聊接纳所有成员对机器人的提及
+
+状态说明：由 [ADR-290](adr-290-open-channel-senders.md) 整体取代，所有平台私聊与支持的群聊均不再过滤发送者，QQ 发送者配对流程移除。以下保留原决策背景。
 
 QQ 原来对私聊和群聊共同使用发送者白名单，因此开启群聊后，未配对的群友即使 @ 机器人也被忽略。
 用户要求机器人接收所有群友的 @ 消息。开启 `allowGroups` 现在表示允许 QQ 群中的任意成员通过提及机器人发起对话；

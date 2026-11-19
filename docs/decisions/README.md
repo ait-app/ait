@@ -13,7 +13,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Bot
 
-- [ADR-289：QQ 群聊接纳所有成员对机器人的提及](bot/adr-289-qq-group-mention-admission.md)
+- [ADR-290：所有消息 Channel 对任意发送者开放](bot/adr-290-open-channel-senders.md)
+- [ADR-289：QQ 群聊接纳所有成员对机器人的提及](bot/adr-289-qq-group-mention-admission.md)（已由 [ADR-290](bot/adr-290-open-channel-senders.md) 取代）
 - [ADR-287：工单跟随拉取请求、直接投递给工作者，以及结构化提问与回答](bot/adr-287-ticket-pull-request-follow-and-answers.md)
 - [ADR-280：Bot 按 id 回读（Chain of Recall）、内联与溢出指针](bot/adr-280-bot-recall-reads-and-spill.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-274：Bot 工单、指派与汇报](bot/adr-274-bot-tickets-assignments-and-reports.md)（经 [ADR-280](bot/adr-280-bot-recall-reads-and-spill.md)、[ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
@@ -21,15 +22,15 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-276](providers/adr-276-ait-input-envelope-and-origin.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md)、[ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-233：中心托管的 Workspace Bot Webhook Channel](bot/adr-233-webhook-channel-center-endpoints.md)
 - [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
-- [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)
-- [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)（经 [ADR-289](bot/adr-289-qq-group-mention-admission.md) 修订）
-- [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)（经 [ADR-272](bot/adr-272-lark-channel.md) 修订）
+- [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)（经 [ADR-290](bot/adr-290-open-channel-senders.md) 修订）
+- [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)（经 [ADR-289](bot/adr-289-qq-group-mention-admission.md)、[ADR-290](bot/adr-290-open-channel-senders.md) 修订）
+- [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)（经 [ADR-272](bot/adr-272-lark-channel.md)、[ADR-290](bot/adr-290-open-channel-senders.md) 修订）
 - [ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace](bot/adr-222-single-agent-mode-no-bot-workspaces.md)
 - [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)
 - [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)（经 [ADR-222](bot/adr-222-single-agent-mode-no-bot-workspaces.md)、[ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md)、[ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md) 修订）
 - [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md)、[ADR-227](bot/adr-227-bot-multi-message-output.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md)、[ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md)、[ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md) 修订）
 - [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)（经 [ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md) 修订）
-- [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)（经 [ADR-145](bot/adr-145-bot-permission-denial.md)、[ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-224](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)、[ADR-226](bot/adr-226-photon-imessage-channel.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md)、[ADR-272](bot/adr-272-lark-channel.md)、[ADR-289](bot/adr-289-qq-group-mention-admission.md) 修订）
+- [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)（经 [ADR-145](bot/adr-145-bot-permission-denial.md)、[ADR-213](bot/adr-213-single-workspace-manager-bot.md)、[ADR-224](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)、[ADR-226](bot/adr-226-photon-imessage-channel.md)、[ADR-233](bot/adr-233-webhook-channel-center-endpoints.md)、[ADR-272](bot/adr-272-lark-channel.md)、[ADR-289](bot/adr-289-qq-group-mention-admission.md)、[ADR-290](bot/adr-290-open-channel-senders.md) 修订）
 
 ## Daemon 与协议
 

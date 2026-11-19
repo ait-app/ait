@@ -204,14 +204,16 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("telegram"),
     tokenRef: z.string(),
-    allowedSenders: z.array(z.string()),
+    // Legacy compatibility field; Hosts no longer filter by sender.
+    allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().default(false),
   }),
   z.strictObject({
     kind: z.enum(["feishu", "lark"]),
     appId: z.string(),
     secretRef: z.string(),
-    allowedSenders: z.array(z.string()),
+    // Legacy compatibility field; Hosts no longer filter by sender.
+    allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().default(false),
   }),
   z.strictObject({
@@ -219,20 +221,23 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     accountId: z.string(),
     baseUrl: z.string(),
     tokenRef: z.string(),
-    allowedSenders: z.array(z.string()),
+    // Legacy compatibility field; Hosts no longer filter by sender.
+    allowedSenders: z.array(z.string()).default([]),
   }),
   z.strictObject({
     kind: z.literal("qq"),
     appId: z.string(),
     secretRef: z.string(),
-    allowedSenders: z.array(z.string()),
+    // Legacy compatibility field; Hosts no longer filter by sender.
+    allowedSenders: z.array(z.string()).default([]),
     allowGroups: z.boolean().default(false),
   }),
   z.strictObject({
     kind: z.literal("photon_imessage"),
     projectId: z.string(),
     keyRef: z.string(),
-    allowedSenders: z.array(z.string()),
+    // Legacy compatibility field; Hosts no longer filter by sender.
+    allowedSenders: z.array(z.string()).default([]),
   }),
   // An HTTP endpoint the Ait center hosts; the center keeps its secret.
   z.strictObject({ kind: z.literal("webhook"), endpointId: z.string(), url: z.string() }),

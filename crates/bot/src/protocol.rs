@@ -94,6 +94,7 @@ pub(crate) struct FeishuConnect {
     pub(crate) channel_id: ChannelId,
     pub(crate) app_id: String,
     pub(crate) app_secret: String,
+    #[serde(default)]
     pub(crate) allowed_senders: Vec<String>,
     #[serde(default)]
     pub(crate) allow_groups: bool,
@@ -108,12 +109,6 @@ pub(crate) struct QqConnect {
     pub(crate) app_secret: String,
     #[serde(default)]
     pub(crate) allow_groups: bool,
-}
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct QqPairRequest {
-    pub(crate) workspace_id: String,
-    pub(crate) channel_id: ChannelId,
 }
 /// A pasted bot token; deliberately not `Debug` because it holds a secret.
 #[derive(Deserialize)]
