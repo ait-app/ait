@@ -554,7 +554,8 @@ for line in sys.stdin:
             continue
         if text in ("async-question", "async-question-running", "async-question-after-answer"):
             if text == "async-question-after-answer":
-                answer = {"type": "agentMessage", "id": pending + "-answer", "text": "Final answer"}
+                answer = {"type": "agentMessage", "id": pending + "-answer", "text": "Final answer",
+                    "delivery": "async", "phase": "final_answer", "questions": None}
                 stream_items.append(answer)
                 emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": answer}})
             question = {"type": "agentMessage", "id": pending + "-question", "delivery": "async",

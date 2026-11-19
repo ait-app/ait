@@ -324,8 +324,13 @@ fn request_id(item: &Value) -> Result<String, AgentSessionError> {
     Ok(format!("permission-{id}"))
 }
 
+/// Identify a structured question. Codex also delivers ordinary text asynchronously.
+pub(super) fn is_question(item: &Value) -> bool {
+    item["type"] == "agentMessage" && item["delivery"] == "async" && !item["questions"].is_null()
+}
+
 fn parse(item: &Value) -> Result<Vec<Question>, AgentSessionError> {
-    if item["type"] != "agentMessage" || item["delivery"] != "async" {
+    if !is_question(item) {
         return Err(AgentSessionError::Failed);
     }
     request_id(item)?;

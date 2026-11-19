@@ -691,7 +691,7 @@ impl CodexSession {
         {
             self.latest_plan = plans::Plan::receive(item, turn)?;
         }
-        if item["delivery"] == "async"
+        if async_questions::is_question(item)
             && let Some(request) = self.questions.receive(item)?
         {
             self.stream
@@ -702,7 +702,7 @@ impl CodexSession {
     }
 
     fn queue_completed_item(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
-        if item["type"] == "agentMessage" && item["delivery"] != "async" {
+        if item["type"] == "agentMessage" && !async_questions::is_question(item) {
             self.last_message = item["text"].as_str().map(str::to_owned);
         }
         self.observe_interaction(item, turn)?;

@@ -88,6 +88,58 @@ fn history_interleaves_speech_and_structured_output_without_duplicate_handoffs()
 }
 
 #[tokio::test]
+async fn paginated_history_preserves_async_text_and_question_cards() {
+    let fixture = crate::testing::Fixture::new();
+    let pages = json!({
+        "first": {
+            "data": [
+                {"type":"item","position":3,"turnId":"turn","item":{
+                    "id":"question","type":"agentMessage","delivery":"async","text":"",
+                    "questions":[{"title":"Which runtime?"}]}},
+                {"type":"item","position":4,"turnId":"turn","item":{
+                    "id":"final","type":"agentMessage","text":"Finished"}}
+            ],
+            "nextCursor":"older"
+        },
+        "older": {
+            "data": [
+                {"type":"turnStarted","position":0,"turnId":"turn","startedAt":100},
+                {"type":"item","position":1,"turnId":"turn","item":{
+                    "id":"comment","type":"agentMessage","delivery":"async","text":"Still working"}},
+                {"type":"item","position":2,"turnId":"turn","item":{
+                    "id":"progress","type":"agentMessage","delivery":"async","text":"Checking",
+                    "questions":null}}
+            ],
+            "nextCursor":null
+        }
+    });
+    std::fs::write(fixture.cwd.join("timeline-pages.json"), pages.to_string()).unwrap();
+    let client = fixture.client();
+    let mut transport = client
+        .launch_transport(fixture.cwd.to_str().unwrap(), false)
+        .unwrap();
+    transport.initialize().await.unwrap();
+    let entries = read(
+        &mut transport,
+        &json!({"id":"thread","createdAt":0}),
+        &provider_native::images::ImageStore::default(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[0].key, "native:turn:comment");
+    assert_eq!(entries[0].item["type"], "assistant_message");
+    assert_eq!(entries[0].item["text"], "Still working");
+    assert_eq!(entries[1].item["type"], "assistant_message");
+    assert_eq!(entries[1].item["text"], "Checking");
+    assert_eq!(entries[2].item["name"], "request_user_input_async");
+    assert_eq!(entries[3].item["text"], "Finished");
+    transport.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn reads_all_pages_and_only_falls_back_on_method_not_found() {
     let fixture = crate::testing::Fixture::new();
     let client = fixture.client();

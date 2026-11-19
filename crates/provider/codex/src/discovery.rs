@@ -275,7 +275,7 @@ pub(super) fn timeline_item(
             super::voice_transcript::project(&mut item);
             item
         }
-        "agentMessage" if native["delivery"] == "async" => {
+        "agentMessage" if super::async_questions::is_question(native) => {
             super::async_questions::timeline(native)?
         }
         "agentMessage" => {
