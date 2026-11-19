@@ -311,6 +311,10 @@ export async function refreshProvidersOnAccess(input: {
     const completed = await input.queryClient.fetchQuery({
       queryKey: refreshKey,
       gcTime: 0,
+      // The app's queries never go stale by default, and a settled refresh stays cached until
+      // its collection timer runs. Reading it back here would answer with an earlier batch
+      // forever, without yielding to that timer, and freeze the renderer.
+      staleTime: 0,
       retry: false,
       queryFn: async ({ signal }) => {
         const controller = new AbortController();

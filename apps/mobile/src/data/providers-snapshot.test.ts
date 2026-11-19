@@ -8,6 +8,7 @@ import {
   createProviderSnapshotCache,
   ProviderSnapshotCacheMissError,
 } from "./provider-snapshot-cache";
+import { queryClient as appQueryClient } from "./query-client";
 import { resolveProviderIconName, replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -528,6 +529,52 @@ describe("model catalog access", () => {
       expect(refreshProvidersSnapshot).toHaveBeenCalledTimes(1);
     } finally {
       release();
+      queryClient.clear();
+      replaceProviderSnapshotIcons(serverId, []);
+    }
+  });
+
+  it("refreshes a provider that finished loading during another refresh, under the app's query defaults", async () => {
+    // The app's client never treats settled data as stale, so a settled refresh must not be
+    // read back as the answer for the providers that are still requested.
+    const queryClient = new QueryClient({ defaultOptions: appQueryClient.getDefaultOptions() });
+    const serverId = "catalog-late-provider";
+    const key = providersSnapshotQueryKey(serverId, snapshot.cwd);
+    const ready = entries[0]!;
+    const late = { ...ready, provider: "late-provider" };
+    const publish = (list: ProviderSnapshotEntry[], hash: string) => ({
+      ...snapshot,
+      snapshotHash: hash,
+      entries: list,
+      compactSnapshot: compactProviderSnapshot(list),
+    });
+    // A signed-out provider is still being probed when the selector asks for a refresh.
+    queryClient.setQueryData(key, publish([ready, { ...late, status: "loading" }], "probing"));
+    const settled = publish(
+      [ready, { ...late, status: "error", error: "Signed out", models: [] }],
+      "settled",
+    );
+    const refreshProvidersSnapshot = vi.fn(async () => ({
+      requestId: "refresh",
+      acknowledged: true,
+    }));
+    const client = { refreshProvidersSnapshot, getProvidersSnapshot: vi.fn(async () => settled) };
+    const fetchQuery = queryClient.fetchQuery.bind(queryClient);
+    let refreshReads = 0;
+    vi.spyOn(queryClient, "fetchQuery").mockImplementation((options) => {
+      // Without a bound, the regression never yields and the test run hangs with it.
+      if (options.queryKey[0] === "providersSnapshotRefresh" && ++refreshReads > 10) {
+        throw new Error("refreshProvidersOnAccess keeps reading a settled refresh");
+      }
+      return fetchQuery(options);
+    });
+    try {
+      await refreshProvidersOnAccess({ client, serverId, cwd: snapshot.cwd, queryClient });
+      expect(refreshProvidersSnapshot.mock.calls).toEqual([
+        [{ cwd: snapshot.cwd, providers: [ready.provider] }],
+        [{ cwd: snapshot.cwd, providers: [late.provider] }],
+      ]);
+    } finally {
       queryClient.clear();
       replaceProviderSnapshotIcons(serverId, []);
     }
