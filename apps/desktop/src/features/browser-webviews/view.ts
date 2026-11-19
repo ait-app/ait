@@ -10,6 +10,7 @@ import { applyBrowserGuestPermissionPolicy } from "../browser-profile.js";
 import type { PaseoBrowserWebviewRegistry } from "./registry.js";
 
 const BROWSER_VIEW_EVENT = "paseo:event:browser-view";
+const ZOOM_LEVEL_EPSILON = 0.001;
 
 export type BrowserViewEventType =
   | "did-fail-load"
@@ -110,6 +111,10 @@ export class PaseoBrowserWebContentsViewManager {
         webviewTag: false,
         allowRunningInsecureContent: false,
         preload: this.dependencies.keyboardPreloadPath,
+        // The page follows the host window zoom like a <webview> guest did. Isolated mode
+        // keeps the level per view across navigations, and the factor seeds the first load.
+        zoomMode: "isolated",
+        zoomFactor: input.hostContents.getZoomFactor(),
       },
     });
     const container = new View();
@@ -213,12 +218,14 @@ export class PaseoBrowserWebContentsViewManager {
 
   public setBounds(hostContentsId: number, browserId: string, bounds: BrowserViewBounds): void {
     const entry = this.entryFor(hostContentsId, browserId);
-    if (!entry || entry.view.webContents.isDestroyed()) {
+    if (!entry || entry.hostContents.isDestroyed() || entry.view.webContents.isDestroyed()) {
       return;
     }
-    entry.container.setBounds(normalizeRectangle(bounds.container));
-    entry.view.setBounds(normalizeRectangle(bounds.contents));
+    const zoomFactor = entry.hostContents.getZoomFactor();
+    entry.container.setBounds(normalizeRectangle(cssPixelsToDips(bounds.container, zoomFactor)));
+    entry.view.setBounds(normalizeRectangle(cssPixelsToDips(bounds.contents, zoomFactor)));
     entry.container.setVisible(bounds.visible);
+    followHostZoom(entry.view.webContents, entry.hostContents);
   }
 
   public destroy(hostContentsId: number, browserId: string): void {
@@ -302,6 +309,27 @@ export class PaseoBrowserWebContentsViewManager {
 
   private key(hostContentsId: number, browserId: string): string {
     return `${hostContentsId}:${browserId}`;
+  }
+}
+
+// The renderer measures the pane in host page CSS pixels, while View.setBounds takes
+// device-independent pixels, so the host page zoom scales the rectangle. Edges are
+// snapped so the scaled size does not drift by a pixel.
+function cssPixelsToDips(rectangle: Rectangle, zoomFactor: number): Rectangle {
+  const x = Math.round(rectangle.x * zoomFactor);
+  const y = Math.round(rectangle.y * zoomFactor);
+  return {
+    x,
+    y,
+    width: Math.round((rectangle.x + rectangle.width) * zoomFactor) - x,
+    height: Math.round((rectangle.y + rectangle.height) * zoomFactor) - y,
+  };
+}
+
+function followHostZoom(guest: WebContents, host: WebContents): void {
+  const hostLevel = host.getZoomLevel();
+  if (Math.abs(guest.getZoomLevel() - hostLevel) > ZOOM_LEVEL_EPSILON) {
+    guest.setZoomLevel(hostLevel);
   }
 }
 
