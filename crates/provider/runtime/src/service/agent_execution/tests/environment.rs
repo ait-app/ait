@@ -5,8 +5,8 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
     let fixture = Fixture::new();
     std::fs::write(fixture.cwd.join("capture-environment"), "").unwrap();
     let receipt_path = fixture.root.path().join("creations.json");
-    let creations = persistence::storage::creation::open(receipt_path.clone()).unwrap();
-    let (execution, registry) = worker_with_creations(&fixture, creations);
+    let creations = persistence::storage::creation::open(receipt_path).unwrap();
+    let (execution, registry) = worker_with_creations(&fixture, creations.clone());
     let request = json!({"idempotencyKey":"environment-create","config":{"provider":"codex","cwd":fixture.cwd},"env":{"AIT_TEST_AGENT_ENV":"private-fixture-value"}});
     let created = execution
         .execute("agent.create.request", request.clone())
@@ -18,11 +18,14 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
         .unwrap();
     assert_eq!(created["agentId"], retried["agentId"]);
     assert!(!created.to_string().contains("private-fixture-value"));
-    assert!(
-        !std::fs::read_to_string(&receipt_path)
-            .unwrap()
-            .contains("private-fixture-value")
-    );
+    let saved = creations
+        .snapshot(
+            domain::creation::protocol::Kind::Agent,
+            "environment-create",
+        )
+        .unwrap()
+        .unwrap();
+    assert!(!json!(saved).to_string().contains("private-fixture-value"));
     assert!(
         !serde_json::to_string(&registry.list().unwrap())
             .unwrap()

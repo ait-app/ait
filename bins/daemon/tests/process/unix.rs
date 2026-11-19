@@ -130,6 +130,9 @@ mod push;
 #[path = "daemon.rs"]
 mod daemon;
 
+#[path = "creation_receipts.rs"]
+mod creation_receipts;
+
 #[path = "workspace_labels.rs"]
 mod workspace_labels;
 

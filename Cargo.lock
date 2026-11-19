@@ -2153,9 +2153,11 @@ version = "0.2.19"
 dependencies = [
  "chrono",
  "domain",
+ "flate2",
  "getrandom 0.4.3",
  "indexmap",
  "model",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

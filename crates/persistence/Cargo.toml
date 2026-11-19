@@ -8,6 +8,9 @@ publish.workspace = true
 # Shared records and storage ports implemented by the concrete file adapters.
 model.workspace = true
 domain.workspace = true
+# Indexed creation receipts and lossless per-result compression.
+rusqlite = { workspace = true, features = ["bundled"] }
+flate2.workspace = true
 # Atomic single-file I/O, observations, typed registries, and concrete storage adapters.
 chrono.workspace = true
 getrandom.workspace = true

@@ -30,6 +30,10 @@
 - `workspace.create.request` 以 `idempotencyKey` 写持久创建回执：相同意图重放已有结果（包括重启后），
   同一 key 携带不同意图返回 `idempotency_conflict`
   （[ADR-060](../decisions/workspace/adr-060-workspace-create-worktree.md)）。
+- Workspace 与 Agent 永久保留创建键、32 字节请求指纹、资源认领及无损压缩的最新结果。daemon 首次
+  启动逐条迁移旧 JSON，原子替换 `creations/receipts.json`。迁移完成后该路径为 SQLite 库，
+  按键读写。新请求及其资源 ID 在同一事务内认领。超出原有 32 MiB 总量仍可启动和更新，
+  磁盘写满会保留此前已提交的状态。降级要求见 [ADR-292](../decisions/daemon/adr-292-indexed-creation-receipts.md)。
 - Worktree 创建先执行 Git，再登记 Workspace；调用方预留的 `workspaceId` 已存在时拒绝，登记失败时移除
   刚创建的 worktree（[ADR-060](../decisions/workspace/adr-060-workspace-create-worktree.md)）。
 - 只有首次成功创建 worktree 才启动 metadata `workspace_automation` 中的 setup；setup 失败不撤销创建，

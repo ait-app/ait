@@ -1,7 +1,6 @@
 //! Creation receipts and admission values shared by resource creation workflows.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::creation::protocol::Snapshot;
 
@@ -13,8 +12,8 @@ pub mod protocol;
 pub struct Receipt {
     /// Opaque, kind-qualified digest of the idempotency key.
     pub id: String,
-    /// Original request excluding its key and subscription flag.
-    pub intent: Value,
+    /// Version-one SHA-256 fingerprint of the request, excluding its key and subscription flag.
+    pub intent_hash: [u8; 32],
     /// Latest committed progress and reserved identities.
     pub snapshot: Snapshot,
     /// A proven initial Agent startup failure may retry the reserved identity.

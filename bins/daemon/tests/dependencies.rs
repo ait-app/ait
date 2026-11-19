@@ -256,11 +256,13 @@ fn violations(packages: &[Value]) -> Vec<String> {
             if matches!(
                 name,
                 "domain" | "persistence" | "model" | "metadata" | "filesystem" | "terminal"
-            ) && [
-                "sqlx", "rusqlite", "axum", "hyper", "reqwest", "tonic", "tauri", "rig", "codex",
-            ]
-            .iter()
-            .any(|prefix| target == *prefix || target.starts_with(&format!("{prefix}-")))
+            ) && !(name == "persistence" && target == "rusqlite")
+                && [
+                    "sqlx", "rusqlite", "axum", "hyper", "reqwest", "tonic", "tauri", "rig",
+                    "codex",
+                ]
+                .iter()
+                .any(|prefix| target == *prefix || target.starts_with(&format!("{prefix}-")))
             {
                 violations.push(format!("impure {name} -> {target}"));
             }
@@ -772,7 +774,11 @@ fn persistence_adapters_depend_on_shared_contracts_without_reverse_or_transport_
             );
         }
     }
-    for dependency in ["axum", "rusqlite", "reqwest"] {
+    assert!(
+        violations(&[json!({"name":"persistence","dependencies":[{"name":"rusqlite"}]})])
+            .is_empty()
+    );
+    for dependency in ["axum", "sqlx", "reqwest"] {
         let packages = [json!({"name":"persistence","dependencies":[{"name":dependency}]})];
         assert_eq!(
             violations(&packages),

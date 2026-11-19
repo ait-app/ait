@@ -21,7 +21,7 @@ impl crate::hub::EventPublisher for Publisher {
 #[test]
 fn host_publisher_observes_only_committed_creation_receipts() {
     let store = Arc::new(Store::default());
-    let creations = Creations::with_store(store.clone()).unwrap();
+    let creations = Creations::with_store(store.clone());
     let publisher = Arc::new(Publisher::default());
     creations.set_publisher(publisher.clone());
     store.fail.store(true, Ordering::Relaxed);
@@ -36,15 +36,11 @@ fn host_publisher_observes_only_committed_creation_receipts() {
 }
 
 impl ReceiptStore for Store {
-    fn list(&self) -> Result<Vec<Receipt>, ErrorCode> {
-        Ok(self.receipts.lock().unwrap().values().cloned().collect())
-    }
-
     fn get(&self, id: &str) -> Result<Option<Receipt>, ErrorCode> {
         Ok(self.receipts.lock().unwrap().get(id).cloned())
     }
 
-    fn put(&self, receipt: Receipt) -> Result<(), ErrorCode> {
+    fn put(&self, receipt: Receipt, _: Option<u64>) -> Result<(), ErrorCode> {
         if self.fail.load(Ordering::SeqCst) {
             return Err(ErrorCode::RegistryIo);
         }
@@ -59,7 +55,7 @@ impl ReceiptStore for Store {
 #[test]
 fn injected_persistence_failure_does_not_claim_resources_or_publish_progress() {
     let store = Arc::new(Store::default());
-    let creations = Creations::with_store(store.clone()).unwrap();
+    let creations = Creations::with_store(store.clone());
     let (outbound, mut receiver) = Outbound::new();
     let observer = creations.observe(Kind::Agent, "one", outbound).unwrap();
     observer.activate().unwrap();
@@ -70,7 +66,7 @@ fn injected_persistence_failure_does_not_claim_resources_or_publish_progress() {
         Err(ErrorCode::RegistryIo)
     ));
     assert!(receiver.try_recv().is_err());
-    assert!(store.list().unwrap().is_empty());
+    assert!(store.receipts.lock().unwrap().is_empty());
 
     store.fail.store(false, Ordering::SeqCst);
     let admitted = creations.begin(Kind::Agent, "two", intent).unwrap();
@@ -79,5 +75,5 @@ fn injected_persistence_failure_does_not_claim_resources_or_publish_progress() {
         admitted.snapshot.agent_id.as_deref(),
         Some("reserved-agent")
     );
-    assert_eq!(store.list().unwrap().len(), 1);
+    assert_eq!(store.receipts.lock().unwrap().len(), 1);
 }

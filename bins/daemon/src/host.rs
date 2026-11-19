@@ -762,7 +762,7 @@ fn compose_directory(
 ) -> anyhow::Result<Directory> {
     let creations =
         persistence::storage::creation::open(config.data_dir.join("creations/receipts.json"))
-            .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
+            .context("initialize creation receipts")?;
     let directory = Directory::new(DirectoryDependencies {
         projects: Box::new(project_registry.clone()),
         workspaces: Box::new(workspace_registry.clone()),
