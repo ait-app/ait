@@ -6532,6 +6532,50 @@ test("sends subscribe/unsubscribe terminals messages", async () => {
   await release;
 });
 
+test("keeps the original disconnect reason when a subscription release is pending", async () => {
+  const mock = createMockTransport();
+  const close = vi.spyOn(mock.transport, "close");
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "release-disconnect",
+    logger: noopLogger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  const observation = client.observeTerminals({ cwd: "/tmp/project" });
+  await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "terminal.list.changed",
+      payload: {
+        requestId: parseSentFrame(mock.sent[0]).requestId,
+        subscriptionId: "server-terminals",
+        cwd: "/tmp/project",
+        terminals: [],
+      },
+    }),
+  );
+  await observation.ready;
+
+  const release = observation.release();
+  await vi.waitFor(() => expect(mock.sent).toHaveLength(2));
+  expect(parseSentFrame(mock.sent[1]).type).toBe("subscription.release.request");
+
+  mock.triggerClose({ code: 1006, reason: "Hub link reset (grace_expired)." });
+  await expect(release).rejects.toThrow("Hub link reset (grace_expired).");
+  expect(client.getConnectionState()).toEqual({
+    status: "disconnected",
+    reason: "Hub link reset (grace_expired).",
+  });
+  expect(client.lastError).toBe("Hub link reset (grace_expired).");
+  expect(close).not.toHaveBeenCalled();
+});
+
 test("dispatches terminal.list.changed events to typed listeners", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

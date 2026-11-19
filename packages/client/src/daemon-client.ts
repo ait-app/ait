@@ -1104,15 +1104,18 @@ export class DaemonClient {
         }),
       ),
     release: async (subscriptionId) => {
-      if (!this.isConnected) return;
+      const transport = this.transport;
+      if (!transport || !this.isConnected) return;
       try {
         await this.sendCorrelatedSessionRequest({
           message: { type: "subscription.release.request", subscriptionId },
           responseType: "subscription.release.response",
         });
       } catch (error) {
-        this.disposeTransport(1000, "Subscription release failed");
-        this.scheduleReconnect({ reason: "Subscription release failed" });
+        if (this.transport === transport && this.isConnected) {
+          this.disposeTransport(1000, "Subscription release failed");
+          this.scheduleReconnect({ reason: "Subscription release failed" });
+        }
         throw error;
       }
     },

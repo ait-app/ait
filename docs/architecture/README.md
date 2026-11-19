@@ -172,6 +172,8 @@ Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 Hub feature 协商与旧版本兼容见
 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
+单连接将客户端活动心跳作为可丢弃的周期快照，worker 队列满时仍保留业务连接。
+见 [连接与传输规格](connection.md#准入与分发)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
 Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发，可用 `AIT_SERVER_HUB_NOTIFICATIONS` 覆盖。
 通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。

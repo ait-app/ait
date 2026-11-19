@@ -102,6 +102,8 @@ async function openHub(synchronousAck = false, credit = false) {
     link: h.link,
     events,
     burst,
+    closeFromHub: (code: string) =>
+      socket.receive({ t: "close", seq: ++sequence, s: open.s, code }),
     acknowledge,
     pendingAcks,
     manualAck: () => {
@@ -204,6 +206,50 @@ import { hubFixture, HOST } from "../../../../packages/client/test/hub.js";
 import type { HubLink } from "@ait/client/internal/hub";
 
 describe("desktop Hub data connections", () => {
+  it.each(["workspace.archive.request", "agent.archive.request"])(
+    "reports the close reason when %s and a renderer ACK arrive after a Hub close",
+    async (method) => {
+      const relay = await openHub(false, true);
+      relay.manualAck();
+      relay.burst(terminalFrames(1));
+      await vi.waitFor(() => expect(relay.frames()).toHaveLength(1));
+      const sequence = relay.frames()[0].sequence as number;
+
+      relay.closeFromHub("peer_gone");
+
+      expect(() => relay.acknowledge(sequence)).not.toThrow();
+      await expect(
+        relay.manager.send(relay.owner, sessionId, {
+          text: JSON.stringify({ type: "request", request_id: "archive", method }),
+        }),
+      ).resolves.toBeUndefined();
+      await expect(relay.manager.recover(relay.owner, sessionId)).resolves.toBe(false);
+      expect(relay.socket.frames("msg")).toEqual([]);
+      expect(relay.socket.frames("credit")).toEqual([]);
+      expect(relay.closes()).toEqual([
+        { sessionId, kind: "close", error: "Hub session closed (peer_gone)." },
+      ]);
+    },
+  );
+
+  it("rejects IPC from a different window while the session is active", async () => {
+    const relay = await openHub();
+    const other = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      send: vi.fn(),
+    });
+    expect(() => relay.manager.acknowledge(other, sessionId, 1)).toThrow(
+      "Relay transport belongs to another window",
+    );
+    await expect(relay.manager.send(other, sessionId, { text: "{}" })).rejects.toThrow(
+      "Relay transport belongs to another window",
+    );
+    expect(() => relay.manager.recover(other, sessionId)).toThrow(
+      "Relay transport belongs to another window",
+    );
+    expect(relay.closes()).toEqual([]);
+  });
+
   it("opens a guest share directly to its serve node without requiring the physical server id", async () => {
     const h = hubFixture();
     h.link.start();

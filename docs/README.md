@@ -39,6 +39,7 @@
 - 现行规格：[Provider](architecture/provider.md)、[Workspace](architecture/workspace.md)、
   [Bot](architecture/bot.md)、[连接与传输](architecture/connection.md)、[Oh My Pi](architecture/omp.md)，
   逐条写明生效的约束及其 ADR。
+- [连接队列与过载处理](architecture/connection.md#准入与分发)。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护；
   `node scripts/adr.mjs governs <路径>` 列出约束某个文件或目录的现行 ADR。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。

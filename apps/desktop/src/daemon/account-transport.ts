@@ -117,7 +117,9 @@ export class AccountTransportManager {
           binary,
         ),
       );
-      transport.onError(() => this.finish(id, session, "Hub session failed"));
+      transport.onError((error) =>
+        this.finish(id, session, error instanceof Error ? error.message : "Hub session failed"),
+      );
       transport.onClose(() => this.finish(id, session));
     } catch (error) {
       owner.removeListener("destroyed", destroyed);
@@ -187,7 +189,8 @@ export class AccountTransportManager {
   }
 
   acknowledge(owner: AccountTransportOwner, id: string, sequence: number): void {
-    const session = this.owned(owner, id);
+    const session = this.findOwnedSession(owner, id);
+    if (!session) return;
     const pending = session.pending.get(sequence);
     if (!pending) return;
     clearTimeout(pending.timer);
@@ -202,20 +205,24 @@ export class AccountTransportManager {
     id: string,
     input: { text?: string; binaryBase64?: string },
   ): Promise<void> {
-    const session = this.owned(owner, id);
+    const session = this.findOwnedSession(owner, id);
+    // The close event already tells the renderer to fail pending requests and reconnect.
+    if (!session) return;
     if (!session.hub) throw new Error("Hub session is not ready");
     if ((input.text === undefined) === (input.binaryBase64 === undefined))
       throw new Error("Invalid Hub frame");
     if ((input.text?.length ?? input.binaryBase64?.length ?? 0) > 2 * 1024 * 1024)
       throw new Error("Hub frame too large");
-    session.hub.send(input.text ?? Buffer.from(input.binaryBase64!, "base64"));
+    try {
+      session.hub.send(input.text ?? Buffer.from(input.binaryBase64!, "base64"));
+    } catch (error) {
+      if (!session.closed) throw error;
+    }
   }
 
   close(owner: AccountTransportOwner, id: string): void {
-    const session = this.sessions.get(id);
-    if (!session) return;
-    if (session.owner !== owner) throw new Error("Relay transport belongs to another window");
-    this.finish(id, session);
+    const session = this.findOwnedSession(owner, id);
+    if (session) this.finish(id, session);
   }
 
   closeAll(): void {
@@ -223,13 +230,14 @@ export class AccountTransportManager {
   }
 
   recover(owner: AccountTransportOwner, id: string): Promise<boolean> {
-    return this.owned(owner, id).hub?.recoverLiveness() ?? Promise.resolve(false);
+    return this.findOwnedSession(owner, id)?.hub?.recoverLiveness() ?? Promise.resolve(false);
   }
 
-  private owned(owner: AccountTransportOwner, id: string): Session {
+  private findOwnedSession(owner: AccountTransportOwner, id: string): Session | undefined {
     const session = this.sessions.get(id);
-    if (!session || session.owner !== owner || session.closed)
-      throw new Error("Relay transport is closed");
+    if (session && session.owner !== owner)
+      throw new Error("Relay transport belongs to another window");
+    if (session?.closed) return;
     return session;
   }
 

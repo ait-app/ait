@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
+use metadata::server::protocol::HEARTBEAT_METHOD;
 use model::outbound::{Outbound, QueueError};
 use model::server::SubscriptionReleaseRequest;
 use model::server::{ClientMessage, ErrorCode, valid_id};
@@ -272,35 +273,51 @@ fn admit(
     outbound: &Outbound,
 ) -> Result<(), QueueError> {
     let lane = lane(&message);
-    if let Err(failure) = senders[lane].try_send(Work::Message(message)) {
-        if let Work::Message(Incoming::Text(
+    let refused = match senders[lane].try_send(Work::Message(message)) {
+        Ok(()) => return Ok(()),
+        Err(mpsc::error::TrySendError::Full(Work::Message(Incoming::Text(
+            ClientMessage::Event { method, .. },
+            _,
+        )))) if method == HEARTBEAT_METHOD => {
+            // The next heartbeat carries a complete activity snapshot again.
+            return Ok(());
+        }
+        Err(failure) => failure.into_inner(),
+    };
+    match refused {
+        Work::Message(Incoming::Text(
             ClientMessage::Request {
                 request_id, method, ..
             },
             _,
-        )) = failure.into_inner()
-        {
-            tracing::info_span!(
-                "rpc",
-                method = %method,
-                request_id = %request_id,
-                capability_lane = lane,
-                resource = "capability_queue",
-                queue_capacity = WORKER_QUEUE_CAPACITY,
-            )
-            .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted))?;
-        } else {
-            // Binary/event loss cannot be repaired by retrying an RPC.
+        )) => tracing::info_span!(
+            "rpc",
+            method = %method,
+            request_id = %request_id,
+            capability_lane = lane,
+            resource = "capability_queue",
+            queue_capacity = WORKER_QUEUE_CAPACITY,
+        )
+        .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted)),
+        work => {
+            // Log only method names from the daemon's declared catalog.
+            let method = match work {
+                Work::Message(Incoming::Text(
+                    ClientMessage::Event { method, .. } | ClientMessage::Response { method, .. },
+                    _,
+                )) => super::validation::lookup(&method).map(|spec| spec.capability),
+                _ => None,
+            };
             tracing::warn!(
                 resource = "capability_queue",
                 capability_lane = lane,
                 queue_capacity = WORKER_QUEUE_CAPACITY,
+                method,
                 "Resource budget exhausted"
             );
-            return Err(QueueError::Full);
+            Err(QueueError::Full)
         }
     }
-    Ok(())
 }
 
 fn lane(message: &Incoming) -> usize {

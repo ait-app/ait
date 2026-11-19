@@ -73,8 +73,10 @@
   （默认、终端与语音、文件与长耗时操作、Provider）。worker 按所属 crate 的方法声明选择，只负责
   并发与订阅隔离，worker 内仍走同一 Context 处理链（[ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)）。
 - 单连接每个 worker 队列容量为 16，组内保持顺序。RPC 超出队列时返回可重试的
-  `resource_exhausted`，不自动重放；事件或二进制帧无法入队时结束连接；`connection.ping` 在路由层
-  直接回答，不等待业务 worker（[ADR-120](../decisions/daemon/adr-120-single-connection-startup-admission.md)）。
+  `resource_exhausted`，不自动重放。队列满时允许丢弃活动快照 `session.heartbeat`，其他事件、
+  响应或二进制帧无法入队时结束连接。`connection.ping` 在路由层直接回答，不等待业务 worker。
+  （[ADR-120](../decisions/daemon/adr-120-single-connection-startup-admission.md)、
+  [ADR-291](../decisions/daemon/adr-291-best-effort-activity-heartbeats.md)）
 - Provider 的普通原生执行与 Timeline 请求在 worker 内按接收顺序完成有界接纳，响应由受追踪的
   任务独立投递；等待慢速原生操作不阻塞后续 Provider 查询或订阅释放。`agent.create.request` 与
   带初始 Agent 的 `workspace.create.request` 同样只占用接纳路径：原生会话启动在工作区预配完成后

@@ -34,6 +34,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-291：单连接的活动心跳允许过载丢弃](daemon/adr-291-best-effort-activity-heartbeats.md)
 - [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
 - [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
@@ -49,7 +50,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
-- [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)
+- [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)（经 [ADR-291](daemon/adr-291-best-effort-activity-heartbeats.md) 修订）
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](daemon/adr-118-summary-contracts-and-persistence-configuration.md)
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)

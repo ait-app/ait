@@ -20,6 +20,46 @@ fn rejected_releases_preserve_the_request_id_for_both_budget_categories() {
 }
 
 #[test]
+fn full_worker_discards_only_session_heartbeat() {
+    let [
+        (metadata, mut metadata_rx),
+        (terminal, _terminal_rx),
+        (files, _files_rx),
+        (provider, _provider_rx),
+    ] = std::array::from_fn(|_| mpsc::channel(WORKER_QUEUE_CAPACITY));
+    let senders = [metadata, terminal, files, provider];
+    let (outbound, mut responses) = Outbound::new();
+    let event = |method: &str| {
+        Incoming::Text(
+            ClientMessage::Event {
+                method: method.to_owned(),
+                params: serde_json::json!({}),
+            },
+            None,
+        )
+    };
+    admit(&senders, event(HEARTBEAT_METHOD), &outbound).unwrap();
+    assert!(metadata_rx.try_recv().is_ok());
+    for _ in 0..WORKER_QUEUE_CAPACITY {
+        admit(&senders, event("push.register"), &outbound).unwrap();
+    }
+    assert_eq!(senders[0].capacity(), 0);
+
+    admit(&senders, event(HEARTBEAT_METHOD), &outbound).unwrap();
+    assert!(matches!(
+        admit(&senders, event("push.register"), &outbound),
+        Err(QueueError::Full)
+    ));
+    assert!(responses.try_recv().is_err());
+
+    metadata_rx.close();
+    assert!(matches!(
+        admit(&senders, event(HEARTBEAT_METHOD), &outbound),
+        Err(QueueError::Full)
+    ));
+}
+
+#[test]
 fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
     for (method, expected) in [
         ("terminal.input", 1),

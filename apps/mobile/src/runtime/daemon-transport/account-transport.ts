@@ -30,6 +30,10 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
   const messages = new Set<(data: unknown, binary: boolean) => void>();
   let disposed = false;
   let cleanup: (() => void) | undefined;
+  const dispose = () => {
+    disposed = true;
+    cleanup?.();
+  };
   const fail = (error: unknown) => {
     if (!disposed) for (const handler of errors) handler(error);
   };
@@ -49,6 +53,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
         return;
       }
       if (event.kind === "close") {
+        dispose();
         for (const handler of closes) handler({ code: 1006, reason: event.error });
         return;
       }
@@ -61,7 +66,10 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
             for (const handler of messages) handler(bytes, true);
           }
         } finally {
-          void invoke("account_transport_ack", { sessionId, sequence: event.sequence }).catch(fail);
+          if (!disposed)
+            void invoke("account_transport_ack", { sessionId, sequence: event.sequence }).catch(
+              fail,
+            );
         }
       }
     });
@@ -73,7 +81,16 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     await invoke("account_transport_open", { sessionId, ...target });
   })().catch(fail);
   return {
-    recoverLiveness: () => invoke("account_transport_recover", { sessionId }).then(Boolean),
+    async recoverLiveness() {
+      if (disposed) return false;
+      try {
+        const recovered = await invoke("account_transport_recover", { sessionId });
+        return !disposed && Boolean(recovered);
+      } catch (error) {
+        if (disposed) return false;
+        throw error;
+      }
+    },
     send(data) {
       if (disposed) throw new Error("Relay connection closed");
       if (typeof data === "string")
@@ -89,8 +106,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     },
     close() {
       if (disposed) return;
-      disposed = true;
-      cleanup?.();
+      dispose();
       void invoke("account_transport_close", { sessionId }).catch(() => undefined);
     },
     onOpen(handler) {
