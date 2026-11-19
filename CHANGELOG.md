@@ -1,5 +1,27 @@
 # Ait changelog
 
+## 0.2.20 - 2026-11-20
+
+- Export the entire saved Timeline, or its conversation messages and voice transcripts, as readable Markdown or inert HTML from context details without interrupting an active turn. Saved result cards and attachment references are preserved; size limits fail explicitly instead of truncating. Downloads are single-use, cancellable and checked against the receipt size; missing artifacts never trigger an automatic re-export. Older hosts show the feature as unavailable. This adds typed export/cancel RPCs and SDK methods plus narrowly validated-origin GET/OPTIONS CORS on the existing file-download endpoint; existing message schemas, token/visitor authorization and provider-native interfaces are unchanged ([#656](https://github.com/ait-app/ait/pull/656)).
+
+- Group chats and private chats are open to every sender on all message channels. Telegram, Feishu, Lark, WeChat, QQ and iMessage no longer filter senders, so an unfamiliar group member or a private-chat user is no longer silently dropped by an outdated list. The old sender list is kept only for compatibility and is no longer checked or used for admission, the sender input field and the QQ pairing whitelist are removed, and the platform credentials, connection checks, group switch, Telegram mention and reply triggers and the Feishu and Lark mention triggers stay as they are ([#781](https://github.com/ait-app/ait/pull/781), [#783](https://github.com/ait-app/ait/pull/783), ADR-290, which supersedes ADR-289).
+
+- A Codex turn that returns a finished text-only message asynchronously is no longer treated as a question. A message is a question only when it carries a questions payload; a text-only async message now uses the existing assistant timeline and completion paths, so the question parser can no longer reject a whole history page and block the next turn when the session is reopened ([#782](https://github.com/ait-app/ait/pull/782)).
+
+- Archiving a workspace or session keeps its connection when the daemon worker queue is saturated. Only the periodic activity heartbeat is shed, an admission error stays correlated with its request, a late desktop send after the Hub session closed is harmless and forwards the close reason to the renderer, and an SDK subscription release is bound to the connection that started it ([#784](https://github.com/ait-app/ait/pull/784), ADR-291).
+
+- The mobile app no longer freezes while the provider list is refreshed. The refresh query now starts a new refresh instead of reusing a settled batch, so the loop stops running on resolved promises without ever yielding ([#786](https://github.com/ait-app/ait/pull/786)).
+
+- The BTW window stays above the keyboard on phones. The native modal viewport and the shared keyboard animation keep the window above the Android and iOS keyboards, the window height and drag range are capped to the space that is available, and the saved drag position is restored when the keyboard closes ([#779](https://github.com/ait-app/ait/pull/779)).
+
+- Cancelling an OMP turn while input is being delivered is bounded. Cancelling the pending input and the turn share one 10-second budget when replacement input is admitted; on timeout the live session is closed and the queued input is dispatched through a resumed session, and the OMP process group survives the shutdown wait so an interrupted shutdown can still be retried or cleaned up ([#780](https://github.com/ait-app/ait/pull/780)).
+
+- The workspace browser stays aligned with its pane when the window is zoomed. The pane bounds are converted from host page pixels to device-independent pixels and the guest zoom is mirrored onto the embedded view, so the page is no longer drawn above and to the left of the pane or scaled wrongly after View to Zoom In ([#777](https://github.com/ait-app/ait/pull/777)).
+
+- Updating an Agent with an unchanged record no longer rewrites the agent registry or wakes the directory observers. The records are compared under the registry lock before the shared snapshot, the last change time and the write state are updated ([#778](https://github.com/ait-app/ait/pull/778)).
+
+- The Host daemon must be upgraded for the Bot channel, relay and OMP fixes.
+
 ## 0.2.19 - 2026-11-19
 
 - MiniMax Code models and thinking levels are now chosen separately: every model is listed once (for example `M3.1-Flash` and `M3`), and the thinking variant and effort move into that model's thinking options (`Default`, `Low`, `Medium`, `High`, `Xhigh` and `Max` for `M3.1-Flash`; `Off` and `Thinking` for `M3`). The non-thinking `M3.1-Flash` entry is no longer refused with `Invalid model reasoning`, variants the native agent rejects are left out of the thinking options, a model chosen without a thinking option keeps the current variant when possible and falls back to the model's other variants when the native agent refuses it, and saved configurations that hold a full native value keep working ([#774](https://github.com/ait-app/ait/pull/774)).
@@ -44,10 +66,6 @@
 - OMP slash commands answer with a command card instead of assistant text: the reply is shown as a tool call that can be expanded, the command is not written to the provider, and it no longer interrupts a running turn.
 - TODO cards keep the same spacing on all four sides.
 - The mobile app keeps the projections it already has while the host is briefly out of date, instead of dropping them.
-
-## Unreleased
-
-- Export the entire saved Timeline, or its conversation messages and voice transcripts, as readable Markdown or inert HTML from context details without interrupting an active turn. Saved result cards and attachment references are preserved; size limits fail explicitly instead of truncating. Downloads are single-use, cancellable and checked against the receipt size; missing artifacts never trigger an automatic re-export. Older hosts show the feature as unavailable. This adds typed export/cancel RPCs and SDK methods plus narrowly validated-origin GET/OPTIONS CORS on the existing file-download endpoint; existing message schemas, token/visitor authorization and provider-native interfaces are unchanged.
 
 ## 0.2.15 - 2026-11-17
 
