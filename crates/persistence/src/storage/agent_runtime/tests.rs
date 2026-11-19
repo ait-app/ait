@@ -213,13 +213,39 @@ fn committed_agent_mutations_wake_directory_observers() {
     receiver.borrow_and_update();
 
     registry
-        .update("agent-1", &|record| record.clone())
+        .update("agent-1", &|current| {
+            let mut next = current.clone();
+            next.requires_attention = true;
+            next
+        })
         .expect("update should persist");
     assert!(receiver.has_changed().expect("sender remains available"));
     receiver.borrow_and_update();
 
     registry.remove("agent-1").expect("remove should persist");
     assert!(receiver.has_changed().expect("sender remains available"));
+}
+
+#[test]
+fn unchanged_agent_records_do_not_wake_directory_observers() {
+    let temp = tempfile::tempdir().expect("temporary directory should exist");
+    let changes = model::changes::Changes::default();
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"))
+        .with_changes(changes.clone());
+    let agent = record("agent-1");
+    registry.upsert(&agent).expect("insert should persist");
+    let receiver = changes.subscribe();
+
+    assert_eq!(
+        registry.update("agent-1", &Clone::clone),
+        Ok(Some(agent.clone()))
+    );
+    assert_eq!(
+        registry.update_status("agent-1", &Clone::clone),
+        Ok(Some(agent.clone()))
+    );
+    assert_eq!(registry.upsert(&agent), Ok(()));
+    assert!(!receiver.has_changed().expect("sender remains available"));
 }
 
 #[test]

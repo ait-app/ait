@@ -69,7 +69,7 @@ impl FileBackedAgentRuntimeRegistry {
         update: &dyn Fn(&PersistedAgentRuntimeRecord) -> PersistedAgentRuntimeRecord,
         durability: Durability,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
-        let result = self.status.update(
+        let Some((record, changed)) = self.status.update(
             agent_id,
             |current| {
                 let next = update(current);
@@ -81,11 +81,14 @@ impl FileBackedAgentRuntimeRegistry {
                 }
             },
             durability,
-        )?;
-        if result.is_some() {
+        )?
+        else {
+            return Ok(None);
+        };
+        if changed {
             self.notify();
         }
-        Ok(result)
+        Ok(Some(record))
     }
 
     fn notify(&self) {
@@ -137,8 +140,9 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
         record: &PersistedAgentRuntimeRecord,
     ) -> Result<(), AgentRuntimeRegistryError> {
         validate_record(record)?;
-        self.status.upsert(record.clone())?;
-        self.notify();
+        if self.status.upsert(record)? {
+            self.notify();
+        }
         Ok(())
     }
 

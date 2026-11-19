@@ -71,7 +71,7 @@ fn deferred_update_is_read_at_once_and_written_only_on_flush() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     let written_at = stored(&path)["lastChangedAt"].clone();
 
     status
@@ -93,12 +93,18 @@ fn immediate_write_includes_pending_status_and_clean_flush_writes_nothing() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("first")).unwrap();
+    status.upsert(&record("first")).unwrap();
     status
         .update("first", titled("pending"), Durability::Deferred)
         .unwrap();
 
-    status.upsert(record("second")).unwrap();
+    let repeated = status
+        .update("first", titled("pending"), Durability::Immediate)
+        .unwrap();
+    assert_eq!(repeated.map(|(_, changed)| changed), Some(false));
+    assert!(stored(&path)["agents"][0]["title"].is_null());
+
+    status.upsert(&record("second")).unwrap();
 
     assert_eq!(stored(&path)["agents"][0]["title"], "pending");
     std::fs::remove_file(&path).unwrap();
@@ -111,7 +117,7 @@ fn dropping_the_last_owner_writes_deferred_status() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     status
         .update("agent", titled("on drop"), Durability::Deferred)
         .unwrap();
@@ -131,7 +137,7 @@ fn flusher_writes_deferred_status_on_its_interval() {
         path.clone(),
         Duration::from_millis(20),
     ));
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
 
     status
         .update("agent", titled("timer"), Durability::Deferred)
@@ -152,7 +158,7 @@ fn close_marks_the_file_clean_and_rejects_later_writes() {
         path.clone(),
         Duration::from_millis(10),
     ));
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     status
         .update("agent", titled("closing"), Durability::Deferred)
         .unwrap();
@@ -167,7 +173,7 @@ fn close_marks_the_file_clean_and_rejects_later_writes() {
         Err(AgentRuntimeRegistryError::Io)
     );
     assert_eq!(
-        status.upsert(record("late")),
+        status.upsert(&record("late")),
         Err(AgentRuntimeRegistryError::Io)
     );
     assert_eq!(status.remove("agent"), Err(AgentRuntimeRegistryError::Io));
@@ -183,7 +189,7 @@ fn an_unclosed_file_reports_when_it_last_changed() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     let changed_at = stored(&path)["lastChangedAt"].as_str().unwrap().to_owned();
 
     let reopened = AgentsStatus::new(path.clone());
@@ -214,12 +220,12 @@ fn failed_immediate_writes_leave_the_cache_unchanged() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("kept")).unwrap();
+    status.upsert(&record("kept")).unwrap();
     std::fs::remove_file(&path).unwrap();
     std::fs::create_dir(&path).unwrap();
 
     assert_eq!(
-        status.upsert(record("rejected")),
+        status.upsert(&record("rejected")),
         Err(AgentRuntimeRegistryError::Io)
     );
     assert_eq!(
@@ -242,7 +248,7 @@ fn failed_flush_keeps_status_pending() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     status
         .update("agent", titled("retry"), Durability::Deferred)
         .unwrap();
@@ -261,7 +267,7 @@ fn oversized_deferred_changes_are_rejected_before_commit() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let status = idle_store(&path);
-    status.upsert(record("agent")).unwrap();
+    status.upsert(&record("agent")).unwrap();
     let huge = "x".repeat(super::max_document_bytes());
 
     assert_eq!(
@@ -270,7 +276,7 @@ fn oversized_deferred_changes_are_rejected_before_commit() {
     );
 
     assert_eq!(status.get_shared("agent").unwrap().unwrap().title, None);
-    status.upsert(record("other")).unwrap();
+    status.upsert(&record("other")).unwrap();
     assert_eq!(stored(&path)["agents"].as_array().unwrap().len(), 2);
 }
 
@@ -291,7 +297,7 @@ fn first_deferred_change_after_a_clean_close_reopens_the_file() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("agents.json");
     let first = idle_store(&path);
-    first.upsert(record("agent")).unwrap();
+    first.upsert(&record("agent")).unwrap();
     first.close().unwrap();
     let restarted = idle_store(&path);
 
@@ -312,4 +318,58 @@ fn first_deferred_change_after_a_clean_close_reopens_the_file() {
             .is_some(),
         "a crash now would trigger recovery"
     );
+}
+
+#[test]
+fn unchanged_immediate_operations_keep_the_file_and_shared_snapshot() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("agents.json");
+    let agent = record("agent");
+    let mut original = serde_json::to_vec(&serde_json::json!({
+        "lastChangedAt": "2026-09-20T10:01:00.000Z",
+        "closed": false,
+        "agents": [&agent],
+    }))
+    .unwrap();
+    // A rewrite removes this trailing whitespace even if the record data stays the same.
+    original.push(b'\n');
+    std::fs::write(&path, &original).unwrap();
+    let status = idle_store(&path);
+    let snapshot = status.snapshot().unwrap();
+
+    let updated = status
+        .update(
+            "agent",
+            |current| Ok(current.clone()),
+            Durability::Immediate,
+        )
+        .unwrap()
+        .expect("the record is still returned");
+    let upserted = status.upsert(&agent).unwrap();
+
+    assert_eq!(updated, (agent, false));
+    assert!(!upserted);
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert!(Arc::ptr_eq(&snapshot, &status.snapshot().unwrap()));
+}
+
+#[test]
+fn unchanged_deferred_update_keeps_the_file_closed_without_starting_the_flusher() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("agents.json");
+    let status = idle_store(&path);
+    status.upsert(&record("agent")).unwrap();
+    status.close().unwrap();
+    let closed = std::fs::read(&path).unwrap();
+    let restarted = idle_store(&path);
+
+    let updated = restarted
+        .update("agent", |current| Ok(current.clone()), Durability::Deferred)
+        .unwrap();
+    restarted.flush().unwrap();
+
+    assert_eq!(updated, Some((record("agent"), false)));
+    assert!(restarted.flusher.get().is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), closed);
+    assert_eq!(AgentsStatus::new(path).interrupted_since().unwrap(), None);
 }

@@ -177,13 +177,13 @@ impl AgentsStatus {
         Ok(self.loaded()?.interrupted_since.clone())
     }
 
-    /// Insert or replace `record` and write the file before returning.
+    /// Write `record` if it is new or changed, returning whether it was written.
     ///
     /// # Errors
     /// Returns `InvalidRecord` when the record cannot round-trip or the document would exceed
     /// its size limit, and `Io` when the store is closed or the write fails. On any failure the
     /// cache is left unchanged.
-    pub(super) fn upsert(&self, record: Record) -> Result<(), Error> {
+    pub(super) fn upsert(&self, record: &Record) -> Result<bool, Error> {
         let mut state = self.open_state()?;
         self.commit(&mut state, record, Durability::Immediate)
     }
@@ -191,7 +191,7 @@ impl AgentsStatus {
     /// Replace the record for `id` with the result of `transform`, persisting per `durability`.
     ///
     /// # Returns
-    /// The stored record, or `None` when `id` is absent.
+    /// The stored record and whether it changed, or `None` when `id` is absent.
     ///
     /// # Errors
     /// Returns `transform` errors, `InvalidRecord` for records that cannot round-trip or would
@@ -202,18 +202,18 @@ impl AgentsStatus {
         id: &str,
         transform: impl FnOnce(&Record) -> Result<Record, Error>,
         durability: Durability,
-    ) -> Result<Option<Record>, Error> {
+    ) -> Result<Option<(Record, bool)>, Error> {
         let mut state = self.open_state()?;
         let Some(current) = state.records.get(id) else {
             return Ok(None);
         };
         let next = transform(&current.record)?;
-        self.commit(&mut state, next.clone(), durability)?;
+        let changed = self.commit(&mut state, &next, durability)?;
         drop(state);
-        if durability == Durability::Deferred {
+        if changed && durability == Durability::Deferred {
             self.schedule();
         }
-        Ok(Some(next))
+        Ok(Some((next, changed)))
     }
 
     /// Remove the record for `id` and write the file before returning.
@@ -290,15 +290,19 @@ impl AgentsStatus {
         Ok(state)
     }
 
-    /// Install `record` in memory, then write it or mark it dirty per `durability`.
+    /// Install a changed record, then write it or mark it dirty per `durability`.
     fn commit(
         &self,
         state: &mut State,
-        record: Record,
+        record: &Record,
         durability: Durability,
-    ) -> Result<(), Error> {
-        let bytes = serialized_len(&record)?;
-        let replaced = state.records.get(&record.id).map(|stored| stored.bytes);
+    ) -> Result<bool, Error> {
+        let previous = state.records.get(&record.id);
+        if previous.is_some_and(|stored| stored.record.as_ref() == record) {
+            return Ok(false);
+        }
+        let bytes = serialized_len(record)?;
+        let replaced = previous.map(|stored| stored.bytes);
         let total = state.bytes - replaced.unwrap_or(0) + bytes;
         let count = state.records.len() + usize::from(replaced.is_none());
         if total + count + ENVELOPE_BYTES > max_document_bytes() {
@@ -306,7 +310,7 @@ impl AgentsStatus {
         }
         let id = record.id.clone();
         let stored = Stored {
-            record: Arc::new(record),
+            record: Arc::new(record.clone()),
             bytes,
         };
         let previous = state.records.insert(id.clone(), stored);
@@ -321,7 +325,6 @@ impl AgentsStatus {
                 {
                     tracing::warn!(%error, "Agent status could not reopen its file; retrying later");
                 }
-                Ok(())
             }
             Durability::Immediate => self.write(state).inspect_err(|_| {
                 match previous {
@@ -334,8 +337,9 @@ impl AgentsStatus {
                 }
                 state.bytes = previous_bytes;
                 state.last_changed_at = previous_change;
-            }),
+            })?,
         }
+        Ok(true)
     }
 
     fn write(&self, state: &mut State) -> Result<(), Error> {
