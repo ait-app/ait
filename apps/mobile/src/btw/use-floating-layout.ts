@@ -1,9 +1,9 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { useWindowDimensions, type View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
 import { isWeb } from "@/constants/platform";
 import { useSettledKeyboardShift } from "@/keyboard/shift";
-import { measureElement, type Rect } from "@/components/ui/menu/menu-anchor";
+import { measureElement, type Rect, type Size } from "@/components/ui/menu/menu-anchor";
 import { SPACING } from "@/styles/theme";
 import type { BtwDragBounds, BtwFloatingFrame } from "@/btw/floating-drag";
 
@@ -18,6 +18,7 @@ const EDGE = SPACING[2];
 const COMPOSER_GAP = SPACING[3];
 const MAX_WIDTH = 384;
 const MAX_HEIGHT = 420;
+const MIN_TYPING_HEIGHT = 128;
 
 /**
  * The window opens above its composer, hugging the right edge of the window. The composer is
@@ -61,26 +62,79 @@ export interface BtwFloatingLayout {
   /** Where the composer alone would put the window, before any drag. */
   frame: BtwFloatingFrame | null;
   dragBounds: BtwDragBounds | null;
+  /** Native animation starts from this box and applies the live keyboard overlap. */
+  restingDragBounds?: BtwDragBounds;
   layoutHeight: number;
+}
+
+export function resolveBtwNativeLayout(
+  anchor: Rect,
+  size: Size,
+  insets: EdgeInsets,
+  keyboardShift: number,
+) {
+  const restingViewport = {
+    x: insets.left,
+    y: 0,
+    width: Math.max(0, size.width - insets.left - insets.right),
+    height: Math.max(0, size.height - insets.bottom),
+    layoutHeight: size.height,
+  };
+  const viewport = {
+    ...restingViewport,
+    height: Math.max(0, restingViewport.height - keyboardShift),
+  };
+  const docked = resolveBtwFloatingFrame(anchor, restingViewport, insets.top);
+  const availableHeight = Math.max(0, viewport.height - insets.top - EDGE * 2);
+  // A short gap above the main composer should still leave room to type. Let
+  // the floating window overlap that composer if the keyboard leaves no other space.
+  const height = Math.min(
+    Math.max(docked.height, keyboardShift > 0 ? MIN_TYPING_HEIGHT : 0),
+    availableHeight,
+  );
+  const frame = {
+    ...docked,
+    bottom: Math.min(docked.bottom, size.height - insets.top - EDGE - height),
+    height,
+  };
+  return {
+    frame,
+    dragBounds: resolveBtwDragBounds(viewport, insets.top, frame),
+    restingDragBounds: resolveBtwDragBounds(restingViewport, insets.top, frame),
+    layoutHeight: size.height,
+  };
+}
+
+export function btwKeyboardClearance(frame: BtwFloatingFrame, safeBottom: number): number {
+  return Math.max(0, frame.bottom - safeBottom - EDGE);
+}
+
+function measureNativeAnchor(anchor: View): Promise<Rect> {
+  return new Promise((resolve) => {
+    // Both native roots are edge-to-edge. Use the anchor's root-relative coordinates
+    // so Android's visible-window offset cannot leak into the dialog's coordinates.
+    anchor.measure((_x, _y, width, height, pageX, pageY) => {
+      resolve({ x: pageX, y: pageY, width, height });
+    });
+  });
 }
 
 export function useBtwFloatingLayout(
   visible: boolean,
   anchorRef: RefObject<View | null>,
   anchorLayoutVersion: number,
+  modalSize: Size | null,
+  keyboardLayoutShift: number,
 ): BtwFloatingLayout {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  // The shared composer dock already applies the keyboard shift. Remeasure its
-  // final screen coordinates rather than subtracting the keyboard inset twice.
+  // Remeasure the composer after its own keyboard animation settles.
   const keyboardShift = useSettledKeyboardShift();
-  const [frame, setFrame] = useState<BtwFloatingFrame | null>(null);
-  const [dragBounds, setDragBounds] = useState<BtwDragBounds | null>(null);
+  const [measurement, setMeasurement] = useState<{ anchor: Rect; viewport: Viewport } | null>(null);
 
   useLayoutEffect(() => {
     if (!visible) {
-      setFrame(null);
-      setDragBounds(null);
+      setMeasurement(null);
       return;
     }
     let disposed = false;
@@ -120,24 +174,11 @@ export function useBtwFloatingLayout(
         height: visual?.height ?? height,
         layoutHeight: height,
       };
-      void measureElement(anchor).then((rect) => {
+      const measure = isWeb ? measureElement : measureNativeAnchor;
+      void measure(anchor).then((rect) => {
         if (disposed || current !== generation) return;
-        const next = resolveBtwFloatingFrame(rect, viewport, insets.top);
-        setFrame((previous) =>
-          previous &&
-          previous.left === next.left &&
-          previous.bottom === next.bottom &&
-          previous.width === next.width &&
-          previous.height === next.height
-            ? previous
-            : next,
-        );
-        setDragBounds(
-          resolveBtwDragBounds(viewport, insets.top, {
-            width: next.width,
-            height: next.height,
-          }),
-        );
+        if (!Number.isFinite(rect.y)) return;
+        setMeasurement({ anchor: rect, viewport });
       });
     };
     const onScroll = (event: Event) => {
@@ -164,7 +205,19 @@ export function useBtwFloatingLayout(
         window.visualViewport?.removeEventListener("scroll", schedule);
       }
     };
-  }, [visible, anchorRef, anchorLayoutVersion, width, height, insets.top, keyboardShift]);
+  }, [visible, anchorRef, anchorLayoutVersion, width, height, keyboardShift, modalSize]);
 
-  return { frame, dragBounds, layoutHeight: height };
+  if (!measurement || (!isWeb && !modalSize)) {
+    return { frame: null, dragBounds: null, layoutHeight: 0 };
+  }
+  const { anchor, viewport } = measurement;
+  if (modalSize) {
+    return resolveBtwNativeLayout(anchor, modalSize, insets, keyboardLayoutShift);
+  }
+  const frame = resolveBtwFloatingFrame(anchor, viewport, insets.top);
+  return {
+    frame,
+    dragBounds: resolveBtwDragBounds(viewport, insets.top, frame),
+    layoutHeight: viewport.layoutHeight,
+  };
 }

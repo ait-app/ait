@@ -21,6 +21,8 @@ export interface BtwDragInput {
   frame: BtwFloatingFrame | null;
   /** Where the window may be placed: the viewport inset by the edge gap and the safe area. */
   dragBounds: BtwDragBounds | null;
+  /** The native view applies keyboard movement to this position during rendering. */
+  restingDragBounds?: BtwDragBounds;
   layoutHeight: number;
 }
 
@@ -71,12 +73,12 @@ export function useBtwDrag(input: BtwDragInput): BtwDragProps {
   const current = useRef(input);
   current.current = input;
 
-  const { frame, dragBounds, layoutHeight } = input;
+  const { frame, dragBounds, restingDragBounds = dragBounds, layoutHeight } = input;
   // Mirrors `position` for the gesture callbacks, which outlive the render that installed them.
   const positionRef = useRef<BtwWindowPosition | null>(null);
   const placed =
-    frame && position && dragBounds
-      ? placeBtwFrame(frame, clampBtwPosition(position, dragBounds), layoutHeight)
+    frame && position && restingDragBounds
+      ? placeBtwFrame(frame, clampBtwPosition(position, restingDragBounds), layoutHeight)
       : frame;
 
   /** Where the window is drawn now: a drag starts here, not at the composer's own frame. */

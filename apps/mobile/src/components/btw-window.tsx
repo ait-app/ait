@@ -106,8 +106,8 @@ export function BtwWindow({
     scrollRef.current?.scrollToEnd({ animated: false });
   }, [topic?.id]);
 
-  return (
-    <View style={styles.window} testID="btw-window" accessibilityLabel={t("btw.title")}>
+  const conversation = (
+    <View style={styles.conversation}>
       <View
         {...dragHandleProps}
         style={[styles.header, dragHandleStyle]}
@@ -223,6 +223,12 @@ export function BtwWindow({
           </Button>
         </View>
       ) : null}
+    </View>
+  );
+
+  return (
+    <View style={styles.window} testID="btw-window" accessibilityLabel={t("btw.title")}>
+      {conversation}
       <View style={styles.footer}>
         {showCompose ? (
           <View
@@ -327,6 +333,8 @@ const styles = StyleSheet.create((theme) => {
       overflow: "hidden",
       ...theme.shadow.lg,
     },
+    // When the IME leaves limited room, the composer retains its space below the transcript.
+    conversation: { flex: 1, minHeight: 0, overflow: "hidden" },
     header: {
       padding: theme.spacing[2],
       paddingLeft: theme.spacing[4],

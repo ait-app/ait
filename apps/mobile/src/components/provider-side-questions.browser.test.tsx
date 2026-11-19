@@ -29,7 +29,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const hasThemeRuntime = typeof UnistylesRuntime.setAdaptiveThemes === "function";
-vi.mock("@/keyboard/shift", () => ({ useSettledKeyboardShift: () => 0 }));
+vi.mock("@/keyboard/shift", () => ({
+  useSettledKeyboardShift: () => 0,
+  useKeyboardShift: vi.fn(),
+  KeyboardTranslateView: ({ children }: React.PropsWithChildren) => children,
+}));
 
 beforeEach(async () => {
   if (!hasThemeRuntime) return;

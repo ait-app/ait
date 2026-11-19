@@ -2,17 +2,24 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { Modal, View } from "react-native";
+import { Modal, StyleSheet as NativeStyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { View as RNView } from "react-native";
-import { useBtwFloatingLayout } from "@/btw/use-floating-layout";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAnimatedReaction } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
+import { btwKeyboardClearance, useBtwFloatingLayout } from "@/btw/use-floating-layout";
 import { useBtwDrag, type BtwDragHandleProps } from "@/btw/use-floating-drag";
+import type { Size } from "@/components/ui/menu/menu-anchor";
+import { KeyboardTranslateView, useKeyboardShift } from "@/keyboard/shift";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { isWeb } from "@/constants/platform";
 import {
@@ -30,6 +37,39 @@ export function useBtwDragHandle(): BtwDragHandleProps {
   return useContext(BtwDragHandleContext) ?? {};
 }
 
+function BtwModalViewport({
+  onLayout,
+  onKeyboardLayoutShift,
+  bottomClearance,
+  children,
+}: {
+  onLayout: (event: LayoutChangeEvent) => void;
+  onKeyboardLayoutShift: (shift: number) => void;
+  bottomClearance: number;
+  children: ReactNode;
+}) {
+  const { layoutShift } = useKeyboardShift();
+  useAnimatedReaction(
+    () => layoutShift.value,
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(onKeyboardLayoutShift, next);
+    },
+    [layoutShift, onKeyboardLayoutShift],
+  );
+
+  return (
+    <View onLayout={onLayout} pointerEvents="box-none" style={styles.overlay}>
+      <KeyboardTranslateView
+        bottomClearance={bottomClearance}
+        pointerEvents="box-none"
+        style={NativeStyleSheet.absoluteFill}
+      >
+        {children}
+      </KeyboardTranslateView>
+    </View>
+  );
+}
+
 export function BtwFloatingSurface({
   visible,
   onClose,
@@ -45,7 +85,28 @@ export function BtwFloatingSurface({
   anchorRef: RefObject<RNView | null>;
   anchorLayoutVersion?: number;
 }) {
-  const layout = useBtwFloatingLayout(visible, anchorRef, anchorLayoutVersion);
+  const [modalSize, setModalSize] = useState<Size | null>(null);
+  const [keyboardLayoutShift, setKeyboardLayoutShift] = useState(0);
+  const { bottom: safeBottom } = useSafeAreaInsets();
+  useLayoutEffect(() => {
+    if (visible) return;
+    setModalSize(null);
+    setKeyboardLayoutShift(0);
+  }, [visible]);
+  const onModalLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width <= 0 || height <= 0) return;
+    setModalSize((size) =>
+      size?.width === width && size.height === height ? size : { width, height },
+    );
+  }, []);
+  const layout = useBtwFloatingLayout(
+    visible,
+    anchorRef,
+    anchorLayoutVersion,
+    modalSize,
+    keyboardLayoutShift,
+  );
   const drag = useBtwDrag(layout);
   const frame = drag.frame;
   const layer = useOverlayLayer("floating");
@@ -83,8 +144,8 @@ export function BtwFloatingSurface({
   );
   const dragHandle = useMemo(() => drag.headerProps, [drag.headerProps]);
 
-  if (!visible || !frame || frame.height <= 0 || frame.width <= 0) return null;
-  const surface = (
+  if (!visible) return null;
+  const surface = frame && (
     <OverlayLayerProvider layer={layer}>
       <View pointerEvents="box-none" style={[styles.overlay, { zIndex: layer }]}>
         <View ref={assignScope} style={[styles.position, inlineUnistylesStyle(frame)]}>
@@ -95,10 +156,27 @@ export function BtwFloatingSurface({
       </View>
     </OverlayLayerProvider>
   );
-  if (isWeb && typeof document !== "undefined") return createPortal(surface, getOverlayRoot());
+  if (isWeb) {
+    return frame && frame.height > 0 && frame.width > 0 && typeof document !== "undefined"
+      ? createPortal(surface, getOverlayRoot())
+      : null;
+  }
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      {surface}
+    <Modal
+      visible
+      transparent
+      statusBarTranslucent
+      navigationBarTranslucent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <BtwModalViewport
+        onLayout={onModalLayout}
+        onKeyboardLayoutShift={setKeyboardLayoutShift}
+        bottomClearance={frame ? btwKeyboardClearance(frame, safeBottom) : 0}
+      >
+        {surface}
+      </BtwModalViewport>
     </Modal>
   );
 }
