@@ -347,6 +347,10 @@ jobs:
       AIT_ANDROID_HERMES_O0: "1"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
+      CCACHE_DIR: ${{ runner.temp }}/android-ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 2G
     steps:
       - *validate-source
 
@@ -390,7 +394,7 @@ jobs:
           ref: ${{ env.SOURCE_REF }}
           persist-credentials: false
 
-      # Four React Native ABIs outgrow the default runner disk.
+      # React Native native builds need room beyond the runner's preinstalled SDKs.
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/share/swift
 
@@ -402,6 +406,29 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Tag builds must write caches so retries can reuse them.
+          cache-read-only: false
+
+      - name: Restore Android ccache
+        id: ccache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-android-ccache-v1-${{ hashFiles('package-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-android-ccache-v1-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-${{ runner.arch }}-android-ccache-v1-
+
+      - name: Set up Android ccache
+        id: setup-ccache
+        # React Native's application CMake automatically uses ccache from PATH.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache
+          ccache --zero-stats
+          ccache --show-config
 
       - *verify-version
 
@@ -470,6 +497,7 @@ jobs:
           NODE
 
       - name: Build signed AAB with Gradle
+        id: android-build
         working-directory: apps/mobile/android
         timeout-minutes: 120
         env:
@@ -478,12 +506,34 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           ./gradlew :app:bundleRelease \
+            "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" \
+            --max-workers=4 \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
             -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
             -x generateReleaseLintModel -x generateReleaseLintVitalModel \
             "-Pandroid.injected.signing.store.file=$RUNNER_TEMP/android-play.keystore" \
             "-Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD" \
             "-Pandroid.injected.signing.key.alias=$KEY_ALIAS" \
             "-Pandroid.injected.signing.key.password=$KEY_PASSWORD"
+
+      - name: Report Android ccache statistics
+        if: ${{ !cancelled() && steps.setup-ccache.outcome == 'success' }}
+        run: |
+          {
+            echo '### Android ccache'
+            echo '```text'
+            ccache --show-stats
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Keep completed compilations even if Gradle or the later Play upload fails.
+      - name: Save Android ccache
+        if: ${{ !cancelled() && (steps.android-build.outcome == 'success' || steps.android-build.outcome == 'failure') && steps.ccache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
       - name: Download pinned bundletool
         run: |

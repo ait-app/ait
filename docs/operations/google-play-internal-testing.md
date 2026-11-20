@@ -124,6 +124,22 @@ runner 执行 `npm ci` → `npm run build:ui-deps` → `expo prebuild --platform
 `AIT_ANDROID_HERMES_O0=1`。AGP 的 `android.injected.signing.*` 属性将 release 签名覆盖为
 上传 keystore；构建结束始终清理临时 keystore。
 
+发布只构建 `arm64-v8a,armeabi-v7a` 两种 ARM ABI，保留 APK 校验要求的 64 位和 32 位
+设备支持，跳过 x86 模拟器架构。Gradle daemon 使用 6 GiB 最大堆和 1 GiB Metaspace，
+通过单个 `-Dorg.gradle.jvmargs` 参数传入；Gradle worker 上限为 4。
+
+runner 安装 ccache，React Native 的 application CMake 自动检测它，用于应用和
+autolinked codegen 的 C/C++ 编译；独立 CMake 工程是否使用缓存取决于各依赖自身配置。
+缓存目录为 `$RUNNER_TEMP/android-ccache`，上限 2 GB，通过编译器内容校验避免 NDK
+安装时间变化导致失效。工作流恢复兼容缓存后清零统计，构建结束把命中统计写入 job 摘要；
+即使 Gradle 失败，也保存已完成的编译，且保存发生在 Play 上传之前。
+
+Gradle 和 ccache 都允许 tag 构建写入缓存。ccache key 按 runner 系统、架构、依赖锁文件
+及运行次数区分，依赖变化时仍可回退并由 ccache 检查具体编译输入。
+[GitHub 缓存作用域](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache)
+只允许恢复当前 ref 或默认分支的缓存，不同 tag 不能直接共享。因此同 tag 重试可以复用缓存；
+从默认分支发起的 `workflow_dispatch` 可为后续 tag 提供缓存，首次冷构建仍需完整编译。
+
 提交前使用固定版本及 SHA-256 的 bundletool 检查结构与 manifest，使用 jarsigner 验证
 上传签名，核对包名、版本、实际 `versionCode` 和非 debug 属性。校验通过后保留原始 AAB
 字节并生成校验和，上传 action 只提交本次通过校验的那一个 AAB。

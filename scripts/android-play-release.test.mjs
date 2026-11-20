@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import yaml from "yaml";
+import { validateAndroidBadging } from "./android-release.mjs";
 import {
   collectAndroidPlayRelease,
   configureAndroidPlayGradle,
@@ -545,6 +546,18 @@ test("workflow passes the exact source, unique version and signing arguments int
   assert.equal(result.status, 0, result.stderr);
   const args = JSON.parse(await readFile(argsFile, "utf8"));
   assert(args.includes(":app:bundleRelease"));
+  assert(args.includes("-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"));
+  assert(args.includes("--max-workers=4"));
+  const architectures = args
+    .find((arg) => arg.startsWith("-PreactNativeArchitectures="))
+    ?.split("=")[1]
+    .split(",");
+  assert(architectures, "Release build must select its supported Android architectures");
+  validateAndroidBadging(
+    `package: name='${actual.packageId}' versionCode='${actual.versionCode}' versionName='${actual.version}'\n` +
+      `native-code: ${architectures.map((abi) => `'${abi}'`).join(" ")}\n`,
+    actual,
+  );
   assert(args.includes(`-Pandroid.injected.signing.store.file=${root}/android-play.keystore`));
   assert(args.includes("-Pandroid.injected.signing.store.password=store $ literal"));
   assert(args.includes("-Pandroid.injected.signing.key.alias=ait upload"));
