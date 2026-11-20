@@ -3384,6 +3384,7 @@ function WorkspaceScreenContent({
             createTerminalDisabled={createTerminalDisabled}
             onCreateDraftTab={handleCreateDraftTab}
             onCreateTerminal={handleCreateTerminal}
+            onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
             onCopyResumeCommand={handleCopyResumeCommand}
             onCopyAgentId={handleCopyAgentId}
             onCopyTerminalId={handleCopyTerminalId}
@@ -3403,10 +3404,8 @@ function WorkspaceScreenContent({
             currentBranchName={currentBranchName}
             showWorkspaceSetup={showWorkspaceSetup}
             showCreateBrowserTab={showCreateBrowserTab}
-            createTerminalDisabled={createTerminalDisabled}
             importAgentDisabled={!canOpenImportSheet}
             copyPathDisabled={!workspaceDirectory}
-            onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
             onCreateBrowser={handleCreateBrowserTab}
             onOpenImportSheet={openImportSheet}
             onCopyWorkspacePath={handleCopyWorkspacePath}

@@ -1,6 +1,5 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { View } from "react-native";
-import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   Archive,
@@ -12,12 +11,10 @@ import {
   Settings,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { TerminalProfile } from "@ait/protocol/messages";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -29,11 +26,7 @@ import {
 } from "@/components/ui/icon-button-chrome";
 import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { Shortcut } from "@/components/ui/shortcut";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
-import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { getTerminalProfileIcon, resolveTerminalProfiles } from "@ait/protocol/terminal-profiles";
-import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import {
   useWorkspaceScriptsMenuPages,
   type UseWorkspaceScriptsMenuPagesInput,
@@ -226,49 +219,16 @@ export function WorkspaceHeaderMenuDesktop({
   );
 }
 
-interface HeaderMenuProfileItemProps {
-  profile: TerminalProfile;
-  disabled: boolean;
-  onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
-}
-
-function HeaderMenuProfileItem({
-  profile,
-  disabled,
-  onCreateTerminalWithProfile,
-}: HeaderMenuProfileItemProps) {
-  const handleSelect = useCallback(() => {
-    onCreateTerminalWithProfile(profile);
-  }, [onCreateTerminalWithProfile, profile]);
-
-  const leading = useMemo(
-    () => (
-      <View style={styles.headerMenuProfileIconWrapper}>
-        <TerminalProfileIcon iconKey={getTerminalProfileIcon(profile)} size={16} />
-      </View>
-    ),
-    [profile],
-  );
-
-  return (
-    <DropdownMenuItem leading={leading} disabled={disabled} onSelect={handleSelect}>
-      {profile.name}
-    </DropdownMenuItem>
-  );
-}
-
 export interface WorkspaceHeaderMenuMobileProps extends WorkspaceHeaderWorkspaceActions {
   scripts: UseWorkspaceScriptsMenuPagesInput;
   showCreateBrowserTab: boolean;
-  createTerminalDisabled: boolean;
-  onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
   onCreateSchedule: () => void;
 }
 
 /**
- * Compact layouts have no tab strip. New agent and New terminal sit in the tab switcher's footer;
- * the rarer launches stay here alongside the workspace actions.
+ * Compact layouts have no tab strip. New agent, New terminal and the terminal profiles sit in the
+ * tab switcher's footer; the rarer launches stay here alongside the workspace actions.
  *
  * The header has no room for a scripts button either, so scripts are a page of this menu, and the
  * ⋯ carries a dot while a running service is unhealthy.
@@ -278,24 +238,12 @@ export function WorkspaceHeaderMenuMobile({
   workspaceId,
   scripts,
   showCreateBrowserTab,
-  createTerminalDisabled,
-  onCreateTerminalWithProfile,
   onCreateBrowser,
   onCreateSchedule,
   ...workspaceActions
 }: WorkspaceHeaderMenuMobileProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   const triggerStyle = useIconButtonChromeStyle({ size: "large" });
-  const { config } = useDaemonConfig(serverId);
-  const profiles = useMemo(
-    () => resolveTerminalProfiles(config?.terminalProfiles),
-    [config?.terminalProfiles],
-  );
-
-  const handleEditProfiles = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(serverId, "terminals") as Href);
-  }, [serverId, router]);
   const scriptsMenu = useWorkspaceScriptsMenuPages(scripts);
   const archive = useWorkspaceScreenArchive({ serverId, workspaceId });
 
@@ -343,23 +291,6 @@ export function WorkspaceHeaderMenuMobile({
           {t("schedules.new")}
         </DropdownMenuItem>
         <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
-        {profiles.map((profile) => (
-          <HeaderMenuProfileItem
-            key={profile.id}
-            profile={profile}
-            disabled={createTerminalDisabled}
-            onCreateTerminalWithProfile={onCreateTerminalWithProfile}
-          />
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
-          onSelect={handleEditProfiles}
-        >
-          {t("workspace.tabs.actions.editTerminalProfiles")}
-        </DropdownMenuItem>
         <WorkspaceHeaderArchiveItem archive={archive} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -369,10 +300,6 @@ export function WorkspaceHeaderMenuMobile({
 const ATTENTION_DOT_SIZE = 6;
 
 const styles = StyleSheet.create((theme) => ({
-  headerMenuProfileIconWrapper: {
-    width: 16,
-    height: 16,
-  },
   // Same red as the Scripts row's unhealthy ▶, so the dot and the row it leads to agree.
   attentionDot: {
     position: "absolute",

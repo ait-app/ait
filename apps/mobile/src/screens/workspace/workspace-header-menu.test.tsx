@@ -12,16 +12,12 @@ vi.mock("@/workspace/use-workspace-screen-archive", () => ({
   useWorkspaceScreenArchive: () => archiveState,
 }));
 vi.mock("@/hooks/use-shortcut-keys", () => ({ useShortcutKeys: () => null }));
-vi.mock("@/hooks/use-daemon-config", () => ({ useDaemonConfig: () => ({ config: null }) }));
 vi.mock("@/screens/workspace/scripts/workspace-scripts-menu-pages", () => ({
   useWorkspaceScriptsMenuPages: () => ({ pages: [], trigger: null, needsAttention: false }),
 }));
-vi.mock("@/components/terminal-profile-icon", () => ({ TerminalProfileIcon: () => null }));
-vi.mock("expo-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children, testID }: { children: ReactNode; testID: string }) => (
     <button data-testid={testID}>{children}</button>
   ),

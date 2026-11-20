@@ -3,6 +3,7 @@ import { Keyboard, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SquarePen, SquareTerminal } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
+import type { TerminalProfile } from "@ait/protocol/messages";
 import { Button } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { useIconButtonChromeStyle } from "@/components/ui/icon-button-chrome";
@@ -17,6 +18,7 @@ import {
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import { TabSwitcherTerminalProfiles } from "./terminal-profiles";
 
 // The trigger draws at 32pt beside its island neighbours, so only vertical slop is free.
 const TAB_SWITCHER_TRIGGER_HIT_SLOP = { top: 8, bottom: 8 } as const;
@@ -142,6 +144,7 @@ interface MobileWorkspaceTabSwitcherProps {
   createTerminalDisabled: boolean;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
+  onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
@@ -280,6 +283,7 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
   createTerminalDisabled,
   onCreateDraftTab,
   onCreateTerminal,
+  onCreateTerminalWithProfile,
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyTerminalId,
@@ -348,31 +352,49 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
     onCreateTerminal();
   }, [onCreateTerminal]);
 
+  const handleDismiss = useCallback(() => setIsOpen(false), []);
+
   const footer = useMemo(
     () => (
       <View style={styles.tabSwitcherFooter}>
-        <Button
-          testID="workspace-tab-switcher-new-agent"
-          style={styles.tabSwitcherFooterButton}
-          variant="secondary"
-          leftIcon={SquarePen}
-          onPress={handleNewAgent}
-        >
-          {t("workspace.header.actions.newAgent")}
-        </Button>
-        <Button
-          testID="workspace-tab-switcher-new-terminal"
-          style={styles.tabSwitcherFooterButton}
-          variant="secondary"
-          leftIcon={SquareTerminal}
+        <TabSwitcherTerminalProfiles
+          serverId={normalizedServerId}
           disabled={createTerminalDisabled}
-          onPress={handleNewTerminal}
-        >
-          {t("workspace.header.actions.newTerminal")}
-        </Button>
+          onCreateTerminalWithProfile={onCreateTerminalWithProfile}
+          onDismiss={handleDismiss}
+        />
+        <View style={styles.tabSwitcherFooterButtons}>
+          <Button
+            testID="workspace-tab-switcher-new-agent"
+            style={styles.tabSwitcherFooterButton}
+            variant="secondary"
+            leftIcon={SquarePen}
+            onPress={handleNewAgent}
+          >
+            {t("workspace.header.actions.newAgent")}
+          </Button>
+          <Button
+            testID="workspace-tab-switcher-new-terminal"
+            style={styles.tabSwitcherFooterButton}
+            variant="secondary"
+            leftIcon={SquareTerminal}
+            disabled={createTerminalDisabled}
+            onPress={handleNewTerminal}
+          >
+            {t("workspace.header.actions.newTerminal")}
+          </Button>
+        </View>
       </View>
     ),
-    [createTerminalDisabled, handleNewAgent, handleNewTerminal, t],
+    [
+      createTerminalDisabled,
+      handleDismiss,
+      handleNewAgent,
+      handleNewTerminal,
+      normalizedServerId,
+      onCreateTerminalWithProfile,
+      t,
+    ],
   );
 
   const renderTabOption = useCallback(
@@ -472,11 +494,15 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
 });
 
 const styles = StyleSheet.create((theme) => ({
+  // Terminal profiles above, the two everyday launches below where a thumb reaches them first.
   tabSwitcherFooter: {
-    flexDirection: "row",
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+  },
+  tabSwitcherFooterButtons: {
+    flexDirection: "row",
+    gap: theme.spacing[3],
   },
   tabSwitcherFooterButton: {
     flex: 1,
