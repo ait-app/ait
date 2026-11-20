@@ -23,7 +23,6 @@ import {
   SIDEBAR_RESIZE_FAIL_OFFSET,
 } from "@/components/sidebar-resize-handle-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
-import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/display-preferences/menu";
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
@@ -514,7 +513,6 @@ function MobileSidebar({
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
             parentGestureRef={closeGestureRef}
-            listHeaderComponent={workspacesSectionHeaderElement}
           />
         )}
 
@@ -690,7 +688,6 @@ function DesktopSidebar({
             onRefresh={handleRefresh}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
-            listHeaderComponent={workspacesSectionHeaderElement}
           />
         )}
 
@@ -719,31 +716,6 @@ function DesktopSidebar({
   );
 }
 
-function WorkspacesSectionHeader() {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.workspacesSectionHeader}>
-      <Text style={styles.workspacesSectionTitle}>{t("sidebar.sections.workspaces")}</Text>
-      <View style={styles.workspacesSectionActions}>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <View>
-              <SidebarDisplayPreferencesMenu />
-            </View>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label={t("sidebar.display.trigger")} />
-          </TooltipContent>
-        </Tooltip>
-      </View>
-    </View>
-  );
-}
-
-// Stable element so the sidebar list's listHeaderComponent prop keeps identity across
-// renders (WorkspacesSectionHeader takes no props).
-const workspacesSectionHeaderElement = <WorkspacesSectionHeader />;
-
 // Static styles for Animated.Views — must NOT use Unistyles dynamic theme to
 // avoid the "Unable to find node on an unmounted component" crash when Unistyles
 // tries to patch the native node that Reanimated also manages.
@@ -766,29 +738,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarHeaderGroupBelowChrome: {
     paddingTop: 0,
-  },
-  workspacesSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    // Rendered inside the scroll's listContent (paddingHorizontal spacing[2]). The title
-    // lands at spacing[2] left to align with project icons. Settings2's painted path stops
-    // inside its 14px SVG, so 4px aligns the ink rather than the SVG box to the row rail.
-    paddingLeft: theme.spacing[2],
-    paddingRight: 4,
-    paddingTop: theme.spacing[1],
-    paddingBottom: theme.spacing[1],
-  },
-  workspacesSectionTitle: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  workspacesSectionActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
   },
   sidebarContent: {
     flex: 1,

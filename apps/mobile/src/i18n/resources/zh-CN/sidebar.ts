@@ -68,7 +68,6 @@ export const sidebar = {
   },
   sections: {
     usage: "用量",
-    workspaces: "工作区",
     sessions: "历史",
     search: "搜索",
     schedules: "计划",

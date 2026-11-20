@@ -69,7 +69,6 @@ export const sidebar = {
   },
   sections: {
     usage: "使用量",
-    workspaces: "ワークスペース",
     sessions: "履歴",
     search: "検索",
     schedules: "スケジュール",

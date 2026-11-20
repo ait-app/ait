@@ -1,14 +1,25 @@
 import { groupHosts } from "@/hosts/host-groups";
 import {
+  createContext,
   useCallback,
+  useContext,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type ReactElement,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { View, type PressableStateCallbackType } from "react-native";
+import {
+  Platform,
+  Pressable,
+  StatusBar,
+  Text,
+  View,
+  type GestureResponderEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   Captions,
@@ -33,10 +44,12 @@ import {
   MenuSeparator,
   MenuSubTrigger,
   MenuSurface,
-  MenuTrigger,
+  useMenuContext,
   type MenuPageDefinition,
 } from "@/components/ui/menu";
-import { mutedIconColorMapping } from "@/components/ui/icon-color";
+import { measureElement } from "@/components/ui/menu/menu-anchor";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
@@ -155,6 +168,199 @@ const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
   timestamp: "sidebar.display.show.timestamp",
 };
 
+interface DisplayMenuHost {
+  /** The trigger the menu is open from, or null while it is closed. */
+  activeTriggerId: string | null;
+  toggle: (triggerId: string, trigger: View | null) => void;
+}
+
+const DisplayMenuHostContext = createContext<DisplayMenuHost | null>(null);
+
+/**
+ * The sidebar's one display menu, opened from a trigger on each row that heads a group.
+ *
+ * The menu belongs to the list rather than to any row because its own choices take rows away:
+ * filtering to another project, or switching the grouping, unmounts the row it was opened from.
+ * A menu living in that row would close under the pointer halfway through a selection. Here the
+ * triggers only say where to anchor, and the surface outlives them.
+ */
+export function SidebarDisplayPreferencesMenuHost({
+  children,
+}: {
+  children: ReactNode;
+}): ReactElement {
+  const [activeTriggerId, setActiveTriggerId] = useState<string | null>(null);
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) setActiveTriggerId(null);
+  }, []);
+  // Held here rather than in the surface: choosing "Manage labels" closes the menu, and the
+  // surface, which only exists while the menu is open, goes with it. The manager mounts on its
+  // first use and then stays, so closing it is its own transition rather than an unmount.
+  const [manager, setManager] = useState<"unused" | "open" | "closed">("unused");
+  const openManager = useCallback(() => setManager("open"), []);
+  const closeManager = useCallback(() => setManager("closed"), []);
+
+  return (
+    <>
+      <MenuRoot compactMode="sheet" open={activeTriggerId !== null} onOpenChange={handleOpenChange}>
+        <DisplayMenuTriggers activeTriggerId={activeTriggerId} onOpen={setActiveTriggerId}>
+          {children}
+        </DisplayMenuTriggers>
+        {/* Everything the menu reads is subscribed to only while it is open. */}
+        {activeTriggerId !== null ? (
+          <SidebarDisplayPreferencesSurface onManageLabels={openManager} />
+        ) : null}
+      </MenuRoot>
+      {manager === "unused" ? null : (
+        <WorkspaceLabelManagerModal visible={manager === "open"} onClose={closeManager} />
+      )}
+    </>
+  );
+}
+
+function DisplayMenuTriggers({
+  activeTriggerId,
+  onOpen,
+  children,
+}: {
+  activeTriggerId: string | null;
+  onOpen: (triggerId: string) => void;
+  children: ReactNode;
+}): ReactElement {
+  const menu = useMenuContext("SidebarDisplayPreferencesMenuHost");
+  const { setAnchorRect, setOpen, triggerRef } = menu;
+  const isOpen = activeTriggerId !== null;
+
+  const toggle = useCallback(
+    (triggerId: string, trigger: View | null) => {
+      if (isOpen) {
+        setOpen(false);
+        return;
+      }
+      // Focus returns here on close, when the trigger is still on screen.
+      Object.assign(triggerRef, { current: trigger });
+      if (!trigger) {
+        onOpen(triggerId);
+        return;
+      }
+      // Read synchronously so the offset cannot change before the measurement resolves. The
+      // surface is drawn from the screen top, and Android measures from below the status bar.
+      const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+      void measureElement(trigger).then((rect) => {
+        // A fixed box rather than the trigger itself: the row may be gone by the next layout.
+        setAnchorRect({ ...rect, y: rect.y + statusBarHeight });
+        onOpen(triggerId);
+        return undefined;
+      });
+    },
+    [isOpen, onOpen, setAnchorRect, setOpen, triggerRef],
+  );
+
+  const value = useMemo<DisplayMenuHost>(
+    () => ({ activeTriggerId, toggle }),
+    [activeTriggerId, toggle],
+  );
+  return (
+    <DisplayMenuHostContext.Provider value={value}>{children}</DisplayMenuHostContext.Provider>
+  );
+}
+
+/**
+ * A row's button for the display menu. `visible` is the row's own reveal rule (hover on desktop,
+ * always on touch); the trigger also stays in place for as long as the menu is open from it, so
+ * the menu is never left pointing at an empty slot.
+ */
+export function SidebarDisplayPreferencesTrigger({
+  triggerId,
+  visible = true,
+}: {
+  triggerId: string;
+  visible?: boolean;
+}): ReactElement {
+  const { t } = useTranslation();
+  const host = useContext(DisplayMenuHostContext);
+  if (!host) {
+    throw new Error(
+      "SidebarDisplayPreferencesTrigger must be used within SidebarDisplayPreferencesMenuHost",
+    );
+  }
+  const { activeTriggerId, toggle } = host;
+  const triggerRef = useRef<View>(null);
+  const active = activeTriggerId === triggerId;
+  const shown = visible || active;
+  const label = t("sidebar.display.trigger");
+
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      // The row underneath collapses its group on press.
+      event.stopPropagation();
+      toggle(triggerId, triggerRef.current);
+    },
+    [toggle, triggerId],
+  );
+  const triggerStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.trigger,
+      !shown && styles.triggerHidden,
+      (hovered || pressed || active) && styles.triggerHovered,
+    ],
+    [active, shown],
+  );
+  const renderIcon = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => (
+      <ThemedSettings2
+        size={14}
+        uniProps={hovered || pressed || active ? foregroundIconColorMapping : mutedIconColorMapping}
+      />
+    ),
+    [active],
+  );
+  const accessibilityState = useMemo(() => ({ expanded: active }), [active]);
+  const webExpandedState = useMemo(
+    () => (isWeb ? ({ "aria-expanded": active } as const) : null),
+    [active],
+  );
+
+  return (
+    <View style={styles.triggerSlot} pointerEvents={shown ? "auto" : "none"}>
+      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+        <TooltipTrigger asChild disabled={!shown || active}>
+          <Pressable
+            {...webExpandedState}
+            ref={triggerRef}
+            collapsable={false}
+            style={triggerStyle}
+            onPress={handlePress}
+            accessibilityRole={isWeb ? undefined : "button"}
+            accessibilityLabel={label}
+            accessibilityState={accessibilityState}
+            testID={`sidebar-display-preferences-menu-${triggerId}`}
+          >
+            {renderIcon}
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="center" offset={8}>
+          <Text style={styles.tooltipText}>{label}</Text>
+        </TooltipContent>
+      </Tooltip>
+    </View>
+  );
+}
+
+/**
+ * The display menu's trigger for a list with no row to carry one.
+ *
+ * A filter can leave the sidebar without a single group heading, and the menu is the only way
+ * back out of most filters, so a list in that state renders this in the headings' place.
+ */
+export function SidebarDisplayPreferencesFallbackRow(): ReactElement {
+  return (
+    <View style={styles.fallbackRow} testID="sidebar-display-preferences-fallback">
+      <SidebarDisplayPreferencesTrigger triggerId="fallback" />
+    </View>
+  );
+}
+
 /**
  * What the sidebar shows and how it is arranged.
  *
@@ -162,7 +368,11 @@ const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
  * shape is deliberate — every option of every decision on one surface is what this menu used to
  * be, and it grew a row for each host on top of that.
  */
-export function SidebarDisplayPreferencesMenu(): ReactElement {
+function SidebarDisplayPreferencesSurface({
+  onManageLabels,
+}: {
+  onManageLabels: () => void;
+}): ReactElement {
   const { t } = useTranslation();
   const preferences = useSidebarDisplayPreferences();
   const hosts = useHosts();
@@ -170,17 +380,6 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
   // from it would lose the row that undoes the filter as soon as the filter narrowed to one.
   const { allProjects, resolvedProjectFilters } = useSidebarModel();
   const { labels } = useWorkspaceLabelProjection();
-  const [managerOpen, setManagerOpen] = useState(false);
-  const openManager = useCallback(() => setManagerOpen(true), []);
-  const closeManager = useCallback(() => setManagerOpen(false), []);
-
-  const triggerStyle = useCallback(
-    ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.trigger,
-      hovered && styles.triggerHovered,
-    ],
-    [],
-  );
 
   const showHostFilter = groupHosts(hosts).length > 1;
   // One project is the whole sidebar, so filtering to it is a no-op with a menu row attached.
@@ -266,7 +465,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
         id: "labelFilter",
         title: t("workspaceLabels.title"),
         content: (
-          <LabelFilterPage labels={labels} preferences={preferences} onManage={openManager} />
+          <LabelFilterPage labels={labels} preferences={preferences} onManage={onManageLabels} />
         ),
       });
     }
@@ -281,89 +480,76 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     resolvedProjectFilters,
     showLabelFilter,
     labels,
-    openManager,
+    onManageLabels,
   ]);
 
   return (
-    <>
-      <MenuRoot compactMode="sheet">
-        <MenuTrigger
-          style={triggerStyle}
-          accessibilityRole={isWeb ? undefined : "button"}
-          accessibilityLabel={t("sidebar.display.trigger")}
-          testID="sidebar-display-preferences-menu"
-        >
-          <ThemedSettings2 size={14} uniProps={mutedIconColorMapping} />
-        </MenuTrigger>
-        <MenuSurface
-          align="end"
-          width={MENU_WIDTH}
-          pages={pages}
-          sheetTitle={t("sidebar.display.heading")}
-          testID="sidebar-display-preferences-content"
-        >
+    <MenuSurface
+      align="end"
+      width={MENU_WIDTH}
+      pages={pages}
+      sheetTitle={t("sidebar.display.heading")}
+      testID="sidebar-display-preferences-content"
+    >
+      <MenuSubTrigger
+        id="grouping"
+        value={t(GROUPING_LABEL_KEYS[preferences.grouping])}
+        testID="sidebar-display-grouping"
+      >
+        {t("sidebar.display.grouping.label")}
+      </MenuSubTrigger>
+      <MenuSubTrigger
+        id="titleSource"
+        value={t(TITLE_SOURCE_LABEL_KEYS[preferences.titleSource])}
+        testID="sidebar-display-title-source"
+      >
+        {t("sidebar.display.titleSource.label")}
+      </MenuSubTrigger>
+      <MenuSubTrigger id="show" testID="sidebar-display-show">
+        {t("sidebar.display.show.label")}
+      </MenuSubTrigger>
+      {showHostFilter ? (
+        <>
+          <MenuSeparator />
+          {/* A filtered sidebar looks like workspaces went missing, so the branch says so
+            from the root rather than making you open it to find out. */}
           <MenuSubTrigger
-            id="grouping"
-            value={t(GROUPING_LABEL_KEYS[preferences.grouping])}
-            testID="sidebar-display-grouping"
+            id="hostFilter"
+            indicator={preferences.hostFilters.length > 0}
+            testID="sidebar-display-host-filter"
           >
-            {t("sidebar.display.grouping.label")}
+            {t("sidebar.display.hostFilter.label")}
           </MenuSubTrigger>
+        </>
+      ) : null}
+      {showProjectFilter ? (
+        <>
+          {/* Host and Project narrow the same list, so they read as one block. The separator
+            belongs above whichever of the two is showing first — with a single host there is
+            no Host row and Project is what has to carry it. */}
+          {showHostFilter ? null : <MenuSeparator />}
           <MenuSubTrigger
-            id="titleSource"
-            value={t(TITLE_SOURCE_LABEL_KEYS[preferences.titleSource])}
-            testID="sidebar-display-title-source"
+            id="projectFilter"
+            indicator={resolvedProjectFilters.length > 0}
+            testID="sidebar-display-project-filter"
           >
-            {t("sidebar.display.titleSource.label")}
+            {t("sidebar.display.projectFilter.label")}
           </MenuSubTrigger>
-          <MenuSubTrigger id="show" testID="sidebar-display-show">
-            {t("sidebar.display.show.label")}
+        </>
+      ) : null}
+      {showLabelFilter ? (
+        <>
+          <MenuSeparator />
+          <MenuSubTrigger
+            id="labelFilter"
+            indicator={hasActiveSidebarLabelFilter(preferences.labelFilter)}
+            testID="sidebar-display-label-filter"
+          >
+            {t("workspaceLabels.title")}
           </MenuSubTrigger>
-          {showHostFilter ? (
-            <>
-              <MenuSeparator />
-              {/* A filtered sidebar looks like workspaces went missing, so the branch says so
-                from the root rather than making you open it to find out. */}
-              <MenuSubTrigger
-                id="hostFilter"
-                indicator={preferences.hostFilters.length > 0}
-                testID="sidebar-display-host-filter"
-              >
-                {t("sidebar.display.hostFilter.label")}
-              </MenuSubTrigger>
-            </>
-          ) : null}
-          {showProjectFilter ? (
-            <>
-              {/* Host and Project narrow the same list, so they read as one block. The separator
-                belongs above whichever of the two is showing first — with a single host there is
-                no Host row and Project is what has to carry it. */}
-              {showHostFilter ? null : <MenuSeparator />}
-              <MenuSubTrigger
-                id="projectFilter"
-                indicator={resolvedProjectFilters.length > 0}
-                testID="sidebar-display-project-filter"
-              >
-                {t("sidebar.display.projectFilter.label")}
-              </MenuSubTrigger>
-            </>
-          ) : null}
-          {showLabelFilter ? (
-            <>
-              <MenuSeparator />
-              <MenuSubTrigger
-                id="labelFilter"
-                indicator={hasActiveSidebarLabelFilter(preferences.labelFilter)}
-                testID="sidebar-display-label-filter"
-              >
-                {t("workspaceLabels.title")}
-              </MenuSubTrigger>
-            </>
-          ) : null}
-        </MenuSurface>
-      </MenuRoot>
-      <WorkspaceLabelManagerModal visible={managerOpen} onClose={closeManager} />
-    </>
+        </>
+      ) : null}
+    </MenuSurface>
   );
 }
 
@@ -763,15 +949,38 @@ function HostFilterItem({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // The 24pt control the rows' other trailing actions use, so a row's buttons read as one set.
+  triggerSlot: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   trigger: {
-    width: 28,
-    height: 28,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
+    flexShrink: 0,
+  },
+  triggerHidden: {
+    opacity: 0,
   },
   triggerHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface2,
+  },
+  tooltipText: {
+    color: theme.colors.popoverForeground,
+    fontSize: theme.fontSize.base,
+  },
+  fallbackRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    // Lands the glyph on the rail the rows' trailing actions sit on.
+    paddingRight: 2,
+    paddingVertical: theme.spacing[1],
   },
   // The icon sits in a 14pt menu slot, so the fallback initial is sized down to match rather
   // than reusing the sidebar row's 16pt figure.

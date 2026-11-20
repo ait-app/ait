@@ -69,7 +69,6 @@ export const sidebar = {
   },
   sections: {
     usage: "Использование",
-    workspaces: "Рабочие пространства",
     sessions: "История",
     search: "Поиск",
     schedules: "Расписания",

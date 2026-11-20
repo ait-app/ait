@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { getServerId } from "./server-id";
 
 interface ContextMenuAnchor {
@@ -166,11 +166,35 @@ export async function expectWorkspaceAbsentFromSidebar(
   ).toHaveCount(0, { timeout: 30_000 });
 }
 
+// The display-preferences menu opens from a button on every row that heads a group: a project
+// row, or a status group's header. A list left with no such row shows the button on a row of its
+// own. Any of them opens the same menu, so callers take whichever comes first.
+export function sidebarDisplayPreferencesTrigger(page: Page): Locator {
+  return page.locator('[data-testid^="sidebar-display-preferences-menu-"]').first();
+}
+
+async function pressSidebarDisplayPreferencesTrigger(page: Page): Promise<void> {
+  const trigger = sidebarDisplayPreferencesTrigger(page);
+  // A row reveals its button on hover, and until then the button ignores the pointer. Forcing the
+  // hover puts the pointer over the row without waiting for a button that cannot answer yet.
+  await trigger.hover({ force: true });
+  await trigger.click();
+}
+
+// Waits for the popover by its test id, which the compact layout's bottom sheet does not carry:
+// a touch-layout caller goes through `openSidebarDisplayPage` instead.
+export async function openSidebarDisplayPreferences(page: Page): Promise<void> {
+  await pressSidebarDisplayPreferencesTrigger(page);
+  await expect(page.getByTestId("sidebar-display-preferences-content")).toBeVisible({
+    timeout: 10_000,
+  });
+}
+
 // The display-preferences menu is one row per decision, and the options sit a page below that
 // row. Every caller has to walk the same path, so it lives here: when the menu's shape moves
 // again, this is the only place that has to follow.
 export async function openSidebarDisplayPage(page: Page, branchTestID: string): Promise<void> {
-  await page.getByTestId("sidebar-display-preferences-menu").click();
+  await pressSidebarDisplayPreferencesTrigger(page);
   await page.getByTestId(branchTestID).click();
 }
 

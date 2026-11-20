@@ -1,11 +1,4 @@
-import {
-  memo,
-  useCallback,
-  useMemo,
-  type MutableRefObject,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { memo, useCallback, useMemo, type MutableRefObject, type ReactElement } from "react";
 import {
   View,
   Text,
@@ -24,6 +17,10 @@ import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
 import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
+import {
+  SidebarDisplayPreferencesFallbackRow,
+  SidebarDisplayPreferencesTrigger,
+} from "@/components/sidebar/display-preferences/menu";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -95,8 +92,7 @@ interface StatusWorkspaceListProps {
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
-  listHeaderComponent?: ReactNode;
-  /** Swaps the group list for the label filter's empty state. Never the header above it. */
+  /** Swaps the group list for the label filter's empty state. */
   sidebarFilterEmpty?: boolean;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   /** Native pull-to-refresh control for the scroll view. */
@@ -113,7 +109,6 @@ export function SidebarStatusWorkspaceList({
   hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
-  listHeaderComponent,
   sidebarFilterEmpty = false,
   parentGestureRef,
   refreshControl,
@@ -184,7 +179,10 @@ export function SidebarStatusWorkspaceList({
           )}
         </View>
       ) : null}
-      {listHeaderComponent}
+      {/* Each group header carries the display menu's trigger. With no header on screen the
+        trigger gets a row of its own, or a filter that emptied the list — or this grouping
+        itself — would have no way back. */}
+      {sidebarFilterEmpty || groups.length === 0 ? <SidebarDisplayPreferencesFallbackRow /> : null}
       {sidebarFilterEmpty ? (
         <SidebarFilterEmptyState />
       ) : (
@@ -368,6 +366,7 @@ function StatusGroupHeader({
 }) {
   const { t } = useTranslation();
   const { isHovered, hoverHandlers } = useSidebarRowHover();
+  const isCompact = useIsCompactFormFactor();
   const toggleWorkspaceGroupCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleWorkspaceGroupCollapsed,
   );
@@ -407,6 +406,12 @@ function StatusGroupHeader({
               {group.label}
             </Text>
           </View>
+        </View>
+        <View style={styles.statusGroupTrailingActions}>
+          <SidebarDisplayPreferencesTrigger
+            triggerId={`status-${group.key}`}
+            visible={isHovered || platformIsNative || isCompact}
+          />
         </View>
       </Pressable>
     </View>
@@ -647,6 +652,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusGroupRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  statusGroupTrailingActions: {
+    flexShrink: 0,
+    // The 24pt control would grow the 36pt row by its own padding; let it overhang instead, and
+    // pull its glyph onto the rail the project rows' trailing actions use.
+    marginVertical: -2,
+    marginRight: -6,
   },
   statusGroupRowPressed: {
     backgroundColor: theme.colors.surface2,

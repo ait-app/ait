@@ -68,7 +68,6 @@ export const sidebar = {
   },
   sections: {
     usage: "الاستخدام",
-    workspaces: "مساحات العمل",
     sessions: "السجل",
     search: "بحث",
     schedules: "الجداول",

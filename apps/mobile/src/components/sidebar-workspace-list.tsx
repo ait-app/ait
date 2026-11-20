@@ -125,6 +125,11 @@ import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
+import {
+  SidebarDisplayPreferencesFallbackRow,
+  SidebarDisplayPreferencesMenuHost,
+  SidebarDisplayPreferencesTrigger,
+} from "@/components/sidebar/display-preferences/menu";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
 import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
@@ -192,9 +197,6 @@ interface SidebarWorkspaceListProps {
   onAddProject?: () => void;
   onImportSession?: () => void;
   listFooterComponent?: ReactElement | null;
-  // Rendered inside the scroll area, below the Pinned section and above the workspace
-  // list. Holds the "Workspaces" section header so pinned items sit above it.
-  listHeaderComponent?: ReactElement | null;
   /** Gesture ref for coordinating with parent gestures (e.g., sidebar close) */
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
 }
@@ -276,6 +278,10 @@ function ProjectRowTrailingActions({
           testID={`sidebar-project-new-worktree-${projectViewKey}`}
         />
       ) : null}
+      <SidebarDisplayPreferencesTrigger
+        triggerId={`project-${projectViewKey}`}
+        visible={actionsVisible}
+      />
       <View
         style={!actionsVisible && styles.projectKebabButtonHidden}
         pointerEvents={actionsVisible ? "auto" : "none"}
@@ -1279,7 +1285,6 @@ export function SidebarWorkspaceList({
   onAddProject,
   onImportSession,
   listFooterComponent,
-  listHeaderComponent,
   parentGestureRef,
 }: SidebarWorkspaceListProps) {
   const pathname = usePathname();
@@ -1303,8 +1308,9 @@ export function SidebarWorkspaceList({
   const projectIconByProjectViewKey = useProjectIcons({ projects: projectIconTargets });
 
   // A filter that matches nothing swaps the list's body and nothing above it. It used to replace
-  // this whole subtree, which unmounted the header — and the header is where the display menu's
-  // trigger lives, so filtering the last row away closed the menu you were filtering from.
+  // this whole subtree, which unmounted the display menu you were filtering from. The menu now
+  // belongs to the host below, above both list modes, for the same reason: its own choices
+  // (a filter, the grouping) remove the very rows that carry its triggers.
   //
   // Only the label filter can get here. The project filter resolves against the projects it can
   // see and falls back to "all projects" when nothing matches, so it either keeps at least one
@@ -1321,47 +1327,47 @@ export function SidebarWorkspaceList({
   // Project mode is the one that keeps its project headers; every other grouping mode is a flat
   // list of grouped rows, so a new mode lands in the grouped branch rather than silently in this
   // one's `else`.
-  return groupMode !== "project" ? (
-    <SidebarGroupedModeList
-      workspaceGroups={workspaceGroups}
-      pinnedGroups={pinnedGroups}
-      workspaceEntriesByKey={workspaceEntriesByKey}
-      projectIconByProjectViewKey={projectIconByProjectViewKey}
-      shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-      onWorkspacePress={onWorkspacePress}
-      hostBadgeByServerId={hostBadgeByServerId}
-      supportsPinningByServerId={supportsPinningByServerId}
-      onToggleWorkspacePin={onToggleWorkspacePin}
-      listHeaderComponent={listHeaderComponent}
-      sidebarFilterEmpty={sidebarFilterEmpty}
-      parentGestureRef={parentGestureRef}
-      refreshControl={refreshControl}
-    />
-  ) : (
-    <ProjectModeList
-      projects={projects}
-      pinnedGroups={pinnedGroups}
-      workspaceEntriesByKey={workspaceEntriesByKey}
-      projectIconByProjectViewKey={projectIconByProjectViewKey}
-      collapsedProjectKeys={collapsedProjectKeys}
-      onToggleProjectCollapsed={onToggleProjectCollapsed}
-      shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-      onWorkspacePress={onWorkspacePress}
-      onAddProject={onAddProject}
-      onImportSession={onImportSession}
-      listFooterComponent={listFooterComponent}
-      listHeaderComponent={listHeaderComponent}
-      sidebarFilterEmpty={sidebarFilterEmpty}
-      parentGestureRef={parentGestureRef}
-      hasActiveProjectFilter={hasActiveProjectFilter}
-      pathname={pathname}
-      hostBadgeByServerId={hostBadgeByServerId}
-      supportsMultiplicityByServerId={supportsMultiplicityByServerId}
-      supportsPinningByServerId={supportsPinningByServerId}
-      onToggleWorkspacePin={onToggleWorkspacePin}
-      refreshControl={refreshControl}
-    />
-  );
+  const list =
+    groupMode !== "project" ? (
+      <SidebarGroupedModeList
+        workspaceGroups={workspaceGroups}
+        pinnedGroups={pinnedGroups}
+        workspaceEntriesByKey={workspaceEntriesByKey}
+        projectIconByProjectViewKey={projectIconByProjectViewKey}
+        shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+        onWorkspacePress={onWorkspacePress}
+        hostBadgeByServerId={hostBadgeByServerId}
+        supportsPinningByServerId={supportsPinningByServerId}
+        onToggleWorkspacePin={onToggleWorkspacePin}
+        sidebarFilterEmpty={sidebarFilterEmpty}
+        parentGestureRef={parentGestureRef}
+        refreshControl={refreshControl}
+      />
+    ) : (
+      <ProjectModeList
+        projects={projects}
+        pinnedGroups={pinnedGroups}
+        workspaceEntriesByKey={workspaceEntriesByKey}
+        projectIconByProjectViewKey={projectIconByProjectViewKey}
+        collapsedProjectKeys={collapsedProjectKeys}
+        onToggleProjectCollapsed={onToggleProjectCollapsed}
+        shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+        onWorkspacePress={onWorkspacePress}
+        onAddProject={onAddProject}
+        onImportSession={onImportSession}
+        listFooterComponent={listFooterComponent}
+        sidebarFilterEmpty={sidebarFilterEmpty}
+        parentGestureRef={parentGestureRef}
+        hasActiveProjectFilter={hasActiveProjectFilter}
+        pathname={pathname}
+        hostBadgeByServerId={hostBadgeByServerId}
+        supportsMultiplicityByServerId={supportsMultiplicityByServerId}
+        supportsPinningByServerId={supportsPinningByServerId}
+        onToggleWorkspacePin={onToggleWorkspacePin}
+        refreshControl={refreshControl}
+      />
+    );
+  return <SidebarDisplayPreferencesMenuHost>{list}</SidebarDisplayPreferencesMenuHost>;
 }
 
 /**
@@ -1380,7 +1386,6 @@ function SidebarGroupedModeList({
   hostBadgeByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
-  listHeaderComponent,
   sidebarFilterEmpty,
   parentGestureRef,
   refreshControl,
@@ -1394,7 +1399,6 @@ function SidebarGroupedModeList({
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
-  listHeaderComponent?: ReactElement | null;
   sidebarFilterEmpty: boolean;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
   refreshControl?: ReactElement<RefreshControlProps>;
@@ -1420,7 +1424,6 @@ function SidebarGroupedModeList({
       hostBadgeByServerId={hostBadgeByServerId}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
-      listHeaderComponent={listHeaderComponent}
       sidebarFilterEmpty={sidebarFilterEmpty}
       parentGestureRef={parentGestureRef}
       refreshControl={refreshControl}
@@ -1440,7 +1443,6 @@ function ProjectModeList({
   onAddProject,
   onImportSession,
   listFooterComponent,
-  listHeaderComponent,
   sidebarFilterEmpty,
   hasActiveProjectFilter,
   parentGestureRef,
@@ -1459,7 +1461,7 @@ function ProjectModeList({
   | "isRefreshing"
   | "onRefresh"
 > & {
-  /** Swaps the list body for the label filter's empty state. Never the header above it. */
+  /** Swaps the list body for the label filter's empty state. */
   sidebarFilterEmpty: boolean;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   pathname: string;
@@ -1597,18 +1599,16 @@ function ProjectModeList({
           )}
         </View>
       ) : null}
-      {/* The header carries the display menu, which is the only way back out of a filter, so it
-        stays for as long as a filter is what emptied the list. It is absent only when the
-        sidebar is genuinely empty, where a section heading would sit over nothing.
+      {/* Each project row carries the display menu's trigger, and the menu is the only way back
+        out of a filter. So when a filter is what left no project row on screen, the trigger gets
+        a row of its own. It is absent only when the sidebar is genuinely empty.
         Every filter that can empty this branch needs a term here: a project filter pinned to a
         project whose chats are all pinned leaves `unpinnedProjects` empty, and without its term
-        the header would go with it, taking the only route back to the filter page. */}
-      {unpinnedProjects.length > 0 ||
-      hasActiveHostFilter ||
-      hasActiveProjectFilter ||
-      sidebarFilterEmpty
-        ? listHeaderComponent
-        : null}
+        the only route back to the filter page would go with the rows. */}
+      {unpinnedProjects.length === 0 &&
+      (hasActiveHostFilter || hasActiveProjectFilter || sidebarFilterEmpty) ? (
+        <SidebarDisplayPreferencesFallbackRow />
+      ) : null}
       {sidebarFilterEmpty ? <SidebarFilterEmptyState /> : projectBody}
       {listFooterComponent}
     </>
@@ -1650,8 +1650,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   listContent: {
     paddingHorizontal: theme.spacing[2],
-    // Optical inset: aligns the visible Pinned/Workspaces glyph edge with the
-    // Schedules icon across the divider; their layout boxes have different insets.
+    // Optical inset: aligns the visible Pinned glyph edge with the Schedules icon across the
+    // divider; their layout boxes have different insets.
     paddingTop: 2,
     paddingBottom: theme.spacing[4],
   },

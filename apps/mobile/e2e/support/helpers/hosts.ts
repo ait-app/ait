@@ -3,6 +3,7 @@ import { identityForeground, type IdentityColorName } from "@/styles/identity-co
 import { openSettings } from "./app";
 import { buildSeededHost } from "./daemon-registry";
 import { clickSettingsBackToWorkspace, openHostSection, selectSettingsHost } from "./settings";
+import { openSidebarDisplayPreferences } from "./sidebar";
 
 const REGISTRY_KEY = "@paseo:daemon-registry";
 const SEED_NONCE_KEY = "@paseo:e2e-seed-nonce";
@@ -121,13 +122,6 @@ export async function waitForConnectedHost(
   await expect(host).toContainText(input.endpoint, { timeout: 30_000 });
   await page.keyboard.press("Escape");
   await expect(host).not.toBeVisible();
-}
-
-export async function openSidebarDisplayPreferences(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-display-preferences-menu").click();
-  await expect(page.getByTestId("sidebar-display-preferences-content")).toBeVisible({
-    timeout: 10_000,
-  });
 }
 
 // Host filters live a page below the display-preferences root, so the filter rows only exist
