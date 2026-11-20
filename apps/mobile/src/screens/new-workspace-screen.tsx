@@ -1650,8 +1650,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     <View testID="new-workspace-ref-picker-row" style={styles.formStack} pointerEvents="box-none">
       {hostControl ? <FormRow>{hostControl}</FormRow> : null}
       <FormRow>{projectControl}</FormRow>
-      {baseControl ? <FormRow>{baseControl}</FormRow> : null}
       {isolationControl ? <FormRow>{isolationControl}</FormRow> : null}
+      {baseControl ? <FormRow>{baseControl}</FormRow> : null}
       <FormRow>{launchControl}</FormRow>
       {/* Keep fixed stack height without separating the visible controls. */}
       {isolationControl ? null : <View style={styles.baseSpacer} pointerEvents="none" />}
@@ -1665,8 +1665,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     >
       {hostControl}
       {projectControl}
-      {baseControl}
       {isolationControl}
+      {baseControl}
       <View style={styles.launchSpacer} pointerEvents="none" />
       {launchControl}
     </View>
