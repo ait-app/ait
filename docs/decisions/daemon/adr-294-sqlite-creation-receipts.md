@@ -1,5 +1,5 @@
 ---
-id: ADR-292
+id: ADR-294
 status: accepted
 date: 2026-11-20
 amends:
@@ -11,7 +11,7 @@ paths:
   - bins/daemon
 ---
 
-# ADR-292：创建回执按键存入 SQLite
+# ADR-294：创建回执按键存入 SQLite
 
 ## 背景
 

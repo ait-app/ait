@@ -30,7 +30,7 @@
 - `workspace.create.request` 以 `idempotencyKey` 写持久创建回执：相同意图重放已有结果（包括重启后），
   同一 key 携带不同意图返回 `idempotency_conflict`（[ADR-060](../decisions/workspace/adr-060-workspace-create-worktree.md)）。
   回执按键存入 `creations/receipts.sqlite3`。首次启动在同一事务中导入旧 JSON，保留原文件作为升级前备份
-  （[ADR-292](../decisions/daemon/adr-292-sqlite-creation-receipts.md)）。
+  （[ADR-294](../decisions/daemon/adr-294-sqlite-creation-receipts.md)）。
 - Worktree 创建先执行 Git，再登记 Workspace；调用方预留的 `workspaceId` 已存在时拒绝，登记失败时移除
   刚创建的 worktree（[ADR-060](../decisions/workspace/adr-060-workspace-create-worktree.md)）。
 - 只有首次成功创建 worktree 才启动 metadata `workspace_automation` 中的 setup；setup 失败不撤销创建，
