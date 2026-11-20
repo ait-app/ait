@@ -9,6 +9,9 @@ use model::creation::{Creations, ReceiptStore};
 
 use crate::registry::FileRegistry;
 
+// Older versions wrote receipts without a limit, including inline images in creation intents.
+const MAX_CREATION_RECEIPT_BYTES: u64 = 128 * 1024 * 1024;
+
 /// File-backed creation receipts; clones share the committed cache and serialization lock.
 #[derive(Debug, Clone)]
 struct FileReceiptStore {
@@ -20,7 +23,11 @@ impl FileReceiptStore {
     #[must_use]
     fn new(path: PathBuf) -> Self {
         Self {
-            registry: Arc::new(FileRegistry::new(path, |receipt| &receipt.id)),
+            registry: Arc::new(FileRegistry::with_max_bytes(
+                path,
+                |receipt| &receipt.id,
+                MAX_CREATION_RECEIPT_BYTES,
+            )),
         }
     }
 }

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use indexmap::IndexMap;
 use serde::{Serialize, de::DeserializeOwned};
 
-/// Largest registry file the loader accepts, like the other document stores.
+/// Default maximum size of a registry file.
 pub(crate) const MAX_REGISTRY_BYTES: u64 = 32 * 1024 * 1024;
 
 /// A registry load, validation, or commit failed.
@@ -37,6 +37,7 @@ pub(crate) type Records<R> = IndexMap<String, Arc<R>>;
 /// Hosts must serialize independent writers with a data-directory lease.
 pub(crate) struct FileRegistry<R, E = Error> {
     path: PathBuf,
+    max_bytes: u64,
     state: Mutex<State<R>>,
     writer: Writer<E>,
     id: fn(&R) -> &str,
@@ -61,8 +62,15 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     /// Create a lazy registry at `path`, keyed by the identity returned by `id`.
     #[must_use]
     pub(crate) fn new(path: PathBuf, id: fn(&R) -> &str) -> Self {
+        Self::with_max_bytes(path, id, MAX_REGISTRY_BYTES)
+    }
+
+    /// Create a lazy registry keyed by `id`, with the same byte limit for reads and writes.
+    #[must_use]
+    pub(crate) fn with_max_bytes(path: PathBuf, id: fn(&R) -> &str, max_bytes: u64) -> Self {
         Self {
             path,
+            max_bytes,
             state: Mutex::new(State {
                 loaded: false,
                 frozen: false,
@@ -92,7 +100,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
         let mut state = self.state.lock().map_err(|_| E::from(Error::Frozen))?;
         if !state.loaded {
             let records: Vec<R> = match crate::File::new(self.path.clone())
-                .read_limited(MAX_REGISTRY_BYTES)
+                .read_limited(self.max_bytes)
             {
                 Ok(bytes) => {
                     serde_json::from_slice(&bytes).map_err(|_| E::from(Error::InvalidFile))?
@@ -100,7 +108,15 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
                 Err(crate::Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                     Vec::new()
                 }
-                Err(crate::Error::TooLarge) => return Err(E::from(Error::InvalidFile)),
+                Err(crate::Error::TooLarge) => {
+                    tracing::error!(
+                        path = %self.path.display(),
+                        size_bytes = ?self.path.metadata().ok().map(|metadata| metadata.len()),
+                        limit_bytes = self.max_bytes,
+                        "registry file exceeds the read limit"
+                    );
+                    return Err(E::from(Error::InvalidFile));
+                }
                 Err(_) => return Err(E::from(Error::Io)),
             };
             for record in records {
@@ -219,7 +235,13 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
             let records: Vec<&R> = staged.values().collect();
             let bytes =
                 serde_json::to_vec_pretty(&records).map_err(|_| E::from(Error::InvalidRecord))?;
-            if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_REGISTRY_BYTES) {
+            if u64::try_from(bytes.len()).map_or(true, |length| length > self.max_bytes) {
+                tracing::error!(
+                    path = %self.path.display(),
+                    size_bytes = bytes.len(),
+                    limit_bytes = self.max_bytes,
+                    "registry update exceeds the write limit"
+                );
                 return Err(E::from(Error::InvalidRecord));
             }
             // Validate programmatically constructed records too (e.g. positive request numbers).

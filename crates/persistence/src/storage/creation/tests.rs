@@ -7,6 +7,51 @@ use serde_json::{Value, json};
 use super::*;
 
 #[test]
+fn oversized_legacy_receipts_can_be_replayed_and_updated() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("receipts.json");
+    let creations = open(path.clone()).unwrap();
+    let intent = json!({"agent": {"images": []}});
+    let admitted = creations
+        .begin(Kind::Workspace, "legacy", intent.clone())
+        .unwrap();
+    let completed = creations
+        .advance(&admitted.snapshot, Phase::Completed, None, None)
+        .unwrap();
+    drop(creations);
+
+    let mut receipts: Vec<Receipt> =
+        serde_json::from_reader(std::fs::File::open(&path).unwrap()).unwrap();
+    receipts[0].intent["agent"]["images"] =
+        json!(["A".repeat(usize::try_from(crate::registry::MAX_REGISTRY_BYTES).unwrap())]);
+    let file = std::fs::File::create(&path).unwrap();
+    serde_json::to_writer_pretty(std::io::BufWriter::new(file), &receipts).unwrap();
+    assert!(path.metadata().unwrap().len() > crate::registry::MAX_REGISTRY_BYTES);
+    let legacy_intent = receipts.pop().unwrap().intent;
+
+    let creations = open(path.clone()).unwrap();
+    let replay = creations
+        .begin(Kind::Workspace, "legacy", legacy_intent)
+        .unwrap();
+    assert!(!replay.execute);
+    assert_eq!(replay.snapshot, completed);
+    assert!(
+        creations
+            .begin(Kind::Agent, "new", json!({}))
+            .unwrap()
+            .execute
+    );
+    drop(creations);
+
+    let reopened = open(path).unwrap();
+    assert_eq!(
+        reopened.snapshot(Kind::Workspace, "legacy").unwrap(),
+        Some(completed)
+    );
+    assert!(reopened.snapshot(Kind::Agent, "new").unwrap().is_some());
+}
+
+#[test]
 fn operation_progress_is_untagged_and_ends_with_its_guard() {
     let creations = Creations::default();
     let (outbound, mut receiver) = Outbound::new();
