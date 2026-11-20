@@ -29,7 +29,6 @@
 - [Provider TODO](architecture/provider.md#原生-todo)：原生任务完整快照、支持范围与输入区 TODO 胶囊。
 - [OpenCode 子会话终态核对](decisions/providers/adr-237-opencode-child-terminal-readback.md)：已验证的原生子项通过只读持久记录纠正遗漏的完成通知。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
-- [Workspace 与 Agent 创建回执](architecture/workspace.md#登记与生命周期)：重试、存储与升级。
 - [主机资源监控](architecture/connection.md#主机资源监控)：侧栏读数、历史与采样生命周期。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 - [会话导出](architecture/provider.md#会话导出)：下载整个已保存 Timeline 或对话内容为 Markdown/HTML，不打断活动轮次。

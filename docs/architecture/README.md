@@ -67,8 +67,6 @@ RPC envelope 的 JSON 编解码由 `model::rpc` 统一提供；metadata 与 file
   连接 envelope、协议版本、错误码和预算归 `model::server`，方法元数据归 `model::methods`。
 - `persistence` 实现 Registry、配置、创建回执、push token、Agent runtime、Bot 和 schedule 的文件存储。
   功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
-- 创建回执使用独立 SQLite 库按键保存请求指纹、资源认领与压缩快照，升级时流式导入旧 JSON。
-  见 [Workspace 创建与重试](workspace.md#登记与生命周期) 和 [ADR-292](../decisions/daemon/adr-292-indexed-creation-receipts.md)。
 - `agents/agents.json` 由 `AgentsStatus` 缓存在内存：结构性变更立即写入，用量、runtime 信息与输入
   时间戳经 `update_status` 延迟，每分钟或关闭时写出；未正常关闭的文件按 `lastChangedAt` 由
   daemon 启动时从 Timeline 补齐输入时间戳（[ADR-288](../decisions/daemon/adr-288-deferred-agent-status-writes.md)）。

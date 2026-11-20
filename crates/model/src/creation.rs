@@ -13,31 +13,29 @@ use crate::ErrorCode;
 use crate::events::{EventHub, Subscription};
 use crate::outbound::Outbound;
 
-/// Stable request fingerprints shared with legacy receipt migration.
-pub mod fingerprint;
-
 /// Blocking persistence boundary for creation receipts; implementations own storage mechanics.
 pub trait ReceiptStore: std::fmt::Debug + Send + Sync {
+    /// Return all committed receipts to restore resource claims at startup.
+    /// # Errors
+    /// Returns `RegistryIo` if persisted state cannot be loaded.
+    fn list(&self) -> Result<Vec<Receipt>, ErrorCode>;
+
     /// Return the receipt for `id`, or none when it has not been committed.
     /// # Errors
     /// Returns `RegistryIo` when storage is unavailable.
     fn get(&self, id: &str) -> Result<Option<Receipt>, ErrorCode>;
 
-    /// Atomically store a receipt and its resource claims before publishing progress.
-    /// `expected_revision` is absent for insertion, or the revision being replaced for an update.
+    /// Durably replace `receipt` before publishing its progress or claiming resources.
     /// # Errors
-    /// Returns `IdempotencyConflict` for stale writes or conflicting keys/resources, and `RegistryIo`
-    /// for storage failures or `ResourceExhausted` for a full database.
-    /// Failures preserve the prior receipt and resource claims.
-    fn put(&self, receipt: Receipt, expected_revision: Option<u64>) -> Result<(), ErrorCode>;
+    /// Returns `RegistryIo` on failure; implementations preserve the prior committed record.
+    fn put(&self, receipt: Receipt) -> Result<(), ErrorCode>;
 }
 
 #[derive(Debug, Default)]
 struct State {
     memory: BTreeMap<String, Receipt>,
     active: BTreeSet<String>,
-    claimed_workspaces: BTreeSet<String>,
-    claimed_agents: BTreeSet<String>,
+    claimed: BTreeSet<String>,
 }
 
 /// Shared creation coordinator with injected persistence; embedded defaults are ephemeral.
@@ -54,13 +52,23 @@ impl Creations {
         self.events.set_publisher(publisher);
     }
 
-    /// Attach an initialized store and query durable claims on demand.
-    #[must_use]
-    pub fn with_store(store: Arc<dyn ReceiptStore>) -> Self {
-        Self {
+    /// Load receipts from `store` without retrying interrupted work; return a shared coordinator.
+    /// # Errors
+    /// Returns the store's load error before accepting any new creation side effects.
+    pub fn with_store(store: Arc<dyn ReceiptStore>) -> Result<Self, ErrorCode> {
+        let claimed = store
+            .list()?
+            .iter()
+            .flat_map(|receipt| owned_resources(&receipt.snapshot))
+            .collect();
+        Ok(Self {
             store: Some(store),
+            state: Arc::new(Mutex::new(State {
+                claimed,
+                ..State::default()
+            })),
             ..Self::default()
-        }
+        })
     }
 
     /// Atomically reserve a resource identity for an immutable creation intent.
@@ -69,51 +77,68 @@ impl Creations {
     /// Returns invalid keys, key conflicts or durable storage failures before any side effects.
     pub fn begin(&self, kind: Kind, key: &str, intent: Value) -> Result<Admission, ErrorCode> {
         validate_key(key)?;
-        let intent_hash = fingerprint::of(&intent);
-        let workspace_id = intent["workspaceId"].as_str().map(str::to_owned);
-        let (needs_agent, agent_id) = match kind {
-            Kind::Agent => (true, intent["agentId"].as_str()),
-            Kind::Workspace => (
-                intent["agent"].is_object(),
-                intent["agent"]["agentId"].as_str(),
-            ),
-        };
-        let agent_id = agent_id.map(str::to_owned);
-        // Release request images and attachments before waiting for receipt I/O.
-        drop(intent);
         let id = identity(kind, key);
         let mut state = self.state.lock().map_err(io)?;
         if let Some(receipt) = self.read(&state, &id)? {
-            return self.replay(&mut state, receipt, &intent_hash);
+            return self.replay(&mut state, receipt, &intent);
         }
-        let workspace_id = match (kind, workspace_id) {
-            (Kind::Workspace, None) => {
-                Some(domain::workspace::registry::generate_workspace_id().map_err(io)?)
+        let field = match kind {
+            Kind::Agent => "agentId",
+            Kind::Workspace => "workspaceId",
+        };
+        let resource_id = if let Some(id) = intent[field].as_str() {
+            id.to_owned()
+        } else {
+            match kind {
+                Kind::Agent => Uuid::new_v4().to_string(),
+                Kind::Workspace => {
+                    domain::workspace::registry::generate_workspace_id().map_err(io)?
+                }
             }
-            (_, workspace_id) => workspace_id,
         };
         let snapshot = Snapshot {
             kind,
             idempotency_key: key.to_owned(),
             revision: 0,
             phase: Phase::Accepted,
-            workspace_id,
-            agent_id: agent_id.or_else(|| needs_agent.then(|| Uuid::new_v4().to_string())),
+            workspace_id: if kind == Kind::Workspace {
+                Some(resource_id.clone())
+            } else {
+                intent["workspaceId"].as_str().map(str::to_owned)
+            },
+            agent_id: if kind == Kind::Agent {
+                Some(resource_id)
+            } else if intent["agent"].is_object() {
+                Some(
+                    intent["agent"]["agentId"]
+                        .as_str()
+                        .map_or_else(|| Uuid::new_v4().to_string(), str::to_owned),
+                )
+            } else {
+                None
+            },
             error: None,
             outcome_unknown: false,
             workspace: None,
             agent: None,
         };
+        let resources: Vec<_> = owned_resources(&snapshot).collect();
+        if resources
+            .iter()
+            .any(|resource| state.claimed.contains(resource))
+        {
+            return Err(ErrorCode::IdempotencyConflict);
+        }
         self.write(
             &mut state,
             Receipt {
                 id: id.clone(),
-                intent_hash,
+                intent,
                 snapshot: snapshot.clone(),
                 retry_initial_agent: false,
             },
-            None,
         )?;
+        state.claimed.extend(resources);
         state.active.insert(id.clone());
         self.publish(&id, &snapshot);
         Ok(Admission {
@@ -126,14 +151,13 @@ impl Creations {
         &self,
         state: &mut State,
         mut receipt: Receipt,
-        intent_hash: &[u8; 32],
+        intent: &Value,
     ) -> Result<Admission, ErrorCode> {
-        if &receipt.intent_hash != intent_hash {
+        if &receipt.intent != intent {
             return Err(ErrorCode::IdempotencyConflict);
         }
         let execute = receipt.retry_initial_agent && !state.active.contains(&receipt.id);
         if execute {
-            let revision = receipt.snapshot.revision;
             receipt.retry_initial_agent = false;
             receipt.snapshot.revision = receipt
                 .snapshot
@@ -143,7 +167,7 @@ impl Creations {
             receipt.snapshot.phase = Phase::WorkspaceReady;
             receipt.snapshot.error = None;
             let id = receipt.id.clone();
-            self.write(state, receipt.clone(), Some(revision))?;
+            self.write(state, receipt.clone())?;
             state.active.insert(id.clone());
             self.publish(&id, &receipt.snapshot);
         }
@@ -173,7 +197,7 @@ impl Creations {
             return Err(ErrorCode::InvalidMessage);
         }
         receipt.retry_initial_agent = true;
-        self.write(&mut state, receipt, Some(snapshot.revision))
+        self.write(&mut state, receipt)
     }
 
     /// Commit a progress transition and publish it after durable installation.
@@ -216,9 +240,8 @@ impl Creations {
         // Once an Agent is ready, a failure may follow acceptance of the initial prompt.
         receipt.snapshot.outcome_unknown =
             phase == Phase::Failed && receipt.snapshot.agent.is_some();
-        let expected_revision = snapshot.revision;
         let snapshot = receipt.snapshot.clone();
-        self.write(&mut state, receipt, Some(expected_revision))?;
+        self.write(&mut state, receipt)?;
         if phase.is_terminal() {
             state.active.remove(&id);
         }
@@ -285,27 +308,10 @@ impl Creations {
         }
     }
 
-    fn write(
-        &self,
-        state: &mut State,
-        receipt: Receipt,
-        expected_revision: Option<u64>,
-    ) -> Result<(), ErrorCode> {
+    fn write(&self, state: &mut State, receipt: Receipt) -> Result<(), ErrorCode> {
         if let Some(store) = &self.store {
-            store.put(receipt, expected_revision)?;
+            store.put(receipt)?;
         } else {
-            if expected_revision.is_none() {
-                let (workspace, agent) = receipt.snapshot.resource_claims();
-                if workspace.is_some_and(|id| state.claimed_workspaces.contains(id))
-                    || agent.is_some_and(|id| state.claimed_agents.contains(id))
-                {
-                    return Err(ErrorCode::IdempotencyConflict);
-                }
-                state
-                    .claimed_workspaces
-                    .extend(workspace.map(str::to_owned));
-                state.claimed_agents.extend(agent.map(str::to_owned));
-            }
             state.memory.insert(receipt.id.clone(), receipt);
         }
         Ok(())
@@ -318,6 +324,19 @@ impl Creations {
         };
         self.events.publish(id, method, &json!(snapshot));
     }
+}
+
+fn owned_resources(snapshot: &Snapshot) -> impl Iterator<Item = String> {
+    [
+        snapshot
+            .workspace_id
+            .as_ref()
+            .filter(|_| snapshot.kind == Kind::Workspace)
+            .map(|id| format!("workspace:{id}")),
+        snapshot.agent_id.as_ref().map(|id| format!("agent:{id}")),
+    ]
+    .into_iter()
+    .flatten()
 }
 
 /// Validate a bounded durable key without assigning it filesystem path semantics.

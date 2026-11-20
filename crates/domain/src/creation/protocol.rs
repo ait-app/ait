@@ -91,17 +91,5 @@ pub struct Snapshot {
     pub agent: Option<Value>,
 }
 
-impl Snapshot {
-    /// Return the owned Workspace and Agent IDs. An Agent creation borrows its Workspace.
-    #[must_use]
-    pub fn resource_claims(&self) -> (Option<&str>, Option<&str>) {
-        let workspace = self
-            .workspace_id
-            .as_deref()
-            .filter(|_| self.kind == Kind::Workspace);
-        (workspace, self.agent_id.as_deref())
-    }
-}
-
 #[cfg(test)]
 mod tests;
