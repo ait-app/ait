@@ -15,10 +15,10 @@ use crate::outbound::Outbound;
 
 /// Blocking persistence boundary for creation receipts; implementations own storage mechanics.
 pub trait ReceiptStore: std::fmt::Debug + Send + Sync {
-    /// Return all committed receipts to restore resource claims at startup.
+    /// Return committed snapshots to restore resource claims at startup.
     /// # Errors
     /// Returns `RegistryIo` if persisted state cannot be loaded.
-    fn list(&self) -> Result<Vec<Receipt>, ErrorCode>;
+    fn snapshots(&self) -> Result<Vec<Snapshot>, ErrorCode>;
 
     /// Return the receipt for `id`, or none when it has not been committed.
     /// # Errors
@@ -57,9 +57,9 @@ impl Creations {
     /// Returns the store's load error before accepting any new creation side effects.
     pub fn with_store(store: Arc<dyn ReceiptStore>) -> Result<Self, ErrorCode> {
         let claimed = store
-            .list()?
+            .snapshots()?
             .iter()
-            .flat_map(|receipt| owned_resources(&receipt.snapshot))
+            .flat_map(owned_resources)
             .collect();
         Ok(Self {
             store: Some(store),

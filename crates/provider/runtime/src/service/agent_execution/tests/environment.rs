@@ -5,7 +5,7 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
     let fixture = Fixture::new();
     std::fs::write(fixture.cwd.join("capture-environment"), "").unwrap();
     let receipt_path = fixture.root.path().join("creations.json");
-    let creations = persistence::storage::creation::open(receipt_path.clone()).unwrap();
+    let creations = persistence::storage::creation::open(&receipt_path).unwrap();
     let (execution, registry) = worker_with_creations(&fixture, creations);
     let request = json!({"idempotencyKey":"environment-create","config":{"provider":"codex","cwd":fixture.cwd},"env":{"AIT_TEST_AGENT_ENV":"private-fixture-value"}});
     let created = execution
@@ -19,9 +19,10 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
     assert_eq!(created["agentId"], retried["agentId"]);
     assert!(!created.to_string().contains("private-fixture-value"));
     assert!(
-        !std::fs::read_to_string(&receipt_path)
+        !std::fs::read(receipt_path.with_extension("sqlite3"))
             .unwrap()
-            .contains("private-fixture-value")
+            .windows(b"private-fixture-value".len())
+            .any(|bytes| bytes == b"private-fixture-value")
     );
     assert!(
         !serde_json::to_string(&registry.list().unwrap())
@@ -51,9 +52,10 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
 async fn invalid_environment_is_rejected_before_creation_receipts_or_native_launch() {
     let fixture = Fixture::new();
     let receipts = fixture.root.path().join("creations.json");
-    let creations = persistence::storage::creation::open(receipts.clone()).unwrap();
+    let creations = persistence::storage::creation::open(&receipts).unwrap();
     let (execution, registry) = worker_with_creations(&fixture, creations);
-    let initial = std::fs::read(&receipts).ok();
+    let database = receipts.with_extension("sqlite3");
+    let initial = std::fs::read(&database).unwrap();
     for env in [
         json!({"BAD=NAME":"value"}),
         json!({"VALUE":"with\u{0}nul"}),
@@ -73,7 +75,7 @@ async fn invalid_environment_is_rejected_before_creation_receipts_or_native_laun
         registry.list().unwrap(),
         [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
     );
-    assert_eq!(std::fs::read(receipts).ok(), initial);
+    assert_eq!(std::fs::read(database).unwrap(), initial);
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     execution.shutdown().await.unwrap();
 }

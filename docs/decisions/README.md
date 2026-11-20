@@ -34,6 +34,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Daemon 与协议
 
+- [ADR-292：创建回执按键存入 SQLite](daemon/adr-292-sqlite-creation-receipts.md)
 - [ADR-291：单连接的活动心跳允许过载丢弃](daemon/adr-291-best-effort-activity-heartbeats.md)
 - [ADR-288：Agent 状态延迟写入 `agents.json`，启动时由 Timeline 补齐](daemon/adr-288-deferred-agent-status-writes.md)
 - [ADR-282：单连接能力提议预算随方法目录扩容](daemon/adr-282-single-connection-capability-budget.md)
@@ -53,12 +54,12 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)（经 [ADR-291](daemon/adr-291-best-effort-activity-heartbeats.md) 修订）
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](daemon/adr-118-summary-contracts-and-persistence-configuration.md)
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
-- [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
+- [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)（经 [ADR-292](daemon/adr-292-sqlite-creation-receipts.md) 修订）
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
 - [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md) 修订）
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)
 - [ADR-107：共享组件直接从所属 crate 导入](daemon/adr-107-direct-imports-from-owning-crates.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
-- [ADR-106：具体文件持久化归 file，model 仅声明契约](daemon/adr-106-concrete-file-persistence.md)（经 [ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-210](providers/adr-210-committed-runtime-read-snapshots.md) 修订）
+- [ADR-106：具体文件持久化归 file，model 仅声明契约](daemon/adr-106-concrete-file-persistence.md)（经 [ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-210](providers/adr-210-committed-runtime-read-snapshots.md)、[ADR-292](daemon/adr-292-sqlite-creation-receipts.md) 修订）
 - [ADR-105：File 工具、通用 Registry 与启动配置独立成 crate](daemon/adr-105-file-tools-and-startup-config.md)（经 [ADR-106](daemon/adr-106-concrete-file-persistence.md)、[ADR-112](daemon/adr-112-persistence-crate.md) 修订）
 - [ADR-103：Terminal 仅依赖 model 的共享契约](daemon/adr-103-terminal-model-dependency.md)（经 [ADR-111](daemon/adr-111-domain-values-and-server-protocol.md) 修订）
 - [ADR-100：功能 crate 作为完整服务安装](daemon/adr-100-crate-level-service-installation.md)（经 [ADR-108](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)、[ADR-129](providers/adr-129-provider-owned-skills.md)、[ADR-130](workspace/adr-130-workspace-methods-owned-by-metadata.md) 修订）

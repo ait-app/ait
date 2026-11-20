@@ -111,7 +111,7 @@ async fn existing_agent_without_creation_receipt_cannot_provision_another_worksp
     client.close(None).await.unwrap();
     terminate(&mut process).await;
     // Model a registered/imported Agent whose creation predates durable receipts.
-    std::fs::remove_file(state.join("creations/receipts.json")).unwrap();
+    std::fs::remove_file(state.join("creations/receipts.sqlite3")).unwrap();
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut client = connect(&address, &methods()).await;

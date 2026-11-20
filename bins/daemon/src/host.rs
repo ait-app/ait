@@ -761,7 +761,7 @@ fn compose_directory(
     changes: model::changes::Changes,
 ) -> anyhow::Result<Directory> {
     let creations =
-        persistence::storage::creation::open(config.data_dir.join("creations/receipts.json"))
+        persistence::storage::creation::open(&config.data_dir.join("creations/receipts.json"))
             .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
     let directory = Directory::new(DirectoryDependencies {
         projects: Box::new(project_registry.clone()),

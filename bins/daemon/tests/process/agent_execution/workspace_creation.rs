@@ -122,8 +122,12 @@ async fn workspace_initial_agent_preserves_subdirectories_receipts_environment_a
     assert_eq!(listed["entries"].as_array().unwrap().len(), 2);
     client.close(None).await.unwrap();
     terminate(&mut process).await;
-    let receipts = std::fs::read_to_string(state.join("creations/receipts.json")).unwrap();
-    assert!(!receipts.contains("composite-private"));
+    let receipts = std::fs::read(state.join("creations/receipts.sqlite3")).unwrap();
+    assert!(
+        !receipts
+            .windows(b"composite-private".len())
+            .any(|bytes| bytes == b"composite-private")
+    );
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut client = connect(&address, &methods()).await;

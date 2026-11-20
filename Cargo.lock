@@ -2156,6 +2156,7 @@ dependencies = [
  "getrandom 0.4.3",
  "indexmap",
  "model",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

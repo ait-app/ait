@@ -36,8 +36,14 @@ fn host_publisher_observes_only_committed_creation_receipts() {
 }
 
 impl ReceiptStore for Store {
-    fn list(&self) -> Result<Vec<Receipt>, ErrorCode> {
-        Ok(self.receipts.lock().unwrap().values().cloned().collect())
+    fn snapshots(&self) -> Result<Vec<Snapshot>, ErrorCode> {
+        Ok(self
+            .receipts
+            .lock()
+            .unwrap()
+            .values()
+            .map(|receipt| receipt.snapshot.clone())
+            .collect())
     }
 
     fn get(&self, id: &str) -> Result<Option<Receipt>, ErrorCode> {
@@ -70,7 +76,7 @@ fn injected_persistence_failure_does_not_claim_resources_or_publish_progress() {
         Err(ErrorCode::RegistryIo)
     ));
     assert!(receiver.try_recv().is_err());
-    assert!(store.list().unwrap().is_empty());
+    assert!(store.snapshots().unwrap().is_empty());
 
     store.fail.store(false, Ordering::SeqCst);
     let admitted = creations.begin(Kind::Agent, "two", intent).unwrap();
@@ -79,5 +85,5 @@ fn injected_persistence_failure_does_not_claim_resources_or_publish_progress() {
         admitted.snapshot.agent_id.as_deref(),
         Some("reserved-agent")
     );
-    assert_eq!(store.list().unwrap().len(), 1);
+    assert_eq!(store.snapshots().unwrap().len(), 1);
 }
