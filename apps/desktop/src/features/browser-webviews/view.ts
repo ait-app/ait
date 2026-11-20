@@ -62,6 +62,7 @@ interface BrowserViewEntry {
   hostWindow: BrowserWindow;
   container: View;
   view: WebContentsView;
+  contents: WebContents;
 }
 
 interface BrowserViewManagerDependencies {
@@ -117,6 +118,9 @@ export class PaseoBrowserWebContentsViewManager {
         zoomFactor: input.hostContents.getZoomFactor(),
       },
     });
+    // WebContentsView may release its webContents property during destruction.
+    // Keep the original object for lifecycle callbacks that run during teardown.
+    const contents = view.webContents;
     const container = new View();
     const entry: BrowserViewEntry = {
       browserId,
@@ -125,6 +129,7 @@ export class PaseoBrowserWebContentsViewManager {
       hostWindow: input.hostWindow,
       container,
       view,
+      contents,
     };
     this.entries.set(key, entry);
     input.hostWindow.contentView.addChildView(container);
@@ -134,33 +139,33 @@ export class PaseoBrowserWebContentsViewManager {
     view.setBounds({ x: 0, y: 0, width: 1, height: 1 });
 
     this.dependencies.registry.registerWebContents({
-      webContentsId: view.webContents.id,
+      webContentsId: contents.id,
       browserId,
       hostWebContentsId: input.hostContents.id,
     });
     this.dependencies.registry.registerWorkspace({ browserId, workspaceId });
-    this.dependencies.registerNavigationGuards(view.webContents);
+    this.dependencies.registerNavigationGuards(contents);
     this.dependencies.installWindowOpenHandler({
-      contents: view.webContents,
-      sourceContents: view.webContents,
+      contents,
+      sourceContents: contents,
       mainWindow: input.hostWindow,
     });
     this.dependencies.installContextMenu({
-      contents: view.webContents,
+      contents,
       mainWindow: input.hostWindow,
     });
     this.dependencies.attachKeyboard({
-      contents: view.webContents,
+      contents,
       hostContents: input.hostContents,
     });
     this.installEventForwarding(entry);
-    view.webContents.once("destroyed", () => {
+    contents.once("destroyed", () => {
       this.removeEntry(entry);
       this.send(entry, { type: "destroyed" });
     });
 
     try {
-      await view.webContents.loadURL(input.initialUrl);
+      await contents.loadURL(input.initialUrl);
     } catch (error) {
       this.send(entry, {
         type: "did-fail-load",
@@ -177,29 +182,29 @@ export class PaseoBrowserWebContentsViewManager {
     if (!entry) {
       throw new Error("Browser view not found");
     }
-    await entry.view.webContents.loadURL(url);
+    await entry.contents.loadURL(url);
   }
 
   public command(hostContentsId: number, browserId: string, command: BrowserViewCommand): void {
     const entry = this.entryFor(hostContentsId, browserId);
-    if (!entry || entry.view.webContents.isDestroyed()) {
+    if (!entry || entry.contents.isDestroyed()) {
       return;
     }
     switch (command) {
       case "focus":
-        entry.view.webContents.focus();
+        entry.contents.focus();
         return;
       case "go-back":
-        entry.view.webContents.goBack();
+        entry.contents.goBack();
         return;
       case "go-forward":
-        entry.view.webContents.goForward();
+        entry.contents.goForward();
         return;
       case "reload":
-        entry.view.webContents.reload();
+        entry.contents.reload();
         return;
       case "stop":
-        entry.view.webContents.stop();
+        entry.contents.stop();
         return;
     }
   }
@@ -210,22 +215,22 @@ export class PaseoBrowserWebContentsViewManager {
     code: string,
   ): Promise<unknown> {
     const entry = this.entryFor(hostContentsId, browserId);
-    if (!entry || entry.view.webContents.isDestroyed()) {
+    if (!entry || entry.contents.isDestroyed()) {
       return Promise.reject(new Error("Browser view not found"));
     }
-    return entry.view.webContents.executeJavaScript(code);
+    return entry.contents.executeJavaScript(code);
   }
 
   public setBounds(hostContentsId: number, browserId: string, bounds: BrowserViewBounds): void {
     const entry = this.entryFor(hostContentsId, browserId);
-    if (!entry || entry.hostContents.isDestroyed() || entry.view.webContents.isDestroyed()) {
+    if (!entry || entry.hostContents.isDestroyed() || entry.contents.isDestroyed()) {
       return;
     }
     const zoomFactor = entry.hostContents.getZoomFactor();
     entry.container.setBounds(normalizeRectangle(cssPixelsToDips(bounds.container, zoomFactor)));
     entry.view.setBounds(normalizeRectangle(cssPixelsToDips(bounds.contents, zoomFactor)));
     entry.container.setVisible(bounds.visible);
-    followHostZoom(entry.view.webContents, entry.hostContents);
+    followHostZoom(entry.contents, entry.hostContents);
   }
 
   public destroy(hostContentsId: number, browserId: string): void {
@@ -234,8 +239,8 @@ export class PaseoBrowserWebContentsViewManager {
       return;
     }
     this.removeEntry(entry);
-    if (!entry.view.webContents.isDestroyed()) {
-      entry.view.webContents.close();
+    if (!entry.contents.isDestroyed()) {
+      entry.contents.close();
     }
   }
 
@@ -248,7 +253,7 @@ export class PaseoBrowserWebContentsViewManager {
   }
 
   private installEventForwarding(entry: BrowserViewEntry): void {
-    const contents = entry.view.webContents;
+    const { contents } = entry;
     contents.on("did-start-loading", () => this.send(entry, { type: "did-start-loading" }));
     contents.on("did-stop-loading", () => this.send(entry, { type: "did-stop-loading" }));
     contents.on("dom-ready", () => this.send(entry, { type: "dom-ready" }));
@@ -279,7 +284,7 @@ export class PaseoBrowserWebContentsViewManager {
 
   private send(entry: BrowserViewEntry, event: Omit<BrowserViewEvent, "browserId">): void {
     if (!entry.hostContents.isDestroyed()) {
-      const contents = entry.view.webContents;
+      const { contents } = entry;
       const destroyed = contents.isDestroyed();
       entry.hostContents.send(BROWSER_VIEW_EVENT, {
         browserId: entry.browserId,
@@ -300,7 +305,7 @@ export class PaseoBrowserWebContentsViewManager {
     if (!entry.hostWindow.isDestroyed()) {
       entry.hostWindow.contentView.removeChildView(entry.container);
     }
-    this.dependencies.registry.unregisterWebContents(entry.view.webContents.id);
+    this.dependencies.registry.unregisterWebContents(entry.contents.id);
   }
 
   private entryFor(hostContentsId: number, browserId: string): BrowserViewEntry | null {

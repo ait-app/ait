@@ -13,6 +13,8 @@ const fakeElectron = vi.hoisted(() => {
   class FakeGuestContents {
     public readonly id = 900;
     public zoomLevel = 0;
+    public destroyed = false;
+    private destroyedListener: (() => void) | undefined;
     public readonly setZoomLevel = vi.fn((level: number) => {
       this.zoomLevel = level;
     });
@@ -22,15 +24,23 @@ const fakeElectron = vi.hoisted(() => {
     }
 
     public isDestroyed(): boolean {
-      return false;
+      return this.destroyed;
     }
 
     public on(): this {
       return this;
     }
 
-    public once(): this {
+    public once(event: string, listener: () => void): this {
+      if (event === "destroyed") {
+        this.destroyedListener = listener;
+      }
       return this;
+    }
+
+    public emitDestroyed(): void {
+      this.destroyed = true;
+      this.destroyedListener?.();
     }
 
     public loadURL(): Promise<void> {
@@ -39,7 +49,15 @@ const fakeElectron = vi.hoisted(() => {
   }
 
   class FakeWebContentsView extends FakeView {
-    public readonly webContents = new FakeGuestContents();
+    public readonly contents = new FakeGuestContents();
+
+    public get webContents(): FakeGuestContents {
+      return this.contents;
+    }
+
+    public clearWebContents(): void {
+      Object.defineProperty(this, "webContents", { value: undefined });
+    }
 
     public constructor(public readonly options: { webPreferences: Record<string, unknown> }) {
       super();
@@ -234,5 +252,22 @@ describe("browser WebContentsView zoom", () => {
     setBounds(PANE);
 
     expect(view.webContents.setZoomLevel).not.toHaveBeenCalled();
+  });
+});
+
+describe("browser WebContentsView lifecycle", () => {
+  test("forwards the destroyed event after WebContentsView releases webContents", async () => {
+    const { host, view } = await openBrowser(1);
+
+    view.clearWebContents();
+    view.contents.emitDestroyed();
+
+    expect(host.send).toHaveBeenCalledWith("paseo:event:browser-view", {
+      browserId: BROWSER_ID,
+      canGoBack: false,
+      canGoForward: false,
+      isLoading: false,
+      type: "destroyed",
+    });
   });
 });
