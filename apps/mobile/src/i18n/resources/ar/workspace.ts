@@ -563,6 +563,7 @@ export const workspace = {
         threadActions: "إجراءات سلسلة المناقشة",
       },
       states: {
+        open: "مفتوح",
         merged: "تم الدمج",
         closed: "مغلق",
       },
@@ -575,6 +576,15 @@ export const workspace = {
         statusLoadFailed: "غير قادر على تحميل حالة طلب السحب",
         activityLoadFailed: "غير قادر على تحميل نشاط طلب السحب",
       },
+    },
+    linkCard: {
+      files_zero: "{{count}} ملف",
+      files_one: "ملف واحد",
+      files_two: "ملفان",
+      files_few: "{{count}} ملفات",
+      files_many: "{{count}} ملفًا",
+      files_other: "{{count}} ملف",
+      unavailable: "التفاصيل غير متاحة",
     },
     forgeSetup: {
       installCli: "ثبّت واجهة سطر الأوامر {{cli}} لاستخدام ميزات {{brand}}.",

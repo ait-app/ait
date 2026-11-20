@@ -556,6 +556,7 @@ export const workspace = {
         threadActions: "讨论主题操作",
       },
       states: {
+        open: "开启",
         merged: "已合并",
         closed: "已关闭",
       },
@@ -568,6 +569,11 @@ export const workspace = {
         statusLoadFailed: "无法加载拉取请求状态",
         activityLoadFailed: "无法加载拉取请求活动",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} 个文件",
+      files_other: "{{count}} 个文件",
+      unavailable: "无法获取详情",
     },
     forgeSetup: {
       installCli: "安装 {{cli}} CLI 以使用 {{brand}} 功能。",

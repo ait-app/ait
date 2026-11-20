@@ -12,6 +12,7 @@ impl ForgeRuntime for FailedForge {
         _: &str,
         _: usize,
         _: &[ForgeSearchKind],
+        _: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError> {
         Err(self.0.clone())
     }

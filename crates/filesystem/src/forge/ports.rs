@@ -90,6 +90,15 @@ pub enum ForgeSearchKind {
     ChangeRequest,
 }
 
+/// Which item states a forge search reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForgeSearchStates {
+    /// Open items only: what a picker of things to work on offers.
+    Open,
+    /// Every state, for looking up one known item that may be merged or closed.
+    All,
+}
+
 /// One forge search item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ForgeSearchItem {
@@ -117,6 +126,23 @@ pub(crate) struct ForgeSearchItem {
     pub(crate) head_ref_name: Option<String>,
     /// Forge timestamp.
     pub(crate) updated_at: Option<String>,
+    /// Author login.
+    pub(crate) author: Option<String>,
+    /// Author avatar image URL.
+    pub(crate) author_avatar_url: Option<String>,
+    /// Diff size for change requests whose forge lists it.
+    pub(crate) diff_stat: Option<ChangeRequestDiffStat>,
+}
+
+/// Size of a change request's diff as its forge reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ChangeRequestDiffStat {
+    /// Added lines.
+    pub(crate) additions: u64,
+    /// Deleted lines.
+    pub(crate) deletions: u64,
+    /// Changed files.
+    pub(crate) changed_files: u64,
 }
 
 /// Forge search outcome, including unavailable results that are not request failures.
@@ -432,7 +458,7 @@ pub trait ForgeRuntime: std::fmt::Debug + Send {
         &["github"]
     }
 
-    /// Search issues and change requests.
+    /// Search issues and change requests of the given `kinds` in the given `states`.
     ///
     /// # Errors
     /// Returns categorized local Git, CLI, authentication, or forge failures.
@@ -442,6 +468,7 @@ pub trait ForgeRuntime: std::fmt::Debug + Send {
         query: &str,
         limit: usize,
         kinds: &[ForgeSearchKind],
+        states: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError>;
 
     /// Push the current branch and create a pull request.

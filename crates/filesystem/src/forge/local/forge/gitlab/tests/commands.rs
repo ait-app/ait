@@ -339,7 +339,11 @@ fn search_uses_issue_output_and_mr_json_flags_with_literal_user_arguments() {
                 "title": "Bug",
                 "web_url": "https://gitlab.com/group/team/project/-/issues/1",
                 "state": "opened",
-                "updated_at": "2026-09-29"
+                "updated_at": "2026-09-29",
+                "author": {
+                    "username": "dev",
+                    "avatar_url": "https://gitlab.com/uploads/dev.png"
+                }
             }
         ]),
     );
@@ -350,9 +354,20 @@ fn search_uses_issue_output_and_mr_json_flags_with_literal_user_arguments() {
             "--not-an-option; echo test",
             10,
             &[ForgeSearchKind::Issue, ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
         )
         .unwrap();
     assert_eq!(result.items.len(), 2);
+    let issue = result
+        .items
+        .iter()
+        .find(|item| item.kind == ForgeSearchKind::Issue)
+        .unwrap();
+    assert_eq!(issue.author.as_deref(), Some("dev"));
+    assert_eq!(
+        issue.author_avatar_url.as_deref(),
+        Some("https://gitlab.com/uploads/dev.png")
+    );
     assert!(fixture.calls().contains("issue\nlist\n-O\njson\n"));
     assert!(fixture.calls().contains("mr\nlist\n-F\njson\n"));
     assert!(
@@ -360,11 +375,29 @@ fn search_uses_issue_output_and_mr_json_flags_with_literal_user_arguments() {
             .calls()
             .contains("--search\n--not-an-option; echo test\n")
     );
+    assert!(!fixture.calls().contains("--all\n"));
+    fixture
+        .forge
+        .search(
+            fixture.cwd(),
+            "7",
+            10,
+            &[ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::All,
+        )
+        .unwrap();
+    assert!(fixture.calls().contains("--search\n7\n--all\n"));
     fixture.error("issue-list", "HTTP 403 forbidden");
     assert!(
         fixture
             .forge
-            .search(fixture.cwd(), "", 10, &[ForgeSearchKind::Issue])
+            .search(
+                fixture.cwd(),
+                "",
+                10,
+                &[ForgeSearchKind::Issue],
+                ForgeSearchStates::Open
+            )
             .is_err()
     );
 }

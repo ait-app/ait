@@ -590,6 +590,7 @@ export const workspace = {
         threadActions: "Actions du fil de discussion",
       },
       states: {
+        open: "Ouvert",
         merged: "Fusionné",
         closed: "Fermé",
       },
@@ -602,6 +603,12 @@ export const workspace = {
         statusLoadFailed: "Impossible de charger le statut de la demande d'extraction",
         activityLoadFailed: "Impossible de charger l'activité de demande d'extraction",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} fichier",
+      files_many: "{{count}} fichiers",
+      files_other: "{{count}} fichiers",
+      unavailable: "Détails indisponibles",
     },
     forgeSetup: {
       installCli: "Installez la CLI {{cli}} pour utiliser les fonctionnalités {{brand}}.",

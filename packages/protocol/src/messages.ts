@@ -2624,6 +2624,13 @@ export const GitHubSearchItemSchema = z.object({
   baseRefName: z.string().nullable().optional(),
   headRefName: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
+  // Author and diff size, sent by daemons that list them. A change request's three counts
+  // arrive together or not at all; GitLab lists none.
+  author: z.string().optional(),
+  authorAvatarUrl: z.string().optional(),
+  additions: z.number().optional(),
+  deletions: z.number().optional(),
+  changedFiles: z.number().optional(),
 });
 
 export const ForgeSearchItemSchema = GitHubSearchItemSchema.extend({
@@ -2649,6 +2656,10 @@ export const ForgeSearchRequestSchema = z.object({
   query: z.string(),
   limit: z.number().int().min(1).max(50).optional(),
   kinds: z.array(ForgeSearchKindSchema).optional(),
+  // Which item states to search; open items only when absent. "all" also reaches merged and
+  // closed items, for looking up one known issue or change request. A daemon that predates the
+  // field ignores it and searches open items.
+  state: z.enum(["open", "all"]).optional(),
   requestId: z.string(),
 });
 

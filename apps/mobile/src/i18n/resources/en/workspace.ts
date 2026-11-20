@@ -573,6 +573,7 @@ export const workspace = {
         threadActions: "Thread actions",
       },
       states: {
+        open: "Open",
         merged: "Merged",
         closed: "Closed",
       },
@@ -585,6 +586,11 @@ export const workspace = {
         statusLoadFailed: "Unable to load pull request status",
         activityLoadFailed: "Unable to load pull request activity",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} file",
+      files_other: "{{count}} files",
+      unavailable: "Details unavailable",
     },
     forgeSetup: {
       installCli: "Install the {{cli}} CLI to use {{brand}} features.",

@@ -52,7 +52,13 @@ fn enterprise_gh_calls_route_to_remote_host_with_interactive_prompts_disabled() 
     );
     fixture
         .forge
-        .search(fixture.cwd(), "", 1, &[ForgeSearchKind::Issue])
+        .search(
+            fixture.cwd(),
+            "",
+            1,
+            &[ForgeSearchKind::Issue],
+            ForgeSearchStates::Open,
+        )
         .unwrap();
     assert_eq!(
         fs::read_to_string(fixture.root.path().join("environment")).unwrap(),
@@ -65,12 +71,35 @@ fn search_only_requests_pull_requests_when_issues_are_excluded() {
     let fixture = Fixture::new("printf '[]'");
     fixture
         .forge
-        .search(fixture.cwd(), "bug", 8, &[ForgeSearchKind::ChangeRequest])
+        .search(
+            fixture.cwd(),
+            "bug",
+            8,
+            &[ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
+        )
         .unwrap();
     let calls = fixture.calls();
     assert!(calls.starts_with("pr\nlist\n--search\nbug\n"), "{calls}");
     assert!(!calls.contains("issue\n"));
     assert!(calls.ends_with("--limit\n8\n"));
+}
+
+#[test]
+fn search_reaches_merged_and_closed_items_only_when_asked_for_every_state() {
+    let fixture = Fixture::new("printf '[]'");
+    let kinds = [ForgeSearchKind::Issue, ForgeSearchKind::ChangeRequest];
+    fixture
+        .forge
+        .search(fixture.cwd(), "795", 5, &kinds, ForgeSearchStates::Open)
+        .unwrap();
+    assert!(!fixture.calls().contains("--state\n"));
+    fixture
+        .forge
+        .search(fixture.cwd(), "795", 5, &kinds, ForgeSearchStates::All)
+        .unwrap();
+    let calls = fixture.calls();
+    assert_eq!(calls.matches("--state\nall\n--limit\n5\n").count(), 2);
 }
 
 #[test]
@@ -87,6 +116,7 @@ fn search_merges_kinds_by_recency_before_applying_the_shared_result_limit() {
             "",
             2,
             &[ForgeSearchKind::Issue, ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
         )
         .unwrap();
     assert_eq!(
@@ -98,6 +128,54 @@ fn search_merges_kinds_by_recency_before_applying_the_shared_result_limit() {
         [3, 2]
     );
     assert_eq!(result.items[1].kind, ForgeSearchKind::ChangeRequest);
+}
+
+#[test]
+fn search_reads_change_request_author_and_diff_size() {
+    let fixture = Fixture::new("cat \"$root/$1.json\"");
+    fixture.payload(
+        "pr.json",
+        &json!([
+            {"number":7,"title":"sized","url":"https://example/7","state":"OPEN",
+             "author":{"login":"octocat","is_bot":false},
+             "additions":963,"deletions":354,"changedFiles":15},
+            {"number":8,"title":"automated","url":"https://example/8","state":"OPEN",
+             "author":{"login":"app/dependabot","is_bot":true},"additions":1}
+        ]),
+    );
+    let result = fixture
+        .forge
+        .search(
+            fixture.cwd(),
+            "",
+            2,
+            &[ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
+        )
+        .unwrap();
+    assert!(
+        fixture
+            .calls()
+            .contains("author,additions,deletions,changedFiles\n")
+    );
+    let sized = &result.items[0];
+    assert_eq!(sized.author.as_deref(), Some("octocat"));
+    assert_eq!(
+        sized.author_avatar_url.as_deref(),
+        Some("https://github.com/octocat.png?size=64")
+    );
+    assert_eq!(
+        sized.diff_stat,
+        Some(ChangeRequestDiffStat {
+            additions: 963,
+            deletions: 354,
+            changed_files: 15,
+        })
+    );
+    let automated = &result.items[1];
+    assert_eq!(automated.author.as_deref(), Some("app/dependabot"));
+    assert_eq!(automated.author_avatar_url, None);
+    assert_eq!(automated.diff_stat, None);
 }
 
 #[test]
@@ -116,6 +194,7 @@ fn partial_search_command_failure_preserves_successful_results() {
             "",
             2,
             &[ForgeSearchKind::Issue, ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
         )
         .unwrap();
     assert_eq!(result.auth_state, ForgeAuthState::Authenticated);
@@ -128,7 +207,13 @@ fn malformed_search_json_fails_instead_of_returning_a_successful_empty_result() 
     let fixture = Fixture::new("printf '{invalid'");
     let error = fixture
         .forge
-        .search(fixture.cwd(), "", 2, &[ForgeSearchKind::Issue])
+        .search(
+            fixture.cwd(),
+            "",
+            2,
+            &[ForgeSearchKind::Issue],
+            ForgeSearchStates::Open,
+        )
         .unwrap_err();
     assert_eq!(error.kind, ForgeFailureKind::Unknown);
 }

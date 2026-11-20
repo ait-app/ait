@@ -5,9 +5,10 @@ mod failures;
 
 use super::execute;
 use crate::forge::ports::{
-    CheckDetails, ForgeAuthState, ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem,
-    ForgeSearchKind, PullRequestCreated, PullRequestMergeMethod, PullRequestStatus,
-    PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem, TimelineReviewState,
+    ChangeRequestDiffStat, CheckDetails, ForgeAuthState, ForgeRuntime, ForgeRuntimeError,
+    ForgeSearch, ForgeSearchItem, ForgeSearchKind, ForgeSearchStates, PullRequestCreated,
+    PullRequestMergeMethod, PullRequestStatus, PullRequestStatusRead, PullRequestTimeline,
+    PullRequestTimelineItem, TimelineReviewState,
 };
 use crate::forge::service::Forge;
 
@@ -64,6 +65,7 @@ impl ForgeRuntime for FakeForge {
         _query: &str,
         _limit: usize,
         _kinds: &[ForgeSearchKind],
+        states: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError> {
         Ok(ForgeSearch {
             items: vec![ForgeSearchItem {
@@ -72,13 +74,24 @@ impl ForgeRuntime for FakeForge {
                 number: 4,
                 title: "Fix".to_owned(),
                 url: "https://github.com/acme/app/pull/4".to_owned(),
-                state: "open".to_owned(),
+                state: match states {
+                    ForgeSearchStates::Open => "open",
+                    ForgeSearchStates::All => "merged",
+                }
+                .to_owned(),
                 body: None,
                 labels: vec!["bug".to_owned()],
                 project_path: Some("acme/app".to_owned()),
                 base_ref_name: Some("main".to_owned()),
                 head_ref_name: Some("fix".to_owned()),
                 updated_at: Some("2026-01-01T00:00:00Z".to_owned()),
+                author: Some("octocat".to_owned()),
+                author_avatar_url: Some("https://github.com/octocat.png?size=64".to_owned()),
+                diff_stat: Some(ChangeRequestDiffStat {
+                    additions: 12,
+                    deletions: 3,
+                    changed_files: 2,
+                }),
             }],
             auth_state: ForgeAuthState::Authenticated,
         })
@@ -217,7 +230,23 @@ fn projects_neutral_and_github_search_shapes() {
     )
     .unwrap();
     assert_eq!(neutral["items"][0]["kind"], "change_request");
+    assert_eq!(neutral["items"][0]["author"], "octocat");
+    assert_eq!(
+        neutral["items"][0]["authorAvatarUrl"],
+        "https://github.com/octocat.png?size=64"
+    );
+    assert_eq!(neutral["items"][0]["additions"], 12);
+    assert_eq!(neutral["items"][0]["deletions"], 3);
+    assert_eq!(neutral["items"][0]["changedFiles"], 2);
     assert_eq!(neutral["authState"], "authenticated");
+    assert_eq!(neutral["items"][0]["state"], "open");
+    let any_state = execute(
+        &forge(),
+        "forge.search.request",
+        json!({"cwd":"/repo","query":"4","state":"all"}),
+    )
+    .unwrap();
+    assert_eq!(any_state["items"][0]["state"], "merged");
     let legacy = execute(
         &forge(),
         "github.search.request",

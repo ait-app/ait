@@ -23,6 +23,7 @@ impl ForgeRuntime for FakeForge {
         _query: &str,
         _limit: usize,
         _kinds: &[ForgeSearchKind],
+        _states: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError> {
         self.calls.lock().unwrap().push("search".to_owned());
         Ok(ForgeSearch {

@@ -26,6 +26,7 @@ import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import {
   computePosition,
   measureElement,
+  type Alignment,
   type Placement,
   type Rect,
   type Size,
@@ -39,8 +40,21 @@ interface HoverCardContextValue {
   setTriggerRef: (node: View | null) => void;
   triggerRef: RefObject<View | null>;
   contentRef: RefObject<View | null>;
-  openNow: () => void;
+  /** Opens from the pointer: after the card's delay, when it has one. */
+  pointerEntered: () => void;
   scheduleClose: () => void;
+}
+
+interface HoverCardProps {
+  /**
+   * How long the pointer rests on the trigger before the card opens. Keyboard focus never waits.
+   * Zero suits a control you aim at; text the pointer only crosses on its way elsewhere wants a
+   * pause, or every link it passes flashes a card.
+   */
+  openDelayMs?: number;
+  /** Asked each time the card is about to open. Returning false leaves it closed. */
+  canOpen?: () => boolean;
+  children: ReactNode;
 }
 
 const HoverCardContext = createContext<HoverCardContextValue | null>(null);
@@ -57,17 +71,20 @@ const HoverCardContext = createContext<HoverCardContextValue | null>(null);
  * </HoverCard>
  * ```
  */
-export function HoverCard({ children }: { children: ReactNode }): ReactNode {
+export function HoverCard({ children, ...props }: HoverCardProps): ReactNode {
   if (!isWeb) return children;
-  return <WebHoverCard>{children}</WebHoverCard>;
+  return <WebHoverCard {...props}>{children}</WebHoverCard>;
 }
 
-function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
+function WebHoverCard({ openDelayMs = 0, canOpen, children }: HoverCardProps): ReactElement {
   const layer = useOverlayLayer("floating");
   const triggerRef = useRef<View>(null);
   const contentRef = useRef<View>(null);
   const [open, setOpen] = useState(false);
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canOpenRef = useRef(canOpen);
+  canOpenRef.current = canOpen;
   // Read when focus arrives: by focusout the element losing focus no longer matches :focus-visible.
   const keyboardFocusedRef = useRef(false);
 
@@ -91,7 +108,16 @@ function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
     return focusInside() && document.activeElement?.matches(":focus-visible") === true;
   }, [focusInside]);
 
+  const clearOpenTimer = useCallback(() => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+  }, []);
+
   const scheduleClose = useCallback(() => {
+    // A pointer that left before the delay ran out never opens the card.
+    clearOpenTimer();
     if (keyboardFocusInside()) return;
     if (graceTimerRef.current) return;
     graceTimerRef.current = setTimeout(() => {
@@ -99,12 +125,26 @@ function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
       if (keyboardFocusInside()) return;
       setOpen(false);
     }, CLOSE_GRACE_MS);
-  }, [keyboardFocusInside]);
+  }, [clearOpenTimer, keyboardFocusInside]);
 
   const openNow = useCallback(() => {
+    clearOpenTimer();
     clearGraceTimer();
+    if (canOpenRef.current && !canOpenRef.current()) return;
     setOpen(true);
-  }, [clearGraceTimer]);
+  }, [clearGraceTimer, clearOpenTimer]);
+
+  const pointerEntered = useCallback(() => {
+    if (openDelayMs <= 0 || open) {
+      openNow();
+      return;
+    }
+    if (openTimerRef.current) return;
+    openTimerRef.current = setTimeout(() => {
+      openTimerRef.current = null;
+      openNow();
+    }, openDelayMs);
+  }, [open, openDelayMs, openNow]);
 
   const keyPressed = useCallback(
     (event: KeyboardEvent): boolean => {
@@ -155,6 +195,7 @@ function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
     const trigger = triggerRef.current as unknown as HTMLElement | null;
     if (!trigger) return;
     const close = () => {
+      clearOpenTimer();
       clearGraceTimer();
       setOpen(false);
     };
@@ -204,7 +245,7 @@ function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
       document.removeEventListener("scroll", scrolled, true);
       window.removeEventListener("resize", close);
     };
-  }, [clearGraceTimer, keyPressed, open, openNow, scheduleClose]);
+  }, [clearGraceTimer, clearOpenTimer, keyPressed, open, openNow, scheduleClose]);
 
   // While open, the safe zone covers trigger + content + the bridge between
   // them. Close only fires when the pointer leaves the safe zone; re-entering
@@ -217,11 +258,17 @@ function WebHoverCard({ children }: { children: ReactNode }): ReactElement {
     onLeaveSafeZone: scheduleClose,
   });
 
-  useEffect(() => clearGraceTimer, [clearGraceTimer]);
+  useEffect(
+    () => () => {
+      clearGraceTimer();
+      clearOpenTimer();
+    },
+    [clearGraceTimer, clearOpenTimer],
+  );
 
   const value = useMemo<HoverCardContextValue>(
-    () => ({ open, layer, setTriggerRef, triggerRef, contentRef, openNow, scheduleClose }),
-    [open, layer, setTriggerRef, openNow, scheduleClose],
+    () => ({ open, layer, setTriggerRef, triggerRef, contentRef, pointerEntered, scheduleClose }),
+    [open, layer, setTriggerRef, pointerEntered, scheduleClose],
   );
 
   return (
@@ -249,7 +296,7 @@ export function HoverCardTrigger({
       accessibilityRole={focusable ? "button" : undefined}
       accessibilityLabel={accessibilityLabel}
       collapsable={false}
-      onPointerEnter={ctx.openNow}
+      onPointerEnter={ctx.pointerEntered}
       onPointerLeave={ctx.scheduleClose}
     >
       {children}
@@ -257,8 +304,44 @@ export function HoverCardTrigger({
   );
 }
 
+export interface HoverCardTriggerElementProps {
+  ref: (node: Element | null) => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+}
+
+/**
+ * The trigger wiring for an element `HoverCardTrigger` cannot wrap. Its `View` is a block, which
+ * is invalid inside a paragraph, so a link in running text spreads these props onto its own inline
+ * element instead. Null outside a `HoverCard` and wherever hover does not exist.
+ */
+export function useHoverCardTriggerProps(): HoverCardTriggerElementProps | null {
+  const ctx = useContext(HoverCardContext);
+  const setTriggerRef = ctx?.setTriggerRef;
+  const pointerEntered = ctx?.pointerEntered;
+  const scheduleClose = ctx?.scheduleClose;
+  return useMemo(() => {
+    if (!setTriggerRef || !pointerEntered || !scheduleClose) return null;
+    return {
+      // The card only ever reads the trigger as a DOM element: its box, what it contains.
+      ref: (node) => setTriggerRef(node as unknown as View | null),
+      onPointerEnter: pointerEntered,
+      onPointerLeave: scheduleClose,
+    };
+  }, [setTriggerRef, pointerEntered, scheduleClose]);
+}
+
+/** A trigger from `useHoverCardTriggerProps` is a bare element with no `measureInWindow`. */
+function measureTrigger(trigger: View): Promise<Rect> {
+  if (typeof trigger.measureInWindow === "function") return measureElement(trigger);
+  const { left, top, width, height } = (trigger as unknown as Element).getBoundingClientRect();
+  return Promise.resolve({ x: left, y: top, width, height });
+}
+
 interface HoverCardContentProps {
   placement: Placement;
+  /** Where the card sits along the trigger's edge. Defaults to centered. */
+  align?: Alignment;
   offset?: number;
   /** Layered over the default popover surface. */
   style?: StyleProp<ViewStyle>;
@@ -287,6 +370,7 @@ function HoverCardSurface({
   triggerRef,
   contentRef,
   placement,
+  align = "center",
   offset = 4,
   style,
   role,
@@ -306,7 +390,7 @@ function HoverCardSurface({
   useEffect(() => {
     if (!triggerRef.current) return;
     let cancelled = false;
-    void measureElement(triggerRef.current).then((rect) => {
+    void measureTrigger(triggerRef.current).then((rect) => {
       if (!cancelled) setTriggerRect(rect);
       return undefined;
     });
@@ -323,11 +407,11 @@ function HoverCardSurface({
       contentSize,
       displayArea: { x: 0, y: 0, width, height },
       placement,
-      alignment: "center",
+      alignment: align,
       offset,
     });
     setPosition({ x, y });
-  }, [contentSize, offset, placement, triggerRect]);
+  }, [align, contentSize, offset, placement, triggerRect]);
 
   const handleLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {

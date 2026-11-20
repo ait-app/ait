@@ -23,6 +23,21 @@ describe("forgeSearchQueryKey", () => {
     ]);
   });
 
+  it("keeps a search of every state apart from the open-only one", () => {
+    expect(forgeSearchQueryKey("server-1", "/repo", "123", ["issue"], "forge", "all")).toEqual([
+      "forge-search",
+      "server-1",
+      "/repo",
+      "forge",
+      "123",
+      "issue",
+      "all-states",
+    ]);
+    expect(forgeSearchQueryKey("server-1", "/repo", "123", undefined, "forge", "open")).toEqual(
+      forgeSearchQueryKey("server-1", "/repo", "123"),
+    );
+  });
+
   it("separates legacy GitHub fallback results from forge search results", () => {
     expect(forgeSearchQueryKey("server-1", "/repo", "123", undefined, "github")).toEqual([
       "forge-search",
@@ -61,6 +76,39 @@ describe("buildForgeSearchQueryOptions", () => {
     expect(requests).toEqual([
       { cwd: "/repo", query: "123", limit: 20, kinds: ["change_request"] },
     ]);
+  });
+
+  it("asks for every state only when told to, and never over the legacy request", async () => {
+    const forgeRequests: unknown[] = [];
+    const githubRequests: unknown[] = [];
+    const client = {
+      async searchForge(options: unknown) {
+        forgeRequests.push(options);
+        return { items: [], authState: "authenticated", error: null, requestId: "forge" };
+      },
+      async searchGitHub(options: unknown) {
+        githubRequests.push(options);
+        return {
+          items: [],
+          featuresEnabled: true,
+          authState: "authenticated",
+          githubFeaturesEnabled: true,
+          error: null,
+          requestId: "github",
+        };
+      },
+    };
+    const input = { client, serverId: "server-1", cwd: "/repo", query: "795", enabled: true };
+
+    await buildForgeSearchQueryOptions({
+      ...input,
+      state: "all",
+      supportsForgeSearch: true,
+    }).queryFn();
+    await buildForgeSearchQueryOptions({ ...input, state: "all" }).queryFn();
+
+    expect(forgeRequests).toEqual([{ cwd: "/repo", query: "795", limit: 20, state: "all" }]);
+    expect(githubRequests).toEqual([{ cwd: "/repo", query: "795", limit: 20 }]);
   });
 
   it("uses the legacy GitHub search request when forge search is unsupported", async () => {

@@ -4,7 +4,8 @@
 
 use crate::forge::ports::{
     CheckDetails, ForgeFailureKind, ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchKind,
-    PullRequestCreated, PullRequestMergeMethod, PullRequestStatusRead, PullRequestTimeline,
+    ForgeSearchStates, PullRequestCreated, PullRequestMergeMethod, PullRequestStatusRead,
+    PullRequestTimeline,
 };
 
 /// Thin application boundary over the blocking forge adapter.
@@ -40,7 +41,7 @@ impl Forge {
         self.runtime.providers()
     }
 
-    /// Search issues and change requests.
+    /// Search issues and change requests of the given `kinds` in the given `states`.
     ///
     /// # Errors
     /// Returns categorized CLI, authentication, remote, or parsing failures.
@@ -50,8 +51,9 @@ impl Forge {
         query: &str,
         limit: usize,
         kinds: &[ForgeSearchKind],
+        states: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError> {
-        self.runtime.search(cwd, query, limit, kinds)
+        self.runtime.search(cwd, query, limit, kinds, states)
     }
 
     /// Create a pull request for the current branch.

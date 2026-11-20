@@ -65,6 +65,11 @@
   其中任何一次失败都使整次读取失败。PR 不存在为 `NotFound`，
   CLI 缺失、未登录或没有支持的远端为“不可用”；调用会阻塞，调用方在阻塞线程上执行。该读取不受 ADR-146 的重置时间过滤，
   因为调用方点名了编号（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 2 节）。
+- `forge.search.request` 在 `cwd` 的 origin 仓库中搜索 Issue 与 PR/MR，默认只返回打开的条目（输入区的选择器与链接
+  自动附加使用）。可选的 `state: "all"` 同时返回已合并和已关闭的条目（GitHub 为 `--state all`，GitLab 为 `--all`），
+  供客户端按编号查找对话中链接指向的条目；不识别该字段的旧 daemon 仍只搜索打开的条目。条目可带作者登录名与头像地址，
+  PR 另带增删行数与变更文件数（GitHub 取自 `gh` 列表字段，头像为 `https://<host>/<login>.png`，应用账号无头像；
+  GitLab 列表不提供行数与文件数）。这些字段均可缺省，旧客户端忽略它们。
 - 后台 fetch 只服务于已激活的目录订阅，按规范化 `git-common-dir` 合并仓库，每 180 秒执行一次
   `git fetch origin --prune --quiet`。全进程最多两个并发，单次限 120 秒并禁用凭据提示；
   它从不修改 HEAD、索引或工作树。无 origin 的目录跳过

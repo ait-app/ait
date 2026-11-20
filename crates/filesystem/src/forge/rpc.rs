@@ -57,7 +57,11 @@ fn search(
         return Err(ErrorCode::InvalidMessage);
     }
     let kinds = normalized_kinds(request.kinds.as_deref());
-    let result = forge.search(&request.cwd, &request.query, limit, &kinds);
+    let states = match request.state {
+        Some(protocol::ForgeSearchState::All) => port::ForgeSearchStates::All,
+        Some(protocol::ForgeSearchState::Open) | None => port::ForgeSearchStates::Open,
+    };
+    let result = forge.search(&request.cwd, &request.query, limit, &kinds, states);
     match (github_compatibility, result) {
         (false, Ok(result)) => encode(
             protocol::ForgeSearchResult {
@@ -401,6 +405,11 @@ fn protocol_search_item(item: port::ForgeSearchItem, legacy: bool) -> protocol::
         base_ref_name: item.base_ref_name,
         head_ref_name: item.head_ref_name,
         updated_at: item.updated_at,
+        author: item.author,
+        author_avatar_url: item.author_avatar_url,
+        additions: item.diff_stat.map(|stat| stat.additions),
+        deletions: item.diff_stat.map(|stat| stat.deletions),
+        changed_files: item.diff_stat.map(|stat| stat.changed_files),
     }
 }
 

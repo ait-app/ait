@@ -573,6 +573,7 @@ export const workspace = {
         threadActions: "スレッドアクション",
       },
       states: {
+        open: "オープン",
         merged: "マージ済み",
         closed: "クローズ済み",
       },
@@ -585,6 +586,11 @@ export const workspace = {
         statusLoadFailed: "プルリクエストのステータスを読み込めません",
         activityLoadFailed: "プルリクエストのアクティビティを読み込めません",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} ファイル",
+      files_other: "{{count}} ファイル",
+      unavailable: "詳細を取得できません",
     },
     forgeSetup: {
       installCli: "{{brand}} の機能を使うには {{cli}} CLI をインストールしてください。",

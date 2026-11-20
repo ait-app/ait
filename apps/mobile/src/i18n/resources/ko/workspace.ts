@@ -566,6 +566,7 @@ export const workspace = {
         threadActions: "스레드 작업",
       },
       states: {
+        open: "열림",
         merged: "병합됨",
         closed: "닫힘",
       },
@@ -578,6 +579,11 @@ export const workspace = {
         statusLoadFailed: "풀 리퀘스트 상태를 불러올 수 없습니다",
         activityLoadFailed: "풀 리퀘스트 활동을 불러올 수 없습니다",
       },
+    },
+    linkCard: {
+      files_one: "파일 {{count}}개",
+      files_other: "파일 {{count}}개",
+      unavailable: "세부 정보를 불러올 수 없음",
     },
     forgeSetup: {
       installCli: "{{brand}} 기능을 사용하려면 {{cli}} CLI를 설치하세요.",

@@ -8,7 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 use domain::workspace::protocol::workspace::{CheckStatus, ChecksStatus};
 
 use crate::forge::ports::{
-    ForgeAuthState, ForgeRuntime, ForgeSearchKind, PullRequestMergeMethod, PullRequestTimelineItem,
+    ForgeAuthState, ForgeRuntime, ForgeSearchKind, ForgeSearchStates, PullRequestMergeMethod,
+    PullRequestTimelineItem,
 };
 use model::workspace::worktrees::ChangeRequestResolver;
 
@@ -34,6 +35,7 @@ fn github_cli_adapter_parses_search_status_timeline_checks_and_mutations() {
             "fix",
             20,
             &[ForgeSearchKind::Issue, ForgeSearchKind::ChangeRequest],
+            ForgeSearchStates::Open,
         )
         .unwrap();
     assert_eq!(search.auth_state, ForgeAuthState::Authenticated);
@@ -113,6 +115,7 @@ fn search_reports_no_remote_without_invoking_a_forge_cli() {
             "",
             20,
             &[ForgeSearchKind::Issue],
+            ForgeSearchStates::Open,
         )
         .unwrap();
     assert_eq!(search.auth_state, ForgeAuthState::NoRemote);
@@ -133,6 +136,7 @@ fn missing_cli_and_authentication_failures_have_distinct_states() {
                 "",
                 20,
                 &[ForgeSearchKind::Issue],
+                ForgeSearchStates::Open,
             )
             .unwrap()
             .auth_state,
@@ -153,6 +157,7 @@ fn missing_cli_and_authentication_failures_have_distinct_states() {
             "",
             20,
             &[ForgeSearchKind::Issue],
+            ForgeSearchStates::Open,
         )
         .unwrap()
         .auth_state,

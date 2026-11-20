@@ -577,6 +577,7 @@ export const workspace = {
         threadActions: "Действия с веткой обсуждения",
       },
       states: {
+        open: "Открыт",
         merged: "Объединён",
         closed: "Закрыт",
       },
@@ -589,6 +590,13 @@ export const workspace = {
         statusLoadFailed: "Не удалось загрузить статус PR",
         activityLoadFailed: "Не удалось загрузить активность PR",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} файл",
+      files_few: "{{count}} файла",
+      files_many: "{{count}} файлов",
+      files_other: "{{count}} файла",
+      unavailable: "Сведения недоступны",
     },
     forgeSetup: {
       installCli: "Установите CLI {{cli}}, чтобы использовать возможности {{brand}}.",

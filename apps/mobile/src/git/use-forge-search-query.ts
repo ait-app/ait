@@ -21,11 +21,15 @@ export interface ForgeSearchPayload {
   requestId: string;
 }
 
+/** "all" also reaches merged and closed items; the default is open items only. */
+export type ForgeSearchState = "open" | "all";
+
 interface ForgeSearchOptions {
   cwd: string;
   query: string;
   limit?: number;
   kinds?: ForgeSearchKind[];
+  state?: ForgeSearchState;
 }
 
 interface LegacyGitHubSearchOptions {
@@ -54,6 +58,11 @@ interface ForgeSearchQueryInput {
   cwd: string;
   query: string;
   kinds?: ForgeSearchKind[];
+  /**
+   * Which item states to search. A daemon that predates the option, and the legacy GitHub
+   * transport, search open items whatever is asked for.
+   */
+  state?: ForgeSearchState;
   enabled: boolean;
   supportsForgeSearch?: boolean;
   hostDisconnectedMessage?: string;
@@ -65,19 +74,14 @@ export function forgeSearchQueryKey(
   query: string,
   kinds?: ForgeSearchKind[],
   transport: "forge" | "github" = "forge",
+  state: ForgeSearchState = "open",
 ) {
   const trimmedQuery = query.trim();
-  if (!kinds) {
-    return ["forge-search", serverId, cwd, transport, trimmedQuery] as const;
-  }
-  return [
-    "forge-search",
-    serverId,
-    cwd,
-    transport,
-    trimmedQuery,
-    [...kinds].sort().join(","),
-  ] as const;
+  const key: string[] = ["forge-search", serverId, cwd, transport, trimmedQuery];
+  if (kinds) key.push([...kinds].sort().join(","));
+  // Open-only searches keep the key they always had; a wider search must not share their results.
+  if (state === "all") key.push("all-states");
+  return key;
 }
 
 export function buildForgeSearchQueryOptions(input: ForgeSearchQueryInput) {
@@ -85,16 +89,23 @@ export function buildForgeSearchQueryOptions(input: ForgeSearchQueryInput) {
   const transport = input.supportsForgeSearch === true ? "forge" : "github";
 
   return {
-    queryKey: forgeSearchQueryKey(input.serverId, input.cwd, query, input.kinds, transport),
+    queryKey: forgeSearchQueryKey(
+      input.serverId,
+      input.cwd,
+      query,
+      input.kinds,
+      transport,
+      input.state,
+    ),
     queryFn: async (): Promise<ForgeSearchPayload> => {
       if (!input.client) {
         throw new Error(
           input.hostDisconnectedMessage ?? i18n.t("workspace.terminal.hostDisconnected"),
         );
       }
-      const request = input.kinds
-        ? { cwd: input.cwd, query, limit: 20, kinds: input.kinds }
-        : { cwd: input.cwd, query, limit: 20 };
+      const request: ForgeSearchOptions = { cwd: input.cwd, query, limit: 20 };
+      if (input.kinds) request.kinds = input.kinds;
+      if (input.state === "all") request.state = "all";
       // COMPAT(githubSearchRpc): use the legacy GitHub RPC with daemons that
       // predate forge.search.*. Remove after 2027-01-17 once the supported
       // daemon floor is >= v0.2.0.
@@ -154,13 +165,13 @@ function toLegacyGitHubSearchKind(kind: ForgeSearchKind): LegacyGitHubSearchKind
 }
 
 function toLegacyGitHubSearchRequest(request: ForgeSearchOptions): LegacyGitHubSearchOptions {
-  if (!request.kinds) {
-    return { cwd: request.cwd, query: request.query, limit: request.limit };
-  }
-  return {
-    ...request,
-    kinds: request.kinds.map(toLegacyGitHubSearchKind),
+  const legacy: LegacyGitHubSearchOptions = {
+    cwd: request.cwd,
+    query: request.query,
+    limit: request.limit,
   };
+  if (request.kinds) legacy.kinds = request.kinds.map(toLegacyGitHubSearchKind);
+  return legacy;
 }
 
 export function useForgeSearchQuery(input: ForgeSearchQueryInput) {

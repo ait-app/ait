@@ -4751,6 +4751,7 @@ export class DaemonClient {
       query: string;
       limit?: number;
       kinds?: ForgeSearchRequest["kinds"];
+      state?: ForgeSearchRequest["state"];
     },
     requestId?: string,
   ): Promise<ForgeSearchPayload> {
@@ -4762,6 +4763,7 @@ export class DaemonClient {
         query: options.query,
         limit: options.limit,
         kinds: options.kinds,
+        state: options.state,
       },
       responseType: "forge.search.response",
       timeout: 15000,

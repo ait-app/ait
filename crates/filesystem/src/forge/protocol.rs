@@ -45,6 +45,16 @@ pub(crate) enum ForgeSearchKind {
     Pr,
 }
 
+/// Item states a search reaches; absent means open items only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ForgeSearchState {
+    /// Open items only.
+    Open,
+    /// Open, merged and closed items.
+    All,
+}
+
 /// Forge or compatibility GitHub search request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +67,8 @@ pub(crate) struct ForgeSearchRequest {
     pub(crate) limit: Option<usize>,
     /// Optional result categories.
     pub(crate) kinds: Option<Vec<ForgeSearchKind>>,
+    /// Optional item states; open items only when absent.
+    pub(crate) state: Option<ForgeSearchState>,
 }
 
 /// One forge search result.
@@ -92,6 +104,21 @@ pub(crate) struct ForgeSearchItem {
     /// Forge timestamp.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) updated_at: Option<String>,
+    /// Author login.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) author: Option<String>,
+    /// Author avatar image URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) author_avatar_url: Option<String>,
+    /// Added lines of a change request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) additions: Option<u64>,
+    /// Deleted lines of a change request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) deletions: Option<u64>,
+    /// Changed files of a change request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) changed_files: Option<u64>,
 }
 
 /// Neutral forge search response.

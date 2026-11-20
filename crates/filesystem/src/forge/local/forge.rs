@@ -16,11 +16,12 @@ use domain::workspace::protocol::workspace::{
 use serde_json::Value;
 
 use crate::forge::ports::{
-    CheckAnnotation, CheckDetails, CheckFailedJob, CheckOutput, ForgeAuthState, ForgeFailureKind,
-    ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem, ForgeSearchKind,
-    PullRequestCheck, PullRequestCreated, PullRequestMergeMethod, PullRequestStatus,
-    PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem, TimelineCommentLocation,
-    TimelineError, TimelineErrorKind, TimelineReviewState,
+    ChangeRequestDiffStat, CheckAnnotation, CheckDetails, CheckFailedJob, CheckOutput,
+    ForgeAuthState, ForgeFailureKind, ForgeRuntime, ForgeRuntimeError, ForgeSearch,
+    ForgeSearchItem, ForgeSearchKind, ForgeSearchStates, PullRequestCheck, PullRequestCreated,
+    PullRequestMergeMethod, PullRequestStatus, PullRequestStatusRead, PullRequestTimeline,
+    PullRequestTimelineItem, TimelineCommentLocation, TimelineError, TimelineErrorKind,
+    TimelineReviewState,
 };
 use crate::support::process::{self, Bounds, RunError, StderrTap};
 
@@ -38,6 +39,8 @@ const PROGRESS_STDERR_LIMIT: u64 = 1024 * 1024;
 const CHECK_ANNOTATION_LIMIT: usize = 20;
 const CHECK_JOB_LIMIT: usize = 100;
 const FAILED_JOB_LIMIT: usize = 5;
+const ISSUE_SEARCH_FIELDS: &str = "number,title,url,state,body,labels,updatedAt,author";
+const CHANGE_REQUEST_SEARCH_FIELDS: &str = "number,title,url,state,body,labels,baseRefName,headRefName,updatedAt,author,additions,deletions,changedFiles";
 const STATUS_FIELDS: &str = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,createdAt,mergedAt,reviewDecision,mergeable,statusCheckRollup";
 
 const TIMELINE_QUERY: &str = r"
@@ -213,6 +216,7 @@ impl ForgeRuntime for LocalForge {
         query: &str,
         limit: usize,
         kinds: &[ForgeSearchKind],
+        states: ForgeSearchStates,
     ) -> Result<ForgeSearch, ForgeRuntimeError> {
         let cwd = require_git_directory(cwd)?;
         let context = match self.forge_context(&cwd) {
@@ -223,50 +227,29 @@ impl ForgeRuntime for LocalForge {
             Err(error) => return Err(error),
         };
         if context.kind == ForgeKind::Gitlab {
-            return gitlab::search(self, &cwd, &context, (query, limit, kinds));
+            return gitlab::search(self, &cwd, &context, (query, limit, kinds, states));
         }
         let limit = limit.clamp(1, 50);
-        let mut attempts = Vec::new();
-        if kinds.contains(&ForgeSearchKind::Issue) {
-            attempts.push((
-                ForgeSearchKind::Issue,
-                self.gh(
-                    &cwd,
-                    &context,
-                    &strings(&[
-                        "issue",
-                        "list",
-                        "--search",
-                        query,
-                        "--json",
-                        "number,title,url,state,body,labels,updatedAt",
-                        "--limit",
-                        &limit.to_string(),
-                    ]),
-                    READ_TIMEOUT,
-                ),
-            ));
-        }
-        if kinds.contains(&ForgeSearchKind::ChangeRequest) {
-            attempts.push((
+        let attempts: Vec<_> = [
+            (ForgeSearchKind::Issue, "issue", ISSUE_SEARCH_FIELDS),
+            (
                 ForgeSearchKind::ChangeRequest,
-                self.gh(
-                    &cwd,
-                    &context,
-                    &strings(&[
-                        "pr",
-                        "list",
-                        "--search",
-                        query,
-                        "--json",
-                        "number,title,url,state,body,labels,baseRefName,headRefName,updatedAt",
-                        "--limit",
-                        &limit.to_string(),
-                    ]),
-                    READ_TIMEOUT,
-                ),
-            ));
-        }
+                "pr",
+                CHANGE_REQUEST_SEARCH_FIELDS,
+            ),
+        ]
+        .into_iter()
+        .filter(|(kind, ..)| kinds.contains(kind))
+        .map(|(kind, command, fields)| {
+            let mut arguments = strings(&[command, "list", "--search", query, "--json", fields]);
+            // `gh` lists open items unless told otherwise.
+            if states == ForgeSearchStates::All {
+                arguments.extend(strings(&["--state", "all"]));
+            }
+            arguments.extend(strings(&["--limit", &limit.to_string()]));
+            (kind, self.gh(&cwd, &context, &arguments, READ_TIMEOUT))
+        })
+        .collect();
         let requested = attempts.len();
         let mut items = Vec::new();
         let mut failures = Vec::new();
@@ -982,9 +965,31 @@ fn parse_search_items(
                 base_ref_name: optional_string(item, "baseRefName"),
                 head_ref_name: optional_string(item, "headRefName"),
                 updated_at: optional_string(item, "updatedAt"),
+                author: author_field(item, "login"),
+                author_avatar_url: search_author_avatar_url(item, context),
+                diff_stat: search_diff_stat(item),
             })
         })
         .collect()
+}
+
+/// GitHub serves a user's avatar at `<host>/<login>.png`; apps have no such page.
+fn search_author_avatar_url(item: &Value, context: &ForgeContext) -> Option<String> {
+    let author = item.get("author")?;
+    if author.get("is_bot").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    let login = author.get("login").and_then(Value::as_str)?;
+    Some(format!("https://{}/{login}.png?size=64", context.host))
+}
+
+fn search_diff_stat(item: &Value) -> Option<ChangeRequestDiffStat> {
+    let count = |field: &str| item.get(field).and_then(Value::as_u64);
+    Some(ChangeRequestDiffStat {
+        additions: count("additions")?,
+        deletions: count("deletions")?,
+        changed_files: count("changedFiles")?,
+    })
 }
 
 fn workspace_reset_at(

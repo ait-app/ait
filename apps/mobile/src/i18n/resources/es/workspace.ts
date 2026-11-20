@@ -587,6 +587,7 @@ export const workspace = {
         threadActions: "Acciones del hilo",
       },
       states: {
+        open: "Abierto",
         merged: "Fusionado",
         closed: "Cerrado",
       },
@@ -599,6 +600,12 @@ export const workspace = {
         statusLoadFailed: "No se puede cargar el estado de la solicitud de extracción",
         activityLoadFailed: "No se puede cargar la actividad de solicitud de extracción",
       },
+    },
+    linkCard: {
+      files_one: "{{count}} archivo",
+      files_many: "{{count}} archivos",
+      files_other: "{{count}} archivos",
+      unavailable: "Detalles no disponibles",
     },
     forgeSetup: {
       installCli: "Instala la CLI de {{cli}} para usar las funciones de {{brand}}.",

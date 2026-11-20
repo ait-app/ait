@@ -9,10 +9,10 @@ use serde_json::Value;
 
 use super::{
     CommandFamily, ForgeAuthState, ForgeContext, ForgeFailureKind, ForgeRuntimeError, ForgeSearch,
-    ForgeSearchItem, ForgeSearchKind, LocalForge, PullRequestCreated, PullRequestMergeMethod,
-    PullRequestStatusRead, READ_TIMEOUT, WRITE_TIMEOUT, current_number, forge_error, git_optional,
-    integer, malformed, optional_string, parse_json, run_command, string, strings,
-    unavailable_search,
+    ForgeSearchItem, ForgeSearchKind, ForgeSearchStates, LocalForge, PullRequestCreated,
+    PullRequestMergeMethod, PullRequestStatusRead, READ_TIMEOUT, WRITE_TIMEOUT, author_field,
+    current_number, forge_error, git_optional, integer, malformed, optional_string, parse_json,
+    run_command, string, strings, unavailable_search,
 };
 
 pub(super) mod checkout;
@@ -244,9 +244,9 @@ pub(super) fn search(
     forge: &LocalForge,
     cwd: &Path,
     context: &ForgeContext,
-    input: (&str, usize, &[ForgeSearchKind]),
+    input: (&str, usize, &[ForgeSearchKind], ForgeSearchStates),
 ) -> Result<ForgeSearch, ForgeRuntimeError> {
-    let (query, limit, kinds) = input;
+    let (query, limit, kinds, states) = input;
     let limit = limit.clamp(1, 50);
     let mut items = Vec::new();
     for kind in kinds {
@@ -264,6 +264,10 @@ pub(super) fn search(
         ]);
         if !query.trim().is_empty() {
             arguments.extend(strings(&["--search", query]));
+        }
+        // `glab` lists open items unless told otherwise.
+        if states == ForgeSearchStates::All {
+            arguments.push("--all".to_owned());
         }
         let value = match read(forge, cwd, context, &arguments) {
             Ok(value) => value,
@@ -320,6 +324,10 @@ fn search_item(
         base_ref_name: optional_string(value, "target_branch"),
         head_ref_name: optional_string(value, "source_branch"),
         updated_at: optional_string(value, "updated_at"),
+        author: author_field(value, "username"),
+        author_avatar_url: author_field(value, "avatar_url"),
+        // List responses carry no diff size, and one extra request per row is not worth it.
+        diff_stat: None,
     })
 }
 
