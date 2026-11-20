@@ -62,6 +62,8 @@ export AIT_SERVER_MINIMAX_CODE_BIN=/absolute/path/to/mcode
 
 - 原生模型与推理等级、Default/Plan 模式和独立权限选择。
 - 文本/图片输入、流式回答、推理、工具进度、审批和原生 token 用量。
+- `ask_user` 问卷以提问弹窗呈现：每个原生步骤对应一个问题，保留原生顺序、步骤标题和选项说明，
+  自由填写项并入同一个问题；回答按原生字段返回，工具调用详情不再另行渲染问卷。
 - 停止原生回合及受管进程清理；原生错误脱敏后保留在 AIT 中。
 - AIT 会话关闭/重启后恢复 MiniMax Code 原生上下文和 AIT 展示历史。
 - 在新会话启动时传入 MCP servers 与附加 system prompt；这些启动配置不能在同一

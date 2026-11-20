@@ -2,6 +2,7 @@
 
 mod catalog;
 mod config;
+mod questions;
 mod session;
 
 use std::path::PathBuf;

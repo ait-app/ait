@@ -220,4 +220,76 @@ describe("question response recovery", () => {
       await i18n.changeLanguage("en");
     }
   });
+  it("shows a MiniMax Code questionnaire step in full and answers it under its header", () => {
+    // One question per native step, as the minimax-code adapter projects `ask_user`.
+    const request = AgentPermissionRequestPayloadSchema.parse({
+      id: "question-minimax",
+      provider: "minimax-code",
+      name: "question",
+      kind: "question",
+      title: "Project setup",
+      input: {
+        questions: [
+          {
+            id: "storage",
+            header: "Storage",
+            question: "Which database should it use?",
+            description: "Used by every new service.",
+            options: [
+              { label: "Postgres", description: "Runs as a server" },
+              { label: "SQLite", description: "Single file" },
+            ],
+            multiSelect: false,
+            allowOther: true,
+            allowEmpty: false,
+            otherKey: "storage__other",
+          },
+          {
+            id: "language",
+            header: "Language",
+            question: "Which language do you prefer?",
+            description: null,
+            options: [{ label: "Rust" }, { label: "Go" }],
+            multiSelect: false,
+            allowOther: true,
+            allowEmpty: false,
+            otherKey: "language__other",
+          },
+        ],
+      },
+      metadata: { toolCallId: "call-ask" },
+    });
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{ key: "agent:question-minimax", agentId: "agent", request }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Storage",
+      "Language",
+    ]);
+    expect(screen.getByTestId("question-form-current-description").textContent).toBe(
+      "Used by every new service.",
+    );
+    expect(screen.getByText("Runs as a server")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Which database should it use?" })).toBeTruthy();
+    fireEvent.click(screen.getByText("Postgres"));
+    expect(screen.getByTestId("question-form-current-question").textContent).toBe(
+      "Which language do you prefer?",
+    );
+    expect(screen.queryByTestId("question-form-current-description")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Which language do you prefer?" }), {
+      target: { value: "Zig" },
+    });
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      behavior: "allow",
+      updatedInput: { ...request.input, answers: { Storage: "Postgres", Language: "Zig" } },
+    });
+  });
 });

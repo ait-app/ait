@@ -205,3 +205,64 @@ async fn installed_latest_mcode_confirms_model_thinking_mode_and_permission_choi
         session.close().await.unwrap();
     }
 }
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_MINIMAX_CODE_BIN and native login; answers a native questionnaire"]
+async fn installed_latest_mcode_asks_one_question_per_step_and_accepts_the_answer() {
+    use super::*;
+    let root = tempfile::tempdir().unwrap();
+    let program =
+        std::env::var_os("AIT_TEST_MINIMAX_CODE_BIN").expect("set AIT_TEST_MINIMAX_CODE_BIN");
+    let client = MiniMaxClient::new(program.into());
+    let spec = AgentSessionSpec {
+        provider: PROVIDER.into(),
+        cwd: root.path().to_str().unwrap().into(),
+        config: StoredAgentConfig::default(),
+        confinement: None,
+    };
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn(
+            "Call your ask_user tool now with exactly one single-choice step whose header is \
+             Language, asking whether I prefer Rust or Go. After I answer, reply with exactly \
+             the option I chose and nothing else.",
+            &spec.config,
+        )
+        .await
+        .unwrap();
+    let mut asked = false;
+    let reply = tokio::time::timeout(Duration::from_secs(180), async {
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::PermissionRequested(request)) => {
+                    let questions = request["input"]["questions"].as_array().unwrap();
+                    assert_eq!(questions.len(), 1, "{request}");
+                    assert_eq!(questions[0]["header"], "Language", "{request}");
+                    assert_eq!(questions[0]["allowOther"], true, "{request}");
+                    assert!(request["metadata"]["toolCallId"].is_string(), "{request}");
+                    let label = questions[0]["options"][0]["label"].clone();
+                    session
+                        .respond_permission(
+                            request["id"].as_str().unwrap(),
+                            &json!({"behavior":"allow","updatedInput":{
+                                "answers":{"Language":label}}}),
+                        )
+                        .await
+                        .unwrap();
+                    asked = true;
+                }
+                Some(AgentTurnEvent::Completed(reply)) => break reply,
+                Some(AgentTurnEvent::Failed) => {
+                    panic!("native failure: {:?}", session.failure_message())
+                }
+                _ => {}
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(asked, "native ask_user did not reach the question request");
+    eprintln!("native reply after the answer: {reply:?}");
+    session.close().await.unwrap();
+}

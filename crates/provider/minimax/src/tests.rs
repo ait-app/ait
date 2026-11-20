@@ -7,6 +7,7 @@ mod discovery;
 mod execution;
 mod live;
 mod mcp;
+mod questionnaire;
 mod variants;
 
 fn fixture() -> (tempfile::TempDir, MiniMaxClient, AgentSessionSpec) {

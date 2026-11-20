@@ -7,6 +7,7 @@ export interface QuestionFormQuestion {
   answerFormat?: "array";
   answerKey?: string;
   question: string;
+  description?: string;
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
@@ -56,6 +57,7 @@ export function parseQuestionFormQuestions(input: unknown): QuestionFormQuestion
         ? { answerFormat: "array" as const, answerKey: readOptionalString(q, "answerKey") }
         : {}),
       question: q.question,
+      description: readOptionalString(q, "description"),
       header: q.header,
       options,
       multiSelect: q.multiSelect === true,

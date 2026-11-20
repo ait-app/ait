@@ -146,6 +146,35 @@ for line in sys.stdin:
                         "language_custom": {"type": "string", "title": "Other language"}},
                     "required": ["language"]}}})
             awaiting_questionnaire = True
+        elif text == "ask-user":
+            # The frames native 0.7.7 sends for `ask_user`: the tool input, then a form with a
+            # numeric identity, no `toolCallId` and a free-form `__other` property per step.
+            steps = [{"id": "storage", "header": "Storage", "question": "Which database?",
+                      "options": [{"id": "pg", "label": "Postgres", "recommended": True},
+                                  {"id": "lite", "label": "SQLite"}]},
+                     {"id": "language", "header": "Language", "question": "Which language?",
+                      "options": [{"id": "rust", "label": "Rust"}, {"id": "go", "label": "Go"}]}]
+            raw = {"mode": "questionnaire", "async": False, "title": "Project setup", "steps": steps}
+            update({"sessionUpdate": "tool_call", "toolCallId": "call-ask", "title": "ask_user",
+                    "name": "ask_user", "kind": "other"})
+            update({"sessionUpdate": "tool_call_update", "toolCallId": "call-ask",
+                    "status": "in_progress", "rawInput": raw})
+            properties = {}
+            for step in steps:
+                properties[step["id"]] = {
+                    "type": "string", "title": step["question"], "oneOf": [
+                        {"const": option["id"], "title": option["label"],
+                         "description": f"About {option['label']}"} for option in step["options"]]}
+                properties[step["id"] + "__other"] = {
+                    "type": "string", "title": step["question"] + " \u2014 Other",
+                    "description": "Others..."}
+            send({"id": 0, "method": "elicitation/create", "params": {
+                "mode": "form", "sessionId": session_id, "message": "Project setup",
+                "requestedSchema": {"type": "object", "properties": properties}}})
+            update({"sessionUpdate": "tool_call_update", "toolCallId": "call-ask",
+                    "status": "completed", "rawInput": raw, "rawOutput": {
+                        "details": {"waiting_for_user": True}, "terminate": True}})
+            awaiting_questionnaire = True
         elif text == "remember":
             (root / "native-memory").write_text("remembered")
             finish("remembered")
@@ -165,6 +194,14 @@ for line in sys.stdin:
             continue
         update({"sessionUpdate": "tool_call_update", "toolCallId": "tool", "status": "completed"})
         finish("approved" if outcome.get("optionId") == "yes" else "denied")
+    elif identity == 0 and method is None:
+        awaiting_questionnaire = False
+        result = request["result"]
+        if result["action"] == "cancel":
+            continue
+        assert result == {"action": "accept", "content": {
+            "storage": "pg", "language__other": "Zig"}}, result
+        finish("Postgres, Zig")
     elif identity == "question":
         awaiting_questionnaire = False
         result = request["result"]

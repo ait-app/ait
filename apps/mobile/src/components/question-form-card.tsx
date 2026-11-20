@@ -561,6 +561,11 @@ export function QuestionFormCard({
           {activeQuestion?.question}
         </Text>
       </View>
+      {activeQuestion?.description ? (
+        <Text testID="question-form-current-description" style={styles.questionDescription}>
+          {activeQuestion.description}
+        </Text>
+      ) : null}
 
       {activeQuestion ? (
         <View key={activeQuestion.question} style={styles.questionBlock}>
@@ -665,6 +670,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 22,
+  },
+  questionDescription: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[1],
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+    color: theme.colors.foregroundMuted,
   },
   optionsWrap: {
     gap: theme.spacing[1],

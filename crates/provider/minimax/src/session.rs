@@ -5,7 +5,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{MiniMaxClient, PROVIDER, catalog, config};
+use super::{MiniMaxClient, PROVIDER, catalog, config, questions};
 use provider_core::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -34,6 +34,8 @@ pub(super) struct Session {
     stream: Stream,
     images: provider_native::images::ImageStore,
     permissions: BTreeMap<String, acp_permissions::Pending>,
+    /// Latest `ask_user` tool update of the active prompt, which labels the form that follows.
+    asked: Option<Value>,
     closed: bool,
 }
 
@@ -82,6 +84,7 @@ pub(super) async fn open(
         stream: Stream::new(client.images.clone()),
         images: client.images.clone(),
         permissions: BTreeMap::new(),
+        asked: None,
         closed: false,
     };
     if let Err(error) = config::apply(
@@ -246,21 +249,27 @@ impl Session {
                             &self.options,
                         )));
                 } else if self.active.is_some() {
+                    if update["rawInput"]["steps"].is_array() {
+                        self.asked = Some(update.clone());
+                    }
                     self.stream.update(update)?;
                 }
             }
             Some(method @ ("session/request_permission" | "elicitation/create")) => {
-                let project = if method == "elicitation/create" {
-                    acp_permissions::form
-                } else {
-                    acp_permissions::capture
-                };
+                let asked = self.asked.as_ref();
                 let request = acp_permissions::admit(
                     message,
                     &self.id,
                     self.active.is_some(),
                     &mut self.permissions,
-                    |message| project(message, PROVIDER),
+                    |message| {
+                        if method != "elicitation/create" {
+                            return acp_permissions::capture(message, PROVIDER);
+                        }
+                        let mut pending = acp_permissions::form(message, PROVIDER)?;
+                        questions::project(&mut pending, message, asked);
+                        Ok(pending)
+                    },
                 )?;
                 self.stream
                     .events
@@ -293,6 +302,7 @@ impl Session {
                 }
                 self.stream.events.push_back(event);
                 self.active = None;
+                self.asked = None;
             }
             Some(_) if message.get("id").is_some() => return Err(AgentSessionError::Failed),
             Some(_) => {}
@@ -448,12 +458,18 @@ impl AgentSession for Session {
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
+        let native = self
+            .permissions
+            .get(id)
+            .map(|pending| questions::answer(pending, response))
+            .transpose()?
+            .flatten();
         acp_session::respond(
             &mut self.transport,
             &mut self.permissions,
             &mut self.stream.events,
             id,
-            response,
+            native.as_ref().unwrap_or(response),
         )
         .await?;
         if response["behavior"] == "deny" && response["interrupt"] == true {
