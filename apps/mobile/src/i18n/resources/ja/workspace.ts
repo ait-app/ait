@@ -299,6 +299,8 @@ export const workspace = {
       copyPath: "ワークスペースパスをコピー",
       copyBranchName: "ブランチ名をコピー",
       showSetup: "セットアップを表示",
+      archive: "ワークスペースをアーカイブ",
+      archiving: "アーカイブ中...",
     },
     toasts: {
       workspacePathUnavailable: "ワークスペースパスはまだ利用できません",
@@ -392,11 +394,6 @@ export const workspace = {
         confirmMessage:
           "origin の最新のデフォルトブランチを取得し、ブランチを {{branch}} に戻して、追跡済みファイルの変更とローカルコミットを破棄します。未追跡のファイルとディレクトリ（入れ子のリポジトリを含む）もすべて削除します。Git の無視対象ファイルは保持します。origin に同名のブランチがある場合は、強制プッシュで同じコミットにリセットします。",
         confirm: "リセット",
-      },
-      archive: {
-        label: "ワークスペースをアーカイブ",
-        pending: "アーカイブ中...",
-        success: "アーカイブしました",
       },
       mergePr: {
         squash: "PRをマージ（スカッシュ）",

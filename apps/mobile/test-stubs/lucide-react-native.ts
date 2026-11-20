@@ -44,6 +44,7 @@ export const Copy = StubIcon;
 export const CornerDownLeft = StubIcon;
 export const Cpu = StubIcon;
 export const Download = StubIcon;
+export const Ellipsis = StubIcon;
 export const ExternalLink = StubIcon;
 export const Eye = StubIcon;
 export const EyeOff = StubIcon;

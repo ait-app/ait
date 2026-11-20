@@ -8,8 +8,7 @@ import {
   CompactWorkspaceHeader,
   MobileWorkspaceTabSwitcher,
 } from "@/screens/workspace/compact-workspace-header";
-import { WorkspaceHeaderProjectRow } from "@/screens/workspace/workspace-header-project-row";
-import { ScreenTitle } from "@/components/headers/screen-title";
+import { WorkspaceHeaderBreadcrumb } from "@/screens/workspace/workspace-header-breadcrumb";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { SplitContainer } from "@/components/split-container";
 import {
@@ -408,6 +407,7 @@ interface WorkspaceHeaderTitleBarProps {
   isSubtitleDistinct: boolean;
   currentBranchName: string | null;
   normalizedServerId: string;
+  normalizedWorkspaceId: string;
   showWorkspaceSetup: boolean;
   importAgentDisabled: boolean;
   copyPathDisabled: boolean;
@@ -424,6 +424,7 @@ function WorkspaceHeaderTitleBar({
   isSubtitleDistinct,
   currentBranchName,
   normalizedServerId,
+  normalizedWorkspaceId,
   showWorkspaceSetup,
   importAgentDisabled,
   copyPathDisabled,
@@ -435,21 +436,20 @@ function WorkspaceHeaderTitleBar({
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
-        <View style={styles.headerTitleTextGroup}>
+        <View style={styles.headerTitleSkeletonSlot}>
           <View style={styles.headerTitleSkeleton} />
         </View>
       ) : (
-        <View style={styles.headerTitleTextGroup}>
-          <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
-          <WorkspaceHeaderProjectRow
-            subtitle={subtitle}
-            isSubtitleDistinct={isSubtitleDistinct}
-            serverId={normalizedServerId}
-          />
-        </View>
+        <WorkspaceHeaderBreadcrumb
+          project={subtitle}
+          workspace={title}
+          showProject={isSubtitleDistinct}
+        />
       )}
       <View style={styles.compactHeaderMenuCluster}>
         <WorkspaceHeaderMenuDesktop
+          serverId={normalizedServerId}
+          workspaceId={normalizedWorkspaceId}
           currentBranchName={currentBranchName}
           showWorkspaceSetup={showWorkspaceSetup}
           importAgentDisabled={importAgentDisabled}
@@ -3310,6 +3310,7 @@ function WorkspaceScreenContent({
                 isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
                 currentBranchName={currentBranchName}
                 normalizedServerId={normalizedServerId}
+                normalizedWorkspaceId={normalizedWorkspaceId}
                 showWorkspaceSetup={showWorkspaceSetup}
                 importAgentDisabled={!canOpenImportSheet}
                 copyPathDisabled={!workspaceDirectory}
@@ -3332,6 +3333,7 @@ function WorkspaceScreenContent({
       headerRight,
       isWorkspaceHeaderLoading,
       normalizedServerId,
+      normalizedWorkspaceId,
       openImportSheet,
       showScreenHeader,
       showWorkspaceSetup,
@@ -3368,7 +3370,6 @@ function WorkspaceScreenContent({
           isLoading={isWorkspaceHeaderLoading}
           title={workspaceHeaderTitle}
           subtitle={workspaceHeaderSubtitle}
-          isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
           serverId={normalizedServerId}
           onToggleExplorer={handleToggleExplorerSidebar}
           explorerToggleLabel={explorerSidebarToggleLabel}
@@ -3395,7 +3396,8 @@ function WorkspaceScreenContent({
             onCloseOtherTabs={handleCloseOtherTabs}
           />
           <WorkspaceHeaderMenuMobile
-            normalizedServerId={normalizedServerId}
+            serverId={normalizedServerId}
+            workspaceId={normalizedWorkspaceId}
             onCreateSchedule={handleCreateScheduleTab}
             scripts={compactHeaderScripts}
             currentBranchName={currentBranchName}
@@ -3442,7 +3444,6 @@ function WorkspaceScreenContent({
       handleToggleExplorerSidebar,
       isMobile,
       isWorkspaceHeaderLoading,
-      isWorkspaceHeaderSubtitleDistinct,
       navigateToTabId,
       normalizedServerId,
       normalizedWorkspaceId,
@@ -3737,27 +3738,10 @@ const styles = StyleSheet.create((theme) => ({
     },
     overflow: "hidden",
   },
-  headerTitleTextGroup: {
+  headerTitleSkeletonSlot: {
     minWidth: 0,
     overflow: "hidden",
     flexShrink: 1,
-    flexGrow: {
-      xs: 1,
-      md: 0,
-    },
-    flexDirection: {
-      xs: "column",
-      md: "row",
-    },
-    alignItems: {
-      xs: "stretch",
-      md: "center",
-    },
-    justifyContent: "flex-start",
-    gap: {
-      xs: 0,
-      md: theme.spacing[2],
-    },
   },
   headerTitleSkeleton: {
     width: 220,

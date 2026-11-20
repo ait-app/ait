@@ -8,7 +8,6 @@ import { GitActionsSplitButton } from "./actions-split-button";
 vi.mock("@/git/use-actions", () => ({
   useGitActionRunner: () => (action: GitAction) => action.handler(),
 }));
-vi.mock("@/hooks/use-shortcut-keys", () => ({ useShortcutKeys: () => null }));
 vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -40,23 +39,42 @@ afterEach(() => {
 });
 
 describe("workspace action dropdown", () => {
-  it("keeps manual archive reachable when there is no recommended primary action", () => {
+  it("keeps the menu reachable when there is no recommended primary action", () => {
     const handler = vi.fn();
-    const archive: GitAction = {
-      id: "archive-workspace",
-      label: "Archive workspace",
-      pendingLabel: "Archiving...",
-      successLabel: "Archived",
+    const reset: GitAction = {
+      id: "reset-workspace",
+      label: "Reset workspace",
+      pendingLabel: "Resetting...",
+      successLabel: "Workspace reset",
       disabled: false,
       status: "idle",
       startsGroup: true,
       handler,
     };
-    render(<GitActionsSplitButton gitActions={{ primary: null, secondary: [archive] }} />);
+    render(<GitActionsSplitButton gitActions={{ primary: null, secondary: [reset] }} />);
 
     expect(screen.queryByTestId("changes-primary-cta")).toBeNull();
     expect(screen.getByTestId("changes-actions-menu-trigger")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("workspace-archive-action"));
+    fireEvent.click(screen.getByTestId("changes-menu-reset-workspace"));
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("shows a promoted reset as the primary button", () => {
+    const handler = vi.fn();
+    const reset: GitAction = {
+      id: "reset-workspace",
+      label: "Reset workspace",
+      pendingLabel: "Resetting...",
+      successLabel: "Workspace reset",
+      disabled: false,
+      status: "idle",
+      startsGroup: true,
+      handler,
+    };
+    render(<GitActionsSplitButton gitActions={{ primary: reset, secondary: [] }} />);
+
+    expect(screen.getByTestId("changes-primary-cta").textContent).toBe("Reset workspace");
+    fireEvent.click(screen.getByTestId("changes-primary-cta"));
     expect(handler).toHaveBeenCalledOnce();
   });
 

@@ -57,6 +57,7 @@ export interface WorkspaceCommandCenterLabels {
   pin: string;
   unpin: string;
   showSetup: string;
+  archive: string;
   labelsGroup: string;
 }
 
@@ -85,6 +86,7 @@ export interface WorkspaceCommandCenterIcons {
   pin?: CommandCenterIcon;
   unpin?: CommandCenterIcon;
   showSetup?: CommandCenterIcon;
+  archive?: CommandCenterIcon;
   toggleFocusMode?: CommandCenterIcon;
   git?(action: GitAction): CommandCenterIcon | undefined;
 }
@@ -117,6 +119,8 @@ export interface WorkspaceCommandCenterSource {
     canPin: boolean;
     /** The workspace has setup commands or a setup error — same gate as the header menu. */
     canShowSetup: boolean;
+    /** Same gate as the header menu's Archive workspace: known, and not already archiving. */
+    canArchive: boolean;
   };
   activeTabKind: WorkspaceTabTarget["kind"] | null;
   activeTabIndex: number;
@@ -133,6 +137,7 @@ export interface WorkspaceCommandCenterSource {
   runGitAction(action: GitAction): void;
   copyPath(): void;
   copyBranchName(): void;
+  archiveWorkspace(): void;
   toggleLabel(name: string, assigned: boolean): void | Promise<void>;
 }
 
@@ -155,8 +160,6 @@ function buildGitContribution(
       title: action.label,
       sectionTitle: source.labels.section,
       icon: source.icons.git?.(action),
-      shortcutKeys:
-        action.id === "archive-workspace" ? source.shortcuts.archiveWorkspace : undefined,
     },
   };
 }
@@ -698,6 +701,22 @@ export function buildWorkspaceCommandCenterContributions(
         icon: source.icons.toggleFocusMode,
         shortcutKeys: source.shortcuts.toggleFocusMode,
         action: { id: "workspace.focus.toggle", scope: "workspace" },
+        visibility: "query",
+      }),
+    );
+  }
+
+  if (source.capabilities.canArchive) {
+    contributions.push(
+      buildWorkspaceCallback({
+        source,
+        id: "workspace:archive",
+        rank: 27,
+        title: source.labels.archive,
+        keywords: ["archive", "close", "remove", "workspace"],
+        icon: source.icons.archive,
+        shortcutKeys: source.shortcuts.archiveWorkspace,
+        run: source.archiveWorkspace,
         visibility: "query",
       }),
     );

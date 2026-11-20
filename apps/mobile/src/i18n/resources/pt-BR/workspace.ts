@@ -298,6 +298,8 @@ export const workspace = {
       copyPath: "Copiar caminho do workspace",
       copyBranchName: "Copiar nome da branch",
       showSetup: "Mostrar configuração",
+      archive: "Arquivar workspace",
+      archiving: "Arquivando...",
     },
     toasts: {
       workspacePathUnavailable: "O caminho do workspace ainda não está disponível",
@@ -391,11 +393,6 @@ export const workspace = {
         confirmMessage:
           "Buscar a versão mais recente da branch padrão de origin, restaurar a branch {{branch}} e descartar alterações rastreadas e commits locais. Excluir também todos os arquivos e diretórios não rastreados, incluindo repositórios aninhados; os arquivos ignorados pelo Git são preservados. Se origin tiver uma branch com o mesmo nome, ela será redefinida para o mesmo commit por um push forçado.",
         confirm: "Redefinir",
-      },
-      archive: {
-        label: "Arquivar workspace",
-        pending: "Arquivando...",
-        success: "Arquivado",
       },
       mergePr: {
         squash: "Merge",

@@ -297,6 +297,8 @@ export const workspace = {
       copyPath: "워크스페이스 경로 복사",
       copyBranchName: "브랜치 이름 복사",
       showSetup: "설정 표시",
+      archive: "워크스페이스 보관",
+      archiving: "보관하는 중...",
     },
     toasts: {
       workspacePathUnavailable: "워크스페이스 경로를 아직 사용할 수 없습니다",
@@ -391,11 +393,6 @@ export const workspace = {
         confirmMessage:
           "origin의 최신 기본 브랜치를 가져오고 브랜치를 {{branch}}로 복원한 뒤 추적 파일 변경 사항과 로컬 커밋을 삭제합니다. 추적되지 않은 모든 파일과 디렉터리(중첩 저장소 포함)도 삭제합니다. Git에서 무시하는 파일은 유지합니다. origin에 같은 이름의 브랜치가 있으면 강제 푸시로 동일한 커밋으로 초기화합니다.",
         confirm: "초기화",
-      },
-      archive: {
-        label: "워크스페이스 보관",
-        pending: "보관하는 중...",
-        success: "보관됨",
       },
       mergePr: {
         squash: "PR 병합(스쿼시)",

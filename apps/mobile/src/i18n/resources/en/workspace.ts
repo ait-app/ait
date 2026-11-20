@@ -296,6 +296,8 @@ export const workspace = {
       copyPath: "Copy workspace path",
       copyBranchName: "Copy branch name",
       showSetup: "Show setup",
+      archive: "Archive workspace",
+      archiving: "Archiving...",
     },
     toasts: {
       workspacePathUnavailable: "Workspace path is not available yet",
@@ -390,11 +392,6 @@ export const workspace = {
         confirmMessage:
           "Fetch the latest default branch from origin, restore branch {{branch}}, and discard tracked changes and local commits in this workspace. Delete all untracked files and directories, including nested repositories; Git-ignored files are kept. If origin has a branch with the same name, force-push it to the same commit.",
         confirm: "Reset workspace",
-      },
-      archive: {
-        label: "Archive workspace",
-        pending: "Archiving...",
-        success: "Archived",
       },
       mergePr: {
         squash: "Merge PR (squash)",

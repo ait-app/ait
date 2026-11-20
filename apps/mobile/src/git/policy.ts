@@ -21,8 +21,7 @@ export type GitActionId =
   | "enable-pr-auto-merge-rebase"
   | "disable-pr-auto-merge"
   | "merge-branch"
-  | "reset-workspace"
-  | "archive-workspace";
+  | "reset-workspace";
 
 export interface GitAction {
   id: GitActionId;
@@ -78,7 +77,8 @@ export interface BuildGitActionsInput {
   behindBaseCount: number;
   aheadOfOrigin: number | null;
   behindOfOrigin: number | null;
-  shouldPromoteArchive: boolean;
+  /** The work is delivered: merged, clean and in sync, so the next step is a fresh start. */
+  shouldPromoteReset: boolean;
   branchStatusAvailable: boolean;
   hasConflicts: boolean;
   hasActiveAgents: boolean;
@@ -305,18 +305,6 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
     handler: input.runtime["reset-workspace"].handler,
   });
 
-  allActions.set("archive-workspace", {
-    id: "archive-workspace",
-    label: i18n.t("workspace.git.actions.archive.label"),
-    pendingLabel: i18n.t("workspace.git.actions.archive.pending"),
-    successLabel: i18n.t("workspace.git.actions.archive.success"),
-    disabled: input.runtime["archive-workspace"].disabled,
-    status: input.runtime["archive-workspace"].status,
-    icon: input.runtime["archive-workspace"].icon,
-    startsGroup: true,
-    handler: input.runtime["archive-workspace"].handler,
-  });
-
   const primaryActionId = getPrimaryActionId(input);
   const primary = primaryActionId ? (allActions.get(primaryActionId) ?? null) : null;
 
@@ -327,12 +315,11 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   if (!input.isOnBaseBranch) {
     secondaryIds.push(...getFeatureActionIds(input));
   }
-  secondaryIds.push("archive-workspace");
 
   return {
     primary,
     secondary: secondaryIds
-      .filter((id) => id !== primaryActionId || (id !== "archive-workspace" && id !== "push"))
+      .filter((id) => id !== primaryActionId || (id !== "reset-workspace" && id !== "push"))
       .map((id) => allActions.get(id)!),
   };
 }
@@ -370,13 +357,14 @@ function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
   }
   if (input.isOnBaseBranch && canPush(input)) return "push";
   if (
-    input.shouldPromoteArchive &&
+    input.shouldPromoteReset &&
+    canResetWorkspace(input) &&
     !input.hasActiveAgents &&
     !input.hasNewWork &&
     (input.remoteAheadCount ?? 0) === 0 &&
     (input.remoteBehindCount ?? 0) === 0
   ) {
-    return "archive-workspace";
+    return "reset-workspace";
   }
   return null;
 }
@@ -660,6 +648,11 @@ function getMergeBranchUnavailableMessage(input: BuildGitActionsInput): string |
     return i18n.t("workspace.git.actions.unavailable.mergeNothing");
   }
   return undefined;
+}
+
+/** Only a managed worktree that knows its initial branch and has a remote can be reset. */
+function canResetWorkspace(input: BuildGitActionsInput): boolean {
+  return input.isPaseoOwnedWorktree && !getResetWorkspaceUnavailableMessage(input);
 }
 
 function getResetWorkspaceUnavailableMessage(input: BuildGitActionsInput): string | undefined {

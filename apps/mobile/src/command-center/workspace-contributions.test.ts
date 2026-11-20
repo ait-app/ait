@@ -25,12 +25,13 @@ function source(gitActions: GitActions): {
   dispatched: KeyboardActionDefinition[];
   copiedPaths: number;
   copiedBranchNames: number;
+  archives: number;
   toggledLabels: Array<{ name: string; assigned: boolean }>;
 } {
   const runGitActions: GitAction[] = [];
   const dispatched: KeyboardActionDefinition[] = [];
   const toggledLabels: Array<{ name: string; assigned: boolean }> = [];
-  const counters = { copiedPaths: 0, copiedBranchNames: 0 };
+  const counters = { copiedPaths: 0, copiedBranchNames: 0, archives: 0 };
   return {
     value: {
       gitActions,
@@ -75,6 +76,7 @@ function source(gitActions: GitActions): {
         pin: "Pin to top",
         unpin: "Unpin",
         showSetup: "Show setup",
+        archive: "Archive workspace",
         labelsGroup: "Labels",
       },
       icons: {},
@@ -85,6 +87,7 @@ function source(gitActions: GitActions): {
         isGit: false,
         canPin: false,
         canShowSetup: false,
+        canArchive: false,
       },
       activeTabKind: null,
       activeTabIndex: -1,
@@ -100,6 +103,9 @@ function source(gitActions: GitActions): {
       copyBranchName: () => {
         counters.copiedBranchNames += 1;
       },
+      archiveWorkspace: () => {
+        counters.archives += 1;
+      },
       toggleLabel: (name, assigned) => {
         toggledLabels.push({ name, assigned });
       },
@@ -112,6 +118,9 @@ function source(gitActions: GitActions): {
     },
     get copiedBranchNames() {
       return counters.copiedBranchNames;
+    },
+    get archives() {
+      return counters.archives;
     },
   };
 }
@@ -184,6 +193,7 @@ describe("workspace command center contributions", () => {
       isGit: false,
       canPin: false,
       canShowSetup: false,
+      canArchive: false,
     };
 
     const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
@@ -308,6 +318,31 @@ describe("workspace command center contributions", () => {
         (item) => item.id === "workspace:pin",
       ),
     ).toBe(false);
+  });
+
+  it("archives the workspace on query, with its shortcut, only while it can be archived", () => {
+    const unavailable = source({ primary: null, secondary: [] });
+    expect(
+      buildWorkspaceCommandCenterContributions(unavailable.value).some(
+        (item) => item.id === "workspace:archive",
+      ),
+    ).toBe(false);
+
+    const available = source({ primary: null, secondary: [] });
+    available.value.capabilities.canArchive = true;
+    available.value.shortcuts.archiveWorkspace = [["mod", "shift", "Backspace"]];
+    const contribution = buildWorkspaceCommandCenterContributions(available.value).find(
+      (item) => item.id === "workspace:archive",
+    );
+
+    expect(contribution?.visibility).toBe("query");
+    expect(contribution?.presentation).toMatchObject({
+      title: "Archive workspace",
+      shortcutKeys: [["mod", "shift", "Backspace"]],
+    });
+    contribution?.run();
+    expect(available.archives).toBe(1);
+    expect(available.dispatched).toEqual([]);
   });
 
   it("lists Show setup only when the workspace has setup to show", () => {

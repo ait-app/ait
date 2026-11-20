@@ -72,7 +72,7 @@ export function deriveWorkspaceActionState(input: {
     hasConflicts: Boolean(branch?.hasConflicts),
     remoteAheadCount: remoteCounts?.ahead ?? null,
     remoteBehindCount: remoteCounts?.behind ?? null,
-    shouldPromoteArchive: Boolean(
+    shouldPromoteReset: Boolean(
       input.prStatusKnown &&
       git &&
       !git.error &&

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type ReactElement } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 import { Info } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -6,7 +6,7 @@ import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { getForgePresentation, type Forge } from "@/git/forge";
 import { ForgeBrandIcon, getForgeBrandColorMapping } from "@/git/forge-icon";
 import { type CheckoutGitActionStatus, useCheckoutGitActionsStore } from "@/git/actions-store";
-import { type CheckoutStatusPayload, useCheckoutStatusQuery } from "@/git/use-status-query";
+import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import {
   buildGitActions,
@@ -24,9 +24,6 @@ import {
   useActiveWorkspaceSelection,
   type ActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import { redirectIfArchivingActiveWorkspace } from "@/workspace/sidebar-workspace-archive-redirect";
-import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warning";
-import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { deriveWorkspaceActionState, hasActiveWorkspaceAgents } from "./workspace-action-state";
@@ -111,16 +108,7 @@ interface UseGitActionsResult {
   isGit: boolean;
 }
 
-interface UseWorkspaceScreenArchiveControllerInput {
-  serverId: string;
-  activeWorkspaceSelection: ActiveWorkspaceSelection | null;
-  workspaceDirectory: string | null | undefined;
-  branchLabel: string;
-  gitStatus: CheckoutStatusPayload | null;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}
-
-function resolveArchiveWorkspaceDescriptor(input: {
+function resolveCheckoutWorkspaceDescriptor(input: {
   workspaces: Map<string, WorkspaceDescriptor> | undefined;
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
   workspaceDirectory: string | null | undefined;
@@ -145,77 +133,6 @@ function resolveArchiveWorkspaceDescriptor(input: {
   return null;
 }
 
-function resolveWorkspaceArchiveRisk(
-  workspace: WorkspaceDescriptor | null,
-  gitStatus: CheckoutStatusPayload | null,
-): { isDirty: boolean | null | undefined; aheadOfOrigin: number | null | undefined } {
-  return {
-    isDirty: gitStatus?.isDirty ?? workspace?.gitRuntime?.isDirty,
-    aheadOfOrigin: gitStatus?.aheadOfOrigin ?? workspace?.gitRuntime?.aheadOfOrigin,
-  };
-}
-
-function canArchiveWorkspace(
-  workspace: WorkspaceDescriptor | null,
-  risk: ReturnType<typeof resolveWorkspaceArchiveRisk>,
-): boolean {
-  return (
-    workspace !== null &&
-    (workspace.workspaceKind !== "worktree" ||
-      (risk.isDirty !== undefined && risk.aheadOfOrigin !== undefined))
-  );
-}
-
-function useWorkspaceScreenArchiveController({
-  serverId,
-  activeWorkspaceSelection,
-  workspaceDirectory,
-  branchLabel,
-  gitStatus,
-  t,
-}: UseWorkspaceScreenArchiveControllerInput) {
-  const sessionWorkspaces = useSessionStore((state) => state.sessions[serverId]?.workspaces);
-  const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
-  const workspaceDescriptor = useMemo(
-    () =>
-      resolveArchiveWorkspaceDescriptor({
-        workspaces: sessionWorkspaces,
-        activeWorkspaceSelection,
-        workspaceDirectory,
-      }),
-    [activeWorkspaceSelection, sessionWorkspaces, workspaceDirectory],
-  );
-  const archiveRisk = resolveWorkspaceArchiveRisk(workspaceDescriptor, gitStatus);
-
-  const controller = useWorkspaceArchive({
-    serverId,
-    workspaceId: workspaceDescriptor?.id ?? "",
-    workspaceKind: workspaceDescriptor?.workspaceKind ?? "directory",
-    name: workspaceDescriptor?.name ?? branchLabel,
-    isDirty: archiveRisk.isDirty,
-    aheadOfOrigin: archiveRisk.aheadOfOrigin,
-    diffStat: workspaceDescriptor?.diffStat ?? null,
-    warningLabels: getWorktreeArchiveWarningLabels(t),
-    onSetHiding: setIsHidingWorkspace,
-    onArchiveStarted: () => {
-      if (!activeWorkspaceSelection) {
-        return;
-      }
-      redirectIfArchivingActiveWorkspace({
-        serverId,
-        workspaceId: activeWorkspaceSelection.workspaceId,
-        activeWorkspaceSelection,
-      });
-    },
-  });
-
-  return {
-    ...controller,
-    isArchiving: workspaceDescriptor?.archivingAt != null || isHidingWorkspace,
-    canArchive: canArchiveWorkspace(workspaceDescriptor, archiveRisk),
-  };
-}
-
 export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActionsResult {
   const { t } = useTranslation();
   const toast = useToast();
@@ -223,7 +140,7 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
   const sessionWorkspaces = useSessionStore((state) => state.sessions[serverId]?.workspaces);
   const resetWorkspaceDescriptor = useMemo(
     () =>
-      resolveArchiveWorkspaceDescriptor({
+      resolveCheckoutWorkspaceDescriptor({
         workspaces: sessionWorkspaces,
         activeWorkspaceSelection,
         workspaceDirectory: cwd,
@@ -473,19 +390,6 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
     toastActionSuccess,
   ]);
 
-  const archiveController = useWorkspaceScreenArchiveController({
-    serverId,
-    activeWorkspaceSelection,
-    workspaceDirectory: status?.cwd,
-    branchLabel,
-    gitStatus,
-    t,
-  });
-
-  const handleArchiveWorkspace = useCallback(() => {
-    archiveController.archive();
-  }, [archiveController]);
-
   const hasActiveAgents = useSessionStore((state) => {
     const session = state.sessions[serverId];
     if (!session?.hasHydratedAgents || !resetWorkspaceDescriptor) return true;
@@ -507,7 +411,7 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
     hasOpenPullRequest: hasPullRequest,
     hasNewWork,
     needsPushForOpenPr,
-    shouldPromoteArchive,
+    shouldPromoteReset,
     branchStatusAvailable,
     hasConflicts,
     remoteAheadCount,
@@ -565,7 +469,7 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
       behindBaseCount,
       aheadOfOrigin,
       behindOfOrigin,
-      shouldPromoteArchive,
+      shouldPromoteReset,
       branchStatusAvailable,
       hasConflicts,
       hasActiveAgents,
@@ -658,12 +562,6 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
           icon: icons.resetWorkspace,
           handler: handleResetWorkspace,
         },
-        "archive-workspace": {
-          disabled: !archiveController.canArchive || archiveController.isArchiving,
-          status: archiveController.isArchiving ? "pending" : "idle",
-          icon: icons.archive,
-          handler: handleArchiveWorkspace,
-        },
       },
     };
   }, [
@@ -698,7 +596,7 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
     prStatusKnown,
     prActionStatus,
     baseRefLabel,
-    shouldPromoteArchive,
+    shouldPromoteReset,
     actionsDisabled,
     commitStatus,
     pullStatus,
@@ -713,8 +611,6 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
     disablePrAutoMergeStatus,
     mergeStatus,
     resetWorkspaceStatus,
-    archiveController.canArchive,
-    archiveController.isArchiving,
     handleCommit,
     handlePull,
     handlePush,
@@ -725,7 +621,6 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
     handleDisablePrAutoMerge,
     handleMergeBranch,
     handleResetWorkspace,
-    handleArchiveWorkspace,
     prIcon,
     baseRef,
   ]);
@@ -737,38 +632,4 @@ export function useGitActions({ serverId, cwd }: UseGitActionsInput): UseGitActi
   );
 
   return { gitActions, branchLabel, baseRefLabel, isGit };
-}
-
-function getWorktreeArchiveWarningLabels(
-  t: (key: string, options?: Record<string, unknown>) => string,
-): WorktreeArchiveWarningLabels {
-  return {
-    title: (workspaceName) => t("workspace.git.actions.archiveWarning.title", { workspaceName }),
-    confirm: t("workspace.git.actions.archiveWarning.confirm"),
-    cancel: t("workspace.git.actions.archiveWarning.cancel"),
-    uncommittedChanges: t("workspace.git.actions.archiveWarning.uncommittedChanges"),
-    uncommittedChangesWithDiff: (diffStat) =>
-      t("workspace.git.actions.archiveWarning.uncommittedChangesWithDiff", { diffStat }),
-    addedLine: (count) =>
-      t(
-        count === 1
-          ? "workspace.git.actions.archiveWarning.addedLine"
-          : "workspace.git.actions.archiveWarning.addedLines",
-        { count },
-      ),
-    deletedLine: (count) =>
-      t(
-        count === 1
-          ? "workspace.git.actions.archiveWarning.deletedLine"
-          : "workspace.git.actions.archiveWarning.deletedLines",
-        { count },
-      ),
-    unpushedCommit: (count) =>
-      t(
-        count === 1
-          ? "workspace.git.actions.archiveWarning.unpushedCommit"
-          : "workspace.git.actions.archiveWarning.unpushedCommits",
-        { count },
-      ),
-  };
 }

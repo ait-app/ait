@@ -14,7 +14,6 @@ interface CompactWorkspaceHeaderProps {
   isLoading: boolean;
   title: string;
   subtitle: string;
-  isSubtitleDistinct: boolean;
   onToggleExplorer: () => void;
   explorerToggleLabel: string;
   explorerToggleAccessibilityState: { expanded: boolean };
@@ -27,7 +26,6 @@ export function CompactWorkspaceHeader({
   isLoading,
   title,
   subtitle,
-  isSubtitleDistinct,
   onToggleExplorer,
   explorerToggleLabel,
   explorerToggleAccessibilityState,
@@ -36,14 +34,8 @@ export function CompactWorkspaceHeader({
 }: CompactWorkspaceHeaderProps) {
   const { t } = useTranslation();
   const projectRow = useMemo(
-    () => (
-      <WorkspaceHeaderProjectRow
-        subtitle={subtitle}
-        isSubtitleDistinct={isSubtitleDistinct}
-        serverId={serverId}
-      />
-    ),
-    [subtitle, isSubtitleDistinct, serverId],
+    () => <WorkspaceHeaderProjectRow subtitle={subtitle} serverId={serverId} />,
+    [subtitle, serverId],
   );
   const actions = (
     <>

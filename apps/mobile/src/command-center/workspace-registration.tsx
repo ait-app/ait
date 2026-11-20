@@ -1,6 +1,7 @@
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Archive,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -51,6 +52,7 @@ import {
 } from "@/workspace-labels";
 import { getLabelCommandCenterIcon } from "@/workspace-labels/command-center-icon";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { useWorkspaceScreenArchive } from "@/workspace/use-workspace-screen-archive";
 import { getCommandCenterIcon } from "./icon";
 import type { CommandCenterIcon } from "./contributions";
 import { useCommandCenterActions } from "./provider";
@@ -86,6 +88,7 @@ const WORKSPACE_COMMAND_CENTER_ICONS = {
   pin: getCommandCenterIcon(Pin),
   unpin: getCommandCenterIcon(PinOff),
   showSetup: getCommandCenterIcon(ListChecks),
+  archive: getCommandCenterIcon(Archive),
   toggleFocusMode: getCommandCenterIcon(Focus),
 };
 
@@ -211,6 +214,11 @@ function useWorkspaceCommandCenterActions(): void {
     cwd: cwd ?? "",
   });
   const runGitAction = useGitActionRunner();
+  const {
+    archive: archiveWorkspace,
+    canArchive,
+    isArchiving,
+  } = useWorkspaceScreenArchive({ serverId: serverId ?? "", workspaceId: workspaceId ?? "" });
   const clipboard = useWorkspaceClipboardActions();
 
   const copyPath = useCallback(() => {
@@ -279,6 +287,7 @@ function useWorkspaceCommandCenterActions(): void {
           pin: t("sidebar.workspace.actions.pin"),
           unpin: t("sidebar.workspace.actions.unpin"),
           showSetup: t("workspace.header.actions.showSetup"),
+          archive: t("workspace.header.actions.archive"),
           labelsGroup: t("workspaceLabels.title"),
         },
         icons: {
@@ -292,6 +301,7 @@ function useWorkspaceCommandCenterActions(): void {
           isGit,
           canPin,
           canShowSetup,
+          canArchive: canArchive && !isArchiving,
         },
         activeTabKind,
         activeTabIndex,
@@ -306,11 +316,14 @@ function useWorkspaceCommandCenterActions(): void {
         runGitAction,
         copyPath,
         copyBranchName,
+        archiveWorkspace,
         toggleLabel,
       }),
     [
       activeTabIndex,
       activeTabKind,
+      archiveWorkspace,
+      canArchive,
       canPin,
       canShowSetup,
       copyBranchName,
@@ -319,6 +332,7 @@ function useWorkspaceCommandCenterActions(): void {
       focusedTabs.length,
       gitActions,
       isCompact,
+      isArchiving,
       isGit,
       isPinned,
       keyboardActionDispatcher,

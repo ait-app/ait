@@ -301,6 +301,8 @@ export const workspace = {
       copyPath: "Copier le chemin de l'espace de travail",
       copyBranchName: "Copier le nom de la branche",
       showSetup: "Afficher la configuration",
+      archive: "Archiver l’espace de travail",
+      archiving: "Archivage...",
     },
     toasts: {
       workspacePathUnavailable: "Le chemin de l'espace de travail n'est pas encore disponible",
@@ -395,11 +397,6 @@ export const workspace = {
         confirmMessage:
           "Récupérer la dernière version de la branche par défaut de origin, restaurer la branche {{branch}} et supprimer les modifications suivies et les commits locaux. Supprimer également tous les fichiers et répertoires non suivis, y compris les dépôts imbriqués ; les fichiers ignorés par Git sont conservés. Si origin possède une branche du même nom, un push forcé la réinitialisera au même commit.",
         confirm: "Réinitialiser",
-      },
-      archive: {
-        label: "Archiver l’espace de travail",
-        pending: "Archivage...",
-        success: "Archivé",
       },
       mergePr: {
         squash: "Fusionner PR (squash)",

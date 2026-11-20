@@ -81,7 +81,7 @@ function createInput(
     behindBaseCount: 0,
     aheadOfOrigin: 0,
     behindOfOrigin: 0,
-    shouldPromoteArchive: false,
+    shouldPromoteReset: false,
     branchStatusAvailable: true,
     hasConflicts: false,
     hasActiveAgents: false,
@@ -160,11 +160,6 @@ function createInput(
         status: "idle",
         handler: () => undefined,
       },
-      "archive-workspace": {
-        disabled: false,
-        status: "idle",
-        handler: () => undefined,
-      },
     },
     ...rest,
   };
@@ -175,9 +170,9 @@ describe("git-actions-policy", () => {
     await i18n.changeLanguage("en");
   });
 
-  it("prioritizes new uncommitted work over an old archive suggestion", () => {
+  it("prioritizes new uncommitted work over an old reset suggestion", () => {
     const actions = buildGitActions(
-      createInput({ shouldPromoteArchive: true, hasUncommittedChanges: true }),
+      createInput({ shouldPromoteReset: true, hasUncommittedChanges: true }),
     );
     expect(actions.primary).toMatchObject({ id: "commit" });
   });
@@ -189,15 +184,51 @@ describe("git-actions-policy", () => {
   ])("shows a disabled blocking state even with dirty files: $label", ({ label, ...state }) => {
     const actions = buildGitActions(createInput({ hasUncommittedChanges: true, ...state }));
     expect(actions.primary).toMatchObject({ id: "branch-status", label, disabled: true });
-    expect(actions.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
   });
 
-  it("recommends archive only when the completed workspace has no active agents", () => {
-    const complete = createInput({ shouldPromoteArchive: true, isPaseoOwnedWorktree: true });
-    expect(buildGitActions(complete).primary).toMatchObject({ id: "archive-workspace" });
+  it("recommends reset only when the completed workspace has no active agents", () => {
+    const complete = createInput({
+      shouldPromoteReset: true,
+      hasRemote: true,
+      isPaseoOwnedWorktree: true,
+      initialBranchAvailable: true,
+    });
+    const idle = buildGitActions(complete);
+    expect(idle.primary).toMatchObject({ id: "reset-workspace", label: "Reset workspace" });
+    expect(idle.secondary.some((action) => action.id === "reset-workspace")).toBe(false);
     const active = buildGitActions({ ...complete, hasActiveAgents: true });
     expect(active.primary).toBeNull();
-    expect(active.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
+    expect(active.secondary.some((action) => action.id === "reset-workspace")).toBe(true);
+  });
+
+  it.each([
+    { isPaseoOwnedWorktree: false },
+    { initialBranchAvailable: false },
+    { hasRemote: false },
+  ])("does not recommend a reset that cannot run: %j", (override) => {
+    const actions = buildGitActions(
+      createInput({
+        shouldPromoteReset: true,
+        hasRemote: true,
+        isPaseoOwnedWorktree: true,
+        initialBranchAvailable: true,
+        ...override,
+      }),
+    );
+    expect(actions.primary).toBeNull();
+  });
+
+  it("never offers archive, which lives in the workspace header menu", () => {
+    const actions = buildGitActions(
+      createInput({
+        shouldPromoteReset: true,
+        hasRemote: true,
+        isPaseoOwnedWorktree: true,
+        initialBranchAvailable: true,
+      }),
+    );
+    const ids: string[] = [actions.primary, ...actions.secondary].map((action) => action?.id ?? "");
+    expect(ids).not.toContain("archive-workspace");
   });
 
   it.each(["closed", "merged"])(
@@ -278,12 +309,7 @@ describe("git-actions-policy", () => {
     const actions = buildGitActions(createInput({ hasRemote: true }));
 
     expect(actions.primary).toBeNull();
-    expect(actions.secondary.map((action) => action.id)).toEqual([
-      "pull",
-      "push",
-      "pull-and-push",
-      "archive-workspace",
-    ]);
+    expect(actions.secondary.map((action) => action.id)).toEqual(["pull", "push", "pull-and-push"]);
   });
 
   it("disables the primary button when the same-named branch is behind", () => {
@@ -450,7 +476,6 @@ describe("git-actions-policy", () => {
       "merge-pr-squash",
       "merge-pr-merge",
       "merge-pr-rebase",
-      "archive-workspace",
     ]);
     expect(
       actions.secondary.some((action) => action.id === "pr" && action.label === "View PR"),
@@ -559,27 +584,19 @@ describe("git-actions-policy", () => {
     expect(directory).toEqual({ primary: null, secondary: [] });
   });
 
-  it("offers archive workspace for Git checkouts and worktrees", () => {
-    const localCheckout = buildGitActions(createInput({ hasUncommittedChanges: true }));
-    const worktree = buildGitActions(
-      createInput({ hasUncommittedChanges: true, isPaseoOwnedWorktree: true }),
-    );
-
-    expect(localCheckout.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
-    expect(worktree.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
-  });
-
-  it("does not promote archive to primary for an idle regular Git checkout", () => {
+  it("has no primary action for an idle regular Git checkout", () => {
     const actions = buildGitActions(createInput());
 
     expect(actions.primary).toBeNull();
-    expect(actions.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
   });
 
-  it("leaves an idle experimental worktree available for manual archive", () => {
-    const actions = buildGitActions(createInput({ isPaseoOwnedWorktree: true }));
+  it("does not promote reset for an idle experimental worktree", () => {
+    const actions = buildGitActions(
+      createInput({ hasRemote: true, isPaseoOwnedWorktree: true, initialBranchAvailable: true }),
+    );
 
     expect(actions.primary).toBeNull();
+    expect(actions.secondary.some((action) => action.id === "reset-workspace")).toBe(true);
   });
 
   it("keeps View PR primary when the PR is ready to merge", () => {
@@ -778,7 +795,6 @@ describe("git-actions-policy", () => {
       "merge-pr-squash",
       "merge-pr-merge",
       "merge-pr-rebase",
-      "archive-workspace",
     ]);
   });
 
@@ -954,7 +970,6 @@ describe("git-actions-policy", () => {
       "merge-pr-squash",
       "merge-pr-merge",
       "merge-pr-rebase",
-      "archive-workspace",
     ]);
   });
 
@@ -990,7 +1005,6 @@ describe("git-actions-policy", () => {
       "merge-branch",
       "pr",
       "enable-pr-auto-merge-squash",
-      "archive-workspace",
     ]);
     expect(
       actions.secondary.some((action) =>
@@ -1127,7 +1141,6 @@ describe("git-actions-policy", () => {
       "merge-branch",
       "pr",
       "merge-pr-merge",
-      "archive-workspace",
     ]);
   });
 
@@ -1180,7 +1193,7 @@ describe("git-actions-policy", () => {
       .filter((action) => !action.startsGroup)
       .map((action) => action.id);
 
-    expect(groupStarters).toEqual(["reset-workspace", "merge-pr-squash", "archive-workspace"]);
+    expect(groupStarters).toEqual(["reset-workspace", "merge-pr-squash"]);
     expect(nonGroupStarters).toEqual([
       "pull",
       "push",

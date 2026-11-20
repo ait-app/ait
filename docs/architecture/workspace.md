@@ -58,6 +58,12 @@
   `gh-merge-base`。Forge 读取（GitHub `createdAt`、GitLab `created_at`）不再关联创建时间早于或等于
   该时间、或缺少创建时间的 PR/MR
   （[ADR-146](../decisions/workspace/adr-146-reset-workspace-change-request-association.md)）。
+- 客户端右上角的 Git 主按钮按“提交”→“创建 PR”→“推送”→“查看 PR”→“重置工作区”推进
+  （[ADR-084](../decisions/workspace/adr-084-workspace-primary-git-action.md)）。PR 已合并、工作区干净、
+  与同名远端分支一致且没有活动 Agent 时推荐重置，但只限可以执行重置的托管 worktree；其余 checkout
+  此时没有主按钮。归档不属于 Git 操作：入口在左侧栏的 Workspace 菜单、标题左侧的 Workspace 操作菜单、
+  命令面板和快捷键，非 Git Workspace 同样可用
+  （[ADR-293](../decisions/workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)）。
 - `Forge::pull_request(cwd, number)` 按编号读取 `cwd` 的 origin 仓库中的一个 PR/MR，供跟随它的 Bot 工单使用：
   状态（合并、关闭、打开；GitLab 的 `locked` 为打开）、头提交、至多 100 个检查与最新的审查活动，本账号写的条目带标记，
   每个条目带作者在仓库中的权限（能写入、其他人、机器人）；结果为中性的 `domain::forge::PullSnapshot`。

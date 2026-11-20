@@ -11,10 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Shortcut } from "@/components/ui/shortcut";
-import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import type { ShortcutKey } from "@/utils/format-shortcut";
 import type { GitAction, GitActions } from "@/git/policy";
 import { useGitActionRunner } from "@/git/use-actions";
 import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
@@ -27,7 +24,6 @@ interface GitActionsSplitButtonProps {
 interface GitActionMenuItemProps {
   action: GitAction;
   onSelect: (action: GitAction) => void;
-  archiveShortcutKeys?: ShortcutKey[][] | null;
   needsSeparator?: boolean;
   showSeparator?: boolean;
   closeOnSelect?: boolean;
@@ -36,30 +32,17 @@ interface GitActionMenuItemProps {
 function GitActionMenuItem({
   action,
   onSelect,
-  archiveShortcutKeys,
   needsSeparator,
   showSeparator,
   closeOnSelect,
 }: GitActionMenuItemProps) {
   const handleSelect = useCallback(() => onSelect(action), [onSelect, action]);
-  const trailing = useMemo(
-    () =>
-      action.id === "archive-workspace" && archiveShortcutKeys ? (
-        <Shortcut chord={archiveShortcutKeys} />
-      ) : undefined,
-    [action.id, archiveShortcutKeys],
-  );
   return (
     <View>
       {needsSeparator && showSeparator ? <DropdownMenuSeparator /> : null}
       <DropdownMenuItem
-        testID={
-          action.id === "archive-workspace"
-            ? "workspace-archive-action"
-            : `changes-menu-${action.id}`
-        }
+        testID={`changes-menu-${action.id}`}
         leading={action.icon}
-        trailing={trailing}
         disabled={action.disabled}
         muted={Boolean(action.unavailableMessage)}
         status={action.status}
@@ -81,7 +64,6 @@ export function GitActionsSplitButton({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const runGitAction = useGitActionRunner();
-  const archiveShortcutKeys = useShortcutKeys("archive-workspace");
 
   const getActionDisplayLabel = useCallback((action: GitAction): string => {
     if (action.status === "pending") return action.pendingLabel;
@@ -183,7 +165,6 @@ export function GitActionsSplitButton({
               key={action.id}
               action={action}
               onSelect={runGitAction}
-              archiveShortcutKeys={archiveShortcutKeys}
               needsSeparator={action.startsGroup}
               showSeparator={index > 0}
               closeOnSelect={
@@ -242,7 +223,6 @@ export function GitActionsSplitButton({
                     key={action.id}
                     action={action}
                     onSelect={runGitAction}
-                    archiveShortcutKeys={archiveShortcutKeys}
                     needsSeparator={action.startsGroup}
                     showSeparator={index > 0}
                     closeOnSelect={

@@ -301,6 +301,8 @@ export const workspace = {
       copyPath: "Copiar ruta del espacio de trabajo",
       copyBranchName: "Copiar nombre de rama",
       showSetup: "Mostrar configuración",
+      archive: "Archivar espacio de trabajo",
+      archiving: "Archivando...",
     },
     toasts: {
       workspacePathUnavailable: "La ruta del espacio de trabajo aún no está disponible",
@@ -394,11 +396,6 @@ export const workspace = {
         confirmMessage:
           "Obtener la última versión de la rama predeterminada de origin, restaurar la rama {{branch}} y descartar los cambios rastreados y los commits locales. Eliminar también todos los archivos y directorios sin seguimiento, incluidos los repositorios anidados; se conservan los archivos ignorados por Git. Si origin tiene una rama con el mismo nombre, se restablecerá al mismo commit mediante un push forzado.",
         confirm: "Restablecer",
-      },
-      archive: {
-        label: "Archivar espacio de trabajo",
-        pending: "Archivando...",
-        success: "Archivado",
       },
       mergePr: {
         squash: "Fusionar PR (squash)",

@@ -292,6 +292,8 @@ export const workspace = {
       copyPath: "复制工作区路径",
       copyBranchName: "复制分支名称",
       showSetup: "显示初始化",
+      archive: "归档工作区",
+      archiving: "正在归档...",
     },
     toasts: {
       workspacePathUnavailable: "工作区路径尚不可用",
@@ -385,11 +387,6 @@ export const workspace = {
         confirmMessage:
           "将获取 origin 的最新默认分支，把分支恢复为 {{branch}}，并丢弃此工作区的已跟踪文件改动和本地提交，同时删除所有未跟踪文件和目录（包括嵌套仓库，保留 Git 忽略的文件）。如果 origin 上存在同名分支，也会通过强制推送将其重置到同一提交。",
         confirm: "重置工作区",
-      },
-      archive: {
-        label: "归档工作区",
-        pending: "正在归档...",
-        success: "已归档",
       },
       mergePr: {
         squash: "合并 PR（压缩提交）",

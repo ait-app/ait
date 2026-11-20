@@ -58,9 +58,9 @@ function derive(overrides: Partial<Parameters<typeof deriveWorkspaceActionState>
 }
 
 describe("workspace action state", () => {
-  it("offers archive for the merged source commit even when main has advanced or history differs", () => {
+  it("offers reset for the merged source commit even when main has advanced or history differs", () => {
     expect(derive()).toMatchObject({
-      shouldPromoteArchive: true,
+      shouldPromoteReset: true,
       hasNewWork: false,
       hasOpenPullRequest: false,
     });
@@ -74,7 +74,7 @@ describe("workspace action state", () => {
       git.branchStatus.headSha = NEW_HEAD;
       expect(
         derive({ gitStatus: git, prStatus: prStatus({ state, isMerged: state === "merged" }) }),
-      ).toMatchObject({ hasNewWork: true, hasOpenPullRequest: false, shouldPromoteArchive: false });
+      ).toMatchObject({ hasNewWork: true, hasOpenPullRequest: false, shouldPromoteReset: false });
     },
   );
 
@@ -82,23 +82,23 @@ describe("workspace action state", () => {
     expect(derive({ prStatus: prStatus({ state: "closed", isMerged: false }) })).toMatchObject({
       hasNewWork: false,
       hasOpenPullRequest: false,
-      shouldPromoteArchive: false,
+      shouldPromoteReset: false,
     });
   });
 
   it("keeps an open PR usable when local commits are newer than the PR head", () => {
     expect(
       derive({ prStatus: prStatus({ state: "open", isMerged: false, headSha: NEW_HEAD }) }),
-    ).toMatchObject({ hasOpenPullRequest: true, hasNewWork: false, shouldPromoteArchive: false });
+    ).toMatchObject({ hasOpenPullRequest: true, hasNewWork: false, shouldPromoteReset: false });
   });
 
   it("allows a deleted remote branch only with matching merged source evidence", () => {
     const git = gitStatus({
       branchStatus: { headSha: HEAD, hasConflicts: false, remoteRef: null, aheadBehind: null },
     });
-    expect(derive({ gitStatus: git }).shouldPromoteArchive).toBe(true);
+    expect(derive({ gitStatus: git }).shouldPromoteReset).toBe(true);
     expect(
-      derive({ gitStatus: git, prStatus: prStatus({ headSha: NEW_HEAD }) }).shouldPromoteArchive,
+      derive({ gitStatus: git, prStatus: prStatus({ headSha: NEW_HEAD }) }).shouldPromoteReset,
     ).toBe(false);
   });
 
@@ -110,15 +110,15 @@ describe("workspace action state", () => {
     { gitStatus: gitStatus({ branchStatus: undefined }) },
     { prStatus: prStatus({ headSha: undefined }) },
     { gitStatus: gitStatus({ error: { code: "UNKNOWN", message: "read failed" } }) },
-  ])("does not recommend archive without complete, idle, clean evidence: %j", (input) => {
-    expect(derive(input).shouldPromoteArchive).toBe(false);
+  ])("does not recommend reset without complete, idle, clean evidence: %j", (input) => {
+    expect(derive(input).shouldPromoteReset).toBe(false);
   });
 
   it.each([
     { ahead: 1, behind: 0 },
     { ahead: 0, behind: 1 },
     { ahead: 1, behind: 1 },
-  ])("does not recommend archive with remote differences: %j", (aheadBehind) => {
+  ])("does not recommend reset with remote differences: %j", (aheadBehind) => {
     expect(
       derive({
         gitStatus: gitStatus({
@@ -129,14 +129,14 @@ describe("workspace action state", () => {
             aheadBehind,
           },
         }),
-      }).shouldPromoteArchive,
+      }).shouldPromoteReset,
     ).toBe(false);
   });
 
   it("uses same-name counts even if the configured upstream is a different branch", () => {
     expect(
       derive({ gitStatus: gitStatus({ aheadOfOrigin: 5, behindOfOrigin: 10 }) }),
-    ).toMatchObject({ remoteAheadCount: 0, remoteBehindCount: 0, shouldPromoteArchive: true });
+    ).toMatchObject({ remoteAheadCount: 0, remoteBehindCount: 0, shouldPromoteReset: true });
   });
 
   it("identifies first-PR work and leaves empty experiments for manual archive", () => {

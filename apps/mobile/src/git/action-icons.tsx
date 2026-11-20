@@ -1,6 +1,5 @@
 import { withUnistyles } from "react-native-unistyles";
 import {
-  Archive,
   ArrowDownUp,
   Download,
   GitCommitHorizontal,
@@ -16,7 +15,6 @@ const ThemedUpload = withUnistyles(Upload);
 const ThemedArrowDownUp = withUnistyles(ArrowDownUp);
 const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedRefreshCcw = withUnistyles(RefreshCcw);
-const ThemedArchive = withUnistyles(Archive);
 
 export const GIT_ACTION_ICONS = {
   commit: <ThemedGitCommitHorizontal size={16} uniProps={mutedIconColorMapping} />,
@@ -25,5 +23,4 @@ export const GIT_ACTION_ICONS = {
   pullAndPush: <ThemedArrowDownUp size={16} uniProps={mutedIconColorMapping} />,
   merge: <ThemedGitMerge size={16} uniProps={mutedIconColorMapping} />,
   resetWorkspace: <ThemedRefreshCcw size={16} uniProps={mutedIconColorMapping} />,
-  archive: <ThemedArchive size={16} uniProps={mutedIconColorMapping} />,
 };

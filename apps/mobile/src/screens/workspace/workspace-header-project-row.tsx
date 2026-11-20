@@ -1,42 +1,36 @@
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostBadge } from "@/hosts/host-badge";
 import { useHostBadges } from "@/hosts/use-host-badges";
 
 /**
  * Which project the workspace belongs to, and which machine it runs on.
  *
- * Compact gets both, on their own line under the workspace name: this header is the only thing on
+ * The compact header puts both on their own line under the workspace name: it is the only thing on
  * screen that says where the workspace lives, because the sidebar that normally carries the host
  * badge is closed. It still follows the host's own badge setting, so a purely local setup stays
- * quiet. A project name that only repeats the workspace name is dropped on wide, where the two sit
- * side by side, and kept on compact, where the line exists for the host anyway.
+ * quiet. The project is shown even when it only repeats the workspace name, since the line exists
+ * for the host anyway. Wide layouts use `WorkspaceHeaderBreadcrumb` instead.
  */
 export function WorkspaceHeaderProjectRow({
   subtitle,
-  isSubtitleDistinct,
   serverId,
 }: {
   subtitle: string;
-  isSubtitleDistinct: boolean;
   serverId: string;
 }) {
-  const isCompact = useIsCompactFormFactor();
-  const hostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
-  const showProject = isSubtitleDistinct || isCompact;
-  if (!showProject && !hostBadge) {
-    return null;
-  }
+  const hostBadge = useHostBadges({ enabled: true }).get(serverId) ?? null;
   return (
     <View style={styles.row}>
-      {showProject ? (
-        <Text testID="workspace-header-subtitle" style={styles.project} numberOfLines={1}>
-          {subtitle}
-        </Text>
+      <Text testID="workspace-header-subtitle" style={styles.project} numberOfLines={1}>
+        {subtitle}
+      </Text>
+      {hostBadge ? (
+        <>
+          <Text style={styles.separator}>·</Text>
+          <HostBadge badge={hostBadge} />
+        </>
       ) : null}
-      {showProject && hostBadge ? <Text style={styles.separator}>·</Text> : null}
-      {hostBadge ? <HostBadge badge={hostBadge} /> : null}
     </View>
   );
 }
