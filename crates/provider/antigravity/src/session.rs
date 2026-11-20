@@ -22,6 +22,8 @@ pub(super) struct Session {
     id: String,
     cwd: String,
     config: StoredAgentConfig,
+    /// Effort the native process was started with; `None` is AGY's own default.
+    effort: Option<String>,
     init: Value,
     active: Option<String>,
     stream: Stream,
@@ -48,14 +50,15 @@ pub(super) async fn open(
         return Err(AgentSessionError::Rejected);
     }
     let conversation = handle.map(|handle| handle.session_id.as_str());
-    let (transport, id, init) = connect(client, spec, conversation).await?;
+    let connection = connect(client, spec, conversation).await?;
     Ok(Session {
         client: client.clone(),
-        transport: Some(transport),
-        id,
+        transport: Some(connection.transport),
+        id: connection.id,
         cwd: spec.cwd.clone(),
         config: spec.config.clone(),
-        init,
+        effort: connection.effort,
+        init: connection.init,
         active: None,
         stream: Stream::default(),
         input_error: None,
@@ -63,18 +66,28 @@ pub(super) async fn open(
     })
 }
 
+/// A started native process and the facts it was started with.
+struct Connection {
+    transport: Transport,
+    id: String,
+    init: Value,
+    effort: Option<String>,
+}
+
 async fn connect(
     client: &AntigravityClient,
     spec: &AgentSessionSpec,
     conversation: Option<&str>,
-) -> Result<(Transport, String, Value), AgentSessionError> {
+) -> Result<Connection, AgentSessionError> {
     // Session startup can launch OAuth. Check cached authentication through the read-only model
     // command first, including automatic restore and configuration-triggered reconnects.
-    discovery::models(client, &spec.cwd).await?;
+    let selection = discovery::catalog(client, &spec.cwd)
+        .await?
+        .select(&spec.config)?;
     let mut transport = Transport::spawn(
         client,
         &spec.cwd,
-        &config::arguments(&spec.config, conversation),
+        &config::arguments(&spec.config, &selection, conversation),
     )?;
     let response = tokio::time::timeout(client.deadline, transport.receive()).await;
     let Ok(Ok(initialized)) = response else {
@@ -100,15 +113,19 @@ async fn connect(
         || conversation.is_some_and(|expected| expected != id)
         || initialized["init"]["cwd"] != spec.cwd
         || !initialized["init"]["permission_mode"].is_string()
-        || spec
-            .config
+        || selection
             .model
             .as_ref()
             .is_some_and(|model| initialized["init"]["model"] != *model)
     {
         return Err(AgentSessionError::Failed);
     }
-    Ok((transport, id.to_owned(), initialized["init"].clone()))
+    Ok(Connection {
+        transport,
+        id: id.to_owned(),
+        init: initialized["init"].clone(),
+        effort: selection.effort,
+    })
 }
 
 impl Session {
@@ -148,9 +165,18 @@ impl Session {
                 config: config.clone(),
                 confinement: None,
             };
-            let (transport, _, init) = connect(&self.client, &spec, Some(&self.id)).await?;
-            self.transport = Some(transport);
-            self.init = init;
+            let connection = connect(&self.client, &spec, Some(&self.id))
+                .await
+                .inspect_err(|error| {
+                    if *error == AgentSessionError::Rejected {
+                        self.input_error = Some(
+                            "AGY does not offer the requested model or thinking level. Choose another and retry.",
+                        );
+                    }
+                })?;
+            self.transport = Some(connection.transport);
+            self.init = connection.init;
+            self.effort = connection.effort;
             self.config.clone_from(config);
             self.stream.reset_process();
         }
@@ -179,6 +205,7 @@ impl Session {
             .push_back(AgentTurnEvent::RuntimeInfo(config::runtime(
                 &self.id,
                 &self.config,
+                self.effort.as_deref(),
                 &self.init,
             )));
         self.stream.submitted(
@@ -266,7 +293,12 @@ impl AgentSession for Session {
     }
 
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
-        Ok(config::runtime(&self.id, &self.config, &self.init))
+        Ok(config::runtime(
+            &self.id,
+            &self.config,
+            self.effort.as_deref(),
+            &self.init,
+        ))
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {

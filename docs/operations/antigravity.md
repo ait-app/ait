@@ -40,7 +40,7 @@ export AIT_SERVER_ANTIGRAVITY_BIN="/custom/path/agy"
 
 显式路径不可用时 Provider 显示 unavailable，不切换到其他安装。
 模型列表从当前 CLI 的 `agy models` 获取；需使用支持官方 stream input/output 的较新版本。
-本次真实验证使用 1.3.0。
+协议验证使用 1.3.0，模型与思考等级的分组对照 1.4.7。
 
 ## 执行模式与会话
 
@@ -65,7 +65,17 @@ Ait 只将新增拒绝用于本轮判断；重连后重新计数，避免旧拒�
 AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度、模型/API 或协议失败的分类说明；
 原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`。
 
-模型选择保留 CLI 返回的完整 slug，包括模型的 effort 变体。
+模型和思考等级分开选择。`agy models` 把每个模型的每个 effort 各列一条记录
+（如 `gemini-test-high` 与 `Gemini Test (High)`）；ID 以 `-<effort>` 结尾且标签以对应的
+`(<Effort>)` 结尾的记录归并为一个模型，effort 成为该模型的思考等级选项，
+按 low、medium、high、xhigh、max 排列。其余记录保持为单独的模型，没有思考等级。
+
+启动时传 `--model <模型> --effort <等级>`；没有选择思考等级时不传 `--effort`，由 AGY 决定。
+AGY 不报告默认 effort，Ait 以该模型在原生列表中的第一条变体作为默认思考等级。
+所选模型不提供的等级在发送前拒绝，并提示重新选择。
+分组之前保存的完整 slug（如 `gemini-test-high`）仍然有效：按模型加 effort 启动，
+显式选择的思考等级优先于 slug 中的 effort；运行信息显示归并后的模型和实际使用的等级。
+
 会话支持多轮文本和图片、工具进度、累计 token 用量与 conversation ID 恢复；
 模型或模式修改在下轮开始前通过同一 conversation ID 重启原生连接。
 读写、编辑和子代理步骤使用对应的工具卡片；子代理保留原生 child conversation ID 和日志 URI，

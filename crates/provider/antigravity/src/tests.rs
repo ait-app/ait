@@ -96,14 +96,21 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
     assert!(client.is_available().await.unwrap());
     assert!(!client.supports_history_replay());
     let details = client.discover(&spec.cwd).await.unwrap();
-    assert_eq!(details.models.len(), 2);
-    assert_eq!(details.models[0]["id"], "gemini-test-low");
+    assert_eq!(details.models.len(), 3);
+    assert_eq!(details.models[0]["id"], "gemini-test");
+    assert_eq!(details.models[0]["label"], "Gemini Test");
+    assert_eq!(details.models[0]["defaultThinkingOptionId"], "high");
+    assert_eq!(
+        details.models[0]["thinkingOptions"],
+        json!([{"id":"low","label":"Low"},{"id":"high","label":"High"},
+            {"id":"xhigh","label":"XHigh"}])
+    );
     assert_eq!(details.modes.len(), 4);
     assert_eq!(
         client.settings(&spec.config)["capabilities"]["supportsMcpServers"],
         false
     );
-    assert!(client.diagnostic().await.unwrap().contains("2 models"));
+    assert!(client.diagnostic().await.unwrap().contains("3 models"));
     assert!(
         logs(&directory)
             .iter()
@@ -129,13 +136,13 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
 #[tokio::test]
 async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
     let (directory, client, mut spec) = fixture();
-    spec.config.model = Some("gemini-test-low".to_owned());
+    spec.config.model = Some("gemini-test".to_owned());
+    spec.config.thinking_option_id = Some("xhigh".to_owned());
     client.validate_selection(&spec).await.unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
-    assert_eq!(
-        session.runtime_info().await.unwrap().model,
-        spec.config.model
-    );
+    let runtime = session.runtime_info().await.unwrap();
+    assert_eq!(runtime.model, spec.config.model);
+    assert_eq!(runtime.thinking_option_id, spec.config.thinking_option_id);
     let handle = session.persistence().unwrap();
     let prompt = AgentPrompt {
         text: "hello".to_owned(),
@@ -166,9 +173,15 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
         if usage.input_tokens == Some(200)))
     );
     spec.config.mode_id = Some("full-access".to_owned());
+    // A variant slug saved before efforts became thinking options restarts as model and effort.
     spec.config.model = Some("claude-test-high".to_owned());
+    spec.config.thinking_option_id = None;
+    client.validate_selection(&spec).await.unwrap();
     session.start_turn("third", &spec.config).await.unwrap();
     completed(session.as_mut()).await;
+    let runtime = session.runtime_info().await.unwrap();
+    assert_eq!(runtime.model.as_deref(), Some("claude-test"));
+    assert_eq!(runtime.thinking_option_id.as_deref(), Some("high"));
     assert_eq!(session.persistence().unwrap(), handle);
     session.close().await.unwrap();
     session.close().await.unwrap();
@@ -196,6 +209,49 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
                 .any(|arg| arg == "--dangerously-skip-permissions")
                 && args.iter().any(|arg| arg == &handle.session_id))
     );
+    for selection in [
+        ["--model", "gemini-test", "--effort", "xhigh"],
+        ["--model", "claude-test", "--effort", "high"],
+    ] {
+        assert!(
+            calls
+                .iter()
+                .filter_map(|call| call["args"].as_array())
+                .any(|args| args.windows(4).any(|window| window == selection)),
+            "{selection:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn rejects_a_thinking_level_the_model_does_not_offer() {
+    let (directory, client, mut spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    spec.config.model = Some("gemini-test".to_owned());
+    spec.config.thinking_option_id = Some("medium".to_owned());
+    assert_eq!(
+        client.validate_selection(&spec).await,
+        Err(AgentSessionError::Rejected)
+    );
+    assert_eq!(
+        session.start_turn("hello", &spec.config).await,
+        Err(AgentSessionError::Rejected)
+    );
+    assert!(
+        session
+            .failure_message()
+            .is_some_and(|message| message.contains("thinking level"))
+    );
+    assert!(
+        logs(&directory)
+            .iter()
+            .all(|call| call.get("input").is_none())
+    );
+    spec.config.thinking_option_id = Some("low".to_owned());
+    session.start_turn("hello", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    assert!(session.failure_message().is_none());
+    session.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -322,7 +378,7 @@ async fn startup_errors_and_timeout_do_not_hang() {
             scenario.to_owned(),
         )]))
         .unwrap();
-        spec.config.model = Some("gemini-test-low".to_owned());
+        spec.config.model = Some("gemini-test".to_owned());
         assert!(client.create_session(&spec).await.is_err(), "{scenario}");
     }
 }

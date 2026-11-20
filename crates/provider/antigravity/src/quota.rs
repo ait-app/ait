@@ -19,7 +19,7 @@ pub(super) async fn read(
 ) -> Result<Value, AgentSessionError> {
     // Native model listing only uses cached authentication. Print mode can launch OAuth even
     // with stdin closed, so refuse signed-out background refreshes before invoking /usage.
-    discovery::models(client, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
+    discovery::catalog(client, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
     // This built-in command returns quota JSON with zero turns and no conversation. Keep it
     // separate from the session stream, where slash expansion is intentionally disabled.
     let bytes = transport::query(

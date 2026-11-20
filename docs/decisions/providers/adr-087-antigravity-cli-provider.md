@@ -72,6 +72,18 @@ Google 的 Antigravity CLI 使用 `agy` 命令。官方脚本与 Homebrew cask �
 输入校验、schema、配置和图片存储失败均在发送前返回固定原因，诊断来源标为 `input`，
 后续有效输入会清除旧原因。图片转换失败或原生写入失败均不自动重发请求。
 
+## 2026-11-20 修订：模型与思考等级分开选择
+
+决策 4 原先原样保留 `agy models` 的完整 slug，同一模型的每个 effort 在模型列表中各占一项，
+思考等级选项为空。AGY 1.4.7 接受 `--model <模型> --effort <等级>`，按模型校验可用 effort，
+并拒绝完整 slug 与不同 `--effort` 的组合；`init` 原样返回传入的模型。
+
+因此改为：ID 以 `-<effort>` 结尾且标签以对应 `(<Effort>)` 结尾的记录归并为一个模型，
+effort 作为该模型的思考等级选项；模型与等级分别经 `--model`、`--effort` 传入。
+只归并原生列出的组合，不为模型补充未列出的 effort。AGY 不报告默认 effort，
+以原生列表中该模型的第一条变体作为默认思考等级，使选择器显示与启动参数一致。
+已保存的完整 slug 在选择校验和连接时解析为模型加 effort，不迁移存储。
+
 ## 后果与验证
 
 桌面、Web 与移动端通过已有 Provider snapshot 获取 Antigravity，显示既有 AGY 图标并提供

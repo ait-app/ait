@@ -17,6 +17,42 @@ async fn authenticated_account_quota_without_model_execution() {
     }
 }
 
+#[tokio::test]
+#[ignore = "requires authenticated AGY; starts native sessions without a model turn"]
+async fn authenticated_model_starts_with_its_default_thinking_level() {
+    let client = AntigravityClient::installed();
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path().canonicalize().unwrap();
+    let mut spec = AgentSessionSpec {
+        provider: PROVIDER.to_owned(),
+        cwd: cwd.to_str().unwrap().to_owned(),
+        config: StoredAgentConfig::default(),
+        confinement: None,
+    };
+    let models = client.discover(&spec.cwd).await.unwrap().models;
+    for model in &models {
+        let options = model["thinkingOptions"].as_array().unwrap();
+        let default = &model["defaultThinkingOptionId"];
+        assert_eq!(default.is_null(), options.is_empty(), "{model}");
+        assert!(
+            options.is_empty() || options.iter().any(|option| option["id"] == *default),
+            "{model}"
+        );
+    }
+    // A start costs two native launches, so one model and effort covers the arguments.
+    let model = models
+        .iter()
+        .find(|model| model["thinkingOptions"] != json!([]))
+        .unwrap();
+    spec.config.model = model["id"].as_str().map(str::to_owned);
+    spec.config.thinking_option_id = model["defaultThinkingOptionId"].as_str().map(str::to_owned);
+    let mut session = client.create_session(&spec).await.unwrap();
+    let runtime = session.runtime_info().await.unwrap();
+    assert_eq!(runtime.model, spec.config.model);
+    assert_eq!(runtime.thinking_option_id, spec.config.thinking_option_id);
+    session.close().await.unwrap();
+}
+
 async fn answer(session: &mut dyn AgentSession) -> String {
     tokio::time::timeout(Duration::from_secs(90), async {
         loop {
@@ -49,16 +85,16 @@ async fn authenticated_multi_turn_and_resume() {
     let models = client.discover(&cwd).await.unwrap().models;
     let model = models
         .iter()
-        .find(|model| model["id"].as_str().is_some_and(|id| id.ends_with("-low")))
-        .unwrap_or(&models[0])["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+        .find(|model| model["thinkingOptions"][0]["id"] == "low")
+        .unwrap_or(&models[0]);
     let spec = AgentSessionSpec {
         provider: PROVIDER.to_owned(),
         cwd,
         config: StoredAgentConfig {
-            model: Some(model),
+            model: model["id"].as_str().map(str::to_owned),
+            thinking_option_id: model["thinkingOptions"][0]["id"]
+                .as_str()
+                .map(str::to_owned),
             mode_id: Some("plan".to_owned()),
             ..Default::default()
         },

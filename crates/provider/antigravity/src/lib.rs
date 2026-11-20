@@ -94,9 +94,9 @@ impl AgentClient for AntigravityClient {
             return Ok("Antigravity CLI (agy) executable is unavailable".to_owned());
         }
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-        let models =
-            discovery::models(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
-        Ok(format!("Antigravity CLI ready; {} models", models.len()))
+        let catalog =
+            discovery::catalog(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
+        Ok(format!("Antigravity CLI ready; {} models", catalog.len()))
     }
 
     async fn usage(&self) -> Result<Value, AgentSessionError> {
@@ -107,7 +107,7 @@ impl AgentClient for AntigravityClient {
     async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
         config::validate_directory(cwd)?;
         Ok(Details {
-            models: discovery::models(self, cwd).await?,
+            models: discovery::catalog(self, cwd).await?.models(),
             modes: config::modes(),
             features: Vec::new(),
         })
@@ -115,15 +115,10 @@ impl AgentClient for AntigravityClient {
 
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         config::validate_spec(spec)?;
-        if let Some(model) = &spec.config.model
-            && !discovery::models(self, &spec.cwd)
-                .await?
-                .iter()
-                .any(|entry| entry["id"] == *model)
-        {
-            return Err(AgentSessionError::Rejected);
-        }
-        Ok(())
+        discovery::catalog(self, &spec.cwd)
+            .await?
+            .select(&spec.config)
+            .map(drop)
     }
 
     async fn create_session(

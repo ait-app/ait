@@ -3,7 +3,10 @@ use std::path::Path;
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use super::PROVIDER;
+use super::{
+    PROVIDER,
+    discovery::{EFFORTS, Selection},
+};
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -17,7 +20,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
         || config
             .thinking_option_id
             .as_deref()
-            .is_some_and(|effort| !matches!(effort, "low" | "medium" | "high" | "xhigh" | "max"))
+            .is_some_and(|effort| !EFFORTS.contains(&effort))
         || config.system_prompt.is_some()
         || config
             .tool_policy
@@ -56,7 +59,11 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
     validate(&spec.config)
 }
 
-pub(super) fn arguments(config: &StoredAgentConfig, conversation: Option<&str>) -> Vec<String> {
+pub(super) fn arguments(
+    config: &StoredAgentConfig,
+    selection: &Selection,
+    conversation: Option<&str>,
+) -> Vec<String> {
     let mut args: Vec<String> = [
         "--input-format",
         "stream-json",
@@ -71,8 +78,8 @@ pub(super) fn arguments(config: &StoredAgentConfig, conversation: Option<&str>) 
     .collect();
     for (flag, value) in [
         ("--conversation", conversation),
-        ("--model", config.model.as_deref()),
-        ("--effort", config.thinking_option_id.as_deref()),
+        ("--model", selection.model.as_deref()),
+        ("--effort", selection.effort.as_deref()),
     ] {
         if let Some(value) = value {
             args.extend([flag.to_owned(), value.to_owned()]);
@@ -94,13 +101,14 @@ pub(super) fn arguments(config: &StoredAgentConfig, conversation: Option<&str>) 
 pub(super) fn runtime(
     id: &str,
     config: &StoredAgentConfig,
+    effort: Option<&str>,
     init: &Value,
 ) -> StoredAgentRuntimeInfo {
     StoredAgentRuntimeInfo {
         provider: PROVIDER.to_owned(),
         session_id: Some(id.to_owned()),
         model: init["model"].as_str().map(str::to_owned),
-        thinking_option_id: config.thinking_option_id.clone(),
+        thinking_option_id: effort.map(str::to_owned),
         mode_id: Some(config.mode_id.as_deref().unwrap_or("default").to_owned()),
         extra: Some(std::collections::BTreeMap::from([(
             "permissionMode".to_owned(),

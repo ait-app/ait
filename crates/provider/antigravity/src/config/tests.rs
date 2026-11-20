@@ -16,7 +16,12 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
             ..StoredAgentConfig::default()
         };
         validate(&config).unwrap();
-        let args = arguments(&config, Some("conversation-id"));
+        // The resolved selection, not the stored model ID, reaches the native command line.
+        let selection = Selection {
+            model: Some("gemini-test".to_owned()),
+            effort: Some("high".to_owned()),
+        };
+        let args = arguments(&config, &selection, Some("conversation-id"));
         assert_eq!(
             args.iter()
                 .any(|arg| arg == "--dangerously-skip-permissions"),
@@ -28,7 +33,7 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
         );
         assert!(
             args.windows(2)
-                .any(|pair| pair == ["--model", "gemini-test-low"])
+                .any(|pair| pair == ["--model", "gemini-test"])
         );
         assert!(args.windows(2).any(|pair| pair == ["--effort", "high"]));
         assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
@@ -91,8 +96,12 @@ fn rejects_settings_that_cannot_be_delivered_natively() {
 #[test]
 fn runtime_reports_only_native_model_facts() {
     let config = StoredAgentConfig::default();
-    let info = runtime("id", &config, &json!({"permission_mode":"request-review"}));
+    let init = json!({"permission_mode":"request-review"});
+    let info = runtime("id", &config, None, &init);
     assert_eq!(info.model, None);
+    assert_eq!(info.thinking_option_id, None);
+    let info = runtime("id", &config, Some("high"), &init);
+    assert_eq!(info.thinking_option_id.as_deref(), Some("high"));
     assert_eq!(info.mode_id.as_deref(), Some("default"));
     assert_eq!(info.extra.unwrap()["permissionMode"], "request-review");
     assert_eq!(modes().len(), 4);

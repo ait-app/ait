@@ -42,8 +42,11 @@ if args == ['models']:
     if scenario == 'model-failure':
         sys.exit(1)
     print('Fetching available models...')
+    print('gemini-test-high\tGemini Test (High)')
+    print('gemini-test-xhigh\tGemini Test (XHigh)')
     print('gemini-test-low\tGemini Test (Low)')
     print('claude-test-high\tClaude Test (High)')
+    print('plain-test\tPlain Test')
     sys.exit(0)
 
 if args == ['--print', '/usage', '--output-format', 'json']:
@@ -71,6 +74,13 @@ if args == ['--print', '/usage', '--output-format', 'json']:
           ]}}})
     sys.exit(0)
 
+efforts = {'gemini-test': ['high', 'xhigh', 'low'], 'claude-test': ['high'], 'plain-test': []}
+effort = args[args.index('--effort') + 1] if '--effort' in args else None
+if model is not None and (model not in efforts or effort not in [None, *efforts[model]]):
+    # The real CLI also accepts full variant slugs, but rejects them with another effort.
+    emit({'event': 'result', 'result': {'conversation_id': '', 'status': 'ERROR',
+        'response': '', 'error': 'invalid model selection'}})
+    sys.exit(1)
 init = {'cwd': os.getcwd(), 'permission_mode': 'request-review', 'tools': ['run_command']}
 if model is not None:
     init['model'] = model
