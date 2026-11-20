@@ -221,6 +221,7 @@ pub(crate) mod bots {
             executor: Arc::new(Native),
             credentials: Arc::new(Native),
             scopes: ::bot::mcp::Scopes::new(),
+            image_directory: None,
         })
         .unwrap()
     }

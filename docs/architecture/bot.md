@@ -341,6 +341,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-290](../decisions/bot/adr-290-open-channel-senders.md)）。
 - QQ 入站消息 ID 超过通用关联 ID 限制时，以 `qq:` 前缀的 SHA-256 十六进制摘要作内部去重键；
   原消息 ID 完整保存在 `replyTo`，用于 QQ 被动回复。已有短 ID 的去重键保持不变。
+- Provider 回复中的 Markdown 图片会在 Telegram、飞书、Lark 与 QQ 走各自的原生图片发送接口；图片来源支持 HTTPS URL、data URL，
+  以及 daemon 数据目录下的 `agents/provider-images` 文件。上述 Channel 的入站图片仍按文本消息处理，微信、iMessage 与 Webhook 保持文本投递（[ADR-292](../decisions/bot/adr-292-rich-media-channel-delivery.md)）。
 
 ### 中心托管的 Webhook
 

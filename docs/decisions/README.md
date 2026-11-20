@@ -13,6 +13,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Bot
 
+- [ADR-292：按平台能力投递 Bot 图片回复](bot/adr-292-rich-media-channel-delivery.md)
 - [ADR-290：所有消息 Channel 对任意发送者开放](bot/adr-290-open-channel-senders.md)
 - [ADR-289：QQ 群聊接纳所有成员对机器人的提及](bot/adr-289-qq-group-mention-admission.md)（已由 [ADR-290](bot/adr-290-open-channel-senders.md) 取代）
 - [ADR-287：工单跟随拉取请求、直接投递给工作者，以及结构化提问与回答](bot/adr-287-ticket-pull-request-follow-and-answers.md)
@@ -21,7 +22,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-272：国际版 Lark Channel 与区域隔离](bot/adr-272-lark-channel.md)
 - [ADR-271：Bot 通知收件箱与合并唤醒轮次](bot/adr-271-bot-notification-inbox-and-wake-turns.md)（经 [ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-276](providers/adr-276-ait-input-envelope-and-origin.md)、[ADR-280](bot/adr-280-bot-recall-reads-and-spill.md)、[ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-233：中心托管的 Workspace Bot Webhook Channel](bot/adr-233-webhook-channel-center-endpoints.md)
-- [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md) 修订）
+- [ADR-227：Bot 按消息身份保留 Provider 的多条回复](bot/adr-227-bot-multi-message-output.md)（经 [ADR-271](bot/adr-271-bot-notification-inbox-and-wake-turns.md)、[ADR-292](bot/adr-292-rich-media-channel-delivery.md) 修订）
 - [ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel](bot/adr-226-photon-imessage-channel.md)（经 [ADR-290](bot/adr-290-open-channel-senders.md) 修订）
 - [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)（经 [ADR-289](bot/adr-289-qq-group-mention-admission.md)、[ADR-290](bot/adr-290-open-channel-senders.md) 修订）
 - [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)（经 [ADR-272](bot/adr-272-lark-channel.md)、[ADR-290](bot/adr-290-open-channel-senders.md) 修订）

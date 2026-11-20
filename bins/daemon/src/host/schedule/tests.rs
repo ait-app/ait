@@ -159,6 +159,7 @@ impl Fixture {
             executor: Arc::new(Idle),
             credentials: Arc::new(Idle),
             scopes: scopes.clone(),
+            image_directory: None,
         })
         .unwrap();
         let agents = Arc::new(Recorded {

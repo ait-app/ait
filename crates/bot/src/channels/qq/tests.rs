@@ -312,6 +312,7 @@ async fn post_once(
             api: &platform.base,
         },
         token: Mutex::new(None),
+        image_directory: None,
     };
     let result = connection
         .post_text("/v2/users/abc/messages", "hello", passive)
@@ -404,6 +405,7 @@ async fn an_http_failure_without_a_qq_code_is_never_a_delivered_send() {
             api: &base,
         },
         token: Mutex::new(None),
+        image_directory: None,
     };
     let sent = connection
         .post_text("/v2/users/abc/messages", "hello", None)
@@ -633,6 +635,7 @@ async fn disabled_groups_are_ignored_for_all_senders() {
             secret: &secret,
             hosts,
             token: Mutex::new(None),
+            image_directory: None,
         };
 
         connection

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Duration;
 
 use domain::bot::{Channel, ChannelConfig};
@@ -7,7 +8,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response, reply_parts,
+    BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response, media,
 };
 use crate::service::Bots;
 
@@ -60,9 +61,21 @@ async fn run_at(
         username,
         api,
     };
+    let image_directory = bots.image_directory();
     let receiving = receiver.receive(cancel);
-    let sending = deliver(bots, channel.id, cancel, |turn, conversation| async move {
-        send_reply(client, token, &turn, &conversation, api).await
+    let sending = deliver(bots, channel.id, cancel, |turn, conversation| {
+        let image_directory = image_directory.clone();
+        async move {
+            send_reply(
+                client,
+                token,
+                &turn,
+                &conversation,
+                image_directory.as_deref(),
+                api,
+            )
+            .await
+        }
     });
     tokio::select! {
         () = cancel.cancelled() => Ok(()),
@@ -92,31 +105,110 @@ async fn send_reply(
     token: &SecretString,
     turn: &domain::bot::Turn,
     conversation: &domain::bot::Conversation,
+    image_directory: Option<&Path>,
     api: &str,
 ) -> Result<(), ErrorCode> {
-    let parts = reply_parts(turn);
+    let parts = media::reply_parts(turn);
     if parts.is_empty() {
         return Err(ErrorCode::BotIo);
     }
     let mut message_id = None;
     let mut current_text = String::new();
-    for text in parts {
-        for (index, chunk) in chunks(text, 3500).into_iter().enumerate() {
-            if index == 0
-                && let Some(id) = message_id
-            {
-                let updated = format!("{current_text}\n\n{chunk}");
-                if chunks(&updated, 3500).len() == 1 {
-                    edit_message(client, token, &conversation.peer, id, &updated, api).await?;
-                    current_text = updated;
-                    continue;
+    let context = ReplyContext {
+        turn,
+        conversation,
+        image_directory,
+    };
+    for part in parts {
+        match part {
+            media::ReplyPart::Text(text) => {
+                for (index, chunk) in chunks(&text, 3500).into_iter().enumerate() {
+                    if index == 0
+                        && let Some(id) = message_id
+                    {
+                        let updated = format!("{current_text}\n\n{chunk}");
+                        if chunks(&updated, 3500).len() == 1 {
+                            edit_message(client, token, &conversation.peer, id, &updated, api)
+                                .await?;
+                            current_text = updated;
+                            continue;
+                        }
+                    }
+                    message_id =
+                        Some(send_message(client, token, turn, conversation, chunk, api).await?);
+                    current_text.clear();
+                    current_text.push_str(chunk);
                 }
             }
-            message_id = Some(send_message(client, token, turn, conversation, chunk, api).await?);
-            current_text.clear();
-            current_text.push_str(chunk);
+            media::ReplyPart::Image { alt, source } => {
+                send_photo(client, token, &context, &alt, &source, api).await?;
+                message_id = None;
+                current_text.clear();
+            }
         }
     }
+    Ok(())
+}
+
+struct ReplyContext<'a> {
+    turn: &'a domain::bot::Turn,
+    conversation: &'a domain::bot::Conversation,
+    image_directory: Option<&'a Path>,
+}
+
+async fn send_photo(
+    client: &reqwest::Client,
+    token: &SecretString,
+    context: &ReplyContext<'_>,
+    alt: &str,
+    source: &str,
+    api: &str,
+) -> Result<(), ErrorCode> {
+    let caption = (!alt.trim().is_empty() && alt.trim() != "Image").then(|| format::render(alt));
+    let mut body = json!({
+        "chat_id": context.conversation.peer,
+        "photo": source,
+    });
+    if let Some(thread) = context.conversation.thread.as_deref() {
+        body["message_thread_id"] = json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
+    }
+    if let Some(reply_to) = context.turn.reply_to.as_deref() {
+        body["reply_parameters"] = json!({
+            "message_id": reply_to.parse::<i64>().map_err(|_| ErrorCode::BotIo)?
+        });
+    }
+    if let Some(caption) = caption.as_deref() {
+        body["caption"] = json!(caption);
+        body["parse_mode"] = json!("HTML");
+    }
+    if media::is_remote_source(source) {
+        call_at(client, token, "sendPhoto", body, api).await?;
+        return Ok(());
+    }
+    let image = media::load_image(client, context.image_directory, source).await?;
+    let mut form = reqwest::multipart::Form::new()
+        .text("chat_id", context.conversation.peer.clone())
+        .part(
+            "photo",
+            reqwest::multipart::Part::bytes(image.bytes)
+                .file_name(image.file_name)
+                .mime_str(image.mime_type)
+                .map_err(|_| ErrorCode::BotIo)?,
+        );
+    if let Some(thread) = context.conversation.thread.as_deref() {
+        form = form.text("message_thread_id", thread.to_owned());
+    }
+    if let Some(reply_to) = context.turn.reply_to.as_deref() {
+        form = form.text(
+            "reply_parameters",
+            json!({"message_id": reply_to.parse::<i64>().map_err(|_| ErrorCode::BotIo)?})
+                .to_string(),
+        );
+    }
+    if let Some(caption) = caption {
+        form = form.text("caption", caption).text("parse_mode", "HTML");
+    }
+    multipart_call_at(client, token, "sendPhoto", form, api).await?;
     Ok(())
 }
 
@@ -428,6 +520,27 @@ async fn call_at(
         }
         // The response may contain a token-bearing URL or personal data; discard it.
         return Err(ErrorCode::BotIo);
+    }
+    Err(ErrorCode::BotIo)
+}
+
+async fn multipart_call_at(
+    client: &reqwest::Client,
+    token: &SecretString,
+    method: &str,
+    form: reqwest::multipart::Form,
+    api: &str,
+) -> Result<Value, ErrorCode> {
+    let endpoint = format!("{api}/bot{}/{method}", expose(token));
+    let response = client
+        .post(endpoint)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| ErrorCode::BotIo)?;
+    let value = json_response(response).await?;
+    if value["ok"] == true {
+        return Ok(value["result"].clone());
     }
     Err(ErrorCode::BotIo)
 }

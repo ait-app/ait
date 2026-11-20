@@ -4,6 +4,8 @@ pub(crate) mod onboarding;
 
 use std::time::{Duration, Instant};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use domain::bot::{Channel, ChannelConfig, Conversation, Turn};
 use futures_util::{SinkExt, StreamExt};
 use model::ErrorCode;
@@ -17,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit_waiting, chunks, connect_socket, deliver,
-    expose, json_response, reply_parts, supervise,
+    expose, json_response, media, supervise,
 };
 use crate::service::Bots;
 
@@ -65,6 +67,7 @@ struct Connection<'a> {
     secret: &'a SecretString,
     hosts: Hosts<'a>,
     token: Mutex<Option<Token>>,
+    image_directory: Option<std::path::PathBuf>,
 }
 
 pub(super) async fn run(
@@ -112,6 +115,7 @@ where
         secret,
         hosts,
         token: Mutex::new(None),
+        image_directory: bots.image_directory(),
     };
     let gateway = connection
         .call(reqwest::Method::GET, "/gateway", None)
@@ -355,20 +359,87 @@ impl Connection<'_> {
     }
 
     async fn reply(&self, turn: Turn, conversation: Conversation) -> Result<(), ErrorCode> {
-        let parts = reply_parts(&turn);
+        let parts = media::reply_parts(&turn);
         if parts.is_empty() {
             return Err(ErrorCode::BotIo);
         }
         let path = message_path(&conversation.peer)?;
         let mut index = 0;
-        for text in parts {
-            for chunk in chunks(text, MAX_CHUNK_UTF16) {
-                let passive = passive_reply(turn.reply_to.as_deref(), index);
-                self.post_text(&path, chunk, passive).await?;
-                index += 1;
+        for part in parts {
+            match part {
+                media::ReplyPart::Text(text) => {
+                    for chunk in chunks(&text, MAX_CHUNK_UTF16) {
+                        let passive = passive_reply(turn.reply_to.as_deref(), index);
+                        self.post_text(&path, chunk, passive).await?;
+                        index += 1;
+                    }
+                }
+                media::ReplyPart::Image { source, .. } => {
+                    let passive = passive_reply(turn.reply_to.as_deref(), index);
+                    self.post_image(&path, &source, passive).await?;
+                    index += 1;
+                }
             }
         }
         Ok(())
+    }
+
+    async fn post_image(
+        &self,
+        path: &str,
+        source: &str,
+        passive: Option<(&str, usize)>,
+    ) -> Result<(), ErrorCode> {
+        let Some((message, sequence)) = passive else {
+            tracing::warn!("QQ reply has no inbound message anchor");
+            return Err(ErrorCode::BotIo);
+        };
+        let upload_path = path
+            .strip_suffix("/messages")
+            .map(|prefix| format!("{prefix}/files"))
+            .ok_or(ErrorCode::BotIo)?;
+        let body = if media::is_remote_source(source) {
+            json!({"file_type":1,"url":source,"srv_send_msg":false})
+        } else {
+            let image =
+                media::load_image(self.client, self.image_directory.as_deref(), source).await?;
+            json!({
+                "file_type":1,
+                "file_data":STANDARD.encode(image.bytes),
+                "srv_send_msg":false,
+            })
+        };
+        let uploaded = self
+            .call(reqwest::Method::POST, &upload_path, Some(&body))
+            .await?;
+        let file_info = uploaded["file_info"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .ok_or(ErrorCode::BotIo)?;
+        let response = self
+            .call(
+                reqwest::Method::POST,
+                path,
+                Some(&json!({
+                    "content":" ",
+                    "msg_type":7,
+                    "media":{"file_info":file_info},
+                    "msg_id":message,
+                    "msg_seq":sequence,
+                })),
+            )
+            .await?;
+        match refusal(&response) {
+            None => Ok(()),
+            Some(code) if REPLY_WINDOW_CLOSED.contains(&code) => {
+                tracing::warn!(code, "QQ passive media reply window is closed");
+                Err(ErrorCode::BotIo)
+            }
+            Some(code) => {
+                tracing::warn!(code, "QQ passive media reply was refused");
+                Err(ErrorCode::BotIo)
+            }
+        }
     }
 
     /// Send text as a passive reply anchored to the inbound QQ message.

@@ -375,7 +375,7 @@ Bot 运行或恢复模式超出上限的任务会被拒绝；没有存储模式�
 ```
 
 Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会自动删除；
-当前只处理文本，不处理附件或编辑消息。
+入站仍只处理文本。出站回复支持 Markdown 图片，图片来源可以是 HTTPS URL、data URL，或 Provider 图片目录中的文件。
 
 ```json
 {
@@ -405,6 +405,7 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 
 QQ 只接受带原消息 `msg_id` 的被动回复；每条入站消息最多回复 5 次，窗口过期后无法补发，投递会记为 `uncertain`。
 QQ 返回的长消息 ID 会转换为有界的内部去重键，回复仍携带完整原消息 ID。
+出站回复支持 Markdown 图片。HTTPS URL 由 QQ 直接拉取，data URL 或 Provider 图片目录中的文件会先上传到 QQ 文件接口，再作为被动图片消息发送。
 如果群主开启了“接收群内全部消息”，QQ 会用 `GROUP_MESSAGE_CREATE` 推送群内消息，任意成员的普通文字也会被接纳。未开启时使用 `GROUP_AT_MESSAGE_CREATE`，接收 @ 机器人的消息。
 
 ### iMessage 接入
@@ -427,7 +428,7 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 同一用户运行的进程可以读取此文件，边界见 [ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)。
 
 飞书使用自建应用机器人，配置 IM 接收/发送权限，订阅 `im.message.receive_v1` 并选择长连接。
-私聊接纳任意发送者；群聊需显式开启并提及机器人。当前不支持富媒体和卡片流式回复。
+私聊接纳任意发送者；群聊需显式开启并提及机器人。入站仍只处理文本，出站回复支持 Markdown 图片，发送前上传到飞书图片接口；卡片流式回复仍未实现。
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
 实际平台凭据和应用权限需要单独验收，历史模拟服务测试不能证明真实账号已验证。
 
@@ -457,6 +458,7 @@ Channel；凭据存储与清理沿用飞书规则。Lark 入口要求主机支�
 Lark 与飞书配置分别连接各自区域，不能通过修改已有 Channel 的类型切换；请新建对应类型。
 Lark 接入目前仅以本地模拟服务验证，真实账号和区域长连接可用性仍需验收；应用必须能启用长连接，
 尚未提供 Lark 平台事件的 Webhook 接收方式。飞书二维码不用于创建 Lark 应用。
+Lark 与飞书共用出站图片发送路径，支持 Markdown 图片；入站仍只处理文本。
 新增类型的升级与降级限制见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。
 
 ### Webhook Channel

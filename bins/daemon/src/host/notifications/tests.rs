@@ -321,6 +321,7 @@ async fn bots_at(root: &Path) -> (Bots, Arc<dyn AgentRuntimeRegistry>, Conversat
         executor: Arc::new(Quiet),
         credentials: Arc::new(Quiet),
         scopes: bot::mcp::Scopes::new(),
+        image_directory: None,
     })
     .unwrap();
     bots.execute(

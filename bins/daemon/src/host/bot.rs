@@ -74,6 +74,7 @@ pub(super) fn compose<
             secrets: SecretFiles::new(root.join("credentials")),
         }),
         scopes,
+        image_directory: Some(data.join("agents/provider-images")),
     })
     .context("start Bot service")?;
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {

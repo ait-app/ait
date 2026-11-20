@@ -1,6 +1,7 @@
 //! Bounded, connection-independent Bot runtime and daemon lifecycle.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -77,6 +78,8 @@ pub struct Dependencies {
     pub credentials: Arc<dyn Credentials>,
     /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
     pub scopes: Arc<Scopes>,
+    /// Provider-owned directory containing rendered image artifacts that Bot may deliver.
+    pub image_directory: Option<PathBuf>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -115,6 +118,8 @@ struct Worker {
     follow: OnceLock<Ports>,
     /// Tickets the follower serves; empty while none follows anything.
     follows: watch::Sender<Vec<FollowTarget>>,
+    /// Provider-owned image directory used by rich-media channel adapters.
+    image_directory: Option<PathBuf>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -219,6 +224,7 @@ impl Bots {
         let cancellation = CancellationToken::new();
         let (closed, observed) = watch::channel(false);
         let hub = watch::Sender::new(state.webhook_bots());
+        let image_directory = dependencies.image_directory.clone();
         let bots = Self(Arc::new(Worker {
             sender,
             cancellation,
@@ -236,6 +242,7 @@ impl Bots {
             center: OnceLock::new(),
             follow: OnceLock::new(),
             follows: watch::Sender::new(Vec::new()),
+            image_directory,
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -480,6 +487,12 @@ impl Bots {
     #[must_use]
     pub fn webhooks(&self) -> watch::Receiver<Vec<WebhookBot>> {
         self.0.webhooks.subscribe()
+    }
+
+    /// Return the provider-owned directory from which native image artifacts may be delivered.
+    #[must_use]
+    pub(crate) fn image_directory(&self) -> Option<PathBuf> {
+        self.0.image_directory.clone()
     }
 
     /// Refuse a turn that is not in one of the Workspace's enabled center channels.

@@ -407,6 +407,7 @@ impl Scoped {
             executor: turns.clone(),
             credentials: Arc::new(Idle),
             scopes: scopes.clone(),
+            image_directory: None,
         })
         .unwrap();
         let schedules = Schedules::spawn(

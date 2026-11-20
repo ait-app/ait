@@ -1,4 +1,5 @@
 pub(crate) mod feishu;
+pub(crate) mod media;
 mod onboarding;
 pub(crate) mod photon;
 pub(crate) mod qq;

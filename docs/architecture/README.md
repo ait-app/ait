@@ -136,6 +136,7 @@ Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接
 Telegram、飞书、Lark、微信、QQ 和 iMessage 均接纳任意发送者，旧发送者列表仅兼容读取；
 群聊仍需开启并遵守平台触发规则，QQ 全量推送也接纳普通群消息。见 [ADR-290](../decisions/bot/adr-290-open-channel-senders.md)。
 飞书与国际版 Lark 共用消息传输实现，凭据验证、API、WebSocket 端点和账号独占按区域隔离，见 [ADR-272](../decisions/bot/adr-272-lark-channel.md)。
+Telegram、飞书、Lark 与 QQ 的出站回复支持 Markdown 图片，图片由各平台原生接口发送；其他 Channel 当前保持文本投递（[ADR-292](../decisions/bot/adr-292-rich-media-channel-delivery.md)）。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 中心托管的 Webhook Channel 使用现有 serve 链路和受限服务会话，daemon 只保存端点；见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
 Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。

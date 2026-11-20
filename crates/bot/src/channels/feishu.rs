@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit, chunks, connect_socket, deliver, expose,
-    json_response, reply_parts,
+    json_response, media,
 };
 use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
@@ -54,6 +54,7 @@ struct Connection<'a> {
     secret: &'a SecretString,
     token: Mutex<Option<Token>>,
     api: &'a str,
+    image_directory: Option<std::path::PathBuf>,
 }
 
 pub(super) async fn run(
@@ -112,6 +113,7 @@ where
         secret,
         token: Mutex::new(None),
         api,
+        image_directory: bots.image_directory(),
     });
     let bot_info = connection
         .call("GET", "/open-apis/bot/v3/info", None)
@@ -314,23 +316,109 @@ impl Connection<'_> {
         turn: domain::bot::Turn,
         conversation: domain::bot::Conversation,
     ) -> Result<(), ErrorCode> {
-        let parts = reply_parts(&turn);
+        let parts = media::reply_parts(&turn);
         if parts.is_empty() {
             return Err(ErrorCode::BotIo);
         }
         let mut index = 0;
-        for text in parts {
-            for chunk in chunks(text, 3000) {
-                self.post_text(
-                    &conversation.peer,
-                    turn.reply_to.as_deref(),
-                    conversation.thread.is_some(),
-                    chunk,
-                    &format!("{}-{index}", turn.id),
-                )
-                .await?;
-                index += 1;
+        for part in parts {
+            match part {
+                media::ReplyPart::Text(text) => {
+                    for chunk in chunks(&text, 3000) {
+                        self.post_text(
+                            &conversation.peer,
+                            turn.reply_to.as_deref(),
+                            conversation.thread.is_some(),
+                            chunk,
+                            &format!("{}-{index}", turn.id),
+                        )
+                        .await?;
+                        index += 1;
+                    }
+                }
+                media::ReplyPart::Image { source, .. } => {
+                    let image =
+                        media::load_image(self.client, self.image_directory.as_deref(), &source)
+                            .await?;
+                    self.post_image(
+                        &conversation.peer,
+                        turn.reply_to.as_deref(),
+                        conversation.thread.is_some(),
+                        image,
+                        &format!("{}-{index}", turn.id),
+                    )
+                    .await?;
+                    index += 1;
+                }
             }
+        }
+        Ok(())
+    }
+
+    async fn post_image(
+        &self,
+        peer: &str,
+        reply_to: Option<&str>,
+        in_thread: bool,
+        image: media::ImageData,
+        uuid: &str,
+    ) -> Result<(), ErrorCode> {
+        if let Some(message) = reply_to
+            && !message
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return Err(ErrorCode::BotIo);
+        }
+        let token = self.token().await?;
+        let part = reqwest::multipart::Part::bytes(image.bytes)
+            .file_name(image.file_name)
+            .mime_str(image.mime_type)
+            .map_err(|_| ErrorCode::BotIo)?;
+        let form = reqwest::multipart::Form::new()
+            .text("image_type", "message")
+            .part("image", part);
+        let upload = json_response(
+            self.client
+                .post(format!("{}/open-apis/im/v1/images", self.api))
+                .bearer_auth(expose(&token))
+                .multipart(form)
+                .send()
+                .await
+                .map_err(|_| ErrorCode::BotIo)?,
+        )
+        .await?;
+        if upload["code"] != 0 {
+            return Err(ErrorCode::BotIo);
+        }
+        let image_key = upload["data"]["image_key"]
+            .as_str()
+            .filter(|key| !key.is_empty())
+            .ok_or(ErrorCode::BotIo)?;
+        let mut body = json!({
+            "receive_id":peer,
+            "msg_type":"image",
+            "content":serde_json::to_string(&json!({"image_key":image_key})).map_err(|_| ErrorCode::BotIo)?,
+            "uuid":uuid,
+        });
+        if let Some(message) = reply_to {
+            body.as_object_mut()
+                .ok_or(ErrorCode::BotIo)?
+                .remove("receive_id");
+            body["reply_in_thread"] = json!(in_thread);
+            self.call(
+                "POST",
+                &format!("/open-apis/im/v1/messages/{message}/reply"),
+                Some(body),
+            )
+            .await?;
+        } else {
+            self.call(
+                "POST",
+                "/open-apis/im/v1/messages?receive_id_type=chat_id",
+                Some(body),
+            )
+            .await?;
         }
         Ok(())
     }

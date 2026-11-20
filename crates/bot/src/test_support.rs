@@ -178,6 +178,7 @@ impl Fixture {
             executor: self.native.clone(),
             credentials,
             scopes: self.scopes.clone(),
+            image_directory: None,
         })
         .unwrap()
     }

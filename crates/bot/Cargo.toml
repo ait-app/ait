@@ -23,7 +23,7 @@ tokio-util.workspace = true
 uuid.workspace = true
 # Direct outbound channel transports; no webhook server or remote state service.
 reqwest.workspace = true
-reqwest.features = ["rustls-tls", "json"]
+reqwest.features = ["rustls-tls", "json", "multipart"]
 futures-util.workspace = true
 tokio-tungstenite.workspace = true
 tokio-tungstenite.features = ["rustls-tls-webpki-roots"]

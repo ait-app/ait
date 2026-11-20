@@ -310,6 +310,61 @@ async fn telegram_accumulates_multiple_assistant_messages_in_one_reply() {
         &SecretString::from("fake".to_owned()),
         &turn,
         &conversation,
+        None,
+        &format!("http://{address}"),
+    )
+    .await
+    .unwrap();
+    bots.shutdown().await.unwrap();
+    server.abort();
+}
+
+#[tokio::test]
+async fn telegram_sends_markdown_images_with_native_photo_api() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let channel = registered_channel(&fixture, &bots).await;
+    bots.accept(Incoming {
+        channel_id: channel.id,
+        peer: "-100".into(),
+        sender: "1".into(),
+        thread: Some("3".into()),
+        message_id: "update-1".into(),
+        text: "hello".into(),
+        reply_to: Some("42".into()),
+    })
+    .await
+    .unwrap();
+    let conversation = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .find(|conversation| conversation.peer == "-100")
+        .unwrap();
+    let mut turn = fixture.store.turns(conversation.id).unwrap().remove(0);
+    turn.reply = Some("![chart](https://example.invalid/chart.png)".into());
+    let app = Router::new().route(
+        "/botfake/sendPhoto",
+        post(|Json(body): Json<Value>| async move {
+            assert_eq!(body["chat_id"], "-100");
+            assert_eq!(body["message_thread_id"], 3);
+            assert_eq!(body["photo"], "https://example.invalid/chart.png");
+            assert_eq!(body["reply_parameters"]["message_id"], 42);
+            Json(json!({"ok":true,"result":{"message_id":51}}))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    send_reply(
+        &reqwest::Client::builder().no_proxy().build().unwrap(),
+        &SecretString::from("fake".to_owned()),
+        &turn,
+        &conversation,
+        None,
         &format!("http://{address}"),
     )
     .await

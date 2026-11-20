@@ -11,6 +11,7 @@ use super::super::*;
 use crate::test_support::{Fixture, WORKSPACE, setup};
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
     let count = Arc::new(AtomicUsize::new(0));
     let token_count = count.clone();
@@ -91,6 +92,7 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
         secret: &secret,
         token: Mutex::new(None),
         api: &api,
+        image_directory: None,
     };
     assert_eq!(
         connection
@@ -184,6 +186,7 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
             secret: &secret,
             token: Mutex::new(None),
             api: API,
+            image_directory: None,
         };
         tokio::time::timeout(
             Duration::from_secs(5),
