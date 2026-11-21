@@ -22,6 +22,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   Folder,
+  FolderGit2,
   FolderPlus,
   GitBranch,
   GitPullRequest,
@@ -450,7 +451,7 @@ function IsolationIcon({
   iconColor: string;
 }) {
   if (isolation === "sandboxed-worktree") return <ShieldCheck size={iconSize} color={iconColor} />;
-  if (isolation === "worktree") return <GitBranch size={iconSize} color={iconColor} />;
+  if (isolation === "worktree") return <FolderGit2 size={iconSize} color={iconColor} />;
   return <Folder size={iconSize} color={iconColor} />;
 }
 
