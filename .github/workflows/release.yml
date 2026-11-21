@@ -347,7 +347,6 @@ jobs:
       AIT_ANDROID_HERMES_O0: "1"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
-      CCACHE_DIR: ${{ runner.temp }}/android-ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_MAXSIZE: 2G
@@ -409,6 +408,10 @@ jobs:
         with:
           # Tag builds must write caches so retries can reuse them.
           cache-read-only: false
+
+      # Job-level env cannot read the runner context, so later steps get the directory from here.
+      - name: Locate Android ccache
+        run: echo "CCACHE_DIR=$RUNNER_TEMP/android-ccache" >> "$GITHUB_ENV"
 
       - name: Restore Android ccache
         id: ccache

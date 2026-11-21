@@ -58,6 +58,21 @@ test("release builds check translations before building or publishing artifacts"
   }
 });
 
+// GitHub rejects the whole workflow file when workflow or job env reads a context that only
+// exists once a runner is assigned.
+test("workflow and job env only read contexts available before a runner is assigned", () => {
+  const scopes = [
+    ["workflow", workflow.env],
+    ...Object.entries(workflow.jobs).map(([name, job]) => [name, job.env]),
+  ];
+  for (const [scope, env] of scopes) {
+    for (const [name, value] of Object.entries(env ?? {})) {
+      for (const [expression] of String(value).matchAll(/\$\{\{.*?\}\}/g))
+        assert.doesNotMatch(expression, /\b(runner|env|job|steps)\./, `${scope}: ${name}`);
+    }
+  }
+});
+
 test("release publication waits for the Windows build and requires its assets", () => {
   assert.deepEqual(workflow.jobs.release.needs, ["build", "windows"]);
   assert.match(workflow.jobs.release.if, /needs\.windows\.result == 'success'/);
