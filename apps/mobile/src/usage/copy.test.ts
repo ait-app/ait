@@ -81,7 +81,7 @@ test("resolves History copy in the current language", async () => {
     "Not counted, unable to reach: Laptop, Server",
   );
   await i18n.changeLanguage("zh-CN");
-  expect(usageCopy.history.tab).toBe("历史");
+  expect(usageCopy.history.title).toBe("用量历史");
   expect(usageCopy.history.range("7d")).toBe("7 天");
   expect(usageCopy.history.notRecorded(["Laptop"])).toBe("Laptop 未记录用量历史");
 });

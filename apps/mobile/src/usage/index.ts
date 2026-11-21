@@ -1,9 +1,4 @@
 export { AgentUsage } from "./agent-usage";
-export { HostUsageSection } from "./host-usage-section";
 export { useHostReportsUsage } from "./queries";
-export {
-  UsageSidebarItem,
-  UsageSidebarRoot,
-  useHasUsageSummary,
-  useOpenSidebarUsage,
-} from "./sidebar-item";
+export { UsageSettingsPage } from "./settings-page";
+export { UsageSidebarItem, useIsUsageSettingsActive, useOpenUsageSettings } from "./sidebar-item";

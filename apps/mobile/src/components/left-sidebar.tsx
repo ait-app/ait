@@ -1,5 +1,5 @@
 import { HostMonitorSidebar } from "@/host-monitor/sidebar-item";
-import { UsageSidebarRoot, UsageSidebarItem } from "@/usage/sidebar-item";
+import { UsageSidebarItem } from "@/usage/sidebar-item";
 import { router } from "expo-router";
 import { FolderPlus, GitBranch, Import, Server, Settings, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -207,7 +207,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   if (isCompactLayout) {
     return (
-      <UsageSidebarRoot>
+      <>
         <RetainedPanelActivity active={active}>
           <MobileSidebar
             {...sharedProps}
@@ -222,12 +222,12 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
           />
         </RetainedPanelActivity>
         {importSessionSheet}
-      </UsageSidebarRoot>
+      </>
     );
   }
 
   return (
-    <UsageSidebarRoot>
+    <>
       <RetainedPanelActivity active={active}>
         <DesktopSidebar
           {...sharedProps}
@@ -241,7 +241,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
         />
       </RetainedPanelActivity>
       {importSessionSheet}
-    </UsageSidebarRoot>
+    </>
   );
 });
 
@@ -516,7 +516,7 @@ function MobileSidebar({
           />
         )}
 
-        <UsageSidebarItem />
+        <UsageSidebarItem onBeforeNavigate={closeSidebar} />
         <HostMonitorSidebar active={active} />
         <SidebarFooter
           theme={theme}

@@ -57,7 +57,7 @@ export function UsageCard({
   const showsFreshnessInline = isNative || isCompact || !refreshable;
   const usage = entry.report;
   const status = statusText(usage, usageCopy);
-  const footer = entry.account.label ?? null;
+  const account = entry.account.label ?? null;
   const { windows, balances, details, planLabel, successfulAt, retained, messages } =
     resolveUsageReport(entry, usageCopy);
 
@@ -77,14 +77,28 @@ export function UsageCard({
   return (
     <View style={containerStyle} testID={`usage-report-${entry.id}`}>
       <View style={styles.header}>
-        <UsageSourceIcon sourceId={entry.sourceId} svg={entry.icon ?? null} size={14} />
-        <Text style={styles.name} numberOfLines={1}>
-          {entry.sourceLabel}
-        </Text>
-        {planLabel ? <StatusBadge label={planLabel} variant="muted" /> : null}
-        <View style={styles.headerSpacer} />
+        <View style={compact ? styles.iconPlain : styles.iconTile}>
+          <UsageSourceIcon
+            sourceId={entry.sourceId}
+            svg={entry.icon ?? null}
+            size={compact ? 14 : 16}
+          />
+        </View>
+        <View style={styles.identity}>
+          <View style={styles.nameRow}>
+            <Text style={compact ? styles.nameCompact : styles.name} numberOfLines={1}>
+              {entry.sourceLabel}
+            </Text>
+            {planLabel ? <StatusBadge label={planLabel} variant="muted" /> : null}
+          </View>
+          {account ? (
+            <Text style={styles.account} numberOfLines={1} testID="usage-account">
+              {account}
+            </Text>
+          ) : null}
+        </View>
         {status ? (
-          <View style={styles.statusRow}>
+          <View style={styles.statusChip}>
             <View style={dotStyle} />
             <Text style={styles.statusLabel}>{status}</Text>
           </View>
@@ -117,6 +131,7 @@ export function UsageCard({
               retained={retained}
               display={display}
               pinnable={pinnable}
+              compact={compact}
             />
           ))}
           {balances.map((balance) => (
@@ -140,20 +155,13 @@ export function UsageCard({
         </View>
       ) : null}
 
-      {footer || showsFreshnessInline ? (
-        <View style={styles.footerRow}>
-          <Text style={styles.footer} numberOfLines={1}>
-            {footer}
-          </Text>
-          {showsFreshnessInline ? (
-            <UsageFreshness
-              successfulAt={successfulAt}
-              retained={retained}
-              style={styles.freshness}
-              testID="usage-freshness"
-            />
-          ) : null}
-        </View>
+      {showsFreshnessInline ? (
+        <UsageFreshness
+          successfulAt={successfulAt}
+          retained={retained}
+          style={styles.freshness}
+          testID="usage-freshness"
+        />
       ) : null}
 
       {refreshState === "failed" ? (
@@ -171,8 +179,10 @@ function CardWindowBar({
   display,
   pinnable,
   retained,
+  compact,
 }: {
   retained: boolean;
+  compact: boolean;
   entry: UsageReportEntry;
   window: UsageWindow;
   display: UsageDisplay;
@@ -195,6 +205,7 @@ function CardWindowBar({
       onTogglePin={toggle}
       pinLabel={usageCopy.pinWindow(entry.sourceLabel, window.label)}
       pinTestID={`usage-pin-${entry.sourceId}-${window.id}`}
+      compact={compact}
     />
   );
 }
@@ -298,23 +309,57 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  iconTile: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+    marginRight: theme.spacing[1],
+  },
+  iconPlain: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  identity: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   name: {
     flexShrink: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
   },
-  headerSpacer: {
-    flex: 1,
+  nameCompact: {
+    flexShrink: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
   },
-  statusRow: {
+  account: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  statusChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface2,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: theme.colors.foregroundMuted,
   },
   statusDotAvailable: {
@@ -353,18 +398,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: theme.fontSize.sm * 1.4,
   },
-  footerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  footer: {
-    flex: 1,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
   freshness: {
-    flexShrink: 0,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },

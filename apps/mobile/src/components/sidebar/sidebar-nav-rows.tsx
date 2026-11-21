@@ -1,4 +1,4 @@
-import { useOpenSidebarUsage } from "@/usage/sidebar-item";
+import { useIsUsageSettingsActive, useOpenUsageSettings } from "@/usage/sidebar-item";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
@@ -226,14 +226,16 @@ const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps
   usage: SidebarUsageRow,
 };
 
-function SidebarUsageRow() {
+function SidebarUsageRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
-  const open = useOpenSidebarUsage();
+  const open = useOpenUsageSettings(onBeforeNavigate);
+  const isActive = useIsUsageSettingsActive();
   return (
     <SidebarHeaderRow
       icon={Gauge}
       label={t(builtinSidebarNavLabelKey("usage"))}
       onPress={open}
+      isActive={isActive}
       testID="sidebar-usage-open"
       variant="compact"
     />

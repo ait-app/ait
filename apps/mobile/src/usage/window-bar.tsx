@@ -28,8 +28,11 @@ export function UsageWindowBar({
   pinLabel,
   pinTestID,
   retained = false,
+  compact = false,
 }: {
   retained?: boolean;
+  /** A popover's denser row: the value at body size. */
+  compact?: boolean;
   window: UsageWindow;
   displayAs: UsageDisplayAs;
   /** Whether the row pins the window to the sidebar. When false the row is a plain bar. */
@@ -62,6 +65,7 @@ export function UsageWindowBar({
     percent: shownPct ?? 0,
     tone,
     pinned,
+    compact,
   };
 
   // Same padding as the pinnable row, so bars line up in both modes.
@@ -106,6 +110,7 @@ function WindowRowContent({
   tone,
   pinnable,
   pinned,
+  compact,
 }: {
   highlight: StyleProp<ViewStyle>;
   label: string;
@@ -116,6 +121,7 @@ function WindowRowContent({
   tone: UsageTone;
   pinnable: boolean;
   pinned: boolean;
+  compact: boolean;
 }) {
   return (
     <>
@@ -126,14 +132,14 @@ function WindowRowContent({
             <Text style={styles.label} numberOfLines={1}>
               {label}
             </Text>
-            <Text style={styles.value}>
-              {value}
-              {trailing ? (
-                <Text style={isAtRisk ? styles.atRisk : styles.reset}>{` · ${trailing}`}</Text>
-              ) : null}
-            </Text>
+            <Text style={compact ? styles.valueCompact : styles.value}>{value}</Text>
           </View>
-          <UsageMeter percent={percent} tone={tone} />
+          <UsageMeter percent={percent} tone={tone} style={compact ? null : styles.meter} />
+          {trailing ? (
+            <Text style={isAtRisk ? styles.atRisk : styles.reset} numberOfLines={1}>
+              {trailing}
+            </Text>
+          ) : null}
         </View>
         {pinnable ? <UsagePinGlyph pinned={pinned} /> : null}
       </View>
@@ -171,7 +177,7 @@ function UsagePinGlyph({ pinned }: { pinned: boolean }) {
 
 const styles = StyleSheet.create((theme) => ({
   contentRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
-  windowContent: { flex: 1, gap: 3 },
+  windowContent: { flex: 1, gap: theme.spacing[1] },
   pin: { width: 12, alignItems: "center" },
   tooltipText: { color: theme.colors.popoverForeground, fontSize: theme.fontSize.sm },
   row: {
@@ -203,7 +209,7 @@ const styles = StyleSheet.create((theme) => ({
   labelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: theme.spacing[2],
   },
   label: {
@@ -213,15 +219,26 @@ const styles = StyleSheet.create((theme) => ({
   },
   value: {
     color: theme.colors.foreground,
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.semibold,
+    fontVariant: ["tabular-nums"],
+  },
+  valueCompact: {
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
+    fontVariant: ["tabular-nums"],
+  },
+  meter: {
+    height: 6,
+    borderRadius: 3,
   },
   reset: {
     color: theme.colors.foregroundMuted,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: theme.fontSize.sm,
   },
   atRisk: {
     color: theme.colors.statusDanger,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: theme.fontSize.sm,
   },
 }));

@@ -113,6 +113,10 @@ describe("usage history in Chromium", () => {
         },
       ]),
     );
+    const totals = node.querySelector('[data-testid="usage-history-totals"]')!;
+    expect(totals.textContent).toContain("Tokens9K");
+    expect(totals.textContent).toContain("Calls4");
+    expect(totals.textContent).toContain("Reported cost$0.25");
     const byModel = node.querySelector('[data-testid="usage-history-by-model"]')!;
     expect(byModel.textContent).toContain("Claude · opus");
     expect(byModel.textContent).toContain("Tokens 4.5K");

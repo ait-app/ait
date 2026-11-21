@@ -1,24 +1,20 @@
 import type { UsageLedgerGroup } from "@ait/protocol/messages";
 import { useCallback, useMemo } from "react";
 import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { useFetchQueries, useFetchQuery } from "@/data/query";
+import { useFetchQueries } from "@/data/query";
 import { groupHosts } from "@/hosts/host-groups";
 import { useHostFeatureAvailabilityMap } from "@/runtime/host-features";
 import {
   getHostRuntimeStore,
   useHostRuntimeConnectionStatuses,
-  useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { useSessionStore, type SessionState } from "@/stores/session-store";
 import { usageCopy } from "./copy";
 import {
   combineUsageHistory,
   historyWindow,
   isLedgerUnsupported,
-  resolveHostHistoryTotals,
   type HistoryRange,
-  type HostHistoryTotals,
   type LedgerAnswer,
   type LedgerQueryState,
   type UsageHistory,
@@ -81,12 +77,6 @@ function toLedgerState(query: UseQueryResult<LedgerAnswer, Error> | undefined): 
   return { data: query?.data, error: query?.error ?? null, isFetching: query?.isFetching ?? false };
 }
 
-/** Whether a host lists the ledger method; null until it has connected and said. */
-function ledgerSupport(session: SessionState | undefined): boolean | null {
-  if (!session?.serverInfo) return null;
-  return session.serverInfo.features?.providerUsageLedger === true;
-}
-
 export interface UsageHistoryHost {
   serverId: string;
   label: string;
@@ -114,17 +104,17 @@ export function useUsageHistoryHosts(): UsageHistoryHost[] {
 }
 
 /**
- * History over one host, or every host when `serverId` is null. Each host answers for itself; the
- * rows are summed here, and hosts that could not answer are listed rather than counted as zero.
+ * One host's History for a range. The host answers for itself; while it cannot, the History lists
+ * it rather than counting it as zero.
  */
 export function useUsageHistory(
-  serverId: string | null,
+  serverId: string,
   range: HistoryRange,
 ): { history: UsageHistory; refresh: () => void } {
   const queryClient = useQueryClient();
   const allHosts = useUsageHistoryHosts();
   const hosts = useMemo(
-    () => (serverId === null ? allHosts : allHosts.filter((host) => host.serverId === serverId)),
+    () => allHosts.filter((host) => host.serverId === serverId),
     [allHosts, serverId],
   );
   const queries = useFetchQueries<LedgerAnswer>(
@@ -148,27 +138,4 @@ export function useUsageHistory(
     }
   }, [hosts, queryClient]);
   return { history, refresh };
-}
-
-/** A host's ledger totals for the last 30 days, as its settings page shows them. */
-export function useHostHistoryTotals(serverId: string): {
-  totals: HostHistoryTotals;
-  refresh: () => void;
-} {
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const supportsLedger = useSessionStore((state) => ledgerSupport(state.sessions[serverId]));
-  // The same summary History's 30-day tables read, so both share one request.
-  const query = useFetchQuery(
-    ledgerQuery({ serverId, isConnected, supportsLedger }, "30d", "model"),
-  );
-  const { refetch } = query;
-  const refresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
-  const totals = resolveHostHistoryTotals({
-    isConnected,
-    supportsLedger,
-    query: toLedgerState(query),
-  });
-  return { totals, refresh };
 }

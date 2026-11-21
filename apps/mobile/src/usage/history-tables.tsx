@@ -12,22 +12,30 @@ import {
   formatLedgerDay,
   formatReportedCost,
 } from "./format";
+import { UsageHistoryChart } from "./history-chart";
 import {
   cacheHitRate,
+  dailyTokens,
   ledgerProviderLabel,
   totalTokens,
-  type HostHistoryTotals,
+  type HistoryRange,
   type LedgerRow,
   type UsageHistory,
 } from "./history-model";
 import { UsageMessage } from "./usage-section";
 
-/** History's tables for the hosts that answered, and notes on those that did not. */
+/**
+ * History for the hosts that answered: totals as tiles, tokens per day, then the calls by provider,
+ * model and day, with notes on hosts that did not answer. `range` draws the per-day chart; a
+ * 24-hour range has too few days for one.
+ */
 export function UsageHistoryBody({
   history,
+  range,
   onRetry,
 }: {
   history: UsageHistory;
+  range?: HistoryRange;
   onRetry: () => void;
 }) {
   const usageCopy = useUsageCopy();
@@ -49,23 +57,35 @@ export function UsageHistoryBody({
           </Button>
         </Alert>
       ) : null}
-      <UsageHistoryTables history={history} locale={locale} />
-      <View style={styles.notes}>
-        {history.recordedSince !== null ? (
-          <Note text={copy.recordedSince(formatLedgerDate(history.recordedSince, locale))} />
-        ) : null}
-        {history.unreachable.length > 0 ? (
-          <Note text={copy.unreachable(history.unreachable)} />
-        ) : null}
-        {history.notRecorded.length > 0 ? (
-          <Note text={copy.notRecorded(history.notRecorded)} />
-        ) : null}
-      </View>
+      <UsageHistoryFigures history={history} range={range} locale={locale} />
+      {history.recordedSince !== null ||
+      history.unreachable.length > 0 ||
+      history.notRecorded.length > 0 ? (
+        <View style={styles.notes}>
+          {history.recordedSince !== null ? (
+            <Note text={copy.recordedSince(formatLedgerDate(history.recordedSince, locale))} />
+          ) : null}
+          {history.unreachable.length > 0 ? (
+            <Note text={copy.unreachable(history.unreachable)} />
+          ) : null}
+          {history.notRecorded.length > 0 ? (
+            <Note text={copy.notRecorded(history.notRecorded)} />
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function UsageHistoryTables({ history, locale }: { history: UsageHistory; locale: string }) {
+function UsageHistoryFigures({
+  history,
+  range,
+  locale,
+}: {
+  history: UsageHistory;
+  range: HistoryRange | undefined;
+  locale: string;
+}) {
   const usageCopy = useUsageCopy();
   const copy = usageCopy.history;
   // Partial sums would pass for the total, so nothing shows until every host has answered.
@@ -74,11 +94,17 @@ function UsageHistoryTables({ history, locale }: { history: UsageHistory; locale
   if (history.byModel.length === 0 && history.byDay.length === 0) {
     return <UsageMessage text={copy.empty} />;
   }
+  const total = totalTokens(history.totals);
   return (
     <>
+      <HistoryTiles totals={history.totals} locale={locale} />
+      {range && range !== "24h" ? (
+        <UsageHistoryChart days={dailyTokens(history.byDay, range, Date.now())} locale={locale} />
+      ) : null}
       <LedgerTable
         title={copy.byProvider}
         rows={history.byProvider}
+        total={total}
         label={(row) => ledgerProviderLabel(row.key.provider)}
         locale={locale}
         testID="usage-history-by-provider"
@@ -86,6 +112,7 @@ function UsageHistoryTables({ history, locale }: { history: UsageHistory; locale
       <LedgerTable
         title={copy.byModel}
         rows={history.byModel}
+        total={total}
         label={(row) =>
           `${ledgerProviderLabel(row.key.provider)} · ${row.key.model || copy.unknownModel}`
         }
@@ -95,6 +122,7 @@ function UsageHistoryTables({ history, locale }: { history: UsageHistory; locale
       <LedgerTable
         title={copy.byDay}
         rows={history.byDay}
+        total={null}
         label={(row) => formatLedgerDay(row.key.day ?? "", locale)}
         locale={locale}
         testID="usage-history-by-day"
@@ -103,15 +131,59 @@ function UsageHistoryTables({ history, locale }: { history: UsageHistory; locale
   );
 }
 
+/** The range's headline figures, one tile each; cache hit and cost only when there is one. */
+function HistoryTiles({ totals, locale }: { totals: LedgerRow; locale: string }) {
+  const copy = useUsageCopy().history;
+  const count = (value: number) => formatLedgerCount(value, locale);
+  const hitRate = cacheHitRate(totals);
+  const cost = formatReportedCost(totals, locale);
+  return (
+    <View style={styles.tiles} testID="usage-history-totals">
+      <Tile label={copy.tokensTitle} value={count(totalTokens(totals))} detail={null} />
+      <Tile
+        label={copy.callsTitle}
+        value={count(totals.calls)}
+        detail={totals.failedCalls > 0 ? copy.failedCalls(count(totals.failedCalls)) : null}
+      />
+      <Tile label={copy.requestsTitle} value={count(totals.requests)} detail={null} />
+      {hitRate === null ? null : (
+        <Tile label={copy.cacheHitTitle} value={formatCacheHitRate(hitRate)} detail={null} />
+      )}
+      {cost === null ? null : <Tile label={copy.costTitle} value={cost} detail={null} />}
+    </View>
+  );
+}
+
+function Tile({ label, value, detail }: { label: string; value: string; detail: string | null }) {
+  return (
+    <View style={[settingsStyles.card, styles.tile]}>
+      <Text style={styles.tileLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.tileValue} numberOfLines={1}>
+        {value}
+      </Text>
+      {detail ? (
+        <Text style={styles.tileDetail} numberOfLines={1}>
+          {detail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function LedgerTable({
   title,
   rows,
+  total,
   label,
   locale,
   testID,
 }: {
   title: string;
   rows: readonly LedgerRow[];
+  /** The range's token total; each row's share of it draws a bar. Null draws none. */
+  total: number | null;
   label: (row: LedgerRow) => string;
   locale: string;
   testID: string;
@@ -126,6 +198,7 @@ function LedgerTable({
             key={JSON.stringify(row.key)}
             row={row}
             label={label(row)}
+            share={total ? totalTokens(row) / total : null}
             locale={locale}
             bordered={index > 0}
           />
@@ -135,15 +208,20 @@ function LedgerTable({
   );
 }
 
-/** A row's label and token total, then its calls, requests, buckets, hit rate and cost. */
+/**
+ * A row's label and token total, its share of the range's tokens, then its calls, requests,
+ * buckets, hit rate and cost.
+ */
 function LedgerRowView({
   row,
   label,
+  share,
   locale,
   bordered,
 }: {
   row: LedgerRow;
   label: string;
+  share: number | null;
   locale: string;
   bordered: boolean;
 }) {
@@ -172,59 +250,16 @@ function LedgerRowView({
         </Text>
         <Text style={styles.rowTotal}>{copy.tokens(tokens(totalTokens(row)))}</Text>
       </View>
+      {share === null ? null : (
+        <View style={styles.shareTrack}>
+          <View
+            style={[styles.shareFill, { width: `${Math.max(0, Math.min(1, share)) * 100}%` }]}
+          />
+        </View>
+      )}
       <Text style={styles.rowDetails}>{details}</Text>
     </View>
   );
-}
-
-/** A host's totals: calls, requests and tokens on one line, with when its history starts. */
-export function HostHistoryTotalsBody({
-  totals,
-  hostLabel,
-  onRetry,
-}: {
-  totals: Exclude<HostHistoryTotals, { kind: "hidden" }>;
-  hostLabel: string;
-  onRetry: () => void;
-}) {
-  const usageCopy = useUsageCopy();
-  const copy = usageCopy.history;
-  const { i18n } = useTranslation();
-  const locale = i18n.language;
-  switch (totals.kind) {
-    case "loading":
-      return <UsageMessage text={usageCopy.loading} />;
-    case "notRecorded":
-      return <UsageMessage text={copy.notRecorded([hostLabel])} />;
-    case "error":
-      return (
-        <Alert variant="error" title={usageCopy.errorTitle} description={totals.message}>
-          <Button variant="outline" size="sm" onPress={onRetry}>
-            {usageCopy.retry}
-          </Button>
-        </Alert>
-      );
-    case "ready": {
-      const row = totals.totals;
-      const summary = [
-        copy.calls(formatLedgerCount(row.calls, locale)),
-        copy.requests(formatLedgerCount(row.requests, locale)),
-        copy.tokens(formatLedgerCount(totalTokens(row), locale)),
-      ].join(" · ");
-      return (
-        <View style={styles.body}>
-          <View style={[settingsStyles.card, styles.row]}>
-            <Text style={styles.rowLabel}>{summary}</Text>
-          </View>
-          {totals.recordedSince !== null ? (
-            <View style={styles.notes}>
-              <Note text={copy.recordedSince(formatLedgerDate(totals.recordedSince, locale))} />
-            </View>
-          ) : null}
-        </View>
-      );
-    }
-  }
 }
 
 function Note({ text }: { text: string }) {
@@ -235,11 +270,38 @@ const styles = StyleSheet.create((theme) => ({
   body: {
     gap: theme.spacing[4],
   },
+  tiles: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[3],
+  },
+  tile: {
+    flexGrow: 1,
+    flexBasis: 110,
+    minWidth: 0,
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+  },
+  tileLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  tileValue: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize["2xl"],
+    fontWeight: theme.fontWeight.semibold,
+    fontVariant: ["tabular-nums"],
+  },
+  tileDetail: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
   table: {
     gap: theme.spacing[2],
   },
   row: {
-    gap: theme.spacing[1],
+    gap: theme.spacing[1.5],
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
   },
@@ -258,6 +320,19 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    fontVariant: ["tabular-nums"],
+  },
+  shareTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.surface3,
+    overflow: "hidden",
+  },
+  shareFill: {
+    height: "100%",
+    borderRadius: 2,
+    backgroundColor: theme.colors.accent,
   },
   rowDetails: {
     color: theme.colors.foregroundMuted,

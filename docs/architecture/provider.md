@@ -343,6 +343,8 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   `nextRefreshAt` 不限制强刷（[ADR-285](../decisions/providers/adr-285-account-usage-retry-delay.md)）。
 - Claude 用量 GET 使用原生客户端格式的 `User-Agent` 和 JSON 请求头，版本来自有界的
   `claude --version`，同时标明 Ait 调用者；版本读取失败时只发送 Ait 标识，不猜测 CLI 版本。
+- 客户端只在设置中每台 Host 的 Usage 页显示该 Host 的套餐用量、用量历史和本机显示偏好，不再有
+  用量弹窗或跨 Host 视图；侧栏的 Usage 入口与摘要打开摘要所读 Host 的这一页。
 
 ## Harness 用量账本
 
@@ -355,7 +357,8 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   token 用量为 `missing`；其余为 `lower_bound`。失败、取消或被中断的调用至多为 `lower_bound`。
   只存提供方报告的费用。
 - `calls` 与 `requests` 保留 90 天，`daily_usage`（UTC 日）无限期；不含文本、路径或凭据，不进入 Hub outbox。
-  查询为 `provider.usage.ledger`，客户端按 `features.providerUsageLedger` 协商并逐 Host 汇总。
+  查询为 `provider.usage.ledger`，客户端按 `features.providerUsageLedger` 协商，在该 Host 的 Usage 页
+  按 24h、7d、30d 显示合计、每日 token 与按提供方、模型、日期的明细，不跨 Host 相加。
 
 ## 测试归属
 

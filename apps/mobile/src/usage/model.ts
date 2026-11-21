@@ -197,14 +197,20 @@ export function resolveUsageHostId(choice: UsageHostChoice): string | null {
 }
 
 /**
- * The host the Usage modal shows: the picked host while it is connected, even one that cannot
- * report usage so the modal says to update it; else the sidebar row's host; else the first
- * connected host.
+ * The host whose Usage page the sidebar opens in Settings: the picked host while it is connected,
+ * even one that cannot report usage so its page says to update it; else the sidebar row's host;
+ * else the first connected host; else the first host, whose page says to connect it.
  */
-export function resolveUsageModalHostId(choice: UsageHostChoice): string | null {
+export function resolveUsageSettingsHostId(choice: UsageHostChoice): string | null {
   const connected = choice.hosts.filter((host) => host.isConnected);
   const picked = connected.find((host) => host.serverId === choice.pickedServerId);
-  return picked?.serverId ?? resolveUsageHostId(choice) ?? connected[0]?.serverId ?? null;
+  return (
+    picked?.serverId ??
+    resolveUsageHostId(choice) ??
+    connected[0]?.serverId ??
+    choice.hosts[0]?.serverId ??
+    null
+  );
 }
 
 /** Current outcome owns messages; only a successful poll owns values and freshness. */

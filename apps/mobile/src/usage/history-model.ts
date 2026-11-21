@@ -144,6 +144,8 @@ export interface LedgerHostFailure {
  * as zero; hosts without a ledger are left out, or listed as not recording when they claimed one.
  */
 export interface UsageHistory {
+  /** Every row summed, over the hosts that answered. */
+  totals: LedgerRow;
   /** Rows by provider and model, summed over the hosts that answered. */
   byModel: LedgerRow[];
   /** `byModel` rolled up by provider. */
@@ -173,6 +175,7 @@ function failure(query: LedgerQueryState): unknown {
 /** Combine each host's summaries into the History view. */
 export function combineUsageHistory(hosts: readonly LedgerHostInput[]): UsageHistory {
   const history: UsageHistory = {
+    totals: EMPTY_ROW,
     byModel: [],
     byProvider: [],
     byDay: [],
@@ -215,40 +218,47 @@ export function combineUsageHistory(hosts: readonly LedgerHostInput[]): UsageHis
     from = Math.min(from, byModel.from);
   }
   if (since > from && Number.isFinite(since)) history.recordedSince = since;
+  history.totals = sumAll(modelRows);
   history.byModel = sumRows(modelRows).sort(byUsage);
   history.byProvider = sumRows(modelRows, (key) => ({ provider: key.provider })).sort(byUsage);
   history.byDay = sumRows(dayRows).sort(byDayDescending);
   return history;
 }
 
-/** What a host's settings page shows of its ledger. */
-export type HostHistoryTotals =
-  | { kind: "hidden" }
-  | { kind: "loading" }
-  | { kind: "notRecorded" }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; totals: LedgerRow; recordedSince: number | null };
+/** One UTC day's tokens, for the tokens-per-day chart. */
+export interface DailyTokens {
+  /** "2026-11-10", as ledger day keys read. */
+  day: string;
+  tokens: number;
+}
+
+function utcDay(time: number): string {
+  return new Date(time).toISOString().slice(0, 10);
+}
 
 /**
- * A host's totals over its by-model summary. Hidden while the host is offline or does not offer
- * the ledger; a host that offers it but keeps none says so instead of failing.
+ * Every UTC day the range touches, oldest first, with the tokens its day rows count. A day without
+ * calls reads 0, so the chart's bars keep even spacing.
  */
-export function resolveHostHistoryTotals(input: {
-  isConnected: boolean;
-  supportsLedger: boolean | null;
-  query: LedgerQueryState;
-}): HostHistoryTotals {
-  const { isConnected, supportsLedger, query } = input;
-  if (!isConnected || supportsLedger !== true) return { kind: "hidden" };
-  const error = failure(query);
-  if (error) {
-    return isLedgerUnsupported(error)
-      ? { kind: "notRecorded" }
-      : { kind: "error", message: toErrorMessage(error) };
+export function dailyTokens(
+  byDay: readonly LedgerRow[],
+  range: HistoryRange,
+  now: number,
+): DailyTokens[] {
+  const tokensByDay = new Map<string, number>();
+  for (const row of byDay) {
+    if (!row.key.day) continue;
+    tokensByDay.set(row.key.day, (tokensByDay.get(row.key.day) ?? 0) + totalTokens(row));
   }
-  if (!query.data) return { kind: "loading" };
-  const { rows, since, from } = query.data;
-  return { kind: "ready", totals: sumAll(rows), recordedSince: since > from ? since : null };
+  const { from, to } = historyWindow(range, now);
+  const days: DailyTokens[] = [];
+  const last = utcDay(to);
+  for (let time = from; ; time += DAY_MS) {
+    const day = utcDay(time);
+    days.push({ day, tokens: tokensByDay.get(day) ?? 0 });
+    if (day >= last) break;
+  }
+  return days;
 }
 
 /** A provider ID as the app names it: "claude" reads "Claude"; an unknown ID reads as itself. */

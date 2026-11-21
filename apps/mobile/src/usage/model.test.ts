@@ -7,7 +7,7 @@ import {
   replaceReport,
   resolveUsageRefresh,
   resolveUsageHostId,
-  resolveUsageModalHostId,
+  resolveUsageSettingsHostId,
   resolveUsageView,
   settleReports,
   upsertReport,
@@ -118,36 +118,46 @@ describe("resolveUsageHostId", () => {
   });
 });
 
-describe("resolveUsageModalHostId", () => {
+describe("resolveUsageSettingsHostId", () => {
   it("shows the picked host while it stays connected, even one that cannot report usage", () => {
-    expect(resolveUsageModalHostId({ pickedServerId: "old", activeServerId: "b", hosts })).toBe(
+    expect(resolveUsageSettingsHostId({ pickedServerId: "old", activeServerId: "b", hosts })).toBe(
       "old",
     );
-    expect(resolveUsageModalHostId({ pickedServerId: "offline", activeServerId: "b", hosts })).toBe(
-      "b",
-    );
+    expect(
+      resolveUsageSettingsHostId({ pickedServerId: "offline", activeServerId: "b", hosts }),
+    ).toBe("b");
   });
 
   it("otherwise shows the host the sidebar row reads", () => {
     for (const pickedServerId of [null, "a", "offline"]) {
       for (const activeServerId of ["b", null, "old", "offline"]) {
         const choice = { pickedServerId, activeServerId, hosts };
-        expect(resolveUsageModalHostId(choice)).toBe(resolveUsageHostId(choice));
+        expect(resolveUsageSettingsHostId(choice)).toBe(resolveUsageHostId(choice));
       }
     }
   });
 
-  it("shows the first connected host when none reports usage, so the modal says to update it", () => {
+  it("opens the first connected host when none reports usage, so its page says to update it", () => {
     expect(
-      resolveUsageModalHostId({
+      resolveUsageSettingsHostId({
         pickedServerId: null,
         activeServerId: null,
         hosts: hosts.slice(0, 2),
       }),
     ).toBe("old");
     expect(
-      resolveUsageModalHostId({ pickedServerId: null, activeServerId: null, hosts: [] }),
+      resolveUsageSettingsHostId({ pickedServerId: null, activeServerId: null, hosts: [] }),
     ).toBeNull();
+  });
+
+  it("opens the first host when none is connected, so its page says to connect it", () => {
+    expect(
+      resolveUsageSettingsHostId({
+        pickedServerId: null,
+        activeServerId: null,
+        hosts: hosts.slice(0, 1),
+      }),
+    ).toBe("offline");
   });
 });
 

@@ -57,9 +57,6 @@ function createUsageCopy(t: TFunction) {
     get planUsage() {
       return t("providerUsage.title");
     },
-    get options() {
-      return t("providerUsage.options");
-    },
     get refresh() {
       return t("providerUsage.refresh");
     },
@@ -77,9 +74,6 @@ function createUsageCopy(t: TFunction) {
     },
     get empty() {
       return t("providerUsage.empty");
-    },
-    get noHosts() {
-      return t("providerUsage.noHosts");
     },
     get errorTitle() {
       return t("providerUsage.errorTitle");
@@ -122,6 +116,21 @@ function createUsageCopy(t: TFunction) {
     get showInSidebarHint() {
       return t("providerUsage.showInSidebarHint");
     },
+    get displayTitle() {
+      return t("providerUsage.displayTitle");
+    },
+    get sidebarHost() {
+      return t("providerUsage.sidebarHost");
+    },
+    get sidebarHostHint() {
+      return t("providerUsage.sidebarHostHint");
+    },
+    get sidebarHostCurrent() {
+      return t("providerUsage.sidebarHostCurrent");
+    },
+    get sidebarHostUse() {
+      return t("providerUsage.sidebarHostUse");
+    },
     get nativeReadFailed() {
       return t("providerUsage.nativeReadFailed");
     },
@@ -132,8 +141,8 @@ function createUsageCopy(t: TFunction) {
 function createHistoryCopy(t: TFunction) {
   const figure = (key: string) => (value: string) => t(`providerUsage.history.${key}`, { value });
   return {
-    get tab() {
-      return t("providerUsage.history.tab");
+    get title() {
+      return t("providerUsage.history.title");
     },
     range: (range: HistoryRange): string =>
       range === "24h"
@@ -170,9 +179,25 @@ function createHistoryCopy(t: TFunction) {
     failed: (host: string, reason: string) => t("providerUsage.history.failed", { host, reason }),
     notRecorded: (hosts: readonly string[]) =>
       t("providerUsage.history.notRecorded", { hosts: hosts.join(", ") }),
-    get hostTotals() {
-      return t("providerUsage.history.hostTotals");
+    get tokensTitle() {
+      return t("providerUsage.history.tokensTitle");
     },
+    get callsTitle() {
+      return t("providerUsage.history.callsTitle");
+    },
+    get requestsTitle() {
+      return t("providerUsage.history.requestsTitle");
+    },
+    get cacheHitTitle() {
+      return t("providerUsage.history.cacheHitTitle");
+    },
+    get costTitle() {
+      return t("providerUsage.history.costTitle");
+    },
+    get tokensPerDay() {
+      return t("providerUsage.history.tokensPerDay");
+    },
+    peak: (value: string) => t("providerUsage.history.peak", { value }),
   } as const;
 }
 

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   cacheHitRate,
   combineUsageHistory,
+  dailyTokens,
   historyWindow,
   isLedgerUnsupported,
   ledgerProviderLabel,
-  resolveHostHistoryTotals,
   sumAll,
   sumRows,
   totalTokens,
@@ -165,6 +165,7 @@ describe("combineUsageHistory", () => {
       }),
     ]);
     expect(history.answered).toBe(2);
+    expect(history.totals).toMatchObject({ key: {}, calls: 4, requests: 8, inputTokens: 10_300 });
     expect(history.byModel.map((sum) => [sum.key.model, sum.calls])).toEqual([
       ["opus", 1],
       ["gpt", 2],
@@ -250,48 +251,36 @@ describe("combineUsageHistory", () => {
   });
 });
 
-describe("resolveHostHistoryTotals", () => {
-  const base = { isConnected: true, supportsLedger: true };
+describe("dailyTokens", () => {
+  const now = Date.parse("2026-11-10T15:00:00Z");
 
-  it("hides the totals for offline hosts and hosts without the ledger", () => {
-    const query = ready(answer([]));
-    expect(resolveHostHistoryTotals({ ...base, isConnected: false, query })).toEqual({
-      kind: "hidden",
-    });
-    expect(resolveHostHistoryTotals({ ...base, supportsLedger: false, query })).toEqual({
-      kind: "hidden",
-    });
-    expect(resolveHostHistoryTotals({ ...base, supportsLedger: null, query })).toEqual({
-      kind: "hidden",
-    });
+  it("lists every UTC day the range touches, oldest first, with days without calls at zero", () => {
+    const days = dailyTokens(
+      [row({ day: "2026-11-05" }), row({ day: "2026-11-10" }, { inputTokens: 1_000 })],
+      "7d",
+      now,
+    );
+    expect(days.map((entry) => entry.day)).toEqual([
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07",
+      "2026-11-08",
+      "2026-11-09",
+      "2026-11-10",
+    ]);
+    expect(days.find((entry) => entry.day === "2026-11-05")?.tokens).toBe(460);
+    expect(days.find((entry) => entry.day === "2026-11-10")?.tokens).toBe(1_360);
+    expect(days.find((entry) => entry.day === "2026-11-06")?.tokens).toBe(0);
   });
 
-  it("says the host is not recording when its ledger did not open", () => {
-    expect(
-      resolveHostHistoryTotals({ ...base, query: failed(rpcError("unsupported_capability")) }),
-    ).toEqual({ kind: "notRecorded" });
-    expect(resolveHostHistoryTotals({ ...base, query: failed(new Error("disk")) })).toEqual({
-      kind: "error",
-      message: "disk",
-    });
-    expect(resolveHostHistoryTotals({ ...base, query: pending })).toEqual({ kind: "loading" });
-  });
-
-  it("sums the host's rows and notes a start inside the range", () => {
-    const totals = resolveHostHistoryTotals({
-      ...base,
-      query: ready(
-        answer(
-          [row({ provider: "codex", model: "gpt" }), row({ provider: "claude", model: "opus" })],
-          FROM + 1,
-        ),
-      ),
-    });
-    expect(totals).toMatchObject({
-      kind: "ready",
-      totals: { calls: 2, requests: 4 },
-      recordedSince: FROM + 1,
-    });
+  it("covers the two days a 24-hour range can touch and ignores rows without a day", () => {
+    const days = dailyTokens([row({ provider: "codex" })], "24h", now);
+    expect(days).toEqual([
+      { day: "2026-11-09", tokens: 0 },
+      { day: "2026-11-10", tokens: 0 },
+    ]);
   });
 });
 

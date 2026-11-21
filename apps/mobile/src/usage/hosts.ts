@@ -1,17 +1,12 @@
 import { resolveHostGroupServerId } from "@/hosts/host-groups";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useHosts } from "@/runtime/host-runtime";
 import { useAppSettings } from "@/hooks/use-settings";
 import {
   useActiveWorkspaceSelection,
   useLastWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import {
-  resolveUsageHostId,
-  resolveUsageModalHostId,
-  type UsageHost,
-  type UsageHostChoice,
-} from "./model";
+import { resolveUsageHostId, resolveUsageSettingsHostId, type UsageHostChoice } from "./model";
 import { setUsageHost } from "./preferences";
 import { useUsageHosts } from "./queries";
 
@@ -40,22 +35,18 @@ export function useUsageHostId(): string | null {
   return resolveUsageHostId(useUsageHostChoice());
 }
 
+/** The host whose Usage page the sidebar opens in Settings, or null when there are no hosts. */
+export function useUsageSettingsHostId(): string | null {
+  return resolveUsageSettingsHostId(useUsageHostChoice());
+}
+
 /**
- * The host the Usage modal shows, and the hosts to pick from. A pick
- * is saved on the device, so the sidebar Usage row and later visits show the same host.
+ * Makes a host the one the sidebar Usage summary reads. The pick is saved on the device, so the
+ * sidebar and later visits keep showing that host.
  */
-export function useUsageHostSelection(): {
-  serverId: string | null;
-  connectedHosts: UsageHost[];
-  select: (serverId: string) => void;
-} {
+export function useSelectUsageHost(): (serverId: string) => void {
   const { updateSettings } = useAppSettings();
-  const choice = useUsageHostChoice();
-  const connectedHosts = useMemo(
-    () => choice.hosts.filter((host) => host.isConnected),
-    [choice.hosts],
-  );
-  const select = useCallback(
+  return useCallback(
     (serverId: string) => {
       // updateSettings logs a failed save before rethrowing; only the rejection needs handling.
       updateSettings((current) => ({ usage: setUsageHost(current.usage, serverId) })).catch(
@@ -64,5 +55,4 @@ export function useUsageHostSelection(): {
     },
     [updateSettings],
   );
-  return { serverId: resolveUsageModalHostId(choice), connectedHosts, select };
 }

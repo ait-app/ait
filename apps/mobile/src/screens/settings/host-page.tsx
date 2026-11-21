@@ -32,8 +32,7 @@ import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { upsertDesktopDaemonConnection } from "@/runtime/daemon-start-service";
-import { HostUsageSection } from "@/usage/host-usage-section";
-import { HostHistoryTotalsSection } from "@/usage/history";
+import { UsageSettingsPage } from "@/usage/settings-page";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -338,12 +337,7 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
     return <HostNotFound />;
   }
 
-  return (
-    <View>
-      <HostUsageSection serverId={serverId} />
-      <HostHistoryTotalsSection serverId={serverId} />
-    </View>
-  );
+  return <UsageSettingsPage serverId={serverId} />;
 }
 
 export function HostSettingsPage({

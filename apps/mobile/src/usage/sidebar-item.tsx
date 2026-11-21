@@ -1,12 +1,5 @@
-import {
-  createContext,
-  Fragment,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
+import { router, usePathname } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   Pressable,
@@ -19,7 +12,8 @@ import { StyleSheet } from "react-native-unistyles";
 import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useUsageInSidebar } from "./in-sidebar";
 import { useUsagePreferences } from "./display";
-import { useUsageHostId } from "./hosts";
+import { buildSettingsHostSectionRoute, buildSettingsRoute } from "@/utils/host-routes";
+import { useUsageHostId, useUsageSettingsHostId } from "./hosts";
 import { useUsageHostReports } from "./queries";
 import { UsageSourceIcon } from "./source-icon";
 import { UsageMeter } from "./meter";
@@ -31,7 +25,6 @@ import {
   type PinnedUsageLayout,
   type PinnedUsageSource,
 } from "./pinned";
-import { UsageModal } from "./usage-modal";
 
 /** Each summary window with data on the usage host, under its source; empty while none has. */
 function useUsageSummary(): readonly PinnedUsageSource[] {
@@ -41,56 +34,37 @@ function useUsageSummary(): readonly PinnedUsageSource[] {
   return useMemo(() => resolvePinnedUsage(reports, preferences, t), [preferences, reports, t]);
 }
 
-/** Whether the sidebar Usage item has anything to show. */
-export function useHasUsageSummary(): boolean {
-  return useUsageSummary().length > 0;
-}
-
 /**
  * The sidebar footer's usage entry: each summary window's source icon and percent, and nothing
  * while no summary window has data, since the footer's Usage icon already opens Usage.
- * Pressing it opens the Usage modal.
+ * Pressing it opens the host's Usage page in Settings.
  */
-export function UsageSidebarItem() {
+export function UsageSidebarItem({ onBeforeNavigate }: { onBeforeNavigate?: () => void }) {
   const { t } = useTranslation();
   const label = t(builtinSidebarNavLabelKey("usage"));
-  const openUsage = useOpenSidebarUsage();
+  const openUsage = useOpenUsageSettings(onBeforeNavigate);
   const sources = useUsageSummary();
   const { inSidebar } = useUsageInSidebar();
   if (!inSidebar || sources.length === 0) return null;
   return <PinnedUsageTrigger label={label} sources={sources} onPress={openUsage} />;
 }
 
-const OpenSidebarUsageContext = createContext<(() => void) | null>(null);
-
 /**
- * One owner for the footer icon and summary: both open the Usage modal over the current screen.
- * The modal mounts on first open and unmounts once it has finished closing, so its host's reports
- * load only while it is shown.
+ * Opens Usage, which lives on each host's settings page: the page of the host the sidebar summary
+ * reads, or Settings itself while there is no host. `onBeforeNavigate` closes a compact sidebar.
  */
-export function UsageSidebarRoot({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const openUsage = useCallback(() => {
-    setMounted(true);
-    setOpen(true);
-  }, []);
-  const closeUsage = useCallback(() => setOpen(false), []);
-  const unmountUsage = useCallback(() => setMounted(false), []);
-
-  return (
-    <OpenSidebarUsageContext.Provider value={openUsage}>
-      {children}
-      {mounted ? <UsageModal visible={open} onClose={closeUsage} onDismiss={unmountUsage} /> : null}
-    </OpenSidebarUsageContext.Provider>
-  );
+export function useOpenUsageSettings(onBeforeNavigate?: () => void): () => void {
+  const serverId = useUsageSettingsHostId();
+  return useCallback(() => {
+    onBeforeNavigate?.();
+    router.push(serverId ? buildSettingsHostSectionRoute(serverId, "usage") : buildSettingsRoute());
+  }, [onBeforeNavigate, serverId]);
 }
 
-/** Both sidebar entry points send the same open command. */
-export function useOpenSidebarUsage(): () => void {
-  const openUsage = useContext(OpenSidebarUsageContext);
-  if (!openUsage) throw new Error("Sidebar Usage must be inside UsageSidebarRoot.");
-  return openUsage;
+/** Whether a host's Usage page in Settings is on screen. */
+export function useIsUsageSettingsActive(): boolean {
+  const pathname = usePathname();
+  return /^\/settings\/hosts\/[^/]+\/usage\/?$/.test(pathname);
 }
 
 function pinnedUsageLabel(label: string, sources: readonly PinnedUsageSource[]): string {
