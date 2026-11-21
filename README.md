@@ -7,6 +7,8 @@
 
 **在一个界面里管理多个编程 Agent。**
 
+简体中文 · [English](README.en.md)
+
 Ait 支持 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、Oh My Pi、MiniMax Code 等编程 Agent。
 你可以在电脑上同时使用多个 Agent，查看文件和 Git 变更、操作终端，也可以从手机或另一台电脑连接，查看进度、发送消息和处理审批。
 Ait 提供中央中继服务：设备不在同一网络时，登录同一账户即可连接在线工作电脑，无需为工作电脑配置公网 IP 或路由器端口转发。
