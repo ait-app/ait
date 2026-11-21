@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.2.23 - 2026-11-22
+
+- The Android build no longer hides the app from Google Play on devices that do not report the portrait feature, such as Chromebooks and desktop-style devices. The Expo config keeps the app locked to portrait, which Android reads as a hardware requirement, so a config plugin now declares it as required="false"; the lock itself stays as it is on phones, because it is a layout preference rather than a hardware need ([#809](https://github.com/ait-app/ait/pull/809)).
+
+- While the online service is signed in, the sidebar footer replaces the Import session, Help and Settings buttons with a single account button that shows the account name and how long the account has left, and those three actions move into its menu; signed out, the footer keeps its three buttons. The time left names its scale only while a week or more remains and is counted in whole days below two days and in whole hours below that, then "Expired"; an account without an expiry shows "Never expires". The account snapshot only records the expiry seen at sign-in, so the button re-reads it from the service every 10 minutes while the app is visible and the account is online, and falls back to the saved value ([#810](https://github.com/ait-app/ait/pull/810)).
+
+- The sidebar host status line shows only the host name, CPU and memory. The network upload and download readings are gone from the line and the two readings are grouped at the right edge instead of being spread across the row, while the details popup is unchanged and still shows the network rates and the history chart ([#811](https://github.com/ait-app/ait/pull/811)).
+
+- The sidebar account menu now ends with Sign out, which runs the same account_logout command as the Settings button without a confirmation and reports a failure as a toast, because the menu has already closed. A second click is ignored while a sign-out is still running ([#812](https://github.com/ait-app/ait/pull/812)).
+
 ## 0.2.22 - 2026-11-21
 
 - Usage is no longer a modal. Every host has its own Settings → Host → Usage page, opened from the sidebar Usage row or from the usage summary, with the host chosen among the connected ones. The plan-usage cards, the usage history chart and the per-host tables were redesigned for that page, the modal's host filter and its options popover are gone, and the compact layout closes the sidebar before the page opens ([#803](https://github.com/ait-app/ait/pull/803)).
