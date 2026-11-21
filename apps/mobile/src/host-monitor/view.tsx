@@ -6,7 +6,6 @@ import {
   ArrowDown,
   ArrowUp,
   Cpu,
-  Globe,
   HardDrive,
   MemoryStick,
   X,
@@ -27,7 +26,6 @@ import {
   memoryPercent,
   networkHistory,
   percent,
-  rate,
   type MonitorHost,
 } from "./model";
 
@@ -86,10 +84,6 @@ export function HostMonitorView(props: HostMonitorViewProps) {
             testID="sidebar-host-monitor-cpu"
             value={!stale && current ? current.cpuPercent : null}
             alert={!stale && (current?.cpuPercent ?? 0) >= 90}
-          />
-          <SummaryNetwork
-            up={!stale && current ? current.txBytesPerSecond : null}
-            down={!stale && current ? current.rxBytesPerSecond : null}
           />
           <SummaryMetric
             icon={MemoryStick}
@@ -184,37 +178,6 @@ function SummaryMetric({
       <Icon size={15} strokeWidth={1.6} color={theme.colors.foregroundMuted} />
       <Text style={[styles.summaryValue, alert && styles.summaryAlert]} numberOfLines={1}>
         {percent(value)}
-      </Text>
-    </View>
-  );
-}
-
-function SummaryNetwork({ up, down }: { up: number | null; down: number | null }) {
-  const { t } = useTranslation();
-  const { theme } = useUnistyles();
-  return (
-    <View
-      style={styles.summaryNetwork}
-      testID="sidebar-host-monitor-network"
-      accessible
-      accessibilityLabel={`${t("hostMonitor.upload")} ${rate(up)}, ${t("hostMonitor.download")} ${rate(down)}`}
-    >
-      <Globe size={15} strokeWidth={1.6} color={theme.colors.foregroundMuted} />
-      <View style={styles.summaryRates}>
-        <SummaryRate icon={ArrowUp} value={up} />
-        <SummaryRate icon={ArrowDown} value={down} />
-      </View>
-    </View>
-  );
-}
-
-function SummaryRate({ icon: Icon, value }: { icon: typeof ArrowUp; value: number | null }) {
-  const { theme } = useUnistyles();
-  return (
-    <View style={styles.summaryRate}>
-      <Icon size={8} strokeWidth={2.5} color={theme.colors.foregroundMuted} />
-      <Text style={styles.summaryRateValue} numberOfLines={1}>
-        {rate(value)}
       </Text>
     </View>
   );
@@ -580,8 +543,8 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: 4,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
+    justifyContent: "flex-end",
+    gap: 14,
   },
   summaryMetric: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 },
   summaryValue: {
@@ -590,23 +553,6 @@ const styles = StyleSheet.create((theme) => ({
     fontVariant: ["tabular-nums"],
   },
   summaryAlert: { color: theme.colors.destructive },
-  summaryNetwork: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  summaryRates: { flexShrink: 1, minWidth: 0 },
-  summaryRate: { flexDirection: "row", alignItems: "center", gap: 2, minWidth: 0 },
-  summaryRateValue: {
-    flexShrink: 1,
-    color: theme.colors.foregroundMuted,
-    fontFamily: theme.fontFamily.mono,
-    fontSize: 9,
-    lineHeight: 11,
-    fontVariant: ["tabular-nums"],
-  },
   detail: { padding: 14, gap: 10 },
   status: { flexDirection: "row", alignItems: "center", gap: 5 },
   close: { padding: 5, borderRadius: 6, marginRight: -5 },
