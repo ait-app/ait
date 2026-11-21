@@ -4,7 +4,6 @@ import { StyleSheet } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
 import { UsageCard } from "./card";
 import type { UsageDisplay } from "./display";
-import { useUsageInSidebar } from "./in-sidebar";
 import type { UsageReportEntry } from "./types";
 
 /** Below this width cards stack; at or above it, two sit side by side. */
@@ -12,8 +11,8 @@ const TWO_COLUMN_MIN_WIDTH = 560;
 const CARD_GAP = 12;
 
 /**
- * One card per report (source + account), two to a row where the page is wide enough. Window rows
- * pin while the sidebar summary is on.
+ * One card per report (source + account), two to a row where the page is wide enough. Each window
+ * row pins the window to the sidebar summary.
  */
 export function UsageList({
   serverId,
@@ -24,7 +23,6 @@ export function UsageList({
   reports: UsageReportEntry[];
   display: UsageDisplay;
 }) {
-  const { inSidebar } = useUsageInSidebar();
   const [width, setWidth] = useState(0);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
@@ -38,13 +36,7 @@ export function UsageList({
           key={entry.id}
           style={[settingsStyles.card, columnWidth === null ? styles.full : { width: columnWidth }]}
         >
-          <UsageCard
-            serverId={serverId}
-            entry={entry}
-            display={display}
-            pinnable={inSidebar}
-            refreshable
-          />
+          <UsageCard serverId={serverId} entry={entry} display={display} pinnable refreshable />
         </View>
       ))}
     </View>

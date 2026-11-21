@@ -16,8 +16,8 @@ export const providerUsage = {
   displayAs: "Pourcentages",
   displayUsed: "Utilisé",
   displayRemaining: "Restant",
-  showInSidebar: "Résumé dans la barre latérale",
-  showInSidebarHint: "Les fenêtres épinglées apparaissent en bas de la barre latérale",
+  pinInfo:
+    "Épinglez une fenêtre pour l'afficher dans le résumé de la barre latérale. Désépinglez-les toutes pour masquer le résumé.",
   displayTitle: "Affichage",
   sidebarHost: "Hôte du résumé latéral",
   sidebarHostHint: "Le résumé de la barre latérale montre l'utilisation du forfait d'un seul hôte",

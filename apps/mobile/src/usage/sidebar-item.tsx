@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo, useState } from "react";
-import { router, usePathname } from "expo-router";
+import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   Pressable,
@@ -9,8 +9,6 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
-import { useUsageInSidebar } from "./in-sidebar";
 import { useUsagePreferences } from "./display";
 import { buildSettingsHostSectionRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { useUsageHostId, useUsageSettingsHostId } from "./hosts";
@@ -35,17 +33,16 @@ function useUsageSummary(): readonly PinnedUsageSource[] {
 }
 
 /**
- * The sidebar footer's usage entry: each summary window's source icon and percent, and nothing
- * while no summary window has data, since the footer's Usage icon already opens Usage.
- * Pressing it opens the host's Usage page in Settings.
+ * The sidebar footer's usage summary: each pinned window's source icon and percent. Nothing while
+ * no pinned window has data, so unpinning every window hides it. Pressing it opens the host's
+ * Usage page in Settings.
  */
 export function UsageSidebarItem({ onBeforeNavigate }: { onBeforeNavigate?: () => void }) {
   const { t } = useTranslation();
-  const label = t(builtinSidebarNavLabelKey("usage"));
+  const label = t("sidebar.sections.usage");
   const openUsage = useOpenUsageSettings(onBeforeNavigate);
   const sources = useUsageSummary();
-  const { inSidebar } = useUsageInSidebar();
-  if (!inSidebar || sources.length === 0) return null;
+  if (sources.length === 0) return null;
   return <PinnedUsageTrigger label={label} sources={sources} onPress={openUsage} />;
 }
 
@@ -53,18 +50,12 @@ export function UsageSidebarItem({ onBeforeNavigate }: { onBeforeNavigate?: () =
  * Opens Usage, which lives on each host's settings page: the page of the host the sidebar summary
  * reads, or Settings itself while there is no host. `onBeforeNavigate` closes a compact sidebar.
  */
-export function useOpenUsageSettings(onBeforeNavigate?: () => void): () => void {
+function useOpenUsageSettings(onBeforeNavigate?: () => void): () => void {
   const serverId = useUsageSettingsHostId();
   return useCallback(() => {
     onBeforeNavigate?.();
     router.push(serverId ? buildSettingsHostSectionRoute(serverId, "usage") : buildSettingsRoute());
   }, [onBeforeNavigate, serverId]);
-}
-
-/** Whether a host's Usage page in Settings is on screen. */
-export function useIsUsageSettingsActive(): boolean {
-  const pathname = usePathname();
-  return /^\/settings\/hosts\/[^/]+\/usage\/?$/.test(pathname);
 }
 
 function pinnedUsageLabel(label: string, sources: readonly PinnedUsageSource[]): string {

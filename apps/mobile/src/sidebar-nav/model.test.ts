@@ -7,6 +7,7 @@ describe("built-in sidebar navigation", () => {
       resolveSidebarNavItems({
         preferences: [
           { key: "plugin:notes:inbox", visible: true },
+          { key: "usage", visible: false },
           { key: "search", visible: false },
           { key: "history", visible: true },
         ],
@@ -18,7 +19,6 @@ describe("built-in sidebar navigation", () => {
       { key: "tasks", visible: true },
       { key: "shared", visible: true },
       { key: "schedules", visible: true },
-      { key: "usage", visible: true },
     ]);
   });
   it("updates visibility and reorders built-ins", () => {
@@ -42,7 +42,6 @@ describe("built-in sidebar navigation", () => {
       "history",
       "shared",
       "schedules",
-      "usage",
     ]);
     expect(moved.find(({ key }) => key === "search")?.visible).toBe(false);
   });
@@ -71,7 +70,6 @@ describe("built-in sidebar navigation", () => {
       { key: "shared", visible: false },
       { key: "search", visible: true },
       { key: "schedules", visible: true },
-      { key: "usage", visible: true },
     ]);
   });
 });

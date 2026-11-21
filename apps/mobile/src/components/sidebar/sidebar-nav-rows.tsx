@@ -1,4 +1,3 @@
-import { useIsUsageSettingsActive, useOpenUsageSettings } from "@/usage/sidebar-item";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
@@ -19,15 +18,7 @@ import {
   buildSessionsRoute,
 } from "@/utils/host-routes";
 import { router, usePathname, type Href } from "expo-router";
-import {
-  Gauge,
-  CalendarClock,
-  History,
-  LayoutDashboard,
-  Plus,
-  Search,
-  Users,
-} from "lucide-react-native";
+import { CalendarClock, History, LayoutDashboard, Plus, Search, Users } from "lucide-react-native";
 import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -223,21 +214,4 @@ const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps
   search: SidebarSearchRow,
   shared: SidebarSharedRow,
   schedules: SidebarSchedulesRow,
-  usage: SidebarUsageRow,
 };
-
-function SidebarUsageRow({ onBeforeNavigate }: SidebarNavRowProps) {
-  const { t } = useTranslation();
-  const open = useOpenUsageSettings(onBeforeNavigate);
-  const isActive = useIsUsageSettingsActive();
-  return (
-    <SidebarHeaderRow
-      icon={Gauge}
-      label={t(builtinSidebarNavLabelKey("usage"))}
-      onPress={open}
-      isActive={isActive}
-      testID="sidebar-usage-open"
-      variant="compact"
-    />
-  );
-}

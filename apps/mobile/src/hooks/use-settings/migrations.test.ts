@@ -45,7 +45,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.sendBehavior).toBe("steer");
     expect(storedSendBehavior(storage)).toBe("steer");
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "usage-summary-pins"]);
   });
 
   it("leaves interrupt alone once the migration has run", async () => {
@@ -64,7 +64,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.sendBehavior).toBe("queue");
     expect(storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "usage-summary-pins"]);
   });
 
   it("marks itself applied on a fresh install without rewriting settings", async () => {
@@ -73,7 +73,7 @@ describe("migrateAppSettings", () => {
     await migrateAppSettings(settingsWith("steer"), storage);
 
     expect(storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "usage-summary-pins"]);
   });
 
   it("keeps unknown migration ids written by a newer client", async () => {
@@ -83,7 +83,11 @@ describe("migrateAppSettings", () => {
 
     await migrateAppSettings(settingsWith("interrupt"), storage);
 
-    expect(appliedIds(storage)).toEqual(["some-later-migration", "steer-default"]);
+    expect(appliedIds(storage)).toEqual([
+      "some-later-migration",
+      "steer-default",
+      "usage-summary-pins",
+    ]);
   });
 
   it("migrates every mobile 15px content preference to 16px", async () => {
@@ -94,7 +98,11 @@ describe("migrateAppSettings", () => {
 
     expect(result.contentFontSize).toBe(16);
     expect(storedContentFontSize(storage)).toBe(16);
-    expect(appliedIds(storage)).toEqual(["steer-default", "mobile-content-16"]);
+    expect(appliedIds(storage)).toEqual([
+      "steer-default",
+      "mobile-content-16",
+      "usage-summary-pins",
+    ]);
   });
 
   it("leaves a 15px web content preference unchanged", async () => {
@@ -105,7 +113,7 @@ describe("migrateAppSettings", () => {
 
     expect(result.contentFontSize).toBe(15);
     expect(storedContentFontSize(storage)).toBeUndefined();
-    expect(appliedIds(storage)).toEqual(["steer-default"]);
+    expect(appliedIds(storage)).toEqual(["steer-default", "usage-summary-pins"]);
   });
 
   it("lets a mobile user choose 15px after the default migration ran", async () => {
@@ -127,6 +135,38 @@ describe("migrateAppSettings", () => {
     expect(result.contentFontSize).toBe(15);
   });
 
+  it("turns the usage summary off for a user who had hidden the sidebar Usage row", async () => {
+    const storage = createInMemoryKeyValueStorage();
+    const settings: AppSettings = {
+      ...settingsWith("steer"),
+      sidebarNavItems: [
+        { key: "search", visible: true },
+        { key: "usage", visible: false },
+      ],
+    };
+
+    const result = await migrateAppSettings(settings, storage);
+
+    expect(result.usage.pins).toEqual([]);
+    expect(result.sidebarNavItems).toEqual([{ key: "search", visible: true }]);
+    expect(JSON.parse(storage.entries.get(APP_SETTINGS_KEY)!).usage.pins).toEqual([]);
+  });
+
+  it("keeps the pins of a user whose sidebar Usage row was showing", async () => {
+    const storage = createInMemoryKeyValueStorage();
+    const pins = [{ sourceId: "claude", windowId: "weekly" }];
+    const settings: AppSettings = {
+      ...settingsWith("steer"),
+      usage: { ...DEFAULT_CLIENT_SETTINGS.usage, pins },
+      sidebarNavItems: [{ key: "usage", visible: true }],
+    };
+
+    const result = await migrateAppSettings(settings, storage);
+
+    expect(result.usage.pins).toEqual(pins);
+    expect(result.sidebarNavItems).toEqual([]);
+  });
+
   it("stays unmarked when the settings write fails, so a later launch retries", async () => {
     const storage = createFailingWriteStorage(APP_SETTINGS_KEY);
 
@@ -144,6 +184,6 @@ describe("migrateAppSettings", () => {
     const result = await migrateAppSettings(settingsWith("steer"), recovered);
 
     expect(result.sendBehavior).toBe("steer");
-    expect(appliedIds(recovered)).toEqual(["steer-default"]);
+    expect(appliedIds(recovered)).toEqual(["steer-default", "usage-summary-pins"]);
   });
 });

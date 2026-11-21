@@ -344,7 +344,8 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
 - Claude 用量 GET 使用原生客户端格式的 `User-Agent` 和 JSON 请求头，版本来自有界的
   `claude --version`，同时标明 Ait 调用者；版本读取失败时只发送 Ait 标识，不猜测 CLI 版本。
 - 客户端只在设置中每台 Host 的 Usage 页显示该 Host 的套餐用量、用量历史和本机显示偏好，不再有
-  用量弹窗或跨 Host 视图；侧栏的 Usage 入口与摘要打开摘要所读 Host 的这一页。
+  用量弹窗或跨 Host 视图。侧栏不再有 Usage 导航项；侧栏底部的用量摘要只显示已固定的窗口，全部取消固定即隐藏，
+  点击打开摘要所读 Host 的这一页。
 
 ## Harness 用量账本
 

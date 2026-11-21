@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { SettingsRow, SettingsSwitch } from "@/components/settings";
+import { SettingsRow } from "@/components/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
@@ -12,7 +12,6 @@ import { useUsageCopy } from "./copy";
 import { useUsagePreferences } from "./display";
 import { UsageHistorySection } from "./history";
 import { useSelectUsageHost, useUsageHostId } from "./hosts";
-import { useUsageInSidebar } from "./in-sidebar";
 import type { UsageDisplayAs } from "./preferences";
 import { useHostUsage, useUsageHosts } from "./queries";
 import { UsageRefreshButton } from "./refresh-button";
@@ -46,27 +45,29 @@ function PlanUsageSection({ serverId }: { serverId: string }) {
     [busy, refresh, view.kind],
   );
   return (
-    <SettingsSection title={usageCopy.planUsage} trailing={trailing} testID="usage-card">
+    <SettingsSection
+      title={usageCopy.planUsage}
+      info={usageCopy.pinInfo}
+      trailing={trailing}
+      testID="usage-card"
+    >
       <UsageBody serverId={serverId} view={view} display={display} onRefresh={refresh} />
     </SettingsSection>
   );
 }
 
 /**
- * Device-local reading preferences: the sidebar summary, which host it reads when several report
- * usage, and whether percents count what is used or what is left.
+ * Device-local reading preferences: which host the sidebar summary reads when several report usage,
+ * and whether percents count what is used or what is left.
  */
 function UsageDisplaySection({ serverId }: { serverId: string }) {
   const usageCopy = useUsageCopy();
   const { display } = useUsagePreferences(serverId);
-  const { inSidebar, setInSidebar } = useUsageInSidebar();
   const sidebarHostId = useUsageHostId();
   const selectHost = useSelectUsageHost();
   const reportingHosts = useUsageHosts().filter((host) => host.isConnected && host.supportsUsage);
   const choosesSidebarHost =
-    inSidebar &&
-    reportingHosts.length > 1 &&
-    reportingHosts.some((host) => host.serverId === serverId);
+    reportingHosts.length > 1 && reportingHosts.some((host) => host.serverId === serverId);
   const displayAsOptions: SegmentedControlOption<UsageDisplayAs>[] = [
     { value: "used", label: usageCopy.displayUsed, testID: "usage-display-used" },
     { value: "remaining", label: usageCopy.displayRemaining, testID: "usage-display-remaining" },
@@ -74,36 +75,27 @@ function UsageDisplaySection({ serverId }: { serverId: string }) {
   return (
     <SettingsSection title={usageCopy.displayTitle} testID="usage-display">
       <View style={settingsStyles.card}>
-        <SettingsSwitch
-          label={usageCopy.showInSidebar}
-          hint={usageCopy.showInSidebarHint}
-          value={inSidebar}
-          onValueChange={setInSidebar}
-          testID="usage-show-in-sidebar"
-        />
         {choosesSidebarHost ? (
-          <View style={settingsStyles.rowBorder}>
-            <SettingsRow
-              label={usageCopy.sidebarHost}
-              hint={usageCopy.sidebarHostHint}
-              testID="usage-sidebar-host"
-            >
-              {sidebarHostId === serverId ? (
-                <Text style={styles.current}>{usageCopy.sidebarHostCurrent}</Text>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onPress={() => selectHost(serverId)}
-                  testID="usage-sidebar-host-use"
-                >
-                  {usageCopy.sidebarHostUse}
-                </Button>
-              )}
-            </SettingsRow>
-          </View>
+          <SettingsRow
+            label={usageCopy.sidebarHost}
+            hint={usageCopy.sidebarHostHint}
+            testID="usage-sidebar-host"
+          >
+            {sidebarHostId === serverId ? (
+              <Text style={styles.current}>{usageCopy.sidebarHostCurrent}</Text>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={() => selectHost(serverId)}
+                testID="usage-sidebar-host-use"
+              >
+                {usageCopy.sidebarHostUse}
+              </Button>
+            )}
+          </SettingsRow>
         ) : null}
-        <View style={settingsStyles.rowBorder}>
+        <View style={choosesSidebarHost ? settingsStyles.rowBorder : null}>
           <SettingsRow label={usageCopy.displayAs}>
             <SegmentedControl
               options={displayAsOptions}

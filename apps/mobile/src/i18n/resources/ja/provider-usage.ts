@@ -16,8 +16,8 @@ export const providerUsage = {
   displayAs: "パーセント表示",
   displayUsed: "使用済み",
   displayRemaining: "残り",
-  showInSidebar: "サイドバーに概要を表示",
-  showInSidebarHint: "固定した使用量ウィンドウをサイドバー下部に表示します",
+  pinInfo:
+    "ウィンドウを固定するとサイドバーの概要に表示されます。すべて固定を解除すると概要は非表示になります。",
   displayTitle: "表示",
   sidebarHost: "サイドバー概要のホスト",
   sidebarHostHint: "サイドバーの概要には 1 台のホストのプラン使用量を表示します",

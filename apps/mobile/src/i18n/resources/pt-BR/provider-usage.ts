@@ -16,8 +16,8 @@ export const providerUsage = {
   displayAs: "Porcentagens",
   displayUsed: "Usado",
   displayRemaining: "Restante",
-  showInSidebar: "Resumo na barra lateral",
-  showInSidebarHint: "As janelas fixadas aparecem no rodapé da barra lateral",
+  pinInfo:
+    "Fixe uma janela para mostrá-la no resumo da barra lateral. Desafixe todas para ocultar o resumo.",
   displayTitle: "Exibição",
   sidebarHost: "Host do resumo lateral",
   sidebarHostHint: "O resumo da barra lateral mostra o uso do plano de um host",

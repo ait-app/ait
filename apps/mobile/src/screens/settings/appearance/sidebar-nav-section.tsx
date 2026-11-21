@@ -17,7 +17,6 @@ import type { TFunction } from "i18next";
 import {
   ArrowDown,
   ArrowUp,
-  Gauge,
   CalendarClock,
   History,
   LayoutDashboard,
@@ -44,7 +43,6 @@ const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   search: Search,
   shared: Users,
   schedules: CalendarClock,
-  usage: Gauge,
 };
 
 function NavIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {

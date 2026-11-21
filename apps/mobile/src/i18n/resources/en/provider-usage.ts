@@ -16,8 +16,8 @@ export const providerUsage = {
   displayAs: "Percentages",
   displayUsed: "Used",
   displayRemaining: "Remaining",
-  showInSidebar: "Summary in sidebar",
-  showInSidebarHint: "Pinned windows show in the sidebar footer",
+  pinInfo:
+    "Pin a window to show it in the sidebar summary. Unpin every window to hide the summary.",
   displayTitle: "Display",
   sidebarHost: "Sidebar summary host",
   sidebarHostHint: "The sidebar summary shows one host's plan usage",

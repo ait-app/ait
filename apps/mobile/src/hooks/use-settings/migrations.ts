@@ -17,6 +17,13 @@ const STEER_DEFAULT_MIGRATION = "steer-default";
 const MOBILE_CONTENT_16_MIGRATION = "mobile-content-16";
 
 /**
+ * The sidebar's Usage row was also the switch for the sidebar usage summary. The row is gone and
+ * the summary now shows whatever is pinned, so a user who had hidden the row gets an explicit
+ * empty pin selection instead: their summary stays off until they pin a window.
+ */
+const USAGE_SUMMARY_PINS_MIGRATION = "usage-summary-pins";
+
+/**
  * Brings stored settings up to date, returning what the caller should use. Owns both writes so
  * the marker can only ever be written after the settings it describes: a failed marker write
  * leaves the migration to re-run harmlessly, while a failed settings write must leave the marker
@@ -47,6 +54,19 @@ export async function migrateAppSettings(
   if (options.native && !applied.has(MOBILE_CONTENT_16_MIGRATION)) {
     migrated = migrated.contentFontSize === 15 ? { ...migrated, contentFontSize: 16 } : migrated;
     applied.add(MOBILE_CONTENT_16_MIGRATION);
+    addedMigration = true;
+  }
+
+  if (!applied.has(USAGE_SUMMARY_PINS_MIGRATION)) {
+    const usageRow = migrated.sidebarNavItems.find((item) => item.key === "usage");
+    if (usageRow) {
+      migrated = {
+        ...migrated,
+        sidebarNavItems: migrated.sidebarNavItems.filter((item) => item.key !== "usage"),
+        usage: usageRow.visible ? migrated.usage : { ...migrated.usage, pins: [] },
+      };
+    }
+    applied.add(USAGE_SUMMARY_PINS_MIGRATION);
     addedMigration = true;
   }
 

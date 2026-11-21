@@ -5,7 +5,6 @@ const BUILTIN_SIDEBAR_NAV_IDS = [
   "search",
   "shared",
   "schedules",
-  "usage",
 ] as const;
 export type BuiltinSidebarNavId = (typeof BUILTIN_SIDEBAR_NAV_IDS)[number];
 
@@ -31,7 +30,6 @@ const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   search: "sidebar.sections.search",
   shared: "sharing.title",
   schedules: "sidebar.sections.schedules",
-  usage: "sidebar.sections.usage",
 };
 
 export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
@@ -50,7 +48,6 @@ const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   search: "toggle-command-center",
   shared: null,
   schedules: null,
-  usage: null,
 };
 
 export function builtinSidebarNavShortcutAction(id: BuiltinSidebarNavId): string | null {

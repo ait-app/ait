@@ -110,11 +110,8 @@ function createUsageCopy(t: TFunction) {
     get displayRemaining() {
       return t("providerUsage.displayRemaining");
     },
-    get showInSidebar() {
-      return t("providerUsage.showInSidebar");
-    },
-    get showInSidebarHint() {
-      return t("providerUsage.showInSidebarHint");
+    get pinInfo() {
+      return t("providerUsage.pinInfo");
     },
     get displayTitle() {
       return t("providerUsage.displayTitle");
