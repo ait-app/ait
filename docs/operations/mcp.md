@@ -100,7 +100,7 @@ curl --fail-with-body --unix-socket /absolute/private-directory/mcp.sock \
 
 ## Bot 与子树凭据
 
-Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent（带保留标签 `ait.bot.scope`），不使用共享令牌，而使用 daemon 签发的作用域凭据，
+Workspace Bot 的隐藏会话，以及 Bot 通过 `agent_create` 启动的 Agent（带保留标签 `ait.bot.scope`），不使用共享令牌，而使用 daemon 签发的作用域凭据，
 会替换用户配置的 `ait` 项。Bot 会话不受 `injectIntoAgents` 控制，子树会话仍受其控制；无法交付凭据时移除 `ait` 项，不回退到共享令牌。
 凭据为 64 个十六进制字符，只在 daemon 内存中以 SHA-256 摘要保存，每次启动重新生成；同一 Agent 重新打开会话、Bot 暂停／移除／被取代、
 会话关闭或归档时作废。Claude、Pi 和 DSH 原生 Host 经属主专用（0600）临时文件取得凭据，原生进程结束时删除；允许运行命令的 Agent 仍可能读到它，见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险。
@@ -109,18 +109,18 @@ Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent
 - 每次请求按 Workspace 当前 Bot 的授权过滤：未授权工具不出现在 `tools/list`，调用返回 `-32602 "Unknown or unavailable tool"`；
   作用域或模式上限违规返回 `isError: true` 的 `Forbidden` 结果。
 - 目标限于 Bot 的作用域（Bot 所在 Workspace 与它创建的未归档 worktree），目标 id 解析为规范 id 后再执行；`cwd` 参数被拒绝。
-- `create_agent`、`set_agent_mode`、`update_agent`、`create_schedule`、`update_schedule` 的 Provider 与模式须在 Bot 的模式上限内；
-  `update_schedule` 只能编辑带 `botScope` 的定时任务。
-- 任何调用者都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签。作用域调用者不能使用 `create_workspace`。
+- `agent_create`、`agent_mode_set`、`agent_update`、`schedule_create`、`schedule_update` 的 Provider 与模式须在 Bot 的模式上限内；
+  `schedule_update` 只能编辑带 `botScope` 的定时任务。
+- 任何调用者都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签。作用域调用者不能使用 `workspace_create`。
 - 没有非退役 Bot 时子树凭据降为只读观察。
-- 工单（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)）：Bot 会话的每次 `create_agent` 打开一个工单，或以可选参数 `ticketId`
+- 工单（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)）：Bot 会话的每次 `agent_create` 打开一个工单，或以可选参数 `ticketId`
   （只在 Bot 会话看到的输入 schema 中，其他调用者传入时 `-32602`）加入已有工单；Agent 带 daemon 写入的标签 `ait.bot.ticket`，结果带 `ticketId`，
-  其子 Agent 继承同一工单。达到 32 个未关闭工单时先自动关闭 Agent 全部已归档的工单（包括等待中的）。`bot_tickets` 列出工单，`bot_ticket_update` 关闭、重新打开、改名或备注；
-  Bot 会话的 `send_agent_prompt` 会重新打开目标 Agent 已关闭的工单，达到上限而不能重新打开时结果带 `ticketNote`。
-  属于工单的 Agent 用 `report_progress`（`kind` 为 `progress`、`blocked`、`done`、`failed`，`text` 必填）汇报，工单与 Agent 取自凭据；`blocked`、`done`、`failed` 唤醒 Bot。
-  Claude 工作者的会话预授权 `report_progress` 与只读的 `ticket_read`（只此两个工具，持久配置不变），不再为它们请求审批；Codex 与其他 Provider 的工作者没有预授权，
-  在会请求审批的模式中调用 `report_progress` 可能先请求审批，见 [Workspace Bot](bots.md#任务)。
-- 拉取请求与提问（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md)）：`report_progress` 另接受可选 `pullRequest`
+  其子 Agent 继承同一工单。达到 32 个未关闭工单时先自动关闭 Agent 全部已归档的工单（包括等待中的）。`bot_ticket_list` 列出工单，`bot_ticket_update` 关闭、重新打开、改名或备注；
+  Bot 会话的 `agent_prompt` 会重新打开目标 Agent 已关闭的工单，达到上限而不能重新打开时结果带 `ticketNote`。
+  属于工单的 Agent 用 `ticket_report`（`kind` 为 `progress`、`blocked`、`done`、`failed`，`text` 必填）汇报，工单与 Agent 取自凭据；`blocked`、`done`、`failed` 唤醒 Bot。
+  Claude 工作者的会话预授权 `ticket_report` 与只读的 `ticket_read`（只此两个工具，持久配置不变），不再为它们请求审批；Codex 与其他 Provider 的工作者没有预授权，
+  在会请求审批的模式中调用 `ticket_report` 可能先请求审批，见 [Workspace Bot](bots.md#任务)。
+- 拉取请求与提问（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md)）：`ticket_report` 另接受可选 `pullRequest`
   （PR 编号、`#编号` 或 URL，1–512 字符）与只配 `blocked` 的 `question`（1–512 字符）；`bot_ticket_update` 另接受 `pullRequest` 与 `answer`（`{agentId,text}`，`text` 1–2048 字符，不能与 `status` 同用）。
   `pullRequest` 先用主机的 `gh`／`glab` 在 Bot 的检出中读取，读不到（CLI 缺失或未登录、PR 不存在、属于别的仓库、超过每工单 4 个或每 Workspace 16 个）时返回说明，
   汇报或更新都不记录；超过跟随上限时的说明写明把仍跟随的 `done` 或 `failed` 工单改为 `cancelled` 可以腾出名额。之后 Ait 跟随该 PR：
@@ -130,15 +130,15 @@ Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent
 - 按 id 回读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）：Bot 会话用 `bot_read`（`resource`、可选 `offset`、`limit`）读取工单、对话、轮次、通知与 Agent，
   属于工单的 Agent 用 `ticket_read` 只读自己的工单。列表默认 20 条、至多 50 条，文本页默认 4000 字符、至多 8000 字符，以 `nextOffset` 续读；
   被截断的文本为 `{"preview","chars","read"}`，`read` 即读取全文的资源。Workspace 所有者在 Ait 中的对话可读 Bot 的全部对话，
-  其他 Channel 的对话只能读自己及自己发起的工单与通知，`workspace_overview`、`bot_tickets` 与 `bot_ticket_update` 对它们套用同一规则。
+  其他 Channel 的对话只能读自己及自己发起的工单与通知，`bot_overview`、`bot_ticket_list` 与 `bot_ticket_update` 对它们套用同一规则。
 - Agent 的触达（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）：其他 Channel 的 Bot 会话只能触达自己工单的 Agent，
   子树凭据按它的工作来自的对话受同样的限制（它的工单的来源对话，没有时为它的 `ait.bot.conversation`）；
   Agent 带属于别的对话的 `ait.bot.ticket` 时总是不能触达，没有这种工单时按 `ait.bot.conversation` 判定。
-  对其他 Agent，`get_agent_status`、`get_agent_activity`、`wait_for_agent`、`send_agent_prompt`、`update_agent`、`set_agent_mode`、`cancel_agent`、`archive_agent`、`kill_agent`
-  返回不含标题或 id 的引导文本，解析不到的 id 也返回同一文本；`list_agents` 与 `list_pending_permissions` 只列能触达的 Agent，
-  受限的调用者的 `list_agents` 读最新 200 个 Agent 后过滤，`nextCursor` 为 `null`，以 `truncated` 表示没有列全；
-  `create_agent` 的 `ticketId` 不能是别的对话的工单。所有者对话、所有者对话启动的 Agent 与不带对话的子树凭据不受此限制。
-- 作用域 `create_agent` 在单独的任务中执行：60 秒调用超时只停止等待，Agent 创建与工单收尾照常完成；该任务占用调用额度直到结束，至多 5 分钟。
+  对其他 Agent，`agent_get`、`agent_activity_read`、`agent_wait`、`agent_prompt`、`agent_update`、`agent_mode_set`、`agent_cancel`、`agent_archive`
+  返回不含标题或 id 的引导文本，解析不到的 id 也返回同一文本；`agent_list` 与 `permission_list` 只列能触达的 Agent，
+  受限的调用者的 `agent_list` 读最新 200 个 Agent 后过滤，`nextCursor` 为 `null`，以 `truncated` 表示没有列全；
+  `agent_create` 的 `ticketId` 不能是别的对话的工单。所有者对话、所有者对话启动的 Agent 与不带对话的子树凭据不受此限制。
+- 作用域 `agent_create` 在单独的任务中执行：60 秒调用超时只停止等待，Agent 创建与工单收尾照常完成；该任务占用调用额度直到结束，至多 5 分钟。
 
 分组与工具对应关系见 [Workspace Bot](bots.md#权限)。
 
@@ -151,24 +151,64 @@ Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自�
 
 ## 可用工具
 
-| 能力               | 工具                                                                                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent              | `create_agent`, `send_agent_prompt`, `get_agent_status`, `list_agents`, `cancel_agent`, `archive_agent`, `kill_agent`, `update_agent`, `get_agent_activity`, `set_agent_mode`, `wait_for_agent` |
-| Workspace          | `create_workspace`, `list_workspaces`, `rename_workspace`, `archive_workspace`                                                                                                                  |
-| 脚本               | `list_workspace_scripts`, `start_workspace_script`, `stop_workspace_script`, `get_workspace_script_run`, `wait_for_workspace_script`                                                            |
-| 终端               | `list_terminals`, `create_terminal`, `kill_terminal`, `capture_terminal`, `send_terminal_keys`                                                                                                  |
-| 定时任务           | `create_schedule`, `list_schedules`, `inspect_schedule`, `pause_schedule`, `resume_schedule`, `update_schedule`, `schedule_logs`, `run_schedule_once`, `delete_schedule`                        |
-| 心跳               | `create_heartbeat`, `delete_heartbeat`                                                                                                                                                          |
-| Profile / Provider | `list_profiles`, `list_providers`, `list_models`, `inspect_provider`                                                                                                                            |
-| 权限               | `list_pending_permissions`, `respond_to_permission`                                                                                                                                             |
-| Workspace Bot      | `workspace_overview`, `bot_memory_read`, `bot_memory_update`, `bot_tickets`, `bot_ticket_update`, `bot_read`（只对 Bot 会话）；`report_progress`, `ticket_read`（只对属于工单的 Agent）         |
+工具名为 `<域>[_<子对象>]_<动作>`（[ADR-295](../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md)），域同时表示谁能看到它。
+
+| 域                     | 工具                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent`                | `agent_create`, `agent_prompt`, `agent_get`, `agent_activity_read`, `agent_list`, `agent_wait`, `agent_update`, `agent_mode_set`, `agent_cancel`, `agent_archive`  |
+| `workspace`            | `workspace_create`, `workspace_list`, `workspace_rename`, `workspace_archive`                                                                                      |
+| `script`               | `script_list`, `script_start`, `script_stop`, `script_run_get`, `script_run_wait`                                                                                  |
+| `terminal`             | `terminal_list`, `terminal_create`, `terminal_kill`, `terminal_capture`, `terminal_send`                                                                           |
+| `schedule`             | `schedule_create`, `schedule_list`, `schedule_get`, `schedule_update`, `schedule_pause`, `schedule_resume`, `schedule_run`, `schedule_log_read`, `schedule_delete` |
+| `heartbeat`            | `heartbeat_create`, `heartbeat_list`, `heartbeat_delete`                                                                                                           |
+| `provider` / `profile` | `provider_list`, `provider_model_list`, `provider_get`, `profile_list`                                                                                             |
+| `permission`           | `permission_list`, `permission_respond`                                                                                                                            |
+| `notepad`              | `notepad_list`, `notepad_read`, `notepad_write`, `notepad_delete`                                                                                                  |
+| `bot`                  | `bot_overview`, `bot_memory_read`, `bot_memory_update`, `bot_ticket_list`, `bot_ticket_update`, `bot_read`（只对 Bot 会话）                                        |
+| `ticket`               | `ticket_report`, `ticket_read`（只对属于工单的 Agent）                                                                                                             |
 
 准确参数由 `tools/list` 的 `inputSchema` 定义。部分能力未安装时，对应工具不出现在目录中。
 Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot 与子树凭据”。
+每个工具带 `title`，注解中 `readOnlyHint` 标出只读工具，`destructiveHint` 只对归档、终止和删除类工具为 `true`。
+
+参数约定：目标 id 为 `<域>Id`（`agentId`、`workspaceId`、`terminalId`、`scheduleId`、`heartbeatId`）；Agent 与 Workspace 的显示名为 `title`，
+定时任务、终端与心跳为 `name`；模式为 `modeId`。目录用 `limit`/`cursor` 分页并返回 `nextCursor`，文本用 `offset`/`limit` 分页并返回 `nextOffset`。
+
+### 旧工具名
+
+0.2.23 及更早版本的名字（`create_agent`、`list_schedules`、`report_progress` 等）不再出现在 `tools/list` 中，但 `tools/call` 仍然接受：
+daemon 在授权判定和 Schema 校验之前把旧名字解析为现在的工具，并把旧参数名（`update_agent.name`、定时任务与心跳的 `id`、`update_schedule.mode`）
+改写为现在的名字。`kill_agent` 解析为 `agent_archive`，结果为归档的形状（`agentId`、`archivedAt`）。旧名字不比它对应的工具多授予任何权限。
+每个旧名字的调用次数在首次及每次翻倍时写入日志（`retired MCP tool name called`），用来判断何时移除；移除不早于 2026-12-22，
+且以日志中不再出现调用为条件。用户在自己的客户端里按旧名字保存的允许清单（如 Claude 的 `mcp__ait__create_agent`）需要自行改为新名字。
+对照表见 [ADR-295](../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md#对照表)。
+
+## Workspace 记事本
+
+每个 Workspace 有一份记事本，供同一 Workspace 的 Agent 互相留下信息：约定的接口、已经做出的决定、正在占用的文件、问题与答复
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。写入不会唤醒任何 Agent；需要对方立刻处理时仍用 `agent_prompt`。
+它与客户端实验性的 notebook tab（检出目录中的 `.ait-notebook.md`）是两份数据，客户端目前没有本记事本的界面。
+
+- 便签用调用者选择的 `key` 寻址：1–64 个字符的 `a-z`、`0-9` 与 `-`，以字母或数字开头。每个 Workspace 至多 64 条，每条正文至多 16384 字节。
+- `notepad_list` 返回记事本 `revision`、`total` 与每条便签的摘要（`key`、`revision`、作者、时间、`chars`、160 个字符以内的 `preview`）；
+  带 `since`（此前返回的记事本 `revision`）时只返回此后变化的便签。
+- `notepad_read` 按 `key` 返回正文与元数据，默认每页 4000 个字符、至多 8000，以 `nextOffset` 续读；没有这条便签时返回 `isError: true`。
+- `notepad_write` 的 `mode` 默认为 `replace`：便签不存在时创建（不得带 `expected`），已存在时 `expected` 必须等于读到的便签 `revision`；
+  不符时返回 `accepted: false`、当前 `revision` 与 `updatedBy`，需要重新读取。`mode: "append"` 在末尾追加一段，段前由服务端写入
+  `[作者 · 时间]`，不需要 `expected`，便签不存在时创建。
+- `notepad_delete` 需要等于当前 `revision` 的 `expected`。
+- `workspaceId` 省略时取调用者 Agent 的 Workspace（`X-Ait-Agent-Id` 或作用域凭据）；没有调用者身份的外部调用必须显式提供。
+  主机凭据可以显式指定任意未归档的 Workspace。托管 worktree 是独立的 Workspace，各有自己的记事本。
+- 作者为 `{kind, agentId?, title?}`：Bot 会话为 `bot`，子树凭据为该 Agent，主机凭据取 `X-Ait-Agent-Id` 指向的 Agent，没有时为 `external`。
+  该请求头不是权限边界，所以主机凭据下的署名只是说明，不能当作身份证明。
+- 便签是其他 Agent 与用户写的数据，不是指令；所有能访问该 Workspace 的 Agent 和用户都能读到，不要写入凭据或密钥。
+- 记事本保存在 `<data-dir>/notepads/notepads.sqlite3`，daemon 重启后保留，不在检出目录中；Workspace 归档或移除时删除，恢复归档不会找回。
+- Bot 会话与子树 Agent：读取属于 `observe`，写入与删除属于 `notepad` 分组；目标必须在授权的 Workspace 内。
+  其他 Channel 的对话及为它工作的 Agent 不能使用记事本，四个工具都返回引导文本；访客不能访问记事本的 RPC。
 
 ## 编排流程
 
-先用 `list_profiles` 读取保存的 profile 和 notes，用 `list_models` 确认模型。
+先用 `profile_list` 读取保存的 profile 和 notes，用 `provider_model_list` 确认模型。
 外部创建 Agent 使用以下调用：
 
 ```json
@@ -177,9 +217,9 @@ Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot
   "id": 2,
   "method": "tools/call",
   "params": {
-    "name": "create_agent",
+    "name": "agent_create",
     "arguments": {
-      "provider": "codex/<list_models 返回的模型 ID>",
+      "provider": "codex/<provider_model_list 返回的模型 ID>",
       "title": "修复登录问题",
       "cwd": "/absolute/project/path",
       "initialPrompt": "修复登录问题并运行相关测试",
@@ -189,25 +229,25 @@ Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot
 }
 ```
 
-创建和 prompt 在输入接纳后返回。用 `get_agent_status` / `get_agent_activity` 检查进展，
-或用 `wait_for_agent` 等待，默认 30 秒、最多 45 秒。超时返回 `status: "timeout"`，
-不会取消执行；通过 `cancel_agent` 显式取消。重试创建复用原 `idempotencyKey`，prompt 重试复用 `messageId`。
+创建和 prompt 在输入接纳后返回。用 `agent_get` / `agent_activity_read` 检查进展，
+或用 `agent_wait` 等待，默认 30 秒、最多 45 秒。超时返回 `status: "timeout"`，
+不会取消执行；通过 `agent_cancel` 显式取消。重试创建复用原 `idempotencyKey`，prompt 重试复用 `messageId`。
 
 Agent 调用可发送 `X-Ait-Agent-Id: <agent-id>`，继承调用者 cwd 和 Workspace 并记录父子关系。
 传入另一个 `workspaceId` 可以将子 Agent 放在另一个 Workspace。需要隔离时先
-`create_workspace`，选择 `isolation: "worktree"`，再使用返回的 Workspace ID。
+`workspace_create`，选择 `isolation: "worktree"`，再使用返回的 Workspace ID。
 `mode` 支持 `branch-off`、`checkout-branch` 和 `checkout-pr`。`isolation: "sandboxed-worktree"`
 接受同样的参数，并在 macOS/Linux 上限制该 Workspace 中受支持 Agent 进程的写入范围，
 详见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)；Linux 要求安装 bubblewrap 并允许非特权 user namespace，详见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)；macOS/Linux 以外的平台会拒绝创建。
 
 脚本位于 Workspace 的 `ait.json`，按 `scriptName` 启停。每次启动记录一次运行并返回 `script.runId`；
 声明了 `acceptsArgs` 的脚本可以传入字符串数组 `args`，每项作为一个位置参数传给脚本，不经 shell 解析。
-`wait_for_workspace_script` 等待运行结束（默认 30 秒、最多 45 秒，超时不停止运行），
-`get_workspace_script_run` 按 `runId` 或脚本名读取提交、结果、耗时和有界输出；两者属于 Bot 的
-`observe` 组，作用域与 `list_workspace_scripts` 相同。字段与生命周期见
+`script_run_wait` 等待运行结束（默认 30 秒、最多 45 秒，超时不停止运行），
+`script_run_get` 按 `runId` 或脚本名读取提交、结果、耗时和有界输出；两者属于 Bot 的
+`observe` 组，作用域与 `script_list` 相同。字段与生命周期见
 [Workspace 自动化](workspace-automation.md)。终端 `keys` 可以是 `Enter`、`C-c`
 等令牌；`literal: true` 发送原样文本。
 
 Schedule 归属于固定 Workspace；外部调用提供 `workspaceId`、`provider`，Agent 调用可以继承。
 Heartbeat 需要调用者身份，定时向该 Agent 发送 prompt。Ait 的 Heartbeat 会持久化，完成后需
-`delete_heartbeat`。`list_schedules` 与其余 Schedule 工具只操作 new-agent 任务。
+`heartbeat_delete`；`heartbeat_list` 返回调用者自己的心跳及其 id。`schedule_list` 与其余 Schedule 工具只操作 new-agent 任务。

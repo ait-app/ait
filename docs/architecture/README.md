@@ -7,6 +7,8 @@ Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `dae
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 客户端 Workspace 记事本由 `apps/mobile` 提供，内容使用 Workspace 文件系统中的 `.ait-notebook.md`，通过现有文件协议共享，不新增 daemon 能力。
+Agent 之间共享的记事本（notepad）是另一份数据：`metadata` 的 `workspace.notepad.*` 方法与 `persistence` 的 SQLite 存储，经 MCP 的 `notepad_*` 工具使用
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。
 
 ## Rust 能力边界
 
@@ -108,7 +110,8 @@ Completion 把匿名 artifact 交给 API/Files 既有一次性下载管线，不
 [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)。
 
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
-API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
+API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。工具名为 `<域>[_<子对象>]_<动作>`，旧名字作为别名继续接受
+（[ADR-295](../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md)）。
 
 账号用量的上游限流由 adapter 投影安全错误和重试时间，`provider` 按已验证账号在内存中遵守
 等待期限，手动强刷也不能提前轮询；同账号成功快照继续保留
@@ -142,7 +145,7 @@ Telegram、飞书、Lark 与 QQ 的出站回复支持 Markdown 图片，图片�
 Workspace 通知经 `Bots::notify` 进入活跃 Bot 的持久日志与收件箱，合并后在来源对话中唤醒一轮；未配置或暂停的 Bot 不写盘、不调用模型。
 daemon 把 Agent／终端 attention（未经焦点过滤的提交后广播）与定时任务运行结果转成通知，来源对话由 `ait.bot.conversation` 标签与 `botConversation` 字段记录，
 见 [ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md)。
-Bot 交办的工作是工单（Ticket）：作用域 `create_agent` 打开或指派工单并写入 `ait.bot.ticket` 标签，Agent 经 `report_progress` 汇报，
+Bot 交办的工作是工单（Ticket）：作用域 `agent_create` 打开或指派工单并写入 `ait.bot.ticket` 标签，Agent 经 `ticket_report` 汇报，
 关于工单 Agent 的通知追加系统汇报；工单只由 Bot 或用户关闭，存储在每个工单一个文件中，见 [ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)。
 
 ## 主机、连接与客户端

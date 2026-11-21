@@ -125,7 +125,7 @@
   worktree 创建在任何 Git 操作前就被 metadata 拒绝
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
-- MCP `create_workspace` 的 `isolation` 只接受 `local`、`worktree`、`sandboxed-worktree`；
+- MCP `workspace_create` 的 `isolation` 只接受 `local`、`worktree`、`sandboxed-worktree`；
   未知值，或 `local` 搭配 worktree 参数，返回 `InvalidMessage`
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）。
 - 每次创建、恢复或 rewind 原生进程前，`provider::service::agent_manager::confinement` 从 Registry
@@ -150,6 +150,22 @@
 - 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab。每个 Workspace 最多一个记事本 tab，tab 布局保留在客户端。
 - 记事本内容存放在 Workspace 根目录的 `.ait-notebook.md`，通过现有文件读取、实时订阅和带版本校验的写入接口同步；因此 Workspace 分享时，协作者访问同一份笔记与 TODO 内容。
 - 访客写入沿用 Workspace 文件权限。写入失败会显示只读状态，并发修改通过文件版本冲突提示处理。
+
+## Agent 共享记事本（notepad）
+
+与上一节的客户端记事本是两份数据：本节的记事本由 daemon 保存，供同一 Workspace 的 Agent 经 MCP 互相留下信息，客户端目前没有它的界面
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。
+
+- 每个 Workspace 一份记事本，由按 `key`（1–64 个字符的 `a-z`、`0-9`、`-`，以字母或数字开头）寻址的便签组成；至多 64 条，每条正文至多 16 KiB。
+  便签带从 1 起的 `revision`、创建者与最后写入者及时间；记事本的 `revision` 在每次创建、修改、删除时加 1。
+- `workspace.notepad.list.request`、`.get.request`、`.write.request`、`.delete.request` 归 `metadata` 的 `notepad` 能力组，只接受未归档的 Workspace，
+  否则返回 `WorkspaceNotFound`。`list` 返回摘要（160 个字符以内的预览），带 `since` 时只返回此后变化的便签；`get` 对不存在的 `key` 返回 `note: null`。
+- `write` 的 `replace` 在便签已存在时要求 `expected` 等于当前 `revision`，`append` 在末尾追加一段并由服务端写入 `[作者 · 时间]`，不需要 `expected`；
+  `delete` 要求 `expected`。修订号不符、便签不存在、已满或超长返回 `accepted: false` 与 `error`，找到便签时附带它的当前 `revision` 与 `updatedBy`。
+- 作者为可选的 `author`（`agent`、`bot`、`user`、`external`），缺省为 `user`；MCP 层按凭据或 `X-Ait-Agent-Id` 填写，主机凭据下只是说明而不是身份证明。
+- 存储为 `<data-dir>/notepads/notepads.sqlite3`，经 `model::workspace::notepad::NotepadStore` 注入；不在检出目录中，不受重置和沙箱写入限制影响。
+  Workspace 归档或移除时删除其记事本，恢复归档不会找回。
+- 访客策略不登记这些方法，访客不能访问。Bot 作用域内的分组与受限调用者见 [Bot 规格](bot.md#工具分组与模式上限)，工具见 [MCP 手册](../operations/mcp.md#workspace-记事本)。
 
 ## 定时任务归属
 

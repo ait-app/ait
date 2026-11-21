@@ -107,17 +107,17 @@ Bot 隐藏会话的能力分三层，均在执行端强制，而不是依赖提�
 2. **Ait MCP：按授权分组开放。** Bot 会话注入 `ait` MCP，工具按以下分组授权，分组之外的工具不出现在
    Bot 的工具目录中，调用也会被 MCP 路由拒绝：
 
-   | 分组             | 包含                                                                                                                                                                                                                                                                           | 默认       |
-   | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-   | 观察             | `list_agents`、`get_agent_status`、`get_agent_activity`、`wait_for_agent`、`list_schedules`、`inspect_schedule`、`schedule_logs`、`list_workspace_scripts`、`list_terminals`、`list_profiles`、`list_providers`、`list_models`、`inspect_provider`、`list_pending_permissions` | 开（必选） |
-   | 启动与指挥 Agent | `create_agent`、`send_agent_prompt`、`update_agent`、`set_agent_mode`                                                                                                                                                                                                          | 开         |
-   | 停止 Agent       | `cancel_agent`、`archive_agent`、`kill_agent`                                                                                                                                                                                                                                  | 开         |
-   | 定时任务         | `create_schedule`、`update_schedule`、`pause_schedule`、`resume_schedule`、`run_schedule_once`、`delete_schedule`、`create_heartbeat`、`delete_heartbeat`                                                                                                                      | 开         |
-   | 脚本             | `start_workspace_script`、`stop_workspace_script`                                                                                                                                                                                                                              | 关         |
-   | 终端             | `create_terminal`、`send_terminal_keys`、`capture_terminal`、`kill_terminal`                                                                                                                                                                                                   | 关         |
-   | 隔离工作区       | `create_workspace`（仅创建当前项目下的 worktree Workspace）                                                                                                                                                                                                                    | 关         |
+   | 分组             | 包含                                                                                                                                                                                                                                            | 默认       |
+   | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+   | 观察             | `agent_list`、`agent_get`、`agent_activity_read`、`agent_wait`、`schedule_list`、`schedule_get`、`schedule_log_read`、`script_list`、`terminal_list`、`profile_list`、`provider_list`、`provider_model_list`、`provider_get`、`permission_list` | 开（必选） |
+   | 启动与指挥 Agent | `agent_create`、`agent_prompt`、`agent_update`、`agent_mode_set`                                                                                                                                                                                | 开         |
+   | 停止 Agent       | `agent_cancel`、`agent_archive`                                                                                                                                                                                                                 | 开         |
+   | 定时任务         | `schedule_create`、`schedule_update`、`schedule_pause`、`schedule_resume`、`schedule_run`、`schedule_delete`、`heartbeat_create`、`heartbeat_delete`                                                                                            | 开         |
+   | 脚本             | `script_start`、`script_stop`                                                                                                                                                                                                                   | 关         |
+   | 终端             | `terminal_create`、`terminal_send`、`terminal_capture`、`terminal_kill`                                                                                                                                                                         | 关         |
+   | 隔离工作区       | `workspace_create`（仅创建当前项目下的 worktree Workspace）                                                                                                                                                                                     | 关         |
 
-   永远不授权：`respond_to_permission`、`archive_workspace`、`rename_workspace`，以及作用于其他 Workspace 的任何操作。
+   永远不授权：`permission_respond`、`workspace_archive`、`workspace_rename`，以及作用于其他 Workspace 的任何操作。
 
 3. **Bot 专属工具**：记忆读写与 Workspace 概览（见下文），只对 Bot 身份暴露。
 
@@ -126,9 +126,9 @@ Bot 隐藏会话的能力分三层，均在执行端强制，而不是依赖提�
 （Bot 是整个 Workspace 的管理者），但所有改变执行权限的入口都受模式上限约束。
 
 **模式上限**：各 Provider 的模式是互不可比的字符串，因此上限按 Provider 配置为**允许的模式列表**
-（向导给出默认值：每个 Provider 允许其默认模式及更保守的模式）。上限同时约束 `create_agent`、
-`set_agent_mode`、`update_agent`，以及 `create_schedule`／`create_heartbeat`／`update_schedule` 中的新 Agent 配置，
-防止通过定时任务加 `run_schedule_once` 绕过。未在设置中列出的 Provider 不可由 Bot 使用。
+（向导给出默认值：每个 Provider 允许其默认模式及更保守的模式）。上限同时约束 `agent_create`、
+`agent_mode_set`、`agent_update`，以及 `schedule_create`／`heartbeat_create`／`schedule_update` 中的新 Agent 配置，
+防止通过定时任务加 `schedule_run` 绕过。未在设置中列出的 Provider 不可由 Bot 使用。
 
 **身份必须可验证。** 现有 `X-Ait-Agent-Id` 只是编排上下文，不构成权限边界（ADR-148）。
 Bot 会话注入时使用**绑定到该 Bot 的独立 MCP 凭据**，MCP 路由据凭据识别 Bot 并应用上述授权与作用域；
@@ -139,7 +139,7 @@ Bot 会话注入时使用**绑定到该 Bot 的独立 MCP 凭据**，MCP 路由�
 
 ### Bot 启动的 Agent
 
-- 由 Bot 通过 `create_agent` 启动的 Agent 是普通、可见的 Ait 会话：出现在 Workspace Agent 列表，
+- 由 Bot 通过 `agent_create` 启动的 Agent 是普通、可见的 Ait 会话：出现在 Workspace Agent 列表，
   可打开、观察、接管，遵循普通权限规则（可能停在 Ait 等待用户审批）。
 - 记录来源：Agent 标记“由 Workspace Bot 启动”，以及发起它的 Bot 对话轮次，供 UI 展示与 Bot 跟进。
   **注意**：现有 attention 计算会排除 internal 会话并按父链寻找根（`workspace_attention.rs`），
@@ -149,7 +149,7 @@ Bot 会话注入时使用**绑定到该 Bot 的独立 MCP 凭据**，MCP 路由�
   “某某 Agent 正在 Ait 中等待你的审批”，用户在 Ait 中处理。
 - Bot 在给 Agent 的提示中带上记忆中的相关偏好（如 PR 标题语言）。
 - **Ait MCP 继承 Bot 的限制（用户已确定）。** Bot 启动的 Agent，以及 Bot 创建的定时任务／心跳所启动的 Agent，
-  注入的 `ait` MCP 使用**派生凭据**：工具分组与作用域与 Bot 相同（同样永不包含 `respond_to_permission`），
+  注入的 `ait` MCP 使用**派生凭据**：工具分组与作用域与 Bot 相同（同样永不包含 `permission_respond`），
   这些 Agent 再启动的子 Agent 继续继承，形成整棵子树的上限。原生权限（改代码、跑测试）不受影响，
   仍按普通 Agent 规则和模式上限执行。共享 Agent MCP 令牌不得注入到这棵子树中的任何会话；
   MCP 路由需按凭据识别“Bot 子树”并执行检查，凭据随 daemon 重启轮换，Bot 设置变更后在下一次请求生效。
@@ -169,7 +169,7 @@ Bot 会话注入时使用**绑定到该 Bot 的独立 MCP 凭据**，MCP 路由�
 
 ### 定时任务
 
-Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron、IANA 时区默认取用户偏好或设备时区），
+Bot 把“每天 22:00 发布”之类的请求转成 `schedule_create`（Cron、IANA 时区默认取用户偏好或设备时区），
 目标为“每次新建 Agent”或某个已有会话，提示词由 Bot 根据记忆与上下文写好。
 任务是普通 Workspace 定时任务，归属记录“由 Bot 创建”，用户可直接在 Ait 编辑；Bot 不另存一份调度状态。
 
@@ -204,17 +204,17 @@ Bot 把“每天 22:00 发布”之类的请求转成 `create_schedule`（Cron�
 
 ### 任务、指派与汇报
 
-原计划没有这一阶段，在阶段 4 之后加入。通知唤醒之后，Bot 仍倾向于在一轮中 `wait_for_agent` 等 Agent 结束，阻塞对话，
+原计划没有这一阶段，在阶段 4 之后加入。通知唤醒之后，Bot 仍倾向于在一轮中 `agent_wait` 等 Agent 结束，阻塞对话，
 完成的工作也无人收尾。现在 Bot 交办的每项工作是一个持久的任务（工单）：Bot 启动的 Agent 自动加入任务，
-工作者用 `report_progress` 汇报，Bot 交出工作后即结束本轮，在 Agent 结束、等待审批或汇报时被唤醒，告诉用户结果后关闭任务；
+工作者用 `ticket_report` 汇报，Bot 交出工作后即结束本轮，在 Agent 结束、等待审批或汇报时被唤醒，告诉用户结果后关闭任务；
 用户在 Bot 标签页查看任务，并可关闭、取消或重新打开。契约见 [ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)，
 用户可见行为见 [Workspace Bot](../operations/bots.md#任务)。
 
-截至 2026-11-13，daemon（记录、存储、状态机、通知挂接、作用域 MCP 工具与 `create_agent` 的任务流程、概览、访客规则）与客户端（协议、SDK 特性
+截至 2026-11-13，daemon（记录、存储、状态机、通知挂接、作用域 MCP 工具与 `agent_create` 的任务流程、概览、访客规则）与客户端（协议、SDK 特性
 `workspaceBotTickets`、对话中的任务入口与详情、唤醒卡片的任务链接、九种语言）已实现，由单元、集成与组件测试覆盖。尚未完成：
 
 - **真实会话验收**：端到端测试用伪执行器代替模型；真实 Provider 会话中 Bot 是否交出工作后结束本轮、是否要求 Agent 汇报并关闭任务，
-  以及 Agent 是否调用 `report_progress`，尚未在运行中的 daemon 上验证。任务界面未在真机、桌面应用或浏览器端到端用例中检查。
+  以及 Agent 是否调用 `ticket_report`，尚未在运行中的 daemon 上验证。任务界面未在真机、桌面应用或浏览器端到端用例中检查。
 - **遗留任务**：创建 Agent 前崩溃留下的无 Agent 任务超过 1 小时后在达到上限时删除（ADR-274 第 2 节）；
   Bot 忘记关闭、仍有未归档 Agent 的任务只占用 32 个名额，由用户手动关闭。
 - **关闭与停止**：关闭或取消任务不停止它的 Agent，需决定是否提供一并停止的操作。

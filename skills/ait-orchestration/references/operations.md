@@ -90,10 +90,11 @@ Typical argument shapes, with values selected from the user's task and live disc
 
 Replace example IDs and provider/model values with actual results. Use `schedule_get` and
 `schedule_log_read` for status and runs. `schedule_run` adds a run without changing cron;
-pausing and resuming use their dedicated tools. `schedule_update` takes `id`: `cron` and `every`
+pausing and resuming use their dedicated tools. `schedule_update` takes `scheduleId`: `cron` and `every`
 are alternatives, and `expiresIn` and `clearExpires: true` are alternatives.
 
 Use `heartbeat_create` only to send recurring prompts into the current, trusted calling Agent.
 Ait heartbeats persist across daemon restarts and need explicit `heartbeat_delete` cleanup.
-Record the returned ID: `schedule_list` and the ordinary schedule mutation tools operate on
-new-Agent schedules, not heartbeats. `heartbeat_delete` requires the original caller's identity.
+`schedule_list` and the ordinary schedule mutation tools operate on new-Agent schedules, not
+heartbeats; `heartbeat_list` returns the calling Agent's heartbeats with the `heartbeatId` each
+needs. `heartbeat_delete` requires the original caller's identity.

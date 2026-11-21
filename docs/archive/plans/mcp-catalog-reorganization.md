@@ -1,14 +1,17 @@
 # MCP 工具目录重组与 Workspace 记事本
 
-状态：设计草案，未实施，不代表已交付功能。对照源码提交 `5451fe2`（0.2.22）。
-本文只描述目标形态、迁移方式和待决问题；实施前需要按[文档规范](../policy/documentation.md#adr-门槛)补 ADR（见[需要的决策](#需要的决策)）。
+**归档说明（2026-11-21）：** 本设计的命名规则、别名、参数约定、`heartbeat_list` 与 Workspace 记事本已实现，现行约定见
+[ADR-295](../../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md)、[ADR-296](../../decisions/workspace/adr-296-workspace-notepad.md) 与
+[MCP 手册](../../operations/mcp.md)。与设计的差别：目录条目没有单独的 `domain` 字段（域取自名字首段）；`workspace_list` 等列表的分页与
+`agent_mode_set` 的合并未做；设计没有提到客户端已有的 notebook tab（`.ait-notebook.md`），两者的关系仍待决定。
+未完成的事项见[未完成工作](../../plans/README.md)。正文保留设计时的表述，对照源码提交 `5451fe2`。
 
 ## 现状
 
 daemon 在 `/mcp/agents` 提供一个无状态 Streamable HTTP 入口，目录为编译期嵌入的
-[`catalog.json`](../../crates/api/src/mcp/catalog.json)，共 50 个工具（[MCP 手册](../operations/mcp.md#可用工具)）。
+[`catalog.json`](../../../crates/api/src/mcp/catalog.json)，共 50 个工具（[MCP 手册](../../operations/mcp.md#可用工具)）。
 调用者分四类：主机凭据（daemon 令牌或共享 Agent MCP 令牌）、Bot 会话、Bot 子树 Agent、属于工单的工作者，
-可见工具由 [`domain::bot::permissions::TOOLS`](../../crates/domain/src/bot/permissions.rs) 的访问类别决定。
+可见工具由 [`domain::bot::permissions::TOOLS`](../../../crates/domain/src/bot/permissions.rs) 的访问类别决定。
 
 ### 问题
 
@@ -26,17 +29,17 @@ daemon 在 `/mcp/agents` 提供一个无状态 Streamable HTTP 入口，目录�
      `list_schedules`、`list_terminals`、`list_pending_permissions` 不分页。
 4. **功能重叠。**
    - `archive_agent` 与 `kill_agent` 分别调用 `agent.archive.request` 与 `agent.items.close.request`，
-     两者最终都落到 `AgentRuntimeDirectory::archive`（[`agent_runtime.rs`](../../crates/provider/runtime/src/rpc/agent_runtime.rs)）。
+     两者最终都落到 `AgentRuntimeDirectory::archive`（[`agent_runtime.rs`](../../../crates/provider/runtime/src/rpc/agent_runtime.rs)）。
    - `set_agent_mode` 与 `update_agent.settings.modeId` 都修改模式，走不同的 RPC（`agent.mode.set.request`、`agent.config.apply.request`）。
    - `inspect_schedule` 已包含运行历史，`schedule_logs` 再读一次运行与输出。
 5. **缺口。**
    - `list_schedules` 排除心跳，`delete_heartbeat` 需要 id，Agent 丢失 id 后无法找回自己的心跳。
    - 同一 Workspace 的 Agent 之间没有被动的共享通道（见 [Workspace 记事本](#workspace-记事本)）。
 6. **工具名分散在多张表里。** 同一个名字要同时出现在 `catalog.json`、访问类别表、
-   [`scope::rule`](../../crates/api/src/mcp/scope.rs)、[`tools::dispatch`](../../crates/api/src/mcp/tools.rs) 及
-   `overview`/`recall`/`tickets` 的分发、`BOT_ARGUMENTS`、[Bot 指令](../../crates/bot/src/instructions.rs)、
-   `initialize` 的 `instructions`、[ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md)、
-   客户端的[工具展示目录](../../packages/protocol/src/paseo-tool-presentation/catalog.ts)和文档中。
+   [`scope::rule`](../../../crates/api/src/mcp/scope.rs)、[`tools::dispatch`](../../../crates/api/src/mcp/tools.rs) 及
+   `overview`/`recall`/`tickets` 的分发、`BOT_ARGUMENTS`、[Bot 指令](../../../crates/bot/src/instructions.rs)、
+   `initialize` 的 `instructions`、[ait-orchestration Skill](../../../skills/ait-orchestration/SKILL.md)、
+   客户端的[工具展示目录](../../../packages/protocol/src/paseo-tool-presentation/catalog.ts)和文档中。
    现有测试只保证目录与访问类别表一致，并在两处写死数量 50。
 7. **失败有三种写法。** 结果里的 `error`、`success: false`、`accepted: false` 都会被转成 `isError: true`。
 8. **注解只有两个。** 每个工具只带 `readOnlyHint` 和固定为 `false` 的 `openWorldHint`，客户端无法区分“删除”与普通写入。
@@ -228,7 +231,7 @@ daemon 在 `/mcp/agents` 提供一个无状态 Streamable HTTP 入口，目录�
 - **受限于外部对话的调用者。** 其他 Channel 的 Bot 对话及其工作者只能触达自己工单的 Agent（ADR-280 第 4 节）。
   记事本是整个 Workspace 共享的，会让不同对话的内容互相可见，所以这类调用者在第一版中不能使用记事本：
   工具返回与其他受限操作相同风格的引导文本。所有者对话及其工作者不受影响。
-- **访客。** 访客策略对未登记的 RPC 方法默认拒绝（[`guest/policy.rs`](../../crates/api/src/guest/policy.rs)），
+- **访客。** 访客策略对未登记的 RPC 方法默认拒绝（[`guest/policy.rs`](../../../crates/api/src/guest/policy.rs)），
   记事本方法在第一版不登记，访客不可读写。
 
 ### 信任与安全
@@ -253,7 +256,7 @@ daemon 在 `/mcp/agents` 提供一个无状态 Streamable HTTP 入口，目录�
 ### 让 Agent 知道它
 
 - `initialize` 的 `instructions` 增加一句：同一 Workspace 的 Agent 用记事本共享信息，开始工作前先 `notepad_list`。
-- [ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md) 增加一节：委派多个 Agent 时在提示里约定便签的 `key` 与各自负责的内容。
+- [ait-orchestration Skill](../../../skills/ait-orchestration/SKILL.md) 增加一节：委派多个 Agent 时在提示里约定便签的 `key` 与各自负责的内容。
 - Bot 指令在授予 `notepad` 分组时增加一句，`bot_overview` 增加记事本的修订号与便签数量。
 
 ### 考虑过的方案
@@ -317,11 +320,11 @@ daemon 在 `/mcp/agents` 提供一个无状态 Streamable HTTP 入口，目录�
 
 以下变化达到 ADR 门槛，实施前各需一份：
 
-- **MCP 工具命名、别名与参数约定**（修订 [ADR-148](../decisions/daemon/adr-148-daemon-mcp.md)）：跨组件契约，
+- **MCP 工具命名、别名与参数约定**（修订 [ADR-148](../../decisions/daemon/adr-148-daemon-mcp.md)）：跨组件契约，
   约束 `crates/api`、`crates/domain`、`crates/bot`、`packages/protocol` 与 `skills`。
 - **Workspace 记事本**：新的 `workspace.notepad.*` 方法、存储格式、作者身份的来源，
-  以及新的 Bot 权限分组和对受限调用者的拒绝（修订 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
-  [ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）。
+  以及新的 Bot 权限分组和对受限调用者的拒绝（修订 [ADR-215](../../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
+  [ADR-280](../../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）。
 
-实施时同步更新 [MCP 手册](../operations/mcp.md)、[Workspace Bot 手册](../operations/bots.md#权限)、
-[Workspace 规格](../architecture/workspace.md)和 [Bot 规格](../architecture/bot.md)。
+实施时同步更新 [MCP 手册](../../operations/mcp.md)、[Workspace Bot 手册](../../operations/bots.md#权限)、
+[Workspace 规格](../../architecture/workspace.md)和 [Bot 规格](../../architecture/bot.md)。

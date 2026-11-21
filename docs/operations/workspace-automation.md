@@ -106,7 +106,7 @@ setup、脚本和 teardown 共用，归档后仍保留到 daemon 退出；daemon
 - 记录只保存在 daemon 内存中：每个脚本的最近一次运行，加上每个 Workspace 最近 16 次被替换的运行。
   daemon 重启或归档 Workspace 后记录丢失。
 
-MCP 工具 `start_workspace_script`、`get_workspace_script_run`、`wait_for_workspace_script` 提供相同能力，
+MCP 工具 `script_start`、`script_run_get`、`script_run_wait` 提供相同能力，
 见 [MCP 工具](mcp.md)。
 
 ### 参数

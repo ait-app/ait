@@ -51,7 +51,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 每轮正常结束后释放（`Release`）原生会话但保留其身份，下一轮重新打开；reset 与退役改为关闭（`Close`）并归档会话
   （[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)、
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
-- 内置指令要求问候与普通聊天直接回复，仅在需要工作区信息或操作时查询 `workspace_overview`。
+- 内置指令要求问候与普通聊天直接回复，仅在需要工作区信息或操作时查询 `bot_overview`。
   Ait 工具未暴露给当前会话时说明能力限制，不通过 shell、本地文件、凭据或 HTTP 重建缺失的工具。
   这是模型行为指引，Provider 的能力降级与权限约束仍按现有规则执行。
 - 输出只来自 Provider timeline 中输入游标之后的 `assistant_message`：同一 `messageId` 的片段合并为一条，
@@ -79,9 +79,9 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   全局积压满时留在收件箱重试。每个对话每小时至多 12 个唤醒轮次，超出记为 `skipped/over_budget`。
   解析出的目标（含 `owner`）当前 generation 有 `uncertain` 轮次时，到期条目记为 `skipped/blocked`，不再占用收件箱
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 5 节）。
-- Bot 会话经作用域 MCP 用 `wait_for_agent`、`get_agent_status` 或 `get_agent_activity` 读到 Agent 已不在执行时，`crates/api` 以
+- Bot 会话经作用域 MCP 用 `agent_wait`、`agent_get` 或 `agent_activity_read` 读到 Agent 已不在执行时，`crates/api` 以
   `Bots::observe` 记录该对话看到的 Agent 最后变更时间（快照中更晚的 `attentionTimestamp` 优先，以覆盖审批请求）。观察挂在发起读取的轮次上
-  （工具调用开始早于该对话当前轮次开始执行的读取不记录，例如已取消轮次迟返的 `wait_for_agent`），
+  （工具调用开始早于该对话当前轮次开始执行的读取不记录，例如已取消轮次迟返的 `agent_wait`），
   该轮次 `completed` 后才生效，以其他方式结束则丢弃；生效后关于该 Agent、目标为该对话且不晚于该时间的 `agent_*` 待唤醒条目记为
   `skipped/observed`。观察只在内存中保留，有界
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 14 节）。
@@ -93,8 +93,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   两种情况都先保存改回 `pending` 的日志，再写入轮次的新状态，因此其间崩溃也只重试一次
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 11 节）。
 - 来源对话由保留标签 `ait.bot.conversation`（`domain::bot::BOT_CONVERSATION_LABEL`）与定时任务字段 `botConversation` 记录。
-  Bot 会话的作用域凭据携带其对话 id；作用域 `create_agent` 为 Bot 调用者写入该对话，子树调用者复制自身 Agent 的标签；
-  作用域 `create_schedule`／`create_heartbeat` 以同样来源写入 `botConversation`，运行创建的 Agent 也带该标签。
+  Bot 会话的作用域凭据携带其对话 id；作用域 `agent_create` 为 Bot 调用者写入该对话，子树调用者复制自身 Agent 的标签；
+  作用域 `schedule_create`／`heartbeat_create` 以同样来源写入 `botConversation`，运行创建的 Agent 也带该标签。
   调用者不能自行提供或修改二者（[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
 - 事件源：daemon 订阅 `SessionEvents::subscribe_committed_attention()`（焦点与中心投递之前的全部 attention），
   按 Agent 当前记录生成 `agent:<agentId>:<timestamp>` 通知，跳过内部会话、已归档、被更新 attention 取代、无 Workspace，
@@ -111,7 +111,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 关闭：`Bots::stop` 只停止 Channel 与执行中的轮次，worker 继续把通知写入日志（不唤醒）直到 `Bots::shutdown`；`shutdown` 先等待已提交的
   `Bots::offer`。`Api::wait_closed` 先关闭定时任务再关闭 Bot，关闭时结算的运行结果因此在重启后唤醒
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
-- `workspace_overview` 的 `notifications` 是调用会话尚未在完成轮次中看到的通知（`bot.notifications.list` 的 `unseenBy`），
+- `bot_overview` 的 `notifications` 是调用会话尚未在完成轮次中看到的通知（`bot.notifications.list` 的 `unseenBy`），
   至多 20 条、`summary` 至多 512 字节，计入 24 KiB 预算；对话已不属于 Bot 时为 `null`
   （[ADR-271](../decisions/bot/adr-271-bot-notification-inbox-and-wake-turns.md) 第 13 节）。
 - 唤醒轮次的最后一条回复恰为 `NO_REPLY` 时记为 `silent` 并直接 `delivered`，不向任何 Channel 发送；外部 Channel 对唤醒轮次发普通消息
@@ -125,7 +125,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 工单（`domain::bot::ticket::Ticket`，id 为 `TicketId`）是 Bot 交办的一项任务：标题、请求、来源对话、状态、指派（至多 16 个 Agent，
   只记 Agent 与 Workspace，实时状态从 Agent 目录读取）与最近 32 条汇报。每个 Bot 至多 32 个未关闭工单，已关闭的保留 64 个，超出删除最早关闭的
   （仍跟随 PR 的已关闭工单不删除，它们受跟随上限约束，[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 5 节）。
-  作用域 `create_agent` 打开工单达到上限时，先关闭全部 Agent 已归档（按 `ait.bot.ticket` 标签完整读取未归档 Agent 目录为空）且有指派的 `open` 或 `waiting` 工单
+  作用域 `agent_create` 打开工单达到上限时，先关闭全部 Agent 已归档（按 `ait.bot.ticket` 标签完整读取未归档 Agent 目录为空）且有指派的 `open` 或 `waiting` 工单
   （`Bots::close_finished_ticket`，系统来源：`open` 工单只在最近一次重新打开之后，每个被指派的 Agent 与其间汇报过的工作者最近一条都是 `done` 时为 `done`，
   否则 `cancelled`；`waiting` 工单无人能再回答，一律 `cancelled`；仍有打开 PR 的工单一律 `done`，以继续跟随该 PR；结论说明自动关闭的原因），
   并删除崩溃留下的遗留工单（未关闭、没有指派、`createdAt` 早于 `ORPHAN_GRACE` 即 1 小时，且含已归档在内没有任何 Agent 带其标签；
@@ -135,31 +135,31 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - 状态为 `open`、`waiting`、`done`、`failed`、`cancelled`。Agent 等待审批使 `open` 进入 `waiting(permission)`，由该 Agent 完成或失败一轮结束。
   工单记下每个最近一次汇报 `blocked` 的工作者（内部字段 `blocked`）：受阻优先于审批（同一或另一 Agent 的审批等待都改为受阻），
   已因他人受阻而等待时只记下；受阻者再汇报其他种类时解除，正等它时交给最早的其他受阻者，没有则回到 `open`。因此报告过受阻的工单在该工作者再汇报、
-  或 Bot／用户处理之前不显示为进行中。Bot 与用户能关闭、重新打开或结束等待（清除全部受阻）；Ait 只在上限自动关闭与 `send_agent_prompt` 时以系统来源关闭或重新打开。
+  或 Bot／用户处理之前不显示为进行中。Bot 与用户能关闭、重新打开或结束等待（清除全部受阻）；Ait 只在上限自动关闭与 `agent_prompt` 时以系统来源关闭或重新打开。
   关闭为另一种已关闭状态返回 `BotConflict`，重复同一目标为 `changed:false`，但以相同状态带新结论关闭时保存结论
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 4、8 节）。
 - 作用域 MCP 经 `Bots::open_ticket`（按 Agent 创建的幂等键幂等）、`assign_ticket`、`abandon_ticket` 让 Bot 启动的每个 Agent 属于一个工单，
-  Agent 带保留标签 `ait.bot.ticket`（`domain::bot::BOT_TICKET_LABEL`）。带标签的 Agent 经 `Bots::report_progress` 汇报，不要求已被指派：
+  Agent 带保留标签 `ait.bot.ticket`（`domain::bot::BOT_TICKET_LABEL`）。带标签的 Agent 经 `Bots::ticket_report` 汇报，不要求已被指派：
   未被指派而工单有空位时先指派，满 16 个时照常记录；对已关闭工单返回 `BotConflict`。Bot 经 `Bots::update_ticket` 关闭、重新打开、改名或备注
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 6–8 节）。
-- 作用域 `create_agent`（`api::mcp::tools::tickets`）：Bot 会话不带 `ticketId` 时，先以该次创建的 `idempotencyKey`（缺省时生成并传给创建）
+- 作用域 `agent_create`（`api::mcp::tools::tickets`）：Bot 会话不带 `ticketId` 时，先以该次创建的 `idempotencyKey`（缺省时生成并传给创建）
   打开工单，再以 `ait.bot.ticket` 创建 Agent，最后指派；没有创建出 Agent 时删除本次新开的工单。会话的对话已不属于该 Bot 时，工单不记来源对话。
   带 `ticketId` 时先确认工单属于该 Bot、未关闭且指派未满 16 个，否则在创建前以引导文本拒绝。带工单标签的子树调用者把标签传给子 Agent 并指派，
-  指派失败只记日志，不使创建失败。结果带 `ticketId`。`ticketId` 只出现在 Bot 会话看到的 `create_agent` 输入 schema 中，
-  其他调用者传入时 `-32602`；定时任务运行创建的 Agent 没有工单。作用域 `create_agent` 在单独的任务中执行（`api::mcp::bounded`），
+  指派失败只记日志，不使创建失败。结果带 `ticketId`。`ticketId` 只出现在 Bot 会话看到的 `agent_create` 输入 schema 中，
+  其他调用者传入时 `-32602`；定时任务运行创建的 Agent 没有工单。作用域 `agent_create` 在单独的任务中执行（`api::mcp::bounded`），
   60 秒调用超时只停止等待，工单收尾照常完成；该任务持有调用额度直到结束，总时长至多 5 分钟
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 6 节）。
-- Bot 会话的 `send_agent_prompt` 在发送前读取目标 Agent 的 `ait.bot.ticket`，该 Bot 的工单已关闭时经 `Bots::reopen_ticket` 重新打开并追加系统汇报；
+- Bot 会话的 `agent_prompt` 在发送前读取目标 Agent 的 `ait.bot.ticket`，该 Bot 的工单已关闭时经 `Bots::reopen_ticket` 重新打开并追加系统汇报；
   达到上限时先做上述自动关闭再重试，仍不能时提示照常发送，结果带 `ticketNote` 告诉 Bot 工单未重新打开；发送失败时工单保持重新打开
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 7 节）。
-- `bot_tickets`、`bot_ticket_update` 只对 Bot 会话可见；`report_progress` 属于新的访问类别 `ToolAccess::Worker`，
+- `bot_ticket_list`、`bot_ticket_update` 只对 Bot 会话可见；`ticket_report` 属于新的访问类别 `ToolAccess::Worker`，
   只对带合法 `ait.bot.ticket` 标签的子树凭据可见（凭据签发时从会话标签读取，`bot::mcp::CallerKind::Subtree.ticket`），
   工单与汇报者都取自凭据。标签在、指派不在（指派失败、工单已满或进程在指派前退出）时汇报照常记录，有空位时补上指派。
   签发这类凭据时 `McpAccess::Scoped.worker` 置位；适配器声明 `AgentClient::additive_tool_preapproval()`（只有 Claude）时，会话绑定在有效配置中
-  追加 `report_progress` 的预授权（与用户的预授权和 `allowedTools` 合并，持久记录不变），所以 Claude 工作者不再就它请求审批。
+  追加 `ticket_report` 的预授权（与用户的预授权和 `allowedTools` 合并，持久记录不变），所以 Claude 工作者不再就它请求审批。
   Codex 的预授权是排他白名单、其他 Provider 拒绝 `tool_policy`，它们保持默认：Codex 在 `auto`、`auto-review` 中与其他 Provider 在会请求审批的模式中
-  仍可能先就 `report_progress` 请求审批；未用真实 Provider 验证（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 7、10 节）。
-- `workspace_overview.tickets`：至多 20 个未关闭工单，每项 `{id,title,status,waiting,thisConversation,agents,latestReport,updatedAt,read}`；
+  仍可能先就 `ticket_report` 请求审批；未用真实 Provider 验证（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 7、10 节）。
+- `bot_overview.tickets`：至多 20 个未关闭工单，每项 `{id,title,status,waiting,thisConversation,agents,latestReport,updatedAt,read}`；
   `agents` 的状态从概览已读的 Agent 目录合并，目录读完整而找不到时为 `archived`，不完整时为 `null`；最新汇报文本超过 512 字符时溢出为读取指针，
   超出 24 KiB 时与其他文本一起先缩为只有长度与指针，再参与列表截断（[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 10 节，[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 7 节）。
 - 通知带 `ticketId` 时，只有拥有该工单的 Bot 保留它并填入 `ticketTitle`，其余 Bot 的副本清除两者；`agent_*` 通知先向工单追加系统汇报再写日志，
@@ -177,13 +177,13 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 9 节）。
 - Bot 不为 `active` 时，除用户更新外的入口返回 `BotConflict` 且不写盘；暂停保留工单，移除与归档删除
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 11 节）。
-- 内置指令要求 Bot 交出工作后结束本轮、只短暂等待预计一分钟内结束的工作、在 Agent 提示中要求其调用 `report_progress`、
-  同一任务的新 Agent 提供 `ticketId`、回报结果后关闭工单，并说明 `send_agent_prompt` 会重新打开 Agent 的工单、新任务需要新 Agent
+- 内置指令要求 Bot 交出工作后结束本轮、只短暂等待预计一分钟内结束的工作、在 Agent 提示中要求其调用 `ticket_report`、
+  同一任务的新 Agent 提供 `ticketId`、回报结果后关闭工单，并说明 `agent_prompt` 会重新打开 Agent 的工单、新任务需要新 Agent
   （[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md) 第 12 节）。
 
 ## 工单跟随拉取请求与提问
 
-- 工单记录它跟随的拉取请求（`Ticket.pulls`，`domain::bot::follow::PullBinding`）：编号、URL、标题、绑定者（工作者经 `report_progress` 的 `pullRequest`，
+- 工单记录它跟随的拉取请求（`Ticket.pulls`，`domain::bot::follow::PullBinding`）：编号、URL、标题、绑定者（工作者经 `ticket_report` 的 `pullRequest`，
   或 Bot 经 `bot_ticket_update` 的 `pullRequest`）、最近读到的状态、检查与已处理条目 id。绑定前经 `Bots::read_pull` 用跟随端口读取并校验：
   引用为编号、`#编号` 或 PR URL，读取总在 Bot 根 Workspace 的检出中按编号进行，URL 须与读到的一致；读不到时工具返回可操作的引导文本，汇报与更新都不记录。
   每个工单至多 4 个、每个 Bot 同时跟随至多 16 个（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 3 节）。
@@ -221,13 +221,13 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 6 节）。
 - 本账号写的条目：比高水位新的本账号条目，正文整体出现在存活工作者最近 200 条时间线的工具调用参数中时视为工作者自己写的，只记为已处理；
   其余照常投递并标明可能是自己写的（包括工作者在仍打开的 PR 上写的“PTAL”之类的短评论，它会重新打开已关闭的工单并回送给工作者）；PR 全部结束后本账号的条目不恢复工单（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 7 节）。
-- 提问与回答：`report_progress` 的 `blocked` 可带 `question`（`Waiting.question`），在工单投影、概览、`bot_read` 与 `ticket_read` 中显示，外部对话看到的存根不含它。
+- 提问与回答：`ticket_report` 的 `blocked` 可带 `question`（`Waiting.question`），在工单投影、概览、`bot_read` 与 `ticket_read` 中显示，外部对话看到的存根不含它。
   所有者以 `bot.ticket.answer.request` 回答，Bot 以 `bot_ticket_update` 的 `answer`（`{agentId,text}`）代为回答；回答指名它回答的工作者，工单不再等待它时为冲突。
   记录 `kind: "answer"` 的汇报（来源 `user` 或 `bot`），解除该工作者的受阻，并以信封 `ticket_answer` 在它空闲时直接投递给它（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 8 节）。外部对话的 Bot 不能对别人的工单绑定或回答（[ADR-287](../decisions/bot/adr-287-ticket-pull-request-follow-and-answers.md) 第 9 节）。
 
 ## 按 id 回读与对话隔离
 
-- Bot 工具 `bot_read`（`ToolAccess::BotOnly`）与工作者工具 `ticket_read`（`ToolAccess::Worker`，与 `report_progress` 一起进入 Claude 工作者的预授权）
+- Bot 工具 `bot_read`（`ToolAccess::BotOnly`）与工作者工具 `ticket_read`（`ToolAccess::Worker`，与 `ticket_report` 一起进入 Claude 工作者的预授权）
   都经 `bot::service::Bots::read(bot::recall::Read)` 在 Bot worker 中投影，不是客户端 RPC：读取范围由调用者凭据决定。
   `agent/<id>` 的 Agent 记录与工单指派的实时状态由 `crates/api` 从 Agent 目录读取并合并，Bot 侧只投影工单、对话、轮次与通知（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、5、6 节）。
 - 资源：`tickets`、`tickets/closed`、`ticket/<id>`（及 `/reports`、`/report/<n>`、`/request`、`/outcome`）、`conversations`、`conversation/<id>`、
@@ -235,7 +235,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   页面上的每个 id 都能再读，通知以日志序号寻址，自由文本的通知 id 不出现在页面上（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
 - 常量（`bot::recall`）：文本页 `TEXT_PAGE = 4000`、至多 `TEXT_PAGE_LIMIT = 8000` 字符；列表 `LIST_PAGE = 20`、至多 `LIST_PAGE_LIMIT = 50` 条，以 `nextOffset` 续读；
   列表项内文本预览 400 字符、单个对象页内 1200 字符、唤醒输入摘要 600 字符。长度按字符计。截断的文本为 `{"preview","chars","read"}`；
-  Agent 目录不带 Agent 的结果文本，Agent 的结果与转录用 `get_agent_activity` 读取（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、2 节）。
+  Agent 目录不带 Agent 的结果文本，Agent 的结果与转录用 `agent_activity_read` 读取（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 1、2 节）。
 - 读取是纯读取：不写盘、不唤醒、不记录观察、不推进 `notificationCursor`；退役 Bot 不可读（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 3 节）。
 - 读取者：调用者对话在内置 Channel 上时为所有者，可读全部、可触达作用域内全部 Agent；其他对话（含 Webhook 与 Bot 已不拥有的对话）只读自己、来源为自己的工单与通知，
   别人的工单只给存根（标题、状态、不含 Agent 的等待原因、`restricted:true`），别人的通知读作未保留，其余返回 `Forbidden`；工作者只读自己的工单，页面不含其他工单、对话或通知 id
@@ -243,8 +243,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 - Agent 触达：`bot::recall::Viewer::sees_agent` 按标签判定，`ait.bot.ticket` 是有来源对话的已知工单时由工单来源决定，否则由 `ait.bot.conversation` 决定，
   Bot 未启动的 Agent 对外部对话不可触达。`Bots::sight(root, Origin)` 为外部对话返回 `Sight`（读取者加 Bot 全部工单的来源）；子树调用者的
   `Origin::Agent` 带它的工单与对话标签，Bot 取工单的来源对话，没有时取标签，两者都没有时返回 `None`（不受限）。`crates/api` 一次取得后套用于
-  `bot_read agent/<id>`、`scope::confine` 的 Agent 目标（九个 Agent 工具，拒绝在执行前，不触发重新打开工单与观察）、`list_agents`、`list_pending_permissions`、
-  `create_agent` 的 `ticketId`、`workspace_overview` 的 `botAgents`、`otherAgents` 与别人工单的 `agents`（只给数量）。受限的调用者的 `list_agents`
+  `bot_read agent/<id>`、`scope::confine` 的 Agent 目标（九个 Agent 工具，拒绝在执行前，不触发重新打开工单与观察）、`agent_list`、`permission_list`、
+  `agent_create` 的 `ticketId`、`bot_overview` 的 `botAgents`、`otherAgents` 与别人工单的 `agents`（只给数量）。受限的调用者的 `agent_list`
   读最新 200 个 Agent 后过滤，不返回目录游标（它编码最后读到的 Agent 的 id），以 `truncated` 表示没有列全。所有者对话及其启动的 Agent 不受限制。
   Workspace 记忆、定时任务、终端与脚本按设计在对话之间共享（[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md) 第 4 节）。
 - 唤醒输入每行以 `(read notification/<序号>)` 结尾，摘要超过 600 字符时截断并标明全文长度，仍在 `bot_wake` 信封内；内置指令要求 Bot 按指针读取、
@@ -270,16 +270,17 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 工具分组与模式上限
 
 - 工具访问由 `domain::bot::permissions::TOOLS` 唯一定义：`observe` 总是授予，新 Bot 默认
-  `{observe, agents, stop, schedules}`；`create_workspace`、`respond_to_permission`、`archive_workspace`、
-  `rename_workspace`、`list_workspaces` 及未登记的工具名永不授予。`workspaces` 分组仍可解析，但不授予工具且保存时移除
+  `{observe, agents, stop, schedules, notepad}`；`notepad` 只管记事本的写入与删除，读取属于 `observe`，
+  受限于外部对话的调用者不能使用记事本（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）；`workspace_create`、`permission_respond`、`workspace_archive`、
+  `workspace_rename`、`workspace_list` 及未登记的工具名永不授予。`workspaces` 分组仍可解析，但不授予工具且保存时移除
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-- `bot_memory_read`、`bot_memory_update`、`workspace_overview`、`bot_tickets`、`bot_ticket_update`、`bot_read` 只对 Bot 自身凭据可见，
-  子树与主机令牌都看不到；`report_progress`、`ticket_read`（`ToolAccess::Worker`）只对带工单标签的子树凭据可见，不进入 Bot 会话的工具预授权
+- `bot_memory_read`、`bot_memory_update`、`bot_overview`、`bot_ticket_list`、`bot_ticket_update`、`bot_read` 只对 Bot 自身凭据可见，
+  子树与主机令牌都看不到；`ticket_report`、`ticket_read`（`ToolAccess::Worker`）只对带工单标签的子树凭据可见，不进入 Bot 会话的工具预授权
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-274](../decisions/bot/adr-274-bot-tickets-assignments-and-reports.md)、[ADR-280](../decisions/bot/adr-280-bot-recall-reads-and-spill.md)）。
 - `modes` 线上形状仍为 `{ [provider]: string[] }`，保存时截断为第一项，执行时也只放行第一项；未列出的 Provider
-  不可使用。`create_agent` 未指定模式时取该项；`set_agent_mode` 与 `update_agent` 按目标 Agent 当前 Provider 校验，
-  `update_agent` 的 features 只允许 `fast_mode`
+  不可使用。`agent_create` 未指定模式时取该项；`agent_mode_set` 与 `agent_update` 按目标 Agent 当前 Provider 校验，
+  `agent_update` 的 features 只允许 `fast_mode`
   （[ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)，修订
   [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
 
@@ -303,11 +304,11 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   作用域为根 Workspace 加上 `Bot.workspaces` 中已记录且未归档的 worktree；违规以 `isError` 工具结果返回 `Forbidden`
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-- 作用域调用者创建的 Agent 被写入 `ait.bot.scope = <根 Workspace>`，其会话获得子树凭据。MCP `create_agent`、`update_agent` 与访客创建
+- 作用域调用者创建的 Agent 被写入 `ait.bot.scope = <根 Workspace>`，其会话获得子树凭据。MCP `agent_create`、`agent_update` 与访客创建
   Agent 都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 第 3 节）。
 - 作用域调用者创建的定时任务与心跳记录 `botScope`。每次运行前按当前授权复核 `schedules` 分组与模式，不满足时以
-  `REVOKED` 失败、任务保持启用；`update_schedule` 只接受带 `botScope` 的任务，运行与恢复要求任务当前模式在上限内
+  `REVOKED` 失败、任务保持启用；`schedule_update` 只接受带 `botScope` 的任务，运行与恢复要求任务当前模式在上限内
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 第 5 节、
   [ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
 
