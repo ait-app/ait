@@ -32,6 +32,7 @@ import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useHubServices } from "@/runtime/hub-service-store";
+import { useHasAnyShares } from "@/sharing/share-lists";
 import { SidebarTaskCounts } from "@/task-board/sidebar-task-counts";
 
 interface SidebarNavRowProps {
@@ -45,12 +46,17 @@ interface SidebarNavRowsProps extends SidebarNavRowProps {
 
 /**
  * Top-level sidebar navigation, ordered and filtered by the user's
- * `sidebarNavItems` preference. Renders nothing — not even the bordered group
- * wrapper — when every item is hidden.
+ * `sidebarNavItems` preference. The Shared row also needs something to show:
+ * it is left out while both share lists are empty. Renders nothing — not even
+ * the bordered group wrapper — when every item is hidden.
  */
 export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps) {
   const { items } = useSidebarNavItems();
-  const visibleItems = useMemo(() => items.filter((item) => item.visible), [items]);
+  const hasAnyShares = useHasAnyShares();
+  const visibleItems = useMemo(
+    () => items.filter((item) => item.visible && (item.id !== "shared" || hasAnyShares)),
+    [hasAnyShares, items],
+  );
 
   if (visibleItems.length === 0) return null;
 

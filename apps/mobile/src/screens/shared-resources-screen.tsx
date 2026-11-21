@@ -1,41 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { RefreshCw, X } from "lucide-react-native";
-import type { ShareGroup, ShareSetting } from "@ait/protocol/messages";
+import type { ShareSetting } from "@ait/protocol/messages";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { Switch } from "@/components/ui/switch";
-import {
-  getHostRuntimeStore,
-  isHostRuntimeConnected,
-  isSharedResourceHost,
-  useHosts,
-} from "@/runtime/host-runtime";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useHubServices } from "@/runtime/hub-service-store";
 import { useAccountState } from "@/runtime/account-state";
 import { groupIncomingSharedHosts } from "@/runtime/shared-hosts";
+import {
+  forgetOutgoingShare,
+  refreshOutgoingShares,
+  selectIncomingShares,
+  useOutgoingShares,
+  type OutgoingShare,
+} from "@/sharing/share-lists";
 import {
   isSharedHostEnabled,
   useSharedHostPreferences,
 } from "@/stores/shared-host-preferences-store";
 import { useTranslation } from "react-i18next";
-import type { HubAccountSnapshot } from "@ait/client/internal/hub";
-
-const EMPTY_INCOMING_SHARES = [] as const;
-
-export function selectIncomingShares(snapshot: Pick<HubAccountSnapshot, "shares"> | null) {
-  return snapshot?.shares ?? EMPTY_INCOMING_SHARES;
-}
-
-interface OutgoingShare {
-  serverId: string;
-  hostLabel: string;
-  groupName: string;
-  setting: ShareSetting;
-}
 
 function settingTitle(setting: ShareSetting, hostLabel: string): string {
   return (
@@ -53,79 +41,31 @@ export function SharedResourcesScreen() {
   const disabledHostKeys = useSharedHostPreferences((state) => state.disabledHostKeys);
   const preferencesHydrated = useSharedHostPreferences((state) => state.hydrated);
   const setHostEnabled = useSharedHostPreferences((state) => state.setHostEnabled);
-  const hosts = useHosts();
-  const ownerHosts = useMemo(() => hosts.filter((host) => !isSharedResourceHost(host)), [hosts]);
-  const [outgoing, setOutgoing] = useState<OutgoingShare[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { shares: outgoing, loading, error: listError } = useOutgoingShares();
+  const [stopError, setStopError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const error = stopError ?? (listError ? listError.message || t("sharing.listError") : null);
 
-  const loadGeneration = useRef(0);
-
-  const loadOutgoing = useCallback(async () => {
-    const generation = ++loadGeneration.current;
-    setLoading(true);
-    setError(null);
-    const runtime = getHostRuntimeStore();
-    // One unreachable daemon must not hide the shares of every other host.
-    const results = await Promise.allSettled(
-      ownerHosts.map(async (host) => {
-        const client = runtime.getClient(host.serverId);
-        if (!client || !isHostRuntimeConnected(runtime.getSnapshot(host.serverId))) return [];
-        const result = await client.listShares().catch((cause: unknown) => {
-          const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
-          if (code === "not_implemented") return null;
-          throw cause;
-        });
-        if (!result) return [];
-        const groups = new Map<string, ShareGroup>(
-          result.groups.map((group) => [group.groupId, group]),
-        );
-        return result.shares
-          .filter((setting) => setting.state !== "revoked")
-          .map((setting) => ({
-            serverId: host.serverId,
-            hostLabel: host.label,
-            groupName: groups.get(setting.groupId)?.name ?? setting.groupId,
-            setting,
-          }));
-      }),
-    );
-    // A newer load, such as one started after removing a share, owns the visible state.
-    if (generation !== loadGeneration.current) return;
-    setOutgoing(results.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure) {
-      const cause: unknown = failure.reason;
-      setError(cause instanceof Error ? cause.message : t("sharing.listError"));
-    }
-    setLoading(false);
-  }, [ownerHosts, t]);
-
-  useEffect(() => {
-    void loadOutgoing();
-  }, [loadOutgoing]);
+  const refresh = useCallback(() => {
+    setStopError(null);
+    refreshOutgoingShares();
+  }, []);
 
   const remove = useCallback(
     async (entry: OutgoingShare) => {
       const client = getHostRuntimeStore().getClient(entry.serverId);
       if (!client) return;
       setRemoving(entry.setting.settingId);
-      setError(null);
+      setStopError(null);
       try {
         await client.removeShare({
           resourceKind: entry.setting.resourceKind,
           resourceKey: entry.setting.resourceKey,
           groupId: entry.setting.groupId,
         });
-        // A list request started before this removal must not restore the stopped share.
-        loadGeneration.current += 1;
-        setLoading(false);
-        setOutgoing((current) =>
-          current.filter((candidate) => candidate.setting.settingId !== entry.setting.settingId),
-        );
+        await forgetOutgoingShare(entry.serverId, entry.setting.settingId);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : t("sharing.stopError"));
+        setStopError(cause instanceof Error ? cause.message : t("sharing.stopError"));
       } finally {
         setRemoving(null);
       }
@@ -181,7 +121,7 @@ export function SharedResourcesScreen() {
                 variant="ghost"
                 size="sm"
                 leftIcon={RefreshCw}
-                onPress={() => void loadOutgoing()}
+                onPress={refresh}
                 disabled={loading}
               >
                 {t("sharing.refresh")}

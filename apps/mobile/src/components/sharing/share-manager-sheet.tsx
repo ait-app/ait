@@ -11,6 +11,7 @@ import { HostPicker } from "@/components/hosts/host-picker";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { isSharedResourceHost, useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
+import { refreshOutgoingShares } from "@/sharing/share-lists";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 
 export interface ShareResourceTarget {
@@ -196,6 +197,8 @@ function ShareManagerContent({ target: initialTarget }: { target: ShareResourceT
             result.share,
           ]);
         }
+        // The sidebar's Shared row and the Shared screen list this Host's shares too.
+        refreshOutgoingShares(target.serverId);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : t("sharing.updateError"));
       } finally {

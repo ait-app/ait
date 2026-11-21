@@ -1,34 +1,36 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { HubAccountSnapshot, HubShare } from "@ait/client/internal/hub";
+import type { HubShare } from "@ait/client/internal/hub";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import { queryClient } from "@/data/query-client";
 import { i18n } from "@/i18n/i18next";
 import { useHubServices } from "@/runtime/hub-service-store";
 import { useSharedHostPreferences } from "@/stores/shared-host-preferences-store";
-import { selectIncomingShares, SharedResourcesScreen } from "./shared-resources-screen";
+import { SharedResourcesScreen } from "./shared-resources-screen";
 
 const state = vi.hoisted(() => ({
   hosts: [
     { serverId: "supported", label: "Current daemon" },
     { serverId: "unsupported", label: "Old daemon" },
   ],
-  clients: new Map<string, Pick<DaemonClient, "listShares">>(),
+  clients: new Map<
+    string,
+    Pick<DaemonClient, "listShares"> & Partial<Pick<DaemonClient, "removeShare">>
+  >(),
   offline: new Set<string>(),
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHosts: () => state.hosts,
   isSharedResourceHost: () => false,
-  isHostRuntimeConnected: (snapshot: { connectionStatus: string } | null) =>
-    snapshot?.connectionStatus === "online",
-  getHostRuntimeStore: () => ({
-    getClient: (serverId: string) => state.clients.get(serverId),
-    getSnapshot: (serverId: string) => ({
-      connectionStatus: state.offline.has(serverId) ? "offline" : "online",
-    }),
-  }),
+  useHostRuntimeConnectionStatuses: (serverIds: readonly string[]) =>
+    new Map(
+      serverIds.map((serverId) => [serverId, state.offline.has(serverId) ? "offline" : "online"]),
+    ),
+  getHostRuntimeStore: () => ({ getClient: (serverId: string) => state.clients.get(serverId) }),
 }));
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: (select: (store: { center: string; accountId: string }) => unknown) =>
@@ -54,6 +56,7 @@ beforeEach(async () => {
   await useSharedHostPreferences.persist.rehydrate();
   useSharedHostPreferences.setState({ disabledHostKeys: [] });
   useHubServices.setState({ snapshot: null });
+  queryClient.clear();
   state.clients.clear();
   state.offline.clear();
   for (const host of state.hosts) {
@@ -69,18 +72,13 @@ beforeEach(async () => {
 });
 afterEach(cleanup);
 
-describe("selectIncomingShares", () => {
-  it("keeps an empty fallback reference stable for Zustand selectors", () => {
-    expect(selectIncomingShares(null)).toBe(selectIncomingShares(null));
-    expect(selectIncomingShares({ shares: null })).toBe(selectIncomingShares({}));
-  });
-
-  it("returns the Hub share snapshot unchanged", () => {
-    const shares = [{ shareId: "share-1" }] as HubShare[];
-    const snapshot = { shares } as Pick<HubAccountSnapshot, "shares">;
-    expect(selectIncomingShares(snapshot)).toBe(shares);
-  });
-});
+function screen() {
+  return createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(SharedResourcesScreen),
+  );
+}
 
 describe("SharedResourcesScreen", () => {
   it("lists each shared Host once with a default-on switch that remains available when turned off", async () => {
@@ -112,7 +110,7 @@ describe("SharedResourcesScreen", () => {
         shares,
       },
     });
-    const view = render(createElement(SharedResourcesScreen));
+    const view = render(screen());
     expect(view.getByText("Shared with me (1)")).toBeTruthy();
     expect(await view.findByText("You are not sharing anything")).toBeTruthy();
     expect(view.getAllByRole("switch")).toHaveLength(1);
@@ -124,7 +122,7 @@ describe("SharedResourcesScreen", () => {
     expect(useHubServices.getState().snapshot?.shares).toBe(shares);
     view.unmount();
 
-    const reopened = render(createElement(SharedResourcesScreen));
+    const reopened = render(screen());
     await reopened.findByText("You are not sharing anything");
     const restoredToggle = reopened.getByRole("switch");
     expect(restoredToggle.getAttribute("aria-checked")).toBe("false");
@@ -153,7 +151,7 @@ describe("SharedResourcesScreen", () => {
         ],
       }),
     });
-    const view = render(createElement(SharedResourcesScreen));
+    const view = render(screen());
 
     expect(await view.findByText("Shared project")).toBeTruthy();
     expect(view.getByText("Project · Team · Current daemon")).toBeTruthy();
@@ -164,8 +162,53 @@ describe("SharedResourcesScreen", () => {
     expect(view.queryByText("Rust daemon does not implement share.list.request")).toBeNull();
   });
 
+  it("drops a stopped share and ignores a list request that was already running", async () => {
+    const setting = {
+      resourceKind: "project" as const,
+      resourceKey: "project-1",
+      groupId: "group-1",
+      permission: "operate" as const,
+      audience: "group" as const,
+      recipients: [],
+      settingId: "setting-1",
+      state: "accepted" as const,
+      displayName: "Shared project",
+      missingRecipients: [],
+    };
+    const listed = {
+      requestId: "list-shares",
+      groups: [{ groupId: "group-1", name: "Team", status: "active", myRole: "member" }],
+      shares: [setting],
+    };
+    const slow = Promise.withResolvers<typeof listed>();
+    const listShares = vi.fn<DaemonClient["listShares"]>().mockResolvedValueOnce(listed);
+    const removeShare = vi.fn<DaemonClient["removeShare"]>().mockResolvedValue({
+      requestId: "remove-share",
+      resourceKind: "project",
+      resourceKey: "project-1",
+      groupId: "group-1",
+      removed: true,
+    });
+    state.clients.set("supported", { listShares, removeShare });
+    const view = render(screen());
+    expect(await view.findByText("Shared project")).toBeTruthy();
+
+    listShares.mockReturnValueOnce(slow.promise);
+    fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(view.getByRole("button", { name: "Stop sharing" }));
+
+    expect(await view.findByText("You are not sharing anything")).toBeTruthy();
+    expect(removeShare).toHaveBeenCalledWith({
+      resourceKind: "project",
+      resourceKey: "project-1",
+      groupId: "group-1",
+    });
+    await act(async () => slow.resolve(listed));
+    expect(view.queryByText("Shared project")).toBeNull();
+  });
+
   it("shows the empty state without an error when no daemon supports sharing", async () => {
-    const view = render(createElement(SharedResourcesScreen));
+    const view = render(screen());
 
     expect(await view.findByText("You are not sharing anything")).toBeTruthy();
     expect(view.queryByText("Rust daemon does not implement share.list.request")).toBeNull();
@@ -193,7 +236,7 @@ describe("SharedResourcesScreen", () => {
     const failing = vi.fn<DaemonClient["listShares"]>().mockRejectedValue(new Error("Timed out"));
     state.clients.set("supported", { listShares });
     state.clients.set("unsupported", { listShares: failing });
-    const view = render(createElement(SharedResourcesScreen));
+    const view = render(screen());
 
     expect(await view.findByText("Shared project")).toBeTruthy();
     expect(view.getByText("Timed out")).toBeTruthy();
@@ -201,7 +244,7 @@ describe("SharedResourcesScreen", () => {
 
     state.offline.add("unsupported");
     failing.mockClear();
-    const reopened = render(createElement(SharedResourcesScreen));
+    const reopened = render(screen());
     expect(await reopened.findByText("Shared project")).toBeTruthy();
     expect(reopened.queryByText("Timed out")).toBeNull();
     expect(failing).not.toHaveBeenCalled();
@@ -214,7 +257,7 @@ describe("SharedResourcesScreen", () => {
     state.clients.set("supported", {
       listShares: vi.fn<DaemonClient["listShares"]>().mockRejectedValue(error),
     });
-    const view = render(createElement(SharedResourcesScreen));
+    const view = render(screen());
 
     expect(await view.findByText(error.message)).toBeTruthy();
   });
