@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn creation_schema_explains_misplaced_models_and_accepts_combined_selection() {
+    let tool = catalog::all()
+        .iter()
+        .find(|tool| tool.name == "create_agent")
+        .unwrap();
+    let mut arguments = json!({"provider":"provider", "settings":{"model":"namespace/model"},
+        "cwd":"/repo", "title":"Model selection test", "initialPrompt":"Run expr 17 + 25",
+        "idempotencyKey":"model-selection-test"});
+    for model in [json!("namespace/model"), Value::Null] {
+        arguments["settings"]["model"] = model;
+        let error = validation::arguments(&tool.name, &tool.input_schema, &arguments).unwrap_err();
+        assert!(error.contains("settings.model is not supported"));
+        assert!(error.contains("<provider-id>/<model-id>"));
+    }
+    arguments.as_object_mut().unwrap().remove("settings");
+    arguments["model"] = json!("namespace/model");
+    let error = validation::arguments(&tool.name, &tool.input_schema, &arguments).unwrap_err();
+    assert!(error.contains("top-level model field is not supported"));
+    arguments.as_object_mut().unwrap().remove("model");
+    arguments["provider"] = json!("provider/namespace/model");
+    assert_eq!(
+        validation::arguments(&tool.name, &tool.input_schema, &arguments),
+        Ok(())
+    );
+    arguments["unexpected"] = json!(true);
+    assert_eq!(
+        validation::arguments(&tool.name, &tool.input_schema, &arguments),
+        Err("Arguments do not match the tool input schema")
+    );
+    assert_eq!(
+        validation::arguments("another_tool", &tool.input_schema, &json!({"model":"x"})),
+        Err("Arguments do not match the tool input schema")
+    );
+}
+
+#[test]
 fn catalog_has_unique_registered_methods_and_closed_schemas() {
     let mut names = std::collections::BTreeSet::new();
     let methods: Vec<_> = crate::capabilities::implemented_methods()

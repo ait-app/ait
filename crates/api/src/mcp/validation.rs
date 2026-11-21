@@ -2,6 +2,39 @@
 
 use serde_json::Value;
 
+/// Validate tool arguments against `schema`, with corrective model-selection guidance.
+///
+/// `name` identifies the tool; `schema` is its caller-visible input schema.
+/// Returns `Ok(())` when `arguments` satisfies that schema.
+///
+/// # Errors
+///
+/// Returns a field-specific hint for misplaced creation models, or a generic schema error.
+pub(super) fn arguments(name: &str, schema: &Value, arguments: &Value) -> Result<(), &'static str> {
+    if matches(schema, arguments) {
+        return Ok(());
+    }
+    if name == "create_agent" {
+        if arguments["settings"].get("model").is_some() {
+            return Err(
+                "settings.model is not supported by create_agent. Remove settings.model and \
+                 combine the provider and model in provider, e.g. \
+                 {\"provider\":\"<provider-id>/<model-id>\"}. Use list_models to select the model id; \
+                 preserve its namespace and slashes.",
+            );
+        }
+        if arguments.get("model").is_some() {
+            return Err(
+                "The top-level model field is not supported by create_agent. Remove model and \
+                 combine the provider and model in provider, e.g. \
+                 {\"provider\":\"<provider-id>/<model-id>\"}. Use list_models to select the model id; \
+                 preserve its namespace and slashes.",
+            );
+        }
+    }
+    Err("Arguments do not match the tool input schema")
+}
+
 /// Return whether `value` satisfies the static catalog's supported `schema` constraints.
 pub(super) fn matches(schema: &Value, value: &Value) -> bool {
     if schema
