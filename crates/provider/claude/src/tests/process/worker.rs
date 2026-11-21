@@ -27,7 +27,7 @@ async fn a_ticket_worker_runs_its_report_tool_without_asking_and_keeps_the_users
             .unwrap();
     assert!(
         args.contains(
-            &"--allowedTools=Read,mcp__ait__report_progress,mcp__ait__ticket_read".to_owned()
+            &"--allowedTools=Read,mcp__ait__ticket_report,mcp__ait__ticket_read".to_owned()
         ),
         "{args:?}"
     );
