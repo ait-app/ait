@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.2.22 - 2026-11-21
+
+- Usage is no longer a modal. Every host has its own Settings → Host → Usage page, opened from the sidebar Usage row or from the usage summary, with the host chosen among the connected ones. The plan-usage cards, the usage history chart and the per-host tables were redesigned for that page, the modal's host filter and its options popover are gone, and the compact layout closes the sidebar before the page opens ([#803](https://github.com/ait-app/ait/pull/803)).
+
+- The sidebar no longer has a Usage row, because usage now lives in each host's settings page. The usage summary stays in the sidebar only while windows are pinned, and clicking it opens the usage page of the host it reports; the old "Summary in sidebar" switch is gone, since pinning now controls the summary, window rows can always be pinned, and the stored "usage" sidebar preference is migrated once and dropped ([#805](https://github.com/ait-app/ait/pull/805)).
+
+- The Shared row is hidden while both shared lists are empty. "Shared with me" and "Shared by me" are now read from every connected Host instead of only the incoming list, so the row disappears when there is nothing to share, and the Settings → Appearance toggle still keeps a row the user turned off hidden ([#806](https://github.com/ait-app/ait/pull/806)).
+
+- The new workspace form gives the worktree isolation level its own icon, so the isolation picker no longer draws the same glyph as the branch picker next to it. Local, New worktree and Sandboxed worktree now read as a progression, and the icons match the ones the sidebar uses for worktree workspaces ([#802](https://github.com/ait-app/ait/pull/802)).
+
 ## 0.2.21 - 2026-11-21
 
 - Creation receipts are no longer limited by the size of the JSON registry. Each receipt is stored in its own row in `creations/receipts.sqlite3`, keyed by receipt ID, so a creation intent that carries inline images can no longer push the whole history past the aggregate file limit. The original `creations/receipts.json` is kept as a pre-upgrade backup and is imported one record at a time in a single transaction; a failed import is rolled back and retried on the next startup, the idempotency algorithm and the serialized intent are unchanged, a disk-full failure is reported as `resource_exhausted`, and committed receipts stay available for replay. A daemon that is downgraded reads the pre-upgrade JSON, and receipts created while downgraded are not merged into an already migrated database ([#793](https://github.com/ait-app/ait/pull/793)).
