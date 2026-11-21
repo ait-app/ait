@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Text } from "react-native";
-import { ChevronsUpDown, CircleUserRound, Import, Settings } from "lucide-react-native";
+import { ChevronsUpDown, CircleUserRound, Import, LogOut, Settings } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -13,7 +13,8 @@ import {
 import { extraMutedIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useAccountState } from "@/runtime/account-state";
+import { useToast } from "@/contexts/toast-context";
+import { accountCommand, useAccountState } from "@/runtime/account-state";
 import { ICON_SIZE } from "@/styles/theme";
 import { type AccountExpiry, useAccountExpiry } from "./account-expiry";
 import { SidebarHelpMenuItems } from "./sidebar-help-menu";
@@ -21,9 +22,11 @@ import { SidebarHelpMenuItems } from "./sidebar-help-menu";
 const ThemedChevronsUpDown = withUnistyles(ChevronsUpDown);
 const ThemedCircleUserRound = withUnistyles(CircleUserRound);
 const ThemedImport = withUnistyles(Import);
+const ThemedLogOut = withUnistyles(LogOut);
 const ThemedSettings = withUnistyles(Settings);
 const settingsLeadingIcon = <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 const importLeadingIcon = <ThemedImport size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
+const signOutLeadingIcon = <ThemedLogOut size={ICON_SIZE.sm} uniProps={mutedIconColorMapping} />;
 
 /** Whether the account button replaces the footer's own Import, Help and Settings buttons. */
 export function useIsAccountSignedIn(): boolean {
@@ -32,7 +35,8 @@ export function useIsAccountSignedIn(): boolean {
 
 /**
  * The signed-in footer button: who is signed in and how long the account has left, on one line.
- * It opens the menu that holds what the three footer buttons it replaces used to do.
+ * It opens the menu that holds what the three footer buttons it replaces used to do, and signs
+ * the account out.
  */
 export function SidebarAccountMenu({
   onOpenSettings,
@@ -46,6 +50,7 @@ export function SidebarAccountMenu({
   const expiry = useAccountExpiry();
   const settingsKeys = useShortcutKeys("toggle-settings");
   const [open, setOpen] = useState(false);
+  const signOut = useSignOut();
 
   const name = accountName || t("sidebar.account.fallbackName");
   const expiryLabel = useExpiryLabel(expiry);
@@ -96,9 +101,36 @@ export function SidebarAccountMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <SidebarHelpMenuItems />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          testID="sidebar-account-sign-out"
+          leading={signOutLeadingIcon}
+          onSelect={signOut}
+        >
+          {t("onlineService.signOut")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/** Signs out the way Settings does; the menu has closed by then, so a failure is reported as a toast. */
+function useSignOut(): () => void {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const pending = useRef(false);
+
+  return useCallback(() => {
+    if (pending.current) return;
+    pending.current = true;
+    accountCommand("account_logout")
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : t("onlineService.requestFailed"));
+      })
+      .finally(() => {
+        pending.current = false;
+      });
+  }, [t, toast]);
 }
 
 function useExpiryLabel(expiry: AccountExpiry): string | null {

@@ -142,6 +142,7 @@ export const Minimize2 = StubIcon;
 export const Turtle = StubIcon;
 export const Hammer = StubIcon;
 export const ListTodo = StubIcon;
+export const LogOut = StubIcon;
 export const Shield = StubIcon;
 export const ShieldEllipsis = StubIcon;
 export const ShieldPlus = StubIcon;

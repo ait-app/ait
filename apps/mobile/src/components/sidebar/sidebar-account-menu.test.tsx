@@ -20,6 +20,8 @@ interface Account {
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn<() => Promise<AccountInfo>>(),
+  command: vi.fn<(command: string) => Promise<unknown>>(),
+  toastError: vi.fn<(message: string) => void>(),
   account: {} as Account,
   visible: true,
 }));
@@ -27,7 +29,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: <T,>(selector: (state: Account) => T) => selector(mocks.account),
   loadAccountInfo: mocks.load,
+  accountCommand: mocks.command,
 }));
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => ({ error: mocks.toastError }) }));
 vi.mock("@/hooks/use-app-visible", () => ({ useAppVisible: () => mocks.visible }));
 vi.mock("@/hooks/use-shortcut-keys", () => ({ useShortcutKeys: () => null }));
 vi.mock("./sidebar-help-menu", () => ({
@@ -82,6 +86,9 @@ beforeEach(async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date", "setTimeout", "clearTimeout"] });
   mocks.load.mockReset();
   mocks.load.mockRejectedValue(new Error("offline"));
+  mocks.command.mockReset();
+  mocks.command.mockResolvedValue(undefined);
+  mocks.toastError.mockReset();
   mocks.visible = true;
   mocks.account = {
     status: "online",
@@ -201,6 +208,44 @@ describe("SidebarAccountMenu", () => {
     expect(onOpenSettings).toHaveBeenCalledOnce();
     expect(onImportSession).toHaveBeenCalledOnce();
     expect(view.getByTestId("sidebar-help-items")).toBeTruthy();
+  });
+
+  it("ends with Sign out, which signs the account out", async () => {
+    const view = renderMenu();
+
+    const items = view.getAllByRole("button").map((item) => item.getAttribute("data-testid"));
+    expect(items.at(-1)).toBe("sidebar-account-sign-out");
+
+    fireEvent.click(view.getByTestId("sidebar-account-sign-out"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.command).toHaveBeenCalledExactlyOnceWith("account_logout");
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed sign-out", async () => {
+    mocks.command.mockRejectedValue(new Error("The service is unreachable."));
+    const view = renderMenu();
+
+    fireEvent.click(view.getByTestId("sidebar-account-sign-out"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith("The service is unreachable.");
+  });
+
+  it("ignores a second Sign out while the first is still running", () => {
+    mocks.command.mockReturnValue(new Promise(() => {}));
+    const view = renderMenu();
+
+    fireEvent.click(view.getByTestId("sidebar-account-sign-out"));
+    fireEvent.click(view.getByTestId("sidebar-account-sign-out"));
+
+    expect(mocks.command).toHaveBeenCalledOnce();
   });
 });
 
