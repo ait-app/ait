@@ -67,6 +67,23 @@ export const sidebar = {
     whatsNew: "Что нового",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "Аккаунт",
+    expiry: {
+      never: "Не истекает",
+      months: "Остались месяцы",
+      weeks: "Остались недели",
+      days_one: "Остался {{count}} день",
+      days_few: "Осталось {{count}} дня",
+      days_many: "Осталось {{count}} дней",
+      days_other: "Осталось {{count}} дня",
+      hours_one: "Остался {{count}} час",
+      hours_few: "Осталось {{count}} часа",
+      hours_many: "Осталось {{count}} часов",
+      hours_other: "Осталось {{count}} часа",
+      expired: "Срок действия истёк",
+    },
+  },
   sections: {
     usage: "Использование",
     sessions: "История",

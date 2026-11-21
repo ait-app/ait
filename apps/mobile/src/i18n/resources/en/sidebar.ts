@@ -66,6 +66,19 @@ export const sidebar = {
     whatsNew: "What's new",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "Account",
+    expiry: {
+      never: "Never expires",
+      months: "Months left",
+      weeks: "Weeks left",
+      days_one: "{{count}} day left",
+      days_other: "{{count}} days left",
+      hours_one: "{{count}} hour left",
+      hours_other: "{{count}} hours left",
+      expired: "Expired",
+    },
+  },
   sections: {
     usage: "Usage",
     sessions: "History",

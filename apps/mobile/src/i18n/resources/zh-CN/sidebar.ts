@@ -66,6 +66,19 @@ export const sidebar = {
     whatsNew: "新功能",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "账户",
+    expiry: {
+      never: "永不过期",
+      months: "剩余数月",
+      weeks: "剩余数周",
+      days_one: "剩余 {{count}} 天",
+      days_other: "剩余 {{count}} 天",
+      hours_one: "剩余 {{count}} 小时",
+      hours_other: "剩余 {{count}} 小时",
+      expired: "已过期",
+    },
+  },
   sections: {
     usage: "用量",
     sessions: "历史",

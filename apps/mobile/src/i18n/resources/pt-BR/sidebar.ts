@@ -66,6 +66,21 @@ export const sidebar = {
     whatsNew: "Novidades",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "Conta",
+    expiry: {
+      never: "Nunca expira",
+      months: "Restam meses",
+      weeks: "Restam semanas",
+      days_one: "Resta {{count}} dia",
+      days_many: "Restam {{count}} dias",
+      days_other: "Restam {{count}} dias",
+      hours_one: "Resta {{count}} hora",
+      hours_many: "Restam {{count}} horas",
+      hours_other: "Restam {{count}} horas",
+      expired: "Expirada",
+    },
+  },
   sections: {
     usage: "Uso",
     sessions: "Histórico",

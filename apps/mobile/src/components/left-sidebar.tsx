@@ -25,6 +25,10 @@ import {
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
+import {
+  SidebarAccountMenu,
+  useIsAccountSignedIn,
+} from "@/components/sidebar/sidebar-account-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -384,6 +388,7 @@ function SidebarFooter({
 }) {
   const newAgentKeys = useShortcutKeys("new-agent");
   const settingsKeys = useShortcutKeys("toggle-settings");
+  const signedIn = useIsAccountSignedIn();
 
   return (
     <View style={styles.sidebarFooter}>
@@ -402,24 +407,28 @@ function SidebarFooter({
         shortcutKeys={newAgentKeys}
         theme={theme}
       />
-      <View style={styles.footerIconRow}>
-        <FooterIconButton
-          onPress={handleImportSession}
-          testID="sidebar-import-session"
-          label={labels.importSession}
-          icon={Import}
-          theme={theme}
-        />
-        <SidebarHelpMenu />
-        <FooterIconButton
-          onPress={handleSettings}
-          testID="sidebar-settings"
-          label={labels.settings}
-          icon={Settings}
-          shortcutKeys={settingsKeys}
-          theme={theme}
-        />
-      </View>
+      {signedIn ? (
+        <SidebarAccountMenu onOpenSettings={handleSettings} onImportSession={handleImportSession} />
+      ) : (
+        <View style={styles.footerIconRow}>
+          <FooterIconButton
+            onPress={handleImportSession}
+            testID="sidebar-import-session"
+            label={labels.importSession}
+            icon={Import}
+            theme={theme}
+          />
+          <SidebarHelpMenu />
+          <FooterIconButton
+            onPress={handleSettings}
+            testID="sidebar-settings"
+            label={labels.settings}
+            icon={Settings}
+            shortcutKeys={settingsKeys}
+            theme={theme}
+          />
+        </View>
+      )}
     </View>
   );
 }

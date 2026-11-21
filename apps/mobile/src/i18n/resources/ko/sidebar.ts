@@ -66,6 +66,19 @@ export const sidebar = {
     whatsNew: "새로운 소식",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "계정",
+    expiry: {
+      never: "만료되지 않음",
+      months: "몇 달 남음",
+      weeks: "몇 주 남음",
+      days_one: "{{count}}일 남음",
+      days_other: "{{count}}일 남음",
+      hours_one: "{{count}}시간 남음",
+      hours_other: "{{count}}시간 남음",
+      expired: "만료됨",
+    },
+  },
   sections: {
     usage: "사용량",
     sessions: "기록",

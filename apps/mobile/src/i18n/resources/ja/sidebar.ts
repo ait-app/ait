@@ -67,6 +67,19 @@ export const sidebar = {
     whatsNew: "新着情報",
     appName: "Ait",
   },
+  account: {
+    fallbackName: "アカウント",
+    expiry: {
+      never: "有効期限なし",
+      months: "残り数か月",
+      weeks: "残り数週間",
+      days_one: "残り {{count}} 日",
+      days_other: "残り {{count}} 日",
+      hours_one: "残り {{count}} 時間",
+      hours_other: "残り {{count}} 時間",
+      expired: "期限切れ",
+    },
+  },
   sections: {
     usage: "使用量",
     sessions: "履歴",
