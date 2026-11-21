@@ -8,6 +8,7 @@ use super::*;
 
 mod confinement;
 mod follow;
+mod notepad;
 mod notifications;
 mod recall;
 mod schedules;
@@ -24,27 +25,27 @@ async fn scoped_credential_lists_only_granted_tools() {
     let host = scoped.tools(TOKEN).await;
     let bot = scoped.tools(&scoped.bot_credential()).await;
     for granted in [
-        "create_agent",
-        "list_schedules",
-        "cancel_agent",
-        "list_agents",
-        "workspace_overview",
+        "agent_create",
+        "schedule_list",
+        "agent_cancel",
+        "agent_list",
+        "bot_overview",
         "bot_memory_read",
         "bot_memory_update",
-        "bot_tickets",
+        "bot_ticket_list",
         "bot_ticket_update",
         "bot_read",
     ] {
         assert!(bot.contains(granted), "{granted}: {bot:?}");
     }
-    assert!(host.contains("respond_to_permission"));
+    assert!(host.contains("permission_respond"));
     for withheld in [
-        "respond_to_permission",
-        "archive_workspace",
-        "rename_workspace",
-        "list_workspaces",
-        "create_terminal",
-        "report_progress",
+        "permission_respond",
+        "workspace_archive",
+        "workspace_rename",
+        "workspace_list",
+        "terminal_create",
+        "ticket_report",
         "ticket_read",
     ] {
         assert!(!bot.contains(withheld), "{withheld}");
@@ -53,8 +54,8 @@ async fn scoped_credential_lists_only_granted_tools() {
     let bot_only = [
         "bot_memory_read",
         "bot_memory_update",
-        "workspace_overview",
-        "bot_tickets",
+        "bot_overview",
+        "bot_ticket_list",
         "bot_ticket_update",
         "bot_read",
     ];
@@ -76,14 +77,14 @@ async fn bot_calls_with_session_header_resolve_root_context() {
     let credential = scoped.bot_credential();
     let header = Some(BOT_SESSION);
     let schedules = scoped
-        .call(&credential, header, "list_schedules", json!({}))
+        .call(&credential, header, "schedule_list", json!({}))
         .await;
     assert!(succeeded(&schedules), "{schedules}");
     let provider = scoped
         .call(
             &credential,
             header,
-            "inspect_provider",
+            "provider_get",
             json!({"provider":"codex"}),
         )
         .await;
@@ -91,7 +92,7 @@ async fn bot_calls_with_session_header_resolve_root_context() {
     let other = scoped.agent(json!({})).await;
     rejected(
         &scoped
-            .call(&credential, Some(&other), "list_schedules", json!({}))
+            .call(&credential, Some(&other), "schedule_list", json!({}))
             .await,
         "Caller does not match credential",
     );
@@ -113,7 +114,7 @@ async fn permission_change_applies_on_next_request() {
         arguments
     };
     let configured = scoped
-        .call(&credential, None, "create_agent", create(Some("auto")))
+        .call(&credential, None, "agent_create", create(Some("auto")))
         .await;
     assert!(succeeded(&configured), "{configured}");
     scoped
@@ -121,7 +122,7 @@ async fn permission_change_applies_on_next_request() {
         .await;
     rejected(
         &scoped
-            .call(&credential, None, "create_agent", create(None))
+            .call(&credential, None, "agent_create", create(None))
             .await,
         "Unknown or unavailable tool",
     );
@@ -129,7 +130,7 @@ async fn permission_change_applies_on_next_request() {
         .permissions(codex_modes(&["auto", "full-access"]))
         .await;
     let restored = scoped
-        .call(&credential, None, "create_agent", create(None))
+        .call(&credential, None, "agent_create", create(None))
         .await;
     assert!(succeeded(&restored), "{restored}");
     scoped.permissions(codex_modes(&["auto"])).await;
@@ -137,7 +138,7 @@ async fn permission_change_applies_on_next_request() {
         .call(
             &credential,
             None,
-            "create_agent",
+            "agent_create",
             create(Some("full-access")),
         )
         .await;
@@ -158,14 +159,14 @@ async fn shared_token_rejected_for_subtree_caller() {
     for token in [AGENT_MCP_TOKEN, TOKEN] {
         rejected(
             &scoped
-                .call(token, Some(&child), "list_agents", json!({}))
+                .call(token, Some(&child), "agent_list", json!({}))
                 .await,
             "Bot-scoped agents must use their own credential",
         );
-        let listed = scoped.call(token, None, "list_agents", json!({})).await;
+        let listed = scoped.call(token, None, "agent_list", json!({})).await;
         assert!(succeeded(&listed), "{listed}");
         let inherited = scoped
-            .call(token, Some(&external), "list_agents", json!({}))
+            .call(token, Some(&external), "agent_list", json!({}))
             .await;
         assert!(succeeded(&inherited), "{inherited}");
     }
@@ -181,7 +182,7 @@ async fn caller_header_must_match_scoped_credential() {
     let credential = scoped.subtree_credential(&child);
     rejected(
         &scoped
-            .call(&credential, Some(&other), "list_agents", json!({}))
+            .call(&credential, Some(&other), "agent_list", json!({}))
             .await,
         "Caller does not match credential",
     );
@@ -189,19 +190,14 @@ async fn caller_header_must_match_scoped_credential() {
         .call(
             &credential,
             None,
-            "create_agent",
+            "agent_create",
             json!({"provider":"codex/offline-model","title":"Grandchild","initialPrompt":"work"}),
         )
         .await;
     assert!(succeeded(&created), "{created}");
     let grandchild = created["result"]["structuredContent"]["agent"]["id"].clone();
     let status = scoped
-        .call(
-            TOKEN,
-            None,
-            "get_agent_status",
-            json!({"agentId":grandchild}),
-        )
+        .call(TOKEN, None, "agent_get", json!({"agentId":grandchild}))
         .await;
     let snapshot = &status["result"]["structuredContent"]["snapshot"];
     assert_eq!(snapshot["labels"]["paseo.parent-agent-id"], child);
@@ -325,7 +321,7 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
         .await;
     rejected(&oversized, "Arguments do not match the tool input schema");
     let overview = scoped
-        .call(&credential, None, "workspace_overview", json!({}))
+        .call(&credential, None, "bot_overview", json!({}))
         .await;
     let overview = structured(&overview);
     assert_eq!(overview["workspace"]["id"], scoped.workspace.as_str());
@@ -340,13 +336,11 @@ async fn bot_memory_tools_are_revision_checked_and_bot_only() {
         .await;
     // A conversation that is not the owner's sees only the Agents of its own tasks (ADR-280).
     let stranger = scoped
-        .call(&credential, None, "workspace_overview", json!({}))
+        .call(&credential, None, "bot_overview", json!({}))
         .await;
     assert_eq!(structured(&stranger)["botAgents"], json!([]));
     let owner = scoped.owner_credential().await;
-    let overview = scoped
-        .call(&owner, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&owner, None, "bot_overview", json!({})).await;
     let overview = structured(&overview);
     let listed: Vec<_> = overview["botAgents"]
         .as_array()
@@ -374,8 +368,8 @@ fn bot_only_names() -> BTreeSet<String> {
     [
         "bot_memory_read",
         "bot_memory_update",
-        "workspace_overview",
-        "bot_tickets",
+        "bot_overview",
+        "bot_ticket_list",
         "bot_ticket_update",
         "bot_read",
     ]

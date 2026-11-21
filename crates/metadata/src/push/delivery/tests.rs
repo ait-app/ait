@@ -112,6 +112,7 @@ fn fixture() -> (Arc<State>, Arc<Transport>, Arc<Registry>) {
         daemon: None,
         directory: None,
         workspace_labels: None,
+        workspace_notepads: None,
         workspace_automation: None,
         workspace_state: None,
         worktrees: None,

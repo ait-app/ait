@@ -11,6 +11,7 @@ use metadata::directory::service::{
     directory::Directory, github_projects::GithubProjects, workspace_state::WorkspaceState,
 };
 use metadata::labels::service::WorkspaceLabels;
+use metadata::notepad::service::WorkspaceNotepads;
 use metadata::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use provider::service::{agent_execution::AgentExecution, agents::Agents};
 
@@ -59,6 +60,8 @@ pub(super) struct Parts {
     pub(super) files: Option<Files>,
     /// Workspace label catalog, assignment, and subscription use cases.
     pub(super) workspace_labels: Option<WorkspaceLabels>,
+    /// Notes shared by the Agents of one Workspace.
+    pub(super) workspace_notepads: Option<WorkspaceNotepads>,
     /// Workspace setup and configured script runtime.
     pub(super) workspace_automation: Option<Arc<Mutex<WorkspaceAutomation>>>,
     /// Workspace attention and archived-placement recovery use cases.
@@ -84,6 +87,7 @@ impl From<Services> for Parts {
             parts.daemon = Some(metadata.daemon);
             parts.directory = Some(metadata.directory);
             parts.workspace_labels = Some(metadata.workspace_labels);
+            parts.workspace_notepads = Some(metadata.workspace_notepads);
             parts.workspace_automation = Some(metadata.workspace_automation);
             parts.workspace_state = Some(metadata.workspace_state);
             parts.worktrees = Some(metadata.worktrees);

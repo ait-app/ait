@@ -28,7 +28,7 @@ fn duration_parser_checks_the_entire_value_and_overflow() {
 fn schedule_patch_translates_cadence_expiry_and_native_config() {
     let value = update(
         json!({"scheduleId":"s","cron":"0 * * * *","timezone":"Asia/Shanghai","clearExpires":true,
-        "provider":"codex/model","mode":"full-access","cwd":"/repo"}),
+        "provider":"codex/model","modeId":"full-access","cwd":"/repo"}),
     )
     .unwrap();
     assert_eq!(

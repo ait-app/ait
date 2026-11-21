@@ -2,7 +2,6 @@
 
 mod migration;
 
-use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -11,7 +10,7 @@ use domain::creation::Receipt;
 use domain::creation::protocol::Snapshot;
 use model::ErrorCode;
 use model::creation::{Creations, ReceiptStore};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, Statement, params};
+use rusqlite::{Connection, OptionalExtension, Statement, params};
 
 const UPSERT: &str = "INSERT INTO receipts (id, intent, snapshot, retry_initial_agent)
     VALUES (?1, ?2, ?3, ?4)
@@ -126,44 +125,13 @@ fn write_receipt(statement: &mut Statement<'_>, receipt: &Receipt) -> Result<(),
     Ok(())
 }
 
-fn open_database(database: &Path) -> Result<Connection, StoreError> {
-    let parent = database
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    fs::create_dir_all(parent)?;
-    let parent = parent.canonicalize()?;
-    let database = parent.join(
-        database
-            .file_name()
-            .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?,
-    );
-    if !database.try_exists()? {
-        // SQLite inherits the permissions of the precreated database for its journal.
-        let temporary = tempfile::NamedTempFile::new_in(parent)?;
-        if let Err(error) = temporary.persist_noclobber(&database)
-            && error.error.kind() != io::ErrorKind::AlreadyExists
-        {
-            return Err(error.error.into());
-        }
-    }
-    let connection = Connection::open_with_flags(
-        database,
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX
-            | OpenFlags::SQLITE_OPEN_NOFOLLOW,
-    )?;
-    connection.execute_batch("PRAGMA synchronous = FULL; PRAGMA trusted_schema = OFF;")?;
-    Ok(connection)
-}
-
 /// Open the SQLite database beside the former JSON file at `legacy_path`.
 /// Import the JSON once, keep it as a backup, and restore claims without retrying interrupted work.
 /// # Errors
 /// Returns `RegistryIo` if the database or the initial import cannot be opened.
 pub fn open(legacy_path: &Path) -> Result<Creations, ErrorCode> {
     let database = legacy_path.with_extension("sqlite3");
-    let connection = open_database(&database)
+    let connection = super::sqlite::open::<StoreError>(&database)
         .and_then(|mut connection| {
             migration::initialize(&mut connection, legacy_path)?;
             Ok(connection)

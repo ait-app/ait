@@ -3,8 +3,8 @@
 //! The host owns transports and task scheduling; model owns shared contracts and persistence
 //! owns concrete storage.
 //!
-//! Capability groups (`server`, `daemon`, `push`, `directory`, `labels`, `automation`,
-//! `worktrees`) each keep the `ports`/`protocol`/`service`/`rpc`/`connection`/`local` layering.
+//! Capability groups (`server`, `daemon`, `push`, `directory`, `labels`, `notepad`,
+//! `automation`, `worktrees`) each keep the `ports`/`protocol`/`service`/`rpc`/`connection`/`local` layering.
 //! Groups reference each other only through `ports` and `protocol`; the top-level modules
 //! compose concrete types.
 
@@ -23,6 +23,7 @@ pub mod automation;
 pub mod daemon;
 pub mod directory;
 pub mod labels;
+pub mod notepad;
 pub mod push;
 pub mod server;
 pub mod worktrees;

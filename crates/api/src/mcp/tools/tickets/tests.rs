@@ -2,12 +2,12 @@ use super::*;
 
 #[test]
 fn ticket_tools_are_routed_here_and_others_are_not() {
-    for tool in ["bot_tickets", "bot_ticket_update", "report_progress"] {
+    for tool in ["bot_ticket_list", "bot_ticket_update", "ticket_report"] {
         assert!(handles(tool), "{tool}");
     }
     for tool in [
-        "create_agent",
-        "workspace_overview",
+        "agent_create",
+        "bot_overview",
         "bot_memory_read",
         "bot_read",
         "ticket_read",

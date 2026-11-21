@@ -70,7 +70,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .call(
             &bot,
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"provider":"codex/offline-model","prompt":"report","cron":CRON}),
         )
         .await;
@@ -87,7 +87,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
                 .call(
                     &bot,
                     None,
-                    "create_schedule",
+                    "schedule_create",
                     json!({"provider":provider,"prompt":"report","cron":CRON}),
                 )
                 .await,
@@ -98,7 +98,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
             .call(
                 &bot,
                 None,
-                "create_schedule",
+                "schedule_create",
                 json!({"workspaceId":scoped.other,"provider":"codex","prompt":"report",
                     "cron":CRON}),
             )
@@ -112,7 +112,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .call(
             &credential,
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"prompt":"report","cron":CRON}),
         )
         .await;
@@ -130,7 +130,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .call(
             &scoped.subtree_credential(&labelled),
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"prompt":"report","cron":CRON}),
         )
         .await;
@@ -142,7 +142,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .call(
             TOKEN,
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"workspaceId":scoped.workspace,"provider":"codex","prompt":"report",
                 "cron":CRON,"botConversation":ConversationId::generate()}),
         )
@@ -154,7 +154,7 @@ async fn scoped_schedule_create_sets_bot_scope_and_default_mode() {
         .call(
             TOKEN,
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"workspaceId":scoped.workspace,"provider":"codex","prompt":"report",
                 "cron":CRON}),
         )
@@ -177,21 +177,21 @@ async fn scoped_update_schedule_enforces_mode_cap() {
         .call(
             &bot,
             None,
-            "create_schedule",
+            "schedule_create",
             json!({"provider":"codex","prompt":"report","cron":CRON}),
         )
         .await;
     let own = schedule_id(&created);
     let update = |id: &str, patch: Value| {
         let mut arguments = patch;
-        arguments["id"] = json!(id);
-        scoped.call(&bot, None, "update_schedule", arguments)
+        arguments["scheduleId"] = json!(id);
+        scoped.call(&bot, None, "schedule_update", arguments)
     };
 
-    forbidden(&update(&own, json!({"mode":"full-access"})).await);
+    forbidden(&update(&own, json!({"modeId":"full-access"})).await);
     forbidden(&update(&own, json!({"provider":"claude"})).await);
-    forbidden(&update(&own, json!({"provider":"claude/model","mode":"auto"})).await);
-    structured(&update(&own, json!({"mode":null})).await);
+    forbidden(&update(&own, json!({"provider":"claude/model","modeId":"auto"})).await);
+    structured(&update(&own, json!({"modeId":null})).await);
     let stored = scoped.stored(&own).await;
     assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");
     assert_eq!(stored["botScope"], scoped.workspace.as_str());
@@ -208,7 +208,7 @@ async fn scoped_update_schedule_enforces_mode_cap() {
         .await;
     for patch in [
         json!({"prompt":"changed"}),
-        json!({"mode":"auto"}),
+        json!({"modeId":"auto"}),
         json!({"provider":"codex/other-model"}),
     ] {
         user_owned(&update(&user, patch).await);
@@ -236,7 +236,7 @@ async fn scoped_schedule_controls_check_target_mode() {
     let bot = scoped.bot_credential();
     let call = |tool: &'static str, id: &str, patch: Value| {
         let mut arguments = patch;
-        arguments["id"] = json!(id);
+        arguments["scheduleId"] = json!(id);
         scoped.call(&bot, None, tool, arguments)
     };
 
@@ -253,15 +253,15 @@ async fn scoped_schedule_controls_check_target_mode() {
         scoped
             .rpc("schedule.pause.request", json!({"scheduleId":task}))
             .await;
-        forbidden(&call("run_schedule_once", task, json!({})).await);
-        forbidden(&call("resume_schedule", task, json!({})).await);
-        user_owned(&call("update_schedule", task, json!({"prompt":"changed"})).await);
+        forbidden(&call("schedule_run", task, json!({})).await);
+        forbidden(&call("schedule_resume", task, json!({})).await);
+        user_owned(&call("schedule_update", task, json!({"prompt":"changed"})).await);
         let stored = scoped.stored(task).await;
         assert_eq!(stored["status"], "paused", "{stored}");
         assert_eq!(stored["prompt"], "report");
         assert_eq!(stored["runs"], json!([]));
-        structured(&call("pause_schedule", task, json!({})).await);
-        structured(&call("inspect_schedule", task, json!({})).await);
+        structured(&call("schedule_pause", task, json!({})).await);
+        structured(&call("schedule_get", task, json!({})).await);
     }
 
     let allowed = scoped
@@ -270,10 +270,10 @@ async fn scoped_schedule_controls_check_target_mode() {
             json!({"provider":"codex","modeId":"auto"}),
         )
         .await;
-    user_owned(&call("update_schedule", &allowed, json!({"prompt":"changed"})).await);
-    structured(&call("pause_schedule", &allowed, json!({})).await);
-    structured(&call("resume_schedule", &allowed, json!({})).await);
-    structured(&call("run_schedule_once", &allowed, json!({})).await);
+    user_owned(&call("schedule_update", &allowed, json!({"prompt":"changed"})).await);
+    structured(&call("schedule_pause", &allowed, json!({})).await);
+    structured(&call("schedule_resume", &allowed, json!({})).await);
+    structured(&call("schedule_run", &allowed, json!({})).await);
     let stored = scoped.stored(&allowed).await;
     assert_eq!(stored["prompt"], "report");
     assert_eq!(stored["runs"].as_array().unwrap().len(), 1, "{stored}");
@@ -282,9 +282,9 @@ async fn scoped_schedule_controls_check_target_mode() {
     let unset = scoped
         .user_schedule(&scoped.workspace, json!({"provider":"codex"}))
         .await;
-    unset_mode(&call("run_schedule_once", &unset, json!({})).await);
-    unset_mode(&call("resume_schedule", &unset, json!({})).await);
-    user_owned(&call("update_schedule", &unset, json!({"mode":"auto"})).await);
+    unset_mode(&call("schedule_run", &unset, json!({})).await);
+    unset_mode(&call("schedule_resume", &unset, json!({})).await);
+    user_owned(&call("schedule_update", &unset, json!({"modeId":"auto"})).await);
     let stored = scoped.stored(&unset).await;
     assert_eq!(stored["prompt"], "report");
     assert_eq!(stored["target"]["config"], json!({"provider":"codex"}));
@@ -298,7 +298,7 @@ async fn scoped_schedule_controls_check_target_mode() {
                 json!({"scheduleId":task,"newAgentConfig":{"modeId":"auto"}}),
             )
             .await;
-        structured(&call("run_schedule_once", task, json!({})).await);
+        structured(&call("schedule_run", task, json!({})).await);
         let stored = scoped.stored(task).await;
         assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");
         assert_eq!(stored["runs"].as_array().unwrap().len(), 1, "{stored}");
@@ -310,7 +310,7 @@ async fn scoped_schedule_controls_check_target_mode() {
             .call(
                 &bot,
                 None,
-                "create_schedule",
+                "schedule_create",
                 json!({"provider":"codex","prompt":"report","cron":CRON}),
             )
             .await,
@@ -326,7 +326,7 @@ async fn scoped_schedule_controls_check_target_mode() {
             .get("modeId")
             .is_none()
     );
-    structured(&call("run_schedule_once", &own, json!({})).await);
+    structured(&call("schedule_run", &own, json!({})).await);
     scoped.stop().await;
 }
 
@@ -340,7 +340,7 @@ async fn bot_cannot_create_heartbeat_targeting_itself() {
             .call(
                 &scoped.bot_credential(),
                 None,
-                "create_heartbeat",
+                "heartbeat_create",
                 heartbeat.clone(),
             )
             .await,
@@ -354,7 +354,7 @@ async fn bot_cannot_create_heartbeat_targeting_itself() {
         .call(
             &scoped.subtree_credential(&child),
             None,
-            "create_heartbeat",
+            "heartbeat_create",
             heartbeat.clone(),
         )
         .await;
@@ -382,7 +382,7 @@ async fn bot_cannot_create_heartbeat_targeting_itself() {
             .call(
                 &scoped.subtree_credential(&stray),
                 None,
-                "create_heartbeat",
+                "heartbeat_create",
                 heartbeat,
             )
             .await,

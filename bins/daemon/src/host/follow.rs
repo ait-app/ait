@@ -1,7 +1,7 @@
 //! Ports through which Workspace Bot tickets follow pull requests (ADR-287): pull requests are
 //! read with the host's forge CLI in the Bot's checkout, on a blocking thread and one at a time;
 //! a ticket's Agents come from the Agent registry, and inputs reach them through the same
-//! execution path as `send_agent_prompt`, only while the Agent is idle, so they never
+//! execution path as `agent_prompt`, only while the Agent is idle, so they never
 //! interrupt, steer into or queue behind a turn.
 
 use std::sync::{Arc, Mutex};

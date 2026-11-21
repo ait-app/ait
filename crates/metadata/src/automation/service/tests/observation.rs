@@ -22,6 +22,7 @@ fn state() -> crate::dispatch::State {
         daemon: None,
         directory: None,
         workspace_labels: None,
+        workspace_notepads: None,
         workspace_automation: Some(Arc::new(Mutex::new(service().0))),
         workspace_state: None,
         worktrees: None,

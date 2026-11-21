@@ -16,7 +16,7 @@ fn read_tools_are_routed_here_and_others_are_not() {
     for tool in ["bot_read", "ticket_read"] {
         assert!(handles(tool), "{tool}");
     }
-    for tool in ["bot_tickets", "workspace_overview", "get_agent_activity"] {
+    for tool in ["bot_ticket_list", "bot_overview", "agent_activity_read"] {
         assert!(!handles(tool), "{tool}");
     }
 }

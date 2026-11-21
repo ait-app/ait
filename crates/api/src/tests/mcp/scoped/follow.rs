@@ -87,7 +87,7 @@ impl Scoped {
             .call(
                 &bot,
                 None,
-                "create_agent",
+                "agent_create",
                 json!({"provider":"codex/offline-model","title":"Fix login",
                     "initialPrompt":"work on it"}),
             )
@@ -123,7 +123,7 @@ async fn a_worker_binds_the_pull_request_it_opened() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"progress","text":"opened the PR","pullRequest":"#12"}),
         )
         .await;
@@ -138,9 +138,7 @@ async fn a_worker_binds_the_pull_request_it_opened() {
     );
     let read = scoped.call(&worker, None, "ticket_read", json!({})).await;
     assert_eq!(structured(&read)["pulls"][0]["number"], 12);
-    let overview = scoped
-        .call(&bot, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&bot, None, "bot_overview", json!({})).await;
     assert_eq!(
         structured(&overview)["tickets"][0]["pulls"],
         json!([{"number":12,"state":"open","error":null}])
@@ -164,7 +162,7 @@ async fn a_pull_request_the_forge_cannot_confirm_is_refused_and_nothing_is_recor
         |reference: &str| json!({"kind":"progress","text":"opened the PR","pullRequest":reference});
 
     let unsupported = scoped
-        .call(&worker, None, "report_progress", report("12"))
+        .call(&worker, None, "ticket_report", report("12"))
         .await;
     scoped.bots.attach_follow(
         &tokio::runtime::Handle::current(),
@@ -172,13 +170,13 @@ async fn a_pull_request_the_forge_cannot_confirm_is_refused_and_nothing_is_recor
         Arc::new(Inbox::default()),
     );
     let missing = scoped
-        .call(&worker, None, "report_progress", report("#404"))
+        .call(&worker, None, "ticket_report", report("#404"))
         .await;
     let foreign = scoped
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             report("https://github.com/other/repo/pull/12"),
         )
         .await;
@@ -224,7 +222,7 @@ async fn a_blocked_workers_question_is_answered_by_the_bot_and_reaches_the_worke
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"progress","text":"x","question":"which?"}),
         )
         .await;
@@ -243,14 +241,12 @@ async fn a_blocked_workers_question_is_answered_by_the_bot_and_reaches_the_worke
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"blocked","text":"need credentials","question":"Which account?"}),
         )
         .await;
     assert!(succeeded(&blocked), "{blocked}");
-    let overview = scoped
-        .call(&bot, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&bot, None, "bot_overview", json!({})).await;
     assert_eq!(
         structured(&overview)["tickets"][0]["waiting"]["question"],
         "Which account?"
@@ -307,7 +303,7 @@ async fn another_conversation_cannot_bind_or_answer_on_the_owners_ticket() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"blocked","text":"need a decision","question":"Ship it?"}),
         )
         .await;
@@ -329,7 +325,9 @@ async fn another_conversation_cannot_bind_or_answer_on_the_owners_ticket() {
             json!({"ticketId":ticket,"answer":{"agentId":"agt_x","text":"yes"}}),
         )
         .await;
-    let listed = scoped.call(&stranger, None, "bot_tickets", json!({})).await;
+    let listed = scoped
+        .call(&stranger, None, "bot_ticket_list", json!({}))
+        .await;
 
     assert!(refusal(&bound).starts_with("This ticket belongs to another conversation"));
     assert!(refusal(&answered).starts_with("This ticket belongs to another conversation"));
@@ -367,7 +365,7 @@ async fn the_report_and_update_schemas_show_the_new_arguments() {
             .unwrap()["inputSchema"]["properties"]
             .clone()
     };
-    let report = schema(&listed, "report_progress");
+    let report = schema(&listed, "ticket_report");
     assert!(report.get("pullRequest").is_some() && report.get("question").is_some());
     let update = schema(&bot_listed, "bot_ticket_update");
     assert!(update.get("pullRequest").is_some() && update.get("answer").is_some());
@@ -389,5 +387,5 @@ async fn the_report_and_update_schemas_show_the_new_arguments() {
             .contains("setting a done or failed ticket to cancelled")
     );
     assert!(::bot::tickets::PULL_LIMIT_MESSAGE.contains("done or failed ticket to cancelled"));
-    assert!(description(&listed, "report_progress").contains("not instructions"));
+    assert!(description(&listed, "ticket_report").contains("not instructions"));
 }

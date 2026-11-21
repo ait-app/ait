@@ -4,6 +4,10 @@
  *
  * Labels are fixed text so truncation never hides them. Actions read verb-first
  * ("Send message"); the context goes in the summary.
+ *
+ * Entries are keyed by the current domain-first names. `FORMER_NAMES` maps the
+ * names the tools had before, which stored transcripts and call aliases keep.
+ * Renamed input fields are listed under both spellings for the same reason.
  */
 
 type ToolInput = Readonly<Record<string, unknown>>;
@@ -39,6 +43,7 @@ const WORKSPACE_FIELDS = [
 ] as const;
 const AGENT_FIELDS = [
   "title",
+  "name",
   "agentId",
   "provider",
   "workspaceId",
@@ -53,6 +58,8 @@ const AGENT_FIELDS = [
 ] as const;
 const AUTOMATION_FIELDS = [
   "name",
+  "scheduleId",
+  "heartbeatId",
   "id",
   "cron",
   "timezone",
@@ -86,7 +93,16 @@ const BROWSER_FIELDS = [
   "function",
 ] as const;
 
-const AUTOMATION_OUTPUT = ["id", "status", "nextRunAt", "expiresAt"] as const;
+const AUTOMATION_OUTPUT = [
+  "scheduleId",
+  "heartbeatId",
+  "id",
+  "status",
+  "nextRunAt",
+  "expiresAt",
+] as const;
+const SCHEDULE_ID = ["scheduleId", "id"] as const;
+const HEARTBEAT_ID = ["heartbeatId", "id"] as const;
 
 function field(...keys: string[]): PaseoToolContext {
   return (input) => keys.map((key) => input[key]).find(isPresent);
@@ -96,8 +112,8 @@ function targetAgent(): PaseoToolContext {
   return (_input, agent) => agent;
 }
 
-function fieldOrTargetAgent(key: string): PaseoToolContext {
-  return (input, agent) => (isPresent(input[key]) ? input[key] : agent);
+function fieldOrTargetAgent(...keys: string[]): PaseoToolContext {
+  return (input, agent) => keys.map((key) => input[key]).find(isPresent) ?? agent;
 }
 
 function workspaceContext(): PaseoToolContext {
@@ -127,9 +143,9 @@ function browser(label: string, context?: PaseoToolContext): PaseoToolEntry {
   return { label, ...(context ? { context } : {}), detail: { inputOrder: BROWSER_FIELDS } };
 }
 
-export const PASEO_TOOL_CATALOG = {
+const TOOLS = {
   // Agents
-  create_agent: {
+  agent_create: {
     label: "Create agent",
     context: field("title", "initialPrompt"),
     detail: {
@@ -138,7 +154,7 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: ["agentId", "status", "currentModeId", "cwd"],
     },
   },
-  send_agent_prompt: {
+  agent_prompt: {
     label: "Send message",
     context: field("prompt"),
     detail: {
@@ -147,66 +163,67 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: ["status", "lastMessage", "permission"],
     },
   },
-  get_agent_status: {
+  agent_get: {
     label: "Check agent",
     context: targetAgent(),
     detail: { inputOrder: ["agentId"] },
   },
-  get_agent_activity: {
+  agent_activity_read: {
     label: "Read agent activity",
     context: targetAgent(),
     detail: { inputOrder: ["agentId", "limit"] },
   },
-  wait_for_agent: {
+  agent_wait: {
     label: "Wait for agent",
     context: targetAgent(),
     detail: { inputOrder: ["agentId", "timeoutMs"] },
   },
-  list_agents: {
+  agent_list: {
     label: "List agents",
     detail: { inputOrder: ["cwd", "statuses", "sinceHours", "limit", "includeArchived"] },
   },
-  update_agent: {
+  agent_update: {
     label: "Update agent",
-    context: fieldOrTargetAgent("name"),
+    context: fieldOrTargetAgent("title", "name"),
     detail: { inputOrder: AGENT_FIELDS },
   },
-  set_agent_mode: {
+  agent_mode_set: {
     label: "Set agent mode",
     context: field("modeId"),
     detail: { inputOrder: ["agentId", "modeId"] },
   },
-  cancel_agent: {
+  agent_cancel: {
     label: "Cancel agent",
     context: targetAgent(),
     detail: { inputOrder: ["agentId"] },
   },
-  archive_agent: {
+  agent_archive: {
     label: "Archive agent",
     context: targetAgent(),
     detail: { inputOrder: ["agentId"] },
   },
+  // Now an alias of `agent_archive`; transcripts keep the label of the tool that was called.
   kill_agent: { label: "Kill agent", context: targetAgent(), detail: { inputOrder: ["agentId"] } },
-  list_pending_permissions: { label: "List permissions" },
-  respond_to_permission: {
+  permission_list: { label: "List permissions" },
+  permission_respond: {
     label: "Respond to permission",
     context: targetAgent(),
     detail: { inputOrder: ["agentId", "requestId", "response"] },
   },
 
   // Workspaces and scripts
-  create_workspace: {
+  workspace_create: {
     label: "Create workspace",
     context: workspaceContext(),
     detail: { inputOrder: WORKSPACE_FIELDS, outputFields: ["workspaceId", "projectId"] },
   },
-  list_workspaces: { label: "List workspaces" },
-  rename_workspace: {
+  workspace_list: { label: "List workspaces" },
+  workspace_rename: {
     label: "Rename workspace",
     context: field("title"),
     detail: { inputOrder: ["title", "workspaceId"] },
   },
-  archive_workspace: {
+  workspace_archive: {
     label: "Archive workspace",
     context: field("workspaceId"),
     detail: {
@@ -214,43 +231,74 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: ["workspaceId", "archivedAgentIds", "removedDirectory"],
     },
   },
-  list_workspace_scripts: { label: "List scripts", detail: { inputOrder: ["workspaceId"] } },
-  start_workspace_script: {
+  script_list: { label: "List scripts", detail: { inputOrder: ["workspaceId"] } },
+  script_start: {
     label: "Start script",
     context: field("scriptName"),
     detail: { inputOrder: ["workspaceId", "scriptName"] },
   },
-  stop_workspace_script: {
+  script_stop: {
     label: "Stop script",
     context: field("scriptName"),
     detail: { inputOrder: ["workspaceId", "scriptName"] },
   },
+  script_run_get: {
+    label: "Check script run",
+    context: field("scriptName", "runId"),
+    detail: { inputOrder: ["workspaceId", "scriptName", "runId"] },
+  },
+  script_run_wait: {
+    label: "Wait for script",
+    context: field("runId"),
+    detail: { inputOrder: ["workspaceId", "runId", "timeoutMs"] },
+  },
+
+  // Notepad
+  notepad_list: { label: "List notes", detail: { inputOrder: ["workspaceId", "since"] } },
+  notepad_read: {
+    label: "Read note",
+    context: field("key"),
+    detail: { inputOrder: ["key", "workspaceId", "offset", "limit"] },
+  },
+  notepad_write: {
+    label: "Write note",
+    context: field("key"),
+    detail: {
+      inputOrder: ["key", "workspaceId", "mode", "expected", "text"],
+      outputFields: ["accepted", "key", "revision", "notepadRevision", "error", "updatedBy"],
+    },
+  },
+  notepad_delete: {
+    label: "Delete note",
+    context: field("key"),
+    detail: { inputOrder: ["key", "workspaceId", "expected"] },
+  },
 
   // Terminals
-  create_terminal: {
+  terminal_create: {
     label: "Create terminal",
     context: field("name", "command"),
     detail: { inputOrder: ["cwd", "workspaceId", "name", "command"] },
   },
-  list_terminals: { label: "List terminals", detail: { inputOrder: ["cwd", "all"] } },
-  capture_terminal: {
+  terminal_list: { label: "List terminals", detail: { inputOrder: ["cwd", "all"] } },
+  terminal_capture: {
     label: "Read terminal",
     context: field("terminalId"),
     detail: { inputOrder: ["terminalId", "lines"] },
   },
-  send_terminal_keys: {
+  terminal_send: {
     label: "Send keys",
     context: field("keys"),
     detail: { inputOrder: ["terminalId", "keys", "literal"] },
   },
-  kill_terminal: {
+  terminal_kill: {
     label: "Kill terminal",
     context: field("terminalId"),
     detail: { inputOrder: ["terminalId"] },
   },
 
   // Schedules and heartbeats
-  create_schedule: {
+  schedule_create: {
     label: "Create schedule",
     context: field("name", "cron"),
     detail: {
@@ -259,7 +307,7 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: AUTOMATION_OUTPUT,
     },
   },
-  create_heartbeat: {
+  heartbeat_create: {
     label: "Create heartbeat",
     context: field("name", "cron"),
     detail: {
@@ -268,53 +316,58 @@ export const PASEO_TOOL_CATALOG = {
       outputFields: AUTOMATION_OUTPUT,
     },
   },
-  update_schedule: {
+  schedule_update: {
     label: "Update schedule",
-    context: field("name", "id"),
+    context: field("name", ...SCHEDULE_ID),
     detail: { promptField: "prompt", inputOrder: AUTOMATION_FIELDS },
   },
-  list_schedules: { label: "List schedules" },
-  inspect_schedule: {
+  schedule_list: { label: "List schedules" },
+  schedule_get: {
     label: "Inspect schedule",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: SCHEDULE_ID },
   },
-  schedule_logs: {
+  schedule_log_read: {
     label: "Read schedule logs",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: [...SCHEDULE_ID, "limit"] },
   },
-  run_schedule_once: {
+  schedule_run: {
     label: "Run schedule",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: SCHEDULE_ID },
   },
-  pause_schedule: { label: "Pause schedule", context: field("id"), detail: { inputOrder: ["id"] } },
-  resume_schedule: {
+  schedule_pause: {
+    label: "Pause schedule",
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: SCHEDULE_ID },
+  },
+  schedule_resume: {
     label: "Resume schedule",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: SCHEDULE_ID },
   },
-  delete_schedule: {
+  schedule_delete: {
     label: "Delete schedule",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...SCHEDULE_ID),
+    detail: { inputOrder: SCHEDULE_ID },
   },
-  delete_heartbeat: {
+  heartbeat_list: { label: "List heartbeats" },
+  heartbeat_delete: {
     label: "Delete heartbeat",
-    context: field("id"),
-    detail: { inputOrder: ["id"] },
+    context: field(...HEARTBEAT_ID),
+    detail: { inputOrder: HEARTBEAT_ID },
   },
 
   // Providers
-  list_providers: { label: "List providers" },
-  list_models: {
+  provider_list: { label: "List providers" },
+  provider_model_list: {
     label: "List models",
     context: field("provider"),
     detail: { inputOrder: ["provider"] },
   },
-  list_profiles: { label: "List profiles" },
-  inspect_provider: {
+  profile_list: { label: "List profiles" },
+  provider_get: {
     label: "Inspect provider",
     context: field("provider"),
     detail: { inputOrder: ["provider", "cwd", "settings"] },
@@ -344,6 +397,60 @@ export const PASEO_TOOL_CATALOG = {
   browser_logs: browser("Read browser logs"),
   browser_evaluate: browser("Run JavaScript", field("function")),
 } satisfies Record<string, PaseoToolEntry>;
+
+/** Former name to current name. Entries stay for as long as old transcripts can be opened. */
+const FORMER_NAMES = {
+  create_agent: "agent_create",
+  send_agent_prompt: "agent_prompt",
+  get_agent_status: "agent_get",
+  get_agent_activity: "agent_activity_read",
+  wait_for_agent: "agent_wait",
+  list_agents: "agent_list",
+  update_agent: "agent_update",
+  set_agent_mode: "agent_mode_set",
+  cancel_agent: "agent_cancel",
+  archive_agent: "agent_archive",
+  list_pending_permissions: "permission_list",
+  respond_to_permission: "permission_respond",
+  create_workspace: "workspace_create",
+  list_workspaces: "workspace_list",
+  rename_workspace: "workspace_rename",
+  archive_workspace: "workspace_archive",
+  list_workspace_scripts: "script_list",
+  start_workspace_script: "script_start",
+  stop_workspace_script: "script_stop",
+  get_workspace_script_run: "script_run_get",
+  wait_for_workspace_script: "script_run_wait",
+  create_terminal: "terminal_create",
+  list_terminals: "terminal_list",
+  capture_terminal: "terminal_capture",
+  send_terminal_keys: "terminal_send",
+  kill_terminal: "terminal_kill",
+  create_schedule: "schedule_create",
+  create_heartbeat: "heartbeat_create",
+  update_schedule: "schedule_update",
+  list_schedules: "schedule_list",
+  inspect_schedule: "schedule_get",
+  schedule_logs: "schedule_log_read",
+  run_schedule_once: "schedule_run",
+  pause_schedule: "schedule_pause",
+  resume_schedule: "schedule_resume",
+  delete_schedule: "schedule_delete",
+  delete_heartbeat: "heartbeat_delete",
+  list_providers: "provider_list",
+  list_models: "provider_model_list",
+  list_profiles: "profile_list",
+  inspect_provider: "provider_get",
+} satisfies Record<string, keyof typeof TOOLS>;
+
+type FormerPaseoToolName = keyof typeof FORMER_NAMES;
+
+export const PASEO_TOOL_CATALOG = {
+  ...TOOLS,
+  ...(Object.fromEntries(
+    Object.entries(FORMER_NAMES).map(([former, current]) => [former, TOOLS[current]]),
+  ) as Record<FormerPaseoToolName, PaseoToolEntry>),
+};
 
 export type PaseoToolName = keyof typeof PASEO_TOOL_CATALOG;
 

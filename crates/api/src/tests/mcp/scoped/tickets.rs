@@ -28,7 +28,7 @@ impl Scoped {
 
     /// Create an Agent through MCP as `bearer`, returning its id and the reported ticket.
     async fn started(&self, bearer: &str, arguments: Value) -> (String, Value) {
-        let created = self.call(bearer, None, "create_agent", arguments).await;
+        let created = self.call(bearer, None, "agent_create", arguments).await;
         let result = structured(&created);
         let agent = result["agent"]["id"].as_str().unwrap().to_owned();
         (agent, result["ticketId"].clone())
@@ -110,7 +110,7 @@ async fn bot_started_agent_opens_one_ticket_per_creation_key() {
     assert_eq!(scoped.ticket_count().await, 1);
     // The same key for another task is refused before anything is created.
     keyed["title"] = json!("Something else");
-    let conflict = scoped.call(&bot, None, "create_agent", keyed).await;
+    let conflict = scoped.call(&bot, None, "agent_create", keyed).await;
     assert_eq!(
         text(&conflict),
         model::ErrorCode::IdempotencyConflict.message()
@@ -140,7 +140,7 @@ async fn failed_creation_leaves_no_ticket_behind() {
     scoped.rpc("agent.create.request", taken.take()).await;
     let mut keyed = create("Conflicting");
     keyed["idempotencyKey"] = json!("taken");
-    let failed = scoped.call(&bot, None, "create_agent", keyed).await;
+    let failed = scoped.call(&bot, None, "agent_create", keyed).await;
     assert_eq!(
         text(&failed),
         model::ErrorCode::IdempotencyConflict.message()
@@ -167,8 +167,8 @@ async fn named_ticket_takes_another_agent_unless_closed_or_foreign() {
     for unknown in [json!(TicketId::generate()), json!("not-a-ticket")] {
         let mut foreign = create("Elsewhere");
         foreign["ticketId"] = unknown;
-        let refused = scoped.call(&bot, None, "create_agent", foreign).await;
-        assert!(text(&refused).contains("bot_tickets"), "{refused}");
+        let refused = scoped.call(&bot, None, "agent_create", foreign).await;
+        assert!(text(&refused).contains("bot_ticket_list"), "{refused}");
     }
     let closed = scoped
         .call(
@@ -180,7 +180,7 @@ async fn named_ticket_takes_another_agent_unless_closed_or_foreign() {
         .await;
     assert_eq!(structured(&closed)["ticket"]["status"], "done");
     assert_eq!(structured(&closed)["changed"], true);
-    let refused = scoped.call(&bot, None, "create_agent", joining).await;
+    let refused = scoped.call(&bot, None, "agent_create", joining).await;
     assert!(text(&refused).contains("closed"), "{refused}");
     assert_eq!(
         scoped.ticket(&ticket).await["assignments"]
@@ -212,7 +212,7 @@ async fn subtree_children_inherit_the_ticket_and_nobody_else_chooses_one() {
     for token in [credential.as_str(), TOKEN] {
         rejected(
             &scoped
-                .call(token, None, "create_agent", named.clone())
+                .call(token, None, "agent_create", named.clone())
                 .await,
             "Arguments do not match the tool input schema",
         );
@@ -221,15 +221,15 @@ async fn subtree_children_inherit_the_ticket_and_nobody_else_chooses_one() {
     forged["labels"] = json!({BOT_TICKET_LABEL:other});
     let mut host = forged.clone();
     host["workspaceId"] = json!(scoped.workspace);
-    forbidden(&scoped.call(&credential, None, "create_agent", forged).await);
-    forbidden(&scoped.call(TOKEN, None, "create_agent", host).await);
+    forbidden(&scoped.call(&credential, None, "agent_create", forged).await);
+    forbidden(&scoped.call(TOKEN, None, "agent_create", host).await);
     for token in [credential.as_str(), TOKEN] {
         forbidden(
             &scoped
                 .call(
                     token,
                     None,
-                    "update_agent",
+                    "agent_update",
                     json!({"agentId":child,"labels":{BOT_TICKET_LABEL:other}}),
                 )
                 .await,
@@ -256,7 +256,7 @@ async fn subtree_children_inherit_the_ticket_and_nobody_else_chooses_one() {
         .call(
             &late_credential,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"progress","text":"started"}),
         )
         .await;
@@ -268,7 +268,7 @@ async fn subtree_children_inherit_the_ticket_and_nobody_else_chooses_one() {
     scoped.stop().await;
 }
 
-/// The `create_agent` input schema properties `bearer` sees.
+/// The `agent_create` input schema properties `bearer` sees.
 async fn create_agent_properties(scoped: &Scoped, bearer: &str) -> Value {
     let listed: Value = scoped
         .post(bearer, None, "tools/list", json!({}))
@@ -280,7 +280,7 @@ async fn create_agent_properties(scoped: &Scoped, bearer: &str) -> Value {
         .as_array()
         .unwrap()
         .iter()
-        .find(|tool| tool["name"] == "create_agent")
+        .find(|tool| tool["name"] == "agent_create")
         .map(|tool| tool["inputSchema"]["properties"].clone())
         .unwrap()
 }
@@ -291,16 +291,16 @@ async fn ticket_tools_are_visible_only_to_their_callers() {
     let (worker, _) = scoped.started(&bot, create("Fix login")).await;
     let worker = scoped.session_credential(&worker).await;
     let plain = scoped.subtree_credential(&scoped.subtree_agent().await);
-    let bot_tools = ["bot_tickets", "bot_ticket_update"];
+    let bot_tools = ["bot_ticket_list", "bot_ticket_update"];
     let listed = scoped.tools(&bot).await;
     assert!(bot_tools.iter().all(|tool| listed.contains(*tool)));
-    assert!(!listed.contains("report_progress"));
+    assert!(!listed.contains("ticket_report"));
     let listed = scoped.tools(&worker).await;
-    assert!(listed.contains("report_progress"));
+    assert!(listed.contains("ticket_report"));
     assert!(bot_tools.iter().all(|tool| !listed.contains(*tool)));
     for bearer in [plain.as_str(), TOKEN] {
         let listed = scoped.tools(bearer).await;
-        for tool in bot_tools.iter().chain(&["report_progress"]) {
+        for tool in bot_tools.iter().chain(&["ticket_report"]) {
             assert!(!listed.contains(*tool), "{tool}");
         }
         rejected(
@@ -308,7 +308,7 @@ async fn ticket_tools_are_visible_only_to_their_callers() {
                 .call(
                     bearer,
                     None,
-                    "report_progress",
+                    "ticket_report",
                     json!({"kind":"done","text":"x"}),
                 )
                 .await,
@@ -320,7 +320,7 @@ async fn ticket_tools_are_visible_only_to_their_callers() {
             .call(
                 &bot,
                 None,
-                "report_progress",
+                "ticket_report",
                 json!({"kind":"done","text":"x"}),
             )
             .await,
@@ -348,7 +348,7 @@ async fn worker_reports_are_recorded_and_only_outcomes_notify_the_bot() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             report("progress", "found the bug"),
         )
         .await;
@@ -359,22 +359,17 @@ async fn worker_reports_are_recorded_and_only_outcomes_notify_the_bot() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             report("blocked", "which account?"),
         )
         .await;
     assert_eq!(structured(&blocked)["ticketStatus"], "waiting");
     let done = scoped
-        .call(&worker, None, "report_progress", report("done", "fixed"))
+        .call(&worker, None, "ticket_report", report("done", "fixed"))
         .await;
     assert_eq!(structured(&done)["ticketStatus"], "open");
     let failed = scoped
-        .call(
-            &worker,
-            None,
-            "report_progress",
-            report("failed", "gave up"),
-        )
+        .call(&worker, None, "ticket_report", report("failed", "gave up"))
         .await;
     assert!(succeeded(&failed), "{failed}");
     assert_eq!(
@@ -413,7 +408,7 @@ async fn worker_reports_are_recorded_and_only_outcomes_notify_the_bot() {
         )
         .await;
     let refused = scoped
-        .call(&worker, None, "report_progress", report("done", "late"))
+        .call(&worker, None, "ticket_report", report("done", "late"))
         .await;
     assert!(text(&refused).contains("not recorded"), "{refused}");
     scoped.stop().await;
@@ -423,7 +418,7 @@ async fn worker_reports_are_recorded_and_only_outcomes_notify_the_bot() {
 async fn bot_ticket_tools_list_close_and_guide() {
     let (scoped, _, bot) = Scoped::ticketed().await;
     let (_, ticket) = scoped.started(&bot, create("Fix login")).await;
-    let listed = scoped.call(&bot, None, "bot_tickets", json!({})).await;
+    let listed = scoped.call(&bot, None, "bot_ticket_list", json!({})).await;
     assert_eq!(structured(&listed)["tickets"][0]["id"], ticket);
     let update = |arguments: Value| scoped.call(&bot, None, "bot_ticket_update", arguments);
     let renamed =
@@ -434,14 +429,14 @@ async fn bot_ticket_tools_list_close_and_guide() {
     let stray = update(json!({"ticketId":ticket,"status":"open","outcome":"x"})).await;
     assert!(text(&stray).contains("at least one"), "{stray}");
     let unknown = update(json!({"ticketId":TicketId::generate(),"status":"done"})).await;
-    assert!(text(&unknown).contains("bot_tickets"), "{unknown}");
+    assert!(text(&unknown).contains("bot_ticket_list"), "{unknown}");
     update(json!({"ticketId":ticket,"status":"done"})).await;
     let conflict = update(json!({"ticketId":ticket,"status":"failed"})).await;
     assert!(text(&conflict).contains("reopen"), "{conflict}");
-    let open = scoped.call(&bot, None, "bot_tickets", json!({})).await;
+    let open = scoped.call(&bot, None, "bot_ticket_list", json!({})).await;
     assert_eq!(structured(&open)["tickets"], json!([]));
     let closed = scoped
-        .call(&bot, None, "bot_tickets", json!({"includeClosed":true}))
+        .call(&bot, None, "bot_ticket_list", json!({"includeClosed":true}))
         .await;
     assert_eq!(structured(&closed)["tickets"][0]["status"], "done");
     scoped.stop().await;
@@ -461,13 +456,11 @@ async fn overview_lists_open_tickets_with_live_agent_status() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"progress","text":"halfway"}),
         )
         .await;
-    let overview = scoped
-        .call(&bot, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&bot, None, "bot_overview", json!({})).await;
     let tickets = structured(&overview)["tickets"].as_array().unwrap().clone();
     assert_eq!(tickets.len(), 2, "{tickets:?}");
     let listed = tickets.iter().find(|entry| entry["id"] == ticket).unwrap();
@@ -494,9 +487,7 @@ async fn overview_lists_open_tickets_with_live_agent_status() {
             json!({"ticketId":ticket,"status":"done"}),
         )
         .await;
-    let overview = scoped
-        .call(&bot, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&bot, None, "bot_overview", json!({})).await;
     let tickets = &structured(&overview)["tickets"];
     assert_eq!(tickets.as_array().unwrap().len(), 1, "{tickets}");
     assert_eq!(tickets[0]["id"], foreign);
@@ -549,7 +540,7 @@ async fn a_worker_reporting_done_wakes_the_bot_in_the_conversation_that_asked() 
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"done","text":"login fixed"}),
         )
         .await;
@@ -597,7 +588,7 @@ impl Scoped {
         self.call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":kind,"text":text}),
         )
         .await
@@ -662,7 +653,7 @@ async fn the_open_limit_closes_tickets_whose_agents_are_all_archived_before_refu
     // Nothing else is evidently over: the next ticket beyond the limit is refused with guidance.
     scoped.fill_tickets(2).await;
     let refused = scoped
-        .call(&bot, None, "create_agent", create("One too many"))
+        .call(&bot, None, "agent_create", create("One too many"))
         .await;
     let guidance = text(&refused);
     assert!(guidance.contains("bot_ticket_update"), "{guidance}");
@@ -686,7 +677,7 @@ async fn giving_an_agent_more_work_reopens_its_closed_ticket() {
         .call(
             &bot,
             None,
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":agent,"prompt":"also fix the logout page"}),
         )
         .await;
@@ -719,7 +710,7 @@ async fn giving_an_agent_more_work_reopens_its_closed_ticket() {
         .call(
             &bot,
             None,
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":agent,"prompt":"and the signup page"}),
         )
         .await;
@@ -734,7 +725,7 @@ async fn giving_an_agent_more_work_reopens_its_closed_ticket() {
         .call(
             &bot,
             None,
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":agent,"prompt":"and the password page"}),
         )
         .await;

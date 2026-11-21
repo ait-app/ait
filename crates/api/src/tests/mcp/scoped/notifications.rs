@@ -33,7 +33,7 @@ async fn overview_lists_unseen_notifications_of_the_calling_conversation() {
     let conversation = scoped.conversation().await;
     let credential = scoped.bot_credential_in(conversation);
     let overview = scoped
-        .call(&credential, None, "workspace_overview", json!({}))
+        .call(&credential, None, "bot_overview", json!({}))
         .await;
     assert_eq!(structured(&overview)["notifications"], json!([]));
 
@@ -44,7 +44,7 @@ async fn overview_lists_unseen_notifications_of_the_calling_conversation() {
         .unwrap();
     assert_eq!(admitted, Notified::Admitted);
     let overview = scoped
-        .call(&credential, None, "workspace_overview", json!({}))
+        .call(&credential, None, "bot_overview", json!({}))
         .await;
     let listed = &structured(&overview)["notifications"];
     assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
@@ -68,12 +68,7 @@ async fn overview_lists_unseen_notifications_of_the_calling_conversation() {
 
     // A session of a conversation the Bot no longer has gets no notification list.
     let stale = scoped
-        .call(
-            &scoped.bot_credential(),
-            None,
-            "workspace_overview",
-            json!({}),
-        )
+        .call(&scoped.bot_credential(), None, "bot_overview", json!({}))
         .await;
     assert!(structured(&stale)["notifications"].is_null());
     scoped.stop().await;
@@ -150,7 +145,7 @@ async fn agents_a_completed_bot_turn_read_settled_do_not_wake_its_conversation_a
     let turn = &sent["turn"]["id"];
     turn_reaches(&scoped, turn, "running").await;
     let mut agents = Vec::new();
-    for tool in ["get_agent_status", "wait_for_agent", "get_agent_activity"] {
+    for tool in ["agent_get", "agent_wait", "agent_activity_read"] {
         let agent = scoped.subtree_agent().await;
         let result = scoped
             .call(&credential, None, tool, json!({"agentId":agent}))
@@ -162,12 +157,7 @@ async fn agents_a_completed_bot_turn_read_settled_do_not_wake_its_conversation_a
     // Only the Bot's own sessions observe; an Agent of its subtree reading it does not.
     let subtree = scoped.subtree_credential(&unread);
     let read = scoped
-        .call(
-            &subtree,
-            None,
-            "get_agent_status",
-            json!({"agentId":unread}),
-        )
+        .call(&subtree, None, "agent_get", json!({"agentId":unread}))
         .await;
     assert!(succeeded(&read), "{read}");
     for (tool, agent) in &agents {

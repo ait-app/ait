@@ -90,7 +90,7 @@ fn phase_two_bot_json_loads_with_default_permissions() {
     let value = serde_json::to_value(&bot).unwrap();
     assert_eq!(
         value["permissions"],
-        serde_json::json!({"groups": ["observe", "agents", "stop", "schedules"], "modes": {}})
+        serde_json::json!({"groups": ["observe", "agents", "stop", "schedules", "notepad"], "modes": {}})
     );
 }
 

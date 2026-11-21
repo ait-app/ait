@@ -81,6 +81,14 @@ export function serverInfo(
       BOT_METHODS.every(has) &&
       BOT_TICKET_METHODS.every(has) &&
       BOT_TICKET_ANSWER_METHODS.every(has),
+    // The notepad tools and Bot permission group arrived with these methods; older daemons
+    // reject the `notepad` group.
+    workspaceNotepad: supports([
+      "workspace.notepad.list.request",
+      "workspace.notepad.get.request",
+      "workspace.notepad.write.request",
+      "workspace.notepad.delete.request",
+    ]),
     workspaceBotFeishuSetup:
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&

@@ -57,16 +57,16 @@ CHILD = {"provider": "codex/offline-model", "title": "Bot child", "initialPrompt
 SCOPE_PROBES = {
     "ait-bot-probe": ("bot-probe", [
         ("tools/list", {}),
-        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
-        tool("create_agent", CHILD),
-        tool("create_schedule", {"provider": "codex/offline-model", "prompt": "scheduled task",
+        tool("agent_create", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("agent_create", CHILD),
+        tool("schedule_create", {"provider": "codex/offline-model", "prompt": "scheduled task",
                                  "cron": "0 9 * * *"}),
     ]),
     "ait-scope-probe": ("scope-probe", [
-        tool("respond_to_permission", {"agentId": "agent", "requestId": "request", "response": {}}),
-        tool("archive_workspace", {"workspaceId": "workspace"}),
-        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
-        tool("list_agents", {}),
+        tool("permission_respond", {"agentId": "agent", "requestId": "request", "response": {}}),
+        tool("workspace_archive", {"workspaceId": "workspace"}),
+        tool("agent_create", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("agent_list", {}),
     ]),
 }
 
@@ -87,16 +87,16 @@ def probe_agent_mcp():
         return "mcp-not-injected"
     headers, rpc = agent_mcp_client()
     catalog = rpc("tools/list", {})
-    assert any(tool["name"] == "rename_workspace" for tool in catalog["result"]["tools"])
-    renamed = rpc("tools/call", {"name": "rename_workspace", "arguments": {"title": "Renamed through injected MCP"}})
+    assert any(tool["name"] == "workspace_rename" for tool in catalog["result"]["tools"])
+    renamed = rpc("tools/call", {"name": "workspace_rename", "arguments": {"title": "Renamed through injected MCP"}})
     assert renamed["result"]["isError"] is False, renamed
     child_path = root / "mcp-injection-child.json"
     if not child_path.exists():
-        created = rpc("tools/call", {"name": "create_agent", "arguments": {
+        created = rpc("tools/call", {"name": "agent_create", "arguments": {
             "provider": "codex/offline-model", "title": "Injected MCP child", "initialPrompt": "child task"}})
         assert created["result"]["isError"] is False, created
         child = created["result"]["structuredContent"]
-        waited = rpc("tools/call", {"name": "wait_for_agent", "arguments": {"agentId": child["agentId"]}})
+        waited = rpc("tools/call", {"name": "agent_wait", "arguments": {"agentId": child["agentId"]}})
         assert waited["result"]["isError"] is False, waited
         assert waited["result"]["structuredContent"]["lastMessage"] == "Echo: child task", waited
         child_path.write_text(json.dumps(child))

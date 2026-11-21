@@ -5,6 +5,7 @@ pub mod git;
 pub mod label_store;
 pub mod lifecycle;
 pub mod naming;
+pub mod notepad;
 pub mod provisioning;
 pub mod registry;
 pub mod runtime;

@@ -372,7 +372,7 @@ impl AgentRunner {
             return Ok(None);
         };
         let permissions = self.scopes.grant(root).permissions;
-        if !permissions.allows("create_schedule", Holder::Subtree) {
+        if !permissions.allows("schedule_create", Holder::Subtree) {
             return Err(REVOKED);
         }
         match &schedule.target {

@@ -31,6 +31,13 @@ const UNSET_MODE: &str = "This schedule has no explicit mode, so it would run at
 const USER_SCHEDULE: &str = "Only schedules created by the Workspace Bot can be edited; ask the \
     user to change this schedule in Ait";
 
+/// Refusal for a caller restricted to an external conversation's work; the notepad would show it
+/// what other conversations wrote.
+const RESTRICTED_NOTEPAD: &str = "The workspace notepad is shared by the whole workspace, so \
+    this conversation and the agents working for it may not use it; only the workspace owner's \
+    Ait conversation and its agents read and write the notepad. Keep notes for this task in \
+    your ticket reports instead";
+
 /// Why a tool call failed: a stable error code, or a scope refusal that guides the caller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Failure {
@@ -138,34 +145,40 @@ enum Rule {
     CreateSchedule,
     /// Heartbeat targeting a subtree caller in a scoped Workspace; Bot sessions cannot be targets.
     CreateHeartbeat,
+    /// A Workspace notepad in scope, defaulting to the caller's own Workspace; refused for
+    /// callers restricted to an external conversation's work.
+    Notepad,
 }
 
 /// Return the rule of `tool`; tools must be registered here explicitly to be usable.
 fn rule(tool: &str) -> Option<Rule> {
     Some(match tool {
-        "list_profiles" | "list_providers" | "bot_memory_read" | "bot_memory_update"
-        | "workspace_overview" | "bot_tickets" | "bot_ticket_update" | "report_progress"
-        | "bot_read" | "ticket_read" => Rule::Open,
-        "list_agents" | "list_pending_permissions" | "list_schedules" => Rule::Listing,
-        "list_models" | "inspect_provider" => Rule::RootDirectory,
-        "create_agent" => Rule::CreateAgent,
-        "send_agent_prompt" | "cancel_agent" | "archive_agent" | "kill_agent"
-        | "get_agent_status" | "get_agent_activity" | "wait_for_agent" => Rule::Agent,
-        "set_agent_mode" => Rule::AgentMode,
-        "update_agent" => Rule::UpdateAgent,
-        "list_workspace_scripts"
-        | "start_workspace_script"
-        | "stop_workspace_script"
-        | "get_workspace_script_run"
-        | "wait_for_workspace_script" => Rule::Workspace,
-        "list_terminals" | "create_terminal" => Rule::RootWorkspace,
-        "kill_terminal" | "capture_terminal" | "send_terminal_keys" => Rule::Terminal,
-        "inspect_schedule" | "pause_schedule" | "delete_schedule" | "schedule_logs"
-        | "delete_heartbeat" => Rule::Schedule,
-        "run_schedule_once" | "resume_schedule" => Rule::ScheduleControl,
-        "update_schedule" => Rule::UpdateSchedule,
-        "create_schedule" => Rule::CreateSchedule,
-        "create_heartbeat" => Rule::CreateHeartbeat,
+        "profile_list" | "provider_list" | "bot_memory_read" | "bot_memory_update"
+        | "bot_overview" | "bot_ticket_list" | "bot_ticket_update" | "ticket_report"
+        | "bot_read" | "ticket_read" | "heartbeat_list" => Rule::Open,
+        "notepad_list" | "notepad_read" | "notepad_write" | "notepad_delete" => Rule::Notepad,
+        "agent_list" | "permission_list" | "schedule_list" => Rule::Listing,
+        "provider_model_list" | "provider_get" => Rule::RootDirectory,
+        "agent_create" => Rule::CreateAgent,
+        "agent_prompt"
+        | "agent_cancel"
+        | "agent_archive"
+        | "agent_get"
+        | "agent_activity_read"
+        | "agent_wait" => Rule::Agent,
+        "agent_mode_set" => Rule::AgentMode,
+        "agent_update" => Rule::UpdateAgent,
+        "script_list" | "script_start" | "script_stop" | "script_run_get" | "script_run_wait" => {
+            Rule::Workspace
+        }
+        "terminal_list" | "terminal_create" => Rule::RootWorkspace,
+        "terminal_kill" | "terminal_capture" | "terminal_send" => Rule::Terminal,
+        "schedule_get" | "schedule_pause" | "schedule_delete" | "schedule_log_read"
+        | "heartbeat_delete" => Rule::Schedule,
+        "schedule_run" | "schedule_resume" => Rule::ScheduleControl,
+        "schedule_update" => Rule::UpdateSchedule,
+        "schedule_create" => Rule::CreateSchedule,
+        "heartbeat_create" => Rule::CreateHeartbeat,
         _ => return None,
     })
 }
@@ -242,6 +255,7 @@ pub(super) async fn confine(
             record_origin(scope.origin(context), arguments);
             active(state, workspace).await.map(drop)
         }
+        Rule::Notepad => return notepad(state, scope, arguments, context).await,
         Rule::Terminal => terminal(state, scope, arguments).await,
         rule @ (Rule::Schedule | Rule::ScheduleControl | Rule::UpdateSchedule) => {
             let schedule = schedule(state, scope, arguments).await?;
@@ -295,7 +309,7 @@ async fn reachable(
 
 /// Remove out-of-scope entries from list results that cannot be filtered at the source.
 pub(super) fn filter(scope: &Scope, tool: &str, result: &mut Value) {
-    if tool != "list_schedules" {
+    if tool != "schedule_list" {
         return;
     }
     if let Some(schedules) = result.get_mut("schedules").and_then(Value::as_array_mut) {
@@ -330,7 +344,7 @@ fn admit(tool: &str, arguments: &Value) -> Result<Rule, ErrorCode> {
     Ok(rule)
 }
 
-/// Place, label and cap a scoped `create_agent`.
+/// Place, label and cap a scoped `agent_create`.
 ///
 /// The Workspace defaults to the caller's own Workspace for subtree callers (`inherited`) and to
 /// the root for Bot sessions. Created Agents carry `BOT_SCOPE_LABEL = root`, so their sessions
@@ -374,7 +388,7 @@ fn record_origin(origin: Option<ConversationId>, arguments: &mut Value) {
     }
 }
 
-/// Cap `update_agent` settings by the resolved `agent`'s provider and refuse reserved labels.
+/// Cap `agent_update` settings by the resolved `agent`'s provider and refuse reserved labels.
 /// # Errors
 /// Returns `Forbidden` for reserved labels, features or a mode outside the cap.
 fn cap_update_agent(scope: &Scope, agent: &Value, arguments: &Value) -> Result<(), ErrorCode> {
@@ -386,7 +400,7 @@ fn cap_update_agent(scope: &Scope, agent: &Value, arguments: &Value) -> Result<(
     }
 }
 
-/// Cap `set_agent_mode` by the resolved `agent`'s provider.
+/// Cap `agent_mode_set` by the resolved `agent`'s provider.
 /// # Errors
 /// Returns `Forbidden` for a mode outside the cap.
 fn cap_agent_mode(scope: &Scope, agent: &Value, arguments: &Value) -> Result<(), ErrorCode> {
@@ -402,7 +416,7 @@ fn cap_target(permissions: &BotPermissions, agent: &Value, mode: &Value) -> Resu
         .map_err(|_| ErrorCode::Forbidden)
 }
 
-/// Require `create_agent`'s provider and `settings.modeId` to be within `permissions`' cap,
+/// Require `agent_create`'s provider and `settings.modeId` to be within `permissions`' cap,
 /// selecting the provider's default mode when none is requested.
 /// # Errors
 /// Returns `InvalidMessage` for a malformed provider and `Forbidden` outside the cap.
@@ -418,7 +432,7 @@ fn cap_mode(permissions: &BotPermissions, arguments: &mut Value) -> Result<(), E
     Ok(())
 }
 
-/// Place a scoped `create_schedule` at its provider's default mode and in the Bot scope.
+/// Place a scoped `schedule_create` at its provider's default mode and in the Bot scope.
 ///
 /// The provider defaults to the subtree caller's own (`inherited`). The mode and scope are passed
 /// as `modeId` and `botScope`, which the tool schema does not let callers supply themselves.
@@ -489,7 +503,7 @@ fn cap_schedule(permissions: &BotPermissions, schedule: &Value) -> Result<(), Fa
     Ok(())
 }
 
-/// Cap the provider and mode an `update_schedule` patch sets on `schedule`.
+/// Cap the provider and mode an `schedule_update` patch sets on `schedule`.
 ///
 /// `mode: null` and a provider change without a mode select the provider's default mode, which
 /// is written into the patch, so a patched task always stores an allowed mode.
@@ -505,14 +519,16 @@ fn cap_schedule_update(
 ) -> Result<bool, ErrorCode> {
     let provider = match arguments.get("provider") {
         Some(patch) => creation::provider_model(patch, false)?.0.to_owned(),
-        None if arguments.get("mode").is_some() => text(&schedule["target"]["config"]["provider"])?,
+        None if arguments.get("modeId").is_some() => {
+            text(&schedule["target"]["config"]["provider"])?
+        }
         None => return Ok(false),
     };
-    let requested = arguments.get("mode").and_then(Value::as_str);
+    let requested = arguments.get("modeId").and_then(Value::as_str);
     let mode = permissions
         .mode(&provider, requested)
         .map_err(|_| ErrorCode::Forbidden)?;
-    arguments["mode"] = json!(mode);
+    arguments["modeId"] = json!(mode);
     Ok(true)
 }
 
@@ -560,7 +576,7 @@ async fn terminal(state: &Shared, scope: &Scope, arguments: &mut Value) -> Resul
     active(state, &workspace).await.map(drop)
 }
 
-/// Resolve schedule `arguments.id`, confine it to the scoped Workspaces and return its document.
+/// Resolve schedule `arguments.scheduleId`, confine it to the scoped Workspaces and return its document.
 async fn schedule(
     state: &Shared,
     scope: &Scope,
@@ -569,20 +585,51 @@ async fn schedule(
     let mut snapshot = rpc::execute(
         state,
         "schedule.inspect.request",
-        json!({"scheduleId":arguments["id"]}),
+        json!({"scheduleId":arguments["scheduleId"]}),
     )
     .await?;
     let schedule = snapshot["schedule"].take();
     let id = text(&schedule["id"])?;
     retarget(
         scope,
-        "id",
+        "scheduleId",
         schedule["workspaceId"].as_str(),
         &id,
         arguments,
     )?;
     active(state, &text(&schedule["workspaceId"])?).await?;
     Ok(schedule)
+}
+
+/// Place a notepad call in the caller's own Workspace unless it names another one in scope: a
+/// subtree caller's is that of its Agent record `context`, a Bot session's the root.
+///
+/// The notepad is shared by the whole Workspace, so a caller restricted to an external
+/// conversation's work may not use it (ADR-296).
+/// # Errors
+/// Returns the notepad refusal for a restricted caller, `Forbidden` for a foreign or archived
+/// Workspace, and propagates lookup and Bot failures.
+async fn notepad(
+    state: &Shared,
+    scope: &Scope,
+    arguments: &mut Value,
+    context: Option<&Value>,
+) -> Result<(), Failure> {
+    let sight = recall::sight(state, scope, context).await?;
+    if recall::external(sight.as_ref()) {
+        return Err(Failure::Refused(RESTRICTED_NOTEPAD));
+    }
+    let workspace = match arguments.get("workspaceId") {
+        Some(workspace) => text(workspace)?,
+        None => context
+            .and_then(|agent| agent["workspaceId"].as_str())
+            .unwrap_or(scope.caller.root.as_str())
+            .to_owned(),
+    };
+    scope.contains(Some(&workspace))?;
+    active(state, &workspace).await?;
+    arguments["workspaceId"] = json!(workspace);
+    Ok(())
 }
 
 /// Return the descriptor of unarchived Workspace `id`.

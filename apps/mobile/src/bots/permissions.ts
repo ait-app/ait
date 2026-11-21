@@ -2,17 +2,23 @@ import type { BotPermissions, BotToolGroup } from "@ait/protocol/bot/types";
 import type { BotSessionSupport, ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import { getUnattendedModeId } from "@ait/protocol/provider-manifest";
 
-const DEFAULT_GROUPS: BotToolGroup[] = ["observe", "agents", "stop", "schedules"];
+const DEFAULT_GROUPS: BotToolGroup[] = ["observe", "agents", "stop", "schedules", "notepad"];
 
-/** Default profile: default groups and, per ready provider, its default attended mode. */
-export function defaultBotPermissions(providers: ProviderSnapshotEntry[]): BotPermissions {
+/**
+ * Default profile: default groups and, per ready provider, its default attended mode. A host
+ * without the workspace notepad rejects the `notepad` group, so it is left out there.
+ */
+export function defaultBotPermissions(
+  providers: ProviderSnapshotEntry[],
+  notepad: boolean,
+): BotPermissions {
   const modes: Record<string, string[]> = {};
   for (const entry of providers) {
     if (entry.status !== "ready" || !entry.enabled) continue;
     const mode = defaultAgentMode(entry);
     if (mode) modes[entry.provider] = [mode];
   }
-  return { groups: [...DEFAULT_GROUPS], modes };
+  return { groups: DEFAULT_GROUPS.filter((group) => notepad || group !== "notepad"), modes };
 }
 
 /** The provider's default mode, or its first attended one when the default is unattended. */

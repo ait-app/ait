@@ -403,7 +403,7 @@ fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
 
 #[test]
 fn only_worker_credentials_on_additive_adapters_preapprove_the_worker_tools() {
-    let report = json!({"kind":"mcp","server":"ait","tool":"report_progress"});
+    let report = json!({"kind":"mcp","server":"ait","tool":"ticket_report"});
     let read = json!({"kind":"mcp","server":"ait","tool":"ticket_read"});
     let docs = json!({"kind":"mcp","server":"docs","tool":"search"});
     let scopes = FakeScopes::new(Grant::Shared);

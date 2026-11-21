@@ -60,25 +60,25 @@ fn bot_only_tools_are_granted_to_bot_sessions_but_never_to_subtrees() {
     let bot = scope(bot(), BotPermissions::default());
     let subtree = scope(subtree(), BotPermissions::default());
     for granted in [&bot, &subtree] {
-        assert!(granted.allows("list_agents"));
-        assert!(granted.allows("create_agent"));
-        assert!(!granted.allows("create_terminal"));
-        assert!(!granted.allows("respond_to_permission"));
+        assert!(granted.allows("agent_list"));
+        assert!(granted.allows("agent_create"));
+        assert!(!granted.allows("terminal_create"));
+        assert!(!granted.allows("permission_respond"));
         assert!(!granted.allows("future_tool"));
     }
     assert!(bot.allows("bot_memory_read"));
     assert!(!subtree.allows("bot_memory_read"));
     let worker = scope(worker(), BotPermissions::default());
-    assert!(worker.allows("create_agent"));
-    assert!(!worker.allows("bot_tickets"));
-    for tool in ["bot_tickets", "bot_ticket_update"] {
+    assert!(worker.allows("agent_create"));
+    assert!(!worker.allows("bot_ticket_list"));
+    for tool in ["bot_ticket_list", "bot_ticket_update"] {
         assert!(bot.allows(tool), "{tool}");
         assert!(!subtree.allows(tool), "{tool}");
     }
-    assert!(worker.allows("report_progress"));
-    assert!(!subtree.allows("report_progress"));
-    assert!(!bot.allows("report_progress"));
-    for tool in ["bot_tickets", "bot_ticket_update", "report_progress"] {
+    assert!(worker.allows("ticket_report"));
+    assert!(!subtree.allows("ticket_report"));
+    assert!(!bot.allows("ticket_report"));
+    for tool in ["bot_ticket_list", "bot_ticket_update", "ticket_report"] {
         assert_eq!(admit(tool, &json!({})), Ok(Rule::Open), "{tool}");
     }
 }
@@ -91,7 +91,7 @@ fn script_run_reads_are_observe_tools_confined_to_scoped_workspaces() {
     };
     for kind in [bot(), subtree()] {
         let scope = scope(kind, observe_only.clone());
-        for tool in ["get_workspace_script_run", "wait_for_workspace_script"] {
+        for tool in ["script_run_get", "script_run_wait"] {
             assert!(scope.allows(tool), "{tool}");
             assert_eq!(
                 admit(tool, &json!({"workspaceId":ROOT})),
@@ -102,7 +102,7 @@ fn script_run_reads_are_observe_tools_confined_to_scoped_workspaces() {
                 Err(ErrorCode::Forbidden)
             );
         }
-        assert!(!scope.allows("start_workspace_script"));
+        assert!(!scope.allows("script_start"));
         assert_eq!(scope.contains(Some(ROOT)), Ok(()));
         assert_eq!(scope.contains(Some("wks_other")), Err(ErrorCode::Forbidden));
     }
@@ -253,10 +253,10 @@ fn mode_cap_covers_every_execution_entry() {
         );
     }
     let allowed = json!({"agentId":"agent","settings":{"modeId":"auto",
-        "features":{"fast_mode":false}},"name":"Renamed"});
+        "features":{"fast_mode":false}},"title":"Renamed"});
     cap_update_agent(&bot, &target, &allowed).unwrap();
     // A pure display change never consults the target's provider cap.
-    cap_update_agent(&bot, &claude, &json!({"agentId":"agent","name":"Renamed"})).unwrap();
+    cap_update_agent(&bot, &claude, &json!({"agentId":"agent","title":"Renamed"})).unwrap();
 
     assert_eq!(
         cap_agent_mode(
@@ -276,19 +276,19 @@ fn mode_cap_covers_every_execution_entry() {
 #[test]
 fn unlisted_tools_reserved_labels_and_cwd_are_rejected() {
     for tool in [
-        "rename_workspace",
-        "archive_workspace",
-        "list_workspaces",
-        "respond_to_permission",
+        "workspace_rename",
+        "workspace_archive",
+        "workspace_list",
+        "permission_respond",
         "future_tool",
     ] {
         assert_eq!(admit(tool, &json!({})), Err(ErrorCode::Forbidden), "{tool}");
     }
     for tool in [
-        "list_models",
-        "inspect_provider",
-        "create_terminal",
-        "create_schedule",
+        "provider_model_list",
+        "provider_get",
+        "terminal_create",
+        "schedule_create",
     ] {
         assert_eq!(
             admit(tool, &json!({"cwd":"/tmp"})),
@@ -361,13 +361,13 @@ fn schedule_listing_keeps_only_scoped_workspaces() {
     let scope = capped_scope(bot());
     let mut result = json!({"schedules":[{"id":"a","workspaceId":ROOT},
         {"id":"b","workspaceId":"wks_other"},{"id":"c","workspaceId":WORKTREE},{"id":"d"}]});
-    filter(&scope, "list_schedules", &mut result);
+    filter(&scope, "schedule_list", &mut result);
     assert_eq!(
         result,
         json!({"schedules":[{"id":"a","workspaceId":ROOT},{"id":"c","workspaceId":WORKTREE}]})
     );
     let mut untouched = json!({"schedules":[{"id":"b","workspaceId":"wks_other"}]});
-    filter(&scope, "list_agents", &mut untouched);
+    filter(&scope, "agent_list", &mut untouched);
     assert_eq!(untouched["schedules"][0]["id"], "b");
 }
 
@@ -397,8 +397,8 @@ fn schedule_patches_keep_the_effective_mode_within_the_cap() {
     assert_eq!(cap_schedule(&permissions, &heartbeat), Ok(()));
 
     for (patch, checked, mode) in [
-        (json!({"mode":null}), true, json!("auto")),
-        (json!({"mode":"auto"}), true, json!("auto")),
+        (json!({"modeId":null}), true, json!("auto")),
+        (json!({"modeId":"auto"}), true, json!("auto")),
         (json!({"provider":"codex/next"}), true, json!("auto")),
         (json!({"model":"next"}), false, Value::Null),
         (json!({"prompt":"changed"}), false, Value::Null),
@@ -409,13 +409,13 @@ fn schedule_patches_keep_the_effective_mode_within_the_cap() {
             Ok(checked),
             "{patch}"
         );
-        assert_eq!(patched["mode"], mode, "{patch}");
+        assert_eq!(patched["modeId"], mode, "{patch}");
     }
     for patch in [
-        json!({"mode":"full-access"}),
-        json!({"mode":"read-only"}),
+        json!({"modeId":"full-access"}),
+        json!({"modeId":"read-only"}),
         json!({"provider":"claude"}),
-        json!({"provider":"claude/model","mode":"auto"}),
+        json!({"provider":"claude/model","modeId":"auto"}),
     ] {
         let mut patched = patch.clone();
         assert_eq!(
@@ -489,4 +489,17 @@ fn scoped_callers_cannot_write_any_ait_label() {
     }
     let mut create = json!({"provider":"codex/gpt","labels":{"team":"ait"}});
     rewrite_create_agent(&capped_scope(bot()), None, origin(), &mut create).unwrap();
+}
+
+#[test]
+fn every_tool_a_scoped_caller_may_hold_has_a_rule() {
+    use domain::bot::permissions::{TOOLS, ToolAccess};
+
+    for (tool, access) in TOOLS {
+        assert_eq!(
+            rule(tool).is_some(),
+            *access != ToolAccess::HostOnly,
+            "{tool}"
+        );
+    }
 }

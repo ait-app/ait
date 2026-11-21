@@ -74,7 +74,7 @@ lists saved profiles; follow the same envelope for an authorized operation:
 ```bash
 curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 70 \
   "${ait_mcp_headers[@]}" --data-binary @- "$AIT_MCP_URL" <<'JSON'
-{"jsonrpc":"2.0","id":"profiles","method":"tools/call","params":{"name":"list_profiles","arguments":{}}}
+{"jsonrpc":"2.0","id":"profiles","method":"tools/call","params":{"name":"profile_list","arguments":{}}}
 JSON
 ```
 

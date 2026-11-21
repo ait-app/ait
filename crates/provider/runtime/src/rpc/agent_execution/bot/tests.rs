@@ -37,8 +37,8 @@ fn capable_profile_patches_only_the_differences_until_converged() {
         panic!("tool policy must be set: {patch:?}");
     };
     let tools = policy["preapproved"].as_array().unwrap();
-    assert!(tools.contains(&json!({"kind":"mcp","server":"ait","tool":"create_agent"})));
-    assert!(!tools.contains(&json!({"kind":"mcp","server":"ait","tool":"list_workspaces"})));
+    assert!(tools.contains(&json!({"kind":"mcp","server":"ait","tool":"agent_create"})));
+    assert!(!tools.contains(&json!({"kind":"mcp","server":"ait","tool":"workspace_list"})));
     let converged = patch.apply(&current);
     assert_eq!(
         Profile::new(&CAPABLE, "rules".into()).patch(&converged),

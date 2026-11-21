@@ -6,7 +6,6 @@ fn catalog_has_unique_registered_methods_and_closed_schemas() {
     let methods: Vec<_> = crate::capabilities::implemented_methods()
         .map(|method| method.name)
         .collect();
-    assert_eq!(catalog::all().len(), 50);
     for tool in catalog::all() {
         assert!(names.insert(&tool.name));
         for method in &tool.methods {
@@ -148,6 +147,68 @@ fn every_catalog_tool_has_an_explicit_access_class() {
         .collect();
     for tool in catalog::all() {
         assert!(table.contains(tool.name.as_str()), "{}", tool.name);
+    }
+    assert_eq!(table.len(), catalog::all().len());
+}
+
+#[test]
+fn names_lead_with_a_known_domain_and_end_with_a_known_verb() {
+    const DOMAINS: [&str; 12] = [
+        "agent",
+        "workspace",
+        "script",
+        "terminal",
+        "schedule",
+        "heartbeat",
+        "provider",
+        "profile",
+        "permission",
+        "notepad",
+        "bot",
+        "ticket",
+    ];
+    const VERBS: [&str; 23] = [
+        "create", "list", "get", "update", "delete", "read", "write", "wait", "start", "stop",
+        "pause", "resume", "run", "cancel", "archive", "rename", "set", "send", "prompt",
+        "capture", "kill", "respond", "report",
+    ];
+    for tool in catalog::all() {
+        let (domain, rest) = tool.name.split_once('_').unwrap();
+        assert!(DOMAINS.contains(&domain), "{}", tool.name);
+        let verb = rest.rsplit('_').next().unwrap();
+        // `bot_overview` is the one tool named for what it returns.
+        assert!(
+            VERBS.contains(&verb) || tool.name == "bot_overview",
+            "{}",
+            tool.name
+        );
+        let descriptor = tool.descriptor(None);
+        assert!(!descriptor["title"].as_str().unwrap().is_empty());
+        assert_eq!(descriptor["annotations"]["title"], descriptor["title"]);
+    }
+}
+
+#[test]
+fn only_archiving_killing_and_deleting_tools_are_destructive() {
+    let destructive: Vec<_> = catalog::all()
+        .iter()
+        .filter(|tool| tool.descriptor(None)["annotations"]["destructiveHint"] == true)
+        .map(|tool| tool.name.as_str())
+        .collect();
+    assert_eq!(
+        destructive,
+        [
+            "agent_archive",
+            "workspace_archive",
+            "terminal_kill",
+            "schedule_delete",
+            "heartbeat_delete",
+            "notepad_delete"
+        ]
+    );
+    for tool in catalog::all() {
+        let annotations = &tool.descriptor(None)["annotations"];
+        assert!(annotations["readOnlyHint"] == false || annotations["destructiveHint"] == false);
     }
 }
 

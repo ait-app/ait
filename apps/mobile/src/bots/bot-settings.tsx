@@ -199,6 +199,7 @@ function BotPermissionsSection({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(permissions);
+  const supportsNotepad = useHostFeature(serverId, "workspaceNotepad");
   const { providers } = useBotProviders(serverId, cwd, interactive);
   const save = useMutation({
     mutationFn: async () => {
@@ -226,6 +227,7 @@ function BotPermissionsSection({
           setDraft(next);
         }}
         disabled={disabled}
+        notepad={supportsNotepad}
       />
       {save.error ? <Text style={styles.error}>{save.error.message}</Text> : null}
       {saved ? <Text style={styles.hint}>{t("bots.permissionsHint")}</Text> : null}

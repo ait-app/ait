@@ -468,6 +468,7 @@ describe("Rust v1 connection", () => {
       workspaceBotNotifications: false,
       workspaceBotTickets: false,
       workspaceBotTicketAnswers: false,
+      workspaceNotepad: false,
       workspaceBotFeishuSetup: false,
       workspaceBotLarkSetup: false,
       workspaceBotTelegramSetup: false,

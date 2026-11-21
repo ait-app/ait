@@ -103,21 +103,17 @@ impl Daemon {
     /// Prompt Agent `id` with `text` through the host token and return its last message.
     async fn prompt(&self, id: &str, text: &str) -> Value {
         self.client
-            .tool(
-                "send_agent_prompt",
-                json!({"agentId":id,"prompt":text}),
-                None,
-            )
+            .tool("agent_prompt", json!({"agentId":id,"prompt":text}), None)
             .await;
         self.client
-            .tool("wait_for_agent", json!({"agentId":id}), None)
+            .tool("agent_wait", json!({"agentId":id}), None)
             .await["lastMessage"]
             .clone()
     }
 
     async fn snapshot(&self, id: &str) -> Value {
         self.client
-            .tool("get_agent_status", json!({"agentId":id}), None)
+            .tool("agent_get", json!({"agentId":id}), None)
             .await["snapshot"]
             .clone()
     }
@@ -164,7 +160,7 @@ impl Deployment {
         let created = daemon
             .client
             .tool(
-                "create_agent",
+                "agent_create",
                 json!({"provider":"codex/offline-model","workspaceId":other,
                     "title":"Outsider","initialPrompt":"ready"}),
                 None,
@@ -173,7 +169,7 @@ impl Deployment {
         let outsider = created["agentId"].as_str().unwrap().to_owned();
         daemon
             .client
-            .tool("wait_for_agent", json!({"agentId":outsider}), None)
+            .tool("agent_wait", json!({"agentId":outsider}), None)
             .await;
         let shared = authorization(&launches(&elsewhere, &outsider)[0]);
         daemon
@@ -197,7 +193,7 @@ impl Deployment {
             .to_owned();
         daemon
             .client
-            .tool("wait_for_agent", json!({"agentId":child}), None)
+            .tool("agent_wait", json!({"agentId":child}), None)
             .await;
         Self {
             fixture,
@@ -312,7 +308,7 @@ async fn bot_manages_agents_within_permissions_and_child_inherits_scope() {
     let listed = deployment
         .daemon
         .client
-        .tool("list_agents", json!({"includeArchived":true}), None)
+        .tool("agent_list", json!({"includeArchived":true}), None)
         .await;
     assert!(
         listed["agents"]
@@ -325,10 +321,10 @@ async fn bot_manages_agents_within_permissions_and_child_inherits_scope() {
 
     // What the Bot could see and do through its credential.
     let tools = tool_names(&deployment.bot_probe[1]);
-    for hidden in ["respond_to_permission", "archive_workspace"] {
+    for hidden in ["permission_respond", "workspace_archive"] {
         assert!(!tools.contains(&hidden.to_owned()), "{tools:?}");
     }
-    for granted in ["create_agent", "create_schedule", "bot_memory_read"] {
+    for granted in ["agent_create", "schedule_create", "bot_memory_read"] {
         assert!(tools.contains(&granted.to_owned()), "{tools:?}");
     }
     forbidden(&deployment.bot_probe[2]);
@@ -453,7 +449,7 @@ async fn bot_scope_survives_daemon_restart() {
     let fresh_bot = fresh[0]["self"]["authorization"].as_str().unwrap();
     derived(fresh_bot);
     assert_ne!(fresh_bot, old_bot);
-    assert!(tool_names(&fresh[1]).contains(&"create_agent".to_owned()));
+    assert!(tool_names(&fresh[1]).contains(&"agent_create".to_owned()));
     deployment.assert_private(&[&old_child, &old_bot, &renewed, fresh_bot]);
     deployment.daemon.stop().await;
 }

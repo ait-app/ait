@@ -58,7 +58,7 @@ const TEXTS: [(&str, &str, &str); 2] = [
     ("tickets", "/latestReport", "text"),
 ];
 /// Agents fetched to count and sample the Agents the Bot did not start, and the Agents read for
-/// a caller that reaches only its own work, whose own Agents the overview and `list_agents`
+/// a caller that reaches only its own work, whose own Agents the overview and `agent_list`
 /// filter out of them.
 pub(super) const AGENT_PAGE: u64 = 200;
 /// Refusal for an update made against a stale revision.
@@ -69,7 +69,7 @@ const STALE_REVISION: &str = "The memory changed since you read it; call bot_mem
 pub(super) fn handles(tool: &str) -> bool {
     matches!(
         tool,
-        "bot_memory_read" | "bot_memory_update" | "workspace_overview"
+        "bot_memory_read" | "bot_memory_update" | "bot_overview"
     )
 }
 
@@ -138,6 +138,7 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
     let memory = memory(state, root).await?;
     let notifications = unseen(state, scope, sight.as_ref()).await?;
     let tickets = open_tickets(state, root).await?;
+    let notepad = notepad(state, root, sight.as_ref()).await?;
     Ok(project(&Sources {
         root,
         checkout: &checkout,
@@ -152,9 +153,27 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
         memory: &memory,
         notifications: &notifications,
         tickets: &tickets,
+        notepad: &notepad,
         sight,
         permissions: &scope.grant.permissions,
     }))
+}
+
+/// The revision and note count of the root Workspace's notepad; `null` for a conversation
+/// restricted to its own work, which may not use the shared notepad (ADR-296).
+/// # Errors
+/// Propagates notepad read failures.
+async fn notepad(state: &Shared, root: &str, sight: Option<&Sight>) -> Result<Value, ErrorCode> {
+    if external(sight) {
+        return Ok(Value::Null);
+    }
+    let listed = rpc::execute(
+        state,
+        "workspace.notepad.list.request",
+        json!({"workspaceId":root}),
+    )
+    .await?;
+    Ok(json!({"revision":listed["revision"],"notes":listed["total"]}))
 }
 
 /// Read the Bot's open tickets, one more than the overview keeps so it can report truncation;
@@ -230,6 +249,8 @@ pub(super) struct Sources<'a> {
     pub(super) notifications: &'a Value,
     /// `bot.ticket.list.request` result of the Bot's open tickets, or `null`.
     pub(super) tickets: &'a Value,
+    /// The root Workspace notepad's revision and note count, or `null` when not shown.
+    pub(super) notepad: &'a Value,
     /// What the calling Bot conversation may read and reach; it also marks the tickets it asked
     /// for. `None` reads everything and marks nothing.
     pub(super) sight: Option<Sight>,
@@ -299,6 +320,7 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
         "notifications":notifications,
         "tickets":tickets,
         "memory":{"revision":sources.memory["revision"],"bytes":text.len()},
+        "notepad":sources.notepad,
         "permissions":sources.permissions,
         "truncated":truncated,
     });
@@ -332,8 +354,8 @@ pub(super) fn project(sources: &Sources<'_>) -> Value {
     }
     if overview["truncated"] == true {
         overview["more"] = json!({"tickets":{"read":"tickets"},
-            "notifications":{"read":"notifications"},"agents":{"tool":"list_agents"},
-            "schedules":{"tool":"list_schedules"}});
+            "notifications":{"read":"notifications"},"agents":{"tool":"agent_list"},
+            "schedules":{"tool":"schedule_list"}});
     }
     overview
 }
@@ -397,7 +419,7 @@ fn cap(list: &mut Vec<Value>, limit: usize) -> bool {
     dropped
 }
 
-/// An Agent of the Bot as the overview lists it; its result reads through `get_agent_activity`.
+/// An Agent of the Bot as the overview lists it; its result reads through `agent_activity_read`.
 fn agent(agent: &Value) -> Value {
     json!({"id":agent["id"],"title":agent["title"],"provider":agent["provider"],
         "status":agent["status"],"requiresAttention":agent["requiresAttention"],

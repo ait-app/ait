@@ -54,6 +54,30 @@ impl Client {
     }
 }
 
+/// Write a note to the notepad of Workspace `id` and read it back.
+async fn notepad_round_trip(client: &Client, id: &str) {
+    let note = client
+        .tool(
+            "notepad_write",
+            json!({"workspaceId":id,"key":"handover","text":"Use port 7316","mode":"append"}),
+            None,
+        )
+        .await;
+    assert_eq!(
+        (&note["accepted"], &note["revision"]),
+        (&json!(true), &json!(1))
+    );
+    let read = client
+        .tool(
+            "notepad_read",
+            json!({"workspaceId":id,"key":"handover"}),
+            None,
+        )
+        .await;
+    assert!(read["text"].as_str().unwrap().ends_with("]\nUse port 7316"));
+    assert_eq!(read["updatedBy"], json!({"kind":"external"}));
+}
+
 #[tokio::test]
 async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let NativeFixture { root, cwd, path } = NativeFixture::new();
@@ -63,18 +87,18 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let address = ready(&mut process, &log).await;
     let client = Client::new(&address);
     let list = client.rpc("tools/list", json!({}), None).await;
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 42);
-    let workspace = client.tool("create_workspace",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 46);
+    let workspace = client.tool("workspace_create",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
     let id = workspace["workspace"]["id"]
         .as_str()
         .or_else(|| workspace["workspace"]["workspaceId"].as_str())
         .unwrap();
-    let replay = client.tool("create_workspace",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
+    let replay = client.tool("workspace_create",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
     assert_eq!(replay["workspace"], workspace["workspace"]);
     assert_eq!(
         client
             .tool(
-                "rename_workspace",
+                "workspace_rename",
                 json!({"workspaceId":id,"title":"Renamed"}),
                 None
             )
@@ -82,25 +106,35 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
         true
     );
     assert_eq!(
-        client.tool("list_workspaces", json!({}), None).await["workspaces"]
+        client.tool("workspace_list", json!({}), None).await["workspaces"]
             .as_array()
             .unwrap()
             .len(),
         1
     );
     assert_eq!(
-        client.tool("list_profiles", json!({}), None).await["profiles"],
+        client.tool("profile_list", json!({}), None).await["profiles"],
         json!([])
     );
-    let invalid = client.rpc("tools/call",json!({"name":"create_workspace","arguments":{"isolation":"local","path":cwd,"unexpected":true}}),None).await;
+    let invalid = client.rpc("tools/call",json!({"name":"workspace_create","arguments":{"isolation":"local","path":cwd,"unexpected":true}}),None).await;
     assert_eq!(invalid["error"]["code"], -32602);
-    let missing = client.rpc("tools/call",json!({"name":"rename_workspace","arguments":{"workspaceId":"wks_missing","title":"x"}}),None).await;
+    let missing = client.rpc("tools/call",json!({"name":"workspace_rename","arguments":{"workspaceId":"wks_missing","title":"x"}}),None).await;
     assert_eq!(missing["result"]["isError"], true);
+    notepad_round_trip(&client, id).await;
+    assert!(state.join("notepads/notepads.sqlite3").is_file());
     client
-        .tool("archive_workspace", json!({"workspaceId":id}), None)
+        .tool("workspace_archive", json!({"workspaceId":id}), None)
         .await;
+    let retired = client
+        .rpc(
+            "tools/call",
+            json!({"name":"notepad_list","arguments":{"workspaceId":id}}),
+            None,
+        )
+        .await;
+    assert_eq!(retired["result"]["isError"], true, "{retired}");
     assert!(
-        client.tool("list_workspaces", json!({}), None).await["workspaces"]
+        client.tool("workspace_list", json!({}), None).await["workspaces"]
             .as_array()
             .unwrap()
             .is_empty()
@@ -134,7 +168,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
             .as_array()
             .unwrap()
             .len(),
-        42
+        46
     );
     terminate(&mut process).await;
     assert!(!std::fs::read_to_string(&log).unwrap().contains(TOKEN));
@@ -148,7 +182,7 @@ async fn mcp_native_agent_calls_preserve_parentage_and_input_admission() {
     let address = ready(&mut process, &log).await;
     let client = Client::new(&address);
     assert_eq!(
-        client.tool("list_providers", json!({}), None).await["providers"]
+        client.tool("provider_list", json!({}), None).await["providers"]
             .as_array()
             .unwrap()
             .len(),
@@ -156,39 +190,39 @@ async fn mcp_native_agent_calls_preserve_parentage_and_input_admission() {
     );
     assert!(
         !client
-            .tool("list_models", json!({"provider":"codex","cwd":cwd}), None)
+            .tool(
+                "provider_model_list",
+                json!({"provider":"codex","cwd":cwd}),
+                None
+            )
             .await["models"]
             .as_array()
             .unwrap()
             .is_empty()
     );
     client
-        .tool(
-            "inspect_provider",
-            json!({"provider":"codex","cwd":cwd}),
-            None,
-        )
+        .tool("provider_get", json!({"provider":"codex","cwd":cwd}), None)
         .await;
     let input = json!({"provider":"codex/offline-model","cwd":cwd,"title":"MCP root","initialPrompt":"hello MCP","idempotencyKey":"mcp-agent"});
-    let created = client.tool("create_agent", input.clone(), None).await;
+    let created = client.tool("agent_create", input.clone(), None).await;
     let id = created["agentId"].as_str().unwrap();
     assert_eq!(
-        client.tool("create_agent", input, None).await["agentId"],
+        client.tool("agent_create", input, None).await["agentId"],
         id
     );
     assert_eq!(
-        client
-            .tool("wait_for_agent", json!({"agentId":id}), None)
-            .await["lastMessage"],
+        client.tool("agent_wait", json!({"agentId":id}), None).await["lastMessage"],
         "Echo: hello MCP"
     );
-    let status = client
-        .tool("get_agent_status", json!({"agentId":id}), None)
-        .await;
+    let status = client.tool("agent_get", json!({"agentId":id}), None).await;
     assert_eq!(status["status"], "idle");
     assert!(
         client
-            .tool("get_agent_activity", json!({"agentId":id,"limit":10}), None)
+            .tool(
+                "agent_activity_read",
+                json!({"agentId":id,"limit":10}),
+                None
+            )
             .await["content"]
             .as_str()
             .unwrap()
@@ -201,7 +235,7 @@ async fn mcp_native_agent_calls_preserve_parentage_and_input_admission() {
 async fn exercise_child(client: &Client, id: &str, status: &Value) {
     let child = client
         .tool(
-            "create_agent",
+            "agent_create",
             json!({"provider":"codex/offline-model","title":"MCP child","initialPrompt":"child task"}),
             Some(id),
         )
@@ -212,60 +246,58 @@ async fn exercise_child(client: &Client, id: &str, status: &Value) {
         status["snapshot"]["workspaceId"]
     );
     let child_status = client
-        .tool("get_agent_status", json!({"agentId":child_id}), None)
+        .tool("agent_get", json!({"agentId":child_id}), None)
         .await;
     assert_eq!(
         child_status["snapshot"]["labels"]["paseo.parent-agent-id"],
         id
     );
     client
-        .tool("wait_for_agent", json!({"agentId":child_id}), None)
+        .tool("agent_wait", json!({"agentId":child_id}), None)
         .await;
-    client.tool("update_agent",json!({"agentId":child_id,"name":"Updated child","settings":{"thinkingOptionId":"high"}}),None).await;
+    client.tool("agent_update",json!({"agentId":child_id,"title":"Updated child","settings":{"thinkingOptionId":"high"}}),None).await;
     client
         .tool(
-            "set_agent_mode",
+            "agent_mode_set",
             json!({"agentId":child_id,"modeId":"full-access"}),
             None,
         )
         .await;
     client
         .tool(
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":child_id,"prompt":"next task"}),
             None,
         )
         .await;
     assert_eq!(
         client
-            .tool("wait_for_agent", json!({"agentId":child_id}), None)
+            .tool("agent_wait", json!({"agentId":child_id}), None)
             .await["lastMessage"],
         "Echo: next task"
     );
     assert_eq!(
-        client.tool("list_agents", json!({"limit":1}), None).await["agents"]
+        client.tool("agent_list", json!({"limit":1}), None).await["agents"]
             .as_array()
             .unwrap()
             .len(),
         1
     );
     assert_eq!(
-        client
-            .tool("list_pending_permissions", json!({}), None)
-            .await["permissions"],
+        client.tool("permission_list", json!({}), None).await["permissions"],
         json!([])
     );
     exercise_permissions(client, child_id).await;
     client
         .tool(
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":child_id,"prompt":"hang"}),
             None,
         )
         .await;
     let timed_out = client
         .tool(
-            "wait_for_agent",
+            "agent_wait",
             json!({"agentId":child_id,"timeoutMs":30}),
             None,
         )
@@ -273,54 +305,52 @@ async fn exercise_child(client: &Client, id: &str, status: &Value) {
     assert_eq!(timed_out["status"], "timeout");
     assert_eq!(
         client
-            .tool("get_agent_status", json!({"agentId":child_id}), None)
+            .tool("agent_get", json!({"agentId":child_id}), None)
             .await["status"],
         "running"
     );
     client
-        .tool("cancel_agent", json!({"agentId":child_id}), None)
+        .tool("agent_cancel", json!({"agentId":child_id}), None)
         .await;
     client
-        .tool("wait_for_agent", json!({"agentId":child_id}), None)
+        .tool("agent_wait", json!({"agentId":child_id}), None)
         .await;
     client
-        .tool("archive_agent", json!({"agentId":child_id}), None)
+        .tool("agent_archive", json!({"agentId":child_id}), None)
         .await;
-    client.tool("kill_agent", json!({"agentId":id}), None).await;
+    client
+        .tool("agent_archive", json!({"agentId":id}), None)
+        .await;
 }
 
 async fn exercise_permissions(client: &Client, agent_id: &str) {
     client
         .tool(
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":agent_id,"prompt":"permit-command"}),
             None,
         )
         .await;
     let waited = client
-        .tool("wait_for_agent", json!({"agentId":agent_id}), None)
+        .tool("agent_wait", json!({"agentId":agent_id}), None)
         .await;
     assert_eq!(waited["status"], "permission");
-    let pending = client
-        .tool("list_pending_permissions", json!({}), None)
-        .await;
+    let pending = client.tool("permission_list", json!({}), None).await;
     let permission = pending["permissions"]
         .as_array()
         .unwrap()
         .iter()
         .find(|permission| permission["agentId"] == agent_id)
         .unwrap();
-    client.tool("respond_to_permission", json!({"agentId":agent_id,"requestId":permission["request"]["id"],"response":{"behavior":"allow"}}), None).await;
+    client.tool("permission_respond", json!({"agentId":agent_id,"requestId":permission["request"]["id"],"response":{"behavior":"allow"}}), None).await;
     assert_eq!(
         client
-            .tool("wait_for_agent", json!({"agentId":agent_id}), None)
+            .tool("agent_wait", json!({"agentId":agent_id}), None)
             .await["status"],
         "idle"
     );
     assert!(
-        client
-            .tool("list_pending_permissions", json!({}), None)
-            .await["permissions"]
+        client.tool("permission_list", json!({}), None).await["permissions"]
             .as_array()
             .unwrap()
             .is_empty()
@@ -339,10 +369,10 @@ async fn mcp_managed_terminals_scripts_schedules_and_owned_heartbeats() {
     let mut process = start_with_path(&root.path().join("state"), &log, Some(&path));
     let address = ready(&mut process, &log).await;
     let client = Client::new(&address);
-    let created = client.tool("create_agent",json!({"provider":"codex/offline-model","cwd":cwd,"title":"Scheduler","initialPrompt":"ready"}),None).await;
+    let created = client.tool("agent_create",json!({"provider":"codex/offline-model","cwd":cwd,"title":"Scheduler","initialPrompt":"ready"}),None).await;
     let agent_id = created["agentId"].as_str().unwrap();
     client
-        .tool("wait_for_agent", json!({"agentId":agent_id}), None)
+        .tool("agent_wait", json!({"agentId":agent_id}), None)
         .await;
     let workspace_id = created["agent"]["workspaceId"].as_str().unwrap();
     exercise_terminals(&client, agent_id, workspace_id).await;
@@ -353,31 +383,27 @@ async fn mcp_managed_terminals_scripts_schedules_and_owned_heartbeats() {
 async fn exercise_terminals(client: &Client, agent_id: &str, workspace_id: &str) {
     assert_eq!(
         client
-            .tool(
-                "list_workspace_scripts",
-                json!({"workspaceId":workspace_id}),
-                None
-            )
+            .tool("script_list", json!({"workspaceId":workspace_id}), None)
             .await["scripts"][0]["scriptName"],
         "service"
     );
     client
         .tool(
-            "start_workspace_script",
+            "script_start",
             json!({"workspaceId":workspace_id,"scriptName":"service"}),
             None,
         )
         .await;
     client
         .tool(
-            "stop_workspace_script",
+            "script_stop",
             json!({"workspaceId":workspace_id,"scriptName":"service"}),
             None,
         )
         .await;
     let terminal = client
         .tool(
-            "create_terminal",
+            "terminal_create",
             json!({"command":"/bin/cat","name":"MCP PTY"}),
             Some(agent_id),
         )
@@ -385,7 +411,7 @@ async fn exercise_terminals(client: &Client, agent_id: &str, workspace_id: &str)
     let terminal_id = terminal["terminal"]["id"].as_str().unwrap();
     client
         .tool(
-            "send_terminal_keys",
+            "terminal_send",
             json!({"terminalId":terminal_id,"keys":"mcp-terminal-marker\n","literal":true}),
             None,
         )
@@ -394,7 +420,7 @@ async fn exercise_terminals(client: &Client, agent_id: &str, workspace_id: &str)
     loop {
         let captured = client
             .tool(
-                "capture_terminal",
+                "terminal_capture",
                 json!({"terminalId":terminal_id,"scrollback":true}),
                 None,
             )
@@ -410,45 +436,49 @@ async fn exercise_terminals(client: &Client, agent_id: &str, workspace_id: &str)
     }
     assert!(
         !client
-            .tool("list_terminals", json!({"workspaceId":workspace_id}), None)
+            .tool("terminal_list", json!({"workspaceId":workspace_id}), None)
             .await["terminals"]
             .as_array()
             .unwrap()
             .is_empty()
     );
     client
-        .tool("kill_terminal", json!({"terminalId":terminal_id}), None)
+        .tool("terminal_kill", json!({"terminalId":terminal_id}), None)
         .await;
 }
 
 async fn exercise_schedules(client: &Client, agent_id: &str, workspace_id: &str) {
-    let schedule = client.tool("create_schedule",json!({"prompt":"scheduled task","cron":"0 0 1 1 *","provider":"codex/offline-model","name":"MCP schedule"}),Some(agent_id)).await;
+    let schedule = client.tool("schedule_create",json!({"prompt":"scheduled task","cron":"0 0 1 1 *","provider":"codex/offline-model","name":"MCP schedule"}),Some(agent_id)).await;
     let schedule_id = schedule["schedule"]["id"].as_str().unwrap();
     client
-        .tool("pause_schedule", json!({"id":schedule_id}), None)
+        .tool("schedule_pause", json!({"scheduleId":schedule_id}), None)
         .await;
     client
         .tool(
-            "update_schedule",
-            json!({"id":schedule_id,"prompt":"updated schedule","maxRuns":2}),
+            "schedule_update",
+            json!({"scheduleId":schedule_id,"prompt":"updated schedule","maxRuns":2}),
             None,
         )
         .await;
     client
-        .tool("resume_schedule", json!({"id":schedule_id}), None)
+        .tool("schedule_resume", json!({"scheduleId":schedule_id}), None)
         .await;
     assert_eq!(
         client
-            .tool("inspect_schedule", json!({"id":schedule_id}), None)
+            .tool("schedule_get", json!({"scheduleId":schedule_id}), None)
             .await["schedule"]["workspaceId"],
         workspace_id
     );
     client
-        .tool("run_schedule_once", json!({"id":schedule_id}), None)
+        .tool("schedule_run", json!({"scheduleId":schedule_id}), None)
         .await;
     assert_eq!(
         client
-            .tool("schedule_logs", json!({"id":schedule_id,"limit":1}), None)
+            .tool(
+                "schedule_log_read",
+                json!({"scheduleId":schedule_id,"limit":1}),
+                None
+            )
             .await["runs"]
             .as_array()
             .unwrap()
@@ -457,14 +487,14 @@ async fn exercise_schedules(client: &Client, agent_id: &str, workspace_id: &str)
     );
     let heartbeat = client
         .tool(
-            "create_heartbeat",
+            "heartbeat_create",
             json!({"prompt":"heartbeat task","cron":"0 0 1 1 *"}),
             Some(agent_id),
         )
         .await;
     let heartbeat_id = heartbeat["schedule"]["id"].as_str().unwrap();
     assert_eq!(
-        client.tool("list_schedules", json!({}), None).await["schedules"]
+        client.tool("schedule_list", json!({}), None).await["schedules"]
             .as_array()
             .unwrap()
             .len(),
@@ -473,24 +503,24 @@ async fn exercise_schedules(client: &Client, agent_id: &str, workspace_id: &str)
     let mismatch = client
         .rpc(
             "tools/call",
-            json!({"name":"delete_heartbeat","arguments":{"id":heartbeat_id}}),
+            json!({"name":"heartbeat_delete","arguments":{"heartbeatId":heartbeat_id}}),
             None,
         )
         .await;
     assert_eq!(mismatch["result"]["isError"], true);
     client
         .tool(
-            "delete_heartbeat",
-            json!({"id":heartbeat_id}),
+            "heartbeat_delete",
+            json!({"heartbeatId":heartbeat_id}),
             Some(agent_id),
         )
         .await;
     client
-        .tool("delete_schedule", json!({"id":schedule_id}), None)
+        .tool("schedule_delete", json!({"scheduleId":schedule_id}), None)
         .await;
     client
         .tool(
-            "archive_workspace",
+            "workspace_archive",
             json!({"workspaceId":workspace_id}),
             None,
         )

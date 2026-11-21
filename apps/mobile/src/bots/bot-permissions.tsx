@@ -17,6 +17,7 @@ const GROUP_LABEL_KEYS: Record<GrantableGroup, string> = {
   schedules: "bots.groupSchedules",
   scripts: "bots.groupScripts",
   terminals: "bots.groupTerminals",
+  notepad: "bots.groupNotepad",
 };
 
 /** Groups whose tools run commands. */
@@ -102,11 +103,14 @@ export function BotPermissionFields({
   value,
   onChange,
   disabled,
+  notepad,
 }: {
   providers: ProviderSnapshotEntry[];
   value: BotPermissions;
   onChange: (value: BotPermissions) => void;
   disabled: boolean;
+  /** Whether the host has the workspace notepad; without it the group is not offered. */
+  notepad: boolean;
 }) {
   const { t } = useTranslation();
   const toggleGroup = (group: GrantableGroup) => {
@@ -123,7 +127,7 @@ export function BotPermissionFields({
   };
   return (
     <View style={styles.permissionBlock} testID="bot-permissions">
-      {BOT_TOOL_GROUPS.map((group) => (
+      {BOT_TOOL_GROUPS.filter((group) => notepad || group !== "notepad").map((group) => (
         <View key={group} style={styles.permissionBlock}>
           <BotCheckbox
             checked={group === "observe" || value.groups.includes(group)}

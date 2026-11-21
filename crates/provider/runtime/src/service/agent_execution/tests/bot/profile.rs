@@ -126,9 +126,9 @@ async fn bot_session_is_read_only_and_preapproves_grantable_ait_tools() {
     assert_eq!(config.mode_id.as_deref(), Some("read-only"));
     assert_eq!(config.system_prompt.as_deref(), Some("Bot instructions"));
     let tools = preapproved(&config);
-    assert!(tools.iter().any(|tool| tool == "create_agent"));
+    assert!(tools.iter().any(|tool| tool == "agent_create"));
     assert!(tools.iter().any(|tool| tool == "bot_memory_update"));
-    assert!(!tools.iter().any(|tool| tool == "respond_to_permission"));
+    assert!(!tools.iter().any(|tool| tool == "permission_respond"));
     let start = fixture
         .requests()
         .into_iter()
@@ -212,7 +212,7 @@ async fn existing_bot_session_is_reconfigured_to_its_profile() {
     assert!(
         preapproved(&config)
             .iter()
-            .any(|tool| tool == "create_agent")
+            .any(|tool| tool == "agent_create")
     );
     assert_bot_reply(&execution, &owner, &id, "resumed", "Echo: resumed").await;
     execution.shutdown().await.unwrap();

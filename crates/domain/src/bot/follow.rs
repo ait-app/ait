@@ -46,7 +46,7 @@ const DELIVERY_TEXT: usize = 8000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BoundBy {
-    /// A worker, through `report_progress`.
+    /// A worker, through `ticket_report`.
     Agent,
     /// The Bot, through `bot_ticket_update`.
     Bot,
@@ -733,7 +733,7 @@ pub fn worker_text(binding: &PullBinding, events: &[&PullEvent]) -> String {
         );
     }
     text.push_str(
-        "How this bears on your ticket's task is your judgement; report_progress records what \
+        "How this bears on your ticket's task is your judgement; ticket_report records what \
          you did about it.",
     );
     text

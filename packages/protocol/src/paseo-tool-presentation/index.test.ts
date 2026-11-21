@@ -6,6 +6,51 @@ import {
   PASEO_TOOL_NAMES,
 } from "./index.js";
 
+// Every renamed tool: [former name, current name, a call's input].
+const RENAMED_TOOLS: ReadonlyArray<[string, string, Record<string, unknown>]> = [
+  ["create_agent", "agent_create", { title: "Reviewer", initialPrompt: "Review it" }],
+  ["send_agent_prompt", "agent_prompt", { agentId: "agt_1", prompt: "Fix the test" }],
+  ["get_agent_status", "agent_get", { agentId: "agt_1" }],
+  ["get_agent_activity", "agent_activity_read", { agentId: "agt_1", limit: 5 }],
+  ["list_agents", "agent_list", {}],
+  ["wait_for_agent", "agent_wait", { agentId: "agt_1" }],
+  ["update_agent", "agent_update", { agentId: "agt_1", title: "Renamed" }],
+  ["set_agent_mode", "agent_mode_set", { agentId: "agt_1", modeId: "plan" }],
+  ["cancel_agent", "agent_cancel", { agentId: "agt_1" }],
+  ["archive_agent", "agent_archive", { agentId: "agt_1" }],
+  ["create_workspace", "workspace_create", { title: "Docs" }],
+  ["list_workspaces", "workspace_list", {}],
+  ["rename_workspace", "workspace_rename", { workspaceId: "wks_1", title: "Docs" }],
+  ["archive_workspace", "workspace_archive", { workspaceId: "wks_1" }],
+  ["list_workspace_scripts", "script_list", { workspaceId: "wks_1" }],
+  ["start_workspace_script", "script_start", { scriptName: "web" }],
+  ["stop_workspace_script", "script_stop", { scriptName: "web" }],
+  ["get_workspace_script_run", "script_run_get", { runId: "run_1" }],
+  ["wait_for_workspace_script", "script_run_wait", { runId: "run_1" }],
+  ["list_terminals", "terminal_list", {}],
+  ["create_terminal", "terminal_create", { name: "dev" }],
+  ["kill_terminal", "terminal_kill", { terminalId: "t1" }],
+  ["capture_terminal", "terminal_capture", { terminalId: "t1" }],
+  ["send_terminal_keys", "terminal_send", { terminalId: "t1", keys: "npm test" }],
+  ["create_schedule", "schedule_create", { name: "Nightly", cron: "0 9 * * 1" }],
+  ["list_schedules", "schedule_list", {}],
+  ["inspect_schedule", "schedule_get", { scheduleId: "sch_1" }],
+  ["update_schedule", "schedule_update", { scheduleId: "sch_1", modeId: "plan" }],
+  ["pause_schedule", "schedule_pause", { scheduleId: "sch_1" }],
+  ["resume_schedule", "schedule_resume", { scheduleId: "sch_1" }],
+  ["run_schedule_once", "schedule_run", { scheduleId: "sch_1" }],
+  ["schedule_logs", "schedule_log_read", { scheduleId: "sch_1" }],
+  ["delete_schedule", "schedule_delete", { scheduleId: "sch_1" }],
+  ["create_heartbeat", "heartbeat_create", { cron: "*/5 * * * *" }],
+  ["delete_heartbeat", "heartbeat_delete", { heartbeatId: "hb_1" }],
+  ["list_providers", "provider_list", {}],
+  ["list_models", "provider_model_list", { provider: "codex" }],
+  ["inspect_provider", "provider_get", { provider: "codex" }],
+  ["list_profiles", "profile_list", {}],
+  ["list_pending_permissions", "permission_list", {}],
+  ["respond_to_permission", "permission_respond", { agentId: "agt_1", requestId: "req_1" }],
+];
+
 function display(toolName: string, input: unknown, targetAgentTitle?: string) {
   return buildPaseoToolDisplay({
     toolName,
@@ -42,6 +87,54 @@ describe("Paseo tool display", () => {
     ["browser_resize", { width: 800, height: 600 }, "Resize browser", "800×600"],
   ])("presents %s with a fixed label and its context", (tool, input, label, summary) => {
     expect(display(`mcp__ait__${tool}`, input)).toEqual({ displayName: label, summary });
+  });
+
+  it.each(RENAMED_TOOLS)("presents %s and %s the same way", (former, current, input) => {
+    expect(PASEO_TOOL_NAMES).toEqual(expect.arrayContaining([former, current]));
+    expect(display(`mcp__ait__${current}`, input)).toEqual(display(`mcp__ait__${former}`, input));
+  });
+
+  it.each([
+    ["agent_update", { agentId: "agt_1", title: "Renamed" }, "Renamed"],
+    ["agent_update", { agentId: "agt_1", name: "Renamed" }, "Renamed"],
+    ["update_agent", { agentId: "agt_1", title: "Renamed" }, "Renamed"],
+    ["agent_update", { agentId: "agt_1", labels: { team: "docs" } }, "agt_1"],
+    ["schedule_get", { scheduleId: "sch_1" }, "sch_1"],
+    ["schedule_get", { id: "sch_1" }, "sch_1"],
+    ["inspect_schedule", { id: "sch_1" }, "sch_1"],
+    ["inspect_schedule", { scheduleId: "sch_1" }, "sch_1"],
+    ["schedule_update", { scheduleId: "sch_1", modeId: "plan" }, "sch_1"],
+    ["update_schedule", { id: "sch_1", mode: "plan" }, "sch_1"],
+    ["heartbeat_delete", { heartbeatId: "hb_1" }, "hb_1"],
+    ["heartbeat_delete", { id: "hb_1" }, "hb_1"],
+    ["delete_heartbeat", { id: "hb_1" }, "hb_1"],
+  ])("reads the renamed input field of %s under either spelling", (tool, input, summary) => {
+    expect(display(`mcp__ait__${tool}`, input)?.summary).toBe(summary);
+  });
+
+  it("keeps the label of the retired kill_agent, which agent_archive replaces", () => {
+    expect(display("mcp__ait__kill_agent", { agentId: "agt_1" })?.displayName).toBe("Kill agent");
+    expect(display("mcp__ait__agent_archive", { agentId: "agt_1" })?.displayName).toBe(
+      "Archive agent",
+    );
+  });
+
+  it.each([
+    ["heartbeat_list", {}, "List heartbeats", undefined],
+    ["notepad_list", { workspaceId: "wks_1", since: 4 }, "List notes", undefined],
+    ["notepad_read", { key: "api-contract", offset: 0 }, "Read note", "api-contract"],
+    [
+      "notepad_write",
+      { key: "questions", text: "Who owns the schema?", mode: "append" },
+      "Write note",
+      "questions",
+    ],
+    ["notepad_delete", { key: "questions", expected: 3 }, "Delete note", "questions"],
+  ])("presents the new tool %s", (tool, input, label, summary) => {
+    expect(display(`mcp__ait__${tool}`, input)).toEqual({
+      displayName: label,
+      ...(summary ? { summary } : {}),
+    });
   });
 
   it("omits the summary when a call has no context", () => {

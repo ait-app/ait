@@ -20,6 +20,8 @@ pub struct State {
     pub directory: Option<Arc<Mutex<crate::directory::service::directory::Directory>>>,
     /// Installed workspace labels service.
     pub workspace_labels: Option<Arc<Mutex<crate::labels::service::WorkspaceLabels>>>,
+    /// Installed workspace notepad service.
+    pub workspace_notepads: Option<Arc<Mutex<crate::notepad::service::WorkspaceNotepads>>>,
     /// Installed workspace automation service.
     pub workspace_automation: Option<Arc<Mutex<crate::automation::service::WorkspaceAutomation>>>,
     /// Installed workspace state service.
@@ -185,6 +187,13 @@ pub async fn dispatch(
         Ok(()) => return Ok(None),
         Err(DispatchError::NotImplemented) => {
             Context::assert_unhandled(context, "metadata::labels");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::notepad(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::notepad");
         }
         Err(error) => return Err(error),
     }

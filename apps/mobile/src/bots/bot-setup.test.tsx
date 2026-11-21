@@ -7,9 +7,10 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { BotSetup } from "./bot-setup";
 import { botKeys } from "./queries";
 
-const { botRequest, supported, notifications, snapshotEntries } = vi.hoisted(() => ({
+const { botRequest, supported, notifications, notepad, snapshotEntries } = vi.hoisted(() => ({
   botRequest: vi.fn(),
   supported: { current: false },
+  notepad: { current: true },
   notifications: { current: false },
   snapshotEntries: { current: [] as unknown[] },
 }));
@@ -25,6 +26,7 @@ vi.mock("@/stores/session-store", () => ({
             features: {
               workspaceBotPermissions: supported.current,
               workspaceBotNotifications: notifications.current,
+              workspaceNotepad: notepad.current,
             },
           },
         },
@@ -119,6 +121,7 @@ const providerEntries = () => [
 beforeEach(() => {
   supported.current = false;
   notifications.current = false;
+  notepad.current = true;
   snapshotEntries.current = providerEntries();
 });
 
@@ -231,9 +234,25 @@ it("setup_sends_default_permissions_when_supported", async () => {
   const [, params] = botRequest.mock.calls[0];
   expect(params.execution.modeId).toBeNull();
   expect(params.permissions).toEqual({
-    groups: ["observe", "agents", "stop", "schedules"],
+    groups: ["observe", "agents", "stop", "schedules", "notepad"],
     modes: { claude: ["default"], codex: ["read-only"] },
   });
+});
+
+it("setup_leaves_the_notepad_group_out_on_a_host_without_the_notepad", async () => {
+  supported.current = true;
+  notepad.current = false;
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  expect(screen.queryByTestId("bot-group-notepad")).toBeNull();
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1].permissions.groups).toEqual([
+    "observe",
+    "agents",
+    "stop",
+    "schedules",
+  ]);
 });
 
 it("setup_sends_edited_permissions", async () => {
@@ -245,7 +264,7 @@ it("setup_sends_edited_permissions", async () => {
   fireEvent.click(screen.getByTestId("bot-setup-submit"));
   await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
   expect(botRequest.mock.calls[0][1].permissions).toEqual({
-    groups: ["observe", "agents", "stop"],
+    groups: ["observe", "agents", "stop", "notepad"],
     modes: { claude: ["plan"], codex: ["read-only"] },
   });
 });

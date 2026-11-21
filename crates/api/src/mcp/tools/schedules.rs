@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::Shared;
 use crate::connection::rpc;
 
-use super::{creation, rename, take};
+use super::{creation, take};
 use crate::mcp::catalog::Tool;
 
 /// Create a Workspace-owned schedule from `arguments` and optional `caller` in `state`.
@@ -73,6 +73,21 @@ pub(super) async fn list(state: &Shared) -> Result<Value, ErrorCode> {
     Ok(value)
 }
 
+/// Return the heartbeats targeting the `caller` Agent; a caller that is no Agent has none.
+/// # Errors
+/// Propagates existing scheduler read failures.
+pub(super) async fn heartbeats(state: &Shared, caller: Option<&Value>) -> Result<Value, ErrorCode> {
+    let mut value = rpc::execute(state, "schedule.list.request", json!({})).await?;
+    let mut heartbeats = value["schedules"].take();
+    if let Some(heartbeats) = heartbeats.as_array_mut() {
+        heartbeats.retain(|schedule| {
+            schedule["target"]["type"] == "agent"
+                && caller.is_some_and(|caller| schedule["target"]["agentId"] == caller["id"])
+        });
+    }
+    Ok(json!({"heartbeats":heartbeats}))
+}
+
 /// Execute schedule `tool` with `arguments` in `state`, checking `caller` heartbeat ownership.
 /// # Errors
 /// Rejects incorrect target kinds, conflicting patches or existing scheduler failures.
@@ -82,7 +97,6 @@ pub(super) async fn operate(
     mut arguments: Value,
     caller: Option<&Value>,
 ) -> Result<Value, ErrorCode> {
-    rename(&mut arguments, "id", "scheduleId")?;
     let snapshot = rpc::execute(
         state,
         "schedule.inspect.request",
@@ -90,7 +104,7 @@ pub(super) async fn operate(
     )
     .await?;
     let schedule = &snapshot["schedule"];
-    if tool.name == "delete_heartbeat" {
+    if tool.name == "heartbeat_delete" {
         if schedule["target"]["type"] != "agent"
             || caller.is_none_or(|caller| schedule["target"]["agentId"] != caller["id"])
         {
@@ -99,20 +113,20 @@ pub(super) async fn operate(
     } else if schedule["target"]["type"] != "new-agent" {
         return Err(ErrorCode::InvalidMessage);
     }
-    if tool.name == "inspect_schedule" {
+    if tool.name == "schedule_get" {
         return Ok(snapshot);
     }
-    if tool.name == "update_schedule" {
+    if tool.name == "schedule_update" {
         arguments = update(arguments)?;
     }
     let limit = take(&mut arguments, "limit")?;
-    let method = if tool.name == "delete_heartbeat" {
+    let method = if tool.name == "heartbeat_delete" {
         "schedule.delete.request"
     } else {
         &tool.methods[0]
     };
     let mut result = rpc::execute(state, method, arguments).await?;
-    if tool.name == "schedule_logs"
+    if tool.name == "schedule_log_read"
         && let Some(runs) = result["runs"].as_array_mut()
     {
         let limit = limit.as_ref().and_then(Value::as_u64).unwrap_or(20);
@@ -165,9 +179,9 @@ fn update(mut arguments: Value) -> Result<Value, ErrorCode> {
         }
         config["model"] = model;
     }
-    for (old, new) in [("cwd", "cwd"), ("mode", "modeId")] {
-        if let Some(value) = take(&mut arguments, old)? {
-            config[new] = value;
+    for key in ["cwd", "modeId"] {
+        if let Some(value) = take(&mut arguments, key)? {
+            config[key] = value;
         }
     }
     if config.as_object().is_some_and(|config| !config.is_empty()) {

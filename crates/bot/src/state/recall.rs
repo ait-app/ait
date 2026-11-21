@@ -20,7 +20,7 @@ use super::State;
 use crate::recall::{DETAIL, Origin, PREVIEW, Page, Read, Reader, Sight, Viewer, spill};
 
 /// The MCP tool that reads an Agent's own transcript and result, which no Bot resource repeats.
-const AGENT_TRANSCRIPT_TOOL: &str = "get_agent_activity";
+const AGENT_TRANSCRIPT_TOOL: &str = "agent_activity_read";
 
 /// A parsed resource path; worker paths carry the worker's own ticket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

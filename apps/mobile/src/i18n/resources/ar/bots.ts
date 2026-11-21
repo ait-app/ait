@@ -20,6 +20,7 @@ export const bots = {
   groupSchedules: "الجداول: إنشاء الجداول وإدارتها",
   groupScripts: "النصوص البرمجية: تشغيل النصوص البرمجية لمساحة العمل",
   groupTerminals: "الطرفيات: إنشاء طرفيات والكتابة فيها",
+  groupNotepad: "المفكرة: كتابة ملاحظات مساحة العمل المشتركة وحذفها",
   permissionRiskHint: "يمكنه تشغيل الأوامر.",
   modeCap: "وضع الوكيل الافتراضي",
   modeNotAllowed: "غير مسموح",

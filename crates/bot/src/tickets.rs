@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// ticket limit, which reports it as `ResourceExhausted`, once no ticket could be closed
 /// automatically.
 pub const OPEN_LIMIT_MESSAGE: &str = "Too many open tickets, and none could be closed \
-    automatically. Call bot_tickets and close the tickets whose work is finished or no longer \
+    automatically. Call bot_ticket_list and close the tickets whose work is finished or no longer \
     needed with bot_ticket_update (status done or cancelled), then try again";
 
 /// Tool error for binding a pull request beyond the per-ticket or per-Workspace bound, which

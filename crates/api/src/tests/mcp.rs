@@ -111,7 +111,7 @@ async fn mcp_stateless_lifecycle_errors_and_authentication() {
     assert_eq!(listed["result"]["tools"], json!([]));
     for (method, params, code) in [
         ("unknown", json!({}), -32601),
-        ("tools/call", json!({"name":"create_agent"}), -32602),
+        ("tools/call", json!({"name":"agent_create"}), -32602),
         ("tools/list", json!({"cursor":"invalid"}), -32602),
         ("initialize", json!({}), -32602),
     ] {

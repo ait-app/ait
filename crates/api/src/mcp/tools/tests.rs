@@ -154,42 +154,33 @@ fn only_reads_of_a_settled_agent_count_as_observations() {
     ));
     for status in SETTLED {
         assert_eq!(
-            settled("wait_for_agent", &json!({"status":status,"final":snapshot})),
+            settled("agent_wait", &json!({"status":status,"final":snapshot})),
             expected
         );
     }
     assert_eq!(
-        settled(
-            "get_agent_status",
-            &json!({"status":"idle","snapshot":snapshot})
-        ),
+        settled("agent_get", &json!({"status":"idle","snapshot":snapshot})),
         expected
     );
     assert_eq!(
         settled(
-            "get_agent_activity",
+            "agent_activity_read",
             &json!({"agentId":"agent-1","status":"error","updatedAt":at})
         ),
         expected
     );
     for (tool, result) in [
+        ("agent_wait", json!({"status":"timeout","final":snapshot})),
+        ("agent_wait", json!({"status":"running","final":snapshot})),
         (
-            "wait_for_agent",
-            json!({"status":"timeout","final":snapshot}),
-        ),
-        (
-            "wait_for_agent",
-            json!({"status":"running","final":snapshot}),
-        ),
-        (
-            "get_agent_status",
+            "agent_get",
             json!({"status":"initializing","snapshot":snapshot}),
         ),
         (
-            "get_agent_status",
+            "agent_get",
             json!({"status":"idle","snapshot":{"id":"agent-1"}}),
         ),
-        ("list_agents", json!({"status":"idle","snapshot":snapshot})),
+        ("agent_list", json!({"status":"idle","snapshot":snapshot})),
     ] {
         assert_eq!(settled(tool, &result), None, "{tool} {result}");
     }
@@ -210,32 +201,29 @@ fn a_read_counts_the_attention_its_snapshot_shows() {
 
     assert_eq!(
         settled(
-            "wait_for_agent",
+            "agent_wait",
             &json!({"status":"permission","final":snapshot})
         ),
         permission
     );
     assert_eq!(
-        settled(
-            "get_agent_status",
-            &json!({"status":"idle","snapshot":snapshot})
-        ),
+        settled("agent_get", &json!({"status":"idle","snapshot":snapshot})),
         permission
     );
     // Older attention, absent attention and an activity read that shows none keep `updatedAt`.
     for (tool, result) in [
         (
-            "wait_for_agent",
+            "agent_wait",
             json!({"status":"idle","final":{"id":"agent-1","updatedAt":attention,
                 "attentionTimestamp":updated}}),
         ),
         (
-            "get_agent_status",
+            "agent_get",
             json!({"status":"idle","snapshot":{"id":"agent-1","updatedAt":attention,
                 "attentionTimestamp":null}}),
         ),
         (
-            "get_agent_activity",
+            "agent_activity_read",
             json!({"agentId":"agent-1","status":"idle","updatedAt":attention}),
         ),
     ] {

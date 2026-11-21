@@ -1146,7 +1146,7 @@ fn a_worker_report_the_conversation_already_read_does_not_wake_it() {
         )
         .unwrap();
 
-    // The running turn's `wait_for_agent` saw agent-1 settled after its report.
+    // The running turn's `agent_wait` saw agent-1 settled after its report.
     state.observe(conversation, "agent-1", later(1), std::time::Instant::now());
     state
         .progress(

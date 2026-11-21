@@ -81,10 +81,10 @@ async fn mcp_socket_serves_the_shared_tools_and_cleans_up_across_restart() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|tool| tool["name"] == "list_workspaces")
+            .any(|tool| tool["name"] == "workspace_list")
     );
     let workspaces: Value = request(json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
-        "params":{"name":"list_workspaces","arguments":{}}}))
+        "params":{"name":"workspace_list","arguments":{}}}))
     .send()
     .await
     .unwrap()

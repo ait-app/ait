@@ -239,6 +239,32 @@ pub(super) async fn automation(
         .map_err(Into::into)
 }
 
+/// Try the workspace notepad request branch and consume `pending` only on a match.
+/// `state` supplies installed services.
+/// Returns after the response was admitted.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn notepad(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(context) = pending.take_if(|context| {
+        crate::notepad::rpc::METHODS
+            .iter()
+            .any(|method| method.name == context.request.method)
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    context
+        .rpc(
+            state.workspace_notepads.clone(),
+            ErrorCode::RegistryIo,
+            |service, method, params| crate::notepad::rpc::execute(service, method, params),
+        )
+        .await
+        .map_err(Into::into)
+}
+
 /// Try the workspace state request branch and consume `pending` only on a match.
 /// `state` supplies installed services; any `connection` argument owns subscriptions.
 /// Returns the branch's completion after execution or response admission.

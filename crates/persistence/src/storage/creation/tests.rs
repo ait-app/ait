@@ -1,3 +1,5 @@
+use std::fs;
+
 use domain::creation::protocol::{Kind, Phase};
 use model::ErrorCode;
 use model::creation::{Creations, validate_key};
@@ -331,7 +333,8 @@ fn legacy_receipt(intent: Value) -> Receipt {
 fn sqlite_disk_limit_preserves_committed_receipts() {
     let root = tempfile::tempdir().unwrap();
     let legacy = root.path().join("receipts.json");
-    let mut connection = open_database(&legacy.with_extension("sqlite3")).unwrap();
+    let mut connection =
+        crate::storage::sqlite::open::<StoreError>(&legacy.with_extension("sqlite3")).unwrap();
     migration::initialize(&mut connection, &legacy).unwrap();
     let store = SqliteReceiptStore {
         connection: Mutex::new(connection),

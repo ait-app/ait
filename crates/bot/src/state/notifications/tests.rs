@@ -853,7 +853,7 @@ fn an_agent_the_conversation_observed_does_not_wake_it_again() {
         )
         .unwrap();
 
-    // The running turn's `wait_for_agent` saw agent-1 settled at the finish.
+    // The running turn's `agent_wait` saw agent-1 settled at the finish.
     state.observe(conversation, "agent-1", finished_at, Instant::now());
     let rerun = agent(
         "again",
@@ -914,7 +914,7 @@ fn an_observation_by_a_turn_that_does_not_complete_never_suppresses_the_report()
         let finished_at = report.at;
         state.notify(report, Utc::now()).unwrap();
 
-        // The running turn's `wait_for_agent` saw agent-1 settled; it has not replied yet.
+        // The running turn's `agent_wait` saw agent-1 settled; it has not replied yet.
         state.observe(conversation, "agent-1", finished_at, Instant::now());
         state.wake(later(10));
         assert_eq!(
@@ -937,7 +937,7 @@ fn a_late_read_of_a_cancelled_turn_never_suppresses_the_report_for_the_next_turn
     let mut state = active(&fixture);
     let conversation = owner(&mut state);
     let cancelled = user_turn(&mut state, conversation, "u1");
-    // The first turn's `wait_for_agent` call opens, then the user cancels that turn.
+    // The first turn's `agent_wait` call opens, then the user cancels that turn.
     let read_started = Instant::now();
     state
         .progress(cancelled, TurnStatus::Cancelled, None, None)

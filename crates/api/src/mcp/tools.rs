@@ -16,6 +16,7 @@ use super::catalog::Tool;
 use super::scope::{self, Failure};
 
 pub(super) mod creation;
+mod notepad;
 mod overview;
 mod queries;
 pub(super) mod recall;
@@ -36,9 +37,13 @@ pub(super) async fn execute(
 ) -> Result<Value, Failure> {
     // Taken before anything awaits, so an observation belongs to the Bot turn that made the call.
     let started = Instant::now();
+    // Schedules and heartbeats are one kind of record below this layer.
+    if tool.name == "heartbeat_delete" {
+        rename(&mut arguments, "heartbeatId", "scheduleId")?;
+    }
     match scope {
         Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
-        None if matches!(tool.name.as_str(), "create_agent" | "update_agent") => {
+        None if matches!(tool.name.as_str(), "agent_create" | "agent_update") => {
             scope::reserved_labels(&arguments, domain::bot::BOT_LABEL_PREFIX)?;
         }
         None => {}
@@ -53,12 +58,12 @@ pub(super) async fn execute(
         return tickets::execute(state, &tool.name, arguments, scope, caller).await;
     }
     if let Some(scope) = scope
-        && tool.name == "create_agent"
+        && tool.name == "agent_create"
     {
         return tickets::create_agent(state, scope, arguments, caller).await;
     }
     let ticket_note = match scope {
-        Some(scope) if tool.name == "send_agent_prompt" => {
+        Some(scope) if tool.name == "agent_prompt" => {
             tickets::reopen_for_prompt(state, scope, &arguments).await
         }
         _ => None,
@@ -102,9 +107,9 @@ async fn observe(state: &Shared, scope: &Scope, tool: &str, result: &Value, star
 /// shows if later, since a permission request raises attention without changing the Agent.
 fn settled(tool: &str, result: &Value) -> Option<(String, DateTime<Utc>)> {
     let snapshot = match tool {
-        "wait_for_agent" => &result["final"],
-        "get_agent_status" => &result["snapshot"],
-        "get_agent_activity" => result,
+        "agent_wait" => &result["final"],
+        "agent_get" => &result["snapshot"],
+        "agent_activity_read" => result,
         _ => return None,
     };
     if !SETTLED.contains(&result["status"].as_str()?) {
@@ -133,50 +138,40 @@ async fn dispatch(
 ) -> Result<Value, ErrorCode> {
     let workspaces = scope.map(Scope::workspaces);
     match tool.name.as_str() {
-        "create_agent" => creation::agent(state, arguments, caller).await,
-        "create_workspace" => {
+        "agent_create" => creation::agent(state, arguments, caller).await,
+        "workspace_create" => {
             let params = creation::workspace(arguments, caller)?;
             rpc::execute(state, "workspace.create.request", params).await
         }
-        "create_terminal" => {
+        "terminal_create" => {
             creation::directory(state, &mut arguments, caller).await?;
             rpc::execute(state, "terminal.create.request", arguments).await
         }
-        "send_agent_prompt" => {
+        "agent_prompt" => {
             rename(&mut arguments, "prompt", "text")?;
             rpc::execute(state, "agent.message.send.request", arguments).await
         }
-        "get_agent_status" => queries::status(state, arguments).await,
-        "list_agents" => {
+        "agent_get" => queries::status(state, arguments).await,
+        "agent_list" => {
             let sight = reach(state, scope, caller).await?;
             queries::agents(state, &arguments, workspaces, sight.as_ref()).await
         }
-        "list_workspaces" => queries::workspaces(state, &arguments).await,
-        "list_pending_permissions" => {
+        "workspace_list" => queries::workspaces(state, &arguments).await,
+        "permission_list" => {
             let sight = reach(state, scope, caller).await?;
             queries::permissions(state, workspaces, sight.as_ref()).await
         }
-        "list_profiles" => queries::profiles(state).await,
-        "get_agent_activity" => queries::activity(state, arguments).await,
-        "inspect_provider" => queries::provider(state, arguments, caller).await,
-        "update_agent" => update_agent(state, arguments).await,
-        "kill_agent" => {
-            let mut result = rpc::execute(
-                state,
-                "agent.items.close.request",
-                json!({"agentIds":[arguments["agentId"]]}),
-            )
-            .await?;
-            result["success"] = json!(result["agents"][0]["agentId"] == arguments["agentId"]);
-            Ok(result)
-        }
-        "wait_for_agent" => {
+        "profile_list" => queries::profiles(state).await,
+        "agent_activity_read" => queries::activity(state, arguments).await,
+        "provider_get" => queries::provider(state, arguments, caller).await,
+        "agent_update" => update_agent(state, arguments).await,
+        "agent_wait" => {
             if arguments.get("timeoutMs").is_none() {
                 arguments["timeoutMs"] = json!(30_000);
             }
             rpc::execute(state, "agent.finish.wait.request", arguments).await
         }
-        "rename_workspace" => {
+        "workspace_rename" => {
             if arguments.get("workspaceId").is_none() {
                 arguments["workspaceId"] = caller
                     .and_then(|caller| caller.get("workspaceId"))
@@ -185,19 +180,23 @@ async fn dispatch(
             }
             rpc::execute(state, "workspace.title.set.request", arguments).await
         }
-        "capture_terminal" => {
+        "terminal_capture" => {
             if take(&mut arguments, "scrollback")? == Some(json!(true)) {
                 arguments["start"] = json!(0);
             }
             rpc::execute(state, "terminal.capture.request", arguments).await
         }
-        "send_terminal_keys" => terminal_keys(state, &arguments).await,
-        "create_schedule" | "create_heartbeat" => {
-            schedules::create(state, arguments, caller, tool.name == "create_heartbeat").await
+        "terminal_send" => terminal_keys(state, &arguments).await,
+        "schedule_create" | "heartbeat_create" => {
+            schedules::create(state, arguments, caller, tool.name == "heartbeat_create").await
         }
-        "list_schedules" => schedules::list(state).await,
-        "inspect_schedule" | "pause_schedule" | "resume_schedule" | "delete_schedule"
-        | "schedule_logs" | "run_schedule_once" | "update_schedule" | "delete_heartbeat" => {
+        "schedule_list" => schedules::list(state).await,
+        "heartbeat_list" => schedules::heartbeats(state, caller).await,
+        "notepad_list" | "notepad_read" | "notepad_write" | "notepad_delete" => {
+            notepad::execute(state, tool, arguments, scope, caller).await
+        }
+        "schedule_get" | "schedule_pause" | "schedule_resume" | "schedule_delete"
+        | "schedule_log_read" | "schedule_run" | "schedule_update" | "heartbeat_delete" => {
             schedules::operate(state, tool, arguments, caller).await
         }
         _ => rpc::execute(state, &tool.methods[0], arguments).await,
@@ -219,6 +218,7 @@ async fn reach(
 
 async fn update_agent(state: &Shared, mut arguments: Value) -> Result<Value, ErrorCode> {
     let settings = take(&mut arguments, "settings")?;
+    rename(&mut arguments, "title", "name")?;
     let id = arguments["agentId"].clone();
     // Validate and apply provider settings before committing the unrelated display metadata.
     let settings_result = if let Some(mut settings) = settings {

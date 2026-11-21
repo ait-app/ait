@@ -44,7 +44,7 @@ fn prefix_wraps_instructions_before_the_input() {
 #[test]
 fn compose_lists_enabled_groups_and_fences_memory() {
     let text = compose("PR titles in Chinese", &BotPermissions::default());
-    assert!(text.contains("workspace_overview"));
+    assert!(text.contains("bot_overview"));
     assert!(text.contains("<workspace-memory>\nPR titles in Chinese\n</workspace-memory>"));
     assert!(text.contains("schedules"));
     assert!(!text.contains("terminals"));
@@ -74,9 +74,12 @@ fn compose_reports_modes_and_follows_the_granted_groups() {
     assert!(text.contains("terminals"));
     assert!(text.contains("codex: auto;"));
     assert!(!text.contains("read-only"));
-    assert!(!text.contains("create_schedule"));
-    assert!(compose("", &BotPermissions::default()).contains("create_schedule"));
+    assert!(!text.contains("schedule_create"));
+    assert!(compose("", &BotPermissions::default()).contains("schedule_create"));
     assert!(text.contains("bot_memory_update"));
+    assert!(text.contains("notepad_write"));
+    permissions.groups.remove(&ToolGroup::Notepad);
+    assert!(!compose("", &permissions).contains("notepad"));
 }
 
 #[test]
@@ -133,15 +136,15 @@ fn compose_hands_work_off_to_ticketed_agents_instead_of_waiting() {
 
     for phrase in [
         "starting an agent opens a ticket for it",
-        "pass that ticket's ticketId to create_agent",
-        "call report_progress with kind blocked when it needs the user",
+        "pass that ticket's ticketId to agent_create",
+        "call ticket_report with kind blocked when it needs the user",
         "tell the user it has started and end your turn",
-        "Do not sit in wait_for_agent for long-running work",
+        "Do not sit in agent_wait for long-running work",
         "within about a minute",
         "close it with bot_ticket_update",
-        "bot_tickets",
+        "bot_ticket_list",
         "reporting on its ticket",
-        "Giving an agent more work with send_agent_prompt reopens its ticket",
+        "Giving an agent more work with agent_prompt reopens its ticket",
         "a new task needs a new agent",
         "You cannot answer an agent's permission request",
     ] {
@@ -209,7 +212,7 @@ fn compose_points_the_bot_at_bot_read_for_recall() {
         "Every id in the overview, a notification or a bot_read page can be read in turn",
         "a read pointer to pass as the resource",
         "Read a ticket with bot_read before following up on it",
-        "For an agent's own transcript use get_agent_activity",
+        "For an agent's own transcript use agent_activity_read",
         "you can read every conversation of this Bot",
         "any other conversation can read only itself and the work it started",
         "ends with a read pointer to the full notification",

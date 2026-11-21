@@ -155,6 +155,16 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("Create agent");
   });
 
+  it("labels a domain-first Ait tool name like its former name", () => {
+    const display = buildToolCallDisplayModel({
+      name: "mcp__ait__agent_create",
+      status: "running",
+      error: null,
+      detail: { type: "unknown", input: null, output: null },
+    });
+    expect(display.displayName).toBe("Create agent");
+  });
+
   it("humanizes list_agents Ait tool", () => {
     const display = buildToolCallDisplayModel({
       name: "mcp__ait__list_agents",

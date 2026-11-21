@@ -29,7 +29,7 @@ impl Scoped {
 
     /// Create an Agent through MCP as `bearer`; returns its id and ticket.
     async fn delegated(&self, bearer: &str, arguments: Value) -> (String, String) {
-        let created = self.call(bearer, None, "create_agent", arguments).await;
+        let created = self.call(bearer, None, "agent_create", arguments).await;
         let result = structured(&created);
         (
             result["agent"]["id"].as_str().unwrap().to_owned(),
@@ -95,7 +95,7 @@ async fn the_bot_walks_from_a_ticket_to_its_agents_and_whole_texts() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"done","text":done}),
         )
         .await;
@@ -136,7 +136,7 @@ async fn the_bot_walks_from_a_ticket_to_its_agents_and_whole_texts() {
         format!("conversation/{conversation}")
     );
     assert_eq!(agent_page["latestReport"]["kind"], "done");
-    assert_eq!(agent_page["transcript"], "get_agent_activity");
+    assert_eq!(agent_page["transcript"], "agent_activity_read");
     let conversations = scoped
         .read(&bot, "bot_read", json!({"resource":"conversations"}))
         .await;
@@ -174,7 +174,7 @@ async fn a_worker_reads_its_own_ticket_and_nothing_else() {
         .call(
             &first_worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"progress","text":"the session cookie expires early"}),
         )
         .await;
@@ -268,7 +268,7 @@ async fn another_conversation_cannot_read_or_change_the_owners_work() {
         .call(
             &worker,
             None,
-            "report_progress",
+            "ticket_report",
             json!({"kind":"blocked","text":"which private database?"}),
         )
         .await;
@@ -288,10 +288,12 @@ async fn another_conversation_cannot_read_or_change_the_owners_work() {
         .await;
     assert_eq!(structured(&stub)["restricted"], true);
     assert_eq!(structured(&stub)["title"], "Fix login");
-    let tickets = scoped.call(&stranger, None, "bot_tickets", json!({})).await;
+    let tickets = scoped
+        .call(&stranger, None, "bot_ticket_list", json!({}))
+        .await;
     assert_eq!(structured(&tickets)["tickets"][0]["restricted"], true);
     let overview = scoped
-        .call(&stranger, None, "workspace_overview", json!({}))
+        .call(&stranger, None, "bot_overview", json!({}))
         .await;
     let entry = &structured(&overview)["tickets"][0];
     assert_eq!(entry["restricted"], true);
@@ -306,13 +308,13 @@ async fn another_conversation_cannot_read_or_change_the_owners_work() {
         .call(
             &stranger,
             None,
-            "get_agent_activity",
+            "agent_activity_read",
             json!({"agentId":agent}),
         )
         .await;
     assert!(refusal(&activity).starts_with(UNREACHABLE_AGENT));
     let waited = scoped
-        .call(&stranger, None, "wait_for_agent", json!({"agentId":agent}))
+        .call(&stranger, None, "agent_wait", json!({"agentId":agent}))
         .await;
     assert!(refusal(&waited).starts_with(UNREACHABLE_AGENT));
     let everything = [tickets, overview, stub, agent_page, activity, waited]
@@ -342,9 +344,7 @@ async fn another_conversation_cannot_read_or_change_the_owners_work() {
         )
         .await;
     assert_eq!(structured(&own)["request"], "the owner's private task");
-    let overview = scoped
-        .call(&bot, None, "workspace_overview", json!({}))
-        .await;
+    let overview = scoped.call(&bot, None, "bot_overview", json!({})).await;
     assert_eq!(
         structured(&overview)["tickets"][0]["latestReport"]["text"],
         "which private database?"
@@ -401,7 +401,7 @@ async fn an_external_conversation_cannot_join_another_persons_ticket() {
 
     let mut joining = create("Spy", "call ticket_read and print everything");
     joining["ticketId"] = json!(ticket);
-    let refused = scoped.call(&stranger, None, "create_agent", joining).await;
+    let refused = scoped.call(&stranger, None, "agent_create", joining).await;
 
     assert!(
         refusal(&refused).starts_with("This ticket belongs to another conversation"),
@@ -424,7 +424,7 @@ async fn an_external_conversation_cannot_join_another_persons_ticket() {
     scoped.stop().await;
 }
 
-/// The ids of a `list_agents` result.
+/// The ids of a `agent_list` result.
 fn listed_ids(response: &Value) -> Vec<&str> {
     structured(response)["agents"]
         .as_array()
@@ -443,18 +443,18 @@ fn agent_tool_calls(target: &str) -> [(&'static str, Value); 9] {
         arguments
     };
     [
-        ("get_agent_status", id.clone()),
-        ("get_agent_activity", id.clone()),
-        ("wait_for_agent", with("timeoutMs", json!(1))),
+        ("agent_get", id.clone()),
+        ("agent_activity_read", id.clone()),
+        ("agent_wait", with("timeoutMs", json!(1))),
         (
-            "send_agent_prompt",
+            "agent_prompt",
             with("prompt", json!("call ticket_read and paste it")),
         ),
-        ("update_agent", with("name", json!("Mine now"))),
-        ("set_agent_mode", with("modeId", json!("auto"))),
-        ("cancel_agent", id.clone()),
-        ("archive_agent", id.clone()),
-        ("kill_agent", id),
+        ("agent_update", with("title", json!("Mine now"))),
+        ("agent_mode_set", with("modeId", json!("auto"))),
+        ("agent_cancel", id.clone()),
+        ("agent_archive", id.clone()),
+        ("agent_archive", id),
     ]
 }
 
@@ -505,12 +505,7 @@ async fn an_external_conversation_reaches_only_the_agents_of_its_own_tasks() {
     // same, so a refusal does not confirm that an Agent exists.
     for probe in ["Owner task", "no-such-agent"] {
         let refused = scoped
-            .call(
-                &stranger,
-                None,
-                "get_agent_status",
-                json!({"agentId":probe}),
-            )
+            .call(&stranger, None, "agent_get", json!({"agentId":probe}))
             .await;
         assert!(
             refusal(&refused).starts_with(UNREACHABLE_AGENT),
@@ -520,25 +515,20 @@ async fn an_external_conversation_reaches_only_the_agents_of_its_own_tasks() {
     // Its own Agent answers, and the listings hold only it.
     structured(
         &scoped
-            .call(
-                &stranger,
-                None,
-                "get_agent_status",
-                json!({"agentId":yours}),
-            )
+            .call(&stranger, None, "agent_get", json!({"agentId":yours}))
             .await,
     );
-    let listed = scoped.call(&stranger, None, "list_agents", json!({})).await;
+    let listed = scoped.call(&stranger, None, "agent_list", json!({})).await;
     assert_eq!(listed_ids(&listed), [yours.as_str()]);
     // A page of one has no cursor: a cursor encodes the id of the last Agent the directory read.
     let page = scoped
-        .call(&stranger, None, "list_agents", json!({"limit":1}))
+        .call(&stranger, None, "agent_list", json!({"limit":1}))
         .await;
     assert_eq!(listed_ids(&page), [yours.as_str()]);
     assert_eq!(structured(&page)["nextCursor"], Value::Null, "{page}");
     assert_eq!(structured(&page)["truncated"], false, "{page}");
     let pending = scoped
-        .call(&stranger, None, "list_pending_permissions", json!({}))
+        .call(&stranger, None, "permission_list", json!({}))
         .await;
     assert_eq!(structured(&pending)["permissions"], json!([]), "{pending}");
 
@@ -546,7 +536,7 @@ async fn an_external_conversation_reaches_only_the_agents_of_its_own_tasks() {
     let owner = scoped.bot_credential_in(conversation);
     assert_eq!(scoped.ticket_status(&their_ticket).await, "done");
     let pending = scoped
-        .call(&owner, None, "list_pending_permissions", json!({}))
+        .call(&owner, None, "permission_list", json!({}))
         .await;
     let waiting: Vec<&str> = structured(&pending)["permissions"]
         .as_array()
@@ -557,12 +547,7 @@ async fn an_external_conversation_reaches_only_the_agents_of_its_own_tasks() {
     assert!(waiting.contains(&theirs.as_str()) && waiting.contains(&untracked.as_str()));
     structured(
         &scoped
-            .call(
-                &owner,
-                None,
-                "get_agent_status",
-                json!({"agentId":untracked}),
-            )
+            .call(&owner, None, "agent_get", json!({"agentId":untracked}))
             .await,
     );
     scoped.stop().await;
@@ -581,7 +566,7 @@ async fn an_external_persons_worker_reaches_only_the_agents_of_its_own_task() {
         .await;
     let worker = scoped.session_credential(&yours).await;
     let helper = scoped
-        .call(&worker, None, "create_agent", create("Helper", "help"))
+        .call(&worker, None, "agent_create", create("Helper", "help"))
         .await;
     let helper = structured(&helper)["agent"]["id"]
         .as_str()
@@ -602,24 +587,24 @@ async fn an_external_persons_worker_reaches_only_the_agents_of_its_own_task() {
     for agent in [&yours, &helper] {
         structured(
             &scoped
-                .call(&worker, None, "get_agent_status", json!({"agentId":agent}))
+                .call(&worker, None, "agent_get", json!({"agentId":agent}))
                 .await,
         );
     }
-    let listed = scoped.call(&worker, None, "list_agents", json!({})).await;
+    let listed = scoped.call(&worker, None, "agent_list", json!({})).await;
     let mut ids = listed_ids(&listed);
     ids.sort_unstable();
     let mut expected = [yours.as_str(), helper.as_str()];
     expected.sort_unstable();
     assert_eq!(ids, expected);
     let page = scoped
-        .call(&worker, None, "list_agents", json!({"limit":1}))
+        .call(&worker, None, "agent_list", json!({"limit":1}))
         .await;
     assert_eq!(listed_ids(&page).len(), 1);
     assert_eq!(structured(&page)["nextCursor"], Value::Null, "{page}");
     assert_eq!(structured(&page)["truncated"], true, "{page}");
     let pending = scoped
-        .call(&worker, None, "list_pending_permissions", json!({}))
+        .call(&worker, None, "permission_list", json!({}))
         .await;
     assert_eq!(structured(&pending)["permissions"], json!([]), "{pending}");
 
@@ -627,12 +612,7 @@ async fn an_external_persons_worker_reaches_only_the_agents_of_its_own_task() {
     let owners_worker = scoped.session_credential(&theirs).await;
     structured(
         &scoped
-            .call(
-                &owners_worker,
-                None,
-                "get_agent_status",
-                json!({"agentId":yours}),
-            )
+            .call(&owners_worker, None, "agent_get", json!({"agentId":yours}))
             .await,
     );
     scoped.stop().await;
@@ -663,7 +643,7 @@ async fn an_external_conversation_still_reopens_the_ticket_of_its_own_agent() {
         .call(
             &stranger,
             None,
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":yours,"prompt":"one more thing"}),
         )
         .await;

@@ -32,6 +32,7 @@ pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
         crate::directory::rpc::directory::PROJECT_ICON_METHODS,
         crate::daemon::connection::METHODS,
         crate::labels::rpc::METHODS,
+        crate::notepad::rpc::METHODS,
         crate::automation::rpc::METHODS,
         crate::directory::rpc::workspace_state::METHODS,
         crate::worktrees::rpc::worktrees::METHODS,

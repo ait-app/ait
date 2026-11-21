@@ -386,6 +386,7 @@ impl Api {
             daemon: services.daemon.map(Arc::new),
             directory: directory.map(shared_service),
             workspace_labels: services.workspace_labels.map(shared_service),
+            workspace_notepads: services.workspace_notepads.map(shared_service),
             workspace_automation: services.workspace_automation,
             workspace_state: services.workspace_state.map(shared_service),
             worktrees,

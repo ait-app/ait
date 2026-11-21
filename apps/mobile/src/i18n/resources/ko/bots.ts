@@ -20,6 +20,7 @@ export const bots = {
   groupSchedules: "일정: 일정 생성 및 관리",
   groupScripts: "스크립트: 워크스페이스 스크립트 실행",
   groupTerminals: "터미널: 터미널 생성 및 입력",
+  groupNotepad: "메모장: 워크스페이스 공유 메모 작성 및 삭제",
   permissionRiskHint: "명령을 실행할 수 있습니다.",
   modeCap: "기본 에이전트 모드",
   modeNotAllowed: "허용 안 함",

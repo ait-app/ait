@@ -9,6 +9,7 @@ use crate::directory::service::{
     workspace_state::WorkspaceState,
 };
 use crate::labels::service::WorkspaceLabels;
+use crate::notepad::service::WorkspaceNotepads;
 use crate::push::service::PushTokens;
 use crate::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 
@@ -23,6 +24,8 @@ pub struct Dependencies {
     pub directory: Directory,
     /// Workspace labels and subscriptions.
     pub workspace_labels: WorkspaceLabels,
+    /// Notes shared by the Agents of one Workspace.
+    pub workspace_notepads: WorkspaceNotepads,
     /// Shared setup and script lifecycle.
     pub workspace_automation: Arc<Mutex<WorkspaceAutomation>>,
     /// Workspace attention use cases.

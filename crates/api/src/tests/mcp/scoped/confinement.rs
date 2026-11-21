@@ -84,7 +84,7 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
 
     let mut outside = create("Outside");
     outside["workspaceId"] = json!(scoped.other);
-    forbidden(&call("create_agent", outside).await);
+    forbidden(&call("agent_create", outside).await);
 
     let own = scoped
         .agent_in(
@@ -105,17 +105,17 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
     for agent in [&own, &foreign] {
         scoped.awaiting_permission(agent).await;
     }
-    forbidden(&call("get_agent_status", json!({"agentId":foreign})).await);
+    forbidden(&call("agent_get", json!({"agentId":foreign})).await);
     // A prefix resolves to the foreign Agent; the resolved Workspace decides.
-    forbidden(&call("cancel_agent", json!({"agentId":&foreign[..8]})).await);
-    structured(&call("get_agent_status", json!({"agentId":&own[..8]})).await);
+    forbidden(&call("agent_cancel", json!({"agentId":&foreign[..8]})).await);
+    structured(&call("agent_get", json!({"agentId":&own[..8]})).await);
 
     let foreign_schedule = id(
         &scoped
             .call(
                 TOKEN,
                 None,
-                "create_schedule",
+                "schedule_create",
                 json!({"workspaceId":scoped.other,"provider":"codex","prompt":"report",
                     "cron":"0 9 * * *"}),
             )
@@ -124,51 +124,51 @@ async fn scoped_calls_cannot_reach_other_workspaces() {
     );
     let own_schedule = id(
         &call(
-            "create_schedule",
+            "schedule_create",
             json!({"provider":"codex","prompt":"report","cron":"0 9 * * *"}),
         )
         .await,
         "/schedule/id",
     );
-    for tool in ["inspect_schedule", "pause_schedule", "schedule_logs"] {
-        forbidden(&call(tool, json!({"id":foreign_schedule})).await);
+    for tool in ["schedule_get", "schedule_pause", "schedule_log_read"] {
+        forbidden(&call(tool, json!({"scheduleId":foreign_schedule})).await);
     }
-    structured(&call("inspect_schedule", json!({"id":own_schedule})).await);
+    structured(&call("schedule_get", json!({"scheduleId":own_schedule})).await);
 
     let foreign_terminal = scoped.terminal(&scoped.other, &scoped.other_cwd).await;
-    forbidden(&call("capture_terminal", json!({"terminalId":foreign_terminal})).await);
+    forbidden(&call("terminal_capture", json!({"terminalId":foreign_terminal})).await);
     forbidden(
         &call(
-            "send_terminal_keys",
+            "terminal_send",
             json!({"terminalId":foreign_terminal,"keys":"Enter"}),
         )
         .await,
     );
-    forbidden(&call("kill_terminal", json!({"terminalId":foreign_terminal})).await);
-    let own_terminal = id(&call("create_terminal", json!({})).await, "/terminal/id");
-    structured(&call("capture_terminal", json!({"terminalId":own_terminal})).await);
-    let terminals = call("list_terminals", json!({})).await;
+    forbidden(&call("terminal_kill", json!({"terminalId":foreign_terminal})).await);
+    let own_terminal = id(&call("terminal_create", json!({})).await, "/terminal/id");
+    structured(&call("terminal_capture", json!({"terminalId":own_terminal})).await);
+    let terminals = call("terminal_list", json!({})).await;
     assert_eq!(
         ids(structured(&terminals), "terminals"),
         [own_terminal.as_str()]
     );
-    let listed = call("list_terminals", json!({"workspaceId":scoped.other})).await;
+    let listed = call("terminal_list", json!({"workspaceId":scoped.other})).await;
     forbidden(&listed);
 
-    let agents = call("list_agents", json!({})).await;
+    let agents = call("agent_list", json!({})).await;
     assert_eq!(ids(structured(&agents), "agents"), [own.as_str()]);
-    let pending = call("list_pending_permissions", json!({})).await;
+    let pending = call("permission_list", json!({})).await;
     assert_eq!(ids(structured(&pending), "permissions"), [own.as_str()]);
-    let schedules = call("list_schedules", json!({})).await;
+    let schedules = call("schedule_list", json!({})).await;
     assert_eq!(
         ids(structured(&schedules), "schedules"),
         [own_schedule.as_str()]
     );
 
     let cwd = json!(scoped.cwd);
-    forbidden(&call("create_terminal", json!({"cwd":cwd})).await);
-    forbidden(&call("list_models", json!({"provider":"codex","cwd":cwd})).await);
-    structured(&call("list_models", json!({"provider":"codex"})).await);
+    forbidden(&call("terminal_create", json!({"cwd":cwd})).await);
+    forbidden(&call("provider_model_list", json!({"provider":"codex","cwd":cwd})).await);
+    structured(&call("provider_model_list", json!({"provider":"codex"})).await);
     scoped.stop().await;
 }
 
@@ -179,7 +179,7 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     let conversation = ConversationId::generate().to_string();
     let bot = scoped.bot_credential_in(conversation.parse().unwrap());
     let created = scoped
-        .call(&bot, None, "create_agent", create("Child"))
+        .call(&bot, None, "agent_create", create("Child"))
         .await;
     let child = id(&created, "/agent/id");
     let labels = scoped.labels(&child).await;
@@ -193,7 +193,7 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
             .call(
                 &credential,
                 None,
-                "respond_to_permission",
+                "permission_respond",
                 json!({"agentId":child,"requestId":"request","response":{}}),
             )
             .await,
@@ -203,12 +203,12 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     escalated["settings"] = json!({"modeId":"full-access"});
     forbidden(
         &scoped
-            .call(&credential, None, "create_agent", escalated)
+            .call(&credential, None, "agent_create", escalated)
             .await,
     );
     let grandchild = id(
         &scoped
-            .call(&credential, None, "create_agent", create("Grandchild"))
+            .call(&credential, None, "agent_create", create("Grandchild"))
             .await,
         "/agent/id",
     );
@@ -219,14 +219,14 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     // Neither the subtree nor the host may name another origin conversation.
     let mut forged = create("Forged");
     forged["labels"] = json!({BOT_CONVERSATION_LABEL:ConversationId::generate()});
-    forbidden(&scoped.call(&credential, None, "create_agent", forged).await);
+    forbidden(&scoped.call(&credential, None, "agent_create", forged).await);
     for token in [credential.as_str(), TOKEN] {
         forbidden(
             &scoped
                 .call(
                     token,
                     None,
-                    "update_agent",
+                    "agent_update",
                     json!({"agentId":grandchild,
                         "labels":{BOT_CONVERSATION_LABEL:ConversationId::generate()}}),
                 )
@@ -236,13 +236,13 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
     let mut host = create("Host");
     host["workspaceId"] = json!(scoped.workspace);
     host["labels"] = json!({BOT_CONVERSATION_LABEL:ConversationId::generate()});
-    forbidden(&scoped.call(TOKEN, None, "create_agent", host).await);
+    forbidden(&scoped.call(TOKEN, None, "agent_create", host).await);
     forbidden(
         &scoped
             .call(
                 &credential,
                 None,
-                "update_agent",
+                "agent_update",
                 json!({"agentId":grandchild,"labels":{BOT_SCOPE_LABEL:scoped.other}}),
             )
             .await,
@@ -253,7 +253,7 @@ async fn subtree_child_inherits_scope_and_cannot_escalate() {
             .call(
                 TOKEN,
                 None,
-                "update_agent",
+                "agent_update",
                 json!({"agentId":grandchild,"labels":{"ait.bot.note":"x"}}),
             )
             .await,
@@ -272,48 +272,39 @@ async fn command_tools_reach_every_agent_in_scope_only() {
     let call = |tool: &'static str, arguments: Value| scoped.call(&bot, None, tool, arguments);
     let user = scoped.agent(json!({})).await;
     let prefix = &user[..8];
-    structured(
-        &call(
-            "send_agent_prompt",
-            json!({"agentId":prefix,"prompt":"hello"}),
-        )
-        .await,
-    );
-    structured(&call("set_agent_mode", json!({"agentId":prefix,"modeId":"auto"})).await);
+    structured(&call("agent_prompt", json!({"agentId":prefix,"prompt":"hello"})).await);
+    structured(&call("agent_mode_set", json!({"agentId":prefix,"modeId":"auto"})).await);
     forbidden(
         &call(
-            "set_agent_mode",
+            "agent_mode_set",
             json!({"agentId":user,"modeId":"full-access"}),
         )
         .await,
     );
     forbidden(
         &call(
-            "update_agent",
+            "agent_update",
             json!({"agentId":user,"settings":{"modeId":"full-access"}}),
         )
         .await,
     );
-    structured(&call("update_agent", json!({"agentId":prefix,"name":"Renamed"})).await);
-    let status = call("get_agent_status", json!({"agentId":user})).await;
+    structured(&call("agent_update", json!({"agentId":prefix,"title":"Renamed"})).await);
+    let status = call("agent_get", json!({"agentId":user})).await;
     assert_eq!(structured(&status)["snapshot"]["title"], "Renamed");
-    let cancelled = call("cancel_agent", json!({"agentId":prefix})).await;
+    let cancelled = call("agent_cancel", json!({"agentId":prefix})).await;
     assert_eq!(cancelled["result"]["isError"], false, "{cancelled}");
 
     let foreign = scoped
         .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)
         .await;
     for (tool, arguments) in [
+        ("agent_prompt", json!({"agentId":foreign,"prompt":"hello"})),
+        ("agent_update", json!({"agentId":foreign,"title":"Renamed"})),
         (
-            "send_agent_prompt",
-            json!({"agentId":foreign,"prompt":"hello"}),
-        ),
-        ("update_agent", json!({"agentId":foreign,"name":"Renamed"})),
-        (
-            "set_agent_mode",
+            "agent_mode_set",
             json!({"agentId":foreign,"modeId":"read-only"}),
         ),
-        ("cancel_agent", json!({"agentId":foreign})),
+        ("agent_cancel", json!({"agentId":foreign})),
     ] {
         forbidden(&call(tool, arguments).await);
     }
@@ -336,7 +327,7 @@ async fn bots_and_their_agents_cannot_create_workspaces() {
             .call(
                 &bot,
                 None,
-                "create_workspace",
+                "workspace_create",
                 json!({"isolation":isolation}),
             )
             .await;
@@ -350,7 +341,7 @@ async fn bots_and_their_agents_cannot_create_workspaces() {
         .call(
             TOKEN,
             None,
-            "create_workspace",
+            "workspace_create",
             json!({"isolation":"worktree","path":scoped.cwd}),
         )
         .await;

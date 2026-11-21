@@ -207,6 +207,16 @@ fn methods_are_classified_by_default_deny() {
     assert!(!Rule::Deny.admits(ResourceKind::Node));
 }
 
+#[test]
+fn the_workspace_notepad_is_not_shared_with_guests() {
+    // Not in its first version (ADR-296); the default denial covers every grant kind.
+    for method in ["list", "get", "write", "delete"] {
+        let rule = classify(&format!("workspace.notepad.{method}.request"));
+        assert_eq!(rule, Rule::Deny, "{method}");
+        assert!(!rule.admits(ResourceKind::Workspace) && !rule.admits(ResourceKind::Node));
+    }
+}
+
 #[tokio::test]
 async fn host_and_owner_methods_are_forbidden() {
     let guest = Guest::new().await;

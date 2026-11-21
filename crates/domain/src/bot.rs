@@ -108,7 +108,7 @@ pub struct Bot {
     /// User-configured MCP tool groups and per-provider mode cap.
     #[serde(default)]
     pub permissions: BotPermissions,
-    /// Unarchived worktree Workspaces this Bot created before Bots lost `create_workspace`; they
+    /// Unarchived worktree Workspaces this Bot created before Bots lost `workspace_create`; they
     /// stay in scope so the Agents already working there keep their access.
     #[serde(default)]
     pub workspaces: BTreeSet<String>,

@@ -13,7 +13,7 @@ async fn assert_child(client: &Client, cwd: &std::path::Path, id: &str, workspac
     assert_eq!(child["agent"]["workspaceId"], workspace);
     assert_eq!(
         client
-            .tool("get_agent_status", json!({"agentId":child_id}), None)
+            .tool("agent_get", json!({"agentId":child_id}), None)
             .await["snapshot"]["labels"]["paseo.parent-agent-id"],
         id
     );
@@ -33,15 +33,13 @@ fn assert_private(state: &std::path::Path, log: &std::path::Path, credential: &s
 async fn probe(client: &Client, id: &str) {
     client
         .tool(
-            "send_agent_prompt",
+            "agent_prompt",
             json!({"agentId":id,"prompt":"ait-mcp-probe"}),
             None,
         )
         .await;
     assert_eq!(
-        client
-            .tool("wait_for_agent", json!({"agentId":id}), None)
-            .await["lastMessage"],
+        client.tool("agent_wait", json!({"agentId":id}), None).await["lastMessage"],
         "Echo: mcp-injection-ok"
     );
 }
@@ -56,7 +54,7 @@ async fn native_client_calls_injected_mcp_across_turns_and_daemon_restart() {
     let client = Client::new(&address);
     let workspace = client
         .tool(
-            "create_workspace",
+            "workspace_create",
             json!({"path":cwd,"isolation":"local"}),
             None,
         )
@@ -64,16 +62,14 @@ async fn native_client_calls_injected_mcp_across_turns_and_daemon_restart() {
     let workspace_id = workspace["workspace"]["id"].as_str().unwrap();
     let created = client
         .tool(
-            "create_agent",
+            "agent_create",
             json!({"provider":"codex/offline-model","workspaceId":workspace_id,
                 "title":"MCP injection probe","initialPrompt":"ready"}),
             None,
         )
         .await;
     let id = created["agentId"].as_str().unwrap();
-    client
-        .tool("wait_for_agent", json!({"agentId":id}), None)
-        .await;
+    client.tool("agent_wait", json!({"agentId":id}), None).await;
 
     probe(&client, id).await;
     probe(&client, id).await;
@@ -91,7 +87,7 @@ async fn native_client_calls_injected_mcp_across_turns_and_daemon_restart() {
     let authorization = server["http_headers"]["Authorization"].as_str().unwrap();
     assert_ne!(authorization, format!("Bearer {TOKEN}"));
     assert_private(&state, &log, authorization.trim_start_matches("Bearer "));
-    let listed = client.tool("list_workspaces", json!({}), None).await;
+    let listed = client.tool("workspace_list", json!({}), None).await;
     assert_eq!(
         listed["workspaces"][0]["title"],
         "Renamed through injected MCP"

@@ -20,6 +20,7 @@ export const bots = {
   groupSchedules: "Schedules: create and manage schedules",
   groupScripts: "Scripts: run workspace scripts",
   groupTerminals: "Terminals: create terminals and type into them",
+  groupNotepad: "Notepad: write and delete shared workspace notes",
   permissionRiskHint: "Can run commands.",
   modeCap: "Default agent mode",
   modeNotAllowed: "Not allowed",

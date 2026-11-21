@@ -34,6 +34,7 @@ use metadata::directory::service::github_projects::GithubProjects;
 use metadata::directory::service::workspace_names::WorkspaceNames;
 use metadata::directory::service::workspace_state::WorkspaceState;
 use metadata::labels::service::WorkspaceLabels;
+use metadata::notepad::service::WorkspaceNotepads;
 use metadata::worktrees::service::workspace_recovery::WorkspaceRecovery;
 use metadata::worktrees::service::worktrees::Worktrees;
 use metadata::worktrees::service::worktrees::provisioning::WorkspaceWorktrees;
@@ -391,7 +392,6 @@ fn compose_services(
 ) -> anyhow::Result<ComposedServices> {
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
-    let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let skills = compose_skills(&config.data_dir)?;
     let agents = compose_agents(&config.data_dir, instance)?;
     let server_id = instance.server_id.to_string();
@@ -464,7 +464,8 @@ fn compose_services(
             Box::new(LocalGithubProjects::new()),
         ),
         directory,
-        workspace_labels,
+        workspace_labels: compose_workspace_labels(config, &storage.workspaces)?,
+        workspace_notepads: compose_workspace_notepads(config, &storage.workspaces)?,
         workspace_automation,
         workspace_state,
         worktrees,
@@ -554,6 +555,20 @@ fn compose_workspace_labels(
     Ok(WorkspaceLabels::new(Box::new(
         FileWorkspaceLabelStore::new(&config.data_dir, workspaces.clone()),
     ))?)
+}
+
+fn compose_workspace_notepads(
+    config: &Config,
+    workspaces: &FileBackedWorkspaceRegistry,
+) -> anyhow::Result<WorkspaceNotepads> {
+    let store = persistence::storage::notepad::SqliteNotepadStore::open(
+        &config.data_dir.join("notepads/notepads.sqlite3"),
+    )
+    .map_err(|_| anyhow::anyhow!("initialize workspace notepads"))?;
+    Ok(WorkspaceNotepads::new(
+        Arc::new(store),
+        Box::new(workspaces.clone()),
+    ))
 }
 
 /// Compose the Bot and schedule services and feed Agent attention, terminal attention and

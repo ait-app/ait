@@ -24,13 +24,13 @@ use super::{creation, recall, take};
 
 /// Refusal for a `ticketId` that names no ticket of the calling Bot.
 const UNKNOWN_TICKET: &str =
-    "No such ticket; call bot_tickets to list your tickets, or omit ticketId to open a new one";
+    "No such ticket; call bot_ticket_list to list your tickets, or omit ticketId to open a new one";
 /// Refusal for starting an Agent on a closed ticket.
 const CLOSED_TICKET: &str = "This ticket is closed; reopen it with bot_ticket_update \
     (status \"open\") before starting another Agent on it, or omit ticketId to open a new ticket";
 /// Refusal for starting an Agent on a ticket that already has the most Agents.
 const FULL_TICKET: &str = "This ticket already has the most Agents it can hold; give the work \
-    to one of its Agents with send_agent_prompt, or omit ticketId to open a new ticket";
+    to one of its Agents with agent_prompt, or omit ticketId to open a new ticket";
 /// Refusal for closing a closed ticket with another status.
 const CLOSED_CONFLICT: &str = "This ticket is already closed with another status; reopen it \
     with status \"open\" first if you need to change it";
@@ -63,7 +63,7 @@ const REPORT_GONE: &str = "Your ticket no longer exists, so the report was not r
 pub(super) fn handles(tool: &str) -> bool {
     matches!(
         tool,
-        "bot_tickets" | "bot_ticket_update" | "report_progress"
+        "bot_ticket_list" | "bot_ticket_update" | "ticket_report"
     )
 }
 
@@ -81,7 +81,7 @@ pub(super) async fn execute(
     let scope = scope.ok_or(ErrorCode::Forbidden)?;
     let root = scope.caller.root.as_str();
     match tool {
-        "bot_tickets" => {
+        "bot_ticket_list" => {
             let params = json!({"workspaceId":root,
                 "includeClosed":arguments.get("includeClosed").unwrap_or(&json!(false))});
             let mut listed = rpc::execute(state, "bot.ticket.list.request", params).await?;
@@ -452,7 +452,7 @@ async fn pull(
         .map_err(|refusal| Failure::Refused(refusal.message()))
 }
 
-/// `report_progress`: a subtree Agent reports on the ticket its own label names.
+/// `ticket_report`: a subtree Agent reports on the ticket its own label names.
 ///
 /// The label is daemon-written, so it authorizes the report as it did the creation; an Agent
 /// not yet assigned, because its assignment failed or the ticket was full, is assigned while
@@ -506,7 +506,7 @@ async fn report(
     }
 }
 
-/// Before a Bot session's `send_agent_prompt` reaches confined Agent `arguments.agentId`,
+/// Before a Bot session's `agent_prompt` reaches confined Agent `arguments.agentId`,
 /// reopen that Agent's closed ticket, so its reports on the new work are recorded. At the open
 /// ticket limit open slots are freed as for opening a ticket and the reopen is retried once.
 /// Best effort: the prompt goes through either way, and a ticket reopened for a prompt that

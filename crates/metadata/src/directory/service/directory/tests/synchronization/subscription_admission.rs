@@ -27,6 +27,7 @@ fn state(runtime: Arc<Runtime>, directory: Directory) -> crate::dispatch::State 
         push_tokens: None,
         daemon: None,
         workspace_labels: None,
+        workspace_notepads: None,
         workspace_automation: None,
         workspace_state: None,
         worktrees: None,

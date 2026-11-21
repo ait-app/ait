@@ -49,7 +49,7 @@ const DELIVERY_FAILURE_LIMIT: u32 = 8;
 const DELIVERY_FAILURE_WINDOW: TimeDelta = TimeDelta::minutes(10);
 /// How long an unclosed ticket without assignments may wait for its first Agent before Ait may
 /// remove it as left behind by a crash (ADR-274 section 6): well past the five minutes a
-/// detached scoped `create_agent` may take between opening the ticket and creating the Agent.
+/// detached scoped `agent_create` may take between opening the ticket and creating the Agent.
 pub const ORPHAN_GRACE: TimeDelta = TimeDelta::hours(1);
 
 /// Where a ticket stands; `done`, `failed` and `cancelled` are closed.

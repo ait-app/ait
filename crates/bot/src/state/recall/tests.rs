@@ -612,7 +612,7 @@ fn agents_lead_to_their_ticket_and_conversation_within_the_reader_rule() {
     assert_eq!(seen["ticket"]["read"], format!("ticket/{task}"));
     assert_eq!(seen["conversation"], format!("conversation/{alice}"));
     assert_eq!(seen["latestReport"]["text"], "fixed");
-    assert_eq!(seen["transcript"], "get_agent_activity");
+    assert_eq!(seen["transcript"], "agent_activity_read");
     // Alice reads the Agent of her own task in full.
     let own = agent(Reader::Conversation(alice));
     assert_eq!(own["title"], "Fixer");

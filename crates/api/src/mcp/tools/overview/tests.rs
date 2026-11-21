@@ -42,6 +42,7 @@ fn sources<'a>(
         memory: &MEMORY,
         notifications: &NONE,
         tickets: &NONE,
+        notepad: &NONE,
         sight: None,
         permissions,
     }
@@ -100,7 +101,7 @@ fn workspace_overview_is_bounded_and_scoped() {
     assert_eq!(overview["permissions"]["groups"][0], "observe");
     // Dropped entries say where each list reads whole.
     assert_eq!(overview["more"]["tickets"]["read"], "tickets");
-    assert_eq!(overview["more"]["agents"]["tool"], "list_agents");
+    assert_eq!(overview["more"]["agents"]["tool"], "agent_list");
 }
 
 #[test]
@@ -111,7 +112,7 @@ fn small_overview_lists_its_agents_and_is_not_truncated() {
     let overview = project(&sources(&own, &own, &[], &workspaces, &permissions));
     assert_eq!(overview["truncated"], false);
     assert!(overview.get("more").is_none());
-    // An Agent's result reads through get_agent_activity; the directory carries no text of it.
+    // An Agent's result reads through agent_activity_read; the directory carries no text of it.
     assert_eq!(
         overview["botAgents"][0],
         json!({"id":"agent-0","title":"T".repeat(60),"provider":"codex","status":"idle",

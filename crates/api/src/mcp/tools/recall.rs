@@ -32,7 +32,7 @@ const NOT_KEPT_WORKER: &str = "Nothing is kept under this resource: your ticket 
 /// Agent, so a refusal does not confirm that an Agent exists (ADR-280 §4).
 pub(in crate::mcp) const UNREACHABLE_AGENT: &str = "No Agent this conversation may reach matches \
     this id: it is unknown, or it works for another conversation of the Workspace Bot or for \
-    the workspace owner. Use the Agents of this conversation's own tickets or list_agents; only \
+    the workspace owner. Use the Agents of this conversation's own tickets or agent_list; only \
     the workspace owner's Ait conversation reaches every Agent";
 /// Refusal for a record another conversation originated.
 const OTHER_CONVERSATION: &str = "This belongs to another conversation of the Workspace Bot, \

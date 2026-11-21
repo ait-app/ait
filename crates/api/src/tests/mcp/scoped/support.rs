@@ -288,6 +288,15 @@ fn metadata(
             registries.workspaces.clone(),
         )))
         .unwrap(),
+        workspace_notepads: metadata::notepad::service::WorkspaceNotepads::new(
+            Arc::new(
+                persistence::storage::notepad::SqliteNotepadStore::open(
+                    &data.join("notepads/notepads.sqlite3"),
+                )
+                .unwrap(),
+            ),
+            Box::new(registries.workspaces.clone()),
+        ),
         workspace_automation: Arc::new(Mutex::new(WorkspaceAutomation::new(
             Box::new(registries.workspaces.clone()),
             Box::new(LocalWorkspaceAutomation::new(Arc::new(

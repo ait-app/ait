@@ -3702,6 +3702,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceBotNotifications: z.boolean().optional(),
         workspaceBotTickets: z.boolean().optional(),
         workspaceBotTicketAnswers: z.boolean().optional(),
+        workspaceNotepad: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
         workspaceBotLarkSetup: z.boolean().optional(),
         workspaceBotTelegramSetup: z.boolean().optional(),
