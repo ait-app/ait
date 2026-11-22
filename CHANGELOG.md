@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.2.24 - 2026-11-22
+
+- The MCP tool catalog was reorganized, and every tool is now named `<domain>[_<object>]_<verb>`, such as `agent_create`, `schedule_pause`, `bot_ticket_list` and `ticket_report`. The previous names still work: `tools/list` shows only the new ones, but `tools/call` resolves a retired name to its tool, rewrites the argument names that tool used before and grants nothing its tool does not; every retired name is counted and logged on its first call and on each doubling, and none of them is removed before 2026-12-22. Argument names were aligned as well, with `agent_update.title`, `scheduleId` on the schedule tools, `heartbeatId` on `heartbeat_delete` and `schedule_update.modeId`, the new `heartbeat_list` returns the calling agent's heartbeats, and `kill_agent` now returns the archive result ([#814](https://github.com/ait-app/ait/pull/814)).
+
+- Every workspace has one notepad that the daemon holds for it, and the agents working in that workspace and the people opening its Notepad tab use the same one. Agents read and write it through the `notepad_read` and `notepad_write` tools, where an append adds a block signed with the author and the time instead of overwriting anyone, and a replace has to name the revision it read or it is refused with the current revision. The tab polls every three seconds while it is focused, autosaves with the revision it read and offers a reload on a conflict, and a host without the feature shows a hint to update the host ([#814](https://github.com/ait-app/ait/pull/814)).
+
+- The notepad is now a Markdown file in the data directory, at `<data-dir>/notepads/<workspace id>/notepad.md`, outside the checkout, and the Notepad tab opens it in the same file editor as any other file, so live updates, conditional saves, conflict prompts and the Markdown preview all come from the file pane. The file is created on the first read, a non-empty `.ait-notebook.md` from earlier versions is imported once and left untouched, and notes written with a build of today's main are not carried over. The notepad is read-only on iOS and Android, where it shows a rendered preview ([#815](https://github.com/ait-app/ait/pull/815)).
+
 ## 0.2.23 - 2026-11-22
 
 - The Android build no longer hides the app from Google Play on devices that do not report the portrait feature, such as Chromebooks and desktop-style devices. The Expo config keeps the app locked to portrait, which Android reads as a hardware requirement, so a config plugin now declares it as required="false"; the lock itself stays as it is on phones, because it is a layout preference rather than a hardware need ([#809](https://github.com/ait-app/ait/pull/809)).
