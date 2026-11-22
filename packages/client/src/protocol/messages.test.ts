@@ -571,6 +571,25 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
   }
 });
 
+it("advertises the workspace notepad only when the daemon declares both of its methods", () => {
+  expect(info(["workspace.notepad.get.request"])?.features?.workspaceNotepad).toBe(false);
+  expect(
+    info(["workspace.notepad.get.request", "workspace.notepad.write.request"])?.features
+      ?.workspaceNotepad,
+  ).toBe(true);
+});
+
+it("turns a notepad result into the response the client validates", () => {
+  const result = { workspaceId: "wks_1", revision: 0, text: "" };
+  const request = { type: "workspace.notepad.get.request", requestId: "r1", workspaceId: "wks_1" };
+  const message = responseMessage("workspace.notepad.get.response", "r1", result, request);
+  expect(message).toEqual({
+    type: "workspace.notepad.get.response",
+    payload: { ...result, requestId: "r1" },
+  });
+  expect(validateWSOutboundMessage({ type: "session", message }).success).toBe(true);
+});
+
 it("advertises host monitoring only when the daemon declares its method", () => {
   expect(info([])?.features?.hostStats).toBe(false);
   expect(info(["daemon.host_stats.request"])?.features?.hostStats).toBe(true);

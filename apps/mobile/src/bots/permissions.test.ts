@@ -37,21 +37,13 @@ describe("bot permissions defaults", () => {
   });
 
   it("builds default groups and omits providers that are not ready", () => {
-    const profile = defaultBotPermissions(
-      [claude, codex, { ...codex, provider: "opencode", status: "unavailable" }],
-      true,
-    );
-    expect(profile.groups).toEqual(["observe", "agents", "stop", "schedules", "notepad"]);
-    expect(profile.modes).toEqual({ claude: ["default"], codex: ["auto"] });
-  });
-
-  it("leaves the notepad group out for a host without the workspace notepad", () => {
-    expect(defaultBotPermissions([codex], false).groups).toEqual([
-      "observe",
-      "agents",
-      "stop",
-      "schedules",
+    const profile = defaultBotPermissions([
+      claude,
+      codex,
+      { ...codex, provider: "opencode", status: "unavailable" },
     ]);
+    expect(profile.groups).toEqual(["observe", "agents", "stop", "schedules"]);
+    expect(profile.modes).toEqual({ claude: ["default"], codex: ["auto"] });
   });
 
   it("bot_session_notes_describe_degraded_capabilities", () => {

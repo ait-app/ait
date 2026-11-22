@@ -451,6 +451,7 @@ describe("Rust v1 connection", () => {
           method !== "bot.permissions.update.request" &&
           method !== "bot.notifications.list.request" &&
           !method.startsWith("bot.ticket.") &&
+          !method.startsWith("workspace.notepad.") &&
           !method.includes(".feishu.") &&
           !method.includes(".lark.") &&
           !method.includes(".telegram.") &&
@@ -486,6 +487,7 @@ describe("Rust v1 connection", () => {
       workspaceBotNotifications: true,
       workspaceBotTickets: true,
       workspaceBotTicketAnswers: true,
+      workspaceNotepad: true,
       workspaceBotFeishuSetup: true,
       workspaceBotLarkSetup: true,
       workspaceBotTelegramSetup: true,
@@ -1135,6 +1137,29 @@ describe("Rust v1 connection", () => {
         });
         expect(h.last(3)).toMatchObject({ method, request_id: `share-${index}` });
       }
+    } finally {
+      h.transport.close();
+    }
+  });
+  it("sends notepad RPCs on the background channel and adapts the result", () => {
+    const h = harness();
+    try {
+      h.ready();
+      h.send({ type: "workspace.notepad.get.request", requestId: "notepad-1", workspaceId: "w1" });
+      expect(h.last(3)).toMatchObject({
+        method: "workspace.notepad.get.request",
+        request_id: "notepad-1",
+        params: { workspaceId: "w1" },
+      });
+      h.sockets[3].message({
+        type: "response",
+        request_id: "notepad-1",
+        result: { workspaceId: "w1", revision: 0, text: "" },
+      });
+      expect(h.received.at(-1)).toEqual({
+        type: "workspace.notepad.get.response",
+        payload: { workspaceId: "w1", revision: 0, text: "", requestId: "notepad-1" },
+      });
     } finally {
       h.transport.close();
     }

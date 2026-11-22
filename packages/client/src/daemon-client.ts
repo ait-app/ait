@@ -743,6 +743,14 @@ export type FetchWorkspacesOptions = Omit<FetchWorkspacesRequest, "type" | "requ
   signal?: AbortSignal;
   requestId?: string;
 };
+export type WorkspaceNotepadPayload = Extract<
+  SessionOutboundMessage,
+  { type: "workspace.notepad.get.response" }
+>["payload"];
+export type WorkspaceNotepadWritePayload = Extract<
+  SessionOutboundMessage,
+  { type: "workspace.notepad.write.response" }
+>["payload"];
 export type WorkspaceLabelListPayload = Extract<
   SessionOutboundMessage,
   { type: "workspace.label.list.response" }
@@ -2436,6 +2444,33 @@ export class DaemonClient {
   ): Promise<Extract<SessionOutboundMessage, { type: "workspace.get.response" }>["payload"]> {
     return this.sendNamespacedCorrelatedSessionRequest<"workspace.get.response">({
       message: { type: "workspace.get.request", workspaceId },
+    });
+  }
+
+  /** Read the workspace's shared notepad. One nobody has written is revision 0 with no text. */
+  getWorkspaceNotepad(workspaceId: string): Promise<WorkspaceNotepadPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.notepad.get.response">({
+      message: { type: "workspace.notepad.get.request", workspaceId },
+    });
+  }
+
+  /**
+   * Replace the notepad's text. `expected` is the revision last read. A write the host refuses
+   * resolves with `accepted: false` and the current revision, which differs from `expected` when
+   * someone else wrote first.
+   */
+  writeWorkspaceNotepad(options: {
+    workspaceId: string;
+    text: string;
+    expected: number;
+  }): Promise<WorkspaceNotepadWritePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.notepad.write.response">({
+      message: {
+        type: "workspace.notepad.write.request",
+        workspaceId: options.workspaceId,
+        text: options.text,
+        expected: options.expected,
+      },
     });
   }
 

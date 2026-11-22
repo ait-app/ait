@@ -71,13 +71,16 @@ export const panels = {
     tooltip: "Notes partagées de l’espace de travail",
     disabled:
       "Activez les fonctionnalités expérimentales pour utiliser les notes de l’espace de travail.",
+    unsupported: "Mettez à jour cet hôte pour utiliser les notes de l’espace de travail.",
     loading: "Chargement des notes partagées…",
     placeholder: "Écrivez les notes et TODO de cet espace de travail…",
     saved: "Enregistré",
     saving: "Enregistrement…",
     unsaved: "Modifications non enregistrées",
     readOnly: "Les notes partagées sont en lecture seule pour les invités.",
-    conflict: "Les notes sur le disque ont changé. Vérifiez la dernière version avant de modifier.",
+    conflict:
+      "Les notes ont été modifiées ailleurs. Rechargez-les avant de les modifier à nouveau ; les modifications non enregistrées ici seront perdues.",
+    reload: "Recharger",
     saveFailed: "Impossible d’enregistrer les notes.",
   },
 };

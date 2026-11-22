@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import invariant from "tiny-invariant";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import type { FileVersion } from "@ait/protocol/messages";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useLiveFile } from "@/file-pane/live-file/hook";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { definePanel } from "@/panels/panel-registry";
@@ -14,7 +13,11 @@ import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { notebookPanelPresentation } from "@/panels/panel-presentations";
 import { toErrorMessage } from "@/utils/error-messages";
 
-const WORKSPACE_NOTEBOOK_PATH = ".ait-notebook.md";
+/** The file earlier versions kept the notes in; its text is imported once and the file is kept. */
+const LEGACY_NOTEBOOK_PATH = ".ait-notebook.md";
+// The host sends no change event for the notepad.
+const POLL_INTERVAL_MS = 3_000;
+const SAVE_DEBOUNCE_MS = 500;
 
 type NotebookStatus =
   | "loading"
@@ -50,6 +53,18 @@ const styles = StyleSheet.create((theme) => ({
   status: {
     color: theme.colors.foregroundMuted,
     fontSize: 12,
+    flexShrink: 1,
+  },
+  statusRow: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  reload: {
+    color: theme.colors.accent,
+    fontSize: 12,
+    fontWeight: "600",
   },
   body: {
     flex: 1,
@@ -86,8 +101,16 @@ function isReadOnlyError(error: unknown): boolean {
   return /read.?only|permission|forbidden|denied/i.test(message);
 }
 
-function fileVersionKey(version: Extract<FileVersion, { status: "ready" }>): string {
-  return `${version.modifiedAt}:${version.revision ?? ""}`;
+type NotepadClient = NonNullable<ReturnType<typeof useHostRuntimeClient>>;
+
+/** Text of the legacy notebook file, or null when there is nothing to import. */
+async function readLegacyNotebook(client: NotepadClient, cwd: string): Promise<string | null> {
+  try {
+    const text = decodeNotebookContent((await client.readFile(cwd, LEGACY_NOTEBOOK_PATH)).bytes);
+    return text.trim().length > 0 ? text : null;
+  } catch {
+    return null;
+  }
 }
 
 function NotebookPanel() {
@@ -98,33 +121,39 @@ function NotebookPanel() {
     settings: { experimentalFeatures },
   } = useAppSettings();
   const client = useHostRuntimeClient(serverId);
+  const supported = useHostFeature(serverId, "workspaceNotepad");
   const workspaceDirectory = useWorkspaceDirectory(serverId, workspaceId);
   const [content, setContent] = useState("");
   const [persistedContent, setPersistedContent] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<NotebookStatus>("loading");
-  const versionRef = useRef<Extract<FileVersion, { status: "ready" }> | null>(null);
+  // The revision the editor's text is based on; a replace must carry it.
+  const revisionRef = useRef(0);
   const latestContentRef = useRef(content);
-  const createAttemptedRef = useRef(false);
+  const persistedContentRef = useRef(persistedContent);
+  const loadedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const pollInFlightRef = useRef(false);
+  const readRefusedRef = useRef(false);
+  const legacyImportTriedRef = useRef(false);
+  const workspaceDirectoryRef = useRef(workspaceDirectory);
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const saveSkippedWhileInFlightRef = useRef(false);
   const [saveRearm, setSaveRearm] = useState(0);
-  const lastAppliedVersionKeyRef = useRef<string | null>(null);
   const invariantTarget = target;
   invariant(invariantTarget.kind === "notebook", "NotebookPanel requires notebook target");
 
-  const enabled = experimentalFeatures && Boolean(client && workspaceDirectory);
-  const liveFile = useLiveFile({
-    client,
-    cwd: workspaceDirectory,
-    path: WORKSPACE_NOTEBOOK_PATH,
-    enabled,
-    liveUpdates: true,
-  });
-  const observation = liveFile.snapshot.observation;
+  const enabled = experimentalFeatures && supported && Boolean(client);
   const dirty = loaded && content !== persistedContent;
-  const canEdit = enabled && isInteractive && status !== "readonly" && status !== "conflict";
+  // `loading` also covers a reload, whose answer replaces the text.
+  const canEdit =
+    enabled &&
+    loaded &&
+    isInteractive &&
+    status !== "loading" &&
+    status !== "readonly" &&
+    status !== "conflict";
 
   usePublishPanelInstanceAttributes({
     modified: dirty,
@@ -141,88 +170,132 @@ function NotebookPanel() {
   }, [content]);
 
   useEffect(() => {
-    if (!enabled || !client || !workspaceDirectory || observation?.status !== "missing") {
-      return;
-    }
-    if (createAttemptedRef.current) return;
-    createAttemptedRef.current = true;
-    setStatus("loading");
-    void client
-      .createFileEntry({
-        cwd: workspaceDirectory,
-        parentPath: ".",
-        name: WORKSPACE_NOTEBOOK_PATH,
-        kind: "file",
-      })
-      .then((result) => {
-        if (!result.success) {
-          setStatus(isReadOnlyError(result.error) ? "readonly" : "error");
-          return;
-        }
-        liveFile.refresh();
-      })
-      .catch((error) => setStatus(isReadOnlyError(error) ? "readonly" : "error"));
-  }, [client, enabled, liveFile, observation?.status, workspaceDirectory]);
+    workspaceDirectoryRef.current = workspaceDirectory;
+  }, [workspaceDirectory]);
 
   useEffect(() => {
-    if (observation?.status !== "ready" || !liveFile.file) return;
-    const nextContent = decodeNotebookContent(liveFile.file.bytes);
-    const nextVersionKey = fileVersionKey(observation.version);
-    if (loaded && dirty) return;
-    if (loaded && lastAppliedVersionKeyRef.current === nextVersionKey) return;
-    versionRef.current = observation.version;
-    lastAppliedVersionKeyRef.current = nextVersionKey;
-    setContent(nextContent);
-    setPersistedContent(nextContent);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const showNotepad = useCallback((notepad: { revision: number; text: string }) => {
+    revisionRef.current = notepad.revision;
+    latestContentRef.current = notepad.text;
+    persistedContentRef.current = notepad.text;
+    loadedRef.current = true;
+    setContent(notepad.text);
+    setPersistedContent(notepad.text);
     setLoaded(true);
     setStatus("clean");
-  }, [dirty, liveFile.file, loaded, observation]);
+  }, []);
+
+  /**
+   * `poll` shows the host's text on first load and afterwards only when it is newer and nothing
+   * typed here would be lost. `reload` always replaces the editor, discarding unsaved text.
+   */
+  const refresh = useCallback(
+    async (mode: "poll" | "reload") => {
+      if (!client) return;
+      if (mode === "poll") {
+        if (pollInFlightRef.current || readRefusedRef.current) return;
+        pollInFlightRef.current = true;
+      }
+      try {
+        let notepad: { revision: number; text: string } =
+          await client.getWorkspaceNotepad(workspaceId);
+        const cwd = workspaceDirectoryRef.current;
+        if (
+          !loadedRef.current &&
+          !legacyImportTriedRef.current &&
+          notepad.revision === 0 &&
+          notepad.text === "" &&
+          cwd
+        ) {
+          // The editor is still locked, so nothing typed here can race the import.
+          legacyImportTriedRef.current = true;
+          const legacy = await readLegacyNotebook(client, cwd);
+          const imported =
+            legacy === null
+              ? null
+              : await client
+                  .writeWorkspaceNotepad({ workspaceId, text: legacy, expected: 0 })
+                  .catch(() => null);
+          if (legacy !== null && imported?.accepted) {
+            notepad = { revision: imported.revision, text: legacy };
+          }
+        }
+        if (!mountedRef.current) return;
+        if (mode === "reload" || !loadedRef.current) {
+          showNotepad(notepad);
+          return;
+        }
+        const unsaved = latestContentRef.current !== persistedContentRef.current;
+        if (unsaved || saveInFlightRef.current || notepad.revision <= revisionRef.current) return;
+        showNotepad(notepad);
+      } catch (error) {
+        if (!mountedRef.current) return;
+        const refused = isReadOnlyError(error);
+        // A guest outside the workspace is refused every time; asking again changes nothing.
+        if (refused) readRefusedRef.current = true;
+        // A failed background poll keeps what is shown; the next one tries again.
+        if (mode === "reload" || !loadedRef.current) setStatus(refused ? "readonly" : "error");
+      } finally {
+        if (mode === "poll") pollInFlightRef.current = false;
+      }
+    },
+    [client, showNotepad, workspaceId],
+  );
+
+  // The first load does not wait for focus, so a visible pane beside the focused one fills in.
+  useEffect(() => {
+    if (enabled) void refresh("poll");
+  }, [enabled, refresh]);
+
+  useEffect(() => {
+    if (!enabled || !isInteractive) return;
+    void refresh("poll");
+    const timer = setInterval(() => void refresh("poll"), POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [enabled, isInteractive, refresh]);
 
   // Debounced autosave. It is keyed on the text itself, not only on `dirty`: `dirty` stays true
   // from the first keystroke until everything is written, so an effect keyed on it alone runs
   // once and never saves what was typed during or after that first write.
   useEffect(() => {
-    if (!dirty || !canEdit || !client || !workspaceDirectory || !versionRef.current) return;
+    if (!dirty || !canEdit || !client) return;
     const generation = saveGenerationRef.current;
     const timer = setTimeout(() => {
-      // One write at a time: a second one would carry the version the first is about to
+      // One write at a time: a second one would carry the revision the first is about to
       // replace and come back as a conflict. The write in flight re-arms this effect when it
       // settles.
       if (saveInFlightRef.current) {
         saveSkippedWhileInFlightRef.current = true;
         return;
       }
-      const expectedVersion = versionRef.current;
+      const expected = revisionRef.current;
       const nextContent = latestContentRef.current;
-      if (!expectedVersion) return;
       saveInFlightRef.current = true;
       setStatus("saving");
       void client
-        .writeFile({
-          cwd: workspaceDirectory,
-          path: WORKSPACE_NOTEBOOK_PATH,
-          content: nextContent,
-          expectedModifiedAt: expectedVersion.modifiedAt,
-          expectedRevision: expectedVersion.revision,
-        })
+        .writeWorkspaceNotepad({ workspaceId, text: nextContent, expected })
         .then((result) => {
-          if (generation !== saveGenerationRef.current) return;
-          if (result.status === "written") {
-            versionRef.current = {
-              ...expectedVersion,
-              size: result.size,
-              modifiedAt: result.modifiedAt,
-              revision: result.revision,
-            };
+          if (result.accepted) {
+            // Recorded even for a superseded save: the host's revision moved either way, and a
+            // stale one would turn the next save into a conflict.
+            revisionRef.current = result.revision;
+            persistedContentRef.current = nextContent;
             setPersistedContent(nextContent);
+          }
+          if (generation !== saveGenerationRef.current) return;
+          if (result.accepted) {
             setStatus(latestContentRef.current === nextContent ? "saved" : "unsaved");
-            return;
+          } else {
+            // The host answers with its current revision. An unchanged one means it refused
+            // the text itself, such as one over the size limit, not that someone else wrote.
+            setStatus(result.revision === expected ? "error" : "conflict");
           }
-          if (result.status === "conflict") {
-            setStatus("conflict");
-            return;
-          }
-          setStatus(isReadOnlyError(result.error) ? "readonly" : "error");
         })
         .catch((error) => {
           if (generation === saveGenerationRef.current) {
@@ -236,18 +309,25 @@ function NotebookPanel() {
             setSaveRearm((count) => count + 1);
           }
         });
-    }, 500);
+    }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [canEdit, client, content, dirty, persistedContent, saveRearm, workspaceDirectory]);
+  }, [canEdit, client, content, dirty, persistedContent, saveRearm, workspaceId]);
 
   const handleChange = useCallback(
     (nextContent: string) => {
       if (!canEdit) return;
+      // Set now, not in the effect: a poll answering before the next render must see this text.
+      latestContentRef.current = nextContent;
       setContent(nextContent);
       setStatus("unsaved");
     },
     [canEdit],
   );
+
+  const handleReload = useCallback(() => {
+    setStatus("loading");
+    void refresh("reload");
+  }, [refresh]);
 
   if (!experimentalFeatures) {
     return (
@@ -256,17 +336,10 @@ function NotebookPanel() {
       </View>
     );
   }
-  if (!workspaceDirectory) {
+  if (!supported) {
     return (
-      <View style={styles.center} testID="workspace-notebook-directory-missing">
-        <Text style={styles.hint}>{t("panels.file.directoryMissing")}</Text>
-      </View>
-    );
-  }
-  if (observation?.status === "error" || liveFile.error) {
-    return (
-      <View style={styles.center} testID="workspace-notebook-error">
-        <Text style={styles.hint}>{t("panels.notebook.saveFailed")}</Text>
+      <View style={styles.center} testID="workspace-notebook-unsupported">
+        <Text style={styles.hint}>{t("panels.notebook.unsupported")}</Text>
       </View>
     );
   }
@@ -293,7 +366,18 @@ function NotebookPanel() {
         {status === "loading" ? (
           <ActivityIndicator />
         ) : (
-          <Text style={styles.status}>{statusLabel}</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.status}>{statusLabel}</Text>
+            {status === "conflict" ? (
+              <Pressable
+                onPress={handleReload}
+                accessibilityRole="button"
+                testID="workspace-notebook-reload"
+              >
+                <Text style={styles.reload}>{t("panels.notebook.reload")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         )}
       </View>
       <View style={styles.body}>

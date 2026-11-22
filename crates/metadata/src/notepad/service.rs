@@ -3,7 +3,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use domain::workspace::notepad::{Note, NoteChange, Notepad, NotepadError, Write};
+use domain::workspace::notepad::{Notepad, NotepadError, Write};
 use domain::workspace::registry::MutationKind;
 use model::workspace::notepad::{NotepadStore, NotepadStoreError};
 use model::workspace::registry::{MutationSubscription, WorkspaceRegistry};
@@ -17,16 +17,22 @@ pub(crate) enum NotepadFailure {
     /// The store could not be read or written.
     #[error(transparent)]
     Storage(#[from] NotepadStoreError),
-    /// The notepad refused the change.
-    #[error(transparent)]
-    Refused(#[from] NotepadError),
+    /// The notepad refused the write; `current` is its unchanged state.
+    #[error("{reason}")]
+    Refused {
+        /// Why the write was refused.
+        reason: NotepadError,
+        /// The notepad as it still is.
+        current: Box<Notepad>,
+    },
 }
 
-/// Notepads of active Workspaces; an archived or removed Workspace loses its notepad.
+/// The notepad of every active Workspace. A Workspace has its notepad from creation, empty until
+/// first written; it is kept while the Workspace is archived and dropped when it is removed.
 pub struct WorkspaceNotepads {
     store: Arc<dyn NotepadStore>,
     workspaces: Box<dyn WorkspaceRegistry>,
-    _archives: Box<dyn MutationSubscription>,
+    _removals: Box<dyn MutationSubscription>,
 }
 
 impl fmt::Debug for WorkspaceNotepads {
@@ -38,24 +44,24 @@ impl fmt::Debug for WorkspaceNotepads {
 }
 
 impl WorkspaceNotepads {
-    /// Serve notepads from `store` for the Workspaces of `workspaces`, clearing a notepad when
-    /// its Workspace is archived or removed.
+    /// Serve notepads from `store` for the Workspaces of `workspaces`, dropping a notepad when
+    /// its Workspace is removed.
     #[must_use]
     pub fn new(store: Arc<dyn NotepadStore>, workspaces: Box<dyn WorkspaceRegistry>) -> Self {
         let cleared = store.clone();
-        let archives = workspaces.subscribe_to_mutations(Arc::new(move |mutation| {
-            if matches!(mutation.kind, MutationKind::Archive | MutationKind::Remove)
+        let removals = workspaces.subscribe_to_mutations(Arc::new(move |mutation| {
+            if mutation.kind == MutationKind::Remove
                 && let Err(error) = cleared.clear(&mutation.workspace_id)
             {
                 tracing::warn!(workspace_id = %mutation.workspace_id, %error,
-                    "could not clear the notepad of a retired workspace");
+                    "could not drop the notepad of a removed workspace");
             }
             Ok(())
         }));
         Self {
             store,
             workspaces,
-            _archives: archives,
+            _removals: removals,
         }
     }
 
@@ -77,42 +83,24 @@ impl WorkspaceNotepads {
 
     /// Apply `write` to the notepad of `workspace_id` and persist it.
     /// # Returns
-    /// The written note.
+    /// The notepad after the write.
     /// # Errors
-    /// Returns the failures of [`Self::notepad`], a refusal of the write, or a storage failure,
-    /// after which nothing was written.
+    /// Returns the failures of [`Self::notepad`], a refusal carrying the unchanged notepad, or a
+    /// storage failure, after which nothing was written.
     pub(crate) fn write(
         &self,
         workspace_id: &str,
         write: Write<'_>,
-    ) -> Result<Note, NotepadFailure> {
+    ) -> Result<Notepad, NotepadFailure> {
         let mut notepad = self.notepad(workspace_id)?;
-        let change = notepad.write(write)?;
-        self.store
-            .commit(workspace_id, notepad.revision(), &change)?;
-        match change {
-            NoteChange::Put(note) => Ok(note),
-            NoteChange::Remove(_) => Err(NotepadFailure::Refused(NotepadError::Missing)),
+        if let Err(reason) = notepad.write(write) {
+            return Err(NotepadFailure::Refused {
+                reason,
+                current: Box::new(notepad),
+            });
         }
-    }
-
-    /// Delete the note `key` of `workspace_id` when its revision equals `expected`.
-    /// # Returns
-    /// The notepad revision after the deletion.
-    /// # Errors
-    /// Returns the failures of [`Self::notepad`], a refusal of the deletion, or a storage
-    /// failure, after which nothing was deleted.
-    pub(crate) fn delete(
-        &self,
-        workspace_id: &str,
-        key: &str,
-        expected: u64,
-    ) -> Result<u64, NotepadFailure> {
-        let mut notepad = self.notepad(workspace_id)?;
-        let change = notepad.delete(key, expected)?;
-        self.store
-            .commit(workspace_id, notepad.revision(), &change)?;
-        Ok(notepad.revision())
+        self.store.save(workspace_id, &notepad)?;
+        Ok(notepad)
     }
 }
 

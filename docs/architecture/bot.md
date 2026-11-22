@@ -270,7 +270,7 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
 ## 工具分组与模式上限
 
 - 工具访问由 `domain::bot::permissions::TOOLS` 唯一定义：`observe` 总是授予，新 Bot 默认
-  `{observe, agents, stop, schedules, notepad}`；`notepad` 只管记事本的写入与删除，读取属于 `observe`，
+  `{observe, agents, stop, schedules}`；`observe` 还包含 Workspace 记事本的 `notepad_read` 与 `notepad_write`，
   受限于外部对话的调用者不能使用记事本（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）；`workspace_create`、`permission_respond`、`workspace_archive`、
   `workspace_rename`、`workspace_list` 及未登记的工具名永不授予。`workspaces` 分组仍可解析，但不授予工具且保存时移除
   （[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)、

@@ -163,11 +163,10 @@ export function BotSetup({
   const [wakeScope, setWakeScope] = useState<BotWakeScope>("own");
   const supportsPermissions = useHostFeature(serverId, "workspaceBotPermissions");
   const supportsNotifications = useHostFeature(serverId, "workspaceBotNotifications");
-  const supportsNotepad = useHostFeature(serverId, "workspaceNotepad");
   const { providers, error } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   // Providers load after mount, so the default profile is derived until the user edits it.
-  const permissions = permissionsDraft ?? defaultBotPermissions(providers, supportsNotepad);
+  const permissions = permissionsDraft ?? defaultBotPermissions(providers);
   const mutation = useMutation({
     mutationFn: async (clearingMemory: boolean) => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -212,7 +211,6 @@ export function BotSetup({
           value={permissions}
           onChange={setPermissionsDraft}
           disabled={disabled}
-          notepad={supportsNotepad}
         />
       ) : null}
       {supportsNotifications ? (

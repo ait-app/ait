@@ -62,9 +62,8 @@ fn workspace(id: &str) -> PersistedWorkspaceRecord {
     }
 }
 
-fn append<'a>(key: &'a str, text: &'a str) -> Write<'a> {
+fn append(text: &str) -> Write<'_> {
     Write {
-        key,
         text,
         mode: WriteMode::Append,
         expected: None,
@@ -74,70 +73,43 @@ fn append<'a>(key: &'a str, text: &'a str) -> Write<'a> {
 }
 
 #[test]
-fn writes_and_deletes_persist_per_workspace() {
+fn every_active_workspace_has_its_own_notepad_from_the_start() {
     let fixture = fixture();
-    let note = fixture
-        .notepads
-        .write("wks_a", append("plan", "first"))
-        .unwrap();
-    assert_eq!((note.revision, note.notepad_revision), (1, 1));
-    fixture
-        .notepads
-        .write("wks_a", append("plan", "second"))
-        .unwrap();
-    assert_eq!(
-        fixture
-            .store
-            .load("wks_a")
-            .unwrap()
-            .note("plan")
-            .unwrap()
-            .revision,
-        2
-    );
+    let empty = fixture.notepads.notepad("wks_a").unwrap();
+    assert_eq!((empty.text(), empty.revision()), ("", 0));
+
+    let written = fixture.notepads.write("wks_a", append("first")).unwrap();
+    assert_eq!(written.revision(), 1);
+    fixture.notepads.write("wks_a", append("second")).unwrap();
+    assert_eq!(fixture.store.load("wks_a").unwrap().revision(), 2);
     assert_eq!(fixture.notepads.notepad("wks_b").unwrap().revision(), 0);
-
-    assert_eq!(
-        fixture.notepads.delete("wks_a", "plan", 1),
-        Err(NotepadFailure::Refused(NotepadError::Conflict(Box::new(
-            fixture
-                .store
-                .load("wks_a")
-                .unwrap()
-                .note("plan")
-                .unwrap()
-                .clone()
-        ))))
-    );
-    assert_eq!(fixture.notepads.delete("wks_a", "plan", 2), Ok(3));
-    assert_eq!(fixture.store.load("wks_a").unwrap().notes().count(), 0);
 }
 
 #[test]
-fn a_refused_write_stores_nothing() {
+fn a_refused_write_stores_nothing_and_returns_the_current_notepad() {
     let fixture = fixture();
+    let current = fixture.notepads.write("wks_a", append("text")).unwrap();
+    let mut stale = append("replacement");
+    stale.mode = WriteMode::Replace;
     assert_eq!(
-        fixture.notepads.write("wks_a", append("Bad Key", "text")),
-        Err(NotepadFailure::Refused(NotepadError::InvalidKey))
+        fixture.notepads.write("wks_a", stale),
+        Err(NotepadFailure::Refused {
+            reason: NotepadError::Conflict,
+            current: Box::new(current.clone()),
+        })
     );
-    assert_eq!(fixture.store.load("wks_a").unwrap().revision(), 0);
+    assert_eq!(fixture.store.load("wks_a").unwrap(), current);
 }
 
 #[test]
-fn unknown_and_archived_workspaces_have_no_notepad_and_archiving_clears_it() {
+fn a_notepad_is_kept_while_its_workspace_is_archived_and_dropped_when_it_is_removed() {
     let fixture = fixture();
     assert_eq!(
         fixture.notepads.notepad("wks_missing"),
         Err(NotepadFailure::Workspace)
     );
-    fixture
-        .notepads
-        .write("wks_a", append("plan", "text"))
-        .unwrap();
-    fixture
-        .notepads
-        .write("wks_b", append("plan", "text"))
-        .unwrap();
+    fixture.notepads.write("wks_a", append("text")).unwrap();
+    fixture.notepads.write("wks_b", append("text")).unwrap();
 
     fixture
         .workspaces
@@ -148,10 +120,10 @@ fn unknown_and_archived_workspaces_have_no_notepad_and_archiving_clears_it() {
         Err(NotepadFailure::Workspace)
     );
     assert_eq!(
-        fixture.notepads.write("wks_a", append("plan", "text")),
+        fixture.notepads.write("wks_a", append("text")),
         Err(NotepadFailure::Workspace)
     );
-    assert_eq!(fixture.store.load("wks_a").unwrap().revision(), 0);
+    assert_eq!(fixture.store.load("wks_a").unwrap().revision(), 1);
 
     fixture.workspaces.remove("wks_b").unwrap();
     assert_eq!(fixture.store.load("wks_b").unwrap().revision(), 0);

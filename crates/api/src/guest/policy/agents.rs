@@ -53,6 +53,7 @@ pub(super) async fn confine(
         Rule::Open
         | Rule::Catalog
         | Rule::Workspace
+        | Rule::Notepad
         | Rule::WorkspaceManage
         | Rule::WorkspaceList
         | Rule::WorkspaceCreate

@@ -15,6 +15,7 @@ import {
 import { ProviderSnapshotEntrySchema, type ServerInfoStatusPayload } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
+import { WORKSPACE_NOTEPAD_METHODS } from "@ait/protocol/workspace-notepad";
 import { object, type Payload } from "./types.js";
 import type { HubShareResourceKind } from "../hub/index.js";
 
@@ -81,14 +82,7 @@ export function serverInfo(
       BOT_METHODS.every(has) &&
       BOT_TICKET_METHODS.every(has) &&
       BOT_TICKET_ANSWER_METHODS.every(has),
-    // The notepad tools and Bot permission group arrived with these methods; older daemons
-    // reject the `notepad` group.
-    workspaceNotepad: supports([
-      "workspace.notepad.list.request",
-      "workspace.notepad.get.request",
-      "workspace.notepad.write.request",
-      "workspace.notepad.delete.request",
-    ]),
+    workspaceNotepad: supports(WORKSPACE_NOTEPAD_METHODS),
     workspaceBotFeishuSetup:
       serverFeatures.has("workspace-bots-v2") &&
       BOT_METHODS.every(has) &&

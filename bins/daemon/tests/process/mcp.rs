@@ -54,25 +54,21 @@ impl Client {
     }
 }
 
-/// Write a note to the notepad of Workspace `id` and read it back.
+/// Append to the notepad of Workspace `id` and read it back.
 async fn notepad_round_trip(client: &Client, id: &str) {
-    let note = client
+    let written = client
         .tool(
             "notepad_write",
-            json!({"workspaceId":id,"key":"handover","text":"Use port 7316","mode":"append"}),
+            json!({"workspaceId":id,"text":"Use port 7316","mode":"append"}),
             None,
         )
         .await;
     assert_eq!(
-        (&note["accepted"], &note["revision"]),
+        (&written["accepted"], &written["revision"]),
         (&json!(true), &json!(1))
     );
     let read = client
-        .tool(
-            "notepad_read",
-            json!({"workspaceId":id,"key":"handover"}),
-            None,
-        )
+        .tool("notepad_read", json!({"workspaceId":id}), None)
         .await;
     assert!(read["text"].as_str().unwrap().ends_with("]\nUse port 7316"));
     assert_eq!(read["updatedBy"], json!({"kind":"external"}));
@@ -87,7 +83,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let address = ready(&mut process, &log).await;
     let client = Client::new(&address);
     let list = client.rpc("tools/list", json!({}), None).await;
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 46);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 44);
     let workspace = client.tool("workspace_create",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
     let id = workspace["workspace"]["id"]
         .as_str()
@@ -128,7 +124,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let retired = client
         .rpc(
             "tools/call",
-            json!({"name":"notepad_list","arguments":{"workspaceId":id}}),
+            json!({"name":"notepad_read","arguments":{"workspaceId":id}}),
             None,
         )
         .await;
@@ -168,7 +164,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
             .as_array()
             .unwrap()
             .len(),
-        46
+        44
     );
     terminate(&mut process).await;
     assert!(!std::fs::read_to_string(&log).unwrap().contains(TOKEN));

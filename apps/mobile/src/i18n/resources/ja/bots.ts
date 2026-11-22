@@ -20,7 +20,6 @@ export const bots = {
   groupSchedules: "スケジュール：スケジュールの作成と管理",
   groupScripts: "スクリプト：ワークスペースのスクリプトの実行",
   groupTerminals: "ターミナル：ターミナルの作成と入力",
-  groupNotepad: "メモ帳：ワークスペースの共有メモの書き込みと削除",
   permissionRiskHint: "コマンドを実行できます。",
   modeCap: "デフォルトのエージェントモード",
   modeNotAllowed: "許可しない",

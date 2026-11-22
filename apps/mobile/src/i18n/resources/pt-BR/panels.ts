@@ -69,13 +69,16 @@ export const panels = {
     subtitle: "Notas compartilhadas do workspace",
     tooltip: "Notas compartilhadas do workspace",
     disabled: "Ative os recursos experimentais para usar o bloco de notas.",
+    unsupported: "Atualize este host para usar o bloco de notas.",
     loading: "Carregando notas compartilhadas…",
     placeholder: "Escreva notas e TODOs para este workspace…",
     saved: "Salvo",
     saving: "Salvando…",
     unsaved: "Alterações não salvas",
     readOnly: "As notas compartilhadas são somente leitura para convidados.",
-    conflict: "As notas no disco mudaram. Confira a versão mais recente antes de editar.",
+    conflict:
+      "As notas foram alteradas em outro lugar. Recarregue-as antes de editar novamente; as alterações não salvas aqui serão perdidas.",
+    reload: "Recarregar",
     saveFailed: "Não foi possível salvar as notas.",
   },
 };

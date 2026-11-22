@@ -316,14 +316,12 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 | `schedules` | 创建、修改、暂停、恢复、运行、删除定时任务与心跳                        | 是   |
 | `scripts`   | 启停 Workspace 脚本                                                     | 否   |
 | `terminals` | 创建终端、发送按键、读取并终止终端                                      | 否   |
-| `notepad`   | 写入与删除 Workspace 记事本的便签（读取属于 `observe`）                 | 是   |
 
-`notepad` 分组随 Workspace 记事本加入（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。升级前保存过权限的 Bot 不会自动获得它，
-需要在设置中勾选；没有保存过权限的旧 Bot 与新建的 Bot 默认开启。客户端只在主机实现了记事本时显示这个分组。
-其他 Channel 的对话及为它工作的 Agent 不能使用记事本，见 [MCP 手册](mcp.md#workspace-记事本)。
+Workspace 记事本不属于任何分组：`notepad_read` 与 `notepad_write` 和 `observe` 一样总是可用，目标限于 Bot 的作用域
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。其他 Channel 的对话及为它工作的 Agent 不能使用记事本，见 [MCP 手册](mcp.md#workspace-记事本)。
 
 `workspace_create`、`permission_respond`、`workspace_archive`、`workspace_rename`、`workspace_list` 永不授予 Bot，Bot 不能通过 Ait MCP 创建 worktree 或 Workspace（[ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
-`bot_memory_read`、`bot_memory_update`、`bot_ticket_list`、`bot_ticket_update`、`bot_read`、`bot_overview`（作用域概览，含未关闭的任务与记事本的修订号和便签数，输出上限 24 KiB，
+`bot_memory_read`、`bot_memory_update`、`bot_ticket_list`、`bot_ticket_update`、`bot_read`、`bot_overview`（作用域概览，含未关闭的任务与记事本的修订号和字符数，输出上限 24 KiB，
 截断的文本带全文长度与读取指针）只对 Bot 自己可见；`ticket_report`、`ticket_read` 只对属于任务的 Agent 可见。
 
 **Agent 模式**为每个 Provider 选择一个原生模式（至多 32 个 Provider），Bot 与它启动的 Agent 只能使用该模式；

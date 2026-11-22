@@ -52,6 +52,8 @@ enum Rule {
     Catalog,
     /// `workspaceId` must name only workspaces inside the scope.
     Workspace,
+    /// As [`Rule::Workspace`] for the Workspace notepad; a guest always writes as a user.
+    Notepad,
     /// As [`Rule::Workspace`] for renaming or archiving; project and node shares only.
     WorkspaceManage,
     /// Listed workspaces are filtered to the scope.
@@ -127,6 +129,7 @@ impl Rule {
             Self::Open
             | Self::Catalog
             | Self::Workspace
+            | Self::Notepad
             | Self::WorkspaceList
             | Self::AgentCreate
             | Self::Agent(_)
@@ -173,6 +176,7 @@ fn classify(method: &str) -> Rule {
         | "workspace.script.run.wait.request"
         | "workspace.clear_attention.request"
         | "workspace.mark_unread.request" => Rule::Workspace,
+        "workspace.notepad.get.request" | "workspace.notepad.write.request" => Rule::Notepad,
         "workspace.archive.request" | "workspace.title.set.request" => Rule::WorkspaceManage,
         "workspace.list.request" => Rule::WorkspaceList,
         "workspace.create.request" => Rule::WorkspaceCreate,
@@ -298,6 +302,12 @@ async fn confine(
         Rule::Catalog => optional_path(session, state, &params).await?,
         Rule::Workspace | Rule::WorkspaceManage => {
             workspaces(session, state, &params["workspaceId"]).await?;
+        }
+        Rule::Notepad => {
+            workspaces(session, state, &params["workspaceId"]).await?;
+            if let Some(params) = params.as_object_mut() {
+                params.remove("author");
+            }
         }
         Rule::WorkspaceList | Rule::ProjectList => {
             return Ok(

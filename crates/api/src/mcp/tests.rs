@@ -202,8 +202,7 @@ fn only_archiving_killing_and_deleting_tools_are_destructive() {
             "workspace_archive",
             "terminal_kill",
             "schedule_delete",
-            "heartbeat_delete",
-            "notepad_delete"
+            "heartbeat_delete"
         ]
     );
     for tool in catalog::all() {

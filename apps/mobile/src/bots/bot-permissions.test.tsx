@@ -59,7 +59,7 @@ const defaults: BotPermissions = {
 
 afterEach(cleanup);
 
-function renderFields(value: BotPermissions = defaults, disabled = false, notepad = true) {
+function renderFields(value: BotPermissions = defaults, disabled = false) {
   const onChange = vi.fn();
   render(
     <BotPermissionFields
@@ -67,7 +67,6 @@ function renderFields(value: BotPermissions = defaults, disabled = false, notepa
       value={value}
       onChange={onChange}
       disabled={disabled}
-      notepad={notepad}
     />,
   );
   return onChange;
@@ -95,21 +94,6 @@ it("toggles groups and flags risky ones", () => {
     ...defaults,
     groups: ["observe", "agents", "stop"],
   });
-});
-
-it("offers the notepad group without a command warning", () => {
-  const onChange = renderFields({ ...defaults, groups: [...defaults.groups, "notepad"] });
-  const notepad = screen.getByTestId("bot-group-notepad");
-  expect(notepad.getAttribute("aria-checked")).toBe("true");
-  expect(notepad.parentElement?.textContent).toBe("bots.groupNotepad");
-  fireEvent.click(notepad);
-  expect(onChange).toHaveBeenLastCalledWith(defaults);
-});
-
-it("does not offer the notepad group on a host without the workspace notepad", () => {
-  renderFields(defaults, false, false);
-  expect(screen.queryByTestId("bot-group-notepad")).toBeNull();
-  expect(screen.getByTestId("bot-group-schedules")).toBeTruthy();
 });
 
 it("shows both warnings", () => {

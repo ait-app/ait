@@ -81,7 +81,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 工作区、文件与 Git
 
-- [ADR-296：Workspace 记事本（notepad）：同一 Workspace 的 Agent 共享的便签](workspace/adr-296-workspace-notepad.md)
+- [ADR-296：每个 Workspace 一份由 daemon 保存的记事本](workspace/adr-296-workspace-notepad.md)
 - [ADR-293：归档移入 Workspace 菜单，交付完成后主按钮推荐重置](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)
 - [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)

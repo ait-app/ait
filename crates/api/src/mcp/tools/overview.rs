@@ -159,7 +159,7 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
     }))
 }
 
-/// The revision and note count of the root Workspace's notepad; `null` for a conversation
+/// The revision and length of the root Workspace's notepad; `null` for a conversation
 /// restricted to its own work, which may not use the shared notepad (ADR-296).
 /// # Errors
 /// Propagates notepad read failures.
@@ -169,11 +169,14 @@ async fn notepad(state: &Shared, root: &str, sight: Option<&Sight>) -> Result<Va
     }
     let listed = rpc::execute(
         state,
-        "workspace.notepad.list.request",
+        "workspace.notepad.get.request",
         json!({"workspaceId":root}),
     )
     .await?;
-    Ok(json!({"revision":listed["revision"],"notes":listed["total"]}))
+    let chars = listed["text"]
+        .as_str()
+        .map_or(0, |text| text.chars().count());
+    Ok(json!({"revision":listed["revision"],"chars":chars}))
 }
 
 /// Read the Bot's open tickets, one more than the overview keeps so it can report truncation;
@@ -249,7 +252,7 @@ pub(super) struct Sources<'a> {
     pub(super) notifications: &'a Value,
     /// `bot.ticket.list.request` result of the Bot's open tickets, or `null`.
     pub(super) tickets: &'a Value,
-    /// The root Workspace notepad's revision and note count, or `null` when not shown.
+    /// The root Workspace notepad's revision and length, or `null` when not shown.
     pub(super) notepad: &'a Value,
     /// What the calling Bot conversation may read and reach; it also marks the tickets it asked
     /// for. `None` reads everything and marks nothing.

@@ -82,6 +82,18 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 3,
     response: "daemon.host_stats.response",
   },
+  "workspace.notepad.get.request": {
+    method: "workspace.notepad.get.request",
+    kind: "request",
+    channel: 3,
+    response: "workspace.notepad.get.response",
+  },
+  "workspace.notepad.write.request": {
+    method: "workspace.notepad.write.request",
+    kind: "request",
+    channel: 3,
+    response: "workspace.notepad.write.response",
+  },
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
     kind: "request",

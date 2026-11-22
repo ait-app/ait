@@ -12,12 +12,10 @@ use crate::mcp::catalog::Tool;
 
 use super::take;
 
-/// Characters of a note returned by one `notepad_read` without a `limit`.
+/// Characters of the notepad returned by one `notepad_read` without a `limit`.
 const DEFAULT_PAGE: u64 = 4000;
-/// Most characters of an Agent's title kept as a note's author title.
+/// Most characters of an Agent's title kept as an author title.
 const AUTHOR_TITLE_CHARS: usize = 128;
-/// Result text for a key no note has.
-const NO_NOTE: &str = "No note has this key; call notepad_list for the current keys";
 
 /// Execute notepad `tool` in `state` with `arguments`, placing it in the `caller` Agent's
 /// Workspace unless one is named and signing writes as the caller `scope` and `caller` identify.
@@ -37,14 +35,11 @@ pub(super) async fn execute(
             .cloned()
             .ok_or(ErrorCode::InvalidMessage)?;
     }
-    match tool.name.as_str() {
-        "notepad_read" => read(state, &tool.methods[0], arguments).await,
-        "notepad_write" => {
-            arguments["author"] = author(scope, caller);
-            rpc::execute(state, &tool.methods[0], arguments).await
-        }
-        _ => rpc::execute(state, &tool.methods[0], arguments).await,
+    if tool.name == "notepad_read" {
+        return read(state, &tool.methods[0], arguments).await;
     }
+    arguments["author"] = author(scope, caller);
+    rpc::execute(state, &tool.methods[0], arguments).await
 }
 
 /// Who writes: the Bot session or Agent a scoped credential belongs to, the Agent a host caller
@@ -70,7 +65,7 @@ fn author(scope: Option<&Scope>, caller: Option<&Value>) -> Value {
     author
 }
 
-/// Return one page of a note's text with its metadata, or a guiding error for an absent note.
+/// Return one page of the notepad's text with its revision and last writer.
 async fn read(state: &Shared, method: &str, mut arguments: Value) -> Result<Value, ErrorCode> {
     let offset = take(&mut arguments, "offset")?
         .as_ref()
@@ -80,12 +75,8 @@ async fn read(state: &Shared, method: &str, mut arguments: Value) -> Result<Valu
         .as_ref()
         .and_then(Value::as_u64)
         .unwrap_or(DEFAULT_PAGE);
-    let mut value = rpc::execute(state, method, arguments).await?;
-    let mut note = value["note"].take();
-    let Some(text) = note["text"].as_str() else {
-        value["error"] = json!(NO_NOTE);
-        return Ok(value);
-    };
+    let mut notepad = rpc::execute(state, method, arguments).await?;
+    let text = notepad["text"].as_str().ok_or(ErrorCode::InvalidMessage)?;
     let chars = text.chars().count() as u64;
     let end = offset.saturating_add(limit);
     let page: String = text
@@ -93,11 +84,10 @@ async fn read(state: &Shared, method: &str, mut arguments: Value) -> Result<Valu
         .skip(usize::try_from(offset).unwrap_or(usize::MAX))
         .take(usize::try_from(limit).unwrap_or(usize::MAX))
         .collect();
-    note["text"] = json!(page);
-    note["chars"] = json!(chars);
-    note["nextOffset"] = if end < chars { json!(end) } else { Value::Null };
-    note["workspaceId"] = value["workspaceId"].take();
-    Ok(note)
+    notepad["text"] = json!(page);
+    notepad["chars"] = json!(chars);
+    notepad["nextOffset"] = if end < chars { json!(end) } else { Value::Null };
+    Ok(notepad)
 }
 
 #[cfg(test)]

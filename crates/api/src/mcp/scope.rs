@@ -145,8 +145,8 @@ enum Rule {
     CreateSchedule,
     /// Heartbeat targeting a subtree caller in a scoped Workspace; Bot sessions cannot be targets.
     CreateHeartbeat,
-    /// A Workspace notepad in scope, defaulting to the caller's own Workspace; refused for
-    /// callers restricted to an external conversation's work.
+    /// The notepad of a Workspace in scope, defaulting to the caller's own Workspace; refused
+    /// for callers restricted to an external conversation's work.
     Notepad,
 }
 
@@ -156,7 +156,7 @@ fn rule(tool: &str) -> Option<Rule> {
         "profile_list" | "provider_list" | "bot_memory_read" | "bot_memory_update"
         | "bot_overview" | "bot_ticket_list" | "bot_ticket_update" | "ticket_report"
         | "bot_read" | "ticket_read" | "heartbeat_list" => Rule::Open,
-        "notepad_list" | "notepad_read" | "notepad_write" | "notepad_delete" => Rule::Notepad,
+        "notepad_read" | "notepad_write" => Rule::Notepad,
         "agent_list" | "permission_list" | "schedule_list" => Rule::Listing,
         "provider_model_list" | "provider_get" => Rule::RootDirectory,
         "agent_create" => Rule::CreateAgent,

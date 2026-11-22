@@ -20,7 +20,6 @@ export const bots = {
   groupSchedules: "定时任务：创建和管理定时任务",
   groupScripts: "脚本：运行 Workspace 脚本",
   groupTerminals: "终端：创建终端并输入内容",
-  groupNotepad: "记事本：写入和删除 Workspace 共享便签",
   permissionRiskHint: "可运行命令。",
   modeCap: "默认 Agent 模式",
   modeNotAllowed: "不允许",

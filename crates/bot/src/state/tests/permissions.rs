@@ -16,7 +16,7 @@ fn setup_stores_default_permissions_and_normalizes_mode() {
     assert_eq!(created["bot"]["execution"]["modeId"], Value::Null);
     assert_eq!(
         created["bot"]["permissions"]["groups"],
-        json!(["observe", "agents", "stop", "schedules", "notepad"])
+        json!(["observe", "agents", "stop", "schedules"])
     );
     assert!(created["bot"].get("workspaces").is_none());
     assert_eq!(

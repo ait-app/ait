@@ -78,8 +78,6 @@ fn compose_reports_modes_and_follows_the_granted_groups() {
     assert!(compose("", &BotPermissions::default()).contains("schedule_create"));
     assert!(text.contains("bot_memory_update"));
     assert!(text.contains("notepad_write"));
-    permissions.groups.remove(&ToolGroup::Notepad);
-    assert!(!compose("", &permissions).contains("notepad"));
 }
 
 #[test]

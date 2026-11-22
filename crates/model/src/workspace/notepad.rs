@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use domain::workspace::notepad::{NoteChange, Notepad};
+use domain::workspace::notepad::Notepad;
 
 /// Why a notepad could not be read or written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -17,25 +17,19 @@ pub enum NotepadStoreError {
 
 /// Blocking store of every Workspace's notepad; hosts serialize calls outside an async reactor.
 pub trait NotepadStore: Debug + Send + Sync {
-    /// Load the notepad of `workspace_id`; a Workspace without notes has an empty notepad.
+    /// Load the notepad of `workspace_id`; a Workspace never written to has the empty notepad.
     ///
     /// # Errors
     /// Returns [`NotepadStoreError`] when the store cannot be read or holds invalid data.
     fn load(&self, workspace_id: &str) -> Result<Notepad, NotepadStoreError>;
 
-    /// Atomically persist `change` to the notepad of `workspace_id` together with its new
-    /// `revision`.
+    /// Atomically replace the stored notepad of `workspace_id` with `notepad`.
     ///
     /// # Errors
     /// Returns [`NotepadStoreError`] when nothing was written.
-    fn commit(
-        &self,
-        workspace_id: &str,
-        revision: u64,
-        change: &NoteChange,
-    ) -> Result<(), NotepadStoreError>;
+    fn save(&self, workspace_id: &str, notepad: &Notepad) -> Result<(), NotepadStoreError>;
 
-    /// Remove the notepad of `workspace_id` with all its notes.
+    /// Remove the stored notepad of `workspace_id`.
     ///
     /// # Errors
     /// Returns [`NotepadStoreError`] when the notepad could not be removed.

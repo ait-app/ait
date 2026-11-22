@@ -192,7 +192,7 @@ async fn dispatch(
         }
         "schedule_list" => schedules::list(state).await,
         "heartbeat_list" => schedules::heartbeats(state, caller).await,
-        "notepad_list" | "notepad_read" | "notepad_write" | "notepad_delete" => {
+        "notepad_read" | "notepad_write" => {
             notepad::execute(state, tool, arguments, scope, caller).await
         }
         "schedule_get" | "schedule_pause" | "schedule_resume" | "schedule_delete"

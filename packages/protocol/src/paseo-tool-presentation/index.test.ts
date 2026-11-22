@@ -121,15 +121,13 @@ describe("Paseo tool display", () => {
 
   it.each([
     ["heartbeat_list", {}, "List heartbeats", undefined],
-    ["notepad_list", { workspaceId: "wks_1", since: 4 }, "List notes", undefined],
-    ["notepad_read", { key: "api-contract", offset: 0 }, "Read note", "api-contract"],
+    ["notepad_read", { workspaceId: "wks_1", offset: 0 }, "Read notepad", undefined],
     [
       "notepad_write",
-      { key: "questions", text: "Who owns the schema?", mode: "append" },
-      "Write note",
-      "questions",
+      { text: "Who owns the schema?", mode: "append" },
+      "Write notepad",
+      "Who owns the schema?",
     ],
-    ["notepad_delete", { key: "questions", expected: 3 }, "Delete note", "questions"],
   ])("presents the new tool %s", (tool, input, label, summary) => {
     expect(display(`mcp__ait__${tool}`, input)).toEqual({
       displayName: label,

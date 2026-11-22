@@ -254,24 +254,28 @@ const TOOLS = {
   },
 
   // Notepad
-  notepad_list: { label: "List notes", detail: { inputOrder: ["workspaceId", "since"] } },
   notepad_read: {
-    label: "Read note",
-    context: field("key"),
-    detail: { inputOrder: ["key", "workspaceId", "offset", "limit"] },
-  },
-  notepad_write: {
-    label: "Write note",
-    context: field("key"),
+    label: "Read notepad",
     detail: {
-      inputOrder: ["key", "workspaceId", "mode", "expected", "text"],
-      outputFields: ["accepted", "key", "revision", "notepadRevision", "error", "updatedBy"],
+      inputOrder: ["workspaceId", "offset", "limit"],
+      outputFields: [
+        "workspaceId",
+        "revision",
+        "updatedBy",
+        "updatedAt",
+        "chars",
+        "nextOffset",
+        "text",
+      ],
     },
   },
-  notepad_delete: {
-    label: "Delete note",
-    context: field("key"),
-    detail: { inputOrder: ["key", "workspaceId", "expected"] },
+  notepad_write: {
+    label: "Write notepad",
+    context: field("text"),
+    detail: {
+      inputOrder: ["workspaceId", "mode", "expected", "text"],
+      outputFields: ["accepted", "workspaceId", "revision", "updatedBy", "updatedAt", "error"],
+    },
   },
 
   // Terminals

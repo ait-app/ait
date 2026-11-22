@@ -4,20 +4,14 @@ use std::io;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
-use domain::workspace::notepad::{Note, NoteChange, Notepad};
+use domain::workspace::notepad::Notepad;
 use model::workspace::notepad::{NotepadStore, NotepadStoreError};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 const SCHEMA: &str = "CREATE TABLE notepads (
         workspace_id TEXT PRIMARY KEY,
-        revision INTEGER NOT NULL
-    ) STRICT;
-    CREATE TABLE notes (
-        workspace_id TEXT NOT NULL,
-        key TEXT NOT NULL,
-        note BLOB NOT NULL,
-        PRIMARY KEY (workspace_id, key)
-    ) STRICT, WITHOUT ROWID;";
+        notepad BLOB NOT NULL
+    ) STRICT;";
 
 #[derive(Debug, thiserror::Error)]
 enum StoreError {
@@ -25,12 +19,10 @@ enum StoreError {
     Io(#[from] io::Error),
     #[error("notepad database error: {0}")]
     Sql(#[from] rusqlite::Error),
-    #[error("invalid stored note: {0}")]
+    #[error("invalid stored notepad: {0}")]
     Json(#[from] serde_json::Error),
     #[error("unsupported notepad database version {0}")]
     Version(i64),
-    #[error("notepad revision out of range")]
-    Revision,
 }
 
 impl From<StoreError> for NotepadStoreError {
@@ -83,57 +75,24 @@ fn initialize(mut connection: Connection) -> Result<Connection, StoreError> {
 }
 
 fn load(connection: &Connection, workspace_id: &str) -> Result<Notepad, StoreError> {
-    let revision = connection
-        .prepare_cached("SELECT revision FROM notepads WHERE workspace_id = ?1")?
-        .query_row([workspace_id], |row| row.get::<_, i64>(0))
-        .optional()?
-        .unwrap_or(0);
-    let revision = u64::try_from(revision).map_err(|_| StoreError::Revision)?;
-    let mut statement =
-        connection.prepare_cached("SELECT note FROM notes WHERE workspace_id = ?1")?;
-    let notes = statement
-        .query_map([workspace_id], |row| row.get::<_, Vec<u8>>(0))?
-        .map(|note| Ok(serde_json::from_slice::<Note>(&note?)?))
-        .collect::<Result<Vec<_>, StoreError>>()?;
-    Ok(Notepad::restore(revision, notes))
+    let stored = connection
+        .prepare_cached("SELECT notepad FROM notepads WHERE workspace_id = ?1")?
+        .query_row([workspace_id], |row| row.get::<_, Vec<u8>>(0))
+        .optional()?;
+    Ok(match stored {
+        Some(notepad) => serde_json::from_slice(&notepad)?,
+        None => Notepad::default(),
+    })
 }
 
-fn commit(
-    connection: &mut Connection,
-    workspace_id: &str,
-    revision: u64,
-    change: &NoteChange,
-) -> Result<(), StoreError> {
-    let revision = i64::try_from(revision).map_err(|_| StoreError::Revision)?;
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction
+fn save(connection: &Connection, workspace_id: &str, notepad: &Notepad) -> Result<(), StoreError> {
+    connection
         .prepare_cached(
-            "INSERT INTO notepads (workspace_id, revision) VALUES (?1, ?2)
-            ON CONFLICT(workspace_id) DO UPDATE SET revision = excluded.revision",
+            "INSERT INTO notepads (workspace_id, notepad) VALUES (?1, ?2)
+            ON CONFLICT(workspace_id) DO UPDATE SET notepad = excluded.notepad",
         )?
-        .execute(params![workspace_id, revision])?;
-    match change {
-        NoteChange::Put(note) => transaction
-            .prepare_cached(
-                "INSERT INTO notes (workspace_id, key, note) VALUES (?1, ?2, ?3)
-                ON CONFLICT(workspace_id, key) DO UPDATE SET note = excluded.note",
-            )?
-            .execute(params![workspace_id, note.key, serde_json::to_vec(note)?])?,
-        NoteChange::Remove(key) => transaction
-            .prepare_cached("DELETE FROM notes WHERE workspace_id = ?1 AND key = ?2")?
-            .execute(params![workspace_id, key])?,
-    };
-    Ok(transaction.commit()?)
-}
-
-fn clear(connection: &mut Connection, workspace_id: &str) -> Result<(), StoreError> {
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    transaction.execute("DELETE FROM notes WHERE workspace_id = ?1", [workspace_id])?;
-    transaction.execute(
-        "DELETE FROM notepads WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    Ok(transaction.commit()?)
+        .execute(params![workspace_id, serde_json::to_vec(notepad)?])?;
+    Ok(())
 }
 
 impl NotepadStore for SqliteNotepadStore {
@@ -141,17 +100,18 @@ impl NotepadStore for SqliteNotepadStore {
         Ok(load(&self.lock(), workspace_id)?)
     }
 
-    fn commit(
-        &self,
-        workspace_id: &str,
-        revision: u64,
-        change: &NoteChange,
-    ) -> Result<(), NotepadStoreError> {
-        Ok(commit(&mut self.lock(), workspace_id, revision, change)?)
+    fn save(&self, workspace_id: &str, notepad: &Notepad) -> Result<(), NotepadStoreError> {
+        Ok(save(&self.lock(), workspace_id, notepad)?)
     }
 
     fn clear(&self, workspace_id: &str) -> Result<(), NotepadStoreError> {
-        Ok(clear(&mut self.lock(), workspace_id)?)
+        self.lock()
+            .execute(
+                "DELETE FROM notepads WHERE workspace_id = ?1",
+                [workspace_id],
+            )
+            .map(drop)
+            .map_err(|error| StoreError::Sql(error).into())
     }
 }
 

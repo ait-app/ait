@@ -1,10 +1,11 @@
 # MCP 工具目录重组与 Workspace 记事本
 
-**归档说明（2026-11-21）：** 本设计的命名规则、别名、参数约定、`heartbeat_list` 与 Workspace 记事本已实现，现行约定见
-[ADR-295](../../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md)、[ADR-296](../../decisions/workspace/adr-296-workspace-notepad.md) 与
-[MCP 手册](../../operations/mcp.md)。与设计的差别：目录条目没有单独的 `domain` 字段（域取自名字首段）；`workspace_list` 等列表的分页与
-`agent_mode_set` 的合并未做；设计没有提到客户端已有的 notebook tab（`.ait-notebook.md`），两者的关系仍待决定。
-未完成的事项见[未完成工作](../../plans/README.md)。正文保留设计时的表述，对照源码提交 `5451fe2`。
+**归档说明（2026-11-22）：** 本设计的命名规则、别名、参数约定与 `heartbeat_list` 已按设计实现
+（[ADR-295](../../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md)）。记事本的实现与本设计不同
+（[ADR-296](../../decisions/workspace/adr-296-workspace-notepad.md)）：每个 Workspace 有且只有一份记事本，是一段文本而不是按 key 的便签，
+没有 `notepad` 权限分组，只有 `notepad_read` 与 `notepad_write` 两个工具，客户端已有的记事本 tab 读写同一份，归档时保留。
+设计写作时没有注意到那个 tab。其他差别：目录条目没有单独的 `domain` 字段（域取自名字首段），列表分页与 `agent_mode_set` 的合并未做。
+现行说明见 [MCP 手册](../../operations/mcp.md)，未完成的事项见[未完成工作](../../plans/README.md)。正文保留设计时的表述，对照源码提交 `5451fe2`。
 
 ## 现状
 

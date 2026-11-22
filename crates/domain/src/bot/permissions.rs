@@ -11,7 +11,7 @@ const MAX_MODES: usize = 16;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolGroup {
-    /// Read-only inspection; cannot be disabled.
+    /// Inspection and the Workspace notepad; cannot be disabled.
     Observe,
     /// Create, prompt and reconfigure Agents.
     Agents,
@@ -23,8 +23,6 @@ pub enum ToolGroup {
     Scripts,
     /// Create and drive terminals.
     Terminals,
-    /// Write and delete notes of the Workspace notepad; reading belongs to `Observe`.
-    Notepad,
     /// Retired: still parsed so saved profiles load, but grants nothing and is dropped on save.
     Workspaces,
 }
@@ -55,7 +53,7 @@ pub enum Holder {
 }
 
 use ToolAccess::{BotOnly, Group, HostOnly, Worker};
-use ToolGroup::{Agents, Notepad, Observe, Schedules, Scripts, Stop, Terminals};
+use ToolGroup::{Agents, Observe, Schedules, Scripts, Stop, Terminals};
 
 /// Every daemon MCP tool name with its access class; unknown names are `HostOnly`.
 pub const TOOLS: &[(&str, ToolAccess)] = &[
@@ -90,10 +88,10 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("heartbeat_create", Group(Schedules)),
     ("heartbeat_delete", Group(Schedules)),
     ("heartbeat_list", Group(Observe)),
-    ("notepad_list", Group(Observe)),
+    // The notepad belongs to the Workspace, so every scoped caller that reaches the Workspace
+    // may read and write it (ADR-296).
     ("notepad_read", Group(Observe)),
-    ("notepad_write", Group(Notepad)),
-    ("notepad_delete", Group(Notepad)),
+    ("notepad_write", Group(Observe)),
     ("script_start", Group(Scripts)),
     ("script_stop", Group(Scripts)),
     ("terminal_create", Group(Terminals)),
@@ -168,7 +166,7 @@ pub struct BotPermissions {
 impl Default for BotPermissions {
     fn default() -> Self {
         Self {
-            groups: BTreeSet::from([Observe, Agents, Stop, Schedules, Notepad]),
+            groups: BTreeSet::from([Observe, Agents, Stop, Schedules]),
             modes: BTreeMap::new(),
         }
     }

@@ -137,21 +137,28 @@ describe("Paseo tool-call detail presentation", () => {
     ]);
   });
 
-  it("lays out a notepad write with the note key first and its revisions as the result", () => {
+  it("lays out a notepad write and reports who holds a conflicting revision", () => {
     expect(
       buildPaseoToolDetailSections(
         "mcp__ait__notepad_write",
-        { text: "Use v2 of the API.", workspaceId: "wks_1", mode: "replace", key: "api-contract" },
-        { key: "api-contract", revision: 2, notepadRevision: 9 },
+        { text: "Use v2 of the API.", expected: 3, workspaceId: "wks_1", mode: "replace" },
+        {
+          accepted: false,
+          workspaceId: "wks_1",
+          revision: 4,
+          updatedBy: { kind: "agent", agentId: "agt_1", title: "Reviewer" },
+          updatedAt: "2026-11-22T09:00:00.000Z",
+          error: "The notepad changed. Read it again before replacing it.",
+        },
       ),
     ).toEqual([
       {
         kind: "fields",
         title: "Details",
         fields: [
-          { label: "Key", value: "api-contract" },
           { label: "Workspace", value: "wks_1" },
           { label: "Mode", value: "replace" },
+          { label: "Expected", value: "3" },
           { label: "Text", value: "Use v2 of the API." },
         ],
       },
@@ -159,12 +166,35 @@ describe("Paseo tool-call detail presentation", () => {
         kind: "fields",
         title: "Result",
         fields: [
-          { label: "Key", value: "api-contract" },
-          { label: "Revision", value: "2" },
-          { label: "Notepad revision", value: "9" },
+          { label: "Accepted", value: "No" },
+          { label: "Workspace", value: "wks_1" },
+          { label: "Revision", value: "4" },
+          { label: "Updated by", value: "Kind: agent\nAgent: agt_1\nTitle: Reviewer" },
+          { label: "Updated at", value: "2026-11-22T09:00:00.000Z" },
+          { label: "Error", value: "The notepad changed. Read it again before replacing it." },
         ],
       },
     ]);
+  });
+
+  it("shows what a notepad read returned, text last", () => {
+    expect(
+      buildPaseoToolDetailSections(
+        "mcp__ait__notepad_read",
+        { limit: 2000 },
+        { text: "Use v2.", chars: 7, revision: 4, workspaceId: "wks_1", nextOffset: null },
+      )?.at(-1),
+    ).toEqual({
+      kind: "fields",
+      title: "Result",
+      fields: [
+        { label: "Workspace", value: "wks_1" },
+        { label: "Revision", value: "4" },
+        { label: "Chars", value: "7" },
+        { label: "Next offset", value: "None" },
+        { label: "Text", value: "Use v2." },
+      ],
+    });
   });
 
   it("unwraps MCP result envelopes instead of exposing JSON-encoded text", () => {

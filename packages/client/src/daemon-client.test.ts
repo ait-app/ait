@@ -7732,6 +7732,56 @@ vi.mock("./protocol/connection.js", async () => {
   return { createDaemonConnection: createProtocolStub };
 });
 
+test("workspace notepad reads and writes correlate their typed results", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "notepad",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  const reading = client.getWorkspaceNotepad("wks_1");
+  const get = parseSentFrame(mock.sent[0]);
+  expect(get).toMatchObject({ type: "workspace.notepad.get.request", workspaceId: "wks_1" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.notepad.get.response",
+      payload: { requestId: get.requestId, workspaceId: "wks_1", revision: 0, text: "" },
+    }),
+  );
+  await expect(reading).resolves.toMatchObject({ revision: 0, text: "" });
+
+  const writing = client.writeWorkspaceNotepad({ workspaceId: "wks_1", text: "", expected: 0 });
+  const write = parseSentFrame(mock.sent[1]);
+  expect(write).toMatchObject({
+    type: "workspace.notepad.write.request",
+    workspaceId: "wks_1",
+    text: "",
+    expected: 0,
+  });
+  expect(write).not.toHaveProperty("mode");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.notepad.write.response",
+      payload: {
+        requestId: write.requestId,
+        accepted: false,
+        workspaceId: "wks_1",
+        revision: 2,
+        updatedBy: { kind: "agent", agentId: "agt_1", title: "Reviewer" },
+        error: "The notepad changed.",
+      },
+    }),
+  );
+  await expect(writing).resolves.toMatchObject({ accepted: false, revision: 2 });
+});
+
 test("host resource statistics gate old hosts and correlate a typed snapshot", async () => {
   for (const supported of [false, true]) {
     const mock = createMockTransport();

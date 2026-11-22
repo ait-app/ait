@@ -18,12 +18,11 @@ export const BOT_TOOL_GROUPS = [
   "schedules",
   "scripts",
   "terminals",
-  "notepad",
 ] as const;
 // `workspaces` is retired but may still appear in profiles saved earlier or sent by older hosts.
 export const BotToolGroupSchema = z.enum([...BOT_TOOL_GROUPS, "workspaces"]);
 export const BotPermissionsSchema = z.strictObject({
-  groups: z.array(BotToolGroupSchema).max(8),
+  groups: z.array(BotToolGroupSchema).max(7),
   modes: z.record(z.string().min(1), z.array(z.string().min(1)).min(1).max(16)),
 });
 /** Which Workspace notifications wake the Bot: its own work only, or the whole Workspace. */

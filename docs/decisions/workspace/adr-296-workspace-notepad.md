@@ -1,7 +1,7 @@
 ---
 id: ADR-296
 status: accepted
-date: 2026-11-21
+date: 2026-11-22
 amends:
   - bot/adr-215-bot-permissions-and-scoped-mcp.md
   - bot/adr-280-bot-recall-reads-and-spill.md
@@ -11,64 +11,67 @@ paths:
   - crates/persistence/src/storage/notepad.rs
   - crates/metadata/src/notepad
   - crates/api/src/mcp
-  - crates/domain/src/bot/permissions.rs
+  - crates/api/src/guest
+  - apps/mobile/src/panels/notebook-panel.tsx
 ---
 
-# ADR-296：Workspace 记事本（notepad）：同一 Workspace 的 Agent 共享的便签
+# ADR-296：每个 Workspace 一份由 daemon 保存的记事本
 
 ## 背景
 
-同一 Workspace 的 Agent 之间没有被动的共享通道。`agent_prompt` 是点对点的并且会开启对方新的一轮；`ticket_report` 只从工作者到 Bot；
-Bot 记忆只对 Bot 会话可见；检出目录中的文件会进入 Git 工作区，被提交、被 `checkout.reset_workspace.request` 清除或与改动冲突。
-Agent 需要一个地方留下别人要用的信息：约定的接口、已经做出的决定、正在占用的文件、问题与答复。
+同一 Workspace 的 Agent 之间没有被动的共享通道：`agent_prompt` 是点对点的并且会开启对方新的一轮，`ticket_report` 只从工作者到 Bot，
+Bot 记忆只对 Bot 会话可见。客户端有一个实验性的记事本 tab，把人写的笔记存放在检出目录的 `.ait-notebook.md`，通过文件协议读写；
+它只在有人打开 tab 后才存在，会进入 Git 工作区、被 `checkout.reset_workspace.request` 清除，Agent 也不知道它。
 
-客户端已有一个实验性的 notebook tab，把人写的笔记存放在检出目录的 `.ait-notebook.md`（[Workspace 规格](../../architecture/workspace.md#客户端-workspace-记事本)）。
-它不经过 daemon 的业务能力，也没有署名、修订或对 Bot 作用域的限制。本决策的记事本是另一份数据；两者是否合并尚未决定，见“未包含”。
+记事本应该是 Workspace 自身的一部分：不论 tab 是否打开都存在，人和 Agent 读写的是同一份，每个 Workspace 有且只有一份。
 
 ## 决策
 
-- **模型。** 每个 Workspace 一份记事本，按 `workspaceId` 寻址，由按 `key` 寻址的便签组成。`key` 为 1–64 个字符的 `a-z`、`0-9` 与 `-`，
-  以字母或数字开头，由调用者选择，使 Agent 在上下文被压缩后仍能凭名字找回便签。便签带 `text`、从 1 起的 `revision`、创建者与最后写入者、
-  创建与最后写入时间。记事本自身的 `revision` 在任何便签创建、修改、删除时加 1，每条便签记录最后一次变化时的记事本修订号，供 `since` 过滤。
-  上限为每个 Workspace 64 条、每条 16 KiB，不允许 NUL，达到上限时拒绝而不淘汰。纯值与状态迁移在 `domain::workspace::notepad`。
-- **写入。** `replace`（默认）在便签不存在时创建，已存在时要求 `expected` 等于当前 `revision`；`append` 在末尾追加一段，段前由服务端写入
-  `[作者 · 时间]`，不需要 `expected`，便签不存在时创建。删除要求 `expected`。任何能写的调用者都能修改和删除任何便签：
-  `expected` 防止的是无意覆盖，不是权限隔离。
-- **拒绝是结果而不是错误。** 修订号不符、缺少 `expected`、便签不存在、已满或超长返回 `accepted: false`、`error` 文本，以及找到便签时它的当前
-  `revision` 与 `updatedBy`；未知或已归档的 Workspace 返回 `WorkspaceNotFound`，非法的 `key`、正文或作者返回 `InvalidMessage`。
-- **归属与存储。** `workspace.notepad.list.request`、`.get.request`、`.write.request`、`.delete.request` 归 `metadata` 的 `notepad` 能力组
+- **模型。** 每个 Workspace 有且只有一份记事本：一段文本，带 `revision`、最后写入者与时间。它随 Workspace 存在，从未写入时为空文本、
+  `revision` 为 0，不需要创建。正文至多 256 KiB，不允许 NUL。纯值与状态迁移在 `domain::workspace::notepad`。
+  记事本内没有按 key 的便签，也没有单独的权限分组：能在这个 Workspace 工作的调用者就能读写它的记事本。
+- **写入。** `replace`（默认）设置整段文本，要求 `expected` 等于当前 `revision`，只有从未写入的记事本可以省略；允许写入空文本以清空。
+  `append` 在末尾追加一段，段前由服务端写入 `[作者 · 时间]`，不需要 `expected`，追加的文本不能为空。每次写入使 `revision` 加 1。
+  Agent 应优先使用 `append`，它不会覆盖别人写的内容。
+- **拒绝是结果而不是错误。** 修订号不符或超长返回 `accepted: false`、`error` 文本、当前 `revision` 与最后写入者；
+  未知或已归档的 Workspace 返回 `WorkspaceNotFound`，含 NUL 的正文、空的追加或非法作者返回 `InvalidMessage`。
+- **归属与存储。** `workspace.notepad.get.request` 与 `workspace.notepad.write.request` 归 `metadata` 的 `notepad` 能力组
   （[ADR-130](adr-130-workspace-methods-owned-by-metadata.md)）。存储端口为 `model::workspace::notepad::NotepadStore`，由 `persistence` 的
-  SQLite 适配器实现，文件为 `<data-dir>/notepads/notepads.sqlite3`，每次变更在一个事务中写入便签与记事本修订号
+  SQLite 适配器实现，文件为 `<data-dir>/notepads/notepads.sqlite3`，每个 Workspace 一行
   （打开数据库的方式与创建回执共用，[ADR-294](../daemon/adr-294-sqlite-creation-receipts.md)）。
 - **生命周期。** 记事本在 daemon 重启后保留，不在检出目录中，因此不进入 Git、不受重置影响，沙箱化 worktree 也不需要为它放开写入路径。
-  Workspace 被归档或移除时，服务通过登记表的变更订阅删除它的记事本；恢复归档的 Workspace 得到空记事本。记事本不随 worktree 创建复制。
+  Workspace 归档期间记事本不可读写但保留，恢复后内容仍在；Workspace 记录被移除时，服务通过登记表的变更订阅删除它。
+  记事本不随 worktree 创建复制，托管 worktree 是独立的 Workspace，有自己的记事本。
 - **作者。** `write` 接受可选的 `author`（`{kind, agentId?, title?}`，`kind` 为 `agent`、`bot`、`user`、`external`），缺省为 `user`。
   MCP 层填写它：Bot 会话为 `bot`，子树凭据为该 Agent，主机凭据取 `X-Ait-Agent-Id` 指向的 Agent，没有时为 `external`。
   该请求头不是权限边界（[ADR-148](../daemon/adr-148-daemon-mcp.md)、ADR-215），持有主机凭据的调用者也可以直接调用 RPC 并填写任意作者，
   所以署名只是说明，不能当作身份证明。
-- **MCP 工具。** `notepad_list`、`notepad_read`（按字符分页，默认 4000、至多 8000）、`notepad_write`、`notepad_delete`，
-  命名与参数遵循 [ADR-295](../daemon/adr-295-mcp-tool-naming-and-aliases.md)。`workspaceId` 省略时取调用者 Agent 的 Workspace；
+- **MCP 工具。** `notepad_read`（按字符分页，默认 4000、至多 8000）与 `notepad_write`，命名与参数遵循
+  [ADR-295](../daemon/adr-295-mcp-tool-naming-and-aliases.md)。`workspaceId` 省略时取调用者 Agent 的 Workspace；
   主机凭据可以显式指定任意未归档的 Workspace。
-- **Bot 作用域（修订 ADR-215）。** 读取属于 `observe`；写入与删除属于新的权限分组 `notepad`，属于默认分组。升级前保存过权限的 Bot 不会自动获得它。
-  目标必须在授权的 Workspace 内，`workspaceId` 省略时子树 Agent 取自己的 Workspace，Bot 会话取根 Workspace。
-  Bot 指令在授予该分组时说明用法，`bot_overview` 返回根 Workspace 记事本的修订号与便签数。
+- **Bot 作用域（修订 ADR-215）。** 两个工具都属于总是授予的 `observe`，不新增权限分组；目标必须在授权的 Workspace 内，
+  `workspaceId` 省略时子树 Agent 取自己的 Workspace，Bot 会话取根 Workspace。Bot 指令说明用法，
+  `bot_overview` 返回根 Workspace 记事本的修订号与字符数。
 - **受限于外部对话的调用者（修订 ADR-280 第 4 节）。** 其他 Channel 的对话及为它工作的 Agent 只能触达自己工单的 Agent；记事本是整个 Workspace
-  共享的，会让不同对话的内容互相可见，所以它们调用四个工具都得到引导文本，`bot_overview` 中的记事本为 `null`。
-- **访客。** 访客策略对未登记的方法默认拒绝，记事本方法不登记，Workspace 访客与整机访客都不能访问。
-- **信任。** 便签是其他 Agent 与用户写的数据，不是指令：一个读过恶意内容的 Agent 可以把诱导文本写进记事本。工具描述、`initialize` 的
+  共享的，会让不同对话的内容互相可见，所以它们调用两个工具都得到引导文本，`bot_overview` 中的记事本为 `null`。
+  这沿用已有的对话隔离，不是记事本自己的权限概念。
+- **访客。** 两个方法按 Workspace 分享放行：能访问该 Workspace 的访客可以读写它的记事本，与此前经文件权限读写 `.ait-notebook.md` 一致。
+  访客请求中的 `author` 被移除，写入一律记为 `user`。
+- **客户端。** 记事本 tab 改为读写本记事本：加载用 `get`，可交互时每 3 秒轮询一次并在没有未保存修改时采用较新的文本，
+  自动保存用带 `expected` 的 `replace`；修订号不符时进入冲突状态并提供“重新加载”。`ServerInfo` 的 `workspaceNotepad` 特性在两个方法都已实现时为真，
+  否则 tab 提示需要更新主机。首次加载时若记事本从未写入而检出目录中存在非空的 `.ait-notebook.md`，客户端把它导入一次，不修改也不删除该文件。
+- **信任。** 记事本的内容是其他 Agent 与用户写的数据，不是指令：一个读过恶意内容的 Agent 可以把诱导文本写进去。工具描述、`initialize` 的
   `instructions`、Skill 与 Bot 指令都这样说明，并要求不写入凭据。
-- **客户端。** `ServerInfo` 的 `workspaceNotepad` 特性在四个方法都已实现时为真；客户端只在此时提供 `notepad` 权限分组并把它放进新 Bot 的默认权限，
-  因为较早的 daemon 会拒绝未知的分组。
 
 ## 后果
 
-- 同一 Workspace 的 Agent 可以不打断彼此地共享信息；托管 worktree 是独立的 Workspace，默认各用各的记事本。
+- 人和 Agent 看到的是同一份记事本，tab 不打开它也存在。
 - 写入不唤醒任何 Agent，提问要等对方下次读取，或由编排者用 `agent_prompt` 提醒。
-- 记事本不是访问控制边界：同一 Workspace 内能写的调用者互相可以覆盖和删除。
-- 归档会丢弃记事本，需要保留的结论应写进仓库或工单。
+- 整段替换以修订号互斥：人在 tab 中编辑时若 Agent 先写入，保存会冲突，需要重新加载后再改。Agent 使用 `append` 不会冲突。
+- 没有变更事件，tab 靠轮询看到别人的写入，最多延迟一个轮询间隔。
+- 记事本不是访问控制边界：同一 Workspace 内的调用者互相可以覆盖。
+- `.ait-notebook.md` 不再被读写；导入之后留在检出目录中，由用户自行处理。
 
 ## 未包含
 
-- 客户端界面与变更事件。notebook tab 仍读写 `.ait-notebook.md`，人看不到 Agent 写的便签；是否让它改为显示本记事本，或让本记事本的工具改为
-  读写那个文件，需要单独决定。
-- 向指定 Agent 投递便签、服务端记录每个 Agent 的已读位置、Project 级记事本、按对话隔离的记事本。
+- 变更事件与订阅、向指定 Agent 投递、服务端记录每个 Agent 的已读位置、Project 级记事本、按对话隔离的记事本。
