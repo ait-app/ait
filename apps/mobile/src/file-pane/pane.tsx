@@ -224,14 +224,17 @@ export function FilePane({
   workspaceRoot,
   location,
   navigationRevision,
+  initialMode = "preview",
 }: {
   serverId: string;
   workspaceRoot: string;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  /** What a file that renders, such as Markdown, shows until the mode is toggled. */
+  initialMode?: "preview" | "source";
 }) {
   const { t } = useTranslation();
-  const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
+  const [previewMode, setPreviewMode] = useState<"preview" | "source">(initialMode);
 
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
@@ -275,7 +278,7 @@ export function FilePane({
     liveFileSnapshot: liveFile.snapshot,
   });
 
-  useEffect(() => setPreviewMode("preview"), [targetKey]);
+  useEffect(() => setPreviewMode(initialMode), [initialMode, targetKey]);
 
   const { file: preview, imageAttachment } = resolveFilePreviewLifecycle(previewLifecycle);
   const imagePreviewUri = useAttachmentPreviewUrl(imageAttachment);

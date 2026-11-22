@@ -1,5 +1,5 @@
 //! Workspace notepad tools: placement, authorship and text paging over the notepad RPCs
-//! (ADR-296).
+//! (ADR-296, ADR-297).
 
 use bot::mcp::CallerKind;
 use model::ErrorCode;
@@ -65,7 +65,7 @@ fn author(scope: Option<&Scope>, caller: Option<&Value>) -> Value {
     author
 }
 
-/// Return one page of the notepad's text with its revision and last writer.
+/// Return one page of the notepad's text with its revision and the path of its file.
 async fn read(state: &Shared, method: &str, mut arguments: Value) -> Result<Value, ErrorCode> {
     let offset = take(&mut arguments, "offset")?
         .as_ref()
@@ -84,6 +84,10 @@ async fn read(state: &Shared, method: &str, mut arguments: Value) -> Result<Valu
         .skip(usize::try_from(offset).unwrap_or(usize::MAX))
         .take(usize::try_from(limit).unwrap_or(usize::MAX))
         .collect();
+    // Clients open the file through its directory; a tool caller only needs the file.
+    if let Some(notepad) = notepad.as_object_mut() {
+        notepad.remove("directory");
+    }
     notepad["text"] = json!(page);
     notepad["chars"] = json!(chars);
     notepad["nextOffset"] = if end < chars { json!(end) } else { Value::Null };

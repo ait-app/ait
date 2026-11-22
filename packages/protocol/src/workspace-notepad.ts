@@ -1,15 +1,7 @@
 import { z } from "zod";
 
-/** Largest notepad text the daemon stores, in UTF-8 bytes. */
+/** Largest text a notepad write may leave in the file, in UTF-8 bytes. */
 export const WORKSPACE_NOTEPAD_MAX_BYTES = 262_144;
-
-/** Who last wrote the notepad; `title` is the agent's title when it wrote. */
-export const WorkspaceNotepadAuthorSchema = z.object({
-  // A kind added by a later host must not make the notepad unreadable.
-  kind: z.union([z.enum(["agent", "bot", "user", "external"]), z.string()]),
-  agentId: z.string().nullish(),
-  title: z.string().nullish(),
-});
 
 export const WorkspaceNotepadGetRequestSchema = z.object({
   type: z.literal("workspace.notepad.get.request"),
@@ -22,19 +14,22 @@ export const WorkspaceNotepadWriteRequestSchema = z.object({
   requestId: z.string(),
   workspaceId: z.string().min(1),
   text: z.string(),
-  // Defaults to `replace`, which must carry the revision last read (0 before the first write).
+  // Defaults to `replace`, which must carry the revision last read unless the notepad is empty.
   mode: z.enum(["replace", "append"]).optional(),
-  expected: z.number().int().nonnegative().optional(),
+  expected: z.string().min(1).optional(),
 });
 
-const revision = z.number().int().nonnegative();
-
-/** A notepad nobody has written is revision 0 with empty text and no author. */
+/**
+ * The notepad is a Markdown file the host keeps outside the workspace's checkout. Clients open
+ * it with the file methods, using `directory` as `cwd`; `path` is the file itself. `revision`
+ * differs whenever the text does.
+ */
 export const WorkspaceNotepadSchema = z.object({
   workspaceId: z.string(),
-  revision,
+  path: z.string().min(1),
+  directory: z.string().min(1),
+  revision: z.string(),
   text: z.string(),
-  updatedBy: WorkspaceNotepadAuthorSchema.nullish(),
   updatedAt: z.string().nullish(),
 });
 
@@ -45,8 +40,8 @@ export const WorkspaceNotepadSchema = z.object({
 export const WorkspaceNotepadWriteResultSchema = z.object({
   accepted: z.boolean(),
   workspaceId: z.string(),
-  revision,
-  updatedBy: WorkspaceNotepadAuthorSchema.nullish(),
+  path: z.string().nullish(),
+  revision: z.string(),
   updatedAt: z.string().nullish(),
   error: z.string().nullish(),
 });
@@ -66,6 +61,5 @@ export const WORKSPACE_NOTEPAD_METHODS = [
   WorkspaceNotepadWriteRequestSchema.shape.type.value,
 ] as const;
 
-export type WorkspaceNotepadAuthor = z.infer<typeof WorkspaceNotepadAuthorSchema>;
 export type WorkspaceNotepad = z.infer<typeof WorkspaceNotepadSchema>;
 export type WorkspaceNotepadWriteResult = z.infer<typeof WorkspaceNotepadWriteResultSchema>;

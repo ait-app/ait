@@ -7,7 +7,7 @@ use model::ErrorCode;
 use model::share::ResourceKind;
 use serde_json::Value;
 
-use super::{Session, inside};
+use super::{Session, inside, notepad_workspace};
 use crate::Shared;
 use crate::guest::Reach;
 use crate::shares::rpc::{active_project, active_workspace, all_workspaces};
@@ -102,6 +102,10 @@ async fn configuration(
     params: &Value,
 ) -> Result<(), ErrorCode> {
     let cwd = params["cwd"].as_str().ok_or(ErrorCode::Forbidden)?;
+    // A notepad directory holds no project configuration; the method's rule checks its reach.
+    if method == "fs.file.write.request" && notepad_workspace(state, cwd).await?.is_some() {
+        return Ok(());
+    }
     inside(session, state, cwd).await?;
     let project = match &session.reach {
         Reach::Project { id, .. } => id.clone(),

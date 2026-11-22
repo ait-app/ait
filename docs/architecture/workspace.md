@@ -147,23 +147,26 @@
 
 ## Workspace 记事本
 
-每个 Workspace 有且只有一份记事本，由 daemon 保存，随 Workspace 存在，不论客户端的记事本 tab 是否打开；人和 Agent 读写的是同一份
-（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。
+每个 Workspace 有且只有一份记事本：daemon 数据目录下的一个 Markdown 文件，不在检出目录中；人和 Agent 读写的是同一个文件
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)、[ADR-297](../decisions/workspace/adr-297-notepad-file-in-data-directory.md)）。
 
-- 记事本是一段文本，带 `revision`、最后写入者（`agent`、`bot`、`user`、`external`）与时间；从未写入时为空文本、`revision` 为 0。正文至多 256 KiB。
+- 文件为 `<data-dir>/notepads/<Workspace ID>/notepad.md`（ID 中小写字母、数字、`_`、`-` 以外的字节写作 `%XX`），经
+  `model::workspace::notepad::NotepadStore` 注入，由 `persistence` 的 `FileNotepadStore` 实现。它不进入 Git，不受重置和沙箱写入限制影响。
+  文件在第一次读取时创建；此时检出目录中若有非空的 `.ait-notebook.md`（更早的存放位置），以它的正文作为初始内容，不修改该文件。
+  Workspace 归档期间记事本保留但不可经 `workspace.notepad.*` 读写，恢复后内容仍在；Workspace 记录被移除时删除它的目录。
+- 文件的内容就是记事本的全部状态：`revision` 是由正文算出的不透明字符串，`updatedAt` 是文件的修改时间。
 - `workspace.notepad.get.request` 与 `workspace.notepad.write.request` 归 `metadata` 的 `notepad` 能力组，只接受未归档的 Workspace，
-  否则返回 `WorkspaceNotFound`。
-- `write` 的 `replace`（默认）要求 `expected` 等于当前 `revision`（从未写入时可省略），允许空文本；`append` 在末尾追加一段并由服务端写入
-  `[作者 · 时间]`，不需要 `expected`。修订号不符或超长返回 `accepted: false`、`error`、当前 `revision` 与最后写入者。
-- 作者为可选的 `author`，缺省为 `user`；MCP 层按凭据或 `X-Ait-Agent-Id` 填写，主机凭据下只是说明而不是身份证明。
-- 存储为 `<data-dir>/notepads/notepads.sqlite3`，经 `model::workspace::notepad::NotepadStore` 注入；不在检出目录中，不受重置和沙箱写入限制影响。
-  Workspace 归档期间记事本保留但不可读写，恢复后内容仍在；Workspace 记录被移除时删除。
-- 访客按 Workspace 分享读写所分享 Workspace 的记事本，请求中的 `author` 被移除。Bot 作用域内两个工具总是可用，受限于外部对话的调用者除外，
+  否则返回 `WorkspaceNotFound`。`get` 返回 `path`、`directory`、`revision`、`text` 与 `updatedAt`；文件大于 1 MiB 或不是 UTF-8 时失败。
+- `write` 的 `replace`（默认）要求 `expected` 等于当前 `revision`（记事本为空时可省略），允许空文本；`append` 在末尾追加一段并由服务端写入
+  `[作者 · 时间]`，不需要 `expected`。修订号不符或写入后超过 256 KiB 返回 `accepted: false`、`error` 与当前 `revision`。
+  写入以临时文件加重命名完成，重命名前发现文件已被别人改动时按新的内容重新决定。
+- 作者为可选的 `author`，缺省为 `user`，只用于 `append` 的署名；MCP 层按凭据或 `X-Ait-Agent-Id` 填写，主机凭据下只是说明而不是身份证明。
+- 访客按 Workspace 分享使用这两个方法，请求中的 `author` 被移除；访客的 `fs.explorer.request`、`fs.file.subscribe.request` 与
+  `fs.file.write.request` 还可以把所分享 Workspace 的记事本目录作为 `cwd`。Bot 作用域内两个工具总是可用，受限于外部对话的调用者除外，
   见 [Bot 规格](bot.md#工具分组与模式上限)；工具见 [MCP 手册](../operations/mcp.md#workspace-记事本)。
 - 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab，每个 Workspace 最多一个，tab 布局保留在客户端。
-  它读写本记事本：可交互时每 3 秒轮询，没有未保存修改时采用较新的文本；自动保存携带读到的 `revision`，冲突时提示并提供重新加载。
-  主机没有 `workspaceNotepad` 特性时提示需要更新主机。记事本从未写入而检出目录中有非空的 `.ait-notebook.md`（此前的存放位置）时，
-  客户端在首次加载时导入一次，不修改该文件。
+  它用 `get` 取得记事本文件的位置，然后用与打开文件相同的文件面板打开它：实时更新、带条件的保存、冲突提示和 Markdown 预览都来自文件面板。
+  Web 与桌面端默认进入编辑，原生移动端的文件面板没有编辑器，只显示渲染后的预览。主机没有 `workspaceNotepad` 特性时提示需要更新主机。
 
 ## 定时任务归属
 

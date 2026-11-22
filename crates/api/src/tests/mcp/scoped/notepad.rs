@@ -1,5 +1,5 @@
 //! The Workspace notepad tools, retired tool names and `heartbeat_list` on the MCP route
-//! (ADR-295, ADR-296).
+//! (ADR-295, ADR-296, ADR-297).
 
 use super::support::{codex_modes, forbidden, rejected, structured};
 use super::*;
@@ -27,10 +27,20 @@ async fn every_workspace_has_one_notepad_that_host_callers_share() {
     let empty = scoped
         .call(TOKEN, None, "notepad_read", json!({"workspaceId":root}))
         .await;
+    let empty = structured(&empty);
     assert_eq!(
-        structured(&empty),
-        &json!({"workspaceId":root,"revision":0,"text":"","chars":0,"nextOffset":null})
+        (&empty["workspaceId"], &empty["text"], &empty["chars"]),
+        (&json!(root), &json!(""), &json!(0))
     );
+    assert_eq!(empty["nextOffset"], Value::Null);
+    assert!(empty.get("directory").is_none());
+    // The notepad is a file of the host, outside the Workspace's checkout.
+    let file = std::path::PathBuf::from(empty["path"].as_str().unwrap());
+    assert!(
+        file.ends_with(format!("notepads/{root}/notepad.md")),
+        "{file:?}"
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "");
 
     let external = scoped
         .call(
@@ -41,11 +51,8 @@ async fn every_workspace_has_one_notepad_that_host_callers_share() {
         )
         .await;
     let external = structured(&external);
-    assert_eq!(
-        (&external["accepted"], &external["revision"]),
-        (&json!(true), &json!(1))
-    );
-    assert_eq!(external["updatedBy"], json!({"kind":"external"}));
+    assert_eq!(external["accepted"], true);
+    assert_ne!(external["revision"], empty["revision"]);
 
     let question = scoped
         .call(
@@ -57,10 +64,6 @@ async fn every_workspace_has_one_notepad_that_host_callers_share() {
         .await;
     let question = structured(&question);
     assert_eq!(question["workspaceId"], root);
-    assert_eq!(
-        question["updatedBy"],
-        json!({"kind":"agent","agentId":agent,"title":"Scoped Agent"})
-    );
 
     let read = scoped
         .call(TOKEN, Some(&agent), "notepad_read", json!({}))
@@ -71,20 +74,31 @@ async fn every_workspace_has_one_notepad_that_host_callers_share() {
         shared.starts_with("API: POST /x\n\n[Scoped Agent · "),
         "{shared}"
     );
-    assert!(shared.ends_with("]\nWhich port?"));
+    assert!(shared.ends_with("]\nWhich port?\n"));
     assert_eq!(
         (&read["revision"], &read["nextOffset"]),
-        (&json!(2), &Value::Null)
+        (&question["revision"], &Value::Null)
     );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), shared);
 
-    // What a client writes without an author is a user's; this is what the Notepad tab does.
-    let by_user = scoped
+    // The Notepad tab opens the file with the file editor; the tools read what it saved.
+    std::fs::write(&file, "typed in the editor\n").unwrap();
+    let edited = scoped
+        .call(TOKEN, Some(&agent), "notepad_read", json!({}))
+        .await;
+    assert_eq!(structured(&edited)["text"], "typed in the editor\n");
+    // A client that names no author appends as a user.
+    scoped
         .rpc(
             "workspace.notepad.write.request",
-            json!({"workspaceId":root,"text":"cleared","expected":2}),
+            json!({"workspaceId":root,"text":"noted","mode":"append"}),
         )
         .await;
-    assert_eq!(by_user["updatedBy"], json!({"kind":"user"}));
+    let signed = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        signed.starts_with("typed in the editor\n\n[User · "),
+        "{signed}"
+    );
 
     let elsewhere = scoped
         .call(
@@ -94,7 +108,7 @@ async fn every_workspace_has_one_notepad_that_host_callers_share() {
             json!({"workspaceId":scoped.other}),
         )
         .await;
-    assert_eq!(structured(&elsewhere)["revision"], 0);
+    assert_eq!(structured(&elsewhere)["text"], "");
     let missing = scoped
         .call(
             TOKEN,
@@ -119,7 +133,8 @@ async fn the_notepad_is_read_in_pages_and_replaced_only_with_the_revision_read()
         scoped.call(TOKEN, None, tool, arguments).await
     };
     let long = format!("{}{}", "a".repeat(4000), "é".repeat(1000));
-    structured(&call("notepad_write", json!({"text":long,"expected":0})).await);
+    let written = call("notepad_write", json!({"text":long})).await;
+    let written = structured(&written)["revision"].clone();
 
     let first = call("notepad_read", json!({})).await;
     let first = structured(&first);
@@ -135,26 +150,32 @@ async fn the_notepad_is_read_in_pages_and_replaced_only_with_the_revision_read()
     let beyond = call("notepad_read", json!({"offset":9000})).await;
     assert_eq!(structured(&beyond)["text"], "");
 
+    assert_eq!(first["revision"], written);
     for stale in [
         json!({"text":"short"}),
-        json!({"text":"short","expected":4}),
+        json!({"text":"short","expected":"stale"}),
     ] {
         let refused_write = call("notepad_write", stale).await;
         let refusal = refused(&refused_write);
         assert_eq!(
             (&refusal["accepted"], &refusal["revision"]),
-            (&json!(false), &json!(1))
+            (&json!(false), &written)
         );
-        assert_eq!(refusal["updatedBy"], json!({"kind":"external"}));
         assert!(refusal["error"].as_str().unwrap().contains("read it again"));
     }
-    let replaced = call("notepad_write", json!({"text":"short","expected":1})).await;
-    assert_eq!(structured(&replaced)["revision"], 2);
+    let replaced = call("notepad_write", json!({"text":"short","expected":written})).await;
+    assert_eq!(structured(&replaced)["accepted"], true);
+    let short = call("notepad_read", json!({})).await;
+    assert_eq!(
+        (&structured(&short)["text"], &structured(&short)["revision"]),
+        (&json!("short"), &structured(&replaced)["revision"])
+    );
 
     let invalid = call("notepad_write", json!({"text":"","mode":"append"})).await;
     assert_eq!(text(&invalid), model::ErrorCode::InvalidMessage.message());
     for (arguments, tool) in [
         (json!({"text":"t","mode":"merge"}), "notepad_write"),
+        (json!({"text":"t","expected":1}), "notepad_write"),
         (json!({"key":"plan"}), "notepad_read"),
     ] {
         rejected(
@@ -189,24 +210,19 @@ async fn a_bot_and_its_agents_use_the_notepad_of_their_workspaces_without_a_gran
         .call(&owner, None, "notepad_write", write.clone())
         .await;
     assert_eq!(structured(&by_bot)["workspaceId"], scoped.workspace);
-    assert_eq!(structured(&by_bot)["updatedBy"], json!({"kind":"bot"}));
     let by_agent = scoped
         .call(&subtree, None, "notepad_write", write.clone())
         .await;
-    assert_eq!(structured(&by_agent)["updatedBy"]["agentId"], child);
     let read = scoped.call(&subtree, None, "notepad_read", json!({})).await;
     let read = structured(&read);
-    assert!(
-        read["text"]
-            .as_str()
-            .unwrap()
-            .starts_with("[Workspace Bot · ")
-    );
-    assert_eq!(read["revision"], 2);
+    let shared = read["text"].as_str().unwrap();
+    assert!(shared.starts_with("[Workspace Bot · "), "{shared}");
+    assert_eq!(shared.matches("]\nstep one\n").count(), 2, "{shared}");
+    assert_eq!(read["revision"], structured(&by_agent)["revision"]);
 
     let overview = scoped.call(&owner, None, "bot_overview", json!({})).await;
     let notepad = &structured(&overview)["notepad"];
-    assert_eq!(notepad["revision"], 2);
+    assert_eq!(notepad["revision"], read["revision"]);
     assert_eq!(notepad["chars"], read["chars"]);
 
     let mut foreign = write.clone();
@@ -250,7 +266,7 @@ async fn a_conversation_restricted_to_its_own_work_may_not_use_the_shared_notepa
             json!({"workspaceId":scoped.workspace}),
         )
         .await;
-    assert_eq!(stored["revision"], 0);
+    assert_eq!(stored["text"], "");
     scoped.stop().await;
 }
 

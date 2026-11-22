@@ -63,15 +63,14 @@ async fn notepad_round_trip(client: &Client, id: &str) {
             None,
         )
         .await;
-    assert_eq!(
-        (&written["accepted"], &written["revision"]),
-        (&json!(true), &json!(1))
-    );
+    assert_eq!(written["accepted"], true);
     let read = client
         .tool("notepad_read", json!({"workspaceId":id}), None)
         .await;
-    assert!(read["text"].as_str().unwrap().ends_with("]\nUse port 7316"));
-    assert_eq!(read["updatedBy"], json!({"kind":"external"}));
+    let text = read["text"].as_str().unwrap();
+    assert!(text.starts_with("[External caller · "), "{text}");
+    assert!(text.ends_with("]\nUse port 7316\n"), "{text}");
+    assert_eq!(read["revision"], written["revision"]);
 }
 
 #[tokio::test]
@@ -117,7 +116,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let missing = client.rpc("tools/call",json!({"name":"workspace_rename","arguments":{"workspaceId":"wks_missing","title":"x"}}),None).await;
     assert_eq!(missing["result"]["isError"], true);
     notepad_round_trip(&client, id).await;
-    assert!(state.join("notepads/notepads.sqlite3").is_file());
+    assert!(state.join("notepads").join(id).join("notepad.md").is_file());
     client
         .tool("workspace_archive", json!({"workspaceId":id}), None)
         .await;

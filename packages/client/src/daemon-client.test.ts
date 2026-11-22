@@ -7746,24 +7746,61 @@ test("workspace notepad reads and writes correlate their typed results", async (
   mock.triggerOpen();
   await connected;
 
+  const file = {
+    path: "/home/me/.ait/notepads/wks_1/notepad.md",
+    directory: "/home/me/.ait/notepads/wks_1",
+  };
   const reading = client.getWorkspaceNotepad("wks_1");
   const get = parseSentFrame(mock.sent[0]);
   expect(get).toMatchObject({ type: "workspace.notepad.get.request", workspaceId: "wks_1" });
   mock.triggerMessage(
     wrapSessionMessage({
       type: "workspace.notepad.get.response",
-      payload: { requestId: get.requestId, workspaceId: "wks_1", revision: 0, text: "" },
+      payload: {
+        requestId: get.requestId,
+        workspaceId: "wks_1",
+        ...file,
+        revision: "r1",
+        text: "",
+      },
     }),
   );
-  await expect(reading).resolves.toMatchObject({ revision: 0, text: "" });
+  await expect(reading).resolves.toMatchObject({ ...file, revision: "r1", text: "" });
 
-  const writing = client.writeWorkspaceNotepad({ workspaceId: "wks_1", text: "", expected: 0 });
-  const write = parseSentFrame(mock.sent[1]);
+  const appending = client.writeWorkspaceNotepad({
+    workspaceId: "wks_1",
+    text: "note",
+    mode: "append",
+  });
+  const append = parseSentFrame(mock.sent[1]);
+  expect(append).toMatchObject({
+    type: "workspace.notepad.write.request",
+    workspaceId: "wks_1",
+    text: "note",
+    mode: "append",
+  });
+  expect(append).not.toHaveProperty("expected");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.notepad.write.response",
+      payload: {
+        requestId: append.requestId,
+        accepted: true,
+        workspaceId: "wks_1",
+        path: file.path,
+        revision: "r2",
+      },
+    }),
+  );
+  await expect(appending).resolves.toMatchObject({ accepted: true, revision: "r2" });
+
+  const writing = client.writeWorkspaceNotepad({ workspaceId: "wks_1", text: "", expected: "r1" });
+  const write = parseSentFrame(mock.sent[2]);
   expect(write).toMatchObject({
     type: "workspace.notepad.write.request",
     workspaceId: "wks_1",
     text: "",
-    expected: 0,
+    expected: "r1",
   });
   expect(write).not.toHaveProperty("mode");
   mock.triggerMessage(
@@ -7773,13 +7810,13 @@ test("workspace notepad reads and writes correlate their typed results", async (
         requestId: write.requestId,
         accepted: false,
         workspaceId: "wks_1",
-        revision: 2,
-        updatedBy: { kind: "agent", agentId: "agt_1", title: "Reviewer" },
+        path: file.path,
+        revision: "r2",
         error: "The notepad changed.",
       },
     }),
   );
-  await expect(writing).resolves.toMatchObject({ accepted: false, revision: 2 });
+  await expect(writing).resolves.toMatchObject({ accepted: false, revision: "r2" });
 });
 
 test("host resource statistics gate old hosts and correlate a typed snapshot", async () => {

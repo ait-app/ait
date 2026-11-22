@@ -183,6 +183,12 @@ export interface SeedDaemonClient {
     handler: (event: { terminalId: string; type: string; data?: Uint8Array }) => void,
   ): () => void;
   killTerminal(terminalId: string): Promise<{ error: string | null }>;
+  writeWorkspaceNotepad(options: {
+    workspaceId: string;
+    text: string;
+    mode?: "replace" | "append";
+    expected?: string;
+  }): Promise<{ accepted: boolean; revision: string }>;
 }
 
 export async function connectSeedClient(options?: {

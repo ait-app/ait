@@ -1,10 +1,11 @@
-//! Workspace notepad: the one text every Agent and user of a Workspace shares (ADR-296).
+//! Workspace notepad: the one text file every Agent and user of a Workspace shares (ADR-296,
+//! ADR-297).
 //!
 //! Pure values and transitions; storage and transport live in the outer crates.
 
 use serde::{Deserialize, Serialize};
 
-/// Most bytes a notepad's text holds, including appended attribution lines.
+/// Most bytes a notepad write may leave in the file, including appended attribution lines.
 pub const MAX_TEXT_BYTES: usize = 256 * 1024;
 /// Most characters of an author's identifier or title kept with a notepad.
 const MAX_AUTHOR_CHARS: usize = 128;
@@ -96,8 +97,8 @@ pub struct Write<'a> {
     pub text: &'a str,
     /// Replace or append.
     pub mode: WriteMode,
-    /// The revision the caller read; required to replace a notepad that was ever written.
-    pub expected: Option<u64>,
+    /// The revision the caller read; required to replace a notepad that holds text.
+    pub expected: Option<&'a str>,
     /// Who writes.
     pub author: Author,
     /// RFC 3339 time of the write.
@@ -121,70 +122,86 @@ pub enum NotepadError {
     TooLarge,
 }
 
-/// One Workspace's shared text. A Workspace that was never written to has the default notepad:
-/// empty text at revision 0.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// One Workspace's notepad as its file held it when it was read. The file belongs to the host,
+/// outside the Workspace's checkout, and people edit it like any other file, so every value is
+/// a snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Notepad {
+    path: String,
     text: String,
-    revision: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    updated_by: Option<Author>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    updated_at: Option<String>,
+    revision: String,
+    updated_at: String,
 }
 
 impl Notepad {
+    /// The notepad file at `path` holding `text`, identified by `revision` and last modified at
+    /// the RFC 3339 time `updated_at`.
+    #[must_use]
+    pub const fn new(path: String, text: String, revision: String, updated_at: String) -> Self {
+        Self {
+            path,
+            text,
+            revision,
+            updated_at,
+        }
+    }
+
+    /// Absolute path of the notepad file on the host.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
     /// The shared text.
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
     }
 
-    /// Counts every write; 0 until the first one.
+    /// Opaque token that differs whenever the text does.
     #[must_use]
-    pub const fn revision(&self) -> u64 {
-        self.revision
+    pub fn revision(&self) -> &str {
+        &self.revision
     }
 
-    /// Who wrote last, once anyone has.
+    /// RFC 3339 time the file was last modified.
     #[must_use]
-    pub const fn updated_by(&self) -> Option<&Author> {
-        self.updated_by.as_ref()
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
     }
 
-    /// RFC 3339 time of the last write, once there was one.
-    #[must_use]
-    pub fn updated_at(&self) -> Option<&str> {
-        self.updated_at.as_deref()
-    }
-
-    /// Apply `write`: replace the text when `expected` is the current revision (it may be
-    /// omitted only while the notepad was never written), or append a block under a line naming
-    /// its author and time.
+    /// The text `write` leaves in this notepad: its own text when `expected` is the current
+    /// revision (it may be omitted only while the notepad is empty), or the current text
+    /// followed by a block under a line naming its author and time.
     ///
     /// # Errors
     ///
     /// Returns [`NotepadError`] for invalid text or author, a missing or stale expected
-    /// revision, or an oversized result; the notepad is then unchanged.
-    pub fn write(&mut self, write: Write<'_>) -> Result<(), NotepadError> {
+    /// revision, or an oversized result.
+    pub fn written(&self, write: &Write<'_>) -> Result<String, NotepadError> {
+        let block = write.text.trim_end_matches('\n');
         let appending = write.mode == WriteMode::Append;
-        if write.text.contains('\0')
-            || (appending && write.text.is_empty())
-            || !write.author.is_valid()
+        if write.text.contains('\0') || (appending && block.is_empty()) || !write.author.is_valid()
         {
             return Err(NotepadError::Invalid);
         }
         let text = if appending {
-            let separator = if self.text.is_empty() { "" } else { "\n\n" };
+            // A blank line separates the block from text that does not already end with one.
+            let separator = match self.text.as_bytes() {
+                [] | [.., b'\n', b'\n'] => "",
+                [.., b'\n'] => "\n",
+                _ => "\n\n",
+            };
             format!(
-                "{}{separator}[{} · {}]\n{}",
+                "{}{separator}[{} · {}]\n{block}\n",
                 self.text,
                 write.author.label(),
-                write.now,
-                write.text
+                write.now
             )
-        } else if write.expected.unwrap_or(0) == self.revision {
+        } else if write
+            .expected
+            .map_or(self.text.is_empty(), |expected| expected == self.revision)
+        {
             write.text.to_owned()
         } else {
             return Err(NotepadError::Conflict);
@@ -192,11 +209,7 @@ impl Notepad {
         if text.len() > MAX_TEXT_BYTES {
             return Err(NotepadError::TooLarge);
         }
-        self.text = text;
-        self.revision += 1;
-        self.updated_by = Some(write.author);
-        self.updated_at = Some(write.now.to_owned());
-        Ok(())
+        Ok(text)
     }
 }
 

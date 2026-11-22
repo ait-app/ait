@@ -289,12 +289,9 @@ fn metadata(
         )))
         .unwrap(),
         workspace_notepads: metadata::notepad::service::WorkspaceNotepads::new(
-            Arc::new(
-                persistence::storage::notepad::SqliteNotepadStore::open(
-                    &data.join("notepads/notepads.sqlite3"),
-                )
-                .unwrap(),
-            ),
+            Arc::new(persistence::storage::notepad::FileNotepadStore::new(
+                data.join("notepads"),
+            )),
             Box::new(registries.workspaces.clone()),
         ),
         workspace_automation: Arc::new(Mutex::new(WorkspaceAutomation::new(

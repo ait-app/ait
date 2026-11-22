@@ -2447,7 +2447,10 @@ export class DaemonClient {
     });
   }
 
-  /** Read the workspace's shared notepad. One nobody has written is revision 0 with no text. */
+  /**
+   * Read the workspace's shared notepad, a Markdown file the host keeps outside the checkout and
+   * creates on first read. Open it with the file methods: `directory` is the `cwd`.
+   */
   getWorkspaceNotepad(workspaceId: string): Promise<WorkspaceNotepadPayload> {
     return this.sendNamespacedCorrelatedSessionRequest<"workspace.notepad.get.response">({
       message: { type: "workspace.notepad.get.request", workspaceId },
@@ -2455,21 +2458,24 @@ export class DaemonClient {
   }
 
   /**
-   * Replace the notepad's text. `expected` is the revision last read. A write the host refuses
-   * resolves with `accepted: false` and the current revision, which differs from `expected` when
-   * someone else wrote first.
+   * Write to the notepad without opening its file. `append` adds a signed block at the end;
+   * `replace` (the default) sets the whole text and needs `expected`, the revision last read,
+   * unless the notepad is empty. A write the host refuses resolves with `accepted: false` and
+   * the current revision.
    */
   writeWorkspaceNotepad(options: {
     workspaceId: string;
     text: string;
-    expected: number;
+    mode?: "replace" | "append";
+    expected?: string;
   }): Promise<WorkspaceNotepadWritePayload> {
     return this.sendNamespacedCorrelatedSessionRequest<"workspace.notepad.write.response">({
       message: {
         type: "workspace.notepad.write.request",
         workspaceId: options.workspaceId,
         text: options.text,
-        expected: options.expected,
+        ...(options.mode ? { mode: options.mode } : {}),
+        ...(options.expected ? { expected: options.expected } : {}),
       },
     });
   }

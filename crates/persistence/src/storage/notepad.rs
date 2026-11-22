@@ -1,117 +1,224 @@
-//! SQLite store of Workspace notepads (ADR-296).
+//! Workspace notepads as Markdown files under the daemon data directory (ADR-297).
+//!
+//! Each Workspace has `<root>/<encoded workspace id>/notepad.md`. Clients open the file with the
+//! file methods, so it is plain text that is written by replacing the file.
 
-use std::io;
-use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::fs;
+use std::io::{self, ErrorKind, Read, Write};
+use std::path::{Path, PathBuf};
 
-use domain::workspace::notepad::Notepad;
+use chrono::{DateTime, SecondsFormat, Utc};
+use domain::workspace::notepad::{MAX_TEXT_BYTES, Notepad};
 use model::workspace::notepad::{NotepadStore, NotepadStoreError};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use sha2::{Digest, Sha256};
 
-const SCHEMA: &str = "CREATE TABLE notepads (
-        workspace_id TEXT PRIMARY KEY,
-        notepad BLOB NOT NULL
-    ) STRICT;";
+const FILE_NAME: &str = "notepad.md";
+/// Largest notepad file read; the file editor writes no text file beyond it.
+const MAX_FILE_BYTES: u64 = 1024 * 1024;
+/// Longest Workspace identity kept as a directory name, which is at most three times as long.
+const MAX_ID_BYTES: usize = 80;
+const BOM: &str = "\u{feff}";
 
 #[derive(Debug, thiserror::Error)]
 enum StoreError {
     #[error("notepad file I/O failed: {0}")]
     Io(#[from] io::Error),
-    #[error("notepad database error: {0}")]
-    Sql(#[from] rusqlite::Error),
-    #[error("invalid stored notepad: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("unsupported notepad database version {0}")]
-    Version(i64),
+    #[error("the workspace identity cannot name a notepad directory")]
+    Identity,
+    #[error("the notepad file is larger than 1 MiB or is not UTF-8 text")]
+    Content,
 }
 
 impl From<StoreError> for NotepadStoreError {
     fn from(error: StoreError) -> Self {
-        let full = matches!(&error, StoreError::Sql(error)
-            if error.sqlite_error_code() == Some(rusqlite::ErrorCode::DiskFull));
         tracing::error!(%error, "notepad store operation failed");
-        if full { Self::Full } else { Self::Io }
-    }
-}
-
-/// Every Workspace's notepad in one SQLite database.
-#[derive(Debug)]
-pub struct SqliteNotepadStore {
-    connection: Mutex<Connection>,
-}
-
-impl SqliteNotepadStore {
-    /// Open the notepad database at `database`, creating it when absent.
-    /// # Errors
-    /// Returns [`NotepadStoreError`] when the file cannot be created or opened, or was written by
-    /// a newer version.
-    pub fn open(database: &Path) -> Result<Self, NotepadStoreError> {
-        let connection = super::sqlite::open::<StoreError>(database).and_then(initialize)?;
-        Ok(Self {
-            connection: Mutex::new(connection),
-        })
-    }
-
-    fn lock(&self) -> MutexGuard<'_, Connection> {
-        self.connection
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-}
-
-fn initialize(mut connection: Connection) -> Result<Connection, StoreError> {
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let version: i64 = transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    match version {
-        0 => {
-            transaction.execute_batch(SCHEMA)?;
-            transaction.pragma_update(None, "user_version", 1)?;
+        match error {
+            StoreError::Io(error) if error.kind() == ErrorKind::StorageFull => Self::Full,
+            _ => Self::Io,
         }
-        1 => {}
-        unsupported => return Err(StoreError::Version(unsupported)),
     }
-    transaction.commit()?;
-    Ok(connection)
 }
 
-fn load(connection: &Connection, workspace_id: &str) -> Result<Notepad, StoreError> {
-    let stored = connection
-        .prepare_cached("SELECT notepad FROM notepads WHERE workspace_id = ?1")?
-        .query_row([workspace_id], |row| row.get::<_, Vec<u8>>(0))
-        .optional()?;
-    Ok(match stored {
-        Some(notepad) => serde_json::from_slice(&notepad)?,
-        None => Notepad::default(),
-    })
+/// Every Workspace's notepad file under one directory.
+#[derive(Debug)]
+pub struct FileNotepadStore {
+    root: PathBuf,
 }
 
-fn save(connection: &Connection, workspace_id: &str, notepad: &Notepad) -> Result<(), StoreError> {
-    connection
-        .prepare_cached(
-            "INSERT INTO notepads (workspace_id, notepad) VALUES (?1, ?2)
-            ON CONFLICT(workspace_id) DO UPDATE SET notepad = excluded.notepad",
-        )?
-        .execute(params![workspace_id, serde_json::to_vec(notepad)?])?;
-    Ok(())
-}
-
-impl NotepadStore for SqliteNotepadStore {
-    fn load(&self, workspace_id: &str) -> Result<Notepad, NotepadStoreError> {
-        Ok(load(&self.lock(), workspace_id)?)
+impl FileNotepadStore {
+    /// Keep notepad files under `root`, which is created with the first notepad.
+    #[must_use]
+    pub const fn new(root: PathBuf) -> Self {
+        Self { root }
     }
 
-    fn save(&self, workspace_id: &str, notepad: &Notepad) -> Result<(), NotepadStoreError> {
-        Ok(save(&self.lock(), workspace_id, notepad)?)
+    fn directory(&self, workspace_id: &str) -> Result<PathBuf, StoreError> {
+        if workspace_id.is_empty() || workspace_id.len() > MAX_ID_BYTES {
+            return Err(StoreError::Identity);
+        }
+        Ok(self.root.join(encode(workspace_id)))
+    }
+}
+
+/// Spell `workspace_id` as one portable file name: lowercase ASCII letters, digits, `_` and `-`
+/// stand for themselves and every other byte is `%XX`, so names stay distinct on
+/// case-insensitive volumes and never form `.` or `..`.
+fn encode(workspace_id: &str) -> String {
+    use std::fmt::Write as _;
+    workspace_id.bytes().fold(
+        String::with_capacity(workspace_id.len()),
+        |mut name, byte| {
+            if matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-') {
+                name.push(char::from(byte));
+            } else {
+                let _ = write!(name, "%{byte:02X}");
+            }
+            name
+        },
+    )
+}
+
+/// The Workspace identity `name` spells, when [`encode`] produced it.
+fn decode(name: &str) -> Option<String> {
+    let mut bytes = Vec::with_capacity(name.len());
+    let mut rest = name.as_bytes();
+    while let [first, tail @ ..] = rest {
+        if *first == b'%' {
+            let (hex, tail) = tail.split_at_checked(2)?;
+            bytes.push(u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?);
+            rest = tail;
+        } else {
+            bytes.push(*first);
+            rest = tail;
+        }
+    }
+    String::from_utf8(bytes)
+        .ok()
+        .filter(|id| !id.is_empty() && id.len() <= MAX_ID_BYTES && encode(id) == name)
+}
+
+/// Token that differs whenever the text does.
+fn revision(text: &str) -> String {
+    let digest = Sha256::digest(text.as_bytes());
+    format!(
+        "{:016x}",
+        u64::from_be_bytes(digest.first_chunk().map_or([0; 8], |head| *head))
+    )
+}
+
+/// The notepad holding `text` in the file at `path` described by `stats`.
+fn snapshot(path: &Path, text: String, stats: &fs::Metadata) -> Result<Notepad, StoreError> {
+    let revision = revision(&text);
+    let updated_at = DateTime::<Utc>::from(stats.modified()?);
+    Ok(Notepad::new(
+        path.to_string_lossy().into_owned(),
+        text,
+        revision,
+        updated_at.to_rfc3339_opts(SecondsFormat::Millis, true),
+    ))
+}
+
+fn read(path: &Path) -> Result<Notepad, StoreError> {
+    let mut file = fs::File::open(path)?;
+    let stats = file.metadata()?;
+    if !stats.is_file() || stats.len() > MAX_FILE_BYTES {
+        return Err(StoreError::Content);
+    }
+    let mut text = String::new();
+    file.read_to_string(&mut text)
+        .map_err(|error| match error.kind() {
+            ErrorKind::InvalidData => StoreError::Content,
+            _ => StoreError::Io(error),
+        })?;
+    if text.starts_with(BOM) {
+        text.drain(..BOM.len());
+    }
+    snapshot(path, text, &stats)
+}
+
+/// The text of the legacy notebook file at `path`, when it is one a new notepad can start with.
+fn legacy_text(path: &Path) -> Option<String> {
+    let stats = fs::metadata(path).ok()?;
+    if !stats.is_file() || stats.len() > MAX_TEXT_BYTES as u64 {
+        return None;
+    }
+    let text = fs::read_to_string(path).ok()?;
+    let text = text.strip_prefix(BOM).unwrap_or(&text);
+    (!text.trim().is_empty() && !text.contains('\0')).then(|| text.to_owned())
+}
+
+/// Write `text` to a synced temporary file beside `path`.
+fn staged(path: &Path, text: &str) -> Result<tempfile::NamedTempFile, StoreError> {
+    let directory = path.parent().ok_or(StoreError::Identity)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
+    temporary.write_all(text.as_bytes())?;
+    temporary.as_file().sync_all()?;
+    Ok(temporary)
+}
+
+fn create(path: &Path, legacy: Option<&Path>) -> Result<(), StoreError> {
+    fs::create_dir_all(path.parent().ok_or(StoreError::Identity)?)?;
+    let text = legacy.and_then(legacy_text).unwrap_or_default();
+    match staged(path, &text)?.persist_noclobber(path) {
+        Ok(_) => Ok(()),
+        // Another writer created the file first; theirs is the notepad.
+        Err(error) if error.error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.error.into()),
+    }
+}
+
+impl NotepadStore for FileNotepadStore {
+    fn open(
+        &self,
+        workspace_id: &str,
+        legacy: Option<&Path>,
+    ) -> Result<Notepad, NotepadStoreError> {
+        let path = self.directory(workspace_id)?.join(FILE_NAME);
+        match read(&path) {
+            Err(StoreError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+                create(&path, legacy)?;
+                Ok(read(&path)?)
+            }
+            outcome => Ok(outcome?),
+        }
+    }
+
+    fn save(
+        &self,
+        workspace_id: &str,
+        read_before: &Notepad,
+        text: &str,
+    ) -> Result<Notepad, NotepadStoreError> {
+        let path = self.directory(workspace_id)?.join(FILE_NAME);
+        let temporary = staged(&path, text)?;
+        // Checked as late as possible: the file editor replaces this file too.
+        match read(&path) {
+            Ok(current) if current.revision() == read_before.revision() => {}
+            Ok(_) => return Err(NotepadStoreError::Changed),
+            Err(StoreError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+                return Err(NotepadStoreError::Changed);
+            }
+            Err(error) => return Err(error.into()),
+        }
+        let file = temporary
+            .persist(&path)
+            .map_err(|error| StoreError::Io(error.error))?;
+        let stats = file.metadata().map_err(StoreError::Io)?;
+        Ok(snapshot(&path, text.to_owned(), &stats)?)
     }
 
     fn clear(&self, workspace_id: &str) -> Result<(), NotepadStoreError> {
-        self.lock()
-            .execute(
-                "DELETE FROM notepads WHERE workspace_id = ?1",
-                [workspace_id],
-            )
-            .map(drop)
-            .map_err(|error| StoreError::Sql(error).into())
+        match fs::remove_dir_all(self.directory(workspace_id)?) {
+            Err(error) if error.kind() != ErrorKind::NotFound => Err(StoreError::Io(error).into()),
+            _ => Ok(()),
+        }
+    }
+
+    fn owner(&self, directory: &Path) -> Option<String> {
+        if directory.parent() != Some(&self.root) {
+            return None;
+        }
+        decode(directory.file_name()?.to_str()?)
     }
 }
 

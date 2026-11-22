@@ -6,7 +6,9 @@ use std::sync::Arc;
 use domain::workspace::lifecycle::WorkspaceCreation;
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
+use metadata::notepad::service::WorkspaceNotepads;
 use model::share::{Accepted, Outcome, ResourceKind, Visitor};
+use persistence::storage::notepad::FileNotepadStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
@@ -17,7 +19,8 @@ use crate::{Api, Services};
 
 pub(crate) const TOKEN: &str = "in-process-test-token-at-least-32-characters";
 
-/// An API whose directory holds two projects in separate directories. The shared project
+/// An API whose directory holds two projects in separate directories and whose notepad files
+/// are kept under `notepads` in the fixture root. The shared project
 /// owns the `shared` workspace at its root and a `sibling` workspace outside its root, the
 /// way managed worktrees live; the other project owns the `other` workspace.
 pub(crate) struct Workspaces {
@@ -79,8 +82,14 @@ impl Workspaces {
         )
         .unwrap();
         let state = Arc::get_mut(&mut api.shared).unwrap();
-        Arc::get_mut(&mut state.metadata).unwrap().directory =
-            Some(crate::shared_service(directory));
+        let metadata = Arc::get_mut(&mut state.metadata).unwrap();
+        metadata.directory = Some(crate::shared_service(directory));
+        metadata.workspace_notepads = Some(crate::shared_service(WorkspaceNotepads::new(
+            Arc::new(FileNotepadStore::new(root.path().join("notepads"))),
+            Box::new(FileBackedWorkspaceRegistry::new(
+                registry.join("workspaces.json"),
+            )),
+        )));
         Self {
             root,
             api,

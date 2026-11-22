@@ -6,9 +6,9 @@
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
-每个 Workspace 有一份由 daemon 保存的记事本：`metadata` 的 `workspace.notepad.*` 方法与 `persistence` 的 SQLite 存储。
-人在客户端的记事本 tab 中读写它，Agent 经 MCP 的 `notepad_read` 与 `notepad_write` 读写同一份
-（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。
+每个 Workspace 有一份记事本：daemon 数据目录下的一个 Markdown 文件，由 `metadata` 的 `workspace.notepad.*` 方法与 `persistence` 的文件存储管理。
+人在客户端的记事本 tab 中用文件编辑器打开它，Agent 经 MCP 的 `notepad_read` 与 `notepad_write` 读写同一个文件
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)、[ADR-297](../decisions/workspace/adr-297-notepad-file-in-data-directory.md)）。
 
 ## Rust 能力边界
 

@@ -1,6 +1,8 @@
 //! Transport-independent notepad request decoding and projection.
 
-use domain::workspace::notepad::{Author, AuthorKind, Notepad, NotepadError, Write};
+use std::path::Path;
+
+use domain::workspace::notepad::{Author, AuthorKind, NotepadError, Write};
 use model::methods::MethodSpec;
 use model::rpc::{decode, encode};
 use model::workspace::notepad::NotepadStoreError;
@@ -41,12 +43,14 @@ fn get(notepads: &WorkspaceNotepads, request: &NotepadGetRequest) -> Result<Valu
     let notepad = notepads
         .notepad(&request.workspace_id)
         .map_err(|failure| code(&failure))?;
+    let path = Path::new(notepad.path());
     encode(
         NotepadGetResult {
             workspace_id: &request.workspace_id,
+            path: notepad.path(),
+            directory: &path.parent().unwrap_or(path).to_string_lossy(),
             revision: notepad.revision(),
             text: notepad.text(),
-            updated_by: notepad.updated_by(),
             updated_at: notepad.updated_at(),
         },
         ErrorCode::RegistryIo,
@@ -57,17 +61,17 @@ fn write(notepads: &WorkspaceNotepads, request: NotepadWriteRequest) -> Result<V
     let now = now_timestamp();
     let outcome = notepads.write(
         &request.workspace_id,
-        Write {
+        &Write {
             text: &request.text,
             mode: request.mode,
-            expected: request.expected,
+            expected: request.expected.as_deref(),
             author: request
                 .author
                 .unwrap_or(Author::anonymous(AuthorKind::User)),
             now: &now,
         },
     );
-    let (notepad, refusal) = match outcome {
+    let (notepad, error) = match outcome {
         Ok(notepad) => (notepad, None),
         Err(NotepadFailure::Refused {
             reason: reason @ (NotepadError::Conflict | NotepadError::TooLarge),
@@ -76,24 +80,16 @@ fn write(notepads: &WorkspaceNotepads, request: NotepadWriteRequest) -> Result<V
         Err(failure) => return Err(code(&failure)),
     };
     encode(
-        result(&request.workspace_id, &notepad, refusal),
+        NotepadWriteResult {
+            accepted: error.is_none(),
+            workspace_id: &request.workspace_id,
+            path: notepad.path(),
+            revision: notepad.revision(),
+            updated_at: notepad.updated_at(),
+            error,
+        },
         ErrorCode::RegistryIo,
     )
-}
-
-fn result<'a>(
-    workspace_id: &'a str,
-    notepad: &'a Notepad,
-    error: Option<String>,
-) -> NotepadWriteResult<'a> {
-    NotepadWriteResult {
-        accepted: error.is_none(),
-        workspace_id,
-        revision: notepad.revision(),
-        updated_by: notepad.updated_by(),
-        updated_at: notepad.updated_at(),
-        error,
-    }
 }
 
 /// The stable error code of a failure that is not a refusal a caller can retry.
@@ -101,7 +97,9 @@ fn code(failure: &NotepadFailure) -> ErrorCode {
     match failure {
         NotepadFailure::Workspace => ErrorCode::WorkspaceNotFound,
         NotepadFailure::Storage(NotepadStoreError::Full) => ErrorCode::ResourceExhausted,
-        NotepadFailure::Storage(NotepadStoreError::Io) => ErrorCode::RegistryIo,
+        NotepadFailure::Storage(NotepadStoreError::Io | NotepadStoreError::Changed) => {
+            ErrorCode::RegistryIo
+        }
         NotepadFailure::Refused { .. } => ErrorCode::InvalidMessage,
     }
 }

@@ -68,6 +68,7 @@ pub(super) async fn confine(
         | Rule::Terminal
         | Rule::TerminalDrive
         | Rule::Path
+        | Rule::File
         | Rule::Download
         | Rule::AgentDownload
         | Rule::Deny => Err(ErrorCode::Forbidden),

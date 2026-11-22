@@ -17,12 +17,15 @@ fn agent() -> Value {
 }
 
 #[test]
-fn a_notepad_reads_empty_until_written_and_then_reports_its_writer() {
+fn a_notepad_reads_empty_until_written_and_names_its_file() {
     let fixture = fixture();
-    assert_eq!(
-        call(&fixture, "get", json!({"workspaceId":"wks_a"})).unwrap(),
-        json!({"workspaceId":"wks_a","revision":0,"text":""})
-    );
+    let file = fixture.file("wks_a");
+    let empty = call(&fixture, "get", json!({"workspaceId":"wks_a"})).unwrap();
+    assert_eq!(empty["workspaceId"], "wks_a");
+    assert_eq!(empty["path"], file.to_str().unwrap());
+    assert_eq!(empty["directory"], file.parent().unwrap().to_str().unwrap());
+    assert_eq!(empty["text"], "");
+    assert!(empty["updatedAt"].is_string());
 
     let written = call(
         &fixture,
@@ -31,35 +34,33 @@ fn a_notepad_reads_empty_until_written_and_then_reports_its_writer() {
     )
     .unwrap();
     assert_eq!(written["accepted"], true);
-    assert_eq!(written["revision"], 1);
-    assert_eq!(written["updatedBy"], agent());
+    assert_eq!(written["path"], empty["path"]);
+    assert_ne!(written["revision"], empty["revision"]);
     assert!(written.get("error").is_none());
 
     let read = call(&fixture, "get", json!({"workspaceId":"wks_a"})).unwrap();
     assert_eq!(
         (&read["text"], &read["revision"]),
-        (&json!("POST /x"), &json!(1))
+        (&json!("POST /x"), &written["revision"])
     );
-    assert_eq!(read["updatedBy"], agent());
     assert_eq!(read["updatedAt"], written["updatedAt"]);
     assert_eq!(
-        call(&fixture, "get", json!({"workspaceId":"wks_b"})).unwrap()["revision"],
-        0
+        call(&fixture, "get", json!({"workspaceId":"wks_b"})).unwrap()["text"],
+        ""
     );
 }
 
 #[test]
-fn a_client_write_is_a_users_and_a_stale_one_is_refused_with_the_current_state() {
+fn a_stale_replace_is_refused_with_the_current_state_and_an_append_is_signed() {
     let fixture = fixture();
     let first = call(
         &fixture,
         "write",
-        json!({"workspaceId":"wks_a","text":"one","expected":0}),
+        json!({"workspaceId":"wks_a","text":"one"}),
     )
     .unwrap();
-    assert_eq!(first["updatedBy"], json!({"kind":"user"}));
 
-    for stale in [json!({}), json!({"expected":0}), json!({"expected":9})] {
+    for stale in [json!({}), json!({"expected":"0"})] {
         let mut params = json!({"workspaceId":"wks_a","text":"two","author":agent()});
         params
             .as_object_mut()
@@ -68,9 +69,8 @@ fn a_client_write_is_a_users_and_a_stale_one_is_refused_with_the_current_state()
         let refused = call(&fixture, "write", params).unwrap();
         assert_eq!(
             (&refused["accepted"], &refused["revision"]),
-            (&json!(false), &json!(1))
+            (&json!(false), &first["revision"])
         );
-        assert_eq!(refused["updatedBy"], json!({"kind":"user"}));
         assert!(refused["error"].as_str().unwrap().contains("read it again"));
     }
 
@@ -80,20 +80,28 @@ fn a_client_write_is_a_users_and_a_stale_one_is_refused_with_the_current_state()
         json!({"workspaceId":"wks_a","text":"two","mode":"append","author":agent()}),
     )
     .unwrap();
-    assert_eq!(
-        (&appended["accepted"], &appended["revision"]),
-        (&json!(true), &json!(2))
-    );
+    assert_eq!(appended["accepted"], true);
+    let text = std::fs::read_to_string(fixture.file("wks_a")).unwrap();
+    assert!(text.starts_with("one\n\n[Backend · "), "{text}");
+    assert!(text.ends_with("]\ntwo\n"), "{text}");
+
+    let unsigned = call(
+        &fixture,
+        "write",
+        json!({"workspaceId":"wks_b","text":"note","mode":"append"}),
+    )
+    .unwrap();
+    assert_eq!(unsigned["accepted"], true);
+    let text = std::fs::read_to_string(fixture.file("wks_b")).unwrap();
+    assert!(text.starts_with("[User · "), "{text}");
+
     let cleared = call(
         &fixture,
         "write",
-        json!({"workspaceId":"wks_a","text":"","expected":2}),
+        json!({"workspaceId":"wks_a","text":"","expected":appended["revision"]}),
     )
     .unwrap();
-    assert_eq!(
-        (&cleared["accepted"], &cleared["revision"]),
-        (&json!(true), &json!(3))
-    );
+    assert_eq!(cleared["accepted"], true);
     assert_eq!(
         call(&fixture, "get", json!({"workspaceId":"wks_a"})).unwrap()["text"],
         ""
@@ -103,6 +111,7 @@ fn a_client_write_is_a_users_and_a_stale_one_is_refused_with_the_current_state()
 #[test]
 fn an_oversized_notepad_refuses_with_guidance() {
     let fixture = fixture();
+    let empty = call(&fixture, "get", json!({"workspaceId":"wks_a"})).unwrap();
     let large = "x".repeat(256 * 1024 + 1);
     let refused = call(
         &fixture,
@@ -112,10 +121,9 @@ fn an_oversized_notepad_refuses_with_guidance() {
     .unwrap();
     assert_eq!(
         (&refused["accepted"], &refused["revision"]),
-        (&json!(false), &json!(0))
+        (&json!(false), &empty["revision"])
     );
     assert!(refused["error"].as_str().unwrap().contains("256 KiB"));
-    assert!(refused.get("updatedBy").is_none());
 }
 
 #[test]
@@ -140,6 +148,11 @@ fn invalid_requests_and_unknown_workspaces_are_errors() {
         (
             "write",
             json!({"workspaceId":"wks_a"}),
+            ErrorCode::InvalidMessage,
+        ),
+        (
+            "write",
+            json!({"workspaceId":"wks_a","text":"t","expected":0}),
             ErrorCode::InvalidMessage,
         ),
         (
@@ -178,5 +191,5 @@ fn invalid_requests_and_unknown_workspaces_are_errors() {
         ),
         Err(ErrorCode::MethodNotFound)
     );
-    let _ = (&fixture.workspaces, &fixture.store);
+    let _ = &fixture.workspaces;
 }

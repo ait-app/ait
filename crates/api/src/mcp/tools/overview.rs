@@ -160,7 +160,8 @@ async fn overview(state: &Shared, scope: &Scope) -> Result<Value, ErrorCode> {
 }
 
 /// The revision and length of the root Workspace's notepad; `null` for a conversation
-/// restricted to its own work, which may not use the shared notepad (ADR-296).
+/// restricted to its own work, which may not use the shared notepad (ADR-296). Reading it
+/// creates the notepad file when the Workspace has none yet.
 /// # Errors
 /// Propagates notepad read failures.
 async fn notepad(state: &Shared, root: &str, sight: Option<&Sight>) -> Result<Value, ErrorCode> {

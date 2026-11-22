@@ -1143,6 +1143,13 @@ describe("Rust v1 connection", () => {
   });
   it("sends notepad RPCs on the background channel and adapts the result", () => {
     const h = harness();
+    const notepad = {
+      workspaceId: "w1",
+      path: "/data/notepads/w1/notepad.md",
+      directory: "/data/notepads/w1",
+      revision: "r1",
+      text: "",
+    };
     try {
       h.ready();
       h.send({ type: "workspace.notepad.get.request", requestId: "notepad-1", workspaceId: "w1" });
@@ -1154,11 +1161,11 @@ describe("Rust v1 connection", () => {
       h.sockets[3].message({
         type: "response",
         request_id: "notepad-1",
-        result: { workspaceId: "w1", revision: 0, text: "" },
+        result: notepad,
       });
       expect(h.received.at(-1)).toEqual({
         type: "workspace.notepad.get.response",
-        payload: { workspaceId: "w1", revision: 0, text: "", requestId: "notepad-1" },
+        payload: { ...notepad, requestId: "notepad-1" },
       });
     } finally {
       h.transport.close();

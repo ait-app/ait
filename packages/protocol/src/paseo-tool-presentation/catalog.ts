@@ -258,15 +258,7 @@ const TOOLS = {
     label: "Read notepad",
     detail: {
       inputOrder: ["workspaceId", "offset", "limit"],
-      outputFields: [
-        "workspaceId",
-        "revision",
-        "updatedBy",
-        "updatedAt",
-        "chars",
-        "nextOffset",
-        "text",
-      ],
+      outputFields: ["workspaceId", "path", "revision", "updatedAt", "chars", "nextOffset", "text"],
     },
   },
   notepad_write: {
@@ -274,7 +266,7 @@ const TOOLS = {
     context: field("text"),
     detail: {
       inputOrder: ["workspaceId", "mode", "expected", "text"],
-      outputFields: ["accepted", "workspaceId", "revision", "updatedBy", "updatedAt", "error"],
+      outputFields: ["accepted", "workspaceId", "path", "revision", "updatedAt", "error"],
     },
   },
 

@@ -580,7 +580,14 @@ it("advertises the workspace notepad only when the daemon declares both of its m
 });
 
 it("turns a notepad result into the response the client validates", () => {
-  const result = { workspaceId: "wks_1", revision: 0, text: "" };
+  const result = {
+    workspaceId: "wks_1",
+    path: "/home/me/.ait/notepads/wks_1/notepad.md",
+    directory: "/home/me/.ait/notepads/wks_1",
+    revision: "9f86d081884c7d65",
+    text: "",
+    updatedAt: "2026-11-22T09:00:00.000Z",
+  };
   const request = { type: "workspace.notepad.get.request", requestId: "r1", workspaceId: "wks_1" };
   const message = responseMessage("workspace.notepad.get.response", "r1", result, request);
   expect(message).toEqual({

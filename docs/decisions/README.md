@@ -81,7 +81,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 工作区、文件与 Git
 
-- [ADR-296：每个 Workspace 一份由 daemon 保存的记事本](workspace/adr-296-workspace-notepad.md)
+- [ADR-297：记事本是数据目录下的 Markdown 文件，由文件编辑器打开](workspace/adr-297-notepad-file-in-data-directory.md)
+- [ADR-296：每个 Workspace 一份由 daemon 保存的记事本](workspace/adr-296-workspace-notepad.md)（经 [ADR-297](workspace/adr-297-notepad-file-in-data-directory.md) 修订）
 - [ADR-293：归档移入 Workspace 菜单，交付完成后主按钮推荐重置](workspace/adr-293-archive-in-workspace-menu-reset-recommendation.md)
 - [ADR-283：RPC JSON 编解码统一归 model](workspace/adr-283-shared-rpc-codecs.md)
 - [ADR-230：归档 Worktree 时运行 teardown](workspace/adr-230-worktree-teardown.md)
@@ -209,7 +210,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 ## 客户端、连接与品牌
 
 - [ADR-284：Workspace 浏览器由主进程 WebContentsView 托管](clients/adr-284-browser-webcontents-view.md)
-- [ADR-281：可分享的 Workspace 记事本标签页](clients/adr-281-workspace-notebook-tab.md)
+- [ADR-281：可分享的 Workspace 记事本标签页](clients/adr-281-workspace-notebook-tab.md)（经 [ADR-297](workspace/adr-297-notepad-file-in-data-directory.md) 修订）
 - [ADR-236：GitHub Release 附带 Google 签名的 Android APK](clients/adr-236-google-signed-apk-release-asset.md)
 - [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)
 - [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)（经 [ADR-236](clients/adr-236-google-signed-apk-release-asset.md) 修订）

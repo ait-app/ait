@@ -465,7 +465,7 @@ fn compose_services(
         ),
         directory,
         workspace_labels: compose_workspace_labels(config, &storage.workspaces)?,
-        workspace_notepads: compose_workspace_notepads(config, &storage.workspaces)?,
+        workspace_notepads: compose_workspace_notepads(config, &storage.workspaces),
         workspace_automation,
         workspace_state,
         worktrees,
@@ -560,15 +560,10 @@ fn compose_workspace_labels(
 fn compose_workspace_notepads(
     config: &Config,
     workspaces: &FileBackedWorkspaceRegistry,
-) -> anyhow::Result<WorkspaceNotepads> {
-    let store = persistence::storage::notepad::SqliteNotepadStore::open(
-        &config.data_dir.join("notepads/notepads.sqlite3"),
-    )
-    .map_err(|_| anyhow::anyhow!("initialize workspace notepads"))?;
-    Ok(WorkspaceNotepads::new(
-        Arc::new(store),
-        Box::new(workspaces.clone()),
-    ))
+) -> WorkspaceNotepads {
+    let store =
+        persistence::storage::notepad::FileNotepadStore::new(config.data_dir.join("notepads"));
+    WorkspaceNotepads::new(Arc::new(store), Box::new(workspaces.clone()))
 }
 
 /// Compose the Bot and schedule services and feed Agent attention, terminal attention and

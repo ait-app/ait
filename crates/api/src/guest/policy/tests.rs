@@ -258,6 +258,68 @@ async fn a_guest_reaches_only_its_workspaces_notepad_and_writes_as_a_user() {
 }
 
 #[tokio::test]
+async fn a_guest_opens_only_the_notepad_files_of_its_workspaces() {
+    // The Notepad tab opens the notepad file with the file editor (ADR-297).
+    const EDITOR: [&str; 3] = [
+        "fs.explorer.request",
+        "fs.file.subscribe.request",
+        "fs.file.write.request",
+    ];
+    let open = |directory: &std::path::Path| json!({"cwd":directory,"path":"notepad.md"});
+    let guest = Guest::new().await;
+    let notepads = guest.fixture.root.path().join("notepads");
+    let own = notepads.join(&guest.fixture.shared);
+    let sibling = notepads.join(&guest.fixture.sibling);
+    for method in EDITOR {
+        assert_eq!(classify(method), Rule::File, "{method}");
+        guest.forwarded(method, open(&own)).await;
+        for foreign in [
+            notepads.join(&guest.fixture.other),
+            sibling.clone(),
+            notepads.clone(),
+            own.join("..").join(&guest.fixture.other),
+        ] {
+            assert_eq!(
+                guest.refused(method, open(&foreign)).await,
+                ErrorCode::Forbidden,
+                "{method} {foreign:?}"
+            );
+        }
+    }
+    // Nothing else reaches a notepad directory, which is outside every checkout.
+    for (method, params) in [
+        ("fs.entry.delete.request", open(&own)),
+        (
+            "fs.entry.create.request",
+            json!({"cwd":own,"parentPath":".","name":"other.md"}),
+        ),
+        ("fs.file.download_token.request", open(&own)),
+        ("checkout.status.get.request", json!({"cwd":own})),
+    ] {
+        assert_eq!(
+            guest.refused(method, params).await,
+            ErrorCode::Forbidden,
+            "{method}"
+        );
+    }
+
+    let project = Guest::with(ResourceKind::Project).await;
+    let notepads = project.fixture.root.path().join("notepads");
+    for method in EDITOR {
+        project
+            .forwarded(method, open(&notepads.join(&project.fixture.sibling)))
+            .await;
+        assert_eq!(
+            project
+                .refused(method, open(&notepads.join(&project.fixture.other)))
+                .await,
+            ErrorCode::Forbidden,
+            "{method}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn host_and_owner_methods_are_forbidden() {
     let guest = Guest::new().await;
     for method in [

@@ -137,16 +137,21 @@ describe("Paseo tool-call detail presentation", () => {
     ]);
   });
 
-  it("lays out a notepad write and reports who holds a conflicting revision", () => {
+  it("lays out a notepad write and reports the revision that conflicts", () => {
     expect(
       buildPaseoToolDetailSections(
         "mcp__ait__notepad_write",
-        { text: "Use v2 of the API.", expected: 3, workspaceId: "wks_1", mode: "replace" },
+        {
+          text: "Use v2 of the API.",
+          expected: "9f86d081884c7d65",
+          workspaceId: "wks_1",
+          mode: "replace",
+        },
         {
           accepted: false,
           workspaceId: "wks_1",
-          revision: 4,
-          updatedBy: { kind: "agent", agentId: "agt_1", title: "Reviewer" },
+          path: "/home/me/.ait/notepads/wks_1/notepad.md",
+          revision: "2c26b46b68ffc68f",
           updatedAt: "2026-11-22T09:00:00.000Z",
           error: "The notepad changed. Read it again before replacing it.",
         },
@@ -158,7 +163,7 @@ describe("Paseo tool-call detail presentation", () => {
         fields: [
           { label: "Workspace", value: "wks_1" },
           { label: "Mode", value: "replace" },
-          { label: "Expected", value: "3" },
+          { label: "Expected", value: "9f86d081884c7d65" },
           { label: "Text", value: "Use v2 of the API." },
         ],
       },
@@ -168,8 +173,8 @@ describe("Paseo tool-call detail presentation", () => {
         fields: [
           { label: "Accepted", value: "No" },
           { label: "Workspace", value: "wks_1" },
-          { label: "Revision", value: "4" },
-          { label: "Updated by", value: "Kind: agent\nAgent: agt_1\nTitle: Reviewer" },
+          { label: "Path", value: "/home/me/.ait/notepads/wks_1/notepad.md" },
+          { label: "Revision", value: "2c26b46b68ffc68f" },
           { label: "Updated at", value: "2026-11-22T09:00:00.000Z" },
           { label: "Error", value: "The notepad changed. Read it again before replacing it." },
         ],
@@ -182,14 +187,22 @@ describe("Paseo tool-call detail presentation", () => {
       buildPaseoToolDetailSections(
         "mcp__ait__notepad_read",
         { limit: 2000 },
-        { text: "Use v2.", chars: 7, revision: 4, workspaceId: "wks_1", nextOffset: null },
+        {
+          text: "Use v2.",
+          chars: 7,
+          revision: "2c26b46b68ffc68f",
+          workspaceId: "wks_1",
+          path: "/home/me/.ait/notepads/wks_1/notepad.md",
+          nextOffset: null,
+        },
       )?.at(-1),
     ).toEqual({
       kind: "fields",
       title: "Result",
       fields: [
         { label: "Workspace", value: "wks_1" },
-        { label: "Revision", value: "4" },
+        { label: "Path", value: "/home/me/.ait/notepads/wks_1/notepad.md" },
+        { label: "Revision", value: "2c26b46b68ffc68f" },
         { label: "Chars", value: "7" },
         { label: "Next offset", value: "None" },
         { label: "Text", value: "Use v2." },

@@ -104,6 +104,9 @@ enum Rule {
     TerminalDrive,
     /// `cwd` must resolve inside the scope.
     Path,
+    /// As [`Rule::Path`], or `cwd` is the notepad directory of a Workspace in scope: the
+    /// Notepad tab opens that file with the file editor (ADR-297).
+    File,
     /// As [`Rule::Path`], within the guest's download token budget.
     Download,
     /// Read a scoped Agent's saved Timeline and bind its artifact to the visiting account.
@@ -145,6 +148,7 @@ impl Rule {
             | Self::Terminal
             | Self::TerminalDrive
             | Self::Path
+            | Self::File
             | Self::Download => true,
         }
     }
@@ -248,10 +252,8 @@ fn classify_resource(method: &str) -> Rule {
         | "terminal.capture.request" => Rule::Terminal,
         "terminal.rename.request" | "terminal.kill.request" => Rule::TerminalDrive,
         "fs.file.download_token.request" => Rule::Download,
+        "fs.explorer.request" | "fs.file.subscribe.request" | "fs.file.write.request" => Rule::File,
         "directory.suggestions.request"
-        | "fs.explorer.request"
-        | "fs.file.subscribe.request"
-        | "fs.file.write.request"
         | "fs.entry.create.request"
         | "fs.entry.rename.request"
         | "fs.entry.duplicate.request"
@@ -340,6 +342,16 @@ async fn confine(
             terminals::owned(session, id)?;
         }
         Rule::Path => path(session, state, &params).await?,
+        Rule::File => {
+            let notepad = match params["cwd"].as_str() {
+                Some(cwd) => notepad_workspace(state, cwd).await.map_err(conceal)?,
+                None => None,
+            };
+            match notepad {
+                Some(workspace) => reached(session, state, &workspace).await?,
+                None => path(session, state, &params).await?,
+            }
+        }
         Rule::Download => {
             path(session, state, &params).await?;
             if !session.take_download(std::time::Instant::now()) {
@@ -438,6 +450,23 @@ async fn path(session: &Session, state: &Shared, params: &Value) -> Result<(), E
     }
     let cwd = params["cwd"].as_str().ok_or(ErrorCode::Forbidden)?;
     inside(session, state, cwd).await
+}
+
+/// The Workspace whose notepad file is kept directly in `cwd`, when `cwd` is a notepad directory.
+/// # Errors
+/// Returns `RegistryIo` when the notepad service cannot be asked.
+async fn notepad_workspace(state: &Shared, cwd: &str) -> Result<Option<String>, ErrorCode> {
+    let notepads = state.metadata.workspace_notepads.clone();
+    if notepads.is_none() {
+        return Ok(None);
+    }
+    let directory = std::path::PathBuf::from(cwd);
+    state
+        .runtime
+        .run_queued(notepads, ErrorCode::RegistryIo, move |notepads| {
+            Ok(notepads.workspace_of(&directory))
+        })
+        .await
 }
 
 async fn optional_path(session: &Session, state: &Shared, params: &Value) -> Result<(), ErrorCode> {

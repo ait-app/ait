@@ -5,66 +5,76 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface Notepad {
   workspaceId: string;
-  revision: number;
+  path: string;
+  directory: string;
+  revision: string;
   text: string;
 }
 
-interface WriteRequest {
-  workspaceId: string;
-  text: string;
-  expected: number;
-}
-
-interface WriteResult {
-  accepted: boolean;
-  workspaceId: string;
-  revision: number;
-  error?: string;
+interface FilePaneProps {
+  serverId: string;
+  workspaceRoot: string;
+  location: { path: string };
+  navigationRevision: number;
+  initialMode?: "preview" | "source";
 }
 
 const mocks = vi.hoisted(() => {
-  const writes: {
-    request: WriteRequest;
-    settle: (result: WriteResult) => void;
-    fail: (error: Error) => void;
-  }[] = [];
   const state = {
-    notepad: { workspaceId: "workspace-a", revision: 3, text: "notes" } as Notepad,
+    notepad: null as Notepad | null,
     readError: null as Error | null,
-    legacyFile: null as string | null,
     experimental: true,
     supported: true,
-    interactive: true,
+    connected: true,
+    workspaceId: "workspace-a",
+    web: true,
   };
   return {
-    writes,
     state,
+    filePanes: [] as FilePaneProps[],
     client: {
-      getWorkspaceNotepad: vi.fn(async (_workspaceId: string) => {
+      getWorkspaceNotepad: vi.fn(async (workspaceId: string) => {
         if (state.readError) throw state.readError;
-        return { ...state.notepad };
+        return { ...state.notepad!, workspaceId };
       }),
-      writeWorkspaceNotepad: vi.fn(
-        (request: WriteRequest) =>
-          new Promise<WriteResult>((resolve, reject) => {
-            writes.push({ request, settle: resolve, fail: reject });
-          }),
-      ),
-      readFile: vi.fn(async (_cwd: string, _path: string) => {
-        if (state.legacyFile === null) throw new Error("File unavailable.");
-        return { bytes: new TextEncoder().encode(state.legacyFile) };
-      }),
+      writeWorkspaceNotepad: vi.fn(),
+      readFile: vi.fn(),
       writeFile: vi.fn(),
-      createFileEntry: vi.fn(),
     },
   };
 });
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock("react-native-unistyles", () => ({
+  StyleSheet: { create: (styles: unknown) => (typeof styles === "function" ? {} : styles) },
+  withUnistyles: (component: unknown) => component,
+}));
+vi.mock("@/components/ui/button", () => ({
+  Button: ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => (
+    <button type="button" onClick={onPress}>
+      {children}
+    </button>
+  ),
+}));
+vi.mock("@/components/ui/icon-color", () => ({ mutedIconColorMapping: {} }));
+vi.mock("@/components/ui/loading-spinner", () => ({ LoadingSpinner: () => null }));
+vi.mock("@/constants/platform", () => ({
+  get isWeb() {
+    return mocks.state.web;
+  },
+}));
+vi.mock("@/file-pane/pane", () => ({
+  FilePane: (props: FilePaneProps) => {
+    mocks.filePanes.push(props);
+    return <div data-testid="workspace-file-pane">{props.location.path}</div>;
+  },
+}));
 vi.mock("@/hooks/use-settings", () => ({
   useAppSettings: () => ({ settings: { experimentalFeatures: mocks.state.experimental } }),
 }));
-vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => mocks.client }));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => (mocks.state.connected ? mocks.client : null),
+}));
 vi.mock("@/runtime/host-features", () => ({
   useHostFeature: (_serverId: string, feature: string) =>
     feature === "workspaceNotepad" && mocks.state.supported,
@@ -72,89 +82,112 @@ vi.mock("@/runtime/host-features", () => ({
 vi.mock("@/panels/pane-context", () => ({
   usePaneContext: () => ({
     serverId: "host-a",
-    workspaceId: "workspace-a",
+    workspaceId: mocks.state.workspaceId,
     target: { kind: "notebook" },
   }),
-  usePaneFocus: () => ({ isInteractive: mocks.state.interactive }),
-}));
-vi.mock("@/panels/panel-instance-attributes", () => ({
-  usePublishPanelInstanceAttributes: () => undefined,
 }));
 vi.mock("@/panels/panel-registry", () => ({
   definePanel: (_kind: string, implementation: { component: React.ComponentType }) =>
     implementation,
 }));
 vi.mock("@/panels/panel-presentations", () => ({ notebookPanelPresentation: {} }));
-vi.mock("@/stores/session-store-hooks", () => ({ useWorkspaceDirectory: () => "/repo" }));
 
 const { notebookPanelRegistration } = await import("./notebook-panel");
 const NotebookPanel = (notebookPanelRegistration as unknown as { component: React.ComponentType })
   .component;
 
-function editor(): HTMLTextAreaElement {
-  return screen.getByTestId("workspace-notebook-editor") as HTMLTextAreaElement;
-}
-
-function type(text: string): void {
-  fireEvent.change(editor(), { target: { value: text } });
-}
-
-async function advance(ms: number): Promise<void> {
+/** Lets the pending notepad lookup settle. */
+async function settle(): Promise<void> {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms);
-  });
-}
-
-/** Renders the panel and lets its first load finish. */
-async function open(): Promise<ReturnType<typeof render>> {
-  const view = render(<NotebookPanel />);
-  await advance(0);
-  return view;
-}
-
-async function settle(index: number, result: Partial<WriteResult>): Promise<void> {
-  await act(async () => {
-    mocks.writes[index]!.settle({
-      accepted: true,
-      workspaceId: "workspace-a",
-      revision: 0,
-      ...result,
-    });
     await Promise.resolve();
   });
 }
 
+/** Renders the panel and lets its lookup finish. */
+async function open(): Promise<ReturnType<typeof render>> {
+  const view = render(<NotebookPanel />);
+  await settle();
+  return view;
+}
+
+function filePane(): FilePaneProps {
+  expect(screen.getByTestId("workspace-file-pane")).toBeTruthy();
+  return mocks.filePanes.at(-1)!;
+}
+
 beforeEach(() => {
   vi.stubGlobal("React", React);
-  vi.useFakeTimers();
-  mocks.writes.length = 0;
+  mocks.filePanes.length = 0;
   Object.assign(mocks.state, {
-    notepad: { workspaceId: "workspace-a", revision: 3, text: "notes" },
+    notepad: {
+      workspaceId: "workspace-a",
+      path: "/home/me/.ait/notepads/workspace-a/notepad.md",
+      directory: "/home/me/.ait/notepads/workspace-a",
+      revision: "r1",
+      text: "notes",
+    },
     readError: null,
-    legacyFile: null,
     experimental: true,
     supported: true,
-    interactive: true,
+    connected: true,
+    workspaceId: "workspace-a",
+    web: true,
   });
   for (const fn of Object.values(mocks.client)) fn.mockClear();
 });
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
-describe("notepad loading", () => {
-  it("shows the workspace notepad and never touches the legacy file once it has text", async () => {
+describe("workspace notepad panel", () => {
+  it("opens the host's notepad file in the file pane, ready to type", async () => {
     await open();
 
     expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledWith("workspace-a");
-    expect(editor().value).toBe("notes");
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
+    expect(filePane()).toEqual({
+      serverId: "host-a",
+      workspaceRoot: "/home/me/.ait/notepads/workspace-a",
+      location: { path: "notepad.md" },
+      navigationRevision: 0,
+      initialMode: "source",
+    });
+    // The file pane reads, watches and saves the file; the panel writes nothing itself.
+    expect(mocks.client.writeWorkspaceNotepad).not.toHaveBeenCalled();
     expect(mocks.client.readFile).not.toHaveBeenCalled();
     expect(mocks.client.writeFile).not.toHaveBeenCalled();
-    expect(mocks.client.createFileEntry).not.toHaveBeenCalled();
+  });
+
+  it("shows the rendered notes where the file pane has no editor", async () => {
+    mocks.state.web = false;
+    await open();
+
+    expect(filePane().initialMode).toBe("preview");
+  });
+
+  it("names the file of a host whose paths use backslashes", async () => {
+    mocks.state.notepad = {
+      ...mocks.state.notepad!,
+      path: "C:\\Users\\me\\.ait\\notepads\\workspace-a\\notepad.md",
+      directory: "C:\\Users\\me\\.ait\\notepads\\workspace-a",
+    };
+    await open();
+
+    expect(filePane()).toMatchObject({
+      workspaceRoot: "C:\\Users\\me\\.ait\\notepads\\workspace-a",
+      location: { path: "notepad.md" },
+    });
+  });
+
+  it("shows a spinner until the host answers", async () => {
+    render(<NotebookPanel />);
+
+    expect(screen.getByTestId("workspace-notebook-loading").textContent).toBe(
+      "panels.notebook.loading",
+    );
+    await settle();
+    expect(screen.queryByTestId("workspace-notebook-loading")).toBeNull();
   });
 
   it("asks an old host for nothing and says it must be updated", async () => {
@@ -164,9 +197,7 @@ describe("notepad loading", () => {
     expect(screen.getByTestId("workspace-notebook-unsupported").textContent).toBe(
       "panels.notebook.unsupported",
     );
-    await advance(10_000);
     expect(mocks.client.getWorkspaceNotepad).not.toHaveBeenCalled();
-    expect(mocks.client.readFile).not.toHaveBeenCalled();
   });
 
   it("asks for nothing while experimental features are off", async () => {
@@ -174,284 +205,55 @@ describe("notepad loading", () => {
     await open();
 
     expect(screen.getByTestId("workspace-notebook-disabled")).toBeTruthy();
-    await advance(10_000);
     expect(mocks.client.getWorkspaceNotepad).not.toHaveBeenCalled();
   });
 
-  it("is read-only for a guest the host refuses, and stops asking", async () => {
+  it("offers a retry when the host cannot say where the notepad is", async () => {
     mocks.state.readError = new Error("Forbidden requestType=workspace.notepad.get.request");
     await open();
 
-    expect(screen.getByText("panels.notebook.readOnly")).toBeTruthy();
-    type("mine");
-    expect(editor().value).toBe("");
-    await advance(10_000);
+    expect(screen.getByTestId("workspace-notebook-error").textContent).toContain(
+      "panels.notebook.loadFailed",
+    );
+    expect(screen.queryByTestId("workspace-file-pane")).toBeNull();
     expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(1);
-    expect(mocks.writes).toHaveLength(0);
-  });
-
-  it("recovers on a later poll when the first load failed", async () => {
-    mocks.state.readError = new Error("Transport closed");
-    await open();
-    expect(screen.getByText("panels.notebook.saveFailed")).toBeTruthy();
 
     mocks.state.readError = null;
-    await advance(3_000);
-    expect(editor().value).toBe("notes");
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-  });
-});
-
-describe("notepad polling", () => {
-  it("polls about every three seconds and shows newer text from the host", async () => {
-    await open();
-    expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(1);
-
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 4, text: "notes from an agent" };
-    await advance(2_900);
-    expect(editor().value).toBe("notes");
-    await advance(100);
+    fireEvent.click(screen.getByText("common.actions.retry"));
+    await settle();
     expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(2);
-    expect(editor().value).toBe("notes from an agent");
-
-    // The next save builds on the polled revision.
-    type("notes from an agent, and me");
-    await advance(500);
-    expect(mocks.writes[0]!.request).toMatchObject({ expected: 4 });
+    expect(filePane().location).toEqual({ path: "notepad.md" });
   });
 
-  it("keeps unsaved text when the host has something newer", async () => {
-    await open();
-    type("notes of mine");
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 4, text: "notes from an agent" };
-    await advance(500);
-    expect(mocks.writes).toHaveLength(1);
-    // A poll that answers while the save is in flight must not replace the text either.
-    await advance(3_000);
-    expect(editor().value).toBe("notes of mine");
-    expect(mocks.writes[0]!.request).toMatchObject({ text: "notes of mine", expected: 3 });
-  });
-
-  it("does not poll in the background and refreshes at once when the pane becomes interactive", async () => {
-    mocks.state.interactive = false;
+  it("keeps the file open across renders and while the host is away", async () => {
     const view = await open();
-    // The first load does not wait for focus.
-    expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(1);
-    expect(editor().value).toBe("notes");
+    const first = filePane();
 
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 4, text: "newer" };
-    await advance(10_000);
-    expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(1);
-
-    mocks.state.interactive = true;
+    mocks.state.connected = false;
     view.rerender(<NotebookPanel />);
-    await advance(0);
-    expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(2);
-    expect(editor().value).toBe("newer");
+    await settle();
+    mocks.state.connected = true;
+    view.rerender(<NotebookPanel />);
+    await settle();
+
+    expect(mocks.client.getWorkspaceNotepad).toHaveBeenCalledTimes(1);
+    // A new location object would make the file pane navigate again.
+    expect(filePane().location).toBe(first.location);
   });
 
-  it("ignores an older answer than the revision it already saved", async () => {
-    await open();
-    type("notes a");
-    await advance(500);
-    await settle(0, { revision: 9 });
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
+  it("looks the file up again for another workspace", async () => {
+    const view = await open();
+    mocks.state.workspaceId = "workspace-b";
+    mocks.state.notepad = {
+      ...mocks.state.notepad!,
+      path: "/home/me/.ait/notepads/workspace-b/notepad.md",
+      directory: "/home/me/.ait/notepads/workspace-b",
+    };
+    view.rerender(<NotebookPanel />);
+    expect(screen.queryByTestId("workspace-file-pane")).toBeNull();
+    await settle();
 
-    // A read that started before the save answers with the revision the save replaced.
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 8, text: "stale" };
-    await advance(3_000);
-    expect(editor().value).toBe("notes a");
-  });
-});
-
-describe("notepad autosave", () => {
-  it("saves once typing pauses, not once per keystroke", async () => {
-    await open();
-
-    type("notes a");
-    await advance(300);
-    type("notes ab");
-    await advance(300);
-    expect(mocks.writes).toHaveLength(0);
-
-    await advance(200);
-    expect(mocks.writes.map((write) => write.request)).toEqual([
-      { workspaceId: "workspace-a", text: "notes ab", expected: 3 },
-    ]);
-  });
-
-  it("saves text typed while an earlier save was still in flight", async () => {
-    await open();
-
-    type("notes a");
-    await advance(500);
-    expect(mocks.writes).toHaveLength(1);
-
-    // Typed during the first write: its timer fires before the write returns.
-    type("notes ab");
-    await advance(500);
-    expect(mocks.writes).toHaveLength(1);
-
-    await settle(0, { revision: 4 });
-    await advance(500);
-
-    expect(mocks.writes).toHaveLength(2);
-    expect(mocks.writes[1]!.request).toMatchObject({ text: "notes ab", expected: 4 });
-
-    await settle(1, { revision: 5 });
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-  });
-
-  it("tries again on the next edit after a failed save", async () => {
-    await open();
-
-    type("notes a");
-    await advance(500);
-    await act(async () => {
-      mocks.writes[0]!.fail(new Error("Transport closed"));
-      await Promise.resolve();
-    });
-    expect(screen.getByText("panels.notebook.saveFailed")).toBeTruthy();
-
-    type("notes ab");
-    await advance(500);
-
-    expect(mocks.writes).toHaveLength(2);
-    expect(mocks.writes[1]!.request).toMatchObject({ text: "notes ab", expected: 3 });
-  });
-
-  it("clears the notepad when all text is deleted", async () => {
-    await open();
-    type("");
-    await advance(500);
-    expect(mocks.writes[0]!.request).toEqual({
-      workspaceId: "workspace-a",
-      text: "",
-      expected: 3,
-    });
-  });
-
-  it("reports a refused text as a failed save, not as a conflict", async () => {
-    await open();
-    type("x".repeat(10));
-    await advance(500);
-    // Same revision as expected: nobody else wrote, the host refused this text.
-    await settle(0, { accepted: false, revision: 3, error: "The notepad is limited to 256 KiB." });
-
-    expect(screen.getByText("panels.notebook.saveFailed")).toBeTruthy();
-    expect(screen.queryByTestId("workspace-notebook-reload")).toBeNull();
-  });
-
-  it("becomes read-only when the host forbids the write", async () => {
-    await open();
-    type("notes a");
-    await advance(500);
-    await act(async () => {
-      mocks.writes[0]!.fail(new Error("Forbidden code=Forbidden"));
-      await Promise.resolve();
-    });
-
-    expect(screen.getByText("panels.notebook.readOnly")).toBeTruthy();
-    type("notes ab");
-    expect(editor().value).toBe("notes a");
-  });
-});
-
-describe("notepad conflicts", () => {
-  it("stops editing on a conflict and reloads the host's text on request", async () => {
-    await open();
-    type("notes of mine");
-    await advance(500);
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 5, text: "notes from an agent" };
-    await settle(0, { accepted: false, revision: 5, error: "The notepad changed." });
-
-    expect(screen.getByText("panels.notebook.conflict")).toBeTruthy();
-    type("more of mine");
-    expect(editor().value).toBe("notes of mine");
-    // Polling must not silently discard the unsaved text.
-    await advance(3_000);
-    expect(editor().value).toBe("notes of mine");
-    expect(mocks.writes).toHaveLength(1);
-
-    fireEvent.click(screen.getByTestId("workspace-notebook-reload"));
-    await advance(0);
-    expect(editor().value).toBe("notes from an agent");
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-    expect(screen.queryByTestId("workspace-notebook-reload")).toBeNull();
-
-    type("notes from an agent, and me");
-    await advance(500);
-    expect(mocks.writes).toHaveLength(2);
-    expect(mocks.writes[1]!.request).toMatchObject({
-      text: "notes from an agent, and me",
-      expected: 5,
-    });
-  });
-});
-
-describe("legacy notebook file import", () => {
-  beforeEach(() => {
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 0, text: "" };
-  });
-
-  it("copies the old file into a never-written notepad and leaves the file alone", async () => {
-    mocks.state.legacyFile = "﻿old notes\n";
-    render(<NotebookPanel />);
-    await advance(0);
-
-    expect(mocks.client.readFile).toHaveBeenCalledWith("/repo", ".ait-notebook.md");
-    expect(mocks.writes.map((write) => write.request)).toEqual([
-      { workspaceId: "workspace-a", text: "old notes\n", expected: 0 },
-    ]);
-    // Still loading: nothing can be typed over the text about to arrive.
-    type("typed too early");
-    expect(editor().value).toBe("");
-
-    await settle(0, { revision: 1 });
-    expect(editor().value).toBe("old notes\n");
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-    expect(mocks.client.writeFile).not.toHaveBeenCalled();
-    expect(mocks.client.createFileEntry).not.toHaveBeenCalled();
-
-    type("old notes\nand new");
-    await advance(500);
-    expect(mocks.writes[1]!.request).toMatchObject({ expected: 1 });
-    // Imported once: later polls of the still-open panel do not read the file again.
-    await advance(6_000);
-    expect(mocks.client.readFile).toHaveBeenCalledTimes(1);
-  });
-
-  it("starts empty when there is no old file, or it is blank", async () => {
-    for (const legacyFile of [null, " \n"]) {
-      mocks.state.legacyFile = legacyFile;
-      const view = await open();
-      expect(editor().value).toBe("");
-      expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-      expect(mocks.writes).toHaveLength(0);
-      view.unmount();
-    }
-  });
-
-  it("starts empty when the import is refused", async () => {
-    mocks.state.legacyFile = "old notes";
-    render(<NotebookPanel />);
-    await advance(0);
-    await settle(0, { accepted: false, revision: 1, error: "The notepad changed." });
-
-    expect(editor().value).toBe("");
-    expect(screen.getByText("panels.notebook.saved")).toBeTruthy();
-    // Whoever wrote first shows up on the next poll.
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 1, text: "from an agent" };
-    await advance(3_000);
-    expect(editor().value).toBe("from an agent");
-  });
-
-  it("does not import over a notepad that was written and then cleared", async () => {
-    mocks.state.notepad = { workspaceId: "workspace-a", revision: 2, text: "" };
-    mocks.state.legacyFile = "old notes";
-    await open();
-
-    expect(mocks.client.readFile).not.toHaveBeenCalled();
-    expect(editor().value).toBe("");
+    expect(mocks.client.getWorkspaceNotepad).toHaveBeenLastCalledWith("workspace-b");
+    expect(filePane().workspaceRoot).toBe("/home/me/.ait/notepads/workspace-b");
   });
 });
