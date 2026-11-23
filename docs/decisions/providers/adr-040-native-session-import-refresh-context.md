@@ -13,6 +13,8 @@ paths:
 - 范围：独立 server，延续 ADR-032/039；不连接旧 daemon 的领域 Message 存储。
 - 对照：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的 import-sessions、
   Session handlers 和 activity-curator；本机 Codex 0.153.4 app-server schema。
+- 修订说明（2026-11-23）：“上下文附件”的边界语义已偏离 Paseo：边界之后仍更新的工具生命周期按边界时的状态导出，
+  不再拒绝；现状见 [Provider 规格](../../architecture/provider.md#时间线与历史投影)。
 
 ## 所有权
 

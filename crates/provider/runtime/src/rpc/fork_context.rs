@@ -132,6 +132,16 @@ impl BoundedText {
     }
 }
 
+/// Build the chat-history attachment for `rows`, which must be ordered by `seq`.
+///
+/// The boundary is resolved against the full projection, then only source rows up to it are
+/// projected, so a tool lifecycle updated after the boundary is exported in its state at the
+/// boundary instead of rejecting the fork.
+///
+/// # Errors
+///
+/// Returns `InvalidMessage` for a stale epoch or a boundary that no projected entry ends at, and
+/// `ResourceExhausted` when the response cannot fit its budget.
 pub(crate) fn export(
     request: &ForkRequest,
     epoch: &str,
@@ -143,40 +153,11 @@ pub(crate) fn export(
         .as_deref()
         .map(str::trim)
         .filter(|id| !id.is_empty());
-    let mut selected = project(rows);
-    let boundary = if let Some(cursor) = &request.boundary_cursor {
-        if cursor.epoch != epoch {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        Some(
-            selected
-                .iter()
-                .find(|row| row.seq_end == cursor.seq)
-                .ok_or(ErrorCode::InvalidMessage)?
-                .seq_end,
-        )
-    } else if let Some(message) = message {
-        Some(
-            selected
-                .iter()
-                .rfind(|row| {
-                    row.item["type"] == "assistant_message" && row.item["messageId"] == message
-                })
-                .ok_or(ErrorCode::InvalidMessage)?
-                .seq_end,
-        )
-    } else {
-        None
+    let projected = project(rows);
+    let selected = match resolve_boundary(request, message, epoch, &projected)? {
+        Some(boundary) => project(&rows[..rows.partition_point(|row| row.seq <= boundary)]),
+        None => projected,
     };
-    if let Some(boundary) = boundary {
-        if selected
-            .iter()
-            .any(|entry| entry.seq_start <= boundary && entry.seq_end > boundary)
-        {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        selected.retain(|entry| entry.seq_end <= boundary);
-    }
     let mut prefix =
         String::from("<chat-history-summary>\nChat history from a previous Ait agent.\n");
     for (field, label) in [("title", "Source agent"), ("cwd", "Source directory")] {
@@ -199,6 +180,31 @@ pub(crate) fn export(
         "type":"text","mimeType":"text/plain","contextKind":"chat_history","title":"Chat history","text":text.finish()},
         "itemCount":selected.len(),"boundaryCursor":request.boundary_cursor,"boundaryMessageId":message,"error":null});
     bounded_response(response)
+}
+
+/// Return the inclusive source sequence that ends the requested projected entry, if any.
+/// The cursor takes precedence over `message`, the last assistant message with that ID.
+fn resolve_boundary(
+    request: &ForkRequest,
+    message: Option<&str>,
+    epoch: &str,
+    projected: &[Entry],
+) -> Result<Option<u64>, ErrorCode> {
+    let entry = if let Some(cursor) = &request.boundary_cursor {
+        if cursor.epoch != epoch {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        projected.iter().find(|entry| entry.seq_end == cursor.seq)
+    } else if let Some(message) = message {
+        projected.iter().rfind(|entry| {
+            entry.item["type"] == "assistant_message" && entry.item["messageId"] == message
+        })
+    } else {
+        return Ok(None);
+    };
+    entry
+        .map(|entry| Some(entry.seq_end))
+        .ok_or(ErrorCode::InvalidMessage)
 }
 
 fn append_body(text: &mut BoundedText, selected: &[Entry]) {

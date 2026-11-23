@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Paseo rejects this case; Ait exports the tool in its state at the boundary instead, because
+/// Codex keeps updating long-running commands while the assistant writes commentary.
+const TOOL_UPDATED_AFTER_BOUNDARY: &str =
+    "rejects a checkpoint whose projected tool state changed later";
+
 #[test]
 fn fork_context_matches_recorded_upstream_cases() {
     let fixture: Value = serde_json::from_str(include_str!(
@@ -40,7 +45,19 @@ fn fork_context_matches_recorded_upstream_cases() {
             &rows,
             &agent,
         );
-        if case.get("error").is_some() {
+        if case["name"] == TOOL_UPDATED_AFTER_BOUNDARY {
+            let text = actual.unwrap()["attachment"]["text"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            assert!(
+                text.contains(
+                    "[User] Run it\n[Terminal] before boundary\n[Assistant] Partial result.\n"
+                ),
+                "{text}"
+            );
+            assert!(!text.contains("after boundary"), "{text}");
+        } else if case.get("error").is_some() {
             assert_eq!(actual, Err(ErrorCode::InvalidMessage), "{}", case["name"]);
         } else {
             let mut actual = actual.unwrap();

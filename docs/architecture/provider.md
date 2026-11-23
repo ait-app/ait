@@ -242,6 +242,9 @@
   片段（assistant 还需 `messageId` 一致）；跨工具调用的每轮单一 Thinking 由共享客户端组合
   （[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)、
   [ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)）。
+- `agent.fork_context.request` 的边界（cursor 或 assistant `messageId`）在完整投影中定位，再只投影该序号及之前的源行：
+  边界之后仍在更新的工具生命周期按边界时的状态导出，不再像 Paseo 那样拒绝。Codex 的长时命令会在 assistant
+  评论之后继续输出，拒绝会让同一轮内多数位置无法分叉。
 - Ait 自己写入的输入（定时任务与心跳运行、Bot 指令前缀与唤醒通知）统一为 `<ait-input kind=…>` 信封。
   runtime 在发布、读取投影与会话标题处调用 `domain::input_envelope`，把信封内的正文与 `origin`
   一并输出；存储行保留发送时的原文，重放与原生历史导入得到同样投影

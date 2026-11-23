@@ -98,3 +98,45 @@ fn empty_context_is_explicit_and_large_context_keeps_its_recent_tail() {
     assert!(text.contains("Earlier conversation omitted"));
     assert!(text.ends_with("LATEST MESSAGE\n</chat-history-summary>"));
 }
+
+#[test]
+fn cursor_inside_a_running_tool_lifecycle_exports_the_tool_state_at_that_position() {
+    let tool = |seq, status, label| {
+        row(
+            seq,
+            json!({"type":"tool_call","callId":"exec-1","name":"terminal","status":status,
+                "detail":{"type":"plain_text","label":label}}),
+        )
+    };
+    let rows = [
+        row(1, json!({"type":"user_message","text":"Run it"})),
+        tool(2, "running", "started"),
+        row(
+            3,
+            json!({"type":"assistant_message","messageId":"commentary","text":"Waiting."}),
+        ),
+        tool(4, "completed", "finished"),
+        row(
+            5,
+            json!({"type":"assistant_message","messageId":"final","text":"Done."}),
+        ),
+    ];
+    let mut boundary = request();
+    boundary.boundary_cursor = Some(Cursor {
+        epoch: "epoch".to_owned(),
+        seq: 3,
+    });
+
+    let exported = export(&boundary, "epoch", &rows, &json!({})).unwrap();
+
+    let text = exported["attachment"]["text"].as_str().unwrap();
+    assert!(
+        text.contains("[User] Run it\n[Terminal] started\n[Assistant] Waiting.\n"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("finished") && !text.contains("Done."),
+        "{text}"
+    );
+    assert_eq!(exported["itemCount"], 3);
+}
