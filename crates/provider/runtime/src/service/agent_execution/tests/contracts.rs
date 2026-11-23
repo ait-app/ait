@@ -29,14 +29,14 @@ async fn child_control_wait_does_not_block_parent_permission_and_returns_native_
     let executor = harness.execution.clone();
     let parent = harness.id.clone();
     let child_id = child.clone();
+    let control_admitted = harness.state.lock().unwrap().control_admitted.clone();
     let control = tokio::spawn(async move {
         executor.execute("agent.subagents.guide.request", json!({"parentAgentId":parent,"childAgentId":child_id,"message":"  guide\n","expectedRevision":revision})).await
     });
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        while harness.state.lock().unwrap().child_controls.is_empty() {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
+    tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        control_admitted.notified(),
+    )
     .await
     .expect("control admitted");
     assert!(!control.is_finished(), "native receipt is still pending");

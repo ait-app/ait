@@ -27,6 +27,7 @@ pub(super) struct State {
     events: VecDeque<AgentTurnEvent>,
     child: Option<NativeSubagent>,
     pub(super) child_controls: Vec<(String, String)>,
+    pub(super) control_admitted: Arc<tokio::sync::Notify>,
     pub(super) control_test: bool,
     pub(super) release_control: bool,
     pub(super) permission_pending: bool,
@@ -177,11 +178,11 @@ impl AgentSession for Session {
         id: &str,
         message: &str,
     ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
-        self.state
-            .lock()
-            .unwrap()
+        let mut state = self.state.lock().unwrap();
+        state
             .child_controls
             .push((id.to_owned(), message.to_owned()));
+        state.control_admitted.notify_one();
         Ok(provider_core::ports::controls::ChildControlReceipt {
             token: "control-token".to_owned(),
         })

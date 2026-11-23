@@ -25,6 +25,7 @@ use super::*;
 #[derive(Debug, Default)]
 struct State {
     controls: AtomicUsize,
+    control_admitted: tokio::sync::Notify,
     answers: AtomicUsize,
     pending: AtomicBool,
     events: Mutex<VecDeque<AgentTurnEvent>>,
@@ -132,6 +133,7 @@ impl AgentSession for Session {
         _: &str,
     ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
         self.state.controls.fetch_add(1, Ordering::SeqCst);
+        self.state.control_admitted.notify_one();
         Ok(provider_core::ports::controls::ChildControlReceipt {
             token: "receipt".to_owned(),
         })
@@ -234,16 +236,6 @@ fn services(root: &std::path::Path, state: Arc<State>) -> Services {
     }
 }
 
-async fn wait_for(counter: &AtomicUsize, expected: usize) {
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while counter.load(Ordering::SeqCst) < expected {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("native export state did not advance");
-}
-
 async fn reply(socket: &mut Socket, id: &str) -> Value {
     loop {
         let message = receive(socket).await;
@@ -290,7 +282,9 @@ async fn child_controls_do_not_block_permission_on_the_same_socket() {
             .as_u64()
             .unwrap();
         send(&mut socket, json!({"type":"request","request_id":"guide","method":"agent.subagents.guide.request","params":{"parentAgentId":parent,"childAgentId":child,"message":"help","expectedRevision":revision}})).await;
-        wait_for(&state.controls, 1).await;
+        tokio::time::timeout(Duration::from_secs(5), state.control_admitted.notified())
+            .await
+            .expect("child control was not admitted");
         send(&mut socket, json!({"type":"request","request_id":"permission","method":"agent.permission.resolve.request","params":{"agentId":parent,"requestId":"permission-1","response":{"behavior":"allow"}}})).await;
         let mut permission = false;
         let mut guide = false;

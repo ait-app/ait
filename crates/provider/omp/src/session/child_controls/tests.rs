@@ -79,6 +79,7 @@ async fn parent_owned_control_checks_membership_and_preserves_a_running_turn() {
     let (_root, client, spec) = fixture();
     let mut session = session::open(&client, &spec, None).await.unwrap();
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    let mut frames = crate::transport::subscribe_frames();
     let parent = session.persistence().unwrap().session_id;
     assert!(matches!(
         session.begin_child_stop("other/child"),
@@ -93,13 +94,15 @@ async fn parent_owned_control_checks_membership_and_preserves_a_running_turn() {
         .unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            if let Some(AgentTurnEvent::ChildControl { token, outcome }) =
-                session.poll_turn().unwrap()
-                && token == receipt.token
-            {
-                break outcome;
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::ChildControl { token, outcome }) if token == receipt.token => {
+                    break outcome;
+                }
+                Some(_) => {}
+                None => {
+                    let _ = frames.recv().await;
+                }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await
