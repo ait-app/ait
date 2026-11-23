@@ -212,6 +212,10 @@ fn classify(method: &str) -> Rule {
 fn classify_resource(method: &str) -> Rule {
     match method {
         "agent.create.request" => Rule::AgentCreate,
+        // Native HTML includes the provider's full journal, not the shared Timeline projection.
+        "agent.native_html.export.request" | "agent.native_html.export.cancel.request" => {
+            Rule::Deny
+        }
         "agent.timeline.export.request" => Rule::AgentDownload,
         "agent.get.request"
         | "agent.timeline.export.cancel.request"

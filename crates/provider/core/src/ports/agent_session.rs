@@ -94,6 +94,33 @@ pub enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub trait AgentSession: Debug + Send + Sync {
+    /// Start an export through the already-owned native session, without starting a turn.
+    ///
+    /// The session retains the request and is driven by its normal `poll_turn` calls;
+    /// completion is retrieved with [`Self::take_native_html_export`].
+    ///
+    /// # Errors
+    /// Returns unavailable for providers without this capability and a session error for
+    /// rejected or failed native admission.
+    fn begin_native_html_export(&mut self) -> Result<(), AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Take a completed native export, if one has settled since admission.
+    fn take_native_html_export(
+        &mut self,
+    ) -> Option<
+        Result<
+            super::native_html_export::NativeHtmlExport,
+            super::native_html_export::NativeHtmlExportError,
+        >,
+    > {
+        None
+    }
+
+    /// Abandon the pending export while keeping responsibility for late native output.
+    fn cancel_native_html_export(&mut self) {}
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,

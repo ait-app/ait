@@ -24,6 +24,8 @@ export type {
   AgentTimelineExportOptions,
   AgentTimelineExportResult,
   AgentTimelineExportCancelResult,
+  AgentNativeHtmlExportResult,
+  AgentNativeHtmlExportCancelResult,
 } from "@ait/protocol/messages";
 import type {
   ShareAudience,
@@ -37,6 +39,10 @@ import {
   AgentCreateFailedStatusPayloadSchema,
   AgentTimelineExportResultSchema,
   AgentTimelineExportCancelResultSchema,
+  AgentNativeHtmlExportResultSchema,
+  AgentNativeHtmlExportCancelResultSchema,
+  type AgentNativeHtmlExportResult,
+  type AgentNativeHtmlExportCancelResult,
   type AgentTimelineExportOptions,
   type AgentTimelineExportResult,
   type AgentTimelineExportCancelResult,
@@ -627,6 +633,17 @@ export interface FetchProviderSubagentTimelineOptions {
   limit?: number;
   requestId?: string;
   timeout?: number;
+}
+
+function nativeHtmlExportAbortReason(signal: AbortSignal): unknown {
+  return (
+    signal.reason ??
+    Object.assign(new Error("Native HTML export cancelled"), { name: "AbortError" })
+  );
+}
+
+function throwNativeHtmlExportAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw nativeHtmlExportAbortReason(signal);
 }
 
 // COMPAT(daemon-client-object-options): added in v0.1.102; remove after
@@ -2822,6 +2839,98 @@ export class DaemonClient {
       selectPayload: (payload) => AgentTimelineExportCancelResultSchema.parse(payload),
     });
   }
+  /** Create a native HTML download, cancelling its producer if the caller aborts. */
+  async exportAgentNativeHtml(
+    agentId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<AgentNativeHtmlExportResult> {
+    if (this.lastServerInfoMessage?.features?.agentNativeHtmlExport !== true) {
+      throw Object.assign(new Error("Native HTML export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    const signal = options?.signal;
+    throwNativeHtmlExportAborted(signal);
+    const operationId = crypto.randomUUID();
+    const request = this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_html.export.request", agentId, operationId },
+      responseType: "agent.native_html.export.response",
+      selectPayload: (payload) => AgentNativeHtmlExportResultSchema.parse(payload),
+    });
+    let cancellationSent = false;
+    let abandoned = false;
+    let releasePromise: Promise<unknown> | undefined;
+    const release = (artifact: AgentNativeHtmlExportResult) => {
+      releasePromise ??= this.cancelAgentNativeHtmlExport(agentId, artifact.token).catch(
+        () => undefined,
+      );
+      return releasePromise;
+    };
+    const cancel = () => {
+      if (cancellationSent) return;
+      cancellationSent = true;
+      void this.sendCorrelatedSessionRequest({
+        message: { type: "agent.native_html.export.cancel.request", agentId, operationId },
+        responseType: "agent.native_html.export.cancel.response",
+        selectPayload: (payload) => AgentNativeHtmlExportCancelResultSchema.parse(payload),
+      }).catch(() => undefined);
+    };
+    // Keep observing the original response after a local abort so a late grant can be released.
+    void request.then(
+      (artifact) => {
+        if (abandoned) void release(artifact);
+      },
+      () => undefined,
+    );
+    let onAbort: (() => void) | undefined;
+    const abort = signal
+      ? new Promise<never>((_resolve, reject) => {
+          onAbort = () => {
+            abandoned = true;
+            cancel();
+            reject(nativeHtmlExportAbortReason(signal));
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
+          if (signal.aborted) onAbort();
+        })
+      : undefined;
+    try {
+      const artifact = await (abort ? Promise.race([request, abort]) : request);
+      if (signal?.aborted) {
+        abandoned = true;
+        await release(artifact);
+        throwNativeHtmlExportAborted(signal);
+      }
+      return artifact;
+    } catch (error) {
+      // A timeout or transport failure may leave the native producer running. The cancellation
+      // remains scoped to this operation and is best effort if the connection has already closed.
+      abandoned = true;
+      cancel();
+      throwNativeHtmlExportAborted(signal);
+      throw error;
+    } finally {
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
+    }
+  }
+
+  /** Release an unused native export token without creating a replacement artifact. */
+  async cancelAgentNativeHtmlExport(
+    agentId: string,
+    token: string,
+  ): Promise<AgentNativeHtmlExportCancelResult> {
+    if (this.lastServerInfoMessage?.features?.agentNativeHtmlExport !== true) {
+      throw Object.assign(new Error("Native HTML export is unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_html.export.cancel.request", agentId, token },
+      responseType: "agent.native_html.export.cancel.response",
+      selectPayload: (payload) => AgentNativeHtmlExportCancelResultSchema.parse(payload),
+    });
+  }
+
   async fetchAgent(options: FetchAgentOptions): Promise<FetchAgentResult | null>;
   async fetchAgent(agentId: string, requestId?: string): Promise<FetchAgentResult | null>;
   async fetchAgent(

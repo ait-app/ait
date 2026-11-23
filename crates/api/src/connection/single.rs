@@ -28,8 +28,10 @@ pub(super) async fn read(
     peer: Peer<'_>,
     mut subscriptions: ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
+    let native_exports = subscriptions.native_exports.clone();
     let provider = ConnectionSubscriptions {
         provider: std::mem::take(&mut subscriptions.provider),
+        native_exports: native_exports.clone(),
         ..Default::default()
     };
     let (metadata_tx, metadata_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
@@ -42,6 +44,7 @@ pub(super) async fn read(
         outbound,
         peer,
         cancel: &cancel,
+        native_exports: &native_exports,
     });
     let reader = async {
         let result = route(
@@ -58,10 +61,20 @@ pub(super) async fn read(
         worker(metadata_rx, subscriptions, &contexts[0]),
         worker(
             terminal_rx,
-            ConnectionSubscriptions::default(),
+            ConnectionSubscriptions {
+                native_exports: native_exports.clone(),
+                ..Default::default()
+            },
             &contexts[1]
         ),
-        worker(files_rx, ConnectionSubscriptions::default(), &contexts[2]),
+        worker(
+            files_rx,
+            ConnectionSubscriptions {
+                native_exports: native_exports.clone(),
+                ..Default::default()
+            },
+            &contexts[2]
+        ),
         worker(provider_rx, provider, &contexts[3])
     )?;
     Ok(())
@@ -72,6 +85,7 @@ struct WorkerContext<'a> {
     outbound: &'a Outbound,
     peer: Peer<'a>,
     cancel: &'a CancellationToken,
+    native_exports: &'a super::native_exports::NativeExports,
 }
 
 async fn worker(
@@ -124,11 +138,14 @@ async fn route(
     let mut assembly = chunks::Assembly::default();
     let mut releases: FuturesUnordered<BoxFuture<'static, Result<(), QueueError>>> =
         FuturesUnordered::new();
+    let mut exports: FuturesUnordered<BoxFuture<'_, Result<(), QueueError>>> =
+        FuturesUnordered::new();
     loop {
         let message = tokio::select! {
             () = context.cancel.cancelled() => return Ok(()),
             () = context.state.cancellation.cancelled() => return Ok(()),
             Some(result) = releases.next() => { result?; continue; },
+            Some(result) = exports.next() => { result?; continue; },
             message = chunks::next(&mut stream, &mut assembly, context.outbound) => match message {
                 Some(Ok(message)) => message,
                 Some(Err(code)) => { error(context.outbound, None, code)?; return Ok(()); },
@@ -160,61 +177,116 @@ async fn route(
                 continue;
             }
             if method == "subscription.release.request" {
-                let Ok(release) =
-                    serde_json::from_value::<SubscriptionReleaseRequest>(params.clone())
-                else {
-                    error(
-                        context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::InvalidMessage,
-                    )?;
-                    continue;
-                };
-                if !valid_id(&release.subscription_id) {
-                    error(
-                        context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::InvalidMessage,
-                    )?;
-                    continue;
+                if let Some(release) = start_release(
+                    &senders,
+                    context.outbound,
+                    request_id,
+                    params,
+                    releases.len(),
+                )? {
+                    releases.push(release);
                 }
-                if releases.len() >= 32 {
-                    reject_release(context.outbound, request_id, "subscription_releases", 32)?;
-                    continue;
-                }
-                let slots: Result<Vec<_>, _> =
-                    senders.iter().map(mpsc::Sender::try_reserve).collect();
-                let Ok(slots) = slots else {
-                    reject_release(
-                        context.outbound,
-                        request_id,
-                        "subscription_release_queue",
-                        WORKER_QUEUE_CAPACITY,
-                    )?;
-                    continue;
-                };
-                let mut done = Vec::with_capacity(4);
-                for slot in slots {
-                    let (tx, rx) = oneshot::channel();
-                    slot.send(Work::Release(release.subscription_id.clone(), tx));
-                    done.push(rx);
-                }
-                let outbound = context.outbound.clone();
-                let request_id = request_id.clone();
-                releases.push(Box::pin(async move {
-                    for receiver in done {
-                        receiver.await.map_err(|_| QueueError::Full)?;
-                    }
-                    outbound.respond(
-                        request_id,
-                        Ok(serde_json::json!({"subscriptionId":release.subscription_id})),
-                    )
-                }));
                 continue;
             }
         }
+        let mut message = message;
+        if super::native_exports::is_start(&message) {
+            match context.native_exports.admit(&mut message) {
+                Ok(lease) => exports.push(Box::pin(super::native_exports::run(
+                    message,
+                    lease,
+                    super::native_exports::JobContext {
+                        state: context.state,
+                        outbound: context.outbound,
+                        peer: context.peer,
+                        ledger: context.native_exports.clone(),
+                    },
+                ))),
+                Err(code) => error(
+                    context.outbound,
+                    super::native_exports::request_id(&message),
+                    code,
+                )?,
+            }
+            continue;
+        }
+        if super::native_exports::is_cancel_message(&message) {
+            let mut subscriptions = ConnectionSubscriptions {
+                native_exports: context.native_exports.clone(),
+                ..Default::default()
+            };
+            if process_message(
+                Some(Ok(message)),
+                context.state,
+                context.outbound,
+                context.peer,
+                &mut subscriptions,
+            )
+            .await?
+            .is_break()
+            {
+                return Ok(());
+            }
+            continue;
+        }
         admit(&senders, message, context.outbound)?;
     }
+}
+
+fn start_release(
+    senders: &[mpsc::Sender<Work>; 4],
+    outbound: &Outbound,
+    request_id: &str,
+    params: &serde_json::Value,
+    outstanding: usize,
+) -> Result<Option<BoxFuture<'static, Result<(), QueueError>>>, QueueError> {
+    let Ok(release) = serde_json::from_value::<SubscriptionReleaseRequest>(params.clone()) else {
+        error(
+            outbound,
+            Some(request_id.to_owned()),
+            ErrorCode::InvalidMessage,
+        )?;
+        return Ok(None);
+    };
+    if !valid_id(&release.subscription_id) {
+        error(
+            outbound,
+            Some(request_id.to_owned()),
+            ErrorCode::InvalidMessage,
+        )?;
+        return Ok(None);
+    }
+    if outstanding >= 32 {
+        reject_release(outbound, request_id, "subscription_releases", 32)?;
+        return Ok(None);
+    }
+    let slots: Result<Vec<_>, _> = senders.iter().map(mpsc::Sender::try_reserve).collect();
+    let Ok(slots) = slots else {
+        reject_release(
+            outbound,
+            request_id,
+            "subscription_release_queue",
+            WORKER_QUEUE_CAPACITY,
+        )?;
+        return Ok(None);
+    };
+    let mut done = Vec::with_capacity(4);
+    for slot in slots {
+        let (tx, rx) = oneshot::channel();
+        slot.send(Work::Release(release.subscription_id.clone(), tx));
+        done.push(rx);
+    }
+    let outbound = outbound.clone();
+    let request_id = request_id.to_owned();
+    Ok(Some(Box::pin(async move {
+        for receiver in done {
+            receiver.await.map_err(|_| QueueError::Full)?;
+        }
+        outbound.respond(
+            request_id,
+            Ok(serde_json::json!({"subscriptionId":release.subscription_id})),
+        )
+    })))
 }
 
 fn reject_release(

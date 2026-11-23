@@ -105,6 +105,11 @@ pub(crate) struct AgentRegistration {
     pub(crate) owner: Option<serde_json::Value>,
 }
 
+type NativeExportResult =
+    Result<crate::ports::native_html_export::ExportedNativeHtml, crate::rpc::ErrorCode>;
+type NativeExportReceiver = tokio::sync::oneshot::Receiver<NativeExportResult>;
+type NativeExportReply = tokio::sync::oneshot::Sender<NativeExportResult>;
+
 #[derive(Debug)]
 struct LiveAgent {
     mcp: Option<super::agent_mcp::Binding>,
@@ -124,6 +129,7 @@ struct LiveAgent {
     failure_entry: Option<provider_core::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    native_export: Option<NativeExportReply>,
     /// Usage ledger calls of this session's turns.
     calls: ledger::Calls,
 }
@@ -154,6 +160,7 @@ impl LiveAgent {
             failure_entry: None,
             exclusive: false,
             interruption_requested: false,
+            native_export: None,
             calls: ledger::Calls::new(ledger),
         }
     }
@@ -1038,6 +1045,43 @@ impl AgentManager {
         Ok(())
     }
 
+    /// Begin a bounded native export on the already-owned session without blocking its lane.
+    ///
+    /// # Errors
+    /// Returns an identity, unsupported-provider, admission, or native transport error.
+    pub(crate) fn begin_native_html_export(
+        &mut self,
+        id: &str,
+    ) -> Result<NativeExportReceiver, crate::rpc::ErrorCode> {
+        use crate::rpc::ErrorCode;
+        self.require_managed(id)
+            .map_err(|error| crate::rpc::agent_execution::map_manager(&error))?;
+        let agent = self.live.get_mut(id).ok_or(ErrorCode::AgentNotFound)?;
+        if agent.native_export.is_some() {
+            return Err(ErrorCode::CatalogBusy);
+        }
+        agent
+            .session
+            .begin_native_html_export()
+            .map_err(|error| match error {
+                AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+                AgentSessionError::Busy => ErrorCode::CatalogBusy,
+                AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+                AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
+            })?;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        agent.native_export = Some(sender);
+        Ok(receiver)
+    }
+
+    /// Withdraw an admitted export while leaving late native cleanup to the owning session.
+    pub(crate) fn cancel_native_html_export(&mut self, id: &str) {
+        if let Some(agent) = self.live.get_mut(id) {
+            agent.native_export = None;
+            agent.session.cancel_native_html_export();
+        }
+    }
+
     /// Persist queued native terminal events before exposing completion to clients.
     ///
     /// A failed write retains its event for retry. Native failures close the process before
@@ -1055,6 +1099,7 @@ impl AgentManager {
             if !agent.registered {
                 continue;
             }
+            cancel_abandoned_native_export(agent);
             persist_runtime(self.registry.as_ref(), &id, agent)?;
             streaming::drain(
                 self.registry.as_ref(),
@@ -1064,6 +1109,7 @@ impl AgentManager {
                 agent,
             )
             .await?;
+            deliver_native_export(&id, agent);
             let Some(event) = &agent.pending else {
                 continue;
             };
@@ -1414,6 +1460,51 @@ const fn map_registry(
     _: domain::agent_runtime::registry::AgentRuntimeRegistryError,
 ) -> AgentManagerError {
     AgentManagerError::Registry
+}
+
+fn cancel_abandoned_native_export(agent: &mut LiveAgent) {
+    if agent
+        .native_export
+        .as_ref()
+        .is_some_and(tokio::sync::oneshot::Sender::is_closed)
+    {
+        agent.native_export = None;
+        agent.session.cancel_native_html_export();
+    }
+}
+
+fn deliver_native_export(id: &str, agent: &mut LiveAgent) {
+    if let Some(result) = agent.session.take_native_html_export()
+        && let Some(reply) = agent.native_export.take()
+    {
+        let _ = reply.send(bind_native_export(id, result));
+    }
+}
+
+fn bind_native_export(
+    id: &str,
+    result: Result<
+        provider_core::ports::native_html_export::NativeHtmlExport,
+        provider_core::ports::native_html_export::NativeHtmlExportError,
+    >,
+) -> NativeExportResult {
+    use provider_core::ports::native_html_export::NativeHtmlExportError;
+    let native = result.map_err(|error| match error {
+        NativeHtmlExportError::Rejected => crate::rpc::ErrorCode::InvalidMessage,
+        NativeHtmlExportError::TooLarge | NativeHtmlExportError::Busy => {
+            crate::rpc::ErrorCode::ResourceExhausted
+        }
+        NativeHtmlExportError::Io => crate::rpc::ErrorCode::AgentIo,
+    })?;
+    Ok(crate::ports::native_html_export::ExportedNativeHtml {
+        artifact: model::download::GeneratedArtifact {
+            agent_id: id.to_owned(),
+            file_name: native.file_name,
+            mime_type: "text/html; charset=utf-8".to_owned(),
+            size: native.size,
+            file: native.file,
+        },
+    })
 }
 
 fn map_session(error: AgentSessionError) -> AgentManagerError {

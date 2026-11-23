@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { AgentUsage } from "@/usage";
 import { formatTokenCount } from "./context-window-meter.utils";
 import { TimelineExport } from "./timeline-export";
+import { NativeHtmlExport } from "./native-html-export";
 
 interface ContextWindowDetailsProps {
   serverId: string;
@@ -57,6 +58,7 @@ export function ContextWindowDetails({
         ) : null}
       </View>
       <TimelineExport serverId={serverId} agentId={agentId} />
+      <NativeHtmlExport serverId={serverId} agentId={agentId} />
       <AgentUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
     </>
   );

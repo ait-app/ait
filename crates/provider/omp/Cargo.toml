@@ -14,6 +14,7 @@ async-trait.workspace = true
 # Decode native image blobs before projecting them as provider image artifacts.
 base64.workspace = true
 chrono.workspace = true
+libc.workspace = true
 # Index session-file lines by id and parent without materializing whole records.
 serde.workspace = true
 serde_json.workspace = true

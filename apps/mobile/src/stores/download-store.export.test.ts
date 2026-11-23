@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTimelineExportResult } from "@ait/protocol/messages";
+import type {
+  AgentNativeHtmlExportResult,
+  AgentTimelineExportResult,
+} from "@ait/protocol/messages";
 import type { HostProfile } from "@/types/host-connection";
 import { useDownloadStore } from "./download-store";
 
@@ -235,5 +238,72 @@ describe("timeline export browser transfer", () => {
     expect(release).toHaveBeenCalledExactlyOnceWith("single-use");
     expect(generate).toHaveBeenCalledOnce();
     expect(fetchFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("native HTML export browser transfer", () => {
+  const native: AgentNativeHtmlExportResult = {
+    agentId: "agent",
+    source: "omp_native",
+    token: "native-token",
+    fileName: "native.html",
+    mimeType: "text/html; charset=utf-8",
+    size: 5,
+    expiresAt: "2026-11-11T01:00:00Z",
+  };
+
+  function startNative() {
+    return useDownloadStore.getState().startNativeHtmlExport({
+      serverId: "host",
+      agentId: "agent",
+      daemonProfile: {
+        connections: [
+          { id: "direct", type: "directTcp", endpoint: "host.test", password: "secret" },
+        ],
+      } as HostProfile,
+      generate: async () => native,
+      release,
+    });
+  }
+
+  it("downloads the native receipt using its own token and exact bytes", async () => {
+    fetchFile.mockResolvedValue(new Response("hello"));
+    await startNative();
+    expect(current()).toMatchObject({ status: "browser_handoff", fileName: "native.html" });
+    expect(await blobs[0]!.text()).toBe("hello");
+    expect(link.download).toBe("native.html");
+    expect(fetchFile).toHaveBeenCalledOnce();
+    expect(String(fetchFile.mock.calls[0]![0])).toContain("token=native-token");
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it("signals cancellation while native export is generating and releases any late result", async () => {
+    const generation = Promise.withResolvers<AgentNativeHtmlExportResult>();
+    const onAbort = vi.fn();
+    const pending = useDownloadStore.getState().startNativeHtmlExport({
+      serverId: "host",
+      agentId: "agent",
+      daemonProfile: undefined,
+      generate: (signal) => {
+        signal.addEventListener("abort", onAbort, { once: true });
+        return generation.promise;
+      },
+      release,
+    });
+    current().cancel!();
+    expect(onAbort).toHaveBeenCalledOnce();
+    generation.resolve(native);
+    await pending;
+    expect(current()).toMatchObject({ status: "error", message: "downloads.cancelled" });
+    expect(release).toHaveBeenCalledExactlyOnceWith("native-token");
+    expect(fetchFile).not.toHaveBeenCalled();
+  });
+
+  it("releases the native artifact when download fails", async () => {
+    fetchFile.mockResolvedValue(new Response("gone", { status: 410 }));
+    await startNative();
+    expect(current().status).toBe("error");
+    expect(release).toHaveBeenCalledExactlyOnceWith("native-token");
+    expect(link.click).not.toHaveBeenCalled();
   });
 });

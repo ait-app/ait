@@ -9,6 +9,7 @@ fn every_worker_method_has_a_canonical_operation_and_explicit_ownership() {
         // Timeline exports ride their own bounded dispatch channel, never the worker lanes.
         "agent.timeline.export.request",
         "agent.timeline.export.cancel.request",
+        "agent.native_html.export.cancel.request",
     ];
     for spec in crate::capabilities::implemented_methods() {
         if crate::rpc::agents::METHODS

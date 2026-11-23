@@ -16,6 +16,10 @@ pub(super) fn allows(method: &str, kind: InboundKind) -> bool {
         .iter()
         .any(|prefix| method.starts_with(prefix))
         || method == "session.heartbeat"
+        || matches!(
+            method,
+            "agent.native_html.export.request" | "agent.native_html.export.cancel.request"
+        )
     {
         return false;
     }

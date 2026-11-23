@@ -75,6 +75,7 @@ pub(crate) enum Operation {
     Snapshot,
     RefreshSnapshot,
     Get,
+    NativeHtmlExport,
     List,
     History,
     Update,
@@ -144,6 +145,7 @@ impl Operation {
             "provider.snapshot.get.request" => Ok(Self::Snapshot),
             "provider.snapshot.refresh.request" => Ok(Self::RefreshSnapshot),
             "agent.get.request" => Ok(Self::Get),
+            "agent.native_html.export.request" => Ok(Self::NativeHtmlExport),
             "agent.list.request" => Ok(Self::List),
             "agent.history.get.request" => Ok(Self::History),
             "agent.update.request" => Ok(Self::Update),
@@ -212,6 +214,7 @@ impl Operation {
             Self::Snapshot => "provider.snapshot.get.request",
             Self::RefreshSnapshot => "provider.snapshot.refresh.request",
             Self::Get => "agent.get.request",
+            Self::NativeHtmlExport => "agent.native_html.export.request",
             Self::List => "agent.list.request",
             Self::History => "agent.history.get.request",
             Self::Update => "agent.update.request",
@@ -271,6 +274,7 @@ impl Operation {
             | Self::VoiceCancel
             | Self::Realtime
             | Self::AppendTimeline
+            | Self::NativeHtmlExport
             | Self::Wake => Access::Session,
             Self::Wait
             | Self::Get
@@ -345,6 +349,7 @@ impl Operation {
             | Self::SideCancel
             | Self::SideHistory
             | Self::SideTransfer
+            | Self::NativeHtmlExport
             | Self::Wake => Some(Target::Agent),
             Self::Subagents | Self::UnifiedSubagents | Self::ChildTimeline => Some(Target::Parent),
             Self::AppendTimeline => Some(Target::AppendedAgent),

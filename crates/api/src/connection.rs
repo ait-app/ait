@@ -20,6 +20,7 @@ pub(super) mod bridge;
 mod chunks;
 mod creation_receipts;
 mod dispatch;
+mod native_exports;
 pub(super) mod rpc;
 mod single;
 mod timeline_export;
@@ -43,6 +44,7 @@ pub(super) struct ConnectionSubscriptions {
     provider: provider::connection::Connection,
     voice: voice::connection::Connection,
     browser: browser::connection::Connection,
+    native_exports: native_exports::NativeExports,
 }
 
 impl ConnectionSubscriptions {
@@ -284,6 +286,9 @@ async fn read(
         ))
         .await;
     }
+    let mut native_jobs: futures_util::stream::FuturesUnordered<
+        futures_util::future::BoxFuture<'_, Result<(), QueueError>>,
+    > = futures_util::stream::FuturesUnordered::new();
     let mut assembly = chunks::Assembly::default();
     let mut terminal_poll = tokio::time::interval(Duration::from_millis(40));
     terminal_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -302,6 +307,7 @@ async fn read(
                 }
                 continue;
             },
+            Some(result) = native_jobs.next() => { result?; continue; },
             message = chunks::next(&mut stream, &mut assembly, outbound) => message,
             _ = upload_expiry.tick() => {
                 subscriptions.filesystem.files.prune_uploads();
@@ -312,6 +318,28 @@ async fn read(
             capabilities: &capabilities,
             guest,
             automation,
+        };
+        let message = match message {
+            Some(Ok(mut incoming)) => {
+                if native_exports::is_start(&incoming) {
+                    match subscriptions.native_exports.admit(&mut incoming) {
+                        Ok(lease) => native_jobs.push(Box::pin(native_exports::run(
+                            incoming,
+                            lease,
+                            native_exports::JobContext {
+                                state,
+                                outbound,
+                                peer,
+                                ledger: subscriptions.native_exports.clone(),
+                            },
+                        ))),
+                        Err(code) => error(outbound, native_exports::request_id(&incoming), code)?,
+                    }
+                    continue;
+                }
+                Some(Ok(incoming))
+            }
+            other => other,
         };
         if process_message(message, state, outbound, peer, &mut subscriptions)
             .await?
@@ -696,6 +724,11 @@ async fn process_request(
         peer.capabilities,
     ) {
         return span.in_scope(|| error(outbound, Some(request.id), code));
+    }
+    if native_exports::is_cancel(&request) {
+        return subscriptions
+            .native_exports
+            .cancel_request(outbound, request);
     }
     dispatch::request(
         Context {

@@ -1,5 +1,146 @@
 use super::*;
 
+#[tokio::test]
+async fn optional_write_under_full_pipe_times_out_without_corrupting_stream() {
+    let (writer, mut reader) = tokio::io::duplex(1);
+    let writer = Mutex::new(writer);
+    writer.lock().await.write_all(b"x").await.unwrap();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    assert_eq!(
+        write_optional(
+            &writer,
+            b"export\n",
+            &cancel,
+            Duration::from_millis(20),
+            Duration::from_millis(20)
+        )
+        .await,
+        OptionalWrite::Unsent
+    );
+    let mut byte = [0];
+    reader.read_exact(&mut byte).await.unwrap();
+    assert_eq!(&byte, b"x");
+    writer.lock().await.write_all(b"y").await.unwrap();
+    reader.read_exact(&mut byte).await.unwrap();
+    assert_eq!(&byte, b"y");
+}
+
+#[tokio::test]
+async fn cancellation_before_writer_admission_never_sends_later() {
+    let (writer, mut reader) = tokio::io::duplex(32);
+    let writer = Arc::new(Mutex::new(writer));
+    let guard = writer.lock().await;
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let task_writer = Arc::clone(&writer);
+    let task_cancel = cancel.clone();
+    let task = tokio::spawn(async move {
+        write_optional(
+            &task_writer,
+            b"export\n",
+            &task_cancel,
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+        )
+        .await
+    });
+    cancel.cancel();
+    assert_eq!(task.await.unwrap(), OptionalWrite::Unsent);
+    drop(guard);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), reader.read_u8())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn partial_optional_frame_reports_transport_failure() {
+    let (writer, _reader) = tokio::io::duplex(1);
+    let writer = Mutex::new(writer);
+    let cancel = tokio_util::sync::CancellationToken::new();
+    assert_eq!(
+        write_optional(
+            &writer,
+            b"export\n",
+            &cancel,
+            Duration::from_millis(20),
+            Duration::from_millis(20)
+        )
+        .await,
+        OptionalWrite::Failed
+    );
+}
+
+#[tokio::test]
+async fn cancellation_after_partial_frame_finishes_the_frame() {
+    let (writer, mut reader) = tokio::io::duplex(1);
+    let writer = Arc::new(Mutex::new(writer));
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let task_writer = Arc::clone(&writer);
+    let task_cancel = cancel.clone();
+    let task = tokio::spawn(async move {
+        write_optional(
+            &task_writer,
+            b"ab",
+            &task_cancel,
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+        )
+        .await
+    });
+    let mut first = [0];
+    reader.read_exact(&mut first).await.unwrap();
+    assert_eq!(&first, b"a");
+    cancel.cancel();
+    let mut second = [0];
+    reader.read_exact(&mut second).await.unwrap();
+    assert_eq!(&second, b"b");
+    assert_eq!(task.await.unwrap(), OptionalWrite::Sent);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn backpressured_optional_command_does_not_close_native_session() {
+    let root = tempfile::tempdir().unwrap();
+    let client = OmpClient::new("/bin/sh".into());
+    let args = [
+        "-c".to_owned(),
+        r#"printf '{"type":"ready"}\n'; exec sleep 30"#.to_owned(),
+    ];
+    let mut transport = Transport::spawn(
+        &client,
+        root.path().to_str().unwrap(),
+        &args,
+        None,
+        Timeouts::default(),
+    )
+    .unwrap();
+    let _ready = tokio::time::timeout(Duration::from_secs(5), transport.messages.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let input = Arc::clone(transport.input.as_ref().unwrap());
+    let guard = input.lock().await;
+    let (_, written) = transport
+        .queue_optional(
+            "export_html",
+            json!({"outputPath":"unused"}),
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .unwrap();
+    let outcome = tokio::time::timeout(Duration::from_secs(2), written)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome, OptionalWrite::Unsent);
+    assert!(!transport.exited());
+    assert!(!transport.poisoned.load(Ordering::Acquire));
+    drop(guard);
+    transport.send(&json!({"type":"next"})).await.unwrap();
+    assert!(transport.poll().is_ok());
+    transport.close().await.unwrap();
+}
+
 async fn read(input: &[u8], limit: usize) -> (Ending, Vec<Value>) {
     let (sender, mut receiver) = mpsc::channel(64);
     let ending = read_frames(input, limit, &sender).await;

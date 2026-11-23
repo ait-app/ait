@@ -150,6 +150,73 @@ it.each([
 });
 
 it.each([
+  [true, true],
+  [true, false],
+  [false, true],
+  [false, false],
+])(
+  "negotiates native HTML export with export=%s and cancel=%s",
+  (exportSupported, cancelSupported) => {
+    const methods = Object.values(METHODS)
+      .map((spec) => spec.method)
+      .filter(
+        (method) =>
+          (exportSupported || method !== "agent.native_html.export.request") &&
+          (cancelSupported || method !== "agent.native_html.export.cancel.request"),
+      );
+    const h = harness(methods);
+    try {
+      h.ready();
+      const status = h.received.find((message) => message.type === "status");
+      expect(object(object(status).payload).features).toMatchObject({
+        agentNativeHtmlExport: exportSupported && cancelSupported,
+      });
+    } finally {
+      h.transport.close();
+    }
+  },
+);
+
+it("routes native export and its cancellation on the same connection", () => {
+  const h = harness();
+  const operationId = "00000000-0000-4000-8000-000000000001";
+  try {
+    h.ready();
+    h.send({
+      type: "agent.native_html.export.request",
+      requestId: "export-1",
+      agentId: "agent-1",
+      operationId,
+    });
+    expect(h.last(2)).toEqual({
+      type: "request",
+      request_id: "export-1",
+      method: "agent.native_html.export.request",
+      params: { agentId: "agent-1", operationId },
+    });
+    h.send({
+      type: "agent.native_html.export.cancel.request",
+      requestId: "cancel-1",
+      agentId: "agent-1",
+      operationId,
+    });
+    expect(h.last(2)).toEqual({
+      type: "request",
+      request_id: "cancel-1",
+      method: "agent.native_html.export.cancel.request",
+      params: { agentId: "agent-1", operationId },
+    });
+    h.sockets[2].message({ type: "response", request_id: "cancel-1", result: { released: true } });
+    expect(h.received.at(-1)).toEqual({
+      type: "agent.native_html.export.cancel.response",
+      payload: { released: true, requestId: "cancel-1" },
+    });
+  } finally {
+    h.transport.close();
+  }
+});
+
+it.each([
   ["markdown", "conversation"],
   ["markdown", "timeline"],
   ["html", "conversation"],

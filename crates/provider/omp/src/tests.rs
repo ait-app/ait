@@ -12,6 +12,7 @@ mod diagnostics;
 mod fixture_program;
 mod installed;
 mod interactions;
+mod native_export;
 mod native_history;
 mod real;
 mod settlement;

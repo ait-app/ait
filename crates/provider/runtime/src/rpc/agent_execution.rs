@@ -2,6 +2,7 @@
 
 mod bot;
 mod controls;
+mod native_export;
 mod native_sessions;
 mod placement;
 mod resume;
@@ -85,6 +86,7 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            Operation::NativeHtmlExport => Err(ErrorCode::UnsupportedCapability),
             Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
             Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
@@ -754,7 +756,7 @@ pub(crate) fn only(params: &Value, allowed: &[&str]) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-const fn map_manager(error: &AgentManagerError) -> ErrorCode {
+pub(crate) const fn map_manager(error: &AgentManagerError) -> ErrorCode {
     match error {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
         AgentManagerError::ProviderUnavailable(_)

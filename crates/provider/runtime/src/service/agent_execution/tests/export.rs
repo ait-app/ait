@@ -112,3 +112,35 @@ async fn export_admission_is_bounded_and_missing_agents_do_not_restore_any_provi
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     execution.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn native_html_requires_an_existing_supported_session_and_shared_export_budget() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let native_request = |id: &str| crate::ports::native_html_export::Request {
+        agent_id: id.to_owned(),
+    };
+    let permits = Arc::clone(&execution.0.exports)
+        .try_acquire_many_owned(2)
+        .unwrap();
+    assert!(matches!(
+        execution
+            .export_native_html(native_request("missing"))
+            .await,
+        Err(ErrorCode::ResourceExhausted)
+    ));
+    drop(permits);
+    assert!(matches!(
+        execution
+            .export_native_html(native_request("missing"))
+            .await,
+        Err(ErrorCode::AgentNotFound)
+    ));
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    assert!(matches!(
+        execution.export_native_html(native_request(id)).await,
+        Err(ErrorCode::UnsupportedCapability)
+    ));
+    execution.shutdown().await.unwrap();
+}

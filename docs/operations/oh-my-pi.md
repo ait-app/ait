@@ -1,5 +1,8 @@
 # Oh My Pi
 
+活动 OMP 会话可从 Agent 上下文详情下载原生 HTML。文件可能包含完整会话历史、活动脚本
+及远程查看器；打开前请确认可以信任其内容和查看器。通用 Timeline 导出与原生导出分别提供。
+
 Oh My Pi 是独立 Provider `omp`。Ait 为每个 Agent 启动一个官方 `omp --mode rpc-ui` 进程，
 通过 OMP 原生 JSONL RPC 通信，并把原生事件直接映射为 Ait 的会话事件。设计与 Paseo 的 OMP Provider
 相同，不经过 ACP。安装、认证、模型、工具、扩展、MCP 和会话文件都由 OMP 管理，与 Ait 的 Pi 适配器无关。

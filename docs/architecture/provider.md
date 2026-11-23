@@ -349,6 +349,11 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
 - 接口、内部所有权、HTTP 限定 CORS 扩展及各平台完成语义见
   [ADR-239](../decisions/providers/adr-239-persisted-timeline-export-downloads.md)；
   原生手机和打包桌面验证限制见 [task26 记录](../plans/pr612-split/task26.json)。
+- 活动 OMP 会话另提供原生 HTML 导出，复用会话单一写者与 Files 一次性下载。它保留 OMP
+  原始字节，可能包含脚本及加载远程查看器；客户端提示风险，只下载而不在 Ait 中预览。
+  原生日志不受共享 Timeline 的投影限制，访客不能使用该导出。暂存文件由 adapter 管理，
+  完成后交接匿名 artifact；取消、超时和晚到响应按
+  [ADR-265](../decisions/providers/adr-265-omp-native-html-export-downloads.md) 清理。
 
 ## 账号用量
 

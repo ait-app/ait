@@ -6,6 +6,7 @@ mod concurrency;
 mod contracts;
 mod environment;
 mod export;
+mod native_export;
 mod placement;
 mod realtime;
 mod reasoning;

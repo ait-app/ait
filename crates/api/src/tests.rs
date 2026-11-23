@@ -7,6 +7,7 @@ mod guest;
 mod hub_control;
 mod hub_publication;
 mod mcp;
+mod native_export;
 mod paseo;
 mod relay_rpc;
 mod server_info;

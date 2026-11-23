@@ -166,6 +166,8 @@ export function serverInfo(
     agentDetach: has("agent.detach.request"),
     agentTimelineExport:
       has("agent.timeline.export.request") && has("agent.timeline.export.cancel.request"),
+    agentNativeHtmlExport:
+      has("agent.native_html.export.request") && has("agent.native_html.export.cancel.request"),
     agentThinkingUpdate: has("agent.thinking.set.request"),
     daemonDiagnostics: has("diagnostics.request"),
     daemonSelfUpdate: has("daemon.update.request"),

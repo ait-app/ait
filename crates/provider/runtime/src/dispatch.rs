@@ -128,6 +128,22 @@ pub enum Completion {
         /// Previously issued single-use token.
         token: String,
     },
+    /// Register a completed provider-native HTML artifact in the existing Files download service.
+    NativeHtmlExport {
+        /// Correlation ID of the original request.
+        request_id: String,
+        /// Typed completed native content.
+        export: crate::ports::native_html_export::ExportedNativeHtml,
+    },
+    /// Release a generated native download that the client no longer needs.
+    ReleaseNativeHtmlExport {
+        /// Correlation ID of the original request.
+        request_id: String,
+        /// Exact owning Agent identity.
+        agent_id: String,
+        /// Previously issued single-use token.
+        token: String,
+    },
 }
 
 /// Dispatch an admitted provider request using concrete shared request resources.

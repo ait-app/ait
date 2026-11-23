@@ -46,6 +46,9 @@ pub struct ExecutionDependencies {
     pub lifetime: Arc<dyn Send + Sync>,
 }
 
+pub(crate) type NativeExportReply =
+    oneshot::Sender<Result<crate::ports::native_html_export::ExportedNativeHtml, ErrorCode>>;
+
 enum Command {
     Request {
         method: Operation,
@@ -53,6 +56,12 @@ enum Command {
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
         realtime: Option<model::realtime::Endpoint>,
+        permit: OwnedSemaphorePermit,
+        queued: std::time::Instant,
+    },
+    NativeHtmlExport {
+        request: crate::ports::native_html_export::Request,
+        reply: NativeExportReply,
         permit: OwnedSemaphorePermit,
         queued: std::time::Instant,
     },
@@ -360,6 +369,35 @@ impl AgentExecution {
         self.enqueue(method, params, cancel, realtime)?
             .await
             .map_err(|_| ErrorCode::AgentIo)?
+    }
+
+    pub(crate) async fn export_native_html(
+        &self,
+        request: crate::ports::native_html_export::Request,
+    ) -> Result<crate::ports::native_html_export::ExportedNativeHtml, ErrorCode> {
+        let _export = Arc::clone(&self.0.exports)
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::ResourceExhausted)?;
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::AgentIo);
+        }
+        let permit = Arc::clone(&self.0.admission)
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::CatalogBusy)?;
+        let (reply, receiver) = oneshot::channel();
+        self.0
+            .sender
+            .try_send(Command::NativeHtmlExport {
+                request,
+                reply,
+                permit,
+                queued: std::time::Instant::now(),
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
+                mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
+            })?;
+        receiver.await.map_err(|_| ErrorCode::AgentIo)?
     }
 
     fn enqueue(

@@ -622,6 +622,14 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
             json!({"agentId":"outside","token":"secret"}),
         ),
         (
+            "agent.native_html.export.request",
+            json!({"agentId":"outside"}),
+        ),
+        (
+            "agent.native_html.export.cancel.request",
+            json!({"agentId":"outside","token":"secret"}),
+        ),
+        (
             "agent.message.send.request",
             json!({"agentId": "a", "text": "hi"}),
         ),
@@ -645,6 +653,29 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
             json!({"agentIds": []}),
         )
         .await;
+}
+
+#[tokio::test]
+async fn native_html_export_is_forbidden_to_all_visitors_even_for_shared_agents() {
+    for kind in [
+        ResourceKind::Workspace,
+        ResourceKind::Project,
+        ResourceKind::Node,
+    ] {
+        let guest = Guest::with(kind).await;
+        for method in [
+            "agent.native_html.export.request",
+            "agent.native_html.export.cancel.request",
+        ] {
+            assert_eq!(
+                guest
+                    .refused(method, json!({"agentId":"agent", "token":"token"}))
+                    .await,
+                ErrorCode::Forbidden,
+                "{kind:?}: {method}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

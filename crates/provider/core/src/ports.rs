@@ -10,6 +10,7 @@ pub mod environment;
 pub mod harness_evidence;
 /// Native history discovery and inspection facts.
 pub mod native_history;
+pub mod native_html_export;
 pub mod preset;
 /// Request usage that adapters report to the harness usage ledger.
 pub mod usage_ledger;

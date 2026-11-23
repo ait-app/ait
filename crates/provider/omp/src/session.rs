@@ -23,6 +23,8 @@ use provider_core::ports::agent_session::{
 use provider_core::ports::diagnostics::{Category, Diagnostic};
 use provider_core::protocol::prompt::AgentPrompt;
 
+mod native_export;
+
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
 /// Characters of partial assistant output quoted in a failure, as Paseo quotes.
@@ -145,6 +147,7 @@ pub(super) struct Session {
     overlay: Option<tempfile::NamedTempFile>,
     /// Discovered at open; absent when native metadata could not be read, which only hides roles.
     catalog: Option<std::sync::Arc<roles::Catalog>>,
+    native_exports: native_export::Exports,
 }
 
 /// Start a disposable native capability reader in `cwd` that saves no session, bounded by
@@ -345,6 +348,7 @@ pub(super) async fn open(
         model: Model::Current,
         overlay,
         catalog: client.role_catalog(&spec.cwd).await.ok(),
+        native_exports: native_export::Exports::default(),
     })
 }
 
@@ -445,6 +449,7 @@ impl Session {
         if old.close().await.is_err() {
             tracing::warn!("the replaced OMP process did not exit after SIGKILL");
         }
+        self.native_exports.after_close(&mut old);
         // The replaced process cannot answer an identity lookup.
         self.release_identities();
         if !persisted {
@@ -647,6 +652,9 @@ impl Session {
     }
 
     fn control_response(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if self.native_exports.response(event) {
+            return Ok(true);
+        }
         if self.usage.owns(event) {
             if let Some(usage) = self.usage.answer(event, self.stream.totals()) {
                 self.publish_usage(usage);
@@ -1339,19 +1347,50 @@ impl AgentSession for Session {
             result => result,
         }
     }
+    fn begin_native_html_export(&mut self) -> Result<(), AgentSessionError> {
+        if self.closed
+            || !self.state["sessionFile"]
+                .as_str()
+                .is_some_and(|path| std::path::Path::new(path).is_file())
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let blobs = history::paths::blobs(&self.client, Some(&self.cwd))?;
+        let root = blobs.parent().ok_or(AgentSessionError::Failed)?;
+        self.native_exports.begin(&mut self.transport, root)
+    }
+
+    fn take_native_html_export(
+        &mut self,
+    ) -> Option<
+        Result<
+            provider_core::ports::native_html_export::NativeHtmlExport,
+            provider_core::ports::native_html_export::NativeHtmlExportError,
+        >,
+    > {
+        self.native_exports.take()
+    }
+
+    fn cancel_native_html_export(&mut self) {
+        self.native_exports.cancel();
+    }
+
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
         self.usage.stop();
         self.pending.clear();
         self.release_identities();
         self.stream.events.extend(self.dialogs.clear());
-        self.transport.close().await
+        let result = self.transport.close().await;
+        self.native_exports.after_close(&mut self.transport);
+        result
     }
 }
 
 impl Session {
     /// Return the next turn event, reading native frames until one is produced.
     fn observe(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        self.native_exports.expire();
         self.check_cancellation()?;
         if let Some(event) = self.next_event() {
             return Ok(Some(event));

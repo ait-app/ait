@@ -12,7 +12,10 @@ import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
 import { Platform } from "react-native";
 import { streamNativeAccountDownload } from "@/runtime/daemon-transport/native-account-download";
-import type { AgentTimelineExportResult } from "@ait/protocol/messages";
+import type {
+  AgentNativeHtmlExportResult,
+  AgentTimelineExportResult,
+} from "@ait/protocol/messages";
 import { downloadFetch } from "@/runtime/daemon-transport/direct-download";
 
 interface DownloadProgress {
@@ -44,7 +47,18 @@ interface DownloadState {
     agentId: string;
     daemonProfile: HostProfile | undefined;
     activeConnectionId?: string | null;
-    generate: () => Promise<AgentTimelineExportResult>;
+    generate: (
+      signal: AbortSignal,
+    ) => Promise<AgentTimelineExportResult | AgentNativeHtmlExportResult>;
+    release: (token: string) => Promise<unknown>;
+    title?: string;
+  }) => Promise<void>;
+  startNativeHtmlExport: (params: {
+    serverId: string;
+    agentId: string;
+    daemonProfile: HostProfile | undefined;
+    activeConnectionId?: string | null;
+    generate: (signal: AbortSignal) => Promise<AgentNativeHtmlExportResult>;
     release: (token: string) => Promise<unknown>;
   }) => Promise<void>;
   startDownload: (params: {
@@ -83,6 +97,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     activeConnectionId,
     generate,
     release,
+    title,
   }) => {
     const id = generateDownloadId();
     const controller = new AbortController();
@@ -92,14 +107,14 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         id,
         serverId,
         scopeId: agentId,
-        fileName: i18n.t("timelineExport.title"),
+        fileName: title ?? i18n.t("timelineExport.title"),
         status: "downloading",
         startedAt: Date.now(),
         cancel: () => controller.abort(),
       }),
       activeDownloadId: id,
     }));
-    let artifact: AgentTimelineExportResult | undefined;
+    let artifact: AgentTimelineExportResult | AgentNativeHtmlExportResult | undefined;
     let transferred = false;
     let releasing: Promise<unknown> | undefined;
     const releaseArtifact = () => {
@@ -109,7 +124,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     signal.addEventListener("abort", releaseArtifact, { once: true });
     try {
       // Exactly one generation per explicit click, including failures and expired tokens.
-      artifact = await generate();
+      artifact = await generate(signal);
       signal.throwIfAborted();
       set((state) => {
         const download = state.downloads.get(id);
@@ -164,6 +179,8 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       await releasing;
     }
   },
+  startNativeHtmlExport: (params) =>
+    get().startTimelineExport({ ...params, title: i18n.t("nativeHtmlExport.title") }),
   startDownload: async ({
     serverId,
     scopeId,
@@ -471,7 +488,7 @@ type TimelineDownloadOutcome = "complete" | "browser_handoff";
 
 async function downloadTimelineArtifact(input: {
   id: string;
-  artifact: AgentTimelineExportResult;
+  artifact: AgentTimelineExportResult | AgentNativeHtmlExportResult;
   daemonProfile: HostProfile | undefined;
   activeConnectionId?: string | null;
   signal: AbortSignal;

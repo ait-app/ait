@@ -23,6 +23,12 @@ impl Peer {
                 self.protocol = 2;
             }
             "get_state" => self.get_state(command),
+            "export_html" => {
+                let path = command["outputPath"].as_str().expect("export path");
+                fs::write(path, "<html><body>native fixture</body></html>")
+                    .expect("write native export");
+                self.response(command, json!({"path": path}));
+            }
             "fixture_new_context" => self.new_context(command),
             "get_available_models" => {
                 self.response(command, json!({"models": self.available}));

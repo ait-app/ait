@@ -1,5 +1,11 @@
 # Ait changelog
 
+## Unreleased
+
+- An active Oh My Pi session can export its native HTML from the Agent's context details. The
+  download preserves OMP's original content and warns that the file can contain scripts and a
+  remote viewer with access to the session history. The existing Ait Timeline export remains available.
+
 ## 0.2.24 - 2026-11-22
 
 - The MCP tool catalog was reorganized, and every tool is now named `<domain>[_<object>]_<verb>`, such as `agent_create`, `schedule_pause`, `bot_ticket_list` and `ticket_report`. The previous names still work: `tools/list` shows only the new ones, but `tools/call` resolves a retired name to its tool, rewrites the argument names that tool used before and grants nothing its tool does not; every retired name is counted and logged on its first call and on each doubling, and none of them is removed before 2026-12-22. Argument names were aligned as well, with `agent_update.title`, `scheduleId` on the schedule tools, `heartbeatId` on `heartbeat_delete` and `schedule_update.modeId`, the new `heartbeat_list` returns the calling agent's heartbeats, and `kill_agent` now returns the archive result ([#814](https://github.com/ait-app/ait/pull/814)).
