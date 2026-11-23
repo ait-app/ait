@@ -923,29 +923,12 @@ async fn permission_from_connection(
 }
 
 fn permission_worker(fixture: &Fixture) -> AgentExecution {
-    use std::os::unix::fs::PermissionsExt;
-
-    let program = fixture.root.path().join("omp");
-    let peer = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/local/omp/tests/fixtures/omp.py");
-    // Scope every native probe and session to this fixture, without process-global environment.
-    std::fs::write(
-        &program,
-        format!(
-            "#!/bin/sh\nexport PI_CODING_AGENT_DIR='{}'\nexec '{}' \"$@\"\n",
-            fixture.root.path().join("omp-agent").display(),
-            peer.display()
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let root = fixture.root.path().join("omp-agent");
+    std::fs::create_dir_all(&root).unwrap();
     worker_with_client(
         fixture,
         model::creation::Creations::default(),
-        Box::new(
-            crate::local::omp::OmpClient::new(program)
-                .with_image_directory(fixture.root.path().join("images")),
-        ),
+        Box::new(secret_fixture::Client::new(root, false)),
     )
     .0
 }
@@ -957,7 +940,7 @@ async fn secret_permission_context_survives_dispatch_and_serialized_resolution()
     let created = execution
         .execute(
             "agent.create.request",
-            json!({"config":{"provider":"omp","cwd":fixture.cwd,"title":"Permission test"}}),
+            json!({"config":{"provider":"fixture-secret","cwd":fixture.cwd,"title":"Permission test"}}),
         )
         .await
         .unwrap();

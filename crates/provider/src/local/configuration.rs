@@ -353,7 +353,9 @@ fn merge(target: &mut Value, source: &Value) {
 #[cfg(test)]
 mod tests;
 
-pub(super) fn executable(program: &std::path::Path) -> bool {
+/// Whether `program` names a runnable file, directly or through PATH lookup.
+#[must_use]
+pub fn executable(program: &std::path::Path) -> bool {
     let runnable = |path: &std::path::Path| {
         let Ok(metadata) = path.metadata() else {
             return false;

@@ -10,6 +10,8 @@
 
 **Spec:** None exists. The Design section below is the specification; Task 1 records it as an ADR.
 
+**Status (2026-11-11):** [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md) extracted `provider-omp` ahead of this plan, and the daemon appends OMP with `Providers::with`. [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) then removed the OMP ACP bridge: `provider::omp_acp`, the `daemon omp-acp` subcommand and any standalone `omp-acp` binary no longer exist, so there is no ACP entry point for `provider-builtin` to own. The `test-support` feature exists, and adapter tests reach runtime operations through the `provider::testing` wrappers instead of widened `cfg` gates. Where the tasks below create `provider-omp`, treat that work as done; where they move or export `omp_acp`/`serve_acp`, drop that step.
+
 ## Design
 
 Target graph. Solid arrows are normal dependencies, dotted arrows are dev-only.

@@ -96,6 +96,7 @@ async fn composed_host_publishes_current_attention_and_three_directories_over_se
         address,
         &instance,
         Uuid::new_v4().to_string().into(),
+        None,
     )
     .unwrap();
     // Exercise real publication and wire transport without the autonomous owner's fixed center.

@@ -117,7 +117,8 @@ test("desktop releases no longer invoke the retired Android APK workflow", async
   assert.equal(release.on.workflow_dispatch.inputs.build_android, undefined);
   assert.equal(release.jobs.android, undefined);
   assert(!release.jobs.release.needs.includes("android"));
-  assert.doesNotMatch(JSON.stringify(release), /build-android\.yml|needs\.android/);
+  // The Play jobs (android-play, android-apk) replaced the retired `android` APK job.
+  assert.doesNotMatch(JSON.stringify(release), /build-android\.yml|needs\.android(?![-\w])/);
   // Rerunning desktop releases still retains and checksums existing APK attachments.
   const verify = release.jobs.release.steps.find(
     (step) => step.name === "Verify assets and write checksums",

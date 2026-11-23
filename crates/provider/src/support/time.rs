@@ -10,3 +10,11 @@ use chrono::{SecondsFormat, Utc};
 pub(crate) fn now_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
+
+/// Read the current instant as Unix milliseconds (UTC), the usage ledger's timestamp unit.
+///
+/// # Returns
+/// Milliseconds since the Unix epoch; negative only for a system clock set before 1970.
+pub(crate) fn now_unix_ms() -> i64 {
+    Utc::now().timestamp_millis()
+}

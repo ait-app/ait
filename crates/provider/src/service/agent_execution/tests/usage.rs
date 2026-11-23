@@ -1,5 +1,12 @@
 use super::*;
 
+use crate::ports::usage_ledger::{
+    CallBegin, CallFinish, CallOutcome, CallSource, RequestRecord, RequestUsage, UsageBoundary,
+    UsageLedger,
+};
+use crate::storage::usage_ledger::SqliteUsageLedger;
+use crate::test_support::{request, worker_with_ledger};
+
 #[tokio::test]
 async fn usage_response_slots_stay_bounded_until_delivery_and_reject_mutations() {
     let fixture = Fixture::new();
@@ -161,5 +168,149 @@ async fn missing_provider_binary_is_omitted_from_host_usage_rpc() {
         .await
         .unwrap();
     assert_eq!(response["providers"], json!([]));
+    execution.shutdown().await.unwrap();
+}
+
+/// 2025-11-08T00:00:00Z, when the test ledger starts.
+const LEDGER_SINCE: i64 = 1_762_560_000_000;
+/// One UTC day in milliseconds.
+const DAY_MS: i64 = 86_400_000;
+
+/// Ledger under `fixture` with one completed Codex user call an hour after it started.
+fn recorded_ledger(fixture: &Fixture) -> Arc<SqliteUsageLedger> {
+    let ledger = Arc::new(
+        SqliteUsageLedger::open_with_clock(&fixture.root.path().join("data"), || LEDGER_SINCE)
+            .unwrap(),
+    );
+    let started_at = LEDGER_SINCE + 3_600_000;
+    ledger.begin_call(CallBegin {
+        call_id: "call-1".into(),
+        agent_id: "agent-1".into(),
+        provider: "codex".into(),
+        model: Some("gpt-5".into()),
+        source: CallSource::User,
+        workspace_id: None,
+        started_at,
+    });
+    ledger.record_request(RequestRecord {
+        call_id: "call-1".into(),
+        agent_id: "agent-1".into(),
+        recorded_at: started_at + 1_000,
+        usage: RequestUsage {
+            segment_id: "codex:turn-1:1".into(),
+            parent: None,
+            model: None,
+            boundary: UsageBoundary::Request,
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_tokens: 30,
+            cache_write_tokens: 40,
+            cache_write_1h_tokens: None,
+            reasoning_tokens: None,
+            cost_usd_reported: Some(0.25),
+            complete: true,
+        },
+    });
+    ledger.finish_call(CallFinish {
+        call_id: "call-1".into(),
+        outcome: CallOutcome::Completed,
+        ended_at: started_at + 2_000,
+        token_usage_available: true,
+    });
+    ledger
+}
+
+#[tokio::test]
+async fn ledger_summaries_group_rows_and_omit_dimensions_that_were_not_queried() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker_with_ledger(
+        &fixture,
+        model::creation::Creations::default(),
+        Box::new(fixture.client()),
+        recorded_ledger(&fixture),
+    );
+    let totals = json!({
+        "calls":1,"failedCalls":0,"requests":1,"inputTokens":10,"outputTokens":20,
+        "cacheReadTokens":30,"cacheWriteTokens":40,"reportedCostUsd":0.25,
+        "costReportedRequests":1,"lowerBoundCalls":0,"missingCalls":0
+    });
+    for (group_by, key) in [
+        (
+            json!(["provider", "source"]),
+            json!({"provider":"codex","source":"user"}),
+        ),
+        (
+            json!(["day", "outcome", "model"]),
+            json!({"day":"2025-11-08","outcome":"completed","model":"gpt-5"}),
+        ),
+    ] {
+        let mut row = totals.clone();
+        row["key"] = key;
+        assert_eq!(
+            request(
+                &execution,
+                "provider.usage.ledger.request",
+                json!({"from":LEDGER_SINCE,"to":LEDGER_SINCE + DAY_MS,"groupBy":group_by}),
+            )
+            .await,
+            json!({"rows":[row],"since":LEDGER_SINCE})
+        );
+    }
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn ledger_queries_need_a_bounded_range_and_distinct_known_groups() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker_with_ledger(
+        &fixture,
+        model::creation::Creations::default(),
+        Box::new(fixture.client()),
+        recorded_ledger(&fixture),
+    );
+    let longest = request(
+        &execution,
+        "provider.usage.ledger.request",
+        json!({"from":0,"to":400 * DAY_MS,"groupBy":["provider"]}),
+    )
+    .await;
+    assert_eq!(longest["since"], LEDGER_SINCE);
+    for params in [
+        json!({"from":5,"to":5,"groupBy":["provider"]}),
+        json!({"from":6,"to":5,"groupBy":["provider"]}),
+        json!({"from":0,"to":400 * DAY_MS + 1,"groupBy":["provider"]}),
+        json!({"from":i64::MIN,"to":i64::MAX,"groupBy":["provider"]}),
+        json!({"from":0,"to":DAY_MS,"groupBy":[]}),
+        json!({"from":0,"to":DAY_MS,"groupBy":["provider","model","provider"]}),
+        json!({"from":0,"to":DAY_MS,"groupBy":["workspace"]}),
+        json!({"from":0,"to":DAY_MS}),
+        json!({"from":"0","to":DAY_MS,"groupBy":["day"]}),
+        json!({"from":0.5,"to":DAY_MS,"groupBy":["day"]}),
+        json!({"from":0,"to":DAY_MS,"groupBy":["day"],"unknown":true}),
+    ] {
+        assert_eq!(
+            execution
+                .execute("provider.usage.ledger.request", params.clone())
+                .await,
+            Err(ErrorCode::InvalidMessage),
+            "{params}"
+        );
+    }
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn ledger_summaries_are_unsupported_on_a_host_without_a_ledger() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    assert_eq!(
+        execution
+            .execute(
+                "provider.usage.ledger.request",
+                json!({"from":0,"to":DAY_MS,"groupBy":["provider"]}),
+            )
+            .await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
     execution.shutdown().await.unwrap();
 }

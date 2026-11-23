@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -17,7 +18,9 @@ const schedulePluralForms = {
 };
 
 export const ptBR: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Executar comando",
     loadFailed: "Não foi possível carregar as tarefas",
     title: "Visão das tarefas",
@@ -2363,6 +2366,31 @@ export const ptBR: TranslationResources = {
     clientUnavailable: "A conexão com o host não está pronta",
     retry: "Tentar novamente",
     tooltipLoading: "Carregando o uso do plano…",
+    history: {
+      tab: "Histórico",
+      byProvider: "Por provedor",
+      byModel: "Por modelo",
+      byDay: "Por dia",
+      unknownModel: "Modelo desconhecido",
+      calls: "Chamadas {{value}}",
+      failedCalls: "Falhas {{value}}",
+      requests: "Requisições {{value}}",
+      tokens: "Tokens {{value}}",
+      input: "Entrada {{value}}",
+      output: "Saída {{value}}",
+      cacheRead: "Leitura de cache {{value}}",
+      cacheWrite: "Gravação de cache {{value}}",
+      cacheHitRate: "Acertos de cache {{value}}",
+      reportedCost: "Custo informado pelo provedor {{value}}",
+      lowerBound:
+        "≥ indica um mínimo: algumas chamadas informaram só parte do uso de tokens, ou nada.",
+      recordedSince: "O histórico de uso começa em {{date}}. Nada anterior foi registrado.",
+      empty: "Nenhuma chamada neste período",
+      unreachable: "Não contabilizados, sem conexão: {{hosts}}",
+      failed: "Não foi possível carregar o histórico de uso de {{host}}: {{reason}}",
+      notRecorded: "O histórico de uso não é registrado em {{hosts}}",
+      hostTotals: "Histórico de uso, últimos 30 dias",
+    },
   },
   pairing: {
     connectionMethods: {

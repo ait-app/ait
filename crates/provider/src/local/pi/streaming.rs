@@ -7,6 +7,7 @@ use regex::Regex;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use crate::local::usage::requests;
 use crate::local::{compaction::Compactions, diagnostics::classify};
 use crate::ports::{
     agent_session::{AgentSessionError, AgentTurnEvent},
@@ -16,6 +17,9 @@ use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
 // Storage caps serialized NativeItem at 768 KiB. Sixfold JSON escaping of 96 KiB
 // leaves 192 KiB for metadata, matching OpenCode's conservative text allowance.
+/// Display slots that ledger segments leave free so they never cause a `display_limit` failure.
+const REQUEST_HEADROOM: usize = 8;
+
 const MAX_TEXT: usize = 96 * 1024;
 const MAX_NOTICE_BYTES: usize = 96 * 1024;
 const MAX_NOTICE_TYPE_BYTES: usize = 128;
@@ -756,8 +760,27 @@ impl Stream {
                 return Err(AgentSessionError::Failed);
             }
             self.push(AgentTurnEvent::Usage(snapshot))?;
+            self.push_request(message);
         }
         Ok(())
+    }
+
+    /// Queue the ledger segment of an assistant message ahead of the turn's terminal event.
+    ///
+    /// The ledger never fails a turn: a segment is queued only while `REQUEST_HEADROOM` display
+    /// slots stay free for required output, otherwise it is dropped with a warning.
+    fn push_request(&mut self, message: &Value) {
+        let index = self.message.to_string();
+        let identity = requests::response_id(message).unwrap_or(&index);
+        let Some(request) = requests::pi_request("pi", &self.turn, identity, message) else {
+            return;
+        };
+        self.discard_notices_at_capacity(2 + REQUEST_HEADROOM);
+        if self.events.len() + self.tools.len() + 2 + REQUEST_HEADROOM >= self.event_limit() {
+            tracing::warn!(provider = "pi", turn = %self.turn, "dropped request usage: display queue full");
+            return;
+        }
+        self.events.push_back(AgentTurnEvent::RequestUsage(request));
     }
 
     fn tool(&mut self, event: &Value) -> Result<(), AgentSessionError> {

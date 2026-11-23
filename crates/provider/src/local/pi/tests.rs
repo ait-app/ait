@@ -102,6 +102,7 @@ async fn streams_tools_usage_and_resumes_same_native_identity() {
     spec.config.model = Some("fixture/model".into());
     client.validate_selection(&spec).await.unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
+    assert!(session.reports_token_usage());
     let arguments: Vec<String> = serde_json::from_str(
         &std::fs::read_to_string(directory.path().join("arguments.json")).unwrap(),
     )
@@ -127,6 +128,31 @@ async fn streams_tools_usage_and_resumes_same_native_identity() {
     assert!(events.iter().any(
         |event| matches!(event, AgentTurnEvent::Usage(usage) if usage.input_tokens == Some(12))
     ));
+    let requests: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter_map(|(position, event)| match event {
+            AgentTurnEvent::RequestUsage(request) => Some((position, request)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(requests.len(), 1);
+    let (position, request) = requests[0];
+    assert!(position < events.len() - 1);
+    assert!(request.segment_id.starts_with("pi:") && request.segment_id.ends_with(":1"));
+    assert_eq!(
+        request.boundary,
+        crate::ports::usage_ledger::UsageBoundary::Request
+    );
+    assert_eq!(
+        (
+            request.input_tokens,
+            request.output_tokens,
+            request.cache_read_tokens
+        ),
+        (12, 3, 2)
+    );
+    assert_eq!(request.cost_usd_reported, Some(0.0));
     assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::Progress{ entry,.. } if entry.item["text"] == "Hello")));
     assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::Timeline(entry) if entry.item["type"] == "tool_call" && entry.item["status"] == "completed")));
     let handle = session.persistence().unwrap();

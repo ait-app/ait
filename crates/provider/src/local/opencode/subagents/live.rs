@@ -115,6 +115,25 @@ impl Live {
         }
     }
 
+    /// Adopt durably verified terminal outcomes so a later process stop cannot replace them.
+    pub(in crate::local::opencode) fn settle(&mut self, settled: &[NativeSubagent]) {
+        for reconciled in settled {
+            let status = &reconciled.descriptor["status"];
+            if status == "running" {
+                continue;
+            }
+            if let Some(child) = self.children.get_mut(&reconciled.id)
+                && child.observed
+                && child.descriptor.descriptor["status"] == "running"
+            {
+                child.descriptor.descriptor["status"] = status.clone();
+                child.descriptor.descriptor["updatedAt"] =
+                    reconciled.descriptor["updatedAt"].clone();
+                child.terminal = true;
+            }
+        }
+    }
+
     /// Whether a child observed on this connection may still publish updates.
     pub(in crate::local::opencode) fn running(&self) -> bool {
         self.children

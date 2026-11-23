@@ -6862,6 +6862,66 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
   });
 });
 
+test("sends provider.usage.ledger.request and resolves provider.usage.ledger.response", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const ledgerPromise = client.listUsageLedger({
+    requestId: "ledger-1",
+    from: 1_762_560_000_000,
+    to: 1_762_646_400_000,
+    groupBy: ["provider", "day"],
+  });
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "provider.usage.ledger.request",
+      requestId: "ledger-1",
+      from: 1_762_560_000_000,
+      to: 1_762_646_400_000,
+      groupBy: ["provider", "day"],
+    },
+  });
+
+  const payload = {
+    requestId: "ledger-1",
+    rows: [
+      {
+        key: { provider: "codex", day: "2025-11-08" },
+        calls: 3,
+        failedCalls: 1,
+        requests: 5,
+        inputTokens: 100,
+        outputTokens: 200,
+        cacheReadTokens: 300,
+        cacheWriteTokens: 40,
+        reportedCostUsd: 0,
+        costReportedRequests: 0,
+        lowerBoundCalls: 1,
+        missingCalls: 0,
+      },
+    ],
+    since: 1_762_000_000_000,
+  };
+  mock.triggerMessage(wrapSessionMessage({ type: "provider.usage.ledger.response", payload }));
+
+  await expect(ledgerPromise).resolves.toEqual(payload);
+});
+
 test("sends agent.items.close.request and resolves agent.items.close.response", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -7431,4 +7491,54 @@ test.each(["retry", "close", "reject"])(
 vi.mock("./protocol/connection.js", async () => {
   const { createProtocolStub } = await import("./test-support/protocol-stub.js");
   return { createDaemonConnection: createProtocolStub };
+});
+
+test("host resource statistics gate old hosts and correlate a typed snapshot", async () => {
+  for (const supported of [false, true]) {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "host-stats",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { hostStats: supported } });
+    await connected;
+    if (!supported) {
+      await expect(client.getHostStats()).rejects.toThrow("Update the host");
+      expect(mock.sent).toEqual([]);
+      continue;
+    }
+    const pending = client.getHostStats(true);
+    const request = parseSentFrame(mock.sent[0]);
+    expect(request).toMatchObject({ type: "daemon.host_stats.request", includeHistory: true });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "daemon.host_stats.response",
+        payload: {
+          requestId: request.requestId,
+          platform: "linux",
+          cpuCount: 4,
+          uptimeSeconds: 100,
+          current: {
+            at: 123,
+            cpuPercent: null,
+            memoryUsedBytes: 1,
+            memoryTotalBytes: 2,
+            rxBytesPerSecond: null,
+            txBytesPerSecond: 0,
+          },
+          history: [],
+          disks: [],
+        },
+      }),
+    );
+    await expect(pending).resolves.toMatchObject({
+      platform: "linux",
+      current: { cpuPercent: null, txBytesPerSecond: 0 },
+    });
+  }
 });

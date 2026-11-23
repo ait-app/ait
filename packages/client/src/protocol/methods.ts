@@ -70,6 +70,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.get.response",
   },
+  "daemon.host_stats.request": {
+    method: "daemon.host_stats.request",
+    kind: "request",
+    channel: 3,
+    response: "daemon.host_stats.response",
+  },
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
     kind: "request",
@@ -598,6 +604,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.usage.list.response",
   },
+  "provider.usage.ledger.request": {
+    method: "provider.usage.ledger.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.usage.ledger.response",
+  },
   "provider.sessions.recent.list.request": {
     method: "provider.sessions.recent.list.request",
     kind: "request",
@@ -607,31 +619,31 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
   "agent.skills.get_status.request": {
     method: "agent.skills.get_status.request",
     kind: "request",
-    channel: 0,
+    channel: 2,
     response: "agent.skills.get_status.response",
   },
   "agent.skills.reconcile.request": {
     method: "agent.skills.reconcile.request",
     kind: "request",
-    channel: 0,
+    channel: 2,
     response: "agent.skills.reconcile.response",
   },
   "agent.skills.uninstall.request": {
     method: "agent.skills.uninstall.request",
     kind: "request",
-    channel: 0,
+    channel: 2,
     response: "agent.skills.uninstall.response",
   },
   "agent.skills.save_selection.request": {
     method: "agent.skills.save_selection.request",
     kind: "request",
-    channel: 0,
+    channel: 2,
     response: "agent.skills.save_selection.response",
   },
   "agent.skills.import_legacy_selection.request": {
     method: "agent.skills.import_legacy_selection.request",
     kind: "request",
-    channel: 0,
+    channel: 2,
     response: "agent.skills.import_legacy_selection.response",
   },
   "checkout.status.get.request": {

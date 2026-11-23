@@ -30,7 +30,7 @@ jobs:
   # Formatting and doc links span the whole repository, so they run on every change.
   # Neither needs npm ci: the docs check uses Node built-ins and the formatter is pinned.
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -88,7 +88,7 @@ jobs:
   ui:
     needs: changes
     if: needs.changes.outputs.ui == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -112,7 +112,7 @@ jobs:
   web-client:
     needs: changes
     if: needs.changes.outputs.web_client == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -129,7 +129,7 @@ jobs:
   web-client-e2e:
     needs: changes
     if: needs.changes.outputs.web_client == 'true' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5

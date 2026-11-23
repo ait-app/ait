@@ -80,6 +80,7 @@ pub(crate) enum Operation {
     ChildTimeline,
     Diagnostic,
     Usage,
+    UsageLedger,
     Available,
     Models,
     Modes,
@@ -141,6 +142,7 @@ impl Operation {
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
             "provider.usage.list.request" => Ok(Self::Usage),
+            "provider.usage.ledger.request" => Ok(Self::UsageLedger),
             "provider.available.list.request" => Ok(Self::Available),
             "provider.models.list.request" => Ok(Self::Models),
             "provider.modes.list.request" => Ok(Self::Modes),
@@ -199,6 +201,7 @@ impl Operation {
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
             Self::Usage => "provider.usage.list.request",
+            Self::UsageLedger => "provider.usage.ledger.request",
             Self::Available => "provider.available.list.request",
             Self::Models => "provider.models.list.request",
             Self::Modes => "provider.modes.list.request",
@@ -263,6 +266,7 @@ impl Operation {
             | Self::Get
             | Self::List
             | Self::History
+            | Self::UsageLedger
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
             Self::RecentSessions | Self::Commands | Self::Diagnostic | Self::Usage => {
@@ -329,6 +333,7 @@ impl Operation {
             | Self::RecentSessions
             | Self::Import
             | Self::Diagnostic
+            | Self::UsageLedger
             | Self::Available
             | Self::Models
             | Self::Modes

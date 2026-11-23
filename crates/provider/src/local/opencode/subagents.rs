@@ -1,4 +1,5 @@
 //! ACP child ownership and projections. Native task results are the durable relationship proof.
+pub(super) mod durable;
 pub(super) mod history;
 pub(super) mod live;
 

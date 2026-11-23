@@ -229,12 +229,14 @@ impl Creations {
             .ok_or(ErrorCode::ResourceExhausted)?;
         phase.clone_into(&mut receipt.snapshot.phase);
         receipt.snapshot.error = error;
-        if let Some(result) = result {
-            if let Some(agent) = result.get("agent").filter(|value| !value.is_null()) {
+        if let Some(mut result) = result {
+            if let Some(agent) = result.get_mut("agent").filter(|value| !value.is_null()) {
                 if let Some(workspace) = agent["workspaceId"].as_str() {
                     receipt.snapshot.workspace_id = Some(workspace.to_owned());
                 }
-                receipt.snapshot.agent = Some(agent.clone());
+                let mut agent = agent.take();
+                clear_pending_permissions(&mut agent);
+                receipt.snapshot.agent = Some(agent);
             }
             if let Some(workspace) = result.get("workspace").filter(|value| !value.is_null()) {
                 receipt.snapshot.workspace = Some(workspace.clone());
@@ -307,10 +309,18 @@ impl Creations {
     }
 
     fn read(&self, state: &State, id: &str) -> Result<Option<Receipt>, ErrorCode> {
-        match &self.store {
-            Some(store) => store.get(id),
-            None => Ok(state.memory.get(id).cloned()),
+        let mut receipt = match &self.store {
+            Some(store) => store.get(id)?,
+            None => state.memory.get(id).cloned(),
+        };
+        // Old receipts may contain dialogs; never replay those contents to clients.
+        if let Some(agent) = receipt
+            .as_mut()
+            .and_then(|receipt| receipt.snapshot.agent.as_mut())
+        {
+            clear_pending_permissions(agent);
         }
+        Ok(receipt)
     }
 
     fn write(&self, state: &mut State, receipt: Receipt) -> Result<(), ErrorCode> {
@@ -328,6 +338,13 @@ impl Creations {
             Kind::Workspace => "workspace.create.update",
         };
         self.events.publish(id, method, &json!(snapshot));
+    }
+}
+
+fn clear_pending_permissions(agent: &mut Value) {
+    // Creation receipts are durable metadata, not the live permission channel.
+    if let Some(pending) = agent.get_mut("pendingPermissions") {
+        *pending = Value::Array(Vec::new());
     }
 }
 

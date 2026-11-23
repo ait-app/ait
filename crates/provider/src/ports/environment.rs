@@ -10,7 +10,7 @@ use super::agent_session::AgentSessionError;
 /// Bounded environment overrides whose values are redacted from debug output.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(try_from = "BTreeMap<String, String>")]
-pub(crate) struct AgentEnvironment(BTreeMap<String, SecretString>);
+pub struct AgentEnvironment(BTreeMap<String, SecretString>);
 
 impl TryFrom<BTreeMap<String, String>> for AgentEnvironment {
     type Error = AgentSessionError;
@@ -51,7 +51,8 @@ impl AgentEnvironment {
     /// Resolve `name` as the native process will see it: overrides first, then the daemon's.
     ///
     /// Callers must not log the returned value.
-    pub(crate) fn variable(&self, name: &str) -> Option<String> {
+    #[must_use]
+    pub fn variable(&self, name: &str) -> Option<String> {
         self.0.get(name).map_or_else(
             || std::env::var(name).ok(),
             |value| Some(value.expose_secret().to_owned()),
@@ -59,7 +60,7 @@ impl AgentEnvironment {
     }
 
     /// Expose values only at native integration boundaries; callers must not log them.
-    pub(crate) fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0
             .iter()
             .map(|(key, value)| (key.as_str(), value.expose_secret()))

@@ -4,22 +4,22 @@ use serde_json::Value;
 
 /// A discovered native descendant and its verified immediate-parent link.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct NativeSubagent {
+pub struct NativeSubagent {
     /// Optional provider locator for children whose native transcript is not a root session.
-    pub(crate) persistence: Option<domain::agent_runtime::AgentPersistenceHandle>,
+    pub persistence: Option<domain::agent_runtime::AgentPersistenceHandle>,
     /// Native child identity.
-    pub(crate) id: String,
+    pub id: String,
     /// Native immediate parent, used to enforce root ancestry.
-    pub(crate) parent_id: String,
+    pub parent_id: String,
     /// Native directory, used only after the parent relationship is validated.
-    pub(crate) cwd: String,
+    pub cwd: String,
     /// Paseo descriptor fields except the host parentAgentId and parentSubagentId.
-    pub(crate) descriptor: Value,
+    pub descriptor: Value,
 }
 
 /// Provider-owned child updates, isolated from the root timeline and foreground turn.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum SubagentEvent {
+pub enum SubagentEvent {
     /// Complete descriptor with a verified immediate-parent link.
     Upsert(NativeSubagent),
     /// A retry-stable incremental observation in the child's own timeline.

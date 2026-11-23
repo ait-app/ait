@@ -24,6 +24,7 @@ use metadata as _;
 use model as _;
 use persistence as _;
 use provider as _;
+use provider_omp as _;
 use reqwest as _;
 use ring as _;
 #[cfg(unix)]
@@ -44,6 +45,37 @@ use tracing_subscriber as _;
 use uuid as _;
 use voice as _;
 
+/// Test-only edges that must not reach production: runtime test entry points and adapter-test
+/// dependencies.
+fn test_only_violations(name: &str, package: &Value) -> Vec<String> {
+    let mut violations = Vec::new();
+    let forwarded = package["features"]
+        .as_object()
+        .into_iter()
+        .flat_map(|features| features.values())
+        .flat_map(|members| members.as_array().into_iter().flatten())
+        .filter_map(Value::as_str);
+    for member in forwarded.filter(|member| member.ends_with("/test-support")) {
+        violations.push(format!("{name} forwards {member}"));
+    }
+    for dependency in package["dependencies"].as_array().into_iter().flatten() {
+        if dependency["kind"].as_str() == Some("dev") {
+            continue;
+        }
+        let target = dependency["name"].as_str().unwrap();
+        if dependency["features"]
+            .as_array()
+            .is_some_and(|features| features.iter().any(|feature| feature == "test-support"))
+        {
+            violations.push(format!("{name} -> {target} test-support outside tests"));
+        }
+        if name == "provider-omp" && target == "model" {
+            violations.push(format!("{name} -> model outside tests"));
+        }
+    }
+    violations
+}
+
 fn violations(packages: &[Value]) -> Vec<String> {
     let workspace_names: BTreeSet<_> = packages
         .iter()
@@ -52,8 +84,8 @@ fn violations(packages: &[Value]) -> Vec<String> {
     let mut violations = Vec::new();
     for package in packages {
         let name = package["name"].as_str().unwrap();
+        violations.extend(test_only_violations(name, package));
         let allowed: &[&str] = match name {
-            "ait-omp-acp" => &["model", "provider"],
             "daemon" => &[
                 "bot",
                 "persistence",
@@ -65,6 +97,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "metadata",
                 "filesystem",
                 "provider",
+                "provider-omp",
                 "api",
                 "terminal",
                 "domain",
@@ -84,6 +117,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "metadata",
                 "filesystem",
             ],
+            "provider-omp" => &["provider", "domain", "model", "persistence"],
             "persistence" => &["model", "domain"],
             "bot" => &["domain", "model", "provider", "persistence"],
             "provider" | "metadata" | "schedule" | "filesystem" => {
@@ -174,21 +208,60 @@ fn guard_catches_indirect_renamed_optional_target_and_development_edges() {
 }
 
 #[test]
-fn omp_acp_cli_depends_only_on_its_provider_and_build_identity() {
-    for dependency in ["model", "provider"] {
+fn runtime_test_entry_points_stay_out_of_production_builds() {
+    let dependency = json!({"name":"provider", "path":"../provider", "features":["test-support"]});
+    for (kind, expected) in [
+        (
+            Value::Null,
+            vec!["provider-omp -> provider test-support outside tests"],
+        ),
+        (
+            json!("build"),
+            vec!["provider-omp -> provider test-support outside tests"],
+        ),
+        (json!("dev"), vec![]),
+    ] {
+        let mut dependency = dependency.clone();
+        dependency["kind"] = kind;
         let packages = [
-            json!({"name":"ait-omp-acp", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+            json!({"id":"provider-omp", "name":"provider-omp", "dependencies":[dependency]}),
+            json!({"id":"provider", "name":"provider", "dependencies":[]}),
         ];
-        assert!(violations(&packages).is_empty());
+        assert_eq!(violations(&packages), expected);
     }
-    for dependency in ["daemon", "api", "persistence", "domain"] {
+}
+
+#[test]
+fn runtime_test_entry_points_cannot_be_forwarded_through_features() {
+    for feature in ["provider/test-support", "provider?/test-support"] {
         let packages = [
-            json!({"name":"ait-omp-acp", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+            json!({"id":"bot", "name":"bot", "features":{"default":[feature]}, "dependencies":[]}),
         ];
-        assert_eq!(
-            violations(&packages),
-            [format!("ait-omp-acp -> {dependency}")]
-        );
+        assert_eq!(violations(&packages), [format!("bot forwards {feature}")]);
+    }
+}
+
+#[test]
+fn omp_adapter_uses_model_only_in_tests() {
+    for (kind, expected) in [
+        (Value::Null, vec!["provider-omp -> model outside tests"]),
+        (json!("dev"), vec![]),
+    ] {
+        let packages = [
+            json!({"id":"provider-omp", "name":"provider-omp", "dependencies":[{"name":"model", "path":"../model", "kind":kind}]}),
+            json!({"id":"model", "name":"model", "dependencies":[]}),
+        ];
+        assert_eq!(violations(&packages), expected);
+    }
+}
+
+#[test]
+fn provider_runtime_cannot_depend_on_its_omp_adapter_or_the_daemon() {
+    for (name, dependency) in [("provider", "provider-omp"), ("provider-omp", "daemon")] {
+        let packages = [
+            json!({"id":name, "name":name, "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+        ];
+        assert_eq!(violations(&packages), [format!("{name} -> {dependency}")]);
     }
 }
 

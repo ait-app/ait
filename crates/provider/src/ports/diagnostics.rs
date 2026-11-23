@@ -2,7 +2,7 @@
 
 /// Stable failure classes; native strings and credentials never cross this boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Category {
+pub enum Category {
     /// Credentials are invalid or authentication has expired.
     Authentication,
     /// The native service denied the requested access.
@@ -35,7 +35,8 @@ pub(crate) enum Category {
 
 impl Category {
     /// Return the fixed user-facing explanation for this class.
-    pub(crate) const fn message(self) -> &'static str {
+    #[must_use]
+    pub const fn message(self) -> &'static str {
         match self {
             Self::Authentication => {
                 "Provider authentication failed. Sign in again before retrying."
@@ -87,9 +88,9 @@ impl Category {
 
 /// Bounded diagnostic facts. Text is generated from a class, never copied from native payloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Diagnostic {
+pub struct Diagnostic {
     /// Common classification used for logs and user-facing text.
-    pub(crate) category: Category,
+    pub category: Category,
     /// Adapter-owned fixed source label, never native input.
     pub(crate) source: &'static str,
     /// Numeric native RPC error code, when supplied.
@@ -102,7 +103,8 @@ pub(crate) struct Diagnostic {
 
 impl Diagnostic {
     /// Construct a diagnostic without assuming native codes or retry behavior.
-    pub(crate) const fn new(category: Category, source: &'static str) -> Self {
+    #[must_use]
+    pub const fn new(category: Category, source: &'static str) -> Self {
         Self {
             category,
             source,

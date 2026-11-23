@@ -169,3 +169,79 @@ async fn failed_dsh_startup_returns_agent_io_and_keeps_runtime_ready() {
     assert_eq!(peer.state.runtime.jobs.available_permits(), 3);
     execution.shutdown().await.unwrap();
 }
+
+fn startup_secret_worker(fixture: &Fixture) -> AgentExecution {
+    let root = fixture.root.path().join("secret-agent");
+    std::fs::create_dir_all(&root).unwrap();
+    worker_with_client(
+        fixture,
+        model::creation::Creations::default(),
+        Box::new(secret_fixture::Client::new(root, true)),
+    )
+    .0
+}
+
+#[tokio::test]
+async fn creation_replies_project_secret_dialogs_without_persisting_them_in_progress() {
+    let fixture = Fixture::new();
+    let execution = startup_secret_worker(&fixture);
+    for capable in [false, true] {
+        let mut peer = Peer::new(&execution);
+        Connection::create(
+            Context {
+                request: Request {
+                    id: "create-secret".to_owned(),
+                    method: "agent.create.request".to_owned(),
+                    params: json!({
+                        "config":{"provider":"fixture-secret","cwd":fixture.cwd},
+                        "idempotencyKey":format!("secret-{capable}"),"subscribe":true
+                    }),
+                },
+                runtime: &peer.state.runtime,
+                outbound: &peer.outbound,
+                available_subscriptions: 1,
+                secret_questions: capable,
+            },
+            &peer.state,
+        )
+        .await
+        .unwrap();
+        let mut progress = Vec::new();
+        let reply = loop {
+            let frame = peer.next();
+            if frame["type"] == "event" {
+                progress.push(frame["params"].clone());
+            } else {
+                break frame;
+            }
+        };
+        let result = &reply["result"];
+        let pending = &result["agent"]["pendingPermissions"][0];
+        assert_eq!(pending["kind"], if capable { "question" } else { "tool" });
+        if capable {
+            assert_eq!(pending["input"]["questions"][0]["secret"], true);
+        } else {
+            assert!(pending.get("input").is_none());
+            assert_eq!(
+                pending["actions"],
+                json!([{
+                    "id":"deny","label":"Cancel","behavior":"deny"
+                }])
+            );
+        }
+        assert_eq!(result["creation"]["agent"]["pendingPermissions"], json!([]));
+        for phase in ["agent_ready", "completed"] {
+            let update = progress
+                .iter()
+                .find(|value| value["phase"] == phase)
+                .unwrap();
+            assert_eq!(update["agent"]["pendingPermissions"], json!([]));
+        }
+        let live = execution
+            .execute("agent.get.request", json!({"agentId":result["agentId"]}))
+            .await
+            .unwrap();
+        assert_eq!(live["agent"]["pendingPermissions"][0]["kind"], "question");
+    }
+    execution.shutdown().await.unwrap();
+}

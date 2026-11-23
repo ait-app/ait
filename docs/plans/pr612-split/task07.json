@@ -5,8 +5,8 @@
   "depends_on": ["00", "01"],
   "donor_sections": [12, 20, 22, 31],
   "donor_paths": "Frozen inventory remains in task00 tasks.json id 07 (closed PR647, evidence 7ac9b4ac). This feature integrates the transferred SDK, connection projection, serialized resolution, OMP bootstrap, Hub redaction and mobile form files plus their shared module/caller migrations; the central inventory is not duplicated here.",
-  "implementation": "Existing typed permission forms support secret, editor prefill, empty/verbatim input and deny-dismiss. Provisional OMP startup publishes dialogs before initialization; one writer releases queued input once, failures settle normally and logical receipts remain distinct from native persistence. Explicit SDK/app capability negotiation drives connection-owned event/timeline/get/list/subscription/finish.wait projections. Private non-Serde PermissionContext reaches serialized resolution, rejects incapable secret ALLOW from live pending state, keeps DENY valid and sanitizes RPC success echoes. Durable Hub permission publications are invalidation markers. Secret inputs stay masked and lock during response; option selection resets both visible custom text and its answer. No Bot feature or new authorization system.",
-  "acceptance": "Explicit SDK hello opt-in reaches Context.secret_questions; legacy secret events and GET/list/subscription snapshots are valid DENY-only upgrade cards without answer-bearing fields; capable and nonsecret views are unchanged; live serialized resolution rejects incapable ALLOW and JSON spoofing while retaining DENY; RPC and durable Hub redaction preserve exact native answers; startup failure/draft receipt/concurrent approval regressions and actual browser flows pass; secure/multiline/empty/cancel UI regressions pass.",
+  "implementation": "Existing typed permission forms support secret, editor prefill, empty/verbatim input and deny-dismiss. Provisional OMP startup publishes dialogs before initialization; one writer releases queued input once, failures settle normally and logical receipts remain distinct from native persistence. Explicit SDK/app capability negotiation drives connection-owned event/timeline/create/get/list/subscription/finish.wait projections. Private non-Serde PermissionContext reaches serialized resolution, rejects incapable secret ALLOW from live pending state, keeps DENY valid and sanitizes RPC success echoes. Durable Hub permission publications are invalidation markers. Creation receipts and progress omit pending dialogs for every client; older receipts are sanitized on read without batch rewriting historical disk bytes. Fresh creation replies retain projected live state; idempotent replay callers recover dialogs through live GET/subscriptions. Secret inputs stay masked and lock during response; option selection resets both visible custom text and its answer. No Bot feature or new authorization system. Split-mode skill-management RPCs share a lower-load channel so every socket can offer the optional secret capability within the legacy 64-capability limit; push registration and heartbeat retain their shared connection.",
+  "acceptance": "Explicit SDK hello opt-in reaches Context.secret_questions; legacy secret events and fresh create/GET/list/subscription snapshots are valid DENY-only upgrade cards without answer-bearing fields; capable and nonsecret live views are unchanged; creation progress and durable receipts contain no pending dialogs, including safe reads of older receipts; live serialized resolution rejects incapable ALLOW and JSON spoofing while retaining DENY; RPC and durable Hub redaction preserve exact native answers; startup failure/draft receipt/concurrent approval regressions and actual browser flows pass; secure/multiline/empty/cancel UI regressions pass.",
   "status": "in_review",
   "branch": "feat/pr612-task07-structured-interactions",
   "base": {
@@ -102,6 +102,30 @@
       {
         "command": "npx --no-install oxfmt --check apps/mobile/e2e/browser/omp-structured-interactions.spec.ts apps/mobile/src/components/question-form-card-core.test.ts apps/mobile/src/components/question-form-card.test.tsx apps/mobile/src/components/question-form-card.browser.test.tsx apps/mobile/src/components/question-form-card.tsx apps/mobile/src/runtime/host-runtime.ts packages/protocol/src/client-capabilities.ts packages/client/src/protocol/connection.ts packages/client/src/protocol/connection-single.test.ts packages/client/src/daemon-client.ts packages/client/src/connection/index.ts && npx --no-install oxlint apps/mobile/e2e/browser/omp-structured-interactions.spec.ts apps/mobile/src/components/question-form-card-core.test.ts apps/mobile/src/components/question-form-card.test.tsx apps/mobile/src/components/question-form-card.browser.test.tsx apps/mobile/src/components/question-form-card.tsx apps/mobile/src/runtime/host-runtime.ts packages/protocol/src/client-capabilities.ts packages/client/src/protocol/connection.ts packages/client/src/protocol/connection-single.test.ts packages/client/src/daemon-client.ts packages/client/src/connection/index.ts",
         "result": "PASS: all 11 affected TS/TSX files formatted; zero lint warnings/errors."
+      },
+      {
+        "command": "cargo test --locked -p provider-omp --lib bootstrap::tests; cargo test --locked -p provider-omp --lib interactions::tests; cargo test --locked -p model --lib creation::tests",
+        "result": "PASS after migration to provider-omp: 12 bootstrap tests, 17 interaction tests, and 4 creation receipt tests. One earlier bootstrap run returned Unavailable during setup; repeated parallel reruns passed, cause not determined."
+      },
+      {
+        "command": "cargo test --locked -p provider --lib creation_replies_project_secret_dialogs_without_persisting_them_in_progress; cargo test --locked -p provider --lib secret_permission_context_survives_dispatch_and_serialized_resolution; cargo test --locked -p api --lib http_authentication_origins_and_readiness",
+        "result": "PASS: creation projection and durable receipt redaction, serialized secret permission resolution, and API readiness/capability count."
+      },
+      {
+        "command": "AIT_TEST_OMP_BIN=/home/KirisameLonnet/.local/bin/omp cargo test --locked -p provider-omp --lib installed::interactions -- --ignored --test-threads=1",
+        "result": "PASS: 7 tests against OMP 18.22.2, including structured dialogs, secret/empty input, cancellation, startup question, and approvals. First run exposed two obsolete timeline text paths in test assertions; corrected to detail.text before the passing rerun."
+      },
+      {
+        "command": "cargo clippy --locked -p provider-omp -p provider -p model -p api --all-targets -- -D warnings",
+        "result": "PASS against the merged branch with Rust 1.98.1; includes test targets and dependency-inclusive lint."
+      },
+      {
+        "command": "npm run build --workspace=@ait/client; npm run build --workspace=@ait/highlight; npm run test --workspace=@ait/client -- src/protocol/connection-single.test.ts src/protocol/connection.test.ts; npm run typecheck --workspace=@ait/client",
+        "result": "PASS: 88 client negotiation and routing tests and typecheck. Before the fix, explicit secret opt-in produced 65 split hello capabilities, exceeding the legacy limit of 64."
+      },
+      {
+        "command": "npx --no-install vitest run --project unit src/components/question-form-card-core.test.ts src/components/question-form-card.test.tsx (apps/mobile)",
+        "result": "PASS: 34 component and form-core tests after building local protocol and highlight packages."
       }
     ],
     "historical_results_before_integration": [
@@ -148,7 +172,7 @@
     ]
   },
   "blockers": [
-    "Full-app mobile typecheck and dependency-inclusive strict Clippy have unrelated failures recorded above. Targeted behavioral checks, actual browser scenarios, affected TS lint and scoped production Clippy pass. No full workspace tests or coverage were run.",
-    "Existing Draft 657 reports merge conflicts with its base. No merge or rebase is authorized or attempted."
+    "Full-app mobile typecheck and browser scenarios were not rerun after this conflict resolution; prior results and their limitations remain recorded above. No full Rust workspace tests or coverage were run.",
+    "Draft 657 targets the retained task01 branch; its associated PR 651 is closed and task01 remains skipped by user decision. Conflict resolution and CI must be verified on the updated branch before delivery."
   ]
 }

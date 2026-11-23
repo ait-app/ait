@@ -17,7 +17,17 @@ use crate::ports::agent_session::AgentSessionError;
 pub(crate) mod process;
 
 const BWRAP: &str = "/usr/bin/bwrap";
-const PROTECTED_DIRECTORIES: [&str; 4] = ["hooks", "plugins", "bin", "shims"];
+const PROTECTED_DIRECTORIES: [&str; 9] = [
+    "hooks",
+    "plugins",
+    "bin",
+    "shims",
+    "extensions",
+    "tools",
+    "natives",
+    "python-env",
+    "profiles",
+];
 
 /// Wrap `program` with writable mounts from `policy`, returning a command ready for args.
 ///
@@ -111,6 +121,10 @@ fn protect(path: &Path) -> io::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error),
     }
+    // A nested entry, such as OMP's `agent/config.yml`, may lack its parent inside the tree.
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     if path
         .file_name()
         .is_some_and(|name| PROTECTED_DIRECTORIES.iter().any(|entry| name == *entry))
@@ -121,10 +135,11 @@ fn protect(path: &Path) -> io::Result<()> {
     // Materialize that same meaning so bind mounting the pointer does not break Git.
     let initial = if path.file_name().is_some_and(|name| name == "commondir") {
         b".\n".as_slice()
-    } else if path
-        .extension()
-        .is_some_and(|extension| extension == "json" || extension == "jsonc" || extension == "yaml")
-    {
+    } else if path.extension().is_some_and(|extension| {
+        ["json", "jsonc", "yaml", "yml"]
+            .iter()
+            .any(|kind| extension == *kind)
+    }) {
         b"{}\n".as_slice()
     } else {
         b"".as_slice()

@@ -103,7 +103,7 @@ jobs:
   # ADR-188: the hosted browser client image is deployed at the site root by ait-server.
   web-client:
     name: Publish web client image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
@@ -151,7 +151,7 @@ jobs:
       matrix:
         include:
           - label: Linux x86_64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
             platform: linux
             artifact: ait-linux-x64
@@ -202,15 +202,12 @@ jobs:
         id: layout
         run: node .tmp/release-tools/scripts/release-layout.mjs
 
-      - name: Build release native tools
+      - name: Build release daemon only
         if: matrix.platform == 'mac'
-        run: |
-          bridge_args=()
-          if [ "${{ steps.layout.outputs.ompBridge }}" = true ]; then bridge_args=(-p ait-omp-acp --bin ait-omp-acp); fi
-          cargo build --locked --release -p "${{ steps.layout.outputs.package }}" --bin "${{ steps.layout.outputs.binary }}" --target "${{ matrix.rust_target }}" "${bridge_args[@]}"
+        run: cargo build --locked --release -p "${{ steps.layout.outputs.package }}" --bin "${{ steps.layout.outputs.binary }}" --target "${{ matrix.rust_target }}"
 
-      # Desktop and standalone archives share both tools on the glibc 2.28+ baseline.
-      - name: Build release native tools (glibc 2.28 baseline)
+      # Desktop and standalone archives share this daemon; manylinux_2_28 keeps it on glibc 2.28+.
+      - name: Build release daemon only (glibc 2.28 baseline)
         if: matrix.platform == 'linux'
         run: bash .tmp/release-tools/scripts/build-linux-daemon.sh "${{ steps.layout.outputs.package }}" "${{ steps.layout.outputs.binary }}" "${{ matrix.rust_target }}" 1.98.1
 
@@ -218,14 +215,12 @@ jobs:
         if: matrix.platform == 'linux'
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
-          AIT_OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
         run: npm run package:linux
 
       - name: Package, sign, and notarize macOS desktop
         if: matrix.platform == 'mac'
         env:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
-          AIT_OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -256,12 +251,11 @@ jobs:
           sudo rpm --install --nodeps release/*.rpm
           node e2e/linux-artifact-smoke.js
 
-      # The desktop signs its own copies; sign and notarize both standalone executables.
+      # The desktop bundle signs its own copy; this signs the standalone headless daemon.
       - name: Sign and notarize standalone macOS daemon
         if: matrix.platform == 'mac'
         env:
           DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
-          OMP_ACP_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/ait-omp-acp
           ENTITLEMENTS: ${{ steps.layout.outputs.desktop }}/build/entitlements.mac.inherit.plist
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -289,18 +283,11 @@ jobs:
           identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')
           test -n "$identity"
           cp "$DAEMON_BIN" "$work/bin/aitd"
-          binaries=(aitd)
-          if [ "${{ steps.layout.outputs.ompBridge }}" = true ]; then
-            cp "$OMP_ACP_BIN" "$work/bin/ait-omp-acp"
-            binaries+=(ait-omp-acp)
-          fi
-          for binary in "${binaries[@]}"; do
-            codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
-              --keychain "$keychain" --sign "$identity" "$work/bin/$binary"
-            codesign --verify --strict --verbose=2 "$work/bin/$binary"
-          done
-          ditto -c -k --keepParent "$work/bin" "$work/native-tools.zip"
-          xcrun notarytool submit "$work/native-tools.zip" \
+          codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
+            --keychain "$keychain" --sign "$identity" "$work/bin/aitd"
+          codesign --verify --strict --verbose=2 "$work/bin/aitd"
+          ditto -c -k --keepParent "$work/bin/aitd" "$work/aitd.zip"
+          xcrun notarytool submit "$work/aitd.zip" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 30m --output-format json > "$work/notarization.json"
           status=$(plutil -extract status raw -o - "$work/notarization.json")
@@ -315,7 +302,7 @@ jobs:
       - name: Package standalone daemon
         env:
           DAEMON_BIN: ${{ env.STANDALONE_DAEMON_BIN || format('{0}/target/{1}/release/{2}', github.workspace, matrix.rust_target, steps.layout.outputs.binary) }}
-        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets --source-layout .
+        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets
 
       - uses: actions/upload-artifact@v6
         with:
@@ -330,8 +317,12 @@ jobs:
     name: Release Android to Google Play internal testing
     if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 150
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      version_code: ${{ steps.plan.outputs.version_code }}
+      submitted: ${{ steps.submit.outcome }}
     # Serialize uploads across tags; each run and retry gets its own versionCode.
     # The default queue would cancel a tag's pending upload when a newer tag arrives.
     concurrency:
@@ -504,6 +495,7 @@ jobs:
           retention-days: 14
 
       - name: Submit this verified AAB to Google Play
+        id: submit
         uses: r0adkll/upload-google-play@v1
         timeout-minutes: 30
         with:
@@ -542,7 +534,7 @@ jobs:
     name: Start iOS internal TestFlight build
     if: ${{ !contains(inputs.tag || github.ref_name, '-') && !inputs.source_commit }}
     continue-on-error: true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       # Xcode Cloud only compares native and package versions, so check the tag here.
@@ -569,11 +561,63 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: node .tmp/release-tools/scripts/xcode-cloud-release.mjs "$RELEASE_TAG"
 
+  # ADR-236: once Play accepts the bundle, attach Google's signed universal APK to the draft Release.
+  # Rerunning only this job retries the APK without rebuilding or resubmitting to Play.
+  android-apk:
+    name: Attach Google-signed Android APK
+    needs: [android-play, release]
+    if: needs.android-play.outputs.submitted == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.android-play.outputs.version }}
+      VERSION_CODE: ${{ needs.android-play.outputs.version_code }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Download Google-signed universal APK
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          build_tools=$(ls -d "$ANDROID_HOME"/build-tools/* | grep -v -- -rc | sort -V | tail -n 1)
+          node .tmp/release-tools/scripts/android-play-apk.mjs --version "$VERSION" \
+            --version-code "$VERSION_CODE" --build-tools "$build_tools" --output-dir apk
+
+      - name: Attach APK and refresh checksums
+        run: |
+          set -euo pipefail
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          test -s "apk/$apk"
+          draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$draft" != true ]; then
+            echo "::warning::$RELEASE_TAG is already published; the APK was not attached"
+            exit 0
+          fi
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir sums
+          {
+            awk -v name="$apk" '$2 != name' sums/SHA256SUMS
+            (cd apk && sha256sum "$apk")
+          } | LC_ALL=C sort -k2,2 > SHA256SUMS
+          gh release upload "$RELEASE_TAG" "apk/$apk" SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
   release:
     name: Prepare GitHub Release
     needs: [build, windows]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.windows.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
@@ -606,21 +650,19 @@ jobs:
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
 
+      # Reruns keep an APK attached earlier; fetch only it and the checksums that cover it.
       - name: Preserve previously published Android APK
         run: |
-          if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
+          apk="Ait-${RELEASE_TAG#v}-android.apk"
+          if test -f "release-assets/$apk"; then
             exit 0
           fi
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            asset_count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
-            if [ "$asset_count" -gt 0 ]; then
-              mkdir -p previous-assets
-              gh release download "$RELEASE_TAG" --dir previous-assets --repo "$GITHUB_REPOSITORY"
-              if test -f "previous-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
-                (cd previous-assets && sha256sum --check SHA256SUMS)
-                cp "previous-assets/Ait-${RELEASE_TAG#v}-android.apk" release-assets/
-              fi
-            fi
+          names=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name') || exit 0
+          if grep -qxF "$apk" <<<"$names"; then
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$apk" --pattern SHA256SUMS --dir previous-assets
+            (cd previous-assets && sha256sum --check --ignore-missing SHA256SUMS)
+            cp "previous-assets/$apk" release-assets/
           fi
 
       - name: Verify assets and write checksums
@@ -630,7 +672,7 @@ jobs:
             args+=(--android)
           fi
           node .tmp/release-tools/scripts/release-assets.mjs verify \
-            "${RELEASE_TAG#v}" release-assets "${args[@]}" --source-layout .
+            "${RELEASE_TAG#v}" release-assets "${args[@]}"
 
       - name: Create or repair GitHub Release
         shell: bash

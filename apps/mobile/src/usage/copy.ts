@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { i18n } from "@/i18n/i18next";
 import { en } from "@/i18n/resources/en";
 import { formatCompactTimeAgo } from "@/utils/time";
+import type { HistoryRange } from "./history-model";
 
 const nativeUsageTextKeys = new Map<string, string>(
   Object.entries(en.providerUsage.nativeText).map(([key, text]) => [
@@ -123,6 +124,57 @@ function createUsageCopy(t: TFunction) {
     },
     get nativeReadFailed() {
       return t("providerUsage.nativeReadFailed");
+    },
+    history: createHistoryCopy(t),
+  } as const;
+}
+
+function createHistoryCopy(t: TFunction) {
+  const figure = (key: string) => (value: string) => t(`providerUsage.history.${key}`, { value });
+  return {
+    get tab() {
+      return t("providerUsage.history.tab");
+    },
+    range: (range: HistoryRange): string =>
+      range === "24h"
+        ? t("providerUsage.hours", { count: 24 })
+        : t("providerUsage.days", { count: range === "7d" ? 7 : 30 }),
+    get byProvider() {
+      return t("providerUsage.history.byProvider");
+    },
+    get byModel() {
+      return t("providerUsage.history.byModel");
+    },
+    get byDay() {
+      return t("providerUsage.history.byDay");
+    },
+    get unknownModel() {
+      return t("providerUsage.history.unknownModel");
+    },
+    calls: figure("calls"),
+    failedCalls: figure("failedCalls"),
+    requests: figure("requests"),
+    tokens: figure("tokens"),
+    input: figure("input"),
+    output: figure("output"),
+    cacheRead: figure("cacheRead"),
+    cacheWrite: figure("cacheWrite"),
+    cacheHitRate: figure("cacheHitRate"),
+    reportedCost: figure("reportedCost"),
+    get lowerBound() {
+      return t("providerUsage.history.lowerBound");
+    },
+    recordedSince: (date: string) => t("providerUsage.history.recordedSince", { date }),
+    get empty() {
+      return t("providerUsage.history.empty");
+    },
+    unreachable: (hosts: readonly string[]) =>
+      t("providerUsage.history.unreachable", { hosts: hosts.join(", ") }),
+    failed: (host: string, reason: string) => t("providerUsage.history.failed", { host, reason }),
+    notRecorded: (hosts: readonly string[]) =>
+      t("providerUsage.history.notRecorded", { hosts: hosts.join(", ") }),
+    get hostTotals() {
+      return t("providerUsage.history.hostTotals");
     },
   } as const;
 }

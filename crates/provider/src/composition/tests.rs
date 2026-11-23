@@ -30,7 +30,6 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "opencode",
             "deepseek-harness",
             "pi",
-            "omp",
             "minimax-code",
         ]
     );
@@ -42,7 +41,6 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "opencode",
         "deepseek-harness",
         "pi",
-        "omp",
         "minimax-code",
     ] {
         manager.validate_provider(provider).unwrap();
@@ -52,6 +50,24 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"
     ));
     assert!(!data.exists());
+}
+
+#[test]
+fn external_adapters_join_the_assembly_with_the_shared_image_directory() {
+    let root = tempfile::tempdir().unwrap();
+    let mut received = None;
+    let providers = Providers::configured(root.path(), |_| None).with(|images| {
+        received = Some(images.to_owned());
+        PiClient::new("external".into())
+    });
+
+    assert_eq!(
+        received.unwrap(),
+        root.path().join("agents/provider-images")
+    );
+    assert_eq!(providers.clients.len(), 8);
+    assert_eq!(providers.clients.last().unwrap().provider(), "pi");
+    assert!(!root.path().join("agents").exists());
 }
 
 #[tokio::test]
@@ -161,5 +177,63 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
         claude_args
             .iter()
             .any(|arg| arg == "--no-session-persistence")
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn summary_generators_record_their_calls_in_the_installed_host_ledger() {
+    use crate::ports::usage_ledger::{
+        CallOutcome, CallSource, UsageGroup, UsageLedger, UsageQuery,
+    };
+
+    let fixture = crate::test_support::Fixture::new();
+    let data = tempfile::tempdir().unwrap();
+    let ledger = Arc::new(SqliteUsageLedger::open(data.path()).unwrap());
+    let config = Arc::new(Configuration::default());
+    config
+        .patch(&json!({"metadataGeneration":{"providers":[{"provider":"codex","model":"m"}]}}))
+        .unwrap();
+    let generator = Providers::configured(fixture.root.path(), |name| {
+        Some(if name == "AIT_SERVER_CODEX_BIN" {
+            fixture.program.clone().into_os_string()
+        } else {
+            fixture.root.path().join(name).into_os_string()
+        })
+    })
+    .with_usage_ledger(ledger.clone())
+    .summary_generator(config);
+    std::fs::write(
+        fixture.cwd.join("metadata-response.json"),
+        r#"{"title":"Recorded title"}"#,
+    )
+    .unwrap();
+
+    generator
+        .generate(SummaryRequest {
+            kind: SummaryKind::Title,
+            cwd: fixture.cwd.to_str().unwrap().to_owned(),
+            context: "Record the generation".into(),
+            selection: None,
+        })
+        .await
+        .unwrap();
+    let summary = ledger
+        .summarize(UsageQuery {
+            from: 0,
+            to: chrono::Utc::now().timestamp_millis() + 1,
+            group_by: vec![UsageGroup::Source, UsageGroup::Outcome],
+        })
+        .await
+        .unwrap();
+
+    let rows: Vec<_> = summary
+        .rows
+        .iter()
+        .map(|row| (row.key.source, row.key.outcome, row.calls))
+        .collect();
+    assert_eq!(
+        rows,
+        [(Some(CallSource::Summary), Some(CallOutcome::Completed), 1)]
     );
 }

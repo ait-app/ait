@@ -119,6 +119,7 @@ async fn permission_returns_safe_resolution_and_preserves_native_answer_and_live
                     .unwrap(),
                 record.clone(),
                 true,
+                Arc::new(crate::ports::usage_ledger::NoopUsageLedger),
             ),
         );
         let connection = manager.events().connect();

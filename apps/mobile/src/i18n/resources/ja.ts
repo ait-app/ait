@@ -1,8 +1,11 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "コマンドを実行",
     loadFailed: "タスクを読み込めませんでした",
     title: "タスク一覧",
@@ -2394,6 +2397,31 @@ export const ja: TranslationResources = {
     clientUnavailable: "ホストへの接続が準備中です",
     retry: "再試行",
     tooltipLoading: "プラン使用量を読み込み中…",
+    history: {
+      tab: "履歴",
+      byProvider: "プロバイダー別",
+      byModel: "モデル別",
+      byDay: "日別",
+      unknownModel: "不明なモデル",
+      calls: "呼び出し {{value}}",
+      failedCalls: "失敗 {{value}}",
+      requests: "リクエスト {{value}}",
+      tokens: "トークン {{value}}",
+      input: "入力 {{value}}",
+      output: "出力 {{value}}",
+      cacheRead: "キャッシュ読み取り {{value}}",
+      cacheWrite: "キャッシュ書き込み {{value}}",
+      cacheHitRate: "キャッシュヒット {{value}}",
+      reportedCost: "プロバイダー報告の費用 {{value}}",
+      lowerBound:
+        "≥ は下限を示します：一部の呼び出しはトークン使用量の一部のみを報告したか、報告しませんでした。",
+      recordedSince: "使用履歴は {{date}} から始まります。それ以前の記録はありません。",
+      empty: "この期間の呼び出しはありません",
+      unreachable: "集計対象外、接続できません：{{hosts}}",
+      failed: "{{host}} から使用履歴を読み込めません：{{reason}}",
+      notRecorded: "{{hosts}} では使用履歴を記録していません",
+      hostTotals: "使用履歴（過去 30 日間）",
+    },
   },
   pairing: {
     connectionMethods: {

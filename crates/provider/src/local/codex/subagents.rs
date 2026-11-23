@@ -181,6 +181,11 @@ impl Live {
         self.children.contains_key(id)
     }
 
+    /// Turn that child thread `id` is running, if it is a child and has one.
+    pub(super) fn turn(&self, id: &str) -> Option<&str> {
+        self.children.get(id)?.turn.as_deref()
+    }
+
     pub(super) fn observe(
         &mut self,
         method: &str,

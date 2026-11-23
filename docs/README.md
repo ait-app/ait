@@ -25,15 +25,17 @@
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [任务总览](operations/task-board.md)：跨主机任务看板、父子任务、审批、停止、已读和归档。
+- [OpenCode 子会话终态核对](decisions/providers/adr-237-opencode-child-terminal-readback.md)：已验证的原生子项通过只读持久记录纠正遗漏的完成通知。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
+- [主机资源监控](architecture/connection.md#主机资源监控)：侧栏读数、历史与采样生命周期。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范
 
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期。
 - 现行规格：[Provider](architecture/provider.md)、[Workspace](architecture/workspace.md)、
-  [Bot](architecture/bot.md)、[连接与传输](architecture/connection.md)，逐条写明生效的约束及其 ADR；
-  [OMP ACP 桥接](architecture/omp-acp-bridge.md)。
+  [Bot](architecture/bot.md)、[连接与传输](architecture/connection.md)、[Oh My Pi](architecture/omp.md)，
+  逐条写明生效的约束及其 ADR。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护；
   `node scripts/adr.mjs governs <路径>` 列出约束某个文件或目录的现行 ADR。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。

@@ -72,13 +72,14 @@ impl AgentManager {
     }
 
     /// Forget a live session, revoking the scoped credential it was opened with.
+    ///
+    /// A ledger call still open for the session's turn finishes as interrupted.
     pub(super) fn drop_live(&mut self, agent_id: &str) {
-        if self
-            .live
-            .remove(agent_id)
-            .and_then(|agent| agent.mcp)
-            .is_some_and(|binding| binding.is_scoped())
-        {
+        let Some(mut agent) = self.live.remove(agent_id) else {
+            return;
+        };
+        super::ledger::interrupt(&mut agent);
+        if agent.mcp.is_some_and(|binding| binding.is_scoped()) {
             self.release_mcp(agent_id);
         }
     }

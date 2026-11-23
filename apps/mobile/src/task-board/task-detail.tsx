@@ -1,20 +1,19 @@
 import React, { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Archive, ArrowUpRight, Check, GitFork, Square, X } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { PermissionRequestCard } from "@/components/permission-request-card";
-import { useToast } from "@/contexts/toast-context";
-import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { toErrorMessage } from "@/utils/error-messages";
-import { taskActions, taskDescendants, type BoardTask } from "./model";
-import { TaskProvider, TaskStatus } from "./task-card";
+import { taskDescendants, type BoardTask } from "./model";
+import { useTaskActions } from "./use-task-actions";
+import { TaskProvider } from "./task-card";
+import { TaskStatus } from "./task-status";
 import { useSubagentsForParent } from "@/subagents";
 
 function ProviderSubtasks({ task }: { task: BoardTask }) {
@@ -65,12 +64,10 @@ export function TaskDetail({
   const { theme } = useUnistyles();
   const { agent } = task;
   const client = useHostRuntimeClient(agent.serverId);
-  const { archiveAgent } = useArchiveAgent();
-  const toast = useToast();
   const children = useMemo(() => taskDescendants(task), [task]);
   const running =
     agent.status === "running" || agent.status === "initializing" || agent.turn.phase === "open";
-  const allowed = taskActions(task);
+  const { action, allowed, disabled, open } = useTaskActions(task, online);
   const recent = useQuery({
     queryKey: [
       "task-board-preview",
@@ -97,25 +94,6 @@ export function TaskDetail({
       return latest?.item.type === "assistant_message" ? latest.item.text : null;
     },
   });
-  const action = useMutation({
-    retry: false,
-    networkMode: "always",
-    mutationFn: async (kind: "stop" | "read" | "archive") => {
-      if (!client || !online) throw new Error(t("taskBoard.offlineHint"));
-      if (!allowed[kind]) throw new Error(t("taskBoard.actionFailed"));
-      if (kind === "stop") await client.cancelAgent(agent.id);
-      else if (kind === "read") await client.clearAgentAttention(agent.id);
-      else {
-        try {
-          await archiveAgent({ serverId: agent.serverId, agentId: agent.id });
-        } catch (error) {
-          toast.error(toErrorMessage(error));
-          throw error;
-        }
-      }
-    },
-  });
-  const disabled = !online || action.isPending;
   return (
     <View style={styles.container} testID="task-detail">
       {showHeader ? (
@@ -238,14 +216,7 @@ export function TaskDetail({
           variant="default"
           leftIcon={ArrowUpRight}
           testID="task-open-conversation"
-          onPress={() =>
-            navigateToAgent({
-              serverId: agent.serverId,
-              agentId: agent.id,
-              workspaceId: agent.workspaceId,
-              pin: true,
-            })
-          }
+          onPress={open}
         >
           {t("taskBoard.openConversation")}
         </Button>

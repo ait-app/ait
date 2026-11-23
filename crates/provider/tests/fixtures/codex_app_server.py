@@ -20,6 +20,7 @@ if (root / "capture-environment").exists():
 mode = (root / "behavior").read_text() if (root / "behavior").exists() else "normal"
 output_lock = threading.Lock()
 pending = None
+replayed_usage = None
 thread_id = None
 ephemeral = False
 turn_text = ""
@@ -117,6 +118,22 @@ def emit(value):
 
 def history_path():
     return root / ("native-history-" + thread_id + ".json")
+
+def usage_path():
+    return root / ("native-usage-" + thread_id + ".json")
+
+def token_usage(params):
+    emit({"method":"thread/tokenUsage/updated", "params":params})
+    if params["threadId"] == thread_id and not ephemeral:
+        usage_path().write_text(json.dumps(params["tokenUsage"]))
+
+def resumed_usage():
+    # Like Codex 0.166, a resume re-reports the thread's last usage under its latest turn.
+    turns = load_history()
+    if not turns or not usage_path().exists():
+        return None
+    return {"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
+        "turnId":turns[-1]["id"], "tokenUsage":json.loads(usage_path().read_text())}}
 
 def load_history():
     path = history_path()
@@ -353,6 +370,12 @@ for line in sys.stdin:
             sys.exit(0)
         result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
     emit({"id": request["id"], "result": result})
+    if method == "thread/resume" and mode == "replay-usage":
+        replayed_usage = resumed_usage()
+    if method == "turn/start" and replayed_usage:
+        # The replay arrives after the next turn starts, the latest a host can first read it.
+        emit(replayed_usage)
+        replayed_usage = None
     if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
         emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
     if method == "thread/realtime/start":
@@ -425,8 +448,14 @@ for line in sys.stdin:
             complete(pending, probe_scope(text))
             continue
         if text == "usage":
-            emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
-                "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})
+            token_usage({"threadId":thread_id,
+                "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}})
+        if text == "request-usage":
+            for total, turn in ((107, pending), (107, pending), (50, pending), (150, None)):
+                token_usage({"threadId":thread_id,
+                    **({"turnId":turn} if turn else {}), "tokenUsage":{"total":{"totalTokens":total},
+                    "last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,
+                    "reasoningOutputTokens":3,"totalTokens":107},"modelContextWindow":200000}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
@@ -531,7 +560,7 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity"):
+        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity", "subagent-usage"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
@@ -549,6 +578,13 @@ for line in sys.stdin:
                     "agentThreadId":thread_id, "agentPath":"/root"}
                 emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":reply}})
             emit({"method":"item/agentMessage/delta","params":{"threadId":child,"turnId":"child-turn","itemId":"child-answer","delta":"Independent child"}})
+            def child_usage(total, turn="child-turn", child=child):
+                token_usage({"threadId":child, **({"turnId":turn} if turn else {}),
+                    "tokenUsage":{"total":{"totalTokens":total},"last":{"inputTokens":20,
+                    "cachedInputTokens":5,"outputTokens":3,"totalTokens":23}}})
+            if text == "subagent-usage":
+                for total, turn in ((40, "child-turn"), (40, "child-turn"), (70, None)):
+                    child_usage(total, turn)
             def finish_child(child=child):
                 child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
                 (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
@@ -581,7 +617,11 @@ for line in sys.stdin:
                     stream_items.append(state)
                     emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
                     emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
+                if text == "subagent-usage":
+                    child_usage(90)
                 complete(pending, "Parent only")
+                if text == "subagent-usage":
+                    child_usage(120, None)
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})
@@ -663,6 +703,11 @@ for line in sys.stdin:
         user = {"type": "userMessage", "id": str(uuid.uuid4()), "content": [{"type": "text", "text": text}]}
         steered_inputs.append(user)
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": user}})
+        if text == "request-usage":
+            token_usage({"threadId":thread_id,
+                "turnId":pending, "tokenUsage":{"total":{"totalTokens":200},
+                "last":{"inputTokens":40,"cachedInputTokens":10,"outputTokens":5,"totalTokens":45},
+                "modelContextWindow":200000}})
         if mode != "steer-wrong-id":
             complete(pending, "stream + " + text if turn_text == "stream" else text)
     elif method == "turn/interrupt":

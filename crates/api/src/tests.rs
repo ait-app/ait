@@ -205,6 +205,11 @@ fn assert_default_capabilities(info: &ServerInfo) {
         .chain(shares::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
+    assert_eq!(info.capabilities.len(), 244);
+    assert!(
+        info.capabilities
+            .contains(&model::server::SECRET_QUESTIONS_CAPABILITY.to_owned())
+    );
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())

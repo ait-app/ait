@@ -929,9 +929,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(226);
+    expect(Object.keys(METHODS)).toHaveLength(228);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(226);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(228);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -939,6 +939,25 @@ describe("Rust v1 connection", () => {
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
       false,
     );
+  });
+  it("routes the skill operations together with room for optional hello capabilities", () => {
+    const methods = [
+      "agent.skills.get_status.request",
+      "agent.skills.reconcile.request",
+      "agent.skills.uninstall.request",
+      "agent.skills.save_selection.request",
+      "agent.skills.import_legacy_selection.request",
+    ];
+    const h = harness();
+    try {
+      h.ready();
+      for (const [index, method] of methods.entries()) {
+        h.send({ type: method, requestId: `skill-${index}` });
+        expect(h.last(2)).toMatchObject({ method, request_id: `skill-${index}` });
+      }
+    } finally {
+      h.transport.close();
+    }
   });
   it("maps group sharing RPCs onto the background channel", () => {
     const methods = [

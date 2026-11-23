@@ -1,0 +1,35 @@
+[package]
+name = "provider-omp"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Ports, prompt/timeline protocol and the shared native toolkit the adapter builds on.
+provider.workspace = true
+domain.workspace = true
+async-trait.workspace = true
+# Decode native image blobs before projecting them as provider image artifacts.
+base64.workspace = true
+chrono.workspace = true
+# Index session-file lines by id and parent without materializing whole records.
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+# Drive the adapter through the runtime's AgentManager test entry points.
+provider = { workspace = true, features = ["test-support"] }
+model.workspace = true
+persistence.workspace = true
+# Offline native provider fixtures, without credentials or a model API.
+axum.workspace = true

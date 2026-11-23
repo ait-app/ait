@@ -1,6 +1,6 @@
 {
   "name": "@ait/client",
-  "version": "0.2.7",
+  "version": "0.2.9",
   "private": true,
   "description": "Ait repository-local client with native daemon protocol support",
   "files": [

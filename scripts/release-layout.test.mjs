@@ -16,7 +16,6 @@ function fixture(t, layout) {
   );
   mkdirSync(path.join(root, layout.desktop), { recursive: true });
   writeFileSync(path.join(root, layout.desktop, "package.json"), "{}");
-  writeFileSync(path.join(root, "Cargo.toml"), '[workspace]\nmembers = ["bins/daemon"]\n');
   return root;
 }
 
@@ -25,7 +24,7 @@ test("resolves renamed sources and immutable tags from before the rename", (t) =
     { package: "daemon", binary: "daemon", desktop: "apps/desktop" },
     { package: "server-bin", binary: "server", desktop: "apps/paseo" },
   ]) {
-    assert.deepEqual(resolveReleaseLayout(fixture(t, layout)), { ...layout, ompBridge: false });
+    assert.deepEqual(resolveReleaseLayout(fixture(t, layout)), layout);
   }
 });
 
@@ -33,13 +32,4 @@ test("fails before building an inconsistent release source", (t) => {
   const root = fixture(t, { package: "daemon", binary: "daemon", desktop: "apps/desktop" });
   writeFileSync(path.join(root, "bins/daemon/Cargo.toml"), '[package]\nname = "other"\n');
   assert.throws(() => resolveReleaseLayout(root), assert.AssertionError);
-});
-
-test("current sources cannot fall back to historical host-only packaging", (t) => {
-  const root = fixture(t, { package: "daemon", binary: "daemon", desktop: "apps/desktop" });
-  writeFileSync(path.join(root, "Cargo.toml"), '[workspace]\nmembers = ["bins/omp-acp"]\n');
-  assert.throws(() => resolveReleaseLayout(root), /missing the OMP ACP bridge manifest/);
-  mkdirSync(path.join(root, "bins/omp-acp"));
-  writeFileSync(path.join(root, "bins/omp-acp/Cargo.toml"), '[package]\nname = "ait-omp-acp"\n');
-  assert.equal(resolveReleaseLayout(root).ompBridge, true);
 });

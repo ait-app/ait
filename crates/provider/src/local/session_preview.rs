@@ -1,6 +1,9 @@
 //! Small, whitespace-normalized user-text previews for native discovery.
 
-pub(super) fn text<'a>(parts: impl Iterator<Item = &'a str>) -> Option<String> {
+/// Join `parts` into a whitespace-normalized preview of at most 300 characters.
+///
+/// Returns `None` when the parts contain no visible text.
+pub fn text<'a>(parts: impl Iterator<Item = &'a str>) -> Option<String> {
     let mut preview = String::new();
     let mut remaining = 300;
     for word in parts.flat_map(str::split_whitespace) {

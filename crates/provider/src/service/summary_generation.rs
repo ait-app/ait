@@ -14,6 +14,10 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
+use crate::ports::usage_ledger::{
+    CallBegin, CallFinish, CallOutcome, CallSource, NoopUsageLedger, UsageLedger,
+};
+use crate::support::time::now_unix_ms;
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 /// Model-backed summary generator shared by all four wording use cases.
@@ -25,6 +29,8 @@ pub(crate) struct Generation {
     queue: Semaphore,
     cancel: CancellationToken,
     deadline: Duration,
+    /// Usage ledger that records every `generate_summary` call.
+    ledger: Arc<dyn UsageLedger>,
 }
 
 impl Generation {
@@ -45,7 +51,15 @@ impl Generation {
             queue: Semaphore::new(32),
             cancel: CancellationToken::new(),
             deadline: Duration::from_secs(90),
+            ledger: Arc::new(NoopUsageLedger),
         }
+    }
+
+    /// Record every provider call of this generator in `ledger` instead of discarding them.
+    #[must_use]
+    pub(crate) fn with_usage_ledger(mut self, ledger: Arc<dyn UsageLedger>) -> Self {
+        self.ledger = ledger;
+        self
     }
 
     async fn run(&self, request: SummaryRequest) -> Result<Value, SummaryError> {
@@ -101,11 +115,17 @@ impl Generation {
                         "{prompt}\n\nThe previous response was invalid. Return only JSON matching the supplied schema."
                     )
                 };
+                let call = SummaryCall::begin(self.ledger.as_ref(), &spec);
                 let output = tokio::time::timeout(
                     Duration::from_secs(25),
                     client.generate_summary(&spec, &text, &schema),
                 )
                 .await;
+                call.finish(if matches!(output, Ok(Ok(_))) {
+                    CallOutcome::Completed
+                } else {
+                    CallOutcome::Failed
+                });
                 let Ok(Ok(output)) = output else {
                     break;
                 };
@@ -115,6 +135,59 @@ impl Generation {
             }
         }
         Err(SummaryError::Unavailable)
+    }
+}
+
+/// One `generate_summary` call in the usage ledger, finished as interrupted if dropped unfinished.
+struct SummaryCall<'a> {
+    /// Ledger that records the call.
+    ledger: &'a dyn UsageLedger,
+    /// Call that is still running.
+    call_id: Option<String>,
+}
+
+impl<'a> SummaryCall<'a> {
+    /// Begin a `summary` call in `ledger` for the auxiliary session `spec`.
+    fn begin(ledger: &'a dyn UsageLedger, spec: &AgentSessionSpec) -> Self {
+        let call_id = format!("summary:{}", uuid::Uuid::new_v4());
+        ledger.begin_call(CallBegin {
+            call_id: call_id.clone(),
+            agent_id: String::new(),
+            provider: spec.provider.clone(),
+            model: spec.config.model.clone(),
+            source: CallSource::Summary,
+            workspace_id: None,
+            started_at: now_unix_ms(),
+        });
+        Self {
+            ledger,
+            call_id: Some(call_id),
+        }
+    }
+
+    /// Finish the call with `outcome`.
+    fn finish(mut self, outcome: CallOutcome) {
+        self.end(outcome);
+    }
+
+    /// Finish the call with `outcome` unless it already finished.
+    fn end(&mut self, outcome: CallOutcome) {
+        if let Some(call_id) = self.call_id.take() {
+            // `generate_summary` returns text only, so the call has no token usage.
+            self.ledger.finish_call(CallFinish {
+                call_id,
+                outcome,
+                ended_at: now_unix_ms(),
+                token_usage_available: false,
+            });
+        }
+    }
+}
+
+impl Drop for SummaryCall<'_> {
+    /// A deadline or shutdown dropped the call while the provider was still working.
+    fn drop(&mut self) {
+        self.end(CallOutcome::Interrupted);
     }
 }
 

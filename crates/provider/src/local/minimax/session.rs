@@ -7,10 +7,12 @@ use uuid::Uuid;
 
 use super::{MiniMaxClient, PROVIDER, config};
 use crate::local::acp_streaming::Stream;
+use crate::local::usage::requests::MAX_SEGMENT_ID;
 use crate::local::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
+use crate::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use crate::protocol::prompt::AgentPrompt;
 
 /// One native ACP session with bounded control requests and a single active prompt.
@@ -283,7 +285,7 @@ impl Session {
                     .push_back(AgentTurnEvent::PermissionRequested(request));
             }
             None => {
-                let (_, id) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
+                let (turn, id) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
                 if message["id"] != *id {
                     return Err(AgentSessionError::Failed);
                 }
@@ -301,6 +303,11 @@ impl Session {
                         return Err(AgentSessionError::Failed);
                     }
                     self.stream.events.push_back(AgentTurnEvent::Usage(usage));
+                    if let Some(request) = turn_request(turn, &message["result"]["usage"]) {
+                        self.stream
+                            .events
+                            .push_back(AgentTurnEvent::RequestUsage(request));
+                    }
                 }
                 self.stream.events.push_back(event);
                 self.active = None;
@@ -312,8 +319,47 @@ impl Session {
     }
 }
 
+/// Ledger segment for the whole-turn `usage` of a prompt result, or `None` when it is all zero.
+///
+/// The provider reports one total per turn, so the segment is a `Turn` boundary; it is complete only
+/// when both input and output counts were present.
+pub(super) fn turn_request(turn: &str, usage: &Value) -> Option<RequestUsage> {
+    let input = usage["inputTokens"].as_u64();
+    let output = usage["outputTokens"].as_u64();
+    let request = RequestUsage {
+        segment_id: format!("minimax:{turn}"),
+        parent: None,
+        model: None,
+        boundary: UsageBoundary::Turn,
+        input_tokens: input.unwrap_or_default(),
+        output_tokens: output.unwrap_or_default(),
+        cache_read_tokens: usage["cachedReadTokens"].as_u64().unwrap_or_default(),
+        cache_write_tokens: usage["cachedWriteTokens"].as_u64().unwrap_or_default(),
+        cache_write_1h_tokens: None,
+        reasoning_tokens: None,
+        cost_usd_reported: None,
+        complete: input.is_some() && output.is_some(),
+    };
+    let empty = request.input_tokens == 0
+        && request.output_tokens == 0
+        && request.cache_read_tokens == 0
+        && request.cache_write_tokens == 0;
+    if empty {
+        return None;
+    }
+    if request.segment_id.len() > MAX_SEGMENT_ID || !request.is_valid() {
+        tracing::warn!(provider = "minimax", turn = %turn, "dropped invalid request usage");
+        return None;
+    }
+    Some(request)
+}
+
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn reports_token_usage(&self) -> bool {
+        true
+    }
+
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         if config.system_prompt != self.initial_config.system_prompt

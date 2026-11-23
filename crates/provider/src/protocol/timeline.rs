@@ -77,15 +77,15 @@ pub(crate) struct SearchRequest {
 /// One immutable provider projection item before sequencing.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeItem {
+pub struct NativeItem {
     /// Provider-owned stable projection identity, scoped to its Agent.
-    pub(crate) key: String,
+    pub key: String,
     /// Native turn identity, when available.
-    pub(crate) turn_id: Option<String>,
+    pub turn_id: Option<String>,
     /// RFC3339 source timestamp.
-    pub(crate) timestamp: String,
+    pub timestamp: String,
     /// Paseo timeline item; never a host domain Message.
-    pub(crate) item: Value,
+    pub item: Value,
 }
 
 /// Plugin display append request; plugin identity is supplied by connection provenance.

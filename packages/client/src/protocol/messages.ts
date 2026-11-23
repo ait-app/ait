@@ -126,6 +126,7 @@ export function serverInfo(
       agentConfigApply: has("agent.config.apply.request"),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
+      hostStats: !scopedGuest && has("daemon.host_stats.request"),
       onlineServiceSync: [
         "relay.status.request",
         "relay.start.request",
@@ -151,6 +152,7 @@ export function serverInfo(
       checkoutForgeSetAutoMerge: has("checkout.forge.set_auto_merge.request"),
       checkoutRefresh: has("checkout.refresh.request"),
       providerUsageList: has("provider.usage.list.request"),
+      providerUsageLedger: has("provider.usage.ledger.request"),
       agentHistorySearch: has("agent.history.get.request"),
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),

@@ -6,13 +6,19 @@ amends:
   - providers/adr-198-omp-interaction-progress.md
 paths:
   - crates/provider
+  - crates/provider-omp
+  - crates/model
+  - crates/api
+  - crates/metadata
+  - packages/client
+  - packages/protocol
   - apps/mobile
 ---
 
 # ADR-243：OMP 结构化原生交互与启动前问答
 
 - 修订：[ADR-198](adr-198-omp-interaction-progress.md) 的表单字段与启动前交互；
-  延续 [ADR-237](adr-237-omp-native-session-and-standalone-acp.md) 的原生 Session 边界。
+  延续 [ADR-248](adr-248-omp-paseo-native-rpc.md) 的原生 Session 边界及 [ADR-249](adr-249-omp-adapter-crate.md) 的 crate 归属。
 - 状态为 proposed：本决策随 Draft PR 提交评审，不代表架构验收；既有 accepted ADR 不被改写。
 
 ## 背景
@@ -60,15 +66,15 @@ dismiss 会提交空 allow 而不是取消，editor 的 native prefill 丢失，
 
 ## 接口变化与迁移（完整 ledger）
 
-| 边界                   | 旧接口/调用链                                                                      | 新接口/调用链                                                                                                                                                    | 迁移与兼容性                                                                                                      |
-| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| daemon wire / 公共 SDK | 开放 `input` record 与既有 permission RPC                                          | 可选 question 字段与显式 `agent-secret-questions-v1` hello offer                                                                                                 | 旧客户端 secret 请求仅可取消；新客户端连接旧宿主不强制要求该能力                                                  |
-| OMP adapter 内部       | `session::open(client,spec,handle)` 直接返回 Session；`connect` 无启动路由         | `session::open(...,startup:Option<Sender<Frame>>)`；`bootstrap::open` 包装 create/resume；`Transport::{writer,startup,finish_startup}`、`Session::adopt_startup` | `AgentClient::create_session/resume_session` 签名不变；外部 ACP bridge 以 `None` 调用，行为不变。无新公共端口方法 |
-| Timeline 连接订阅      | `EventHub::subscribe(id, keys, outbound)`                                          | `EventHub::subscribe(id, keys, outbound, secret_questions)`                                                                                                      | provider 连接传递协商结果；内部观察者默认 incapable；逐连接投影不修改发布者原始事件                               |
-| 原生进程参数           | 探测 `--mode rpc-ui --no-session`                                                  | 探测追加 `--no-ui`                                                                                                                                               | 官方 18.17.0 支持；插件仍加载，元数据读取不再触发启动问题                                                         |
-| 表单 UI                | `QuestionFormQuestion` 无 secret/预填/取消语义；dismiss 对 allowEmpty 提交空 allow | 新增可选 `secret/initialValue/preserveWhitespace/dismissBehavior`；secret 掩码、按题 key 重建、预填；deny-dismiss                                                | 组件 props 不变；既有 Codex/其他 provider 问题不带新字段，行为不变                                                |
-| 启动输入               | 初始化完成后才能提交首条输入                                                       | provisional 排队一次，就绪后同一 writer 释放；取消即关闭不重放                                                                                                   | 逻辑 turn id 映射回原生 turn；重连经 `pendingPermissions` 恢复未答 dialog，不重放已取消请求                       |
-| i18n                   | `message.question.*`、`common.actions.dismiss`                                     | 不变                                                                                                                                                             | 9 个 locale 无新增键                                                                                              |
+| 边界                   | 旧接口/调用链                                                                      | 新接口/调用链                                                                                                                                                    | 迁移与兼容性                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| daemon wire / 公共 SDK | 开放 `input` record 与既有 permission RPC                                          | 可选 question 字段与显式 `agent-secret-questions-v1` hello offer                                                                                                 | 旧客户端 secret 请求仅可取消；新客户端连接旧宿主不强制要求该能力                                   |
+| OMP adapter 内部       | `session::open(client,spec,handle)` 直接返回 Session；`connect` 无启动路由         | `session::open(...,startup:Option<Sender<Frame>>)`；`bootstrap::open` 包装 create/resume；`Transport::{writer,startup,finish_startup}`、`Session::adopt_startup` | `AgentClient::create_session/resume_session` 签名不变；旧测试直接调用传入 `None`；无新公共端口方法 |
+| Timeline 连接订阅      | `EventHub::subscribe(id, keys, outbound)`                                          | `EventHub::subscribe(id, keys, outbound, secret_questions)`                                                                                                      | provider 连接传递协商结果；内部观察者默认 incapable；逐连接投影不修改发布者原始事件                |
+| 原生进程参数           | 探测 `--mode rpc-ui --no-session`                                                  | 探测追加 `--no-ui`                                                                                                                                               | 官方 18.17.0 支持；插件仍加载，元数据读取不再触发启动问题                                          |
+| 表单 UI                | `QuestionFormQuestion` 无 secret/预填/取消语义；dismiss 对 allowEmpty 提交空 allow | 新增可选 `secret/initialValue/preserveWhitespace/dismissBehavior`；secret 掩码、按题 key 重建、预填；deny-dismiss                                                | 组件 props 不变；既有 Codex/其他 provider 问题不带新字段，行为不变                                 |
+| 启动输入               | 初始化完成后才能提交首条输入                                                       | provisional 排队一次，就绪后同一 writer 释放；取消即关闭不重放                                                                                                   | 逻辑 turn id 映射回原生 turn；重连经 `pendingPermissions` 恢复未答 dialog，不重放已取消请求        |
+| i18n                   | `message.question.*`、`common.actions.dismiss`                                     | 不变                                                                                                                                                             | 9 个 locale 无新增键                                                                               |
 
 旧宿主 + 新客户端：可选字段缺席时表单退化为既有行为（无掩码/预填），不报错。
 新宿主 + 旧客户端：非 secret 请求不变；secret 请求降为带升级说明的 DENY-only tool permission，
@@ -82,4 +88,4 @@ secret/空值/换行/预填/取消语义由 adapter 显式 typed 字段承载，
 provisional session 不引入第二 writer；取消与失败路径沿用既有结算。
 定向验收覆盖共享夹具（Rust/protocol/UI 同源）、bootstrap 单元测试、manager 启动/重连回归与
 官方 18.17.0 安装夹具（secret/empty/cancel/startup，loopback 模型，无付费推理）。
-当前说明见 [OMP 架构](../../architecture/omp-acp-bridge.md) 与 [操作手册](../../operations/oh-my-pi.md)。
+当前说明见 [OMP 架构](../../architecture/omp.md) 与 [操作手册](../../operations/oh-my-pi.md)。

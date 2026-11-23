@@ -29,7 +29,7 @@ enum StateMatch {
 
 /// One provider-owned state location that a confined Agent process must keep writing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct StateLocation {
+pub struct StateLocation {
     /// Environment variable naming the location, or its base directory, when set.
     variable: Option<&'static str>,
     /// Child below the variable's value; empty when the variable names the location itself.
@@ -43,7 +43,11 @@ pub(crate) struct StateLocation {
 }
 
 impl StateLocation {
-    const fn tree(
+    /// Directory tree at `variable`'s value (joined with `child`), or at `home` when it is unset.
+    ///
+    /// `protected` names entries below the tree that stay read-only for confined processes.
+    #[must_use]
+    pub const fn tree(
         variable: Option<&'static str>,
         child: &'static str,
         home: &'static str,
@@ -103,12 +107,6 @@ pub(crate) const PI_STATE: &[StateLocation] = &[
     ),
 ];
 
-/// Oh My Pi configuration and data directories.
-pub(crate) const OMP_STATE: &[StateLocation] = &[
-    StateLocation::tree(Some("PI_CONFIG_DIR"), "", ".omp", &[]),
-    StateLocation::tree(Some("XDG_DATA_HOME"), "omp", ".local/share/omp", &[]),
-];
-
 /// `OpenCode` XDG data, state, cache and configuration directories.
 pub(crate) const OPENCODE_STATE: &[StateLocation] = &[
     StateLocation::tree(
@@ -157,7 +155,7 @@ pub(crate) const MINIMAX_STATE: &[StateLocation] = &[StateLocation::tree(
 ///
 /// Returns `Unavailable` when this platform has no write sandbox, and `Failed` when the
 /// worktree, its Git directories or the home directory cannot be resolved.
-pub(crate) fn command(
+pub fn command(
     program: &Path,
     confinement: Option<&WriteConfinement>,
     state: &[StateLocation],

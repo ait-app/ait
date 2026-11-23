@@ -213,6 +213,10 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn reports_token_usage(&self) -> bool {
+        true
+    }
+
     async fn account_usage(&self) -> Result<Value, AgentSessionError> {
         super::quota::read(&self.client, std::path::Path::new(&self.cwd)).await
     }

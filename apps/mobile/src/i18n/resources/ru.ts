@@ -1,3 +1,4 @@
+import { hostMonitorEn } from "./host-monitor";
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
@@ -39,7 +40,9 @@ const scheduleCadencePluralForms = {
 };
 
 export const ru: TranslationResources = {
+  hostMonitor: hostMonitorEn,
   taskBoard: {
+    ...en.taskBoard,
     runCommand: "Выполнение команды",
     loadFailed: "Не удалось загрузить задачи",
     title: "Обзор задач",
@@ -2386,6 +2389,31 @@ export const ru: TranslationResources = {
     clientUnavailable: "Подключение к хосту не готово",
     retry: "Повторить",
     tooltipLoading: "Загрузка использования по тарифу…",
+    history: {
+      tab: "История",
+      byProvider: "По провайдерам",
+      byModel: "По моделям",
+      byDay: "По дням",
+      unknownModel: "Неизвестная модель",
+      calls: "Вызовы {{value}}",
+      failedCalls: "Ошибки {{value}}",
+      requests: "Запросы {{value}}",
+      tokens: "Токены {{value}}",
+      input: "Ввод {{value}}",
+      output: "Вывод {{value}}",
+      cacheRead: "Чтение кэша {{value}}",
+      cacheWrite: "Запись в кэш {{value}}",
+      cacheHitRate: "Попадания в кэш {{value}}",
+      reportedCost: "Стоимость по данным провайдера {{value}}",
+      lowerBound:
+        "≥ означает нижнюю границу: некоторые вызовы сообщили об использовании токенов частично или не сообщили вовсе.",
+      recordedSince: "История использования начинается {{date}}. Более ранних записей нет.",
+      empty: "За этот период вызовов нет",
+      unreachable: "Не учтены, нет связи: {{hosts}}",
+      failed: "Не удалось загрузить историю использования с {{host}}: {{reason}}",
+      notRecorded: "История использования не записывается на {{hosts}}",
+      hostTotals: "История использования за последние 30 дней",
+    },
   },
   pairing: {
     connectionMethods: {

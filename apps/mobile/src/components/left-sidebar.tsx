@@ -1,3 +1,4 @@
+import { HostMonitorSidebar } from "@/host-monitor/sidebar-item";
 import { UsageSidebarRoot, UsageSidebarItem } from "@/usage/sidebar-item";
 import { router } from "expo-router";
 import { FolderPlus, GitBranch, Import, Server, Settings, X } from "lucide-react-native";
@@ -39,7 +40,7 @@ import {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
-import { RetainedPanelActivity } from "@/components/retained-panel";
+import { RetainedPanelActivity, useRetainedPanelActive } from "@/components/retained-panel";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
 import { type SidebarGroupMode, useSidebarViewStore } from "@/stores/sidebar-view-store";
@@ -459,6 +460,7 @@ function MobileSidebar({
   insetsBottom,
   closeSidebar,
 }: MobileSidebarProps) {
+  const active = useRetainedPanelActive();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
 
@@ -530,6 +532,7 @@ function MobileSidebar({
         )}
 
         <UsageSidebarItem />
+        <HostMonitorSidebar active={active} />
         <SidebarFooter
           theme={theme}
           handleOpenProject={handleOpenProject}
@@ -707,6 +710,7 @@ function DesktopSidebar({
         <SidebarCalloutSlot />
 
         <UsageSidebarItem />
+        <HostMonitorSidebar active={active} />
         <SidebarFooter
           theme={theme}
           handleOpenProject={handleOpenProject}

@@ -552,6 +552,7 @@ mod controls;
 mod delivery;
 mod fork_context;
 mod recovery;
+mod secret_fixture;
 mod streaming;
 mod subscriptions;
 mod titles;

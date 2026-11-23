@@ -13,7 +13,7 @@ use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub(crate) enum AgentSessionError {
+pub enum AgentSessionError {
     /// The provider cannot currently start or resume a session.
     #[error("provider is unavailable")]
     Unavailable,
@@ -33,20 +33,20 @@ pub(crate) enum AgentSessionError {
 
 /// Provider-independent inputs required to construct or resume a native session.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct AgentSessionSpec {
+pub struct AgentSessionSpec {
     /// Provider identity.
-    pub(crate) provider: String,
+    pub provider: String,
     /// Native session working directory.
-    pub(crate) cwd: String,
+    pub cwd: String,
     /// Persistable provider configuration.
-    pub(crate) config: StoredAgentConfig,
+    pub config: StoredAgentConfig,
     /// OS write confinement for the native process tree; never persisted with the Agent.
-    pub(crate) confinement: Option<domain::workspace::sandbox::WriteConfinement>,
+    pub confinement: Option<domain::workspace::sandbox::WriteConfinement>,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentResumePurpose {
+pub enum AgentResumePurpose {
     /// Resume an active Agent for interaction.
     Interactive,
     /// Read the history of an archived Agent without claiming an interactive writer.
@@ -55,7 +55,7 @@ pub(crate) enum AgentResumePurpose {
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum AgentTurnEvent {
+pub enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
@@ -77,6 +77,8 @@ pub(crate) enum AgentTurnEvent {
     History(Vec<crate::protocol::timeline::NativeItem>),
     /// Complete current usage snapshot; consumers replace rather than sum repeated observations.
     Usage(crate::protocol::usage::AgentUsage),
+    /// One additive model request for the usage ledger; consumers sum distinct segments.
+    RequestUsage(super::usage_ledger::RequestUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
     RuntimeInfo(StoredAgentRuntimeInfo),
     /// The native provider drained its turn successfully.
@@ -90,7 +92,7 @@ pub(crate) enum AgentTurnEvent {
 /// Live provider session. Closing releases resources without deleting native history.
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
-pub(crate) trait AgentSession: Debug + Send + Sync {
+pub trait AgentSession: Debug + Send + Sync {
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,
@@ -149,6 +151,12 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// Whether this session publishes `AgentTurnEvent::RequestUsage` for its turns.
+    /// Without it, the ledger records the session's calls with missing token usage.
+    fn reports_token_usage(&self) -> bool {
+        false
+    }
+
     /// Return the most recent failure's user-visible explanation, if available.
     ///
     /// Adapters must exclude credentials and private diagnostics, and keep the message at most
@@ -182,6 +190,9 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
         Vec::new()
     }
+    /// Adopt terminal descendant outcomes verified from provider-owned durable state, so a later
+    /// stop of this session cannot replace them.
+    fn settle_subagents(&self, _children: &[super::controls::NativeSubagent]) {}
     /// Prepare a session-scoped question answer that requires durable user-input admission.
     /// This has no side effects; call `respond_permission` only after admission succeeds.
     /// # Errors
@@ -308,7 +319,7 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
-pub(crate) trait AgentClient: Debug + Send + Sync {
+pub trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false
@@ -494,6 +505,16 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         _cwd: &str,
     ) -> Result<Vec<super::controls::NativeSubagent>, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
+    }
+
+    /// Reconcile already verified child links with provider-owned durable lifecycle facts.
+    /// # Errors
+    /// Returns a provider read failure; callers may retain the previous observations.
+    async fn reconcile_subagents(
+        &self,
+        children: Vec<super::controls::NativeSubagent>,
+    ) -> Result<Vec<super::controls::NativeSubagent>, AgentSessionError> {
+        Ok(children)
     }
 
     /// Derive a new native history before the selected user message, preserving the old thread.

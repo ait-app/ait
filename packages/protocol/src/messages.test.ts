@@ -7,6 +7,7 @@ import {
   SessionOutboundMessageSchema,
   WorkspaceProjectDescriptorPayloadSchema,
 } from "./messages.js";
+import { validateWSOutboundMessage } from "./validation/ws-outbound.js";
 
 function workspaceDescriptor(overrides: Record<string, unknown> = {}) {
   return {
@@ -253,6 +254,87 @@ describe("provider usage list message contract", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("provider usage ledger message contract", () => {
+  const row = {
+    calls: 1,
+    failedCalls: 0,
+    requests: 2,
+    inputTokens: 10,
+    outputTokens: 20,
+    cacheReadTokens: 30,
+    cacheWriteTokens: 40,
+    reportedCostUsd: 0.25,
+    costReportedRequests: 1,
+    lowerBoundCalls: 0,
+    missingCalls: 0,
+  };
+
+  test("round-trips a grouped range request", () => {
+    const request = {
+      type: "provider.usage.ledger.request",
+      from: 1_762_560_000_000,
+      to: 1_762_646_400_000,
+      groupBy: ["provider", "model", "source", "outcome", "day"],
+      requestId: "ledger-1",
+    };
+
+    expect(SessionInboundMessageSchema.parse(request)).toEqual(request);
+  });
+
+  test.each([{ groupBy: [] }, { groupBy: ["workspace"] }, { from: 1.5 }, { to: "1762646400000" }])(
+    "rejects a malformed request %j",
+    (override) => {
+      const parsed = SessionInboundMessageSchema.safeParse({
+        type: "provider.usage.ledger.request",
+        from: 0,
+        to: 86_400_000,
+        groupBy: ["provider"],
+        requestId: "ledger-bad",
+        ...override,
+      });
+
+      expect(parsed.success).toBe(false);
+    },
+  );
+
+  test("round-trips rows whose keys carry only the grouped dimensions", () => {
+    const response = {
+      type: "provider.usage.ledger.response",
+      payload: {
+        requestId: "ledger-2",
+        rows: [
+          { key: { provider: "codex", source: "user" }, ...row },
+          { key: { day: "2025-11-08", outcome: "a-future-outcome" }, ...row },
+        ],
+        since: 1_762_560_000_000,
+      },
+    };
+
+    const parsed = SessionOutboundMessageSchema.parse(response);
+
+    expect(parsed).toEqual(response);
+    expect(validateWSOutboundMessage({ type: "session", message: response })).toEqual({
+      success: true,
+      data: { type: "session", message: response },
+    });
+  });
+
+  test("rejects negative or fractional counters", () => {
+    for (const override of [{ calls: -1 }, { requests: 1.5 }, { reportedCostUsd: -0.01 }]) {
+      const parsed = SessionOutboundMessageSchema.safeParse({
+        type: "provider.usage.ledger.response",
+        payload: {
+          requestId: "ledger-3",
+          rows: [{ key: {}, ...row, ...override }],
+          since: 0,
+        },
+      });
+
+      expect(parsed.success).toBe(false);
+    }
   });
 });
 

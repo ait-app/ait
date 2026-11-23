@@ -117,7 +117,11 @@ impl Connection {
         )
         .await;
         match result {
-            Ok(value) => {
+            Ok(mut value) => {
+                super::dispatch::permission_projection::response(
+                    &mut value,
+                    context.secret_questions,
+                );
                 context.respond(Ok(value))?;
                 Ok(())
             }

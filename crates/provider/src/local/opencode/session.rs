@@ -1135,6 +1135,11 @@ impl AgentSession for Session {
             .lock()
             .map_or_else(|_| Vec::new(), |children| children.list())
     }
+    fn settle_subagents(&self, children: &[crate::ports::controls::NativeSubagent]) {
+        if let Ok(mut live) = self.children.lock() {
+            live.settle(children);
+        }
+    }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.diagnostics.failure()
     }

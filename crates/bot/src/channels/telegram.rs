@@ -11,11 +11,14 @@ use super::{
 };
 use crate::service::Bots;
 
+mod format;
 pub(crate) mod onboarding;
 
 const API: &str = "https://api.telegram.org";
 /// Longest wait between admission attempts while the Bot's global backlog is full.
 const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
+const PROCESSING_REACTION: &str = "\u{1f440}";
+const GROUP_PRIVACY_WARNING: &str = "Telegram group privacy is enabled; promote this bot to an administrator or disable privacy in BotFather and re-add it before using group mentions";
 
 pub(super) async fn run(
     bots: &Bots,
@@ -45,11 +48,18 @@ async fn run_at(
         cancel.cancelled().await;
         return Ok(());
     }
-    bots.channel_status(
-        channel.id,
-        json!({"state":"connected","accountId":identity.to_string()}),
-    )
-    .await;
+    let mut status = json!({"state":"connected","accountId":identity.to_string()});
+    if matches!(
+        channel.config,
+        ChannelConfig::Telegram {
+            allow_groups: true,
+            ..
+        }
+    ) && me["can_read_all_group_messages"] != true
+    {
+        status["error"] = json!(GROUP_PRIVACY_WARNING);
+    }
+    bots.channel_status(channel.id, status).await;
     let receiver = Receiver {
         bots,
         channel,
@@ -61,28 +71,88 @@ async fn run_at(
     };
     let receiving = receiver.receive(cancel);
     let sending = deliver(bots, channel.id, cancel, |turn, conversation| async move {
-        let parts = reply_parts(&turn);
-        if parts.is_empty() {
-            return Err(ErrorCode::BotIo);
-        }
-        for text in parts {
-            for chunk in chunks(text, 3500) {
-                let body = message_body(
-                    &conversation.peer,
-                    conversation.thread.as_deref(),
-                    turn.reply_to.as_deref(),
-                    chunk,
-                )?;
-                call_at(client, token, "sendMessage", body, api).await?;
-            }
-        }
-        Ok(())
+        send_reply(client, token, &turn, &conversation, api).await
     });
     tokio::select! {
         () = cancel.cancelled() => Ok(()),
         result = receiving => result,
         result = sending => result,
     }
+}
+
+async fn send_reply(
+    client: &reqwest::Client,
+    token: &SecretString,
+    turn: &domain::bot::Turn,
+    conversation: &domain::bot::Conversation,
+    api: &str,
+) -> Result<(), ErrorCode> {
+    let parts = reply_parts(turn);
+    if parts.is_empty() {
+        return Err(ErrorCode::BotIo);
+    }
+    let mut message_id = None;
+    let mut current_text = String::new();
+    for text in parts {
+        for (index, chunk) in chunks(text, 3500).into_iter().enumerate() {
+            if index == 0
+                && let Some(id) = message_id
+            {
+                let updated = format!("{current_text}\n\n{chunk}");
+                if chunks(&updated, 3500).len() == 1 {
+                    edit_message(client, token, &conversation.peer, id, &updated, api).await?;
+                    current_text = updated;
+                    continue;
+                }
+            }
+            message_id = Some(send_message(client, token, turn, conversation, chunk, api).await?);
+            current_text.clear();
+            current_text.push_str(chunk);
+        }
+    }
+    Ok(())
+}
+
+async fn send_message(
+    client: &reqwest::Client,
+    token: &SecretString,
+    turn: &domain::bot::Turn,
+    conversation: &domain::bot::Conversation,
+    text: &str,
+    api: &str,
+) -> Result<i64, ErrorCode> {
+    let body = message_body(
+        &conversation.peer,
+        conversation.thread.as_deref(),
+        turn.reply_to.as_deref(),
+        text,
+    )?;
+    let sent = call_at(client, token, "sendMessage", body, api).await?;
+    sent["message_id"].as_i64().ok_or(ErrorCode::BotIo)
+}
+
+async fn edit_message(
+    client: &reqwest::Client,
+    token: &SecretString,
+    chat_id: &str,
+    message_id: i64,
+    text: &str,
+    api: &str,
+) -> Result<(), ErrorCode> {
+    call_at(
+        client,
+        token,
+        "editMessageText",
+        json!({
+            "chat_id":chat_id,
+            "message_id":message_id,
+            "text":format::render(text),
+            "parse_mode":"HTML"
+        }),
+        api,
+    )
+    .await
+    .map(|_| ())
 }
 
 struct Receiver<'a> {
@@ -130,7 +200,11 @@ impl Receiver<'_> {
         let mut backoff = Duration::from_secs(1);
         loop {
             match admit(self.bots, incoming.clone()).await? {
-                Disposition::Accepted | Disposition::Skip => return Ok(true),
+                Disposition::Accepted => {
+                    self.react(&incoming).await;
+                    return Ok(true);
+                }
+                Disposition::Skip => return Ok(true),
                 Disposition::Busy => {
                     self.notify_busy(&incoming).await;
                     return Ok(true);
@@ -143,6 +217,24 @@ impl Receiver<'_> {
                     backoff = (backoff * 2).min(MAX_BACKLOG_RETRY);
                 }
             }
+        }
+    }
+
+    /// Best-effort reaction showing that a durably admitted message is being processed.
+    async fn react(&self, incoming: &Incoming) {
+        let Some(message_id) = incoming.reply_to.as_deref() else {
+            return;
+        };
+        let result = react(
+            self.client,
+            self.token,
+            &incoming.peer,
+            message_id,
+            self.api,
+        )
+        .await;
+        if let Err(error) = result {
+            tracing::warn!(channel = %self.channel.id, ?error, "Telegram reaction failed");
         }
     }
 
@@ -172,7 +264,11 @@ fn message_body(
     reply_to: Option<&str>,
     text: &str,
 ) -> Result<Value, ErrorCode> {
-    let mut body = json!({"chat_id":peer,"text":text});
+    let mut body = json!({
+        "chat_id":peer,
+        "text":format::render(text),
+        "parse_mode":"HTML"
+    });
     if let Some(message) = reply_to {
         body["reply_parameters"] =
             json!({"message_id":message.parse::<i64>().map_err(|_| ErrorCode::BotIo)?});
@@ -181,6 +277,30 @@ fn message_body(
         body["message_thread_id"] = json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
     }
     Ok(body)
+}
+
+async fn react(
+    client: &reqwest::Client,
+    token: &SecretString,
+    chat_id: &str,
+    message_id: &str,
+    api: &str,
+) -> Result<(), ErrorCode> {
+    let message_id = message_id.parse::<i64>().map_err(|_| ErrorCode::BotIo)?;
+    call_at(
+        client,
+        token,
+        "setMessageReaction",
+        json!({
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "reaction": [{"type": "emoji", "emoji": PROCESSING_REACTION}],
+            "is_big": false,
+        }),
+        api,
+    )
+    .await
+    .map(|_| ())
 }
 
 fn incoming(

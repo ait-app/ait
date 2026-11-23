@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
-import { formatAmount, formatDisplayPct, formatResetLabel, formatRunOutLabel } from "./format";
+import {
+  formatAmount,
+  formatCacheHitRate,
+  formatDisplayPct,
+  formatLedgerCount,
+  formatLedgerDate,
+  formatLedgerDay,
+  formatLedgerTokens,
+  formatReportedCost,
+  formatResetLabel,
+  formatRunOutLabel,
+} from "./format";
 
 afterEach(async () => {
   vi.useRealTimers();
@@ -43,4 +54,38 @@ it("retained reset times that have passed do not claim the quota is resetting", 
   expect(formatResetLabel(past, true)).toBe("Reset time passed");
   expect(formatResetLabel(past)).toBe("resetting now");
   expect(formatResetLabel(null, true)).toBeNull();
+});
+
+describe("ledger figures", () => {
+  it("compacts counts past a thousand in the app's language", () => {
+    expect(formatLedgerCount(980, "en")).toBe("980");
+    expect(formatLedgerCount(12_345, "en")).toBe("12.3K");
+    expect(formatLedgerCount(1_250_000, "en")).toBe("1.3M");
+  });
+
+  it("marks lower-bound token figures with ≥", () => {
+    expect(formatLedgerTokens(12_345, false, "en")).toBe("12.3K");
+    expect(formatLedgerTokens(12_345, true, "en")).toBe("≥12.3K");
+    expect(formatLedgerTokens(0, true, "en")).toBe("≥0");
+  });
+
+  it("writes cache hit rates as whole percents", () => {
+    expect(formatCacheHitRate(0.756)).toBe("76%");
+    expect(formatCacheHitRate(0)).toBe("0%");
+  });
+
+  it("shows reported cost only when a provider reported one, and marks partial reports", () => {
+    const row = { reportedCostUsd: 1.5, costReportedRequests: 2, requests: 2 };
+    expect(formatReportedCost(row, "en")).toBe("$1.50");
+    expect(formatReportedCost({ ...row, costReportedRequests: 1 }, "en")).toBe("≥$1.50");
+    expect(formatReportedCost({ ...row, costReportedRequests: 0 }, "en")).toBeNull();
+    expect(formatReportedCost({ ...row, reportedCostUsd: 0.0042 }, "en")).toBe("$0.0042");
+  });
+
+  it("writes UTC ledger days and history starts in the app's language", () => {
+    expect(formatLedgerDay("2026-11-10", "en")).toBe("Nov 10");
+    expect(formatLedgerDay("2026-11-10", "zh-CN")).toBe("11月10日");
+    expect(formatLedgerDay("someday", "en")).toBe("someday");
+    expect(formatLedgerDate(Date.parse("2026-11-02T12:00:00Z"), "en")).toBe("Nov 2, 2026");
+  });
 });

@@ -44,6 +44,3 @@ run("npm", [
   "never",
   ...(target === "mac" ? ["-c.forceCodeSigning=true"] : []),
 ]);
-if (target === "mac") {
-  run("xcrun", ["stapler", "validate", path.join(desktop, "release/mac-arm64/Ait.app")]);
-}

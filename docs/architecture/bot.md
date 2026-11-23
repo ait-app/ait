@@ -135,6 +135,8 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   客户端按接入方法是否实现显示微信、QQ 与 iMessage
   （[ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)、
   [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)）。
+- QQ 群聊接收 `GROUP_AT_MESSAGE_CREATE`；开启 QQ 的群全量消息能力后，也兼容
+  `GROUP_MESSAGE_CREATE`，将群内普通消息一并接纳。
 
 ### 中心托管的 Webhook
 

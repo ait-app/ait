@@ -93,6 +93,7 @@ async fn optional_session_controls_fail_without_claiming_unsupported_authority()
     unavailable(session.account_usage()).await;
     assert_eq!(session.failure_message(), None);
     assert!(!session.pending_foreground());
+    assert!(!session.reports_token_usage());
     assert_eq!(session.cancel_pending().await, Ok(()));
     assert_eq!(
         session.subagents(),
