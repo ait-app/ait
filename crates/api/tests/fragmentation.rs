@@ -13,7 +13,6 @@ use model as _;
 use persistence as _;
 use provider as _;
 use provider_builtin as _;
-use provider_core as _;
 use relay as _;
 use reqwest as _;
 use schedule as _;

@@ -27,14 +27,16 @@ use crate::storage::timeline::Timeline;
 /// measured value with no headroom: the synchronized cold list ignores `page.limit` and grows
 /// with the host's Agents, and long-turn pages that reach a large tool output ship its whole
 /// body, bounded only by the 900 KiB page budget.
+/// The exact limits include 108 bytes per Agent snapshot added after the original measurement:
+/// 53 for child-control capabilities and 55 for preset selection state and revision.
 const CEILINGS: &[(&str, usize, usize)] = &[
     ("agent directory: workspace page", 67_000, 40),
-    ("agent directory: synchronized cold", 270_188, 200),
+    ("agent directory: synchronized cold", 291_788, 200),
     ("agent directory: synchronized resume", 2_000, 1),
     ("agent directory: get", 1_700, 1),
     ("long turn: timeline tail", 195_000, 40),
-    ("long turn: older page", 417_240, 40),
-    ("long turn: catch-up after reconnect", 417_239, 40),
+    ("long turn: older page", 417_348, 40),
+    ("long turn: catch-up after reconnect", 417_347, 40),
     ("long turn: catch-up after epoch change", 195_000, 40),
     ("forty turns: timeline tail", 133_000, 40),
     ("forty turns: older page", 138_000, 40),
