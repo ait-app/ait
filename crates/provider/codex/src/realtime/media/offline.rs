@@ -1,4 +1,9 @@
-use super::{AgentSessionError, Endpoint, Event, Future, Media, Pin, oneshot, watch};
+use std::{future::Future, pin::Pin};
+
+use model::realtime::{Endpoint, Event};
+use tokio::sync::{oneshot, watch};
+
+use super::{AgentSessionError, Media};
 
 /// Offline media boundary for native app-server lifecycle tests.
 pub(crate) fn fixture(

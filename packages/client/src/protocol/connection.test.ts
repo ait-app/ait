@@ -231,15 +231,8 @@ it("negotiates business ping only on the liveness connection while retaining rel
   for (const [channel, capabilities] of CHANNEL_CAPABILITIES.entries()) {
     expect(capabilities.includes("connection.ping")).toBe(channel === 0);
     expect(capabilities).toContain("subscription.release.request");
+    expect(capabilities.length).toBeLessThanOrEqual(64);
   }
-  // #663 is independently reviewable; retain room for its two channel 2 methods in either merge order.
-  expect(
-    new Set([
-      ...CHANNEL_CAPABILITIES[2],
-      "agent.native_html.export.request",
-      "agent.native_html.export.cancel.request",
-    ]).size,
-  ).toBeLessThanOrEqual(64);
 });
 
 it("releases a file subscription through its owning split connection", () => {

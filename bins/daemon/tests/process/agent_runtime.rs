@@ -225,6 +225,8 @@ fn agent(id: &str, workspace_id: &str, title: &str) -> PersistedAgentRuntimeReco
         last_status: AgentRuntimeStatus::Closed,
         last_mode_id: None,
         config: None,
+        config_revision: 0,
+        model_preset: None,
         runtime_info: None,
         features: Vec::new(),
         persistence: None,

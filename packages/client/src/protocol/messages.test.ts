@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentTimelineSearchResponseMessageSchema,
   parseServerInfoStatusPayload,
+  ServerInfoStatusPayloadSchema,
   SessionOutboundMessageSchema,
 } from "@ait/protocol/messages";
 import { METHODS } from "./methods.js";
@@ -129,7 +130,8 @@ function info(methods: string[]) {
 }
 it("emits every server-info feature schema key as an explicit boolean", () => {
   const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
-  expect(Object.keys(payload.features ?? {})).toHaveLength(99);
+  const schemaKeys = Object.keys(ServerInfoStatusPayloadSchema.in.shape.features.unwrap().shape);
+  expect(Object.keys(payload.features ?? {}).sort()).toEqual(schemaKeys.sort());
   expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
     true,
   );
