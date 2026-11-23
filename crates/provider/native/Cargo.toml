@@ -25,6 +25,10 @@ tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
 
+[features]
+# The stdio record/replay peer for adapter tests; never enabled by production dependents.
+test-support = []
+
 [lints]
 workspace = true
 
