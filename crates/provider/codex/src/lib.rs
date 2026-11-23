@@ -464,6 +464,14 @@ impl AgentClient for CodexClient {
         "codex"
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: "Codex",
+            description: "OpenAI's Codex workspace agent with sandbox controls and optional network access",
+            default_mode: provider_core::ports::catalog::DefaultMode::Fixed("auto"),
+        })
+    }
+
     fn continues_interrupted_turns(&self) -> bool {
         true
     }
@@ -1037,12 +1045,7 @@ impl AgentSession for CodexSession {
         if config.model.is_some() {
             self.info.model.clone_from(&config.model);
         }
-        self.info.mode_id = Some(
-            config
-                .mode_id
-                .clone()
-                .unwrap_or_else(|| "read-only".to_owned()),
-        );
+        self.info.mode_id = Some(config.mode_id.clone().unwrap_or_else(|| "auto".to_owned()));
         self.info
             .thinking_option_id
             .clone_from(&config.thinking_option_id);
@@ -1245,7 +1248,7 @@ fn runtime_info(response: &Value, id: &str, spec: &AgentSessionSpec) -> StoredAg
             spec.config
                 .mode_id
                 .clone()
-                .unwrap_or_else(|| "read-only".to_owned()),
+                .unwrap_or_else(|| "auto".to_owned()),
         ),
         extra: None,
     }

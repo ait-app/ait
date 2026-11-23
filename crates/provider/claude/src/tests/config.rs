@@ -37,7 +37,15 @@ fn rejects_unsupported_configuration_and_preserves_native_modes() {
         );
     }
     let settings = client.settings(&StoredAgentConfig::default());
-    assert_eq!(settings["availableModes"].as_array().unwrap().len(), 5);
+    let modes = settings["availableModes"].as_array().unwrap();
+    assert_eq!(modes.len(), 5);
+    assert_eq!(
+        modes
+            .iter()
+            .find(|mode| mode["isDefault"] == true)
+            .and_then(|mode| mode["id"].as_str()),
+        Some("auto")
+    );
     assert_eq!(settings["capabilities"]["supportsStreaming"], true);
     assert_eq!(settings["capabilities"]["supportsSessionListing"], true);
     assert!(config::validate_spec(&spec(std::path::Path::new("relative"))).is_err());

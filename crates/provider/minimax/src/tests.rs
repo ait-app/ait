@@ -491,3 +491,59 @@ fn turn_request_maps_cache_buckets_and_skips_empty_usage() {
     );
     assert_eq!(session::turn_request("turn", &Value::Null), None);
 }
+
+#[tokio::test]
+async fn defaults_permission_mode_to_auto_on_new_sessions_and_preserves_explicit_or_resumed_modes()
+{
+    let (root, client, mut spec) = fixture();
+    std::fs::write(root.path().join("scenario"), "default-ask").unwrap();
+
+    let details = client.discover(&spec.cwd).await.unwrap();
+    let permission = &details.features[0];
+    assert_eq!(permission["id"], "permissionMode");
+    assert_eq!(permission["value"], "auto");
+    assert_eq!(
+        permission["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|option| option["isDefault"] == true)
+            .and_then(|option| option["id"].as_str()),
+        Some("auto")
+    );
+
+    let draft = client.draft_features(&spec).await.unwrap();
+    assert_eq!(draft[0]["value"], "auto");
+
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert_eq!(
+        session.control_settings(&spec.config).unwrap()["features"][0]["value"],
+        "auto"
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+
+    // Resuming without an explicit override preserves whatever permission mode the native
+    // session already holds rather than overwriting it.
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(
+        resumed.control_settings(&spec.config).unwrap()["features"][0]["value"],
+        "default"
+    );
+    resumed.close().await.unwrap();
+
+    // An explicit permissionMode overrides the default on creation.
+    spec.config.feature_values = Some(std::collections::BTreeMap::from([(
+        "permissionMode".into(),
+        json!("default"),
+    )]));
+    let mut explicit = client.create_session(&spec).await.unwrap();
+    assert_eq!(
+        explicit.control_settings(&spec.config).unwrap()["features"][0]["value"],
+        "default"
+    );
+    explicit.close().await.unwrap();
+}

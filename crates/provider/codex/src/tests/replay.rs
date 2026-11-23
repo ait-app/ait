@@ -36,6 +36,7 @@ fn text_turn_spec(cwd: &str) -> AgentSessionSpec {
         cwd: cwd.to_owned(),
         config: StoredAgentConfig {
             model: Some("gpt-6-luna".to_owned()),
+            mode_id: Some("read-only".to_owned()),
             thinking_option_id: Some("low".to_owned()),
             ..StoredAgentConfig::default()
         },

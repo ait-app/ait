@@ -4,6 +4,7 @@ mod catalog;
 mod config;
 mod questions;
 mod session;
+mod summary;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -69,6 +70,23 @@ impl AgentClient for MiniMaxClient {
             description: "MiniMax Code via Agent Client Protocol",
             default_mode: provider_core::ports::catalog::DefaultMode::Omitted,
         })
+    }
+
+    fn supports_summary_generation(&self) -> bool {
+        true
+    }
+
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
+        summary::select_model(models)
+    }
+
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        summary::generate(self, spec, prompt, schema).await
     }
 
     fn supports_history_replay(&self) -> bool {

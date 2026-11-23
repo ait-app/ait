@@ -7,6 +7,7 @@ mod input;
 mod quota;
 mod session;
 mod streaming;
+mod summary;
 mod transport;
 
 use std::path::PathBuf;
@@ -88,6 +89,23 @@ impl AgentClient for AntigravityClient {
                 native_logs: provider_core::ports::harness_evidence::NativeLogs::Unknown,
             },
         )
+    }
+
+    fn supports_summary_generation(&self) -> bool {
+        true
+    }
+
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
+        summary::select_model(models)
+    }
+
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        summary::generate(self, spec, prompt, schema).await
     }
 
     fn supports_history_replay(&self) -> bool {

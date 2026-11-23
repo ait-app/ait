@@ -74,7 +74,7 @@ pub(super) fn modes() -> Vec<Value> {
     .into_iter()
     .map(|(id, label, icon, tier)| {
         json!({"id":id,"label":label,"icon":icon,
-        "colorTier":tier,"isDefault":id=="default","isUnattended":id=="bypassPermissions"})
+        "colorTier":tier,"isDefault":id=="auto","isUnattended":id=="bypassPermissions"})
     })
     .collect()
 }

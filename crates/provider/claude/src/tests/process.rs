@@ -304,6 +304,15 @@ async fn discovers_creates_streams_resumes_changes_settings_and_reads_history() 
     assert_eq!(client.commands(&spec).await.unwrap()[0]["name"], "review");
     let mut session = client.create_session(&spec).await.unwrap();
     assert_eq!(session.provider(), "claude");
+    assert_eq!(
+        session.runtime_info().await.unwrap().mode_id.as_deref(),
+        Some("auto")
+    );
+    let initial_args = std::fs::read_to_string(root.path().join("claude-args.json")).unwrap();
+    assert!(
+        initial_args.contains("--permission-mode=auto"),
+        "{initial_args}"
+    );
     let handle = session.persistence().unwrap();
     session.start_turn("hello", &spec.config).await.unwrap();
     assert_eq!(finish(session.as_mut()).await, "Claude: hello");

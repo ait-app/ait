@@ -259,7 +259,7 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     id: "codex",
     label: "Codex",
     description: "OpenAI's Codex workspace agent with sandbox controls and optional network access",
-    defaultModeId: "auto-review",
+    defaultModeId: "auto",
     modes: CODEX_MODES,
     voice: {
       enabled: true,

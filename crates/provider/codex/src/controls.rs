@@ -218,7 +218,7 @@ pub(super) fn modes() -> Vec<Value> {
     vec![
         json!({"id":"auto","label":"Default Permissions",
             "description":"Write in the workspace and request approval when needed",
-            "icon":"Shield","colorTier":"moderate"}),
+            "icon":"Shield","colorTier":"moderate","isDefault":true}),
         json!({"id":"full-access","label":"Full Access",
             "description":"Run without sandbox restrictions or approval prompts",
             "icon":"ShieldOff","colorTier":"dangerous","isUnattended":true}),
@@ -231,7 +231,7 @@ pub(super) fn modes() -> Vec<Value> {
 /// nested Seatbelt profiles or user namespaces; its tool commands therefore run with full
 /// access inside that outer boundary instead of failing.
 pub(super) fn policy(config: &StoredAgentConfig, confined: bool) -> (Value, &str, Value) {
-    let (approval, sandbox) = match config.mode_id.as_deref().unwrap_or("read-only") {
+    let (approval, sandbox) = match config.mode_id.as_deref().unwrap_or("auto") {
         "auto" | "auto-review" => ("on-request", "workspace-write"),
         "full-access" => ("never", "danger-full-access"),
         _ => ("never", "read-only"),

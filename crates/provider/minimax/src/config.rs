@@ -11,6 +11,9 @@ use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use provider_core::protocol::provider::Details;
 use provider_native::acp_transport::Transport;
 
+/// Default native tool permission for new sessions when the host advertises `auto`.
+const DEFAULT_PERMISSION: &str = "auto";
+
 /// Validate bounded host settings before native admission; unsupported fields are rejected.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config
@@ -108,12 +111,14 @@ pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
 /// Apply selected ACP options and verify their confirmed values; unsupported choices reject.
 /// Uses `transport` and native session `id`; updates `options` with acknowledged `config`.
 /// The host model and thinking choice resolve to a native model variant and effort first.
+/// When `apply_defaults` is true and no `permissionMode` is specified, selects `auto` if offered.
 /// Returns a transport/protocol error if native acknowledgement fails.
 pub(super) async fn apply(
     transport: &mut Transport,
     id: &str,
     options: &mut Value,
     config: &StoredAgentConfig,
+    apply_defaults: bool,
 ) -> Result<(), AgentSessionError> {
     validate(config)?;
     let model = config.model.as_deref();
@@ -140,7 +145,12 @@ pub(super) async fn apply(
         .feature_values
         .as_ref()
         .and_then(|features| features.get("permissionMode"))
-        .and_then(Value::as_str);
+        .and_then(Value::as_str)
+        .or_else(|| {
+            apply_defaults
+                .then(|| default_permission(options))
+                .flatten()
+        });
     for (category, selected) in [
         ("thought_level", selection.effort.as_deref()),
         ("mode", config.mode_id.as_deref()),
@@ -151,6 +161,15 @@ pub(super) async fn apply(
         }
     }
     Ok(())
+}
+
+fn default_permission(options: &Value) -> Option<&'static str> {
+    let permission = option(options, "_permission")?;
+    choices(permission)
+        .ok()?
+        .into_iter()
+        .any(|choice| choice["value"] == DEFAULT_PERMISSION)
+        .then_some(DEFAULT_PERMISSION)
 }
 
 /// Select native `value` for the option in `category` and verify the acknowledgement.
@@ -282,9 +301,16 @@ pub(super) fn features(options: &Value) -> Result<Vec<Value>, AgentSessionError>
     let Some(permission) = option(options, "_permission") else {
         return Ok(Vec::new());
     };
+    let default = default_permission(options);
     let choices = choices(permission)?
         .into_iter()
-        .map(|choice| json!({"id":choice["value"],"label":choice["name"]}))
+        .map(|choice| {
+            let is_default = default.map_or_else(
+                || choice["value"] == permission["currentValue"],
+                |default| choice["value"] == default,
+            );
+            json!({"id":choice["value"],"label":choice["name"],"isDefault":is_default})
+        })
         .collect::<Vec<_>>();
     Ok(vec![json!({
         "id":"permissionMode","type":"select","label":"Permissions",

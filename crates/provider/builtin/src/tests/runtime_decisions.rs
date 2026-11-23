@@ -126,6 +126,18 @@ fn catalog_presentation_keeps_the_legacy_labels_descriptions_and_default_modes()
                     r#"Fixed("default")"#.to_owned(),
                 ),
                 (
+                    "claude",
+                    "Claude",
+                    "Anthropic's multi-tool assistant with MCP support, streaming, and deep reasoning",
+                    r#"Fixed("auto")"#.to_owned(),
+                ),
+                (
+                    "codex",
+                    "Codex",
+                    "OpenAI's Codex workspace agent with sandbox controls and optional network access",
+                    r#"Fixed("auto")"#.to_owned(),
+                ),
+                (
                     "deepseek-harness",
                     "DeepSeek Harness",
                     dsh_description,

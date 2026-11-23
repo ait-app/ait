@@ -368,7 +368,7 @@ fn launch_command(
         ])
         .arg(format!(
             "--permission-mode={}",
-            spec.config.mode_id.as_deref().unwrap_or("default")
+            permission_mode(&spec.config, binding.is_some())
         ))
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
@@ -427,6 +427,15 @@ fn launch_command(
     #[cfg(unix)]
     command.process_group(0);
     Ok((command, mcp_config))
+}
+
+/// Resolve the CLI `--permission-mode`: interactive sessions default to `auto`, while
+/// ephemeral probe and metadata processes stay on `default`.
+fn permission_mode(config: &domain::agent_runtime::StoredAgentConfig, interactive: bool) -> &str {
+    config
+        .mode_id
+        .as_deref()
+        .unwrap_or(if interactive { "auto" } else { "default" })
 }
 
 /// Write `document` to a new owner-only temporary file so MCP credentials stay out of `ps`.

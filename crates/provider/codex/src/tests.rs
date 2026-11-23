@@ -257,6 +257,10 @@ async fn native_create_text_turn_cancel_resume_and_history_are_distinct() {
         session.runtime_info().await.unwrap().model.as_deref(),
         Some("offline-model")
     );
+    assert_eq!(
+        session.runtime_info().await.unwrap().mode_id.as_deref(),
+        Some("auto")
+    );
     session
         .start_turn("hello", &fixture.spec().config)
         .await
@@ -314,8 +318,8 @@ async fn native_create_text_turn_cancel_resume_and_history_are_distinct() {
         .iter()
         .find(|request| request["method"] == "thread/start")
         .unwrap();
-    assert_eq!(start["params"]["sandbox"], "read-only");
-    assert_eq!(start["params"]["approvalPolicy"], "never");
+    assert_eq!(start["params"]["sandbox"], "workspace-write");
+    assert_eq!(start["params"]["approvalPolicy"], "on-request");
     assert_eq!(
         start["params"]["developerInstructions"],
         "test instructions"
@@ -326,6 +330,30 @@ async fn native_create_text_turn_cancel_resume_and_history_are_distinct() {
             .any(|request| request["method"] == "thread/resume")
     );
     assert_eq!(requests.last().unwrap()["method"], "thread/read");
+}
+
+#[test]
+fn default_mode_is_auto_and_explicit_read_only_stays_read_only() {
+    let client = CodexClient::new("codex".into());
+    assert_eq!(
+        client
+            .modes()
+            .iter()
+            .find(|mode| mode["isDefault"] == true)
+            .and_then(|mode| mode["id"].as_str()),
+        Some("auto")
+    );
+    let default_config = StoredAgentConfig::default();
+    let default_policy = controls::policy(&default_config, false);
+    assert_eq!(default_policy.0, "on-request");
+    assert_eq!(default_policy.1, "workspace-write");
+    let read_only_config = StoredAgentConfig {
+        mode_id: Some("read-only".into()),
+        ..Default::default()
+    };
+    let read_only_policy = controls::policy(&read_only_config, false);
+    assert_eq!(read_only_policy.0, "never");
+    assert_eq!(read_only_policy.1, "read-only");
 }
 
 #[tokio::test]

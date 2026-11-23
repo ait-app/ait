@@ -92,6 +92,7 @@ pub(super) async fn open(
         &session.id,
         &mut session.options,
         &spec.config,
+        handle.is_none(),
     )
     .await
     {
@@ -118,14 +119,19 @@ impl Session {
                 model: Some(text(choice, "value")?.to_owned()),
                 ..StoredAgentConfig::default()
             };
-            let accepted =
-                match config::apply(&mut self.transport, &self.id, &mut self.options, &selected)
-                    .await
-                {
-                    Ok(()) => true,
-                    Err(AgentSessionError::Rejected) => false,
-                    Err(error) => return Err(error),
-                };
+            let accepted = match config::apply(
+                &mut self.transport,
+                &self.id,
+                &mut self.options,
+                &selected,
+                false,
+            )
+            .await
+            {
+                Ok(()) => true,
+                Err(AgentSessionError::Rejected) => false,
+                Err(error) => return Err(error),
+            };
             probes.push(catalog::Probe {
                 choice: choice.clone(),
                 accepted,
@@ -171,7 +177,14 @@ impl Session {
             })
             .collect::<Result<Vec<_>, _>>()?;
         self.transport.diagnostics.clear();
-        config::apply(&mut self.transport, &self.id, &mut self.options, config).await?;
+        config::apply(
+            &mut self.transport,
+            &self.id,
+            &mut self.options,
+            config,
+            false,
+        )
+        .await?;
         let user_text = prompt_blocks::text(&blocks);
         let turn = Uuid::new_v4().to_string();
         let rpc_id = self

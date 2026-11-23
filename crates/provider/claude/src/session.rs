@@ -104,7 +104,7 @@ pub(super) async fn open(
                 spec.config
                     .mode_id
                     .clone()
-                    .unwrap_or_else(|| "default".to_owned()),
+                    .unwrap_or_else(|| "auto".to_owned()),
             ),
             extra: None,
         },
@@ -689,12 +689,7 @@ impl AgentSession for ClaudeSession {
         self.info
             .thinking_option_id
             .clone_from(&config.thinking_option_id);
-        self.info.mode_id = Some(
-            config
-                .mode_id
-                .clone()
-                .unwrap_or_else(|| "default".to_owned()),
-        );
+        self.info.mode_id = Some(config.mode_id.clone().unwrap_or_else(|| "auto".to_owned()));
         Ok(id)
     }
 

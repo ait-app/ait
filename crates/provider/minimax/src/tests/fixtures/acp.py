@@ -6,9 +6,22 @@ import sys
 import time
 from pathlib import Path
 
-assert sys.argv[1] == "acp"
 root = Path.cwd()
 scenario = (root / "scenario").read_text() if (root / "scenario").exists() else "normal"
+if sys.argv[1] == "exec":
+    prompt = sys.stdin.read()
+    (root / "exec-args.json").write_text(json.dumps({"args": sys.argv[1:], "stdin": prompt}))
+    if scenario == "exec-fail":
+        print(json.dumps({"schemaVersion": 1, "type": "exec.result", "status": "failed", "output": None}), flush=True)
+        sys.exit(0)
+    print(json.dumps({
+        "schemaVersion": 1,
+        "type": "exec.result",
+        "status": "succeeded",
+        "output": {"title": "MiniMax summary"},
+    }), flush=True)
+    sys.exit(0)
+assert sys.argv[1] == "acp"
 # Native 0.7.7 lists each model per reasoning variant; non-thinking Flash is rejected.
 FLASH_OFF = "m:minimax:MiniMax-M3.1-Flash:v:"
 FLASH_THINKING = "m:minimax:MiniMax-M3.1-Flash:v:thinking"
@@ -20,7 +33,7 @@ VARIANTS = [
 ]
 model = FLASH_THINKING if scenario == "variants" else "minimax/flash"
 mode = "default"
-permission_mode = "auto"
+permission_mode = "default" if scenario == "default-ask" else "auto"
 thinking_effort = "default"
 active = None
 session_id = "minimax-session"

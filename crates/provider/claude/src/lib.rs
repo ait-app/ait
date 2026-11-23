@@ -222,6 +222,14 @@ impl AgentClient for ClaudeClient {
         "claude"
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: "Claude",
+            description: "Anthropic's multi-tool assistant with MCP support, streaming, and deep reasoning",
+            default_mode: provider_core::ports::catalog::DefaultMode::Fixed("auto"),
+        })
+    }
+
     fn imported_session_mode(&self) -> &'static str {
         "default"
     }

@@ -168,6 +168,14 @@ for line in sys.stdin:
             terminal('SUCCESS', 'Command was denied' if scenario == 'denied-response' else '',
                      denied_actions=[{'action': 'command', 'display_name': 'RunCommand'}])
         continue
+    if '--json-schema' in args and scenario != 'summary-tool':
+        step('user_input', 'DONE')
+        step_index += 1
+        step('agent_response', 'DONE', text_delta='{"title":"Fixture summary"}')
+        step_index += 1
+        terminal('SUCCESS', '{"title":"Fixture summary"}',
+                 structured_output={'title': 'Fixture summary'})
+        continue
     step('user_input', 'DONE')
     step_index += 1
     step('tool', 'ACTIVE', tool_name='run_command', tool_info={
