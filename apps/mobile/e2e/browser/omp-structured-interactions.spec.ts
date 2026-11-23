@@ -29,7 +29,7 @@ const peerLog = path.join(agentDir, "calls.jsonl");
 // Extend the existing offline peer with two independent dialogs. Keep the native
 // turn open until both responses arrive, so answering one cannot settle the other.
 const peerSource = readFileSync(
-  path.join(repoRoot, "crates/provider/src/local/omp/tests/fixtures/omp.py"),
+  path.join(repoRoot, "crates/provider-omp/src/tests/fixtures/omp.py"),
   "utf8",
 );
 const askBranch = "        if text == 'ask':";

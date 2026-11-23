@@ -25,7 +25,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 243);
+    assert_eq!(published.len(), 244);
     assert_eq!(implemented.len(), 242);
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
@@ -96,6 +96,6 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
             .difference(&implemented)
             .map(String::as_str)
             .collect::<Vec<_>>(),
-        ["connection.single.v1"]
+        ["agent-secret-questions-v1", "connection.single.v1"]
     );
 }

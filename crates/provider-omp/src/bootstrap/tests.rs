@@ -37,7 +37,8 @@ async fn ready_session_reports_declined_oversized_startup_dialogs() {
 
 #[tokio::test]
 async fn startup_dialog_before_ready_can_be_answered_and_releases_input_once() {
-    let (root, client, spec) = crate::tests::fixture();
+    let (root, mut client, spec) = crate::tests::fixture();
+    client.timeouts.ready = std::time::Duration::from_secs(2);
     std::fs::create_dir_all(root.path().join("agent")).unwrap();
     std::fs::write(root.path().join("agent/startup-before-ready"), "true").unwrap();
     let mut session = tokio::time::timeout(
@@ -52,6 +53,8 @@ async fn startup_dialog_before_ready_can_be_answered_and_releases_input_once() {
         .pop()
         .expect("startup question");
     assert_eq!(request["id"], "early-choice");
+    // A visible question may outlive the normal ready deadline.
+    tokio::time::sleep(std::time::Duration::from_millis(2200)).await;
     session
         .start_turn("after early answer", &spec.config)
         .await

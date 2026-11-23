@@ -430,7 +430,6 @@ impl Transport {
             .await
             .map_err(|_| AgentSessionError::Unavailable)?;
         self.startup_timeouts = Some(self.timeouts);
-        self.timeouts.ready = self.timeouts.ready.max(STARTUP_TIMEOUT);
         self.startup = Some(sender);
         Ok(())
     }
@@ -456,23 +455,37 @@ impl Transport {
     /// Returns `AgentSessionError::Failed` when `ready` does not arrive in time, the process
     /// closes, or OMP refuses the protocol v2 it advertised.
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
-        let ready = tokio::time::timeout(self.timeouts.ready, async {
-            while let Some(frame) = self.messages.recv().await {
+        let ready: Result<Option<Value>, tokio::time::error::Elapsed> = async {
+            let mut deadline = tokio::time::Instant::now() + self.timeouts.ready;
+            let mut extended = false;
+            loop {
+                let Some(frame) = tokio::time::timeout_at(deadline, self.messages.recv()).await?
+                else {
+                    return Ok(None);
+                };
                 if frame.value["type"] == "ready" {
-                    return Some(frame.value);
+                    return Ok(Some(frame.value));
                 }
                 if frame.value["type"] == "extension_ui_request"
                     && let Some(sender) = &self.startup
-                    && sender
-                        .send(super::bootstrap::Frame::Ui(frame.value))
-                        .await
-                        .is_err()
                 {
-                    return None;
+                    if !extended {
+                        deadline =
+                            tokio::time::Instant::now() + self.timeouts.ready.max(STARTUP_TIMEOUT);
+                        extended = true;
+                    }
+                    if tokio::time::timeout_at(
+                        deadline,
+                        sender.send(super::bootstrap::Frame::Ui(frame.value)),
+                    )
+                    .await?
+                    .is_err()
+                    {
+                        return Ok(None);
+                    }
                 }
             }
-            None
-        })
+        }
         .await;
         let ready = match ready {
             Ok(Some(ready)) => ready,

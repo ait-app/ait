@@ -36,7 +36,12 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 243);
+    assert_eq!(registered.len(), 244);
+    assert!(
+        registered
+            .iter()
+            .any(|name| name == "agent-secret-questions-v1")
+    );
     assert!(
         !registered
             .iter()
@@ -73,7 +78,7 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 243);
+    assert_eq!(registered.len(), 244);
     assert!(unique.contains("bot.message.send.request"));
     for name in [
         "browser.tunnel.open.request",
