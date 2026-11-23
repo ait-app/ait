@@ -20,6 +20,11 @@ use crate::rpc::timeline::fetch_stored;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
 
+/// The baseline predates the two child-control capability flags added by #673. Each Agent
+/// snapshot adds exactly these bytes; keeping the adjustment explicit preserves zero headroom.
+const CHILD_CONTROL_BYTES: usize =
+    b",\"supportsChildGuide\":false,\"supportsChildStop\":false".len();
+
 /// Read name, maximum encoded result bytes, maximum returned rows.
 ///
 /// Values are the measurement on 2026-11-23 plus about 25 percent, rounded up; row ceilings
@@ -29,12 +34,20 @@ use crate::storage::timeline::Timeline;
 /// body, bounded only by the 900 KiB page budget.
 const CEILINGS: &[(&str, usize, usize)] = &[
     ("agent directory: workspace page", 67_000, 40),
-    ("agent directory: synchronized cold", 270_188, 200),
+    (
+        "agent directory: synchronized cold",
+        270_188 + 200 * CHILD_CONTROL_BYTES,
+        200,
+    ),
     ("agent directory: synchronized resume", 2_000, 1),
     ("agent directory: get", 1_700, 1),
     ("long turn: timeline tail", 195_000, 40),
-    ("long turn: older page", 417_240, 40),
-    ("long turn: catch-up after reconnect", 417_239, 40),
+    ("long turn: older page", 417_240 + CHILD_CONTROL_BYTES, 40),
+    (
+        "long turn: catch-up after reconnect",
+        417_239 + CHILD_CONTROL_BYTES,
+        40,
+    ),
     ("long turn: catch-up after epoch change", 195_000, 40),
     ("forty turns: timeline tail", 133_000, 40),
     ("forty turns: older page", 138_000, 40),
@@ -170,6 +183,9 @@ fn agent_directory_reads() -> Vec<Measured> {
         json!({"scope":"active","sort":sort,"page":{"limit":HOST_AGENTS},"sync":{}}),
     );
     assert_eq!(cold["entries"].as_array().map(Vec::len), Some(HOST_AGENTS));
+    for entry in cold["entries"].as_array().expect("cold entries") {
+        assert_child_control_flags(&entry["agent"]);
+    }
     let mut changed = agent(7);
     changed.title = Some("Renamed while the client was away".to_owned());
     agents.upsert(&changed).expect("change one agent");
@@ -234,6 +250,7 @@ fn timeline_reads(scenario: &str, items: &[NativeItem]) -> Vec<Measured> {
         .append(&record.id, &record.provider, items)
         .expect("append the history");
     let mut envelope = serde_json::to_value(snapshot(&record)).expect("agent snapshot");
+    assert_child_control_flags(&envelope);
     envelope["lastError"] = json!(record.last_error);
     let read = |mut params: Value, history_needs_refresh: Option<bool>| {
         params["agentId"] = json!(record.id);
@@ -282,6 +299,11 @@ fn timeline_reads(scenario: &str, items: &[NativeItem]) -> Vec<Measured> {
             "entries",
         ),
     ]
+}
+
+fn assert_child_control_flags(agent: &Value) {
+    assert_eq!(agent["capabilities"]["supportsChildGuide"], false);
+    assert_eq!(agent["capabilities"]["supportsChildStop"], false);
 }
 
 /// One running turn: a prompt, then reasoning, tool calls and progress messages, where every

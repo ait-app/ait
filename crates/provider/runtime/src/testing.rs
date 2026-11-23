@@ -44,6 +44,7 @@ use provider_core::protocol::prompt::AgentPrompt;
 use provider_core::protocol::timeline::NativeItem;
 
 pub mod agent_mcp;
+pub mod child_controls;
 #[cfg(test)]
 mod tests;
 
