@@ -669,7 +669,7 @@ async fn process_request(
                                     MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
                                 ),
                             )
-                            .instrument(span)
+                            .instrument(span.clone())
                             .await
                         } else {
                             policy::private::execute(
@@ -679,13 +679,13 @@ async fn process_request(
                                 request.params,
                                 private,
                             )
-                            .instrument(span)
+                            .instrument(span.clone())
                             .await
                         }
                     }
                     Err(code) => Err(code),
                 };
-                return outbound.respond(request_id, result);
+                return span.in_scope(|| outbound.respond(request_id, result));
             }
         },
         None => request,

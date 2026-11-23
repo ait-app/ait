@@ -43,6 +43,7 @@ use model::ErrorCode;
 use model::methods::MethodSpec;
 use serde_json::Value;
 use tokio_util::task::task_tracker::TaskTrackerToken;
+use tracing::Instrument;
 
 use crate::dispatch::State as Shared;
 use crate::service::agent_execution::{AdmittedResponse, AgentExecution};
@@ -128,15 +129,18 @@ fn respond_projected<R: Send + 'static>(
     // outbound delivery. Dropping the socket cannot cancel accepted work, such as a catalog
     // cache or refresh update. `retained` stays alive with the response owner, so inline
     // events observe the whole admitted operation.
-    state.tasks.spawn(async move {
-        let mut result = response.receive().await.map_err(Into::into);
-        if let (Some(project), Ok(value)) = (project, &mut result) {
-            project(value);
+    state.tasks.spawn(
+        async move {
+            let mut result = response.receive().await.map_err(Into::into);
+            if let (Some(project), Ok(value)) = (project, &mut result) {
+                project(value);
+            }
+            let _ = outbound.respond(request_id, result);
+            drop(response);
+            drop(retained);
         }
-        let _ = outbound.respond(request_id, result);
-        drop(response);
-        drop(retained);
-    });
+        .instrument(tracing::Span::current()),
+    );
     drop(admission);
     Ok(())
 }
@@ -170,16 +174,19 @@ pub(crate) fn wait(
         .expect("installed execution checked above");
     let outbound = outbound.clone();
     let cancellation = state.cancellation.clone();
-    state.tasks.spawn(async move {
-        let _permit = permit;
-        let failure = outbound.failure();
-        let result = tokio::select! {
-            () = cancellation.cancelled() => return,
-            () = failure.cancelled() => return,
-            result = execution.execute("agent.finish.wait.request", params) => result,
-        };
-        let _ = outbound.respond(request_id, result.map_err(Into::into));
-    });
+    state.tasks.spawn(
+        async move {
+            let _permit = permit;
+            let failure = outbound.failure();
+            let result = tokio::select! {
+                () = cancellation.cancelled() => return,
+                () = failure.cancelled() => return,
+                result = execution.execute("agent.finish.wait.request", params) => result,
+            };
+            let _ = outbound.respond(request_id, result.map_err(Into::into));
+        }
+        .instrument(tracing::Span::current()),
+    );
     drop(admission);
     Ok(())
 }
@@ -252,3 +259,6 @@ fn track(state: &Shared) -> Result<TaskTrackerToken, ErrorCode> {
     }
     Ok(state.tasks.token())
 }
+
+#[cfg(test)]
+mod tests;

@@ -217,7 +217,7 @@ impl ErrorCode {
             Self::AgentDisabled => "Agent is disabled",
             Self::AgentIsDefault => "Deselect the default Agent before disabling it",
             Self::CatalogBusy => "Catalog is busy",
-            Self::AgentIo => "Agent I/O failed; retry with the same key",
+            Self::AgentIo => "Agent operation failed; check the current state before retrying",
             Self::WorkspaceNotFound => "Workspace is not registered",
             Self::RegistryIo => "Project or workspace registry I/O failed",
             Self::DaemonConfigInvalid => "Daemon configuration is invalid",

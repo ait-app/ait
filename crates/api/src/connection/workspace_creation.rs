@@ -10,6 +10,7 @@ use model::outbound::Outbound;
 use model::runtime::Runtime;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
+use tracing::Instrument;
 
 use crate::Shared;
 
@@ -49,25 +50,28 @@ pub(super) async fn request(
         provider: state.provider.clone(),
     };
     drop(context);
-    state.tasks.spawn(async move {
-        let result = create(&composition, &input, params).await;
-        match result {
-            Ok(value) => {
-                let event = (!value["workspace"].is_null())
-                    .then(|| json!({"kind":"upsert","workspace":value["workspace"]}));
-                let _ = outbound.respond(request_id, Ok(value));
-                if let Some(params) = event {
-                    let _ = outbound.send(&model::ServerMessage::Event {
-                        method: "workspace.update".to_owned(),
-                        params,
-                    });
+    state.tasks.spawn(
+        async move {
+            let result = create(&composition, &input, params).await;
+            match result {
+                Ok(value) => {
+                    let event = (!value["workspace"].is_null())
+                        .then(|| json!({"kind":"upsert","workspace":value["workspace"]}));
+                    let _ = outbound.respond(request_id, Ok(value));
+                    if let Some(params) = event {
+                        let _ = outbound.send(&model::ServerMessage::Event {
+                            method: "workspace.update".to_owned(),
+                            params,
+                        });
+                    }
+                }
+                Err(error) => {
+                    let _ = outbound.respond(request_id, Err(error));
                 }
             }
-            Err(error) => {
-                let _ = outbound.respond(request_id, Err(error));
-            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
     Ok(())
 }
 /// Owned dependencies retained by one tracked Workspace creation.

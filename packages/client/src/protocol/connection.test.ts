@@ -233,7 +233,6 @@ it("negotiates business ping only on the liveness connection while retaining rel
     expect(capabilities).toContain("subscription.release.request");
     expect(capabilities.length).toBeLessThanOrEqual(64);
   }
-
 });
 
 it("routes preset selection and context on their negotiated split connections", () => {
