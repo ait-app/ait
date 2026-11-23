@@ -395,6 +395,40 @@ pub trait AgentClient: Debug + Send + Sync {
         true
     }
 
+    /// Whether a turn interrupted by an unexpected host restart resumes on its own: the runtime
+    /// queues a continuation input on the saved native session instead of only reporting the
+    /// interruption (ADR-177).
+    ///
+    /// Only adapters whose resumed session reliably continues from saved history return `true`.
+    fn continues_interrupted_turns(&self) -> bool {
+        false
+    }
+
+    /// Whether a live session's own descendant observations are complete, so the runtime may
+    /// skip native subagent discovery while that session reports any children.
+    fn live_subagents_are_complete(&self) -> bool {
+        false
+    }
+
+    /// Mode recorded for a session adopted from native history whose configuration names none.
+    fn imported_session_mode(&self) -> &'static str {
+        "read-only"
+    }
+
+    /// Display name, description and default mode added to this adapter's catalog entry.
+    ///
+    /// The default adds nothing beyond the discovered models and modes.
+    fn catalog_presentation(&self) -> Option<super::catalog::CatalogPresentation> {
+        None
+    }
+
+    /// Native program and log locations for local incident evidence.
+    ///
+    /// The default contributes no harness section to incident reports.
+    fn harness_evidence(&self) -> Option<super::harness_evidence::HarnessEvidenceSource> {
+        None
+    }
+
     /// Create a session with ephemeral environment overrides for its native child process.
     ///
     /// Default adapters accept an empty environment and reject unsupported nonempty values.

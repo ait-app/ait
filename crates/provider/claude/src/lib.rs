@@ -222,6 +222,27 @@ impl AgentClient for ClaudeClient {
         "claude"
     }
 
+    fn imported_session_mode(&self) -> &'static str {
+        "default"
+    }
+
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_CLAUDE_BIN",
+                default_program: "claude",
+                log_directory_variable: "AIT_DIAGNOSTICS_CLAUDE_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::UnderRoot {
+                    root_variable: "CLAUDE_CONFIG_DIR",
+                    home_directory: ".claude",
+                    subdirectory: "debug",
+                },
+            },
+        )
+    }
+
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(&self.resolved_config(config))
     }

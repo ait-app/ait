@@ -10,6 +10,7 @@ use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
 mod concurrency;
 mod diagnostics;
 mod paseo;
+mod presentation;
 
 #[derive(Debug)]
 struct Client(bool);

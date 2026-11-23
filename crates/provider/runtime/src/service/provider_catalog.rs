@@ -16,6 +16,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::protocol::provider::{ListRequest, RefreshRequest, SnapshotRequest};
 use provider_core::ports::agent_session::AgentClient;
+use provider_core::ports::catalog::{CatalogPresentation, DefaultMode};
 use provider_core::protocol::provider::Details;
 
 mod draft;
@@ -249,34 +250,8 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         "botSession":client.bot_session_support(),
         "supportsRealtimeVoice":client.settings(&domain::agent_runtime::StoredAgentConfig::default())["capabilities"]["supportsRealtimeVoice"] == true,
         "models":details.models,"modes":details.modes,"fetchedAt":Utc::now().to_rfc3339()});
-    if client.provider() == "deepseek-harness" {
-        value["label"] = json!("DeepSeek Harness");
-        value["description"] = json!(if client
-            .settings(&domain::agent_runtime::StoredAgentConfig::default())["capabilities"]["supportsDynamicModes"]
-            == true
-        {
-            "DeepSeek Harness native interactive Host"
-        } else {
-            "DeepSeek Harness via Agent Client Protocol"
-        });
-        value["defaultModeId"] = value["modes"]
-            .as_array()
-            .and_then(|modes| modes.iter().find(|mode| mode["isDefault"] == true))
-            .map_or(Value::Null, |mode| mode["id"].clone());
-    }
-    if client.provider() == "antigravity" {
-        value["label"] = json!("Antigravity");
-        value["description"] = json!("Google Antigravity via the official AGY CLI");
-        value["defaultModeId"] = json!("default");
-    }
-    if client.provider() == "omp" {
-        value["label"] = json!("Oh My Pi");
-        value["description"] = json!("Oh My Pi native approvals, questions and subagents");
-        value["defaultModeId"] = json!("full");
-    }
-    if client.provider() == "minimax-code" {
-        value["label"] = json!("MiniMax Code");
-        value["description"] = json!("MiniMax Code via Agent Client Protocol");
+    if let Some(presentation) = client.catalog_presentation() {
+        present(&mut value, presentation);
     }
     if let Some(error) = error {
         value["error"] = json!(error);
@@ -288,6 +263,22 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         generation: 0,
         loading: None,
         refresh_again: false,
+    }
+}
+
+/// Add an adapter's label, description and default mode to its discovered catalog entry.
+fn present(entry: &mut Value, presentation: CatalogPresentation) {
+    entry["label"] = json!(presentation.label);
+    entry["description"] = json!(presentation.description);
+    match presentation.default_mode {
+        DefaultMode::Omitted => {}
+        DefaultMode::Fixed(mode) => entry["defaultModeId"] = json!(mode),
+        DefaultMode::Discovered => {
+            entry["defaultModeId"] = entry["modes"]
+                .as_array()
+                .and_then(|modes| modes.iter().find(|mode| mode["isDefault"] == true))
+                .map_or(Value::Null, |mode| mode["id"].clone());
+        }
     }
 }
 

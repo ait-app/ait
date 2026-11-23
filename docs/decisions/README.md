@@ -58,7 +58,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md) 修订）
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)（经 [ADR-294](daemon/adr-294-sqlite-creation-receipts.md) 修订）
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
-- [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md) 修订）
+- [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-299](providers/adr-299-runtime-reads-adapter-capabilities.md) 修订）
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)
 - [ADR-107：共享组件直接从所属 crate 导入](daemon/adr-107-direct-imports-from-owning-crates.md)（经 [ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-106：具体文件持久化归 file，model 仅声明契约](daemon/adr-106-concrete-file-persistence.md)（经 [ADR-107](daemon/adr-107-direct-imports-from-owning-crates.md)、[ADR-111](daemon/adr-111-domain-values-and-server-protocol.md)、[ADR-112](daemon/adr-112-persistence-crate.md)、[ADR-210](providers/adr-210-committed-runtime-read-snapshots.md)、[ADR-294](daemon/adr-294-sqlite-creation-receipts.md) 修订）
@@ -119,6 +119,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-299：运行时按 adapter 声明的能力决策，不比较 provider id](providers/adr-299-runtime-reads-adapter-capabilities.md)
 - [ADR-286：模型预设的备选链、供应商展示与选择器优先级](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)
 - [ADR-285：账号用量查询遵守上游重试时间](providers/adr-285-account-usage-retry-delay.md)
 - [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)（经 [ADR-286](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）
@@ -127,7 +128,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-275：共享模型目录刷新与选择保值](providers/adr-275-shared-model-catalog-refresh.md)（提议中）
 - [ADR-273：Provider crate 家族收拢到 `crates/provider/`](providers/adr-273-provider-crate-directory.md)
-- [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md) 修订）
+- [ADR-270：Provider 拆为契约、共享工具、逐 adapter、运行时与装配 crate](providers/adr-270-provider-crate-family.md)（经 [ADR-273](providers/adr-273-provider-crate-directory.md)、[ADR-299](providers/adr-299-runtime-reads-adapter-capabilities.md) 修订）
 - [ADR-249：OMP 适配器独立为 `provider-omp` crate](providers/adr-249-omp-adapter-crate.md)（经 [ADR-248](providers/adr-248-omp-paseo-native-rpc.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-248：OMP Provider 按 Paseo 设计直接驱动原生 RPC](providers/adr-248-omp-paseo-native-rpc.md)
 - [ADR-246：按 Host 记录的 Harness 用量账本](providers/adr-246-harness-usage-ledger.md)
@@ -159,7 +160,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)（经 [ADR-190](providers/adr-190-omp-acp-settlement.md)、[ADR-194](providers/adr-194-omp-settlement-reconciliation.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
 - [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
-- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)（经 [ADR-299](providers/adr-299-runtime-reads-adapter-capabilities.md) 修订）
 - [ADR-176: Pi user images in the shared timeline projection](providers/adr-176-pi-user-image-projection.md)
 - [ADR-175：独立恢复 Provider 错误详情与重启收尾](providers/adr-175-restore-provider-recovery.md)（经 [ADR-177](providers/adr-177-codex-restart-continuation.md) 修订）
 - [ADR-174: Pi native session import](providers/adr-174-pi-session-import.md)（经 [ADR-176](providers/adr-176-pi-user-image-projection.md)、[ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md) 修订）

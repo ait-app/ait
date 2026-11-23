@@ -1,15 +1,57 @@
 use super::*;
 
+/// A source for the adapter whose variables use `key`, as the built-in adapters declare them.
+fn declared(key: &str, program: &'static str, native_logs: NativeLogs) -> HarnessEvidenceSource {
+    let (program_variable, log_directory_variable) = match key {
+        "OPENCODE" => (
+            "AIT_SERVER_OPENCODE_BIN",
+            "AIT_DIAGNOSTICS_OPENCODE_LOG_DIR",
+        ),
+        "CODEX" => ("AIT_SERVER_CODEX_BIN", "AIT_DIAGNOSTICS_CODEX_LOG_DIR"),
+        "CLAUDE" => ("AIT_SERVER_CLAUDE_BIN", "AIT_DIAGNOSTICS_CLAUDE_LOG_DIR"),
+        _ => ("AIT_SERVER_PI_BIN", "AIT_DIAGNOSTICS_PI_LOG_DIR"),
+    };
+    HarnessEvidenceSource {
+        program_variable,
+        default_program: program,
+        log_directory_variable,
+        native_logs,
+    }
+}
+
 #[test]
 fn environment_overrides_program_and_log_roots() {
-    let evidence = HarnessEvidence::configured(|key| match key {
+    let sources = [
+        (
+            "opencode",
+            declared(
+                "OPENCODE",
+                "opencode",
+                NativeLogs::ReportedByProgram(&["debug", "paths", "log"]),
+            ),
+        ),
+        (
+            "codex",
+            declared(
+                "CODEX",
+                "codex",
+                NativeLogs::UnderRoot {
+                    root_variable: "CODEX_HOME",
+                    home_directory: ".codex",
+                    subdirectory: "log",
+                },
+            ),
+        ),
+        ("pi", declared("PI", "pi", NativeLogs::Unknown)),
+    ];
+    let evidence = HarnessEvidence::configured(sources, |key| match key {
         "HOME" => Some("/fixture".into()),
         "AIT_SERVER_PI_BIN" => Some("/bin/custom-pi".into()),
         "AIT_SERVER_OPENCODE_BIN" => Some("/bin/custom-opencode".into()),
         "AIT_DIAGNOSTICS_OPENCODE_LOG_DIR" => Some("/logs/native".into()),
         _ => None,
     });
-    assert_eq!(evidence.sources.len(), 6);
+    assert_eq!(evidence.sources.len(), 3);
     let pi = evidence
         .sources
         .iter()
@@ -17,6 +59,7 @@ fn environment_overrides_program_and_log_roots() {
         .unwrap();
     assert_eq!(pi.program, Path::new("/bin/custom-pi"));
     assert!(pi.logs.is_none());
+    assert!(pi.log_query.is_none());
     assert_eq!(
         evidence.sources[0].program,
         Path::new("/bin/custom-opencode")
@@ -26,9 +69,35 @@ fn environment_overrides_program_and_log_roots() {
         Some(Path::new("/logs/native"))
     );
     assert_eq!(
+        evidence.sources[0].log_query,
+        Some(&["debug", "paths", "log"][..])
+    );
+    assert_eq!(
         evidence.sources[1].logs.as_deref(),
         Some(Path::new("/fixture/.codex/log"))
     );
+    assert_eq!(evidence.sources[1].program, Path::new("codex"));
+}
+
+#[test]
+fn root_variable_relocates_native_logs_and_unset_home_leaves_none() {
+    let logs = NativeLogs::UnderRoot {
+        root_variable: "CLAUDE_CONFIG_DIR",
+        home_directory: ".claude",
+        subdirectory: "debug",
+    };
+    let relocated =
+        HarnessEvidence::configured([("claude", declared("CLAUDE", "claude", logs))], |key| {
+            (key == "CLAUDE_CONFIG_DIR").then(|| "/config".into())
+        });
+    let homeless =
+        HarnessEvidence::configured([("claude", declared("CLAUDE", "claude", logs))], |_| None);
+
+    assert_eq!(
+        relocated.sources[0].logs.as_deref(),
+        Some(Path::new("/config/debug"))
+    );
+    assert!(homeless.sources[0].logs.is_none());
 }
 
 #[test]
@@ -113,9 +182,10 @@ fn probes_fail_without_hanging_and_collection_reports_missing_sources() {
         );
         let evidence = HarnessEvidence {
             sources: vec![Source {
-                name: "fixture",
+                name: "fixture".into(),
                 program: "/missing/ait-test-binary".into(),
                 logs: None,
+                log_query: None,
             }],
         };
         let report = evidence.collect(Utc::now(), Utc::now()).await;
@@ -145,4 +215,32 @@ fn probes_fail_without_hanging_and_collection_reports_missing_sources() {
             );
         }
     });
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn reported_log_directory_must_be_absolute() {
+    const ABSOLUTE: &[&str] = &["/missing/ait-native-logs"];
+    const RELATIVE: &[&str] = &["relative/logs"];
+    let reported = |log_query: &'static [&'static str]| HarnessEvidence {
+        sources: vec![Source {
+            name: "fixture".into(),
+            program: "/bin/echo".into(),
+            logs: None,
+            log_query: Some(log_query),
+        }],
+    };
+    let now = Utc::now();
+
+    let absolute = reported(ABSOLUTE).collect(now, now).await;
+    let relative = reported(RELATIVE).collect(now, now).await;
+
+    assert!(
+        absolute.contains("Logs: directory unavailable"),
+        "{absolute}"
+    );
+    assert!(
+        relative.contains("Log discovery: non-absolute path rejected"),
+        "{relative}"
+    );
 }

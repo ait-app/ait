@@ -52,13 +52,22 @@
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
 - 内置 adapter 列表只在 `crates/provider/builtin`：`provider_builtin::providers` 从空容器
   `provider::Providers::empty` 开始，
-  用 `Providers::with` 依次追加 `provider-codex` 的 `CodexClient`、`provider-antigravity` 的 `AntigravityClient`、
-  `provider-claude` 的 `ClaudeClient`、`provider-deepseek-harness` 的 `DeepSeekHarnessClient`、`provider-minimax` 的 `MiniMaxClient`、`provider-omp` 的 `OmpClient`、`provider-opencode` 的 `OpenCodeClient` 与 `provider-pi` 的 `PiClient`，共享同一图片目录（`OpenCodeClient` 与迁出前一样不接收该目录）；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
+  用 `Providers::with` 依次追加 `provider-opencode` 的 `OpenCodeClient`、`provider-codex` 的 `CodexClient`、
+  `provider-claude` 的 `ClaudeClient`、`provider-deepseek-harness` 的 `DeepSeekHarnessClient`、`provider-antigravity` 的 `AntigravityClient`、`provider-minimax` 的 `MiniMaxClient`、`provider-omp` 的 `OmpClient` 与 `provider-pi` 的 `PiClient`，共享同一图片目录（`OpenCodeClient` 与迁出前一样不接收该目录）；
+  注册顺序只决定故障证据中 Harness 段的顺序；daemon 在 `compose_providers` 中只调用这一入口。`Providers` 是运行时的 adapter 容器，
   负责注册与摘要生成器装配。`provider-builtin` 的生产依赖只有 `provider`、`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode` 与 `provider-pi`。
   可执行文件默认值与 `AIT_SERVER_*_BIN` 覆盖随 adapter 列表维护（OMP 的经 `provider_omp::installed_program`）。
-  运行时仍有两份按 provider id 键控的部分副本，需与该列表手工保持一致：`crates/provider/runtime/src/diagnostics.rs`
-  的诊断来源表列出六个 adapter 的 `AIT_SERVER_<KEY>_BIN` 与各自的默认程序，
-  `crates/provider/runtime/src/service/provider_catalog.rs` 按四个 provider id 补充 Catalog 标签、说明与默认模式。
+  运行时不按 provider id 分支，只读取 adapter 在 `AgentClient` 上按行为声明的决定（默认值即非特殊 adapter 的行为）：
+  `harness_evidence` 给出故障证据的程序覆盖变量、默认程序、日志目录覆盖变量与 `NativeLogs`
+  （OpenCode、Codex、Claude、DeepSeek Harness、Antigravity、Pi 声明），`Providers::harness_evidence` 按注册顺序组成
+  收集器，daemon 启动诊断收集器时调用；`catalog_presentation` 给出 Catalog 条目的 `label`、`description` 与
+  `defaultModeId` 来源（DeepSeek Harness 取发现的默认模式，Antigravity 固定 `default`，OMP 固定 `full`，MiniMax Code 不设）；
+  `continues_interrupted_turns`（Codex）决定重启后是否排入继续指令；`live_subagents_are_complete`（OpenCode）
+  允许活动会话已报告子会话时跳过原生子会话发现；`imported_session_mode`（Claude 为 `default`，默认 `read-only`）
+  是导入会话缺少模式时记录的模式。`provider-builtin` 的 `runtime_provider_ids` 测试从注册的 adapter 取得 id，
+  扫描 `crates/provider/runtime/src` 的非测试源码，引用内置 id 即失败；唯一允许的是 `storage/agents.rs` 旧 Agent 目录
+  schema 的 `CHECK(driver='codex')`。`runtime_decisions` 测试断言各 adapter 的声明等于迁移前运行时写死的值
+  （[ADR-299](../decisions/providers/adr-299-runtime-reads-adapter-capabilities.md)）。
   构造与注册不启动原生进程，也不创建存储
   （[ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)、
@@ -196,10 +205,11 @@
   [ADR-221](../decisions/bot/adr-221-read-only-bot-session-inspection.md)；
   [Bot 手册](../operations/bots.md)）。
 - 执行器启动、接纳请求前收尾没有本进程 writer 的 `running` 记录：未归档、非内部、有有效句柄
-  且无待处理持久权限的 Codex 会话向持久 FIFO 放入一次身份稳定的继续指令（已有排队输入时不追加）；
+  且无待处理持久权限、adapter 声明 `continues_interrupted_turns` 的会话（目前只有 Codex）向持久 FIFO 放入一次身份稳定的继续指令（已有排队输入时不追加）；
   其余写入固定的重启中断错误并转为 `error`。原始用户输入从不重放，写盘失败使启动失败
   （[ADR-175](../decisions/providers/adr-175-restore-provider-recovery.md) 第 2 项已由
-  [ADR-177](../decisions/providers/adr-177-codex-restart-continuation.md) 对 Codex 修订）。
+  [ADR-177](../decisions/providers/adr-177-codex-restart-continuation.md) 对 Codex 修订，
+  [ADR-299](../decisions/providers/adr-299-runtime-reads-adapter-capabilities.md) 改为按声明判断）。
 - 沙箱 Workspace 中，adapter 未声明 `supports_write_confinement` 时创建或恢复返回
   `ConfinementUnsupported`，失败关闭；目前 Antigravity 与 DeepSeek Harness 未声明
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、

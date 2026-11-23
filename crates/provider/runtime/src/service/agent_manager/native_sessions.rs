@@ -305,7 +305,7 @@ impl AgentManager {
             .as_ref()
             .ok_or(ErrorCode::UnsupportedCapability)?;
         timeline.reconcile(&record.id, &record.provider, &history.entries)?;
-        apply_history(&mut record, history);
+        self.apply_history(&mut record, history);
         if let Some(owner) = &self.owner {
             owner.bind(&record)?;
         }
@@ -316,7 +316,7 @@ impl AgentManager {
                     next.workspace_id.clone_from(&record.workspace_id);
                     next.labels.remove(PARENT_AGENT_ID_LABEL);
                     next.labels.extend(record.labels.clone());
-                    apply_history(&mut next, history);
+                    self.apply_history(&mut next, history);
                     next
                 })
                 .map_err(|_| ErrorCode::AgentIo)?
@@ -371,7 +371,7 @@ impl AgentManager {
         self.registry
             .update(id, &|current| {
                 let mut next = current.clone();
-                apply_history(&mut next, &history);
+                self.apply_history(&mut next, &history);
                 if let Some(metadata) = next
                     .persistence
                     .as_mut()
@@ -386,59 +386,63 @@ impl AgentManager {
         self.mark_history_loaded(id);
         Ok(())
     }
-}
 
-pub(super) fn apply_history(record: &mut PersistedAgentRuntimeRecord, history: &SessionHistory) {
-    if super::titles::missing(record) {
-        record.title = super::titles::from_history(history);
-        if history
-            .descriptor
-            .title
-            .as_deref()
-            .and_then(super::titles::from_prompt)
-            .is_none()
-            && record.title.is_some()
-        {
-            record.title_origin = Some(domain::agent_runtime::TitleOrigin::Prompt);
+    /// Adopt native `history` into `record`, marking it idle and current.
+    pub(super) fn apply_history(
+        &self,
+        record: &mut PersistedAgentRuntimeRecord,
+        history: &SessionHistory,
+    ) {
+        if super::titles::missing(record) {
+            record.title = super::titles::from_history(history);
+            if history
+                .descriptor
+                .title
+                .as_deref()
+                .and_then(super::titles::from_prompt)
+                .is_none()
+                && record.title.is_some()
+            {
+                record.title_origin = Some(domain::agent_runtime::TitleOrigin::Prompt);
+            }
         }
-    }
-    if let Some(handle) = &mut record.persistence {
-        handle.metadata = Some(history.resume_metadata.clone());
-    }
-    record.archived_at = None;
-    record.last_status = AgentRuntimeStatus::Idle;
-    record.last_error = None;
-    record.updated_at = now_timestamp();
-    record.last_activity_at = Some(history.descriptor.last_activity_at.clone());
-    record.last_user_message_at = history
-        .entries
-        .iter()
-        .rev()
-        .find(|entry| entry.item["type"] == "user_message")
-        .map(|entry| entry.timestamp.clone());
-    record.runtime_info = Some(StoredAgentRuntimeInfo {
-        provider: record.provider.clone(),
-        session_id: Some(history.descriptor.provider_handle_id.clone()),
-        model: history.config.model.clone(),
-        thinking_option_id: history.config.thinking_option_id.clone(),
-        mode_id: record
-            .config
-            .as_ref()
-            .and_then(|config| config.mode_id.clone())
-            .or_else(|| {
-                Some(
-                    if record.provider == "claude" {
-                        "default"
-                    } else {
-                        "read-only"
-                    }
-                    .to_owned(),
-                )
+        if let Some(handle) = &mut record.persistence {
+            handle.metadata = Some(history.resume_metadata.clone());
+        }
+        record.archived_at = None;
+        record.last_status = AgentRuntimeStatus::Idle;
+        record.last_error = None;
+        record.updated_at = now_timestamp();
+        record.last_activity_at = Some(history.descriptor.last_activity_at.clone());
+        record.last_user_message_at = history
+            .entries
+            .iter()
+            .rev()
+            .find(|entry| entry.item["type"] == "user_message")
+            .map(|entry| entry.timestamp.clone());
+        record.runtime_info = Some(StoredAgentRuntimeInfo {
+            provider: record.provider.clone(),
+            session_id: Some(history.descriptor.provider_handle_id.clone()),
+            model: history.config.model.clone(),
+            thinking_option_id: history.config.thinking_option_id.clone(),
+            mode_id: record
+                .config
+                .as_ref()
+                .and_then(|config| config.mode_id.clone())
+                .or_else(|| Some(self.imported_session_mode(&record.provider).to_owned())),
+            extra: history.resume_metadata.get("lastUsage").map(|usage| {
+                std::collections::BTreeMap::from([("lastUsage".to_owned(), usage.clone())])
             }),
-        extra: history.resume_metadata.get("lastUsage").map(|usage| {
-            std::collections::BTreeMap::from([("lastUsage".to_owned(), usage.clone())])
-        }),
-    });
+        });
+    }
+
+    /// Mode recorded for an adopted `provider` session whose configuration names none.
+    fn imported_session_mode(&self, provider: &str) -> &'static str {
+        // An unregistered provider keeps the port's default mode.
+        self.clients
+            .get(provider)
+            .map_or("read-only", |client| client.imported_session_mode())
+    }
 }
 
 pub(crate) fn canonical(cwd: &str) -> Result<String, ErrorCode> {

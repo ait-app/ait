@@ -23,7 +23,8 @@ const CONTINUE: &str = concat!(
 );
 
 impl AgentManager {
-    /// Queue a continuation for resumable Codex work and fail other interrupted turns.
+    /// Queue a continuation for work on adapters that continue interrupted turns and fail other
+    /// interrupted turns.
     ///
     /// The durable FIFO submits a separate continuation through the normal session lane; the
     /// interrupted user input is never replayed. Failed or uncertain recovery is reported once.
@@ -81,10 +82,14 @@ impl AgentManager {
         record: &PersistedAgentRuntimeRecord,
         timeline: &Timeline,
     ) -> Result<bool, AgentManagerError> {
-        if record.provider != "codex" || record.internal || record.archived_at.is_some() {
+        if record.internal || record.archived_at.is_some() {
             return Ok(false);
         }
-        let Some(client) = self.clients.get(&record.provider) else {
+        let Some(client) = self
+            .clients
+            .get(&record.provider)
+            .filter(|client| client.continues_interrupted_turns())
+        else {
             return Ok(false);
         };
         let Some(handle) = record.persistence.as_ref().filter(|handle| {

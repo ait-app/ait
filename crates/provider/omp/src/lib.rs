@@ -233,6 +233,14 @@ impl AgentClient for OmpClient {
         PROVIDER
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: LABEL,
+            description: "Oh My Pi native approvals, questions and subagents",
+            default_mode: provider_core::ports::catalog::DefaultMode::Fixed("full"),
+        })
+    }
+
     fn supports_write_confinement(&self) -> bool {
         true
     }

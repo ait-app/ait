@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use model::summary::{SummaryConfiguration, SummaryGenerator};
 
+use crate::diagnostics::HarnessEvidence;
 use crate::ports::usage_ledger::{NoopUsageLedger, UsageLedger};
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 use crate::service::summary_generation::Generation;
@@ -43,6 +44,15 @@ impl Providers {
             Generation::new(config, self.summary_clients.clone())
                 .with_usage_ledger(self.usage_ledger.clone()),
         )
+    }
+
+    /// Native program and log locations the configured adapters declare for incident evidence.
+    ///
+    /// Returns a collector resolved from the process environment, with one harness section per
+    /// declaring adapter in registration order; nothing is probed or read until it collects.
+    #[must_use]
+    pub fn harness_evidence(&self) -> HarnessEvidence {
+        HarnessEvidence::from_clients(&self.clients)
     }
 
     /// Register the configured adapters with the foreground `manager`.

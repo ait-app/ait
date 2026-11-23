@@ -8,6 +8,7 @@ use domain::summary::{SummaryKind, SummaryRequest};
 use provider_core::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
+use provider_core::ports::harness_evidence::{HarnessEvidenceSource, NativeLogs};
 #[cfg(unix)]
 use serde_json::json;
 
@@ -23,6 +24,15 @@ impl AgentClient for External {
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
         Ok(false)
+    }
+
+    fn harness_evidence(&self) -> Option<HarnessEvidenceSource> {
+        Some(HarnessEvidenceSource {
+            program_variable: "AIT_TEST_EXTERNAL_HARNESS_BIN",
+            default_program: "/missing/ait-external-harness",
+            log_directory_variable: "AIT_TEST_EXTERNAL_HARNESS_LOG_DIR",
+            native_logs: NativeLogs::Unknown,
+        })
     }
 
     async fn create_session(
@@ -59,6 +69,25 @@ fn external_adapters_join_the_assembly_with_the_shared_image_directory() {
     assert_eq!(providers.clients.len(), assembled + 1);
     assert_eq!(providers.clients.last().unwrap().provider(), "external");
     assert!(!root.path().join("agents").exists());
+}
+
+#[tokio::test]
+async fn harness_evidence_has_one_section_per_declaring_adapter() {
+    let root = tempfile::tempdir().unwrap();
+    let now = chrono::Utc::now();
+
+    let empty = Providers::empty(root.path()).harness_evidence();
+    let external = Providers::empty(root.path())
+        .with(|_| External)
+        .harness_evidence();
+
+    assert_eq!(empty.collect(now, now).await, "");
+    let report = external.collect(now, now).await;
+    assert!(
+        report.starts_with("\nHarness: external\n  Version: unavailable"),
+        "{report}"
+    );
+    assert_eq!(report.matches("Harness:").count(), 1);
 }
 
 #[cfg(unix)]

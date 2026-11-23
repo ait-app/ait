@@ -49,8 +49,9 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 （`crates/provider/codex` 即 `provider-codex`），唯一的例外是运行时 `provider`，目录为 `crates/provider/runtime`；其余 crate 的目录与包名一致（[ADR-273](../decisions/providers/adr-273-provider-crate-directory.md)）。
 `provider-native` 只依赖 `provider-core` 与 `domain`，只供原生 adapter 共享，`provider` 不依赖它。
 `provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider` 之间没有生产依赖；`provider-builtin` 是唯一注册内置 adapter 的 crate，
-daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。运行时仍有两份按 provider id 键控的部分副本需与它手工保持一致：
-`crates/provider/runtime/src/diagnostics.rs` 的诊断来源表（adapter 的覆盖变量与默认程序）和 `crates/provider/runtime/src/service/provider_catalog.rs` 的 Catalog 特例。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
+daemon 经它注册全部内置 adapter，不直接依赖任何 adapter crate。运行时不按 provider id 分支：诊断来源、Catalog 标签与默认模式、
+重启继续、子会话发现与导入模式都由 adapter 在 `AgentClient` 上按行为声明，`provider-builtin` 的守卫测试拒绝运行时生产代码引用内置 id
+（[ADR-299](../decisions/providers/adr-299-runtime-reads-adapter-capabilities.md)）。`provider-antigravity`、`provider-claude`、`provider-codex`、`provider-deepseek-harness`、`provider-minimax`、`provider-omp`、`provider-opencode`、`provider-pi` 与 `provider-builtin` 仅以 dev 边启用
 `provider` 的 `test-support` feature；反向只有 `provider` 以 dev 边启用 `provider-codex` 的 `test-support`，供运行时执行测试驱动 Codex 假程序。非 dev 边启用会被依赖守卫拒绝。
 `domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
 RPC envelope 的 JSON 编解码由 `model::rpc` 统一提供；metadata 与 filesystem 继续在各自

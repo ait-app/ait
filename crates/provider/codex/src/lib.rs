@@ -461,6 +461,27 @@ impl AgentClient for CodexClient {
         "codex"
     }
 
+    fn continues_interrupted_turns(&self) -> bool {
+        true
+    }
+
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_CODEX_BIN",
+                default_program: "codex",
+                log_directory_variable: "AIT_DIAGNOSTICS_CODEX_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::UnderRoot {
+                    root_variable: "CODEX_HOME",
+                    home_directory: ".codex",
+                    subdirectory: "log",
+                },
+            },
+        )
+    }
+
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         validate_config(config)
     }

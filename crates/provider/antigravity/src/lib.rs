@@ -69,6 +69,27 @@ impl AgentClient for AntigravityClient {
         PROVIDER
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: "Antigravity",
+            description: "Google Antigravity via the official AGY CLI",
+            default_mode: provider_core::ports::catalog::DefaultMode::Fixed("default"),
+        })
+    }
+
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_ANTIGRAVITY_BIN",
+                default_program: "agy",
+                log_directory_variable: "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::Unknown,
+            },
+        )
+    }
+
     fn supports_history_replay(&self) -> bool {
         false
     }

@@ -187,6 +187,31 @@ impl AgentClient for DeepSeekHarnessClient {
         PROVIDER
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: "DeepSeek Harness",
+            description: if self.interactive {
+                "DeepSeek Harness native interactive Host"
+            } else {
+                "DeepSeek Harness via Agent Client Protocol"
+            },
+            default_mode: provider_core::ports::catalog::DefaultMode::Discovered,
+        })
+    }
+
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_DEEPSEEK_HARNESS_BIN",
+                default_program: "dsh",
+                log_directory_variable: "AIT_DIAGNOSTICS_DEEPSEEK_HARNESS_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::Unknown,
+            },
+        )
+    }
+
     fn supports_history_replay(&self) -> bool {
         self.interactive
     }

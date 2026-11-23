@@ -150,6 +150,14 @@ struct FakeState {
     permission_responses: Vec<(String, Value)>,
     permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
+    interrupted_turns: InterruptedTurns,
+}
+
+/// What the fake adapter declares for turns interrupted by a host restart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InterruptedTurns {
+    Continue,
+    Report,
 }
 
 impl Default for FakeState {
@@ -182,6 +190,7 @@ impl Default for FakeState {
             permission_responses: Vec::new(),
             permission_result: Ok(()),
             during_resume: None,
+            interrupted_turns: InterruptedTurns::Continue,
         }
     }
 }
@@ -213,6 +222,10 @@ impl AgentClient for FakeClient {
     }
     fn provider(&self) -> &'static str {
         "codex"
+    }
+
+    fn continues_interrupted_turns(&self) -> bool {
+        self.0.lock().unwrap().interrupted_turns == InterruptedTurns::Continue
     }
 
     fn validate_config(&self, _: &StoredAgentConfig) -> Result<(), AgentSessionError> {

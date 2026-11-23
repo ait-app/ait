@@ -63,6 +63,14 @@ impl AgentClient for MiniMaxClient {
         PROVIDER
     }
 
+    fn catalog_presentation(&self) -> Option<provider_core::ports::catalog::CatalogPresentation> {
+        Some(provider_core::ports::catalog::CatalogPresentation {
+            label: "MiniMax Code",
+            description: "MiniMax Code via Agent Client Protocol",
+            default_mode: provider_core::ports::catalog::DefaultMode::Omitted,
+        })
+    }
+
     fn supports_history_replay(&self) -> bool {
         false
     }

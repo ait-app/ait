@@ -11,6 +11,9 @@ use std::time::Duration;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use tokio::io::AsyncReadExt;
 
+use provider_core::ports::agent_session::AgentClient;
+use provider_core::ports::harness_evidence::{HarnessEvidenceSource, NativeLogs};
+
 const FILE_BYTES: u64 = 64 * 1024;
 const FILE_COUNT: usize = 3;
 const DIRECTORY_ENTRIES: usize = 1024;
@@ -23,58 +26,64 @@ pub struct HarnessEvidence {
 
 #[derive(Debug)]
 struct Source {
-    name: &'static str,
+    name: String,
     program: PathBuf,
     logs: Option<PathBuf>,
-}
-
-impl Default for HarnessEvidence {
-    fn default() -> Self {
-        Self::configured(|name| std::env::var_os(name))
-    }
+    /// Arguments that make the program print its log directory when `logs` is unset.
+    log_query: Option<&'static [&'static str]>,
 }
 
 impl HarnessEvidence {
-    /// Resolve configured launchers and log roots using `environment`, without I/O.
+    /// Resolve the sources `clients` declare from the process environment, in client order.
+    pub(crate) fn from_clients(clients: &[Box<dyn AgentClient>]) -> Self {
+        Self::configured(
+            clients.iter().filter_map(|client| {
+                client
+                    .harness_evidence()
+                    .map(|source| (client.provider(), source))
+            }),
+            |name| std::env::var_os(name),
+        )
+    }
+
+    /// Resolve each named source's launcher and log root using `environment`, without I/O.
     /// Returns a read-only collector; custom log roots must be dedicated native log directories.
-    #[must_use]
-    fn configured(environment: impl Fn(&str) -> Option<OsString>) -> Self {
+    fn configured<'client>(
+        sources: impl IntoIterator<Item = (&'client str, HarnessEvidenceSource)>,
+        environment: impl Fn(&str) -> Option<OsString>,
+    ) -> Self {
         let home = environment("HOME")
             .or_else(|| environment("USERPROFILE"))
             .map(PathBuf::from);
-        let root = |key, suffix| {
-            environment(key)
-                .map(PathBuf::from)
-                .or_else(|| home.as_ref().map(|home| home.join(suffix)))
-        };
-        let sources = [
-            ("opencode", "OPENCODE", "opencode", None),
-            (
-                "codex",
-                "CODEX",
-                "codex",
-                root("CODEX_HOME", ".codex").map(|p| p.join("log")),
-            ),
-            (
-                "claude",
-                "CLAUDE",
-                "claude",
-                root("CLAUDE_CONFIG_DIR", ".claude").map(|p| p.join("debug")),
-            ),
-            ("deepseek-harness", "DEEPSEEK_HARNESS", "dsh", None),
-            ("antigravity", "ANTIGRAVITY", "agy", None),
-            ("pi", "PI", "pi", None),
-        ]
-        .into_iter()
-        .map(|(name, key, fallback, logs)| Source {
-            name,
-            program: environment(&format!("AIT_SERVER_{key}_BIN"))
-                .map_or_else(|| fallback.into(), PathBuf::from),
-            logs: environment(&format!("AIT_DIAGNOSTICS_{key}_LOG_DIR"))
-                .map(PathBuf::from)
-                .or(logs),
-        })
-        .collect();
+        let sources = sources
+            .into_iter()
+            .map(|(name, source)| {
+                let (logs, log_query) = match source.native_logs {
+                    NativeLogs::Unknown => (None, None),
+                    NativeLogs::UnderRoot {
+                        root_variable,
+                        home_directory,
+                        subdirectory,
+                    } => (
+                        environment(root_variable)
+                            .map(PathBuf::from)
+                            .or_else(|| home.as_ref().map(|home| home.join(home_directory)))
+                            .map(|root| root.join(subdirectory)),
+                        None,
+                    ),
+                    NativeLogs::ReportedByProgram(arguments) => (None, Some(arguments)),
+                };
+                Source {
+                    name: name.to_owned(),
+                    program: environment(source.program_variable)
+                        .map_or_else(|| source.default_program.into(), PathBuf::from),
+                    logs: environment(source.log_directory_variable)
+                        .map(PathBuf::from)
+                        .or(logs),
+                    log_query,
+                }
+            })
+            .collect();
         Self { sources }
     }
 
@@ -89,22 +98,20 @@ impl HarnessEvidence {
                     .await
                     .unwrap_or_else(|error| format!("unavailable ({error})"));
                 let mut report = format!("\nHarness: {}\n  Version: {}\n", source.name, version);
-                let logs = match &source.logs {
-                    Some(path) => Some(path.clone()),
-                    None if source.name == "opencode" => {
-                        match probe(&source.program, &["debug", "paths", "log"]).await {
-                            Ok(text) if Path::new(&text).is_absolute() => Some(PathBuf::from(text)),
-                            Ok(_) => {
-                                report.push_str("  Log discovery: non-absolute path rejected\n");
-                                None
-                            }
-                            Err(error) => {
-                                let _ = writeln!(report, "  Log discovery: {error}");
-                                None
-                            }
+                let logs = match (&source.logs, source.log_query) {
+                    (Some(path), _) => Some(path.clone()),
+                    (None, Some(arguments)) => match probe(&source.program, arguments).await {
+                        Ok(text) if Path::new(&text).is_absolute() => Some(PathBuf::from(text)),
+                        Ok(_) => {
+                            report.push_str("  Log discovery: non-absolute path rejected\n");
+                            None
                         }
-                    }
-                    None => None,
+                        Err(error) => {
+                            let _ = writeln!(report, "  Log discovery: {error}");
+                            None
+                        }
+                    },
+                    (None, None) => None,
                 };
                 if let Some(logs) = logs {
                     let excerpt =

@@ -168,6 +168,19 @@ impl AgentClient for PiClient {
         PROVIDER
     }
 
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_PI_BIN",
+                default_program: "pi",
+                log_directory_variable: "AIT_DIAGNOSTICS_PI_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::Unknown,
+            },
+        )
+    }
+
     fn cwd_lookup(&self) -> CwdLookup {
         CwdLookup::Requested
     }

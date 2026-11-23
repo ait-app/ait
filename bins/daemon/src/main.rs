@@ -79,8 +79,11 @@ async fn run(
     .await
     .context("join daemon startup preparation")?
     .context("load daemon configuration")?;
-    let diagnostics = diagnostics::Diagnostics::start(config.data_dir.join("diagnostics"))
-        .context("start diagnostic collector")?;
+    let diagnostics = diagnostics::Diagnostics::start(
+        config.data_dir.join("diagnostics"),
+        provider_builtin::providers(&config.data_dir).harness_evidence(),
+    )
+    .context("start diagnostic collector")?;
     *collector = Some((diagnostics.clone(), startup.lease()));
     tracing_subscriber::registry()
         .with(diagnostics.clone().filtered())

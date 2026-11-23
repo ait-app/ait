@@ -61,10 +61,14 @@ pub(crate) struct Diagnostics {
 }
 
 impl Diagnostics {
-    /// Start a bounded evidence worker using `directory` for sanitized incident files.
+    /// Start a bounded evidence worker using `directory` for sanitized incident files and
+    /// `harness` for native program versions and log excerpts.
     /// Returns the tracing layer / report port, or a thread creation error.
-    pub(crate) fn start(directory: PathBuf) -> std::io::Result<Self> {
-        Self::with_sources(directory, provider::diagnostics::HarnessEvidence::default())
+    pub(crate) fn start(
+        directory: PathBuf,
+        harness: provider::diagnostics::HarnessEvidence,
+    ) -> std::io::Result<Self> {
+        Self::with_sources(directory, harness)
     }
 
     fn with_sources(

@@ -2,8 +2,8 @@
 //!
 //! The runtime's [`Providers`] container stays adapter-agnostic; this crate decides which
 //! adapters it holds, their default programs, and the environment variables that override them.
-//! The runtime still names some adapters by provider id in its diagnostics sources (variables and
-//! default programs) and catalog labels; keep those in step by hand.
+//! Each adapter declares its own catalog presentation and incident-evidence source on the
+//! `AgentClient` port, so the runtime never branches on a provider id (ADR-299).
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -49,15 +49,10 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
     let opencode = environment("AIT_SERVER_OPENCODE_BIN")
         .map_or_else(|| PathBuf::from("opencode"), PathBuf::from);
     let pi = environment("AIT_SERVER_PI_BIN").map_or_else(|| PathBuf::from("pi"), PathBuf::from);
+    // Registration order is the order of harness sections in incident evidence.
     Providers::empty(data_dir)
+        .with(|_| OpenCodeClient::new(opencode))
         .with(|images| CodexClient::new(codex).with_image_directory(images.to_owned()))
-        .with(|images| {
-            antigravity
-                .map_or_else(AntigravityClient::installed, |program| {
-                    AntigravityClient::new(program.into())
-                })
-                .with_image_directory(images.to_owned())
-        })
         .with(|images| ClaudeClient::new(claude).with_image_directory(images.to_owned()))
         .with(|images| {
             let mut client = dsh
@@ -73,9 +68,15 @@ pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString
             }
             client
         })
+        .with(|images| {
+            antigravity
+                .map_or_else(AntigravityClient::installed, |program| {
+                    AntigravityClient::new(program.into())
+                })
+                .with_image_directory(images.to_owned())
+        })
         .with(|images| MiniMaxClient::new(minimax).with_image_directory(images.to_owned()))
         .with(|images| OmpClient::new(omp).with_image_directory(images.to_owned()))
-        .with(|_| OpenCodeClient::new(opencode))
         .with(|images| PiClient::new(pi).with_image_directory(images.to_owned()))
 }
 

@@ -195,6 +195,11 @@ async fn default_discovery_and_control_contracts_report_unavailable() {
     let spec = spec();
     let handle = handle();
     assert!(client.supports_history_replay());
+    assert!(!client.continues_interrupted_turns());
+    assert!(!client.live_subagents_are_complete());
+    assert_eq!(client.imported_session_mode(), "read-only");
+    assert_eq!(client.catalog_presentation(), None);
+    assert_eq!(client.harness_evidence(), None);
     assert!(!client.handles_out_of_band("/unknown"));
     assert_eq!(
         client.persisted_permissions(&handle),

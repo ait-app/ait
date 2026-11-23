@@ -9,10 +9,12 @@ use provider::testing::{Manager, clients, summary_clients};
 
 use super::*;
 
+mod runtime_decisions;
+mod runtime_provider_ids;
 #[cfg(unix)]
 mod summary;
 
-/// Every built-in provider identity, sorted; registration order is not observable.
+/// Every built-in provider identity, sorted; registration order only orders incident evidence.
 const BUILT_IN: [&str; 8] = [
     "antigravity",
     "claude",

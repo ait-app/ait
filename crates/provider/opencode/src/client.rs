@@ -184,6 +184,25 @@ impl AgentClient for OpenCodeClient {
     fn provider(&self) -> &'static str {
         PROVIDER
     }
+
+    fn live_subagents_are_complete(&self) -> bool {
+        true
+    }
+
+    fn harness_evidence(
+        &self,
+    ) -> Option<provider_core::ports::harness_evidence::HarnessEvidenceSource> {
+        Some(
+            provider_core::ports::harness_evidence::HarnessEvidenceSource {
+                program_variable: "AIT_SERVER_OPENCODE_BIN",
+                default_program: "opencode",
+                log_directory_variable: "AIT_DIAGNOSTICS_OPENCODE_LOG_DIR",
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::ReportedByProgram(
+                    &["debug", "paths", "log"],
+                ),
+            },
+        )
+    }
     fn discovery_timeout(&self) -> Duration {
         // Include the executable probe, native initialization and session catalog inspection.
         self.startup_timeout * 2 + Duration::from_secs(60)

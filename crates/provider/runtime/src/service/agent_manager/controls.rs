@@ -325,7 +325,7 @@ impl AgentManager {
             .clients
             .get(&record.provider)
             .ok_or(ErrorCode::UnsupportedCapability)?;
-        let discovered = if record.provider == "opencode" && !live.is_empty() {
+        let discovered = if client.live_subagents_are_complete() && !live.is_empty() {
             // The owned process already observes descendants; do not replay the entire directory
             // on this parent's execution lane merely to return its live children.
             Ok(Vec::new())
@@ -465,7 +465,7 @@ impl AgentManager {
         }
         if let Some(owner) = &self.owner {
             let mut replacement = record.clone();
-            super::native_sessions::apply_history(&mut replacement, &history);
+            self.apply_history(&mut replacement, &history);
             owner.bind(&replacement)?;
         }
         self.invalidate_history(id);
@@ -564,7 +564,7 @@ impl AgentManager {
             .update(id, &|current| {
                 let mut next = current.clone();
                 let archived_at = next.archived_at.clone();
-                super::native_sessions::apply_history(&mut next, history);
+                self.apply_history(&mut next, history);
                 next.archived_at = archived_at;
                 if let Some(metadata) = next
                     .persistence

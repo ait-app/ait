@@ -6,6 +6,7 @@ use super::*;
 use provider_core::ports::native_history::SessionDescriptor;
 
 mod budget;
+mod imported_mode;
 
 #[test]
 fn recent_query_matches_all_display_fields_and_paths_are_canonical_directories() {

@@ -204,6 +204,31 @@ fn resumable_codex_work_queues_one_continuation_without_replaying_the_original_i
 }
 
 #[test]
+fn adapters_that_do_not_continue_interrupted_turns_report_the_interruption_instead() {
+    let (manager, registry, client) = make_manager();
+    client.0.lock().unwrap().interrupted_turns = InterruptedTurns::Report;
+    let timeline = Timeline::memory().unwrap();
+    let manager = manager.with_timeline(timeline.clone());
+    let mut original = stored_record();
+    original.last_status = AgentRuntimeStatus::Running;
+    registry.upsert(&original).unwrap();
+
+    manager.recover_turns().unwrap();
+
+    assert!(timeline.queued_inputs().unwrap().is_empty());
+    let recovered = registry.get(&original.id).unwrap().unwrap();
+    assert_eq!(recovered.last_status, AgentRuntimeStatus::Error);
+    assert!(
+        recovered
+            .last_error
+            .as_deref()
+            .unwrap()
+            .contains("host restarted")
+    );
+    assert_eq!(client.0.lock().unwrap().start_calls, 0);
+}
+
+#[test]
 fn recovery_does_not_insert_a_continuation_ahead_of_already_queued_user_work() {
     let (manager, registry, _) = make_manager();
     let timeline = Timeline::memory().unwrap();
