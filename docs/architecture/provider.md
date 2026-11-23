@@ -74,7 +74,9 @@
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
 - 原生 adapter 共享的进程、沙箱、ACP、图片、诊断与用量工具在 `crates/provider/native`，生产依赖只有
   `provider-core` 与 `domain`，只公开 adapter 用到的项；`provider` 不依赖它
-  （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+  （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。它的 `test-support` feature
+  在 Unix 上公开 `provider_native::replay`（stdio 录制回放对端 `StdioPeer`），不启用任何依赖，adapter 只以 dev 边启用
+  （[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)）。
 - Antigravity 的 adapter 在 `crates/provider/antigravity`，生产依赖为 `provider-core`、`provider-native` 与
   `domain`（`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `AntigravityClient`；
   `provider` 与 daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它：设置
@@ -227,6 +229,12 @@
   `ResourceExhausted`，不截断条目也不返回无法推进游标的空页
   （[ADR-090](../decisions/providers/adr-090-timeline-entry-and-page-budgets.md)，修订 ADR-039；
   Codex MCP 超大字段预览见 [ADR-140](../decisions/providers/adr-140-codex-mcp-display-previews.md)）。
+- 打开会话的读取有本地线路预算：`crates/provider/runtime/src/rpc/tests/wire_budgets.rs` 用确定的合成数据
+  （约 900 条的单个长轮次、40 个已完成轮次、200 个 Agent 的目录）测量 Timeline tail、更早一页、重连后的
+  `after` 追赶与 epoch 变更后的追赶，以及 Agent 目录读取，比较编码后 JSON 结果的字节数和返回行数与同文件的
+  `CEILINGS` 表；不含 WebSocket envelope，也不计时。测试日志每行打印
+  `wire budget | 读取 | bytes 实测 / 上限 | rows 实测 / 上限`，超出即失败。确需增长时只改表中一行，并在
+  PR 描述写明实测值与原因；不要为压低数字改变分页或载荷行为。
 - `allowCached` 仅在已有持久条目且没有未完成的 rewind 替换时走独立读取，响应以
   `historyNeedsRefresh` 标明尚未完成原生校验；daemon 以 `agent-timeline-cached-reads-v1` 宣告
   （[ADR-133](../decisions/providers/adr-133-cached-timeline-first.md)）。
@@ -242,6 +250,9 @@
   `<system-notice>` 投影为 `notification`
   （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)，OMP 部分已由
   [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
+- 留在 `user_message` 正文里的 harness 注入块（如导入的 Claude 会话中的 `<system-reminder>`）只在展示时折叠：
+  客户端把标签名含 `-` 或 `_`、开标签位于行首且配对闭标签位于行尾的块显示为可展开的标签名，
+  条目类型与 `text` 不变，复制与回退仍使用原文；导入列表的标题与提示词预览去掉这些块。
 - adapter 识别原生压缩开始/结束并输出 `compaction` 条目；原生执行结束时仍未关闭的压缩标为
   `failed`（[ADR-150](../decisions/providers/adr-150-provider-compaction-lifecycle.md)）。
 
@@ -378,6 +389,12 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
   [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+- stdio JSON 行协议的 adapter 可用 `provider_native::replay::StdioPeer` 回放真实 CLI 的录制：录制文件
+  （`ait-stdio-replay` NDJSON，按启动序号记 `spawn`、`stdin`、`stdout` 原样帧）放在所属 adapter crate 的
+  `tests/fixtures/replay/`，由该 crate 中默认忽略的录制测试驱动真实 adapter 对真实 CLI 生成，使用只含凭据副本的隔离配置；
+  回放离线运行，adapter 发出与录制不符的帧（除请求 `id` 与 `{{any}}` 外逐值比较）即失败。目前只有 Codex 接入，
+  其余场景仍用手写假 CLI（[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)、
+  [操作说明](../operations/provider-replay.md)）。
 - 需要多个真实 adapter 与真实运行时协作的装配测试归 `crates/provider/builtin`，经 `provider::testing`
   读取装配结果；运行时测试用桩 adapter 验证目录与容器行为，adapter 自身的端口值在该 adapter 的测试中断言
   （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。

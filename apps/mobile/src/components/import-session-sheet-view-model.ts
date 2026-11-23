@@ -1,5 +1,6 @@
 import type { FetchRecentProviderSessionEntry } from "@ait/client/internal/daemon-client";
 import type { AgentProvider } from "@ait/protocol/agent-types";
+import { userMessageProse } from "@/components/user-message-tags";
 import { i18n } from "@/i18n/i18next";
 
 export const PER_PROVIDER_LIMIT = 15;
@@ -241,11 +242,11 @@ export function resolveImportTarget(input: {
 }
 
 export function getSessionTitle(entry: FetchRecentProviderSessionEntry): string {
-  const title = entry.title?.trim();
+  const title = userMessageProse(entry.title ?? "");
   if (title) {
     return title;
   }
-  const firstPromptPreview = entry.firstPromptPreview?.trim();
+  const firstPromptPreview = userMessageProse(entry.firstPromptPreview ?? "");
   if (firstPromptPreview) {
     return firstPromptPreview;
   }
@@ -254,8 +255,8 @@ export function getSessionTitle(entry: FetchRecentProviderSessionEntry): string 
 
 export function getPromptPreview(entry: FetchRecentProviderSessionEntry): string {
   return (
-    entry.lastPromptPreview?.trim() ||
-    entry.firstPromptPreview?.trim() ||
+    userMessageProse(entry.lastPromptPreview ?? "") ||
+    userMessageProse(entry.firstPromptPreview ?? "") ||
     i18n.t("importSession.preview.noPrompt")
   );
 }

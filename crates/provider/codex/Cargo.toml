@@ -44,6 +44,8 @@ workspace = true
 # Drive the adapter through the runtime's execution worker and AgentManager test entry points.
 provider = { workspace = true, features = ["test-support"] }
 persistence.workspace = true
+# Replay transcripts recorded from the real Codex CLI through the shared stdio peer.
+provider-native = { workspace = true, features = ["test-support"] }
 # Encode image payloads in history fixtures.
 base64.workspace = true
 # Offline native provider fixtures, without credentials or a model API.

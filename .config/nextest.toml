@@ -11,3 +11,8 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 fail-fast = false
 slow-timeout = { period = "30s", terminate-after = 4 }
 failure-output = "immediate-final"
+
+# Wire budget suites print their measured table; keep it in the log when they pass.
+[[profile.default.overrides]]
+filter = "test(/::wire_budgets::/)"
+success-output = "immediate"

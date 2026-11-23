@@ -18,6 +18,9 @@ pub mod metadata_process;
 pub mod notes;
 pub mod process_group;
 pub mod prompt_blocks;
+/// Record and replay of a stdio JSON-lines native CLI for adapter tests.
+#[cfg(all(unix, any(test, feature = "test-support")))]
+pub mod replay;
 pub mod sandbox;
 pub mod session_preview;
 pub mod side_runner;

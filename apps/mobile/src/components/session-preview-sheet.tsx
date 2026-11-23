@@ -14,6 +14,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
+import { UserMessageBody } from "@/components/user-message-body";
 import { formatTimeAgo } from "@/utils/time";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 
@@ -72,7 +73,7 @@ function PreviewItem({ entry }: { entry: FetchProviderSessionPreviewEntry }) {
       return (
         <View style={styles.userBlock} testID={`session-preview-user-${entry.key}`}>
           <Text style={styles.roleLabel}>{t("importSession.sessionPreview.you")}</Text>
-          <Text style={styles.userText}>{item.text}</Text>
+          <UserMessageBody message={item.text} textStyle={styles.userText} />
         </View>
       );
     case "assistant_message":
