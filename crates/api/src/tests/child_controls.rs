@@ -10,7 +10,7 @@ use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::skills::local::LocalSkills;
 use provider::skills::service::Skills;
-use provider::testing::child_controls::State;
+use provider::testing::child_controls::Fixture as ChildFixture;
 
 use super::*;
 
@@ -28,7 +28,7 @@ impl model::summary::SummaryGenerator for Silent {
     fn shutdown(&self) {}
 }
 
-fn services(root: &std::path::Path, state: &Arc<State>) -> Services {
+fn services(root: &std::path::Path, child_fixture: &ChildFixture) -> Services {
     let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
     let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
     let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
@@ -51,7 +51,7 @@ fn services(root: &std::path::Path, state: &Arc<State>) -> Services {
         )
         .unwrap();
     let mut manager = AgentManager::new(Box::new(registry.clone()));
-    state.register(&mut manager).unwrap();
+    child_fixture.register(&mut manager).unwrap();
     let execution = AgentExecution::spawn(ExecutionDependencies {
         manager,
         directory: AgentRuntimeDirectory::new(
@@ -97,8 +97,8 @@ async fn reply(socket: &mut Socket, id: &str) -> Value {
 async fn child_controls_do_not_block_permission_on_the_same_socket() {
     for single in [false, true] {
         let root = tempfile::tempdir().unwrap();
-        let state = Arc::new(State::default());
-        let fixture = Fixture::with_services(services(root.path(), &state)).await;
+        let child_fixture = ChildFixture::default();
+        let fixture = Fixture::with_services(services(root.path(), &child_fixture)).await;
         let mut socket = fixture.socket().await;
         let capabilities = json!([
             "connection.single.v1",
@@ -130,7 +130,7 @@ async fn child_controls_do_not_block_permission_on_the_same_socket() {
             .as_u64()
             .unwrap();
         send(&mut socket, json!({"type":"request","request_id":"guide","method":"agent.subagents.guide.request","params":{"parentAgentId":parent,"childAgentId":child,"message":"help","expectedRevision":revision}})).await;
-        tokio::time::timeout(Duration::from_secs(5), state.wait_for_control())
+        tokio::time::timeout(Duration::from_secs(5), child_fixture.control_admitted())
             .await
             .expect("child control was not admitted");
         send(&mut socket, json!({"type":"request","request_id":"permission","method":"agent.permission.resolve.request","params":{"agentId":parent,"requestId":"permission-1","response":{"behavior":"allow"}}})).await;
@@ -147,8 +147,8 @@ async fn child_controls_do_not_block_permission_on_the_same_socket() {
                 guide = true;
             }
         }
-        assert_eq!(state.controls(), 1);
-        assert_eq!(state.answers(), 1);
+        assert_eq!(child_fixture.controls(), 1);
+        assert_eq!(child_fixture.answers(), 1);
         socket.close(None).await.unwrap();
         fixture.stop().await;
     }

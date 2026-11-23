@@ -1,4 +1,4 @@
-//! A deterministic child-control adapter for cross-capability transport tests.
+//! Deterministic child-control adapter for cross-crate transport tests.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -13,42 +13,45 @@ use serde_json::{Value, json};
 
 use crate::service::agent_manager::{AgentManager, AgentManagerError};
 
-/// Shared state of the deterministic child-control adapter.
+/// Shared state and adapter registration for the child-control fixture.
+#[derive(Clone, Debug, Default)]
+pub struct Fixture(Arc<State>);
+
+impl Fixture {
+    /// Register the deterministic child-control adapter with `manager`.
+    ///
+    /// # Errors
+    /// Returns the manager error if the adapter cannot be registered.
+    pub fn register(&self, manager: &mut AgentManager) -> Result<(), AgentManagerError> {
+        manager.register_client(Box::new(Client(self.0.clone())))
+    }
+
+    /// Wait until a child control is admitted.
+    pub async fn control_admitted(&self) {
+        self.0.control_admitted.notified().await;
+    }
+
+    /// Return the number of admitted child controls.
+    #[must_use]
+    pub fn controls(&self) -> usize {
+        self.0.controls.load(Ordering::SeqCst)
+    }
+
+    /// Return the number of answered permission requests.
+    #[must_use]
+    pub fn answers(&self) -> usize {
+        self.0.answers.load(Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug, Default)]
-pub struct State {
+struct State {
     controls: AtomicUsize,
     control_admitted: tokio::sync::Notify,
     answers: AtomicUsize,
     pending: AtomicBool,
     events: Mutex<VecDeque<AgentTurnEvent>>,
     child: Mutex<Option<provider_core::ports::controls::NativeSubagent>>,
-}
-
-impl State {
-    /// Register the deterministic adapter against the given runtime manager.
-    ///
-    /// # Errors
-    /// Returns an error if the adapter identity is invalid or already registered.
-    pub fn register(self: &Arc<Self>, manager: &mut AgentManager) -> Result<(), AgentManagerError> {
-        manager.register_client(Box::new(Client(self.clone())))
-    }
-
-    /// Wait for the child control request to reach the adapter.
-    pub async fn wait_for_control(&self) {
-        self.control_admitted.notified().await;
-    }
-
-    /// Number of child controls received by the adapter.
-    #[must_use]
-    pub fn controls(&self) -> usize {
-        self.controls.load(Ordering::SeqCst)
-    }
-
-    /// Number of permissions answered by the adapter.
-    #[must_use]
-    pub fn answers(&self) -> usize {
-        self.answers.load(Ordering::SeqCst)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -125,9 +128,17 @@ impl AgentSession for Session {
             persistence: None,
             descriptor: json!({"id":"native-child", "status":"running", "updatedAt":"2026-11-23T00:00:00Z"}),
         };
-        *self.state.child.lock().unwrap() = Some(child.clone());
+        *self
+            .state
+            .child
+            .lock()
+            .expect("fixture mutex is not poisoned") = Some(child.clone());
         self.state.pending.store(true, Ordering::SeqCst);
-        let mut events = self.state.events.lock().unwrap();
+        let mut events = self
+            .state
+            .events
+            .lock()
+            .expect("fixture mutex is not poisoned");
         events.push_back(AgentTurnEvent::Subagent(
             provider_core::ports::controls::SubagentEvent::Upsert(child),
         ));
@@ -137,7 +148,13 @@ impl AgentSession for Session {
         Ok("turn-1".to_owned())
     }
     fn subagents(&self) -> Vec<provider_core::ports::controls::NativeSubagent> {
-        self.state.child.lock().unwrap().iter().cloned().collect()
+        self.state
+            .child
+            .lock()
+            .expect("fixture mutex is not poisoned")
+            .iter()
+            .cloned()
+            .collect()
     }
     fn pending_permissions(&self) -> Vec<Value> {
         if self.state.pending.load(Ordering::SeqCst) {
@@ -165,7 +182,7 @@ impl AgentSession for Session {
         self.state
             .events
             .lock()
-            .unwrap()
+            .expect("fixture mutex is not poisoned")
             .push_back(AgentTurnEvent::ChildControl {
                 token: "receipt".to_owned(),
                 outcome: provider_core::ports::controls::ChildControlOutcome::Guide(Ok(
@@ -175,7 +192,12 @@ impl AgentSession for Session {
         Ok(())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
-        Ok(self.state.events.lock().unwrap().pop_front())
+        Ok(self
+            .state
+            .events
+            .lock()
+            .expect("fixture mutex is not poisoned")
+            .pop_front())
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         Ok(())
