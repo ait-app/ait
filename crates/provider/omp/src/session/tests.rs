@@ -10,6 +10,196 @@ fn with_fast(config: &StoredAgentConfig) -> StoredAgentConfig {
 }
 
 #[tokio::test]
+async fn command_catalog_becomes_available_from_the_live_session() {
+    let (_root, client, spec) = fixture();
+    let mut frames = crate::transport::subscribe_frames();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while session.command_catalog().is_none() {
+            session.poll_turn().unwrap();
+            if session.command_catalog().is_none() {
+                let _ = frames.recv().await;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        session
+            .command_catalog()
+            .unwrap()
+            .iter()
+            .any(|command| command["name"] == "review")
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn command_updates_change_routing_and_builtin_aliases_use_host_controls() {
+    use provider_core::ports::agent_session::CommandRoute;
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let update = json!({"type":"available_commands_update","commands":[
+        {"name":"model","source":"builtin","aliases":["m"]},
+        {"name":"record","source":"extension"}
+    ]});
+    session.consume(&update).unwrap();
+    assert_eq!(
+        session.command_route("/m test"),
+        Some(CommandRoute::OutOfBand)
+    );
+    assert_eq!(
+        session.command_route("/record test"),
+        Some(CommandRoute::Foreground)
+    );
+    assert!(matches!(
+        session.out_of_band(&AgentPrompt::text("/m test")).await,
+        Err(AgentSessionError::Rejected)
+    ));
+    assert!(session.stream.events.iter().any(|event| matches!(event,
+        AgentTurnEvent::Timeline(item) if item.item["detail"]["text"].as_str()
+            .is_some_and(|text| text.contains("model selector")))));
+    assert_eq!(
+        session
+            .stream
+            .events
+            .iter()
+            .filter(|event| matches!(event, AgentTurnEvent::CommandsChanged))
+            .count(),
+        1
+    );
+    session.consume(&update).unwrap();
+    assert_eq!(
+        session
+            .stream
+            .events
+            .iter()
+            .filter(|event| matches!(event, AgentTurnEvent::CommandsChanged))
+            .count(),
+        1
+    );
+    session
+        .consume(&json!({"type":"available_commands_update","commands":"invalid"}))
+        .unwrap();
+    assert!(session.command_catalog().is_none());
+    assert_eq!(
+        session.command_route("/record"),
+        Some(CommandRoute::Unavailable)
+    );
+    assert_eq!(
+        session
+            .stream
+            .events
+            .iter()
+            .filter(|event| matches!(event, AgentTurnEvent::CommandsChanged))
+            .count(),
+        2
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_restarted_process_rejects_stale_slash_ownership_before_prompt_write() {
+    let (root, client, spec) = fixture();
+    let mut frames = crate::transport::subscribe_frames();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let old_process = session.transport.process_id();
+    let config = StoredAgentConfig {
+        mode_id: Some("write".to_owned()),
+        ..spec.config.clone()
+    };
+    assert!(matches!(
+        session.start_turn("/record argument", &config).await,
+        Err(AgentSessionError::CommandCatalogChanged)
+    ));
+    assert_ne!(old_process, session.transport.process_id());
+    assert_eq!(count(&calls_after(root.path(), 0), "prompt"), 0);
+    session.start_turn("hello", &config).await.unwrap();
+    let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(event @ (AgentTurnEvent::Completed(_) | AgentTurnEvent::Failed)) => {
+                    break event;
+                }
+                Some(_) => {}
+                None => {
+                    let _ = frames.recv().await;
+                }
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        matches!(outcome, AgentTurnEvent::Completed(Some(ref reply)) if reply == "Hello world")
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_same_process_catalog_change_rejects_stale_foreground_before_prompt_write() {
+    use provider_core::ports::agent_session::CommandRoute;
+    let (root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session
+        .consume(&json!({"type":"available_commands_update","commands":[
+            {"name":"record","source":"extension"}
+        ]}))
+        .unwrap();
+    assert_eq!(
+        session.command_route("/record argument"),
+        Some(CommandRoute::Foreground)
+    );
+    session
+        .consume(&json!({"type":"available_commands_update","commands":[
+            {"name":"record","source":"builtin"}
+        ]}))
+        .unwrap();
+    assert!(matches!(
+        session.start_turn("/record argument", &spec.config).await,
+        Err(AgentSessionError::CommandCatalogChanged)
+    ));
+    assert_eq!(count(&calls_after(root.path(), 0), "prompt"), 0);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_catalog_update_buffered_during_configuration_is_seen_before_prompt_write() {
+    use provider_core::ports::agent_session::CommandRoute;
+    let (root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    crate::tests::commands_ready(&mut session).await;
+    session
+        .consume(&json!({"type":"available_commands_update","commands":[
+            {"name":"record","source":"extension"}
+        ]}))
+        .unwrap();
+    assert_eq!(
+        session.command_route("/record argument"),
+        Some(CommandRoute::Foreground)
+    );
+    std::fs::write(
+        root.path().join("agent/command-update-on-state.json"),
+        json!([{"name":"record","source":"builtin"}]).to_string(),
+    )
+    .unwrap();
+    let config = StoredAgentConfig {
+        thinking_option_id: Some("high".to_owned()),
+        ..spec.config.clone()
+    };
+    assert!(matches!(
+        session.start_turn("/record argument", &config).await,
+        Err(AgentSessionError::CommandCatalogChanged)
+    ));
+    assert_eq!(count(&calls_after(root.path(), 0), "prompt"), 0);
+    assert_eq!(
+        session.command_route("/record argument"),
+        Some(CommandRoute::OutOfBand)
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn late_steering_rejection_cannot_claim_the_next_prompts_client_message_id() {
     let (_root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();

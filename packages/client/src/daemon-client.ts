@@ -509,7 +509,10 @@ type WriteProjectConfigPayload = Extract<
   { type: "project.config.write.response" }
 >["payload"];
 
-type ListCommandsPayload = ListCommandsResponse["payload"];
+type ListCommandsPayload = ListCommandsResponse["payload"] & {
+  ownershipApplicable: boolean;
+  ownershipComplete: boolean;
+};
 type ListCommandsDraftConfig = Pick<
   AgentSessionConfig,
   "provider" | "cwd" | "modeId" | "model" | "thinkingOptionId" | "featureValues"
@@ -5730,15 +5733,28 @@ export class DaemonClient {
     legacyOptions?: LegacyListCommandsOptions | string,
   ): Promise<ListCommandsPayload> {
     const options = normalizeListCommandsOptions(input, legacyOptions);
-    return this.sendCorrelatedSessionRequest({
+    const params = {
+      agentId: options.agentId,
+      ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
+    };
+    if (this.lastServerInfoMessage?.features?.agentCommandOwnership === true) {
+      const result = await this.sendCorrelatedSessionRequest({
+        requestId: options.requestId,
+        message: { type: "agent.commands.list.v2.request", ...params },
+        responseType: "agent.commands.list.v2.response",
+      });
+      return {
+        ...result,
+        ownershipComplete:
+          result.ownershipApplicable && result.error === null && result.ownershipComplete,
+      };
+    }
+    const result = await this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
-      message: {
-        type: "agent.commands.list.request",
-        agentId: options.agentId,
-        ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
-      },
+      message: { type: "agent.commands.list.request", ...params },
       responseType: "agent.commands.list.response",
     });
+    return { ...result, ownershipApplicable: false, ownershipComplete: false };
   }
 
   // ============================================================================

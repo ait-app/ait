@@ -106,6 +106,12 @@ impl Peer {
     }
 
     fn get_state(&mut self, command: &Value) {
+        let update = self.root.join("command-update-on-state.json");
+        if update.exists() {
+            let commands = super::read_json(&update);
+            fs::remove_file(update).expect("remove command update fixture");
+            self.emit(&json!({"type":"available_commands_update","commands":commands}));
+        }
         if self.pending_async && self.root.join("release-settlement").exists() {
             self.pending_async = false;
             self.emit(&json!({"type": "agent_start"}));

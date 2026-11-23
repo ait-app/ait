@@ -145,6 +145,7 @@ pub(super) fn finish_turn(agent: &mut super::LiveAgent) {
         Some(AgentTurnEvent::Cancelled) => CallOutcome::Cancelled,
         Some(
             AgentTurnEvent::Started(_)
+            | AgentTurnEvent::CommandsChanged
             | AgentTurnEvent::RuntimeInfo(_)
             | AgentTurnEvent::Usage(_)
             | AgentTurnEvent::RequestUsage(_)

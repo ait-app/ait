@@ -222,6 +222,21 @@ fn plan(
     method: Operation,
     params: &Value,
 ) -> Result<(ExecutionState, Option<String>), ErrorCode> {
+    let session_catalog = if method == Operation::CommandsV2 && params.get("draftConfig").is_none()
+    {
+        let id = params["agentId"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let resolved = state.resolve(id)?;
+        let record = state
+            .registry
+            .get(&resolved)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        state.manager.commands_include_ownership(&record.provider)
+    } else {
+        false
+    };
     let lane = if mutation::is_mutation(method) {
         None
     } else if method == Operation::Bot {
@@ -265,6 +280,7 @@ fn plan(
         method.access(),
         Access::Read | Access::Catalog | Access::Discovery
     ) && !(method == Operation::Usage && params.get("agentId").is_some())
+        && !session_catalog
     {
         None
     } else if method == Operation::ClearAttention && params["agentId"].is_array() {
@@ -402,7 +418,9 @@ fn canonicalize(
     method: Operation,
     params: &mut Value,
 ) -> Result<(), ErrorCode> {
-    if method == Operation::Commands && params.get("draftConfig").is_some() {
+    if matches!(method, Operation::Commands | Operation::CommandsV2)
+        && params.get("draftConfig").is_some()
+    {
         return Ok(());
     }
     if let Some(target) = method.target()

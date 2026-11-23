@@ -268,12 +268,16 @@ impl ExecutionState {
         )
     }
 
-    pub(super) async fn commands(&self, params: Value) -> Result<Value, ErrorCode> {
+    pub(super) async fn commands(
+        &self,
+        method: Operation,
+        params: Value,
+    ) -> Result<Value, ErrorCode> {
         if let Some(config) = params.get("draftConfig").filter(|value| !value.is_null()) {
             only(config, SESSION_CONFIG_FIELDS)?;
         }
         let request: CommandsRequest = decode(params)?;
-        let (id, spec) = match self.resolve(&request.agent_id) {
+        let (id, spec, draft) = match self.resolve(&request.agent_id) {
             Ok(id) => {
                 let record = self.record(&id)?;
                 (
@@ -284,6 +288,7 @@ impl ExecutionState {
                         config: record.config.unwrap_or_default(),
                         confinement: None,
                     },
+                    false,
                 )
             }
             Err(ErrorCode::AgentNotFound) => {
@@ -296,13 +301,28 @@ impl ExecutionState {
                         config: draft.stored,
                         confinement: None,
                     },
+                    true,
                 )
             }
             Err(error) => return Err(error),
         };
-        let commands = self.manager.commands(&spec).await?;
-        crate::rpc::timeline::bounded(json!({"agentId":id,"commands":commands,"error":null}))
-            .map_err(Into::into)
+        let applicable = self.manager.commands_include_ownership(&spec.provider);
+        let (commands, complete, error) = if method == Operation::CommandsV2 && !draft && applicable
+        {
+            match self.manager.live_command_catalog(&id) {
+                Some(commands) => (commands, true, None),
+                None => (Vec::new(), false, Some("Command catalog is unavailable")),
+            }
+        } else {
+            let commands = self.manager.commands(&spec).await?;
+            (commands, draft && applicable, None)
+        };
+        let mut result = json!({"agentId":id,"commands":commands,"error":error});
+        if method == Operation::CommandsV2 {
+            result["ownershipApplicable"] = json!(applicable);
+            result["ownershipComplete"] = json!(complete);
+        }
+        crate::rpc::timeline::bounded(result).map_err(Into::into)
     }
 
     pub(super) async fn subagents(

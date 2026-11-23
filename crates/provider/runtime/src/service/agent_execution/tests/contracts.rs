@@ -6,7 +6,7 @@ use crate::testing::request;
 use provider_core::protocol::prompt::AgentPrompt;
 
 mod fixture;
-use fixture::Harness;
+use fixture::{CommandOwnership, Harness};
 
 #[tokio::test]
 async fn child_control_wait_does_not_block_parent_permission_and_returns_native_outcome() {
@@ -185,4 +185,43 @@ async fn attention_clear_accepts_the_documented_agent_id_array() {
         .await;
     harness.execution.shutdown().await.unwrap();
     assert!(result.is_ok(), "{result:?}");
+}
+
+#[tokio::test]
+async fn command_ownership_uses_live_session_and_draft_uses_probe() {
+    let harness = Harness::new().await;
+    {
+        let mut state = harness.state.lock().unwrap();
+        state.command_ownership = CommandOwnership::Supported;
+        state.command_catalog = Some(vec![
+            json!({"name":"live", "description":"live", "argumentHint":"", "source":"extension"}),
+        ]);
+    }
+    let live = request(
+        &harness.execution,
+        "agent.commands.list.v2.request",
+        json!({"agentId":harness.id}),
+    )
+    .await;
+    assert_eq!(live["ownershipApplicable"], true);
+    assert_eq!(live["ownershipComplete"], true);
+    assert_eq!(live["commands"][0]["name"], "live");
+    assert_eq!(harness.state.lock().unwrap().command_probes, 0);
+    harness.state.lock().unwrap().command_catalog = None;
+    let unknown = request(
+        &harness.execution,
+        "agent.commands.list.v2.request",
+        json!({"agentId":harness.id}),
+    )
+    .await;
+    assert_eq!(unknown["ownershipApplicable"], true);
+    assert_eq!(unknown["ownershipComplete"], false);
+    assert!(unknown["error"].is_string());
+    assert_eq!(harness.state.lock().unwrap().command_probes, 0);
+    let draft = request(&harness.execution, "agent.commands.list.v2.request", json!({"agentId":"draft", "draftConfig":{"provider":"contract","cwd":harness.created["agent"]["cwd"]}})).await;
+    assert_eq!(draft["ownershipApplicable"], true);
+    assert_eq!(draft["ownershipComplete"], true);
+    assert_eq!(draft["commands"][0]["name"], "probe");
+    assert_eq!(harness.state.lock().unwrap().command_probes, 1);
+    harness.execution.shutdown().await.unwrap();
 }

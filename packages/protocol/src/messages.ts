@@ -856,6 +856,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
 ]);
 
 export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("commands_changed") }),
   z.object({
     type: z.literal("thread_started"),
     sessionId: z.string(),
@@ -3182,6 +3183,10 @@ export const ListCommandsRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const ListCommandsV2RequestSchema = ListCommandsRequestSchema.extend({
+  type: z.literal("agent.commands.list.v2.request"),
+});
+
 export const RegisterPushTokenMessageSchema = z.object({
   type: z.literal("push.register"),
   token: z.string(),
@@ -3562,6 +3567,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
   ListCommandsRequestSchema,
+  ListCommandsV2RequestSchema,
   RegisterPushTokenMessageSchema,
   PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
@@ -3950,6 +3956,7 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: z.boolean().optional(),
+        agentCommandOwnership: z.boolean().optional(),
         agentModelPresetSelection: z.boolean().optional(),
         // Preset management requires all four provider.presets RPCs on the host.
         providerPresets: z.boolean().optional(),
@@ -6763,6 +6770,10 @@ const AgentSlashCommandSchema = z.object({
   description: z.string(),
   argumentHint: z.string(),
   kind: z.enum(["command", "skill"]).optional().catch("command"),
+  source: z.string().optional(),
+  aliases: z.array(z.string()).optional(),
+  menuVisible: z.boolean().optional(),
+  menuAliases: z.array(z.string()).optional(),
 });
 
 export const ListCommandsResponseSchema = z.object({
@@ -6772,6 +6783,14 @@ export const ListCommandsResponseSchema = z.object({
     commands: z.array(AgentSlashCommandSchema),
     error: z.string().nullable(),
     requestId: z.string(),
+  }),
+});
+
+export const ListCommandsV2ResponseSchema = z.object({
+  type: z.literal("agent.commands.list.v2.response"),
+  payload: ListCommandsResponseSchema.shape.payload.extend({
+    ownershipApplicable: z.boolean(),
+    ownershipComplete: z.boolean(),
   }),
 });
 
@@ -7190,6 +7209,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderUsageListResponseMessageSchema,
   ProviderUsageLedgerResponseMessageSchema,
   ListCommandsResponseSchema,
+  ListCommandsV2ResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
   CreateTerminalResponseSchema,

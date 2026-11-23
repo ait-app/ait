@@ -168,7 +168,9 @@ impl AgentManager {
         .map_err(|error| match error {
             AgentSessionError::Rejected => ErrorCode::InvalidMessage,
             AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
-            AgentSessionError::Busy => ErrorCode::CatalogBusy,
+            AgentSessionError::Busy | AgentSessionError::CommandCatalogChanged => {
+                ErrorCode::CatalogBusy
+            }
             AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
         })?;
         if preview.descriptor.provider_id != request.provider_id

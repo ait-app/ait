@@ -206,6 +206,16 @@ impl AgentManager {
         }
     }
 
+    pub(crate) fn live_command_catalog(&self, id: &str) -> Option<Vec<Value>> {
+        self.live.get(id)?.session.command_catalog()
+    }
+
+    pub(crate) fn commands_include_ownership(&self, provider: &str) -> bool {
+        self.clients
+            .get(provider)
+            .is_some_and(|client| client.commands_include_ownership())
+    }
+
     pub(crate) async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
         self.clients
             .get(&spec.provider)
@@ -214,7 +224,9 @@ impl AgentManager {
             .await
             .map_err(|error| match error {
                 AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
-                AgentSessionError::Busy => ErrorCode::CatalogBusy,
+                AgentSessionError::Busy | AgentSessionError::CommandCatalogChanged => {
+                    ErrorCode::CatalogBusy
+                }
                 AgentSessionError::Rejected => ErrorCode::InvalidMessage,
                 AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
             })

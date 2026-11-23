@@ -56,6 +56,7 @@ fn set_failure_entry(agent: &mut super::LiveAgent, message: &str) {
 fn event_kind(event: &AgentTurnEvent) -> &'static str {
     match event {
         AgentTurnEvent::Started(_) => "started",
+        AgentTurnEvent::CommandsChanged => "commands_changed",
         AgentTurnEvent::Subagent(_) => "subagent",
         AgentTurnEvent::ChildControl { .. } => "child_control",
         AgentTurnEvent::Progress { .. } => "progress",
@@ -118,19 +119,16 @@ pub(super) async fn drain(
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
         if agent.pending.is_none() {
-            agent.pending = match agent.session.poll_turn() {
-                Ok(event) => event,
-                Err(error) => {
-                    tracing::warn!(provider = %agent.record.provider, agent_id = %id,
-                        operation = "poll", error_kind = %error, "Native provider observation failed");
-                    Some(AgentTurnEvent::Failed)
-                }
-            };
+            agent.pending = next_event(agent, id);
         }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
             Some(AgentTurnEvent::Started(turn)) => {
                 persist_started(registry, timeline, id, agent, turn)
+            }
+            Some(AgentTurnEvent::CommandsChanged) => {
+                publish_commands_changed(timeline, id);
+                Ok(())
             }
             Some(AgentTurnEvent::Subagent(event)) => {
                 super::controls::publish_subagent(registry, timeline, events, agent, event)
@@ -216,6 +214,29 @@ pub(super) async fn drain(
         settle_failure(registry, timeline, events, id, agent).await?;
     }
     Ok(())
+}
+
+fn next_event(agent: &mut super::LiveAgent, id: &str) -> Option<AgentTurnEvent> {
+    match agent.session.poll_turn() {
+        Ok(event) => event,
+        Err(error) => {
+            tracing::warn!(provider = %agent.record.provider, agent_id = %id,
+                operation = "poll", error_kind = %error, "Native provider observation failed");
+            Some(AgentTurnEvent::Failed)
+        }
+    }
+}
+
+fn publish_commands_changed(timeline: Option<&crate::storage::timeline::Timeline>, id: &str) {
+    if let Some(timeline) = timeline {
+        timeline.events().publish(
+            id,
+            "agent_stream",
+            &serde_json::json!({
+                "agentId": id, "event": {"type": "commands_changed"}, "timestamp": now_timestamp()
+            }),
+        );
+    }
 }
 
 async fn service_realtime(agent: &mut super::LiveAgent) -> Result<(), AgentManagerError> {
@@ -314,6 +335,7 @@ fn take_processed(id: &str, agent: &mut super::LiveAgent) {
         // because its loop breaks on them.
         Some(
             AgentTurnEvent::RuntimeInfo(_)
+            | AgentTurnEvent::CommandsChanged
             | AgentTurnEvent::Usage(_)
             | AgentTurnEvent::Subagent(_)
             | AgentTurnEvent::ChildControl { .. }
@@ -526,9 +548,11 @@ impl AgentManager {
                 agent.pending_input_at = Some(now_timestamp());
                 Ok(())
             }
-            Err(AgentSessionError::Rejected | AgentSessionError::Busy) => {
-                Err(AgentManagerError::Busy)
-            }
+            Err(
+                AgentSessionError::Rejected
+                | AgentSessionError::Busy
+                | AgentSessionError::CommandCatalogChanged,
+            ) => Err(AgentManagerError::Busy),
             Err(
                 error @ (AgentSessionError::Failed
                 | AgentSessionError::Unavailable

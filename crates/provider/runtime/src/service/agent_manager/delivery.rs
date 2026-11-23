@@ -8,7 +8,10 @@ use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
 use crate::support::time::now_timestamp;
 use model::ErrorCode;
-use provider_core::{ports::agent_session::AgentTurnEvent, protocol::prompt::AgentPrompt};
+use provider_core::{
+    ports::agent_session::{AgentTurnEvent, CommandRoute},
+    protocol::prompt::AgentPrompt,
+};
 
 /// Ceiling for writing a cancellation request while admitting newer input.
 ///
@@ -48,7 +51,7 @@ impl AgentManager {
             Receipt::Rejected => return Err(ErrorCode::InvalidMessage),
             Receipt::New => {}
         }
-        match self.steer_input(agent, prompt).await {
+        match Box::pin(self.steer_input(agent, prompt)).await {
             Ok(()) => timeline.finish_input(agent, message, Receipt::Accepted),
             Err(
                 AgentManagerError::Busy
@@ -102,17 +105,20 @@ impl AgentManager {
             .get(agent)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
-        let out_of_band = self
-            .clients
-            .get(&record.provider)
-            .is_some_and(|client| client.handles_out_of_band(&prompt.text));
+        let behavior_policy = match behavior {
+            ActiveTurnBehavior::Interrupt => "interrupt",
+            ActiveTurnBehavior::Steer => "steer",
+        };
+        let Some(out_of_band) = self
+            .command_input_route(agent, prompt, &record, behavior_policy)
+            .await?
+        else {
+            return Ok(());
+        };
         let policy = if out_of_band {
             "answer"
         } else {
-            match behavior {
-                ActiveTurnBehavior::Interrupt => "interrupt",
-                ActiveTurnBehavior::Steer => "steer",
-            }
+            behavior_policy
         };
         if let Some(receipt) = self.existing_input(agent, prompt, policy)? {
             match receipt {
@@ -145,7 +151,7 @@ impl AgentManager {
             && !queued
         {
             timeline.claim_input(agent, &message)?;
-            match self.steer_input(agent, prompt).await {
+            match Box::pin(self.steer_input(agent, prompt)).await {
                 Ok(()) => return timeline.finish_input(agent, &message, Receipt::Accepted),
                 Err(AgentManagerError::Busy) => timeline.requeue_input(agent, &message)?,
                 Err(_) => {
@@ -162,7 +168,67 @@ impl AgentManager {
             return Err(error);
         }
         // Native terminal acknowledgement may arrive later; the durable FIFO owns the input.
-        self.dispatch_inputs(Some(agent)).await
+        Box::pin(self.dispatch_inputs(Some(agent))).await
+    }
+
+    /// Resolve routing from the current session; `None` means an input was already accepted.
+    async fn command_input_route(
+        &mut self,
+        agent: &str,
+        prompt: &AgentPrompt,
+        record: &domain::agent_runtime::PersistedAgentRuntimeRecord,
+        behavior_policy: &str,
+    ) -> Result<Option<bool>, ErrorCode> {
+        let client = self.clients.get(&record.provider);
+        let static_candidate =
+            client.is_some_and(|client| client.handles_out_of_band(&prompt.text));
+        let candidate = static_candidate
+            || (client.is_some_and(|client| client.commands_include_ownership())
+                && prompt.text.trim_start().starts_with('/'));
+        // A previously admitted input keeps its receipt even when the live command catalog
+        // changes between attempts. Both checks still validate the complete prompt fingerprint.
+        let mut prior_rejected = false;
+        if candidate {
+            let prior = match self.existing_input(agent, prompt, "answer") {
+                Err(ErrorCode::IdempotencyConflict) => {
+                    self.existing_input(agent, prompt, behavior_policy)?
+                }
+                result => result?,
+            };
+            match prior {
+                Some(Receipt::Accepted) => return Ok(None),
+                Some(Receipt::Uncertain) => return Err(ErrorCode::AgentIo),
+                Some(Receipt::Rejected) => prior_rejected = true,
+                Some(Receipt::New) | None => {}
+            }
+        }
+        let out_of_band = if candidate {
+            if record.archived_at.is_some()
+                || self.live.get(agent).is_some_and(|live| live.exclusive)
+            {
+                return Err(ErrorCode::CatalogBusy);
+            }
+            if !self.live.contains_key(agent) {
+                self.resume(agent).await.map_err(|_| ErrorCode::AgentIo)?;
+            }
+            let route = self
+                .live
+                .get(agent)
+                .and_then(|live| live.session.command_route(&prompt.text));
+            if prior_rejected && route.is_some() {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            match route {
+                Some(CommandRoute::OutOfBand) => true,
+                None => static_candidate,
+                Some(CommandRoute::Foreground) => false,
+                Some(CommandRoute::Pending) => return Err(ErrorCode::CatalogBusy),
+                Some(CommandRoute::Unavailable) => return Err(ErrorCode::UnsupportedCapability),
+            }
+        } else {
+            false
+        };
+        Ok(Some(out_of_band))
     }
 
     async fn deliver_command(
@@ -196,6 +262,13 @@ impl AgentManager {
             Err(_) => Receipt::Uncertain,
         };
         timeline.finish_input(agent, &message, receipt)?;
+        if matches!(
+            result,
+            Err(provider_core::ports::agent_session::AgentSessionError::Rejected)
+        ) {
+            self.poll().await.map_err(|_| ErrorCode::AgentIo)?;
+            return Err(ErrorCode::InvalidMessage);
+        }
         result.map_err(|_| ErrorCode::AgentIo)?;
         self.poll().await.map_err(|_| ErrorCode::AgentIo)
     }
@@ -276,7 +349,10 @@ impl AgentManager {
                 .registry
                 .get(&input.agent)
                 .map_err(|_| ErrorCode::AgentIo)?;
-            if record.is_none_or(|record| record.archived_at.is_some()) {
+            if record
+                .as_ref()
+                .is_none_or(|record| record.archived_at.is_some())
+            {
                 timeline.cancel_inputs(&input.agent)?;
                 continue;
             }
@@ -292,40 +368,28 @@ impl AgentManager {
                     continue;
                 }
             }
-            timeline.claim_input(&input.agent, &input.message)?;
-            let admitted = async {
-                if input
-                    .message
-                    .starts_with(super::recovery::RESTART_INPUT_PREFIX)
-                {
-                    self.resume_with_recovery(&input.agent, true).await?;
-                    self.poll().await?;
-                    if self
-                        .registry
-                        .get(&input.agent)
-                        .map_err(|_| AgentManagerError::Registry)?
-                        .is_some_and(|record| {
-                            record.last_status == domain::agent_runtime::AgentRuntimeStatus::Error
-                        })
-                    {
-                        return Err(AgentManagerError::Session);
-                    }
-                    if self.active_turn(&input.agent).is_some()
-                        || self
-                            .live
-                            .get(&input.agent)
-                            .is_some_and(|live| live.last_message.is_some())
-                    {
-                        return Ok(());
-                    }
-                }
-                self.send_input(&input.agent, &input.prompt).await
+            let provider = record
+                .as_ref()
+                .map_or("unknown", |entry| entry.provider.as_str());
+            if !self
+                .queued_command_ready(&timeline, &input, provider, selected)
+                .await?
+            {
+                continue;
             }
-            .await;
+            timeline.claim_input(&input.agent, &input.message)?;
+            let admitted = Box::pin(self.admit_queued_input(&input)).await;
             match admitted {
                 Ok(()) => timeline.finish_input(&input.agent, &input.message, Receipt::Accepted)?,
                 Err(AgentManagerError::PresetPending) => {
                     timeline.requeue_input(&input.agent, &input.message)?;
+                }
+                Err(AgentManagerError::CommandCatalogChanged) => {
+                    timeline.finish_input(&input.agent, &input.message, Receipt::Rejected)?;
+                    if selected.is_some() {
+                        return Err(ErrorCode::CatalogBusy);
+                    }
+                    Self::report_command_catalog_change(&timeline, &input, provider)?;
                 }
                 Err(error) => {
                     self.fail_queued_input(&timeline, &input, &error)?;
@@ -336,6 +400,95 @@ impl AgentManager {
             }
         }
         Ok(())
+    }
+
+    /// Recheck queued command ownership without consuming a pending catalog lookup.
+    async fn queued_command_ready(
+        &mut self,
+        timeline: &Timeline,
+        input: &QueuedInput,
+        provider: &str,
+        selected: Option<&str>,
+    ) -> Result<bool, ErrorCode> {
+        let ownership = self
+            .clients
+            .get(provider)
+            .is_some_and(|client| client.commands_include_ownership());
+        if !ownership || !input.prompt.text.trim_start().starts_with('/') {
+            return Ok(true);
+        }
+        if !self.live.contains_key(&input.agent) {
+            self.resume(&input.agent)
+                .await
+                .map_err(|_| ErrorCode::AgentIo)?;
+        }
+        self.poll().await.map_err(|_| ErrorCode::AgentIo)?;
+        if self.active_turn(&input.agent).is_some() {
+            return Ok(false);
+        }
+        let route = self
+            .live
+            .get(&input.agent)
+            .and_then(|live| live.session.command_route(&input.prompt.text));
+        if matches!(route, Some(CommandRoute::Pending)) {
+            return Ok(false);
+        }
+        if matches!(
+            route,
+            Some(CommandRoute::OutOfBand | CommandRoute::Unavailable)
+        ) {
+            timeline.claim_input(&input.agent, &input.message)?;
+            timeline.finish_input(&input.agent, &input.message, Receipt::Rejected)?;
+            if selected.is_some() {
+                return Err(ErrorCode::CatalogBusy);
+            }
+            Self::report_command_catalog_change(timeline, input, provider)?;
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    fn report_command_catalog_change(
+        timeline: &Timeline,
+        input: &QueuedInput,
+        provider: &str,
+    ) -> Result<(), ErrorCode> {
+        timeline.append(&input.agent, provider, &[provider_core::protocol::timeline::NativeItem {
+            key: format!("host:command-catalog-changed:{}", input.message),
+            turn_id: None,
+            timestamp: now_timestamp(),
+            item: serde_json::json!({"type":"error","message":"The command list changed before this message could be sent. Please retry it."}),
+        }])?;
+        Ok(())
+    }
+
+    async fn admit_queued_input(&mut self, input: &QueuedInput) -> Result<(), AgentManagerError> {
+        if input
+            .message
+            .starts_with(super::recovery::RESTART_INPUT_PREFIX)
+        {
+            self.resume_with_recovery(&input.agent, true).await?;
+            self.poll().await?;
+            if self
+                .registry
+                .get(&input.agent)
+                .map_err(|_| AgentManagerError::Registry)?
+                .is_some_and(|record| {
+                    record.last_status == domain::agent_runtime::AgentRuntimeStatus::Error
+                })
+            {
+                return Err(AgentManagerError::Session);
+            }
+            if self.active_turn(&input.agent).is_some()
+                || self
+                    .live
+                    .get(&input.agent)
+                    .is_some_and(|live| live.last_message.is_some())
+            {
+                return Ok(());
+            }
+        }
+        Box::pin(self.send_input(&input.agent, &input.prompt)).await
     }
 
     fn fail_queued_input(

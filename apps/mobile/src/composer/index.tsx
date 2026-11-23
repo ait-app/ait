@@ -32,7 +32,15 @@ import {
   resolveWorkspaceFileDrop,
   type WorkspaceFileDragPayload,
 } from "@/attachments/workspace-file-drag";
-import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  commandOwnershipAmbiguous,
+  resolveClientSlashCommand,
+  type ClientSlashCommand,
+} from "@/client-slash-commands";
+import { checkCommandPreflight } from "@/client-slash-commands/preflight";
+import { CommandArgumentHint } from "@/composer/command-argument-hint-view";
+import { agentCommandRevisionKey } from "@/data/agent-commands-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import {
   AttachmentFrame,
@@ -101,7 +109,7 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
-import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
+import { fetchAgentCommands, type DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
@@ -1235,6 +1243,7 @@ function ComposerContentImpl({
 }: ComposerContentProps) {
   const mode = resolveComposerInputMode(inputMode);
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -1369,7 +1378,7 @@ function ComposerContentImpl({
     [onChangeText],
   );
 
-  const runClientSlashCommand = useCallback(
+  const executeClientSlashCommand = useCallback(
     (command: ClientSlashCommand): boolean => {
       if (command.execution !== "immediate" || !onClientSlashCommand) {
         return false;
@@ -1407,6 +1416,17 @@ function ComposerContentImpl({
   const { pickImages, takePhoto } = useImageAttachmentPicker();
   const { pickFiles } = useFilePicker();
   const agentIdRef = useRef(agentId);
+  const serverIdRef = useRef(serverId);
+  serverIdRef.current = serverId;
+  agentIdRef.current = agentId;
+  const commandCheckInFlight = useRef(false);
+  const composerMounted = useRef(true);
+  useEffect(() => {
+    composerMounted.current = true;
+    return () => {
+      composerMounted.current = false;
+    };
+  }, []);
   const sendAgentMessageRef = useRef<
     | ((
         agentId: string,
@@ -1670,10 +1690,81 @@ function ComposerContentImpl({
     [clearDraft, hasBtwSource, openBtwPanel, replaceUserInput, t],
   );
 
-  // `/btw` and immediate client slash commands run instead of sending or queueing.
-  // Returns the outgoing attachments when the payload should go through.
-  const resolveOutgoingAttachments = useCallback(
-    (payload: MessagePayload): ComposerAttachment[] | null => {
+  const checkFreshCommandOwnership = useCallback(async () => {
+    if (commandCheckInFlight.current) return null;
+    const serverInfo = client?.getLastServerInfoMessage?.();
+    if (!serverInfo) {
+      setSendError(t("agentAutocomplete.ownershipUnavailable"));
+      return null;
+    }
+    const supportsOwnership =
+      (serverInfo.features as { agentCommandOwnership?: boolean } | undefined)
+        ?.agentCommandOwnership === true;
+    if (supportsOwnership && (!client || !isConnected)) {
+      setSendError(t("agentAutocomplete.ownershipUnavailable"));
+      return null;
+    }
+    const currentText = readLiveDraftText(messageInputRef.current, textSource);
+    const currentAttachments = latestUserAttachmentsRef.current;
+    const currentContext = () => {
+      const agent = useSessionStore.getState().sessions[serverId]?.agents?.get(agentId);
+      return JSON.stringify([agent?.provider, agent?.cwd, agent?.runtimeInfo?.sessionId]);
+    };
+    const context = currentContext();
+    const revisionKey = agentCommandRevisionKey(serverId, agentId);
+    const revision = queryClient.getQueryData<number>(revisionKey) ?? 0;
+    commandCheckInFlight.current = true;
+    try {
+      const result = await checkCommandPreflight({
+        supportsOwnership,
+        fetchCatalog: () => {
+          if (!client) throw new Error("Client unavailable");
+          return fetchAgentCommands({ client, agentId, draftConfig: commandDraftConfig });
+        },
+        isCurrent: () =>
+          composerMounted.current &&
+          serverIdRef.current === serverId &&
+          agentIdRef.current === agentId &&
+          getHostRuntimeStore().getClient(serverId) === client &&
+          currentContext() === context &&
+          (queryClient.getQueryData<number>(revisionKey) ?? 0) === revision &&
+          readLiveDraftText(messageInputRef.current, textSource) === currentText &&
+          latestUserAttachmentsRef.current === currentAttachments,
+      });
+      if (result.status === "unavailable") {
+        setSendError(t("agentAutocomplete.ownershipUnavailable"));
+      }
+      if (result.status === "session-unavailable") {
+        setSendError(t("agentAutocomplete.sessionCatalogUnavailable"));
+      }
+      return result.status === "ready" ? result.ownership : null;
+    } finally {
+      commandCheckInFlight.current = false;
+    }
+  }, [agentId, client, commandDraftConfig, isConnected, queryClient, serverId, t, textSource]);
+
+  const runClientSlashCommand = useCallback(
+    (command: ClientSlashCommand, invokedName: string) => {
+      void checkFreshCommandOwnership().then((ownership) => {
+        if (!ownership) return;
+        if (commandOwnershipAmbiguous(`/${invokedName}`, ownership)) {
+          setSendError(t("agentAutocomplete.ownershipAmbiguous"));
+          return;
+        }
+        const accepted = resolveClientSlashCommand({
+          text: `/${invokedName}`,
+          hasAttachments: false,
+          ownership,
+        });
+        if (accepted?.kind === command.kind) executeClientSlashCommand(accepted);
+        else setSendError(t("agentAutocomplete.ownershipUnavailable"));
+      });
+    },
+    [checkFreshCommandOwnership, executeClientSlashCommand, t],
+  );
+
+  const handleSubmit = useCallback(
+    (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const btw = resolveBtwCommand({
         text: payload.text,
@@ -1681,30 +1772,47 @@ function ComposerContentImpl({
       });
       if (btw && inputMode === "chat") {
         openBtw(btw);
-        return null;
+        return;
       }
-      const clientSlashCommand = resolveClientSlashCommand({
+      const candidate = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
       });
-      if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
-        return null;
+      if (candidate && onClientSlashCommand) {
+        void checkFreshCommandOwnership().then((ownership) => {
+          if (!ownership) return;
+          if (commandOwnershipAmbiguous(payload.text, ownership)) {
+            setSendError(t("agentAutocomplete.ownershipAmbiguous"));
+            return;
+          }
+          const command = resolveClientSlashCommand({
+            text: payload.text,
+            hasAttachments: false,
+            ownership,
+          });
+          if (command && executeClientSlashCommand(command)) return;
+          if (blurOnSubmit) messageInputRef.current?.blur();
+          void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+        });
+        return;
       }
-      return outgoingAttachments;
-    },
-    [attachments, buildOutgoingAttachments, inputMode, openBtw, runClientSlashCommand],
-  );
-
-  const handleSubmit = useCallback(
-    (payload: MessagePayload) => {
-      const outgoingAttachments = resolveOutgoingAttachments(payload);
-      if (!outgoingAttachments) return;
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
       void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
     },
-    [blurOnSubmit, resolveOutgoingAttachments, sendMessageWithContent],
+    [
+      attachments,
+      blurOnSubmit,
+      buildOutgoingAttachments,
+      checkFreshCommandOwnership,
+      executeClientSlashCommand,
+      inputMode,
+      onClientSlashCommand,
+      openBtw,
+      sendMessageWithContent,
+      t,
+    ],
   );
 
   const handlePickImage = useCallback(async () => {
@@ -1988,11 +2096,49 @@ function ComposerContentImpl({
 
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
-      const outgoingAttachments = resolveOutgoingAttachments(payload);
-      if (!outgoingAttachments) return;
+      const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const btw = resolveBtwCommand({
+        text: payload.text,
+        hasAttachments: outgoingAttachments.length > 0,
+      });
+      if (btw && inputMode === "chat") {
+        openBtw(btw);
+        return;
+      }
+      const candidate = resolveClientSlashCommand({
+        text: payload.text,
+        hasAttachments: outgoingAttachments.length > 0,
+      });
+      if (candidate && onClientSlashCommand) {
+        void checkFreshCommandOwnership().then((ownership) => {
+          if (!ownership) return;
+          if (commandOwnershipAmbiguous(payload.text, ownership)) {
+            setSendError(t("agentAutocomplete.ownershipAmbiguous"));
+            return;
+          }
+          const command = resolveClientSlashCommand({
+            text: payload.text,
+            hasAttachments: false,
+            ownership,
+          });
+          if (command && executeClientSlashCommand(command)) return;
+          queueMessage(payload.text, outgoingAttachments);
+        });
+        return;
+      }
       queueMessage(payload.text, outgoingAttachments);
     },
-    [queueMessage, resolveOutgoingAttachments],
+    [
+      attachments,
+      buildOutgoingAttachments,
+      checkFreshCommandOwnership,
+      executeClientSlashCommand,
+      inputMode,
+      onClientSlashCommand,
+      openBtw,
+      queueMessage,
+      t,
+    ],
   );
 
   // Handle keyboard navigation for command autocomplete.
@@ -2541,6 +2687,14 @@ function ComposerContentImpl({
                   submitLabel={submitLabel}
                 />
               </RenderProfile>
+              {inputMode === "chat" && !readOnly ? (
+                <CommandArgumentHint
+                  text={textSource}
+                  serverId={serverId}
+                  agentId={agentId}
+                  draftConfig={commandDraftConfig}
+                />
+              ) : null}
               <Combobox
                 options={githubSearchOptions}
                 value=""

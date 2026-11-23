@@ -126,7 +126,11 @@ impl ExecutionState {
 
 impl ExecutionState {
     fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
-        if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
+        if matches!(
+            method,
+            "agent.commands.list.request" | "agent.commands.list.v2.request"
+        ) && params.get("draftConfig").is_some()
+        {
             return Ok(());
         }
         if let Some(id) = params["agentId"].as_str()
@@ -175,7 +179,7 @@ impl ExecutionState {
                 self.voice_turn(method, params).await
             }
             Operation::Rewind => self.rewind(params).await,
-            Operation::Commands => self.commands(params).await,
+            Operation::Commands | Operation::CommandsV2 => self.commands(method, params).await,
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
@@ -1038,6 +1042,7 @@ pub(crate) fn only(params: &Value, allowed: &[&str]) -> Result<(), ErrorCode> {
 const fn map_manager(error: &AgentManagerError) -> ErrorCode {
     match error {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
+        AgentManagerError::CommandCatalogChanged => ErrorCode::CatalogBusy,
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
         | AgentManagerError::ConfinementUnsupported(_)

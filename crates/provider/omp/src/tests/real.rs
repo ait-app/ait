@@ -108,6 +108,7 @@ async fn installed_omp_real_plugins_share_native_commands_tools_and_history() {
         );
     }
     let mut session = client.create_session(&spec).await.unwrap();
+    commands_ready(session.as_mut()).await;
     session
         .start_turn("/compat-notify-only", &spec.config)
         .await

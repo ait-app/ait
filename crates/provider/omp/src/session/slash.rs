@@ -46,7 +46,9 @@ impl Session {
         prompt: &AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         prompt.validate()?;
-        if let Some((name, managed)) = commands::gui_managed(&prompt.text) {
+        let canonical = self.commands.canonical_text(&prompt.text);
+        let command_text = canonical.as_deref().unwrap_or(&prompt.text);
+        if let Some((name, managed)) = commands::gui_managed(command_text) {
             if self.closed || prompt.output_schema.is_some() {
                 return Err(AgentSessionError::Rejected);
             }
@@ -57,9 +59,9 @@ impl Session {
             self.live = true;
             let note = commands::gui_managed_note(name, managed);
             self.stream.command_note(name, &note);
-            return Ok(());
+            return Err(AgentSessionError::Rejected);
         }
-        let (command, args) = commands::builtin(&prompt.text).ok_or(AgentSessionError::Rejected)?;
+        let (command, args) = commands::builtin(command_text).ok_or(AgentSessionError::Rejected)?;
         if self.closed || prompt.output_schema.is_some() || self.pending.len() >= MAX_PENDING {
             return Err(AgentSessionError::Rejected);
         }

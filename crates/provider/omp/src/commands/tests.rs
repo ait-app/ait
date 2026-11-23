@@ -62,43 +62,108 @@ fn the_list_merges_built_ins_with_omps_commands() {
     ]}))
     .unwrap();
 
-    let names: Vec<_> = listed.iter().map(|command| &command["name"]).collect();
-    assert_eq!(
-        names,
-        [
-            "compact",
-            "autocompact",
-            "handoff",
-            "steer",
-            "follow-up",
-            "review",
-            "plain",
-            "bare"
-        ]
-    );
+    let find = |name: &str| {
+        listed
+            .iter()
+            .find(|command| command["name"] == name)
+            .unwrap()
+    };
     // OMP's entry wins but keeps the built-in hint when it has none.
     assert_eq!(
-        listed[0],
+        *find("compact"),
         json!({"name":"compact","description":"Compact now","argumentHint":"[instructions]",
-            "kind":"command"})
+            "kind":"command","source":"builtin"})
     );
-    assert_eq!(listed[1]["argumentHint"], "[on|off|toggle]");
-    assert_eq!(listed[2]["argumentHint"], "[focus]");
-    assert_eq!(listed[5]["kind"], "skill");
-    assert_eq!(listed[6]["description"], "extension");
-    assert_eq!(listed[7]["description"], "Later wins");
-    // Blocked entries are left out, so completion never offers a refused command.
-    assert!(
-        listed.iter().all(|command| {
-            let name = command["name"].as_str().unwrap_or_default();
-            MANAGED
-                .iter()
-                .all(|(blocked, _)| !blocked.eq_ignore_ascii_case(name))
-        }),
-        "{listed:?}"
+    assert_eq!(find("autocompact")["argumentHint"], "[on|off|toggle]");
+    assert_eq!(find("handoff")["argumentHint"], "[focus]");
+    assert_eq!(find("review")["kind"], "skill");
+    assert_eq!(find("plain")["source"], "extension");
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|command| command["name"] == "bare")
+            .count(),
+        2
     );
+    for name in ["advisor", "MODEL", "fork", "Settings", "QUIT"] {
+        assert_eq!(find(name)["menuVisible"], false);
+    }
     assert!(list(&json!({"commands":[{"name":""}]})).is_err());
     assert!(list(&json!({})).is_err());
+}
+
+#[test]
+fn native_ownership_retains_collisions_aliases_and_unknown_sources() {
+    for entries in [
+        vec![
+            json!({"name":"model","source":"builtin","aliases":["models","safe"]}),
+            json!({"name":"other","source":"extension","aliases":["models"]}),
+            json!({"name":"record","source":"extension"}),
+            json!({"name":"fork"}),
+        ],
+        vec![
+            json!({"name":"fork"}),
+            json!({"name":"record","source":"extension"}),
+            json!({"name":"other","source":"extension","aliases":["models"]}),
+            json!({"name":"model","source":"builtin","aliases":["models","safe"]}),
+        ],
+    ] {
+        let catalog = Catalog::parse(&json!({"commands":entries})).unwrap();
+        assert!(catalog.builtin_owned("MODEL"));
+        assert!(!catalog.builtin_owned("models"));
+        assert!(!catalog.builtin_owned("record"));
+        assert!(!catalog.builtin_owned("fork"));
+        assert!(!catalog.contains("missing"));
+        let listed = catalog.project();
+        let model = listed
+            .iter()
+            .find(|entry| entry["name"] == "model")
+            .unwrap();
+        assert_eq!(model["menuVisible"], false);
+        assert_eq!(model["aliases"], json!(["models", "safe"]));
+        assert_eq!(model["menuAliases"], json!([]));
+        let plugin = listed
+            .iter()
+            .find(|entry| entry["name"] == "record")
+            .unwrap();
+        assert_eq!(plugin["source"], "extension");
+        assert!(plugin.get("menuVisible").is_none());
+        let other = listed
+            .iter()
+            .find(|entry| entry["name"] == "other")
+            .unwrap();
+        assert_eq!(other["menuAliases"], json!([]));
+        let unknown = listed.iter().find(|entry| entry["name"] == "fork").unwrap();
+        assert!(unknown.get("source").is_none());
+        assert_eq!(unknown["menuVisible"], false);
+    }
+    for entries in [
+        vec![
+            json!({"name":"model","source":"builtin"}),
+            json!({"name":"model","source":"extension"}),
+        ],
+        vec![
+            json!({"name":"model","source":"extension"}),
+            json!({"name":"model","source":"builtin"}),
+        ],
+    ] {
+        let catalog = Catalog::parse(&json!({"commands":entries})).unwrap();
+        assert_eq!(catalog.claim("model"), Some(&Claim::Ambiguous));
+        assert!(
+            catalog
+                .project()
+                .iter()
+                .filter(|entry| entry["name"] == "model")
+                .all(|entry| entry["menuVisible"] == false)
+        );
+    }
+    for aliases in [json!(["\u{0000}"]), json!([7]), json!([":"]), json!({})] {
+        assert!(Catalog::parse(&json!({"commands":[{"name":"one","aliases":aliases}]})).is_err());
+    }
+    assert!(
+        Catalog::parse(&json!({"commands":[{"name":"one","aliases":vec!["a"; MAX_ALIASES + 1]}]}))
+            .is_err()
+    );
 }
 
 #[test]

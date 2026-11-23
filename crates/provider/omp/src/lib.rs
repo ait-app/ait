@@ -291,6 +291,10 @@ impl AgentClient for OmpClient {
         commands::builtin(text).is_some() || commands::gui_managed(text).is_some()
     }
 
+    fn commands_include_ownership(&self) -> bool {
+        true
+    }
+
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)
     }

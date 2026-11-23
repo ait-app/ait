@@ -24,12 +24,28 @@ pub enum AgentSessionError {
     /// The provider rejected a request while the transport remains usable.
     #[error("provider rejected the session operation")]
     Rejected,
+    /// The native session changed before a command was written; ownership must be rechecked.
+    #[error("provider command catalog changed before admission")]
+    CommandCatalogChanged,
     /// The native session is already owned by another interactive writer.
     #[error("provider session is in use")]
     Busy,
     /// A native history read failed with payload-free page and budget context.
     #[error(transparent)]
     History(super::native_history::HistoryError),
+}
+
+/// Session-scoped routing for a slash command whose native ownership may vary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandRoute {
+    /// Execute the host-managed command beside the active turn.
+    OutOfBand,
+    /// Deliver the command as ordinary provider input.
+    Foreground,
+    /// The native catalog is being obtained; a queued input may safely wait.
+    Pending,
+    /// Ownership is unknown, so admission must not interrupt a running turn.
+    Unavailable,
 }
 
 /// Provider-independent inputs required to construct or resume a native session.
@@ -59,6 +75,8 @@ pub enum AgentResumePurpose {
 pub enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
+    /// The native command catalog changed or became unavailable.
+    CommandsChanged,
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
     Subagent(super::controls::SubagentEvent),
     /// Final result of a previously queued parent-owned child control.
@@ -205,6 +223,17 @@ pub trait AgentSession: Debug + Send + Sync {
     /// Native foreground work was accepted but its start notification has not arrived yet.
     fn pending_foreground(&self) -> bool {
         false
+    }
+
+    /// Decide command routing from this session's native catalog, when supported.
+    /// `None` preserves the adapter's existing provider-wide routing.
+    fn command_route(&self, _text: &str) -> Option<CommandRoute> {
+        None
+    }
+
+    /// The complete native command catalog for this session, when it is known.
+    fn command_catalog(&self) -> Option<Vec<serde_json::Value>> {
+        None
     }
 
     /// Withdraw accepted autonomous work that has not announced a foreground turn yet.
@@ -513,6 +542,11 @@ pub trait AgentClient: Debug + Send + Sync {
 
     /// Whether this text names a provider command that bypasses foreground input scheduling.
     fn handles_out_of_band(&self, _text: &str) -> bool {
+        false
+    }
+
+    /// Whether every successful command catalog retains all native name claimants.
+    fn commands_include_ownership(&self) -> bool {
         false
     }
 

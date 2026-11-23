@@ -139,32 +139,13 @@ flowchart LR
   这些命令不接受图片或附件。
 - `/steer`、`/follow-up` 在空闲时开始新回合；回合进行中时以 `prompt{streamingBehavior}` 排队，
   迟到的拒绝与 steer 相同，显示为警告。
-- 命令列表先列内置命令，再列 OMP 的 `get_available_commands`；同名时 OMP 的条目替换内置条目，
-  但保留内置的参数提示。`skill` 来源映射为 `kind: skill`。
-- Ait 屏蔽 OMP 的 62 行原生斜杠命令（`docs/plans/pr612-split/sources.json` 的 `commands_tsv`
-  中标为屏蔽的行，含别名共 69 个名字），按策略与承接方式分类：
-  - `rewrite`（23 行 / 27 个名字）：Ait 接管该设置。其中 16 个名字指向 Ait 的控件——`model`、
-    `models`、`switch` 指模型选择器，`modelpreset` 指 Settings › Providers › Model presets，
-    `effort` 指思考控件，`fast` 指 Speed 控件，`settings` 指 Settings，`setup`、`providers`
-    指 Settings › Providers，`login`、`logout` 指账号页，`hub`、`subagents` 指 Subagents 面板，
-    `resume` 指 History，`branch`、`rewind` 指 Rewind 菜单；其余 11 个（`advisor`、`prewalk`、
-    `slow`、`skillful`、`extended-context`、`computer`、`browser`、`agents`、`tree`、`export`、
-    `dump`）Ait 拥有该设置但暂无控件，答复不指向不存在的入口。
-  - `defer`（34 行 / 36 个名字）：Ait 尚未交付该能力，原生处理器不得在 Ait 之外执行副作用。
-    `todo`、`plan-review`、`new`、`clear`、`delete`、`fresh`、`shake`、`pin`、`unpin`、`rename`、
-    `move`、`wt`、`worktree`、`fork`、`restart`、`mcp`、`skills`、`marketplace`、`plugins`、
-    `plugin`、`reload-plugins`、`ssh`、`forget-approvals`、`add-dir`、`remove-dir`、`copy`、`open`、
-    `local`、`git`、`share`、`collab`、`join`、`leave`、`pause`、`live`、`retry`。
-  - `exclude`（5 行 / 6 个名字）：终端专属，Ait 不另造替代——`hotkeys`、`quit`、`q`、`exit`、
-    `record`、`debug`。
-- 这些命令都不写入 OMP，也不进入命令列表，因此补全不会提供提交时会被拒绝的条目。文本走带外答复，
-  `handles_out_of_band` 为 true，回合进行中提交时不会被当作 steer 拒绝、进而中断原生回合
-  （[取消与追加输入](#取消与追加输入)）。答复是命令卡：有控件时指出控件（模型选择器、Model presets、
-  思考控件、Speed 控件、Settings、Providers、账号页、Subagents 面板、History、Rewind 菜单）；暂无控件时
-  只说该设置由 Ait 管理，不指向不存在的入口；未交付的能力与终端专属命令各自说明命令不会交给 OMP。
-  OMP 在原生处理器里执行的副作用因此不会在 Ait 之外发生。带结构化输出 schema 或会话已关闭时仍为
-  `Rejected`。
-- Ait 自己的答复同 `command_output` 一样显示为命令卡，不作助手正文。
+- 命令身份由当前原生会话提供的来源与别名决定，菜单隐藏不抹去名称归属。只有来源明确、
+  不存在其他声明者时，Ait 才能把对应内置命令交给自己的控件或带外处理；扩展命令继续交给
+  原生会话，来源不明或冲突无法判定时拒绝并保留输入。排队输入在真正发送前重新检查归属，
+  进程替换会使旧目录失效。目录不可用时不得使用另一个探测进程的结果冒充活动会话
+  （[ADR-302](../decisions/providers/adr-302-omp-command-ownership.md)）。
+- 原生进程不提供原子的目录版本检查与执行；即使在写入前核对，原生扩展仍可能在核对后自主变化。
+  界面会刷新和失效旧目录，并在清空或归档前重新查询，但不能消除原生接口中的最后竞态窗口。
 
 ## 交互
 
@@ -272,8 +253,7 @@ flowchart LR
 
 ## 暂缓与已知限制
 
-- 未实现：宿主工具与 MCP 桥接、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、基于
-  `available_commands_update` 的会话级命令缓存、终端组件 UI。
+- 未实现：宿主工具与 MCP 桥接、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、终端组件 UI。
 - 已知限制：
   - 未经运行时通告的自主回合不能被 `cancel_pending` 取消，排队输入要等该运行结束后才投递。
   - 同一回合中先 `/follow-up` 后 `/steer` 时，客户端 ID 按写入顺序分配，而 OMP 先投递 steer。

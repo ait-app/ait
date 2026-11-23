@@ -5728,6 +5728,8 @@ test("lists commands with draft config via RPC", async () => {
     commands: [{ name: "help", description: "Show help", argumentHint: "" }],
     error: null,
     requestId: request.requestId,
+    ownershipApplicable: false,
+    ownershipComplete: false,
   });
 });
 
@@ -5780,6 +5782,8 @@ test("lists commands with explicit requestId via RPC", async () => {
     commands: [],
     error: null,
     requestId: "req-commands",
+    ownershipApplicable: false,
+    ownershipComplete: false,
   });
 });
 
@@ -5825,6 +5829,8 @@ test("preserves legacy listCommands id overload", async () => {
     commands: [],
     error: null,
     requestId: "req-commands-legacy",
+    ownershipApplicable: false,
+    ownershipComplete: false,
   });
 });
 
@@ -5886,6 +5892,8 @@ test("preserves legacy listCommands options overload", async () => {
     commands: [{ name: "help", description: "Show help", argumentHint: "" }],
     error: null,
     requestId: "req-commands-draft-legacy",
+    ownershipApplicable: false,
+    ownershipComplete: false,
   });
 });
 
@@ -8067,4 +8075,92 @@ test("host resource statistics gate old hosts and correlate a typed snapshot", a
       current: { cpuPercent: null, txBytesPerSecond: 0 },
     });
   }
+});
+
+test("prefers command ownership v2 and preserves separate owners", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "ownership",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentCommandOwnership: true } });
+  await connected;
+  const pending = client.listCommands({ agentId: "agent-1" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request.type).toBe("agent.commands.list.v2.request");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.commands.list.v2.response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent-1",
+        error: null,
+        ownershipApplicable: true,
+        ownershipComplete: true,
+        commands: [
+          {
+            name: "clear",
+            description: "extension",
+            argumentHint: "",
+            source: "extension",
+            aliases: ["reset"],
+            menuVisible: true,
+            menuAliases: ["reset"],
+          },
+          {
+            name: "clear",
+            description: "builtin",
+            argumentHint: "",
+            source: "builtin",
+            menuVisible: false,
+          },
+        ],
+      },
+    }),
+  );
+  const result = await pending;
+  expect(result.ownershipApplicable).toBe(true);
+  expect(result.ownershipComplete).toBe(true);
+  expect(result.commands).toHaveLength(2);
+  expect(result.commands[0]).toMatchObject({
+    source: "extension",
+    aliases: ["reset"],
+    menuAliases: ["reset"],
+  });
+});
+
+test("never trusts ownership completeness on a failed v2 catalog", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "ownership-failed",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentCommandOwnership: true } });
+  await connected;
+  const pending = client.listCommands("agent-1");
+  const request = parseSentFrame(mock.sent[0]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.commands.list.v2.response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent-1",
+        commands: [],
+        error: "unavailable",
+        ownershipApplicable: true,
+        ownershipComplete: true,
+      },
+    }),
+  );
+  expect((await pending).ownershipComplete).toBe(false);
 });

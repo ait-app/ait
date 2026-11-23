@@ -124,6 +124,12 @@ enum CancellationStall {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+enum CommandOwnership {
+    Unsupported,
+    Supported,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 enum ChildControlSupport {
     Unsupported,
     Supported,
@@ -155,6 +161,10 @@ struct FakeState {
     failure_message: Option<&'static str>,
     failure_diagnostic: Option<provider_core::ports::diagnostics::Diagnostic>,
     commands_error: AgentSessionError,
+    command_ownership: CommandOwnership,
+    command_route: Option<provider_core::ports::agent_session::CommandRoute>,
+    out_of_band_calls: usize,
+    out_of_band_result: Result<(), AgentSessionError>,
     permission_responses: Vec<(String, Value)>,
     permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
@@ -197,6 +207,10 @@ impl Default for FakeState {
             failure_message: None,
             failure_diagnostic: None,
             commands_error: AgentSessionError::Unavailable,
+            command_ownership: CommandOwnership::Unsupported,
+            command_route: None,
+            out_of_band_calls: 0,
+            out_of_band_result: Ok(()),
             permission_responses: Vec::new(),
             permission_result: Ok(()),
             during_resume: None,
@@ -215,6 +229,9 @@ struct FakeSession(Arc<Mutex<FakeState>>);
 
 #[async_trait::async_trait]
 impl AgentClient for FakeClient {
+    fn commands_include_ownership(&self) -> bool {
+        self.0.lock().unwrap().command_ownership == CommandOwnership::Supported
+    }
     fn supports_agent_mcp(&self) -> bool {
         matches!(
             self.0.lock().unwrap().mcp_support,
@@ -307,6 +324,21 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
+    fn command_route(
+        &self,
+        _text: &str,
+    ) -> Option<provider_core::ports::agent_session::CommandRoute> {
+        self.0.lock().unwrap().command_route
+    }
+
+    async fn out_of_band(
+        &mut self,
+        _prompt: &provider_core::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state.out_of_band_calls += 1;
+        state.out_of_band_result
+    }
     fn begin_child_guide(
         &mut self,
         id: &str,

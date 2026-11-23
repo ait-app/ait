@@ -313,6 +313,20 @@ pub(super) async fn next(
     .unwrap()
 }
 
+pub(super) async fn commands_ready(session: &mut dyn AgentSession) {
+    let mut frames = crate::transport::subscribe_frames();
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while session.command_catalog().is_none() {
+            session.poll_turn().unwrap();
+            if session.command_catalog().is_none() {
+                let _ = frames.recv().await;
+            }
+        }
+    })
+    .await
+    .expect("the native command catalog was not received");
+}
+
 pub(super) async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     let mut events = Vec::new();
     loop {
@@ -697,6 +711,7 @@ async fn garbage_output_is_skipped_without_failing_or_resending_input() {
 async fn local_command_admission_does_not_pretend_native_history_was_persisted() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
+    commands_ready(session.as_mut()).await;
     session
         .start_turn("/notify-only", &spec.config)
         .await

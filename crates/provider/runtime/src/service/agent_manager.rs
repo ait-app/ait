@@ -88,6 +88,9 @@ pub enum AgentManagerError {
     /// A preset lookup is pending; no native input has been submitted.
     #[error("model preset is still being refreshed")]
     PresetPending,
+    /// A native restart invalidated slash-command ownership before input was written.
+    #[error("command catalog changed before admission")]
+    CommandCatalogChanged,
     /// The provider cannot confine its native process inside a sandboxed Workspace.
     #[error(
         "provider {0} cannot run in a sandboxed worktree: it does not support OS write confinement"
@@ -997,41 +1000,35 @@ impl AgentManager {
         if record.archived_at.is_some() || self.active_turn(agent_id).is_some() {
             return Err(AgentManagerError::Busy);
         }
-        let now = now_timestamp();
-        let restarting = prompt
-            .client_message_id
-            .as_deref()
-            .is_some_and(|message| message.starts_with(recovery::RESTART_INPUT_PREFIX));
-        self.registry
-            .update(agent_id, &|current| {
-                let mut next = current.clone();
-                next.last_status = AgentRuntimeStatus::Running;
-                next.updated_at.clone_from(&now);
-                if !restarting {
-                    next.last_user_message_at = Some(now.clone());
-                }
-                next.last_activity_at = Some(now.clone());
-                next.last_error = None;
-                next.requires_attention = false;
-                next.attention_reason = None;
-                next.attention_timestamp = None;
-                if titles::missing(current) {
-                    next.title = titles::from_prompt(&prompt.text);
-                    next.title_origin = next
-                        .title
-                        .as_ref()
-                        .map(|_| domain::agent_runtime::TitleOrigin::Prompt);
-                }
-                next
-            })
-            .map_err(map_registry)?
-            .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+        let before_admission = Box::new(record.clone());
+        let admission_record = Box::new(begin_input_status(
+            self.registry.as_ref(),
+            agent_id,
+            prompt,
+        )?);
         let agent = self
             .live
             .get_mut(agent_id)
             .ok_or(AgentManagerError::Session)?;
-        agent.last_message = None;
-        agent.last_message_observer = None;
+        let previous_message = agent.last_message.take();
+        let previous_observer = agent.last_message_observer.take();
+        let mut effective = record.config.take().unwrap_or_default();
+        if let Some(binding) = &agent.mcp {
+            binding.apply(&mut effective);
+        }
+        let admission = agent.session.start_input(prompt, &effective).await;
+        drop(preset_fence);
+        if matches!(admission, Err(AgentSessionError::CommandCatalogChanged)) {
+            agent.last_message = previous_message;
+            agent.last_message_observer = previous_observer;
+            restore_command_admission(
+                self.registry.as_ref(),
+                agent_id,
+                &before_admission,
+                &admission_record,
+            )?;
+            return Err(AgentManagerError::CommandCatalogChanged);
+        }
         if let Some(names) = &self.workspace_names {
             name_workspace(
                 names.as_ref(),
@@ -1040,12 +1037,6 @@ impl AgentManager {
                 &prompt.text,
             );
         }
-        let mut effective = record.config.take().unwrap_or_default();
-        if let Some(binding) = &agent.mcp {
-            binding.apply(&mut effective);
-        }
-        let admission = agent.session.start_input(prompt, &effective).await;
-        drop(preset_fence);
         if let Ok(turn) = admission {
             let runtime = agent.session.runtime_info().await;
             agent
@@ -1485,6 +1476,83 @@ fn publish_terminal_attention(
     );
 }
 
+fn begin_input_status(
+    registry: &dyn AgentRuntimeRegistry,
+    agent_id: &str,
+    prompt: &provider_core::protocol::prompt::AgentPrompt,
+) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+    let now = now_timestamp();
+    let restarting = prompt
+        .client_message_id
+        .as_deref()
+        .is_some_and(|message| message.starts_with(recovery::RESTART_INPUT_PREFIX));
+    registry
+        .update(agent_id, &|current| {
+            let mut next = current.clone();
+            next.last_status = AgentRuntimeStatus::Running;
+            next.updated_at.clone_from(&now);
+            if !restarting {
+                next.last_user_message_at = Some(now.clone());
+            }
+            next.last_activity_at = Some(now.clone());
+            next.last_error = None;
+            next.requires_attention = false;
+            next.attention_reason = None;
+            next.attention_timestamp = None;
+            if titles::missing(current) {
+                next.title = titles::from_prompt(&prompt.text);
+                next.title_origin = next
+                    .title
+                    .as_ref()
+                    .map(|_| domain::agent_runtime::TitleOrigin::Prompt);
+            }
+            next
+        })
+        .map_err(map_registry)?
+        .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))
+}
+
+fn restore_command_admission(
+    registry: &dyn AgentRuntimeRegistry,
+    agent_id: &str,
+    before: &PersistedAgentRuntimeRecord,
+    admission: &PersistedAgentRuntimeRecord,
+) -> Result<(), AgentManagerError> {
+    registry
+        .update(agent_id, &|current| {
+            let mut next = current.clone();
+            if current.last_status == admission.last_status
+                && current.updated_at == admission.updated_at
+                && current.last_user_message_at == admission.last_user_message_at
+                && current.last_activity_at == admission.last_activity_at
+                && current.last_error == admission.last_error
+                && current.requires_attention == admission.requires_attention
+                && current.attention_reason == admission.attention_reason
+                && current.attention_timestamp == admission.attention_timestamp
+            {
+                next.last_status = before.last_status;
+                next.updated_at.clone_from(&before.updated_at);
+                next.last_user_message_at
+                    .clone_from(&before.last_user_message_at);
+                next.last_activity_at.clone_from(&before.last_activity_at);
+                next.last_error.clone_from(&before.last_error);
+                next.requires_attention = before.requires_attention;
+                next.attention_reason = before.attention_reason;
+                next.attention_timestamp
+                    .clone_from(&before.attention_timestamp);
+                if current.title == admission.title
+                    && current.title_origin == admission.title_origin
+                {
+                    next.title.clone_from(&before.title);
+                    next.title_origin = before.title_origin;
+                }
+            }
+            next
+        })
+        .map_err(map_registry)?;
+    Ok(())
+}
+
 const fn map_registry(
     _: domain::agent_runtime::registry::AgentRuntimeRegistryError,
 ) -> AgentManagerError {
@@ -1495,6 +1563,7 @@ fn map_session(error: AgentSessionError) -> AgentManagerError {
     match error {
         AgentSessionError::Busy => AgentManagerError::Busy,
         AgentSessionError::Rejected => AgentManagerError::SessionRejected,
+        AgentSessionError::CommandCatalogChanged => AgentManagerError::CommandCatalogChanged,
         AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
         AgentSessionError::History(error) => AgentManagerError::History(error.to_string()),
     }

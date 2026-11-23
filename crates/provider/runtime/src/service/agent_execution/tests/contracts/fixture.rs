@@ -19,6 +19,13 @@ use provider_core::protocol::timeline::NativeItem;
 
 const NOW: &str = "2026-10-31T00:00:00Z";
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) enum CommandOwnership {
+    #[default]
+    Unsupported,
+    Supported,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct State {
     pub(super) cancellations: usize,
@@ -32,6 +39,9 @@ pub(super) struct State {
     pub(super) release_control: bool,
     pub(super) permission_pending: bool,
     pub(super) permission_answers: usize,
+    pub(super) command_ownership: CommandOwnership,
+    pub(super) command_catalog: Option<Vec<Value>>,
+    pub(super) command_probes: usize,
 }
 
 pub(super) struct Harness {
@@ -97,6 +107,18 @@ struct Client(Arc<Mutex<State>>);
 impl AgentClient for Client {
     fn provider(&self) -> &'static str {
         "contract"
+    }
+
+    fn commands_include_ownership(&self) -> bool {
+        self.0.lock().unwrap().command_ownership == CommandOwnership::Supported
+    }
+
+    async fn commands(&self, _: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state.command_probes += 1;
+        Ok(vec![
+            json!({"name":"probe","description":"probe", "argumentHint":"", "source":"extension"}),
+        ])
     }
 
     fn supports_history_replay(&self) -> bool {
@@ -173,6 +195,10 @@ struct Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn command_catalog(&self) -> Option<Vec<Value>> {
+        self.state.lock().unwrap().command_catalog.clone()
+    }
+
     fn begin_child_guide(
         &mut self,
         id: &str,

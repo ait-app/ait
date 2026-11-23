@@ -60,6 +60,7 @@ pub(crate) enum Operation {
     ForkContext,
     Rewind,
     Commands,
+    CommandsV2,
     Subagents,
     UnifiedSubagents,
     ChildGuide,
@@ -133,6 +134,7 @@ impl Operation {
             "agent.fork_context.request" => Ok(Self::ForkContext),
             "agent.rewind.request" => Ok(Self::Rewind),
             "agent.commands.list.request" => Ok(Self::Commands),
+            "agent.commands.list.v2.request" => Ok(Self::CommandsV2),
             "agent.provider_subagents.list.request" => Ok(Self::Subagents),
             "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
             "agent.subagents.guide.request" => Ok(Self::ChildGuide),
@@ -205,6 +207,7 @@ impl Operation {
             Self::ForkContext => "agent.fork_context.request",
             Self::Rewind => "agent.rewind.request",
             Self::Commands => "agent.commands.list.request",
+            Self::CommandsV2 => "agent.commands.list.v2.request",
             Self::Subagents => "agent.provider_subagents.list.request",
             Self::UnifiedSubagents => "agent.subagents.list.request",
             Self::ChildGuide => "agent.subagents.guide.request",
@@ -298,6 +301,7 @@ impl Operation {
             | Self::RecentSessions
             | Self::SessionPreview
             | Self::Commands
+            | Self::CommandsV2
             | Self::Diagnostic
             | Self::PresetDescribe
             | Self::PresetList
@@ -345,6 +349,7 @@ impl Operation {
             | Self::ForkContext
             | Self::Rewind
             | Self::Commands
+            | Self::CommandsV2
             | Self::Usage
             | Self::Get
             | Self::Update

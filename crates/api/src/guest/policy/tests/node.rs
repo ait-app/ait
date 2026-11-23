@@ -26,6 +26,7 @@ async fn management_requires_a_whole_node_grant() {
             "provider.usage.list.request",
             "provider.usage.ledger.request",
             "agent.skills.get_status.request",
+            "agent.commands.list.v2.request",
             "session.events.set_subscription.request",
             "file.upload.request",
         ] {

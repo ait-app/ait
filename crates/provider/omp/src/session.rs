@@ -146,6 +146,7 @@ pub(super) struct Session {
     overlay: Option<tempfile::NamedTempFile>,
     /// Discovered at open; absent when native metadata could not be read, which only hides roles.
     catalog: Option<std::sync::Arc<roles::Catalog>>,
+    commands: command_catalog::Commands,
 }
 
 /// Start a disposable native capability reader in `cwd` that saves no session, bounded by
@@ -297,7 +298,7 @@ pub(super) async fn open(
         fast: config::requested_fast_mode(&spec.config),
         ..config::Launch::default()
     };
-    let (transport, state) = connect(
+    let (mut transport, state) = connect(
         client,
         &spec.cwd,
         &spec.config,
@@ -315,6 +316,8 @@ pub(super) async fn open(
         .with_identity_lookups();
     // OMP's todo state at attach, unless the replayed history already shows it (M4).
     stream.state_todos(&state);
+    let mut commands = command_catalog::Commands::default();
+    let _ = commands.refresh(&mut transport);
     Ok(Session {
         client: client.clone(),
         transport,
@@ -347,6 +350,7 @@ pub(super) async fn open(
         model: Model::Current,
         overlay,
         catalog: client.role_catalog(&spec.cwd).await.ok(),
+        commands,
     })
 }
 
@@ -464,6 +468,11 @@ impl Session {
         self.usage.reset();
         self.cancel_requests.clear();
         self.input_requests.clear();
+        if self.commands.refresh(&mut self.transport) {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::CommandsChanged);
+        }
         self.idle_without_outcome = None;
         self.live = !persisted;
         self.state = state;
@@ -524,10 +533,36 @@ impl Session {
         if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
             return Err(AgentSessionError::Rejected);
         }
+        let previous_process = self.transport.process_id();
         self.configure(config).await?;
+        if is_slash_command(&prompt.text) {
+            // Configuration requests buffer unrelated native frames. Observe those frames
+            // before trusting a catalog that may have changed during the request.
+            if self.transport.process_id() != previous_process
+                || !self.drain_before_slash()?
+                || self.active.is_some()
+                || self.commands.route(&prompt.text)
+                    != Some(provider_core::ports::agent_session::CommandRoute::Foreground)
+            {
+                return Err(AgentSessionError::CommandCatalogChanged);
+            }
+        }
         let payload = Self::payload(prompt)?;
         self.submit(payload, None, prompt.client_message_id.clone())
             .await
+    }
+
+    /// Process already received native facts without consuming their projected events.
+    /// A saturated queue leaves ownership uncertain, so the caller must retry.
+    fn drain_before_slash(&mut self) -> Result<bool, AgentSessionError> {
+        self.commands.poll();
+        for _ in 0..64 {
+            let Some(event) = self.transport.poll()? else {
+                return Ok(true);
+            };
+            self.consume(&event)?;
+        }
+        Ok(false)
     }
 
     /// Convert `prompt` for OMP (D7).
@@ -649,6 +684,14 @@ impl Session {
     }
 
     fn control_response(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if let Some(changed) = self.commands.response(event) {
+            if changed {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::CommandsChanged);
+            }
+            return Ok(true);
+        }
         if self
             .child_controls
             .response(&mut self.transport, event, &mut self.stream.events)
@@ -779,6 +822,14 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "available_commands_update" {
+            if self.commands.update(event) {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::CommandsChanged);
+            }
+            return Ok(());
+        }
         if event["type"] == "response" && self.control_response(event)? {
             return Ok(());
         }
@@ -1213,6 +1264,15 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         PROVIDER
     }
+    fn command_route(
+        &self,
+        text: &str,
+    ) -> Option<provider_core::ports::agent_session::CommandRoute> {
+        self.commands.route(text)
+    }
+    fn command_catalog(&self) -> Option<Vec<Value>> {
+        self.commands.catalog()
+    }
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         // The manager asks immediately after submission, before polling any dialogs.
         // A queued get_state can wait on that same dialog and prevent its publication.
@@ -1382,6 +1442,7 @@ impl AgentSession for Session {
 impl Session {
     /// Return the next turn event, reading native frames until one is produced.
     fn observe(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        self.commands.poll();
         self.child_controls.poll(&mut self.stream.events);
         self.check_cancellation()?;
         if let Some(event) = self.next_event() {
@@ -1563,6 +1624,7 @@ fn failure_text(reason: &str, message: &Value) -> String {
 }
 
 mod child_controls;
+mod command_catalog;
 mod slash;
 
 #[cfg(all(test, unix))]

@@ -1,6 +1,7 @@
 use super::*;
 
 mod child_controls;
+mod command_provenance;
 mod commands;
 #[cfg(target_os = "macos")]
 mod confinement;
@@ -468,6 +469,7 @@ async fn installed_omp_settlement_uses_native_state_when_notification_is_lost() 
 async fn installed_omp_local_commands_settle_with_an_echo_and_their_output() {
     let fixture = installed_with_plugins().await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    commands_ready(session.as_mut()).await;
     let prompt = AgentPrompt {
         client_message_id: Some("client-1".to_owned()),
         ..AgentPrompt::text("/session")

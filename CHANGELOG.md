@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- OMP slash commands distinguish native extensions and aliases from Ait-managed built-ins.
+  Ambiguous ownership is reported before an input can be sent or a local shortcut can archive a session.
+
 - Model presets and ordinary model choices now have separate selection states. Selecting an
   ordinary model exits the preset and restores independent role and fallback settings; changes
   saved in the selected preset are used on later turns.

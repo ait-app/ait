@@ -242,7 +242,7 @@ fn classify_resource(method: &str) -> Rule {
             Rule::AgentDrive("parentAgentId")
         }
         "agent.update.request" => Rule::AgentUpdate,
-        "agent.commands.list.request" => Rule::AgentCommands,
+        "agent.commands.list.request" | "agent.commands.list.v2.request" => Rule::AgentCommands,
         "agent.list.request" | "agent.history.get.request" => Rule::AgentFilter,
         "agent.timeline.set_subscription.request" => Rule::AgentSubscription,
         "agent.items.close.request" => Rule::ItemsClose,

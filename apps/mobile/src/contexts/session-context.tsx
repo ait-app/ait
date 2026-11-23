@@ -49,6 +49,7 @@ import { useToast } from "@/contexts/toast-context";
 import { readSyncedTimelineCursor } from "@/contexts/session-timeline-cursor";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
+import { invalidateAgentCommands } from "@/data/agent-commands-query";
 
 type AudioOutputPayload = Extract<
   SessionOutboundMessage,
@@ -363,6 +364,9 @@ export function SessionProvider({ children, serverId, client }: SessionProviderP
     const onStream = (message: SessionOutboundMessage) => {
       if (message.type !== "agent.stream") return;
       const { agentId, event, timestamp, seq, epoch } = message.payload;
+      if ((event as { type: string }).type === "commands_changed") {
+        invalidateAgentCommands(queryClient, serverId, agentId);
+      }
       const parsedTimestamp = new Date(timestamp);
       const streamEvent = event;
       if (
@@ -478,7 +482,7 @@ export function SessionProvider({ children, serverId, client }: SessionProviderP
       setViewedTimelineSync(serverId, null);
       sync.dispose();
     };
-  }, [client, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime]);
+  }, [client, queryClient, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime]);
 
   useEffect(() => {
     // A connection switch can replace the owner while isConnected stays true.

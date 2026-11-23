@@ -53,7 +53,10 @@ async fn a_blocked_command_answered_while_idle_does_not_start_a_turn() {
         ..command("/model opus")
     };
     // Ait answers it without OMP: no turn starts and nothing reaches the transport.
-    session.out_of_band(&prompt).await.unwrap();
+    assert!(matches!(
+        session.out_of_band(&prompt).await,
+        Err(AgentSessionError::Rejected)
+    ));
 
     let card = match next(session.as_mut()).await.unwrap() {
         AgentTurnEvent::Timeline(entry) => entry.item,
@@ -79,13 +82,15 @@ async fn a_blocked_command_answered_while_idle_does_not_start_a_turn() {
             "`/quit` is a terminal-only OMP command, which Ait does not run.",
         ),
     ] {
-        session
-            .out_of_band(&AgentPrompt {
-                client_message_id: Some(format!("client-{name}")),
-                ..command(text)
-            })
-            .await
-            .unwrap();
+        assert!(matches!(
+            session
+                .out_of_band(&AgentPrompt {
+                    client_message_id: Some(format!("client-{name}")),
+                    ..command(text)
+                })
+                .await,
+            Err(AgentSessionError::Rejected)
+        ));
         let card = match next(session.as_mut()).await.unwrap() {
             AgentTurnEvent::Timeline(entry) => entry.item,
             other => panic!("expected the command card for {text}, got {other:?}"),
@@ -117,7 +122,10 @@ async fn a_blocked_command_running_mid_turn_is_a_card_and_leaves_the_turn_alone(
         client_message_id: Some("client-1".to_owned()),
         ..command("/advisor off")
     };
-    session.out_of_band(&prompt).await.unwrap();
+    assert!(matches!(
+        session.out_of_band(&prompt).await,
+        Err(AgentSessionError::Rejected)
+    ));
     // The native run is still the one the command answered beside.
     session.steer_turn(&turn, "continue").await.unwrap();
 

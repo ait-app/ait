@@ -245,6 +245,7 @@ pub(super) async fn read(
                     AgentSessionError::Failed => "transport or provider failure",
                     AgentSessionError::Rejected => "request rejected",
                     AgentSessionError::Busy => "session busy",
+                    AgentSessionError::CommandCatalogChanged => "command catalog changed",
                     AgentSessionError::History(_) => return Err(error),
                 };
                 return Err(projection.error(page_number, HistoryFailure::Rpc(reason)));

@@ -129,7 +129,7 @@ function info(methods: string[]) {
 }
 it("emits every server-info feature schema key as an explicit boolean", () => {
   const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
-  expect(Object.keys(payload.features ?? {})).toHaveLength(97);
+  expect(Object.keys(payload.features ?? {})).toHaveLength(99);
   expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
     true,
   );
@@ -611,4 +611,15 @@ it("turns a notepad result into the response the client validates", () => {
 it("advertises host monitoring only when the daemon declares its method", () => {
   expect(info([])?.features?.hostStats).toBe(false);
   expect(info(["daemon.host_stats.request"])?.features?.hostStats).toBe(true);
+});
+
+it.each([
+  [[], false],
+  [["agent.commands.list.request"], false],
+  [["agent.commands.list.v2.request"], true],
+] as const)("negotiates command ownership only for v2", (names, expected) => {
+  const message = serverInfo({ server_id: "host", features: [] }, new Set(names));
+  expect(object(object(message).payload).features).toMatchObject({
+    agentCommandOwnership: expected,
+  });
 });

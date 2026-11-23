@@ -177,6 +177,7 @@ async fn installed_omp_cached_approval_offers_grants_and_keeps_the_written_conte
 async fn installed_omp_structured_ask_dialog_answers_every_question_at_once() {
     let fixture = installed_with_plugins().await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    commands_ready(session.as_mut()).await;
     session
         .start_turn("/compat-ask-dialog", &fixture.spec.config)
         .await

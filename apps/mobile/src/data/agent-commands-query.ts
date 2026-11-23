@@ -1,5 +1,6 @@
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import { normalizeWorkspacePath } from "@/utils/workspace-identity";
+import type { QueryClient } from "@tanstack/react-query";
 
 const AGENT_COMMANDS_QUERY_ROOT = "agentCommands";
 
@@ -22,6 +23,23 @@ export function agentCommandsQueryRoot(serverId: string) {
 
 export function sessionAgentCommandsQueryKey(input: { serverId: string; agentId: string }) {
   return [...agentCommandsQueryRoot(input.serverId), "session", input.agentId] as const;
+}
+
+export function agentCommandRevisionKey(serverId: string, agentId: string) {
+  return ["agentCommandRevision", serverId, agentId] as const;
+}
+
+/** Invalidate immediately and discard older in-flight responses before refetching. */
+export function invalidateAgentCommands(client: QueryClient, serverId: string, agentId: string) {
+  const key = sessionAgentCommandsQueryKey({ serverId, agentId });
+  client.setQueryData<number>(
+    agentCommandRevisionKey(serverId, agentId),
+    (value) => (value ?? 0) + 1,
+  );
+  void client.invalidateQueries({ queryKey: key, refetchType: "none" });
+  void client
+    .cancelQueries({ queryKey: key })
+    .then(() => client.invalidateQueries({ queryKey: key }));
 }
 
 export function draftAgentCommandsQueryKey(input: {

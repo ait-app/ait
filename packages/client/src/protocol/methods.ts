@@ -489,6 +489,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.items.close.response",
   },
+  "agent.commands.list.v2.request": {
+    method: "agent.commands.list.v2.request",
+    kind: "request",
+    channel: 2,
+    response: "agent.commands.list.v2.response",
+  },
   "agent.commands.list.request": {
     method: "agent.commands.list.request",
     kind: "request",

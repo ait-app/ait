@@ -3,6 +3,9 @@ import {
   CLIENT_SLASH_COMMANDS,
   buildDraftAgentSetup,
   resolveClientSlashCommand,
+  visibleNativeCommands,
+  commandOwnershipAmbiguous,
+  selectedClientCommandName,
 } from "@/client-slash-commands";
 import type { Agent } from "@/stores/session-store";
 
@@ -103,6 +106,110 @@ describe("resolveClientSlashCommand", () => {
     ).toBeNull();
     expect(resolveClientSlashCommand({ text: "hello /quit", hasAttachments: false })).toBeNull();
     expect(resolveClientSlashCommand({ text: "/quit", hasAttachments: true })).toBeNull();
+  });
+
+  it("honors hidden, aliased, and unknown-source native ownership without trusting an incomplete catalog", () => {
+    const input = { text: "/clear", hasAttachments: false };
+    expect(resolveClientSlashCommand({ ...input, ownership: { kind: "unavailable" } })).toBeNull();
+    expect(resolveClientSlashCommand({ ...input, ownership: { kind: "legacy" } })?.name).toBe(
+      "clear",
+    );
+    expect(
+      resolveClientSlashCommand({ ...input, ownership: { kind: "complete", commands: [] } })?.name,
+    ).toBe("clear");
+    expect(
+      resolveClientSlashCommand({
+        ...input,
+        ownership: {
+          kind: "complete",
+          commands: [{ name: "clear", source: "builtin", menuVisible: false }],
+        },
+      })?.name,
+    ).toBe("clear");
+    for (const command of [
+      { name: "clear", source: "extension" },
+      { name: "other", aliases: ["clear:"], source: "skill", menuAliases: [] },
+      { name: "clear", source: "builtin", menuVisible: true },
+      { name: "other", aliases: ["clear"], source: "builtin", menuVisible: true },
+      { name: "clear" },
+    ]) {
+      expect(
+        resolveClientSlashCommand({
+          ...input,
+          ownership: { kind: "complete", commands: [command] },
+        }),
+      ).toBeNull();
+    }
+  });
+
+  it("retains a shortcut alias owned solely by a GUI-managed native builtin", () => {
+    const ownership = {
+      kind: "complete" as const,
+      commands: [{ name: "clear", aliases: ["new"], source: "builtin", menuVisible: false }],
+    };
+    expect(
+      resolveClientSlashCommand({ text: "/clear", hasAttachments: false, ownership })?.name,
+    ).toBe("clear");
+    expect(
+      resolveClientSlashCommand({ text: "/new", hasAttachments: false, ownership })?.name,
+    ).toBe("clear");
+    expect(
+      resolveClientSlashCommand({
+        text: "/new",
+        hasAttachments: false,
+        ownership: {
+          ...ownership,
+          commands: [...ownership.commands, { name: "new", source: "extension" }],
+        },
+      }),
+    ).toBeNull();
+    const clear = CLIENT_SLASH_COMMANDS.find((command) => command.name === "clear")!;
+    expect(selectedClientCommandName(clear, "new")).toBe("new");
+    expect(selectedClientCommandName(clear, "ne")).toBe("clear");
+    expect(
+      resolveClientSlashCommand({
+        text: "/new",
+        hasAttachments: false,
+        ownership: {
+          kind: "complete",
+          commands: [{ name: "delete", aliases: ["new"], source: "builtin", menuVisible: false }],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("shows one native row for duplicate claimants without losing ownership information", () => {
+    const builtin = { name: "clear", source: "builtin" };
+    const extension = { name: "clear", source: "extension" };
+    const hidden = { name: "exit", source: "builtin", menuVisible: false };
+    expect(visibleNativeCommands([builtin, extension, hidden])).toEqual([
+      { ...extension, menuAliases: [] },
+    ]);
+    expect(visibleNativeCommands([extension, builtin, hidden])).toEqual([
+      { ...extension, menuAliases: [] },
+    ]);
+    expect(
+      visibleNativeCommands([
+        { ...extension, menuAliases: ["one"] },
+        { ...extension, menuAliases: ["two"] },
+      ])[0].menuAliases,
+    ).toEqual(["one", "two"]);
+    expect(
+      resolveClientSlashCommand({
+        text: "/clear",
+        hasAttachments: false,
+        ownership: { kind: "complete", commands: [builtin, extension, hidden] },
+      }),
+    ).toBeNull();
+    expect(
+      commandOwnershipAmbiguous("/clear", { kind: "complete", commands: [builtin, extension] }),
+    ).toBe(true);
+    expect(commandOwnershipAmbiguous("/clear", { kind: "complete", commands: [extension] })).toBe(
+      false,
+    );
+    expect(commandOwnershipAmbiguous("/exit", { kind: "complete", commands: [hidden] })).toBe(
+      false,
+    );
   });
 });
 

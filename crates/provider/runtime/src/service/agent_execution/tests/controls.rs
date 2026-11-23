@@ -202,6 +202,13 @@ async fn controls_validate_atomically_apply_next_turn_and_persist() {
         .await
         .unwrap();
     assert_eq!(draft["commands"], commands["commands"]);
+    let v2 = execution
+        .execute("agent.commands.list.v2.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    assert_eq!(v2["commands"], commands["commands"]);
+    assert_eq!(v2["ownershipApplicable"], false);
+    assert_eq!(v2["ownershipComplete"], false);
     assert_eq!(
         execution
             .execute(

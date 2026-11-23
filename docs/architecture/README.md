@@ -96,6 +96,8 @@ metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protoco
 通过 `Providers::with` 依次追加 `provider-codex` 的 Codex、`provider-antigravity` 的 Antigravity、
 `provider-claude` 的 Claude Code、`provider-deepseek-harness` 的 DeepSeek Harness、`provider-minimax` 的 MiniMax Code、`provider-omp` 的 Oh My Pi、`provider-opencode` 的 OpenCode 与 `provider-pi` 的 Pi；daemon 只调用这一入口（[ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
 [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
+OMP 会话按当前原生命令来源和别名裁决内置入口与扩展，目录不明确时拒绝危险操作；
+见 [ADR-302](../decisions/providers/adr-302-omp-command-ownership.md)。
 每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
 使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、

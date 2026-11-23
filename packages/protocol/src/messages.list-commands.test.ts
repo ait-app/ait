@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "./messages.js";
+import {
+  AgentStreamEventPayloadSchema,
+  SessionInboundMessageSchema,
+  SessionOutboundMessageSchema,
+} from "./messages.js";
 
 describe("agent.commands.list.request schema", () => {
   test("accepts legacy agent-only payload", () => {
@@ -105,5 +109,47 @@ describe("agent.commands.list.request schema", () => {
       throw new Error("Expected agent.commands.list.response message");
     }
     expect(parsed.payload.commands[0]?.kind).toBe("command");
+  });
+});
+
+test("v2 preserves command ownership and requires explicit completeness", () => {
+  const request = SessionInboundMessageSchema.parse({
+    type: "agent.commands.list.v2.request",
+    agentId: "agent-1",
+    requestId: "request-1",
+  });
+  expect(request.type).toBe("agent.commands.list.v2.request");
+  const response = {
+    type: "agent.commands.list.v2.response",
+    payload: {
+      agentId: "agent-1",
+      requestId: "request-1",
+      error: null,
+      ownershipApplicable: true,
+      ownershipComplete: true,
+      commands: [
+        {
+          name: "clear",
+          description: "extension",
+          argumentHint: "",
+          source: "future-source",
+          aliases: ["reset"],
+          menuVisible: false,
+          menuAliases: ["reset"],
+        },
+        { name: "clear", description: "builtin", argumentHint: "", source: "builtin" },
+      ],
+    },
+  };
+  expect(SessionOutboundMessageSchema.parse(response)).toEqual(response);
+  const { ownershipComplete: _, ...incomplete } = response.payload;
+  expect(SessionOutboundMessageSchema.safeParse({ ...response, payload: incomplete }).success).toBe(
+    false,
+  );
+});
+
+test("parses a session command catalog invalidation", () => {
+  expect(AgentStreamEventPayloadSchema.parse({ type: "commands_changed" })).toEqual({
+    type: "commands_changed",
   });
 });

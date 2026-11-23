@@ -137,6 +137,8 @@ const MANAGED: [(&str, Managed); 69] = [
 
 /// Most commands accepted from one OMP command list.
 const MAX_COMMANDS: usize = 4096;
+/// Bound aggregate aliases independently of the number of catalog entries.
+const MAX_ALIASES: usize = 4096;
 
 /// A built-in command Ait runs out of band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,57 +252,189 @@ pub(super) fn auto_compact(args: &str) -> AutoCompact {
     }
 }
 
-/// Map OMP's `{commands}` (from `get_available_commands`) into Ait commands, as Paseo's
-/// `mapOmpSlashCommands`: the built-ins first, then OMP's commands, which replace a built-in
-/// of the same name but keep its argument hint when they have none. A description falls back
-/// to the command's `source`, then `"command"`; `skill` sources are skills. Commands Ait
-/// blocks are left out, so completion never offers what submission refuses.
+/// A native catalog and the ownership of each name and alias. A collision or missing
+/// provenance is never classified as builtin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Catalog {
+    entries: Vec<Value>,
+    claims: HashMap<String, Claim>,
+}
+
+/// A source conflict or ambiguous builtin alias cannot be dispatched safely.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Claim {
+    Builtin(String),
+    Native,
+    Unknown(String),
+    Ambiguous,
+}
+
+impl Catalog {
+    /// Decode the complete native catalog before using it for either display or routing.
+    pub(super) fn parse(value: &Value) -> Result<Self, AgentSessionError> {
+        let entries = value["commands"]
+            .as_array()
+            .filter(|commands| commands.len() <= MAX_COMMANDS)
+            .ok_or(AgentSessionError::Failed)?;
+        let mut claims = HashMap::new();
+        let mut alias_count = 0_usize;
+        for entry in entries {
+            let name = config::text(entry, "name")?;
+            let claim = match entry["source"].as_str() {
+                Some("builtin") => Claim::Builtin(name.to_owned()),
+                Some(
+                    "extension" | "skill" | "custom" | "file" | "project" | "template" | "prompt",
+                ) => Claim::Native,
+                _ => Claim::Unknown(name.to_owned()),
+            };
+            let aliases = aliases(entry)?;
+            alias_count = alias_count.saturating_add(aliases.len());
+            if alias_count > MAX_ALIASES {
+                return Err(AgentSessionError::Failed);
+            }
+            for name in std::iter::once(name).chain(aliases) {
+                let key = name.trim_end_matches(':').to_ascii_lowercase();
+                claims
+                    .entry(key)
+                    .and_modify(|previous| {
+                        *previous = match (&*previous, &claim) {
+                            (Claim::Native, Claim::Native) => Claim::Native,
+                            (Claim::Unknown(name), Claim::Native)
+                            | (Claim::Native, Claim::Unknown(name)) => Claim::Unknown(name.clone()),
+                            (Claim::Unknown(first), Claim::Unknown(second))
+                                if first.eq_ignore_ascii_case(second) =>
+                            {
+                                previous.clone()
+                            }
+                            (Claim::Builtin(first), Claim::Builtin(second))
+                                if first.eq_ignore_ascii_case(second) =>
+                            {
+                                previous.clone()
+                            }
+                            _ => Claim::Ambiguous,
+                        };
+                    })
+                    .or_insert_with(|| claim.clone());
+            }
+        }
+        Ok(Self {
+            entries: entries.clone(),
+            claims,
+        })
+    }
+
+    /// Whether at least one native command claims this name or alias.
+    pub(super) fn contains(&self, name: &str) -> bool {
+        self.claims
+            .contains_key(&name.trim_end_matches(':').to_ascii_lowercase())
+    }
+
+    /// Only explicit builtin claims count; conflicting or absent sources do not.
+    pub(super) fn builtin_owned(&self, name: &str) -> bool {
+        matches!(self.claim(name), Some(Claim::Builtin(_)))
+    }
+
+    /// Return the unambiguous canonical owner for a name or alias.
+    pub(super) fn claim(&self, name: &str) -> Option<&Claim> {
+        self.claims
+            .get(&name.trim_end_matches(':').to_ascii_lowercase())
+    }
+
+    pub(super) fn project(&self) -> Vec<Value> {
+        let mut output = Vec::with_capacity(BUILTINS.len() + self.entries.len());
+        for (name, description, hint) in BUILTINS {
+            if !self.contains(name) {
+                output.push(json!({"name":name,"description":description,"argumentHint":hint,"kind":"command"}));
+            }
+        }
+        for entry in &self.entries {
+            let name = entry["name"].as_str().expect("validated command name");
+            let hint = entry["input"]["hint"]
+                .as_str()
+                .or_else(|| {
+                    BUILTINS
+                        .iter()
+                        .find(|(builtin, _, _)| builtin.eq_ignore_ascii_case(name))
+                        .map(|(_, _, hint)| *hint)
+                })
+                .unwrap_or_default();
+            let description = entry["description"]
+                .as_str()
+                .or_else(|| entry["source"].as_str())
+                .unwrap_or("command");
+            let mut command = json!({"name":name,"description":description,"argumentHint":hint,
+                "kind":if entry["source"] == "skill" {"skill"} else {"command"}});
+            if let Some(source) = entry["source"].as_str() {
+                command["source"] = json!(source);
+            }
+            if matches!(self.claim(name), Some(Claim::Ambiguous))
+                || matches!(self.claim(name), Some(Claim::Unknown(canonical)) if host_reserved(name) || host_reserved(canonical))
+                || (entry["source"] == "builtin"
+                    && (gui_managed(&format!("/{name}")).is_some() || !self.builtin_owned(name)))
+            {
+                command["menuVisible"] = json!(false);
+            }
+            if let Some(raw) = entry["aliases"].as_array() {
+                command["aliases"] = json!(raw);
+                let visible: Vec<_> = raw
+                    .iter()
+                    .filter(|alias| {
+                        let name = alias
+                            .as_str()
+                            .expect("validated alias")
+                            .trim_end_matches(':');
+                        !matches!(self.claim(name), Some(Claim::Ambiguous))
+                            && !matches!(self.claim(name), Some(Claim::Unknown(canonical)) if host_reserved(name) || host_reserved(canonical))
+                            && (entry["source"] != "builtin"
+                                || (self.builtin_owned(name)
+                                    && gui_managed(&format!(
+                                        "/{}",
+                                        entry["name"].as_str().unwrap_or_default()
+                                    ))
+                                    .is_none()
+                                    && gui_managed(&format!("/{name}")).is_none()))
+                    })
+                    .cloned()
+                    .collect();
+                command["menuAliases"] = json!(visible);
+            }
+            output.push(command);
+        }
+        output
+    }
+}
+
+fn host_reserved(name: &str) -> bool {
+    gui_managed(&format!("/{name}")).is_some() || builtin(&format!("/{name} argument")).is_some()
+}
+
+fn aliases(entry: &Value) -> Result<impl ExactSizeIterator<Item = &str>, AgentSessionError> {
+    let values = match entry.get("aliases") {
+        None | Some(Value::Null) => &[][..],
+        Some(Value::Array(values)) if values.len() <= MAX_COMMANDS => values.as_slice(),
+        Some(_) => return Err(AgentSessionError::Failed),
+    };
+    if values.iter().any(|value| {
+        value.as_str().is_none_or(|text| {
+            text.trim_end_matches(':').is_empty()
+                || text.len() > 4096
+                || text.chars().any(char::is_control)
+        })
+    }) {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(values
+        .iter()
+        .map(|value| value.as_str().expect("validated alias")))
+}
+
+/// Project a complete OMP catalog without losing source, aliases, or hidden ownership.
 ///
 /// # Errors
 ///
 /// Returns `AgentSessionError::Failed` for a missing or oversized list or an invalid name.
 pub(super) fn list(value: &Value) -> Result<Vec<Value>, AgentSessionError> {
-    let native = value["commands"]
-        .as_array()
-        .filter(|commands| commands.len() <= MAX_COMMANDS)
-        .ok_or(AgentSessionError::Failed)?;
-    let mut commands = Vec::with_capacity(BUILTINS.len() + native.len());
-    // Position of each listed name, so a later entry replaces an earlier one in place.
-    let mut positions = HashMap::with_capacity(commands.capacity());
-    for (name, description, hint) in BUILTINS {
-        positions.insert(name, commands.len());
-        commands.push(
-            json!({"name":name,"description":description,"argumentHint":hint,"kind":"command"}),
-        );
-    }
-    for entry in native {
-        let name = config::text(entry, "name")?;
-        if MANAGED
-            .iter()
-            .any(|(command, _)| command.eq_ignore_ascii_case(name))
-        {
-            continue;
-        }
-        let known = positions.get(name).copied();
-        let hint = entry["input"]["hint"]
-            .as_str()
-            .or_else(|| known.and_then(|index| commands[index]["argumentHint"].as_str()))
-            .unwrap_or_default()
-            .to_owned();
-        let description = entry["description"]
-            .as_str()
-            .or_else(|| entry["source"].as_str())
-            .unwrap_or("command");
-        let command = json!({"name":name,"description":description,"argumentHint":hint,
-            "kind":if entry["source"] == "skill" {"skill"} else {"command"}});
-        if let Some(index) = known {
-            commands[index] = command;
-        } else {
-            positions.insert(name, commands.len());
-            commands.push(command);
-        }
-    }
-    Ok(commands)
+    Ok(Catalog::parse(value)?.project())
 }
 
 #[cfg(test)]
