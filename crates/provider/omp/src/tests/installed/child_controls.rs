@@ -7,6 +7,7 @@ use provider_core::ports::controls::{ChildControlOutcome, ChildGuideOutcome, Chi
 async fn installed_omp_guides_and_cancels_a_real_native_child() {
     let fixture = installed_child_fixture().await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    let mut frames = crate::transport::subscribe_frames();
     session
         .start_turn("AIT_CHILD_CONTROL_FIXTURE", &fixture.spec.config)
         .await
@@ -21,8 +22,14 @@ async fn installed_omp_guides_and_cancels_a_real_native_child() {
                 return child;
             }
             // The delegated child outlives the parent turn, so settlement keeps the wait alive.
-            let _ = session.poll_turn().unwrap();
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            if session.poll_turn().unwrap().is_none()
+                && session
+                    .subagents()
+                    .iter()
+                    .all(|child| child.descriptor["status"] != "running")
+            {
+                let _ = frames.recv().await;
+            }
         }
     })
     .await
@@ -32,12 +39,12 @@ async fn installed_omp_guides_and_cancels_a_real_native_child() {
         .begin_child_guide(&child.id, "Ait guidance")
         .unwrap();
     assert_eq!(
-        settled(session.as_mut(), &guidance.token).await,
+        settled(session.as_mut(), &guidance.token, &mut frames).await,
         ChildControlOutcome::Guide(Ok(ChildGuideOutcome::Accepted))
     );
     let stopped = session.begin_child_stop(&child.id).unwrap();
     assert_eq!(
-        settled(session.as_mut(), &stopped.token).await,
+        settled(session.as_mut(), &stopped.token, &mut frames).await,
         ChildControlOutcome::Stop(Ok(ChildStopOutcome::Cancelled))
     );
     // Acceptance is not termination: termination arrives as an observed child status.
@@ -47,8 +54,14 @@ async fn installed_omp_guides_and_cancels_a_real_native_child() {
             .iter()
             .all(|entry| entry.id != child.id || entry.descriptor["status"] != "canceled")
         {
-            session.poll_turn().unwrap();
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            if session.poll_turn().unwrap().is_none()
+                && session
+                    .subagents()
+                    .iter()
+                    .all(|entry| entry.id != child.id || entry.descriptor["status"] != "canceled")
+            {
+                let _ = frames.recv().await;
+            }
         }
     })
     .await
@@ -56,30 +69,34 @@ async fn installed_omp_guides_and_cancels_a_real_native_child() {
     // A terminal child is a not-running fact for both controls, without another native write.
     let stopped = session.begin_child_stop(&child.id).unwrap();
     assert_eq!(
-        settled(session.as_mut(), &stopped.token).await,
+        settled(session.as_mut(), &stopped.token, &mut frames).await,
         ChildControlOutcome::Stop(Ok(ChildStopOutcome::NotRunning))
     );
     let guidance = session.begin_child_guide(&child.id, "late").unwrap();
     assert_eq!(
-        settled(session.as_mut(), &guidance.token).await,
+        settled(session.as_mut(), &guidance.token, &mut frames).await,
         ChildControlOutcome::Guide(Ok(ChildGuideOutcome::NotRunning))
     );
     session.close().await.unwrap();
 }
 
 /// Service the control hook until the deferred typed answer for `token` arrives.
-async fn settled(session: &mut dyn AgentSession, token: &str) -> ChildControlOutcome {
+async fn settled(
+    session: &mut dyn AgentSession,
+    token: &str,
+    frames: &mut tokio::sync::broadcast::Receiver<()>,
+) -> ChildControlOutcome {
     loop {
-        if let Some(event) = session.poll_turn().unwrap()
-            && let AgentTurnEvent::ChildControl {
+        match session.poll_turn().unwrap() {
+            Some(AgentTurnEvent::ChildControl {
                 token: event_token,
                 outcome,
-            } = event
-            && event_token == token
-        {
-            return outcome;
+            }) if event_token == token => return outcome,
+            Some(_) => {}
+            None => {
+                let _ = frames.recv().await;
+            }
         }
-        tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
 
@@ -176,7 +193,7 @@ async fn mock_child_completion(
         ));
     }
     if hangs {
-        tokio::time::sleep(Duration::from_secs(120)).await;
+        std::future::pending::<()>().await;
     }
     let body = format!("data: {}\n\ndata: [DONE]\n\n", frames[0]);
     ([("content-type", "text/event-stream")], body)
