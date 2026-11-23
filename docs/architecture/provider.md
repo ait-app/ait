@@ -232,6 +232,9 @@
   `<system-notice>` 投影为 `notification`
   （[ADR-196](../decisions/providers/adr-196-provider-output-semantics.md)，OMP 部分已由
   [ADR-248](../decisions/providers/adr-248-omp-paseo-native-rpc.md) 修订）。
+- 留在 `user_message` 正文里的 harness 注入块（如导入的 Claude 会话中的 `<system-reminder>`）只在展示时折叠：
+  客户端把标签名含 `-` 或 `_`、开标签位于行首且配对闭标签位于行尾的块显示为可展开的标签名，
+  条目类型与 `text` 不变，复制与回退仍使用原文；导入列表的标题与提示词预览去掉这些块。
 - adapter 识别原生压缩开始/结束并输出 `compaction` 条目；原生执行结束时仍未关闭的压缩标为
   `failed`（[ADR-150](../decisions/providers/adr-150-provider-compaction-lifecycle.md)）。
 

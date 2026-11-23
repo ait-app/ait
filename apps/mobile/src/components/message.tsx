@@ -1,5 +1,6 @@
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { UserMessageRemoteImage } from "./user-message-remote-image";
+import { UserMessageBody } from "./user-message-body";
 import { VoiceTranscript } from "./voice-transcript";
 import type { CompactionMarkerLabelInput } from "./message-compaction-label";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
@@ -576,9 +577,11 @@ export const UserMessage = memo(function UserMessage({
             </Text>
           ) : null}
           {hasText ? (
-            <Text selectable style={userMessageStylesheet.text} dataSet={MESSAGE_TEXT_DATASET}>
-              {message}
-            </Text>
+            <UserMessageBody
+              message={message}
+              textStyle={userMessageStylesheet.text}
+              textDataSet={MESSAGE_TEXT_DATASET}
+            />
           ) : null}
         </View>
         {hasText ? (

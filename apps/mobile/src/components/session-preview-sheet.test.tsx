@@ -109,6 +109,7 @@ vi.mock("@/components/ui/loading-spinner", () => ({
 }));
 
 vi.mock("lucide-react-native", () => ({
+  ChevronRight: () => React.createElement("span", { "data-icon": "ChevronRight" }),
   ChevronUp: () => React.createElement("span", { "data-icon": "ChevronUp" }),
   Eye: () => React.createElement("span", { "data-icon": "Eye" }),
 }));
@@ -297,5 +298,36 @@ describe("SessionPreviewSheet pagination", () => {
     } finally {
       queryClient.clear();
     }
+  });
+});
+
+describe("SessionPreviewSheet user messages", () => {
+  it("collapses an injected tag block and expands it on press", async () => {
+    const reminder = "<system-reminder>\nYou are in a worktree.\n</system-reminder>\nFix the test";
+    const fetchProviderSessionPreview = vi.fn().mockResolvedValueOnce({
+      ...olderPage,
+      entries: [message("m1", reminder)],
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(SessionPreviewSheet, {
+          visible: true,
+          client: { fetchProviderSessionPreview },
+          serverId: "server-1",
+          entry,
+          onClose: vi.fn(),
+        }),
+      ),
+    );
+
+    await waitFor(() => expect(screen.getByText("Fix the test")).toBeTruthy());
+    expect(screen.getByText("system-reminder")).toBeTruthy();
+    expect(screen.queryByText("You are in a worktree.")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("user-message-tag-toggle"));
+    expect(screen.getByTestId("user-message-tag-body").textContent).toBe("You are in a worktree.");
   });
 });
