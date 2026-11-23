@@ -15,6 +15,7 @@ use provider_core::ports::preset::{Preset, PresetBackend, PresetDescriptor, Pres
 #[derive(Debug, Clone, Default)]
 struct NativePresetClient {
     writes: Arc<Mutex<usize>>,
+    fail_after_write: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[async_trait::async_trait]
@@ -62,6 +63,12 @@ impl AgentClient for NativePresetClient {
 
     async fn save_native_preset(&self, _cwd: &str, _preset: &Preset) -> Result<(), PresetError> {
         *self.writes.lock().unwrap() += 1;
+        if self
+            .fail_after_write
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(PresetError::Unavailable("readback failed".into()));
+        }
         Ok(())
     }
 }
@@ -284,4 +291,33 @@ async fn a_native_store_refuses_rename_before_calling_its_write_port() {
     assert!(answer["saved"].is_null());
     assert!(answer["error"].as_str().unwrap().contains("rename"));
     assert_eq!(*writes.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn failed_native_readback_still_invalidates_preset_snapshots() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(FileDaemonConfigStore::with_defaults(
+        root.path().join("config.json"),
+    ));
+    let service = crate::service::presets::PresetService::new(store);
+    let native = NativePresetClient::default();
+    native
+        .fail_after_write
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let client: Arc<dyn AgentClient> = Arc::new(native.clone());
+    let before = service.revision();
+    let preset = Preset {
+        name: "A".into(),
+        model: "model".into(),
+        thinking_option_id: None,
+        feature_values: BTreeMap::new(),
+    };
+    assert!(
+        service
+            .save("omp", "/tmp", Some(&client), &preset, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(*native.writes.lock().unwrap(), 1);
+    assert!(service.revision() > before);
 }

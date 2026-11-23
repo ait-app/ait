@@ -123,6 +123,7 @@ export async function invalidatePresetCaches(
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["provider-presets", serverId, provider] }),
+    queryClient.invalidateQueries({ queryKey: ["agent-model-preset-context", serverId] }),
     queryClient.invalidateQueries({ queryKey: ["providerPresetFeatures", serverId, provider] }),
     queryClient.invalidateQueries({ queryKey: ["providerFeatures", serverId, provider] }),
     queryClient.invalidateQueries({ queryKey: ["agentProfileFeatures", serverId] }),

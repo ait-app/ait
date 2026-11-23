@@ -172,6 +172,18 @@ fn validate_overrides(
     record: &PersistedAgentRuntimeRecord,
     overrides: &Overrides,
 ) -> Result<(), AgentManagerError> {
+    let changes_config = overrides.cwd.is_some()
+        || overrides.config != domain::agent_runtime::StoredAgentConfig::default();
+    if changes_config
+        && (record.config_revision == u64::MAX
+            || record
+                .model_preset
+                .as_ref()
+                .and_then(|state| state.selected.as_ref())
+                .is_some())
+    {
+        return Err(AgentManagerError::InvalidRequest);
+    }
     let handle = record
         .persistence
         .as_ref()

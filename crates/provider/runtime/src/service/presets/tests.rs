@@ -229,6 +229,7 @@ fn concurrent_creates_all_survive_without_lost_updates() {
                 let service = service.clone();
                 scope.spawn(move || {
                     tokio::runtime::Builder::new_current_thread()
+                        .enable_time()
                         .build()
                         .unwrap()
                         .block_on(service.save("claude", ".", None, &preset(name, "model/a"), None))

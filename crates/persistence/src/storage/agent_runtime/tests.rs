@@ -7,6 +7,8 @@ use super::FileBackedAgentRuntimeRegistry;
 
 fn record(id: &str) -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: id.to_owned(),
         provider: "codex".to_owned(),
         cwd: "/tmp/project".to_owned(),

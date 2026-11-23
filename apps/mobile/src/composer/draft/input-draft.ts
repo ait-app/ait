@@ -10,10 +10,14 @@ import {
 } from "@/hooks/use-agent-form-state";
 import {
   mergeModelPresetFeatureValues,
+  isPresetOwnedFeature,
+  modelPresetConfiguration,
   withModelPresetRoleDefaults,
   type ModelPresetConfiguration,
+  type ModelPresetControls,
 } from "@/agent-controls/model-presets";
 import { useDraftAgentFeatures } from "@/hooks/use-draft-agent-features";
+import { useFormPreferences } from "@/hooks/use-form-preferences";
 import {
   buildDraftAgentControls,
   hasDraftContent,
@@ -35,6 +39,11 @@ import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { useShallow } from "zustand/shallow";
 import type { ComposerTextSource } from "@/composer/text-source";
 import { isWeb } from "@/constants/platform";
+import { useSessionStore } from "@/stores/session-store";
+import type { ModelPresetSelection } from "@ait/protocol/messages";
+import type { DraftModelPresetSelection } from "@/stores/draft-store/state";
+import { useProviderPresets } from "@/data/provider-presets";
+import { usePresetPermissionDenied } from "@/agent-controls/preset-permission";
 
 type AttachmentUpdater =
   | UserComposerAttachment[]
@@ -58,6 +67,12 @@ type DraftComposerState = UseAgentFormStateResult & {
   effectiveModelId: string;
   effectiveThinkingOptionId: string;
   featureValues: Record<string, unknown> | undefined;
+  modelPreset:
+    | (ModelPresetSelection & {
+        baseFeatureValues: Record<string, unknown>;
+        baseThinkingOptionId: string | null;
+      })
+    | null;
   agentControls: DraftAgentControlsProps;
   commandDraftConfig: DraftCommandConfig | undefined;
 };
@@ -77,6 +92,7 @@ export interface AgentInputDraft {
 
 export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDraft {
   const composerOptions = input.composer ?? null;
+  const { preferences } = useFormPreferences();
   const workingDir = composerOptions?.lockedWorkingDir?.trim() || "";
   const formState = useAgentFormState({
     workingDir,
@@ -269,7 +285,12 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
       modeOptions: formState.modeOptions,
     }),
     [
-      formState.availableModels,
+      formState.availableModels.map((model) => ({
+        id: model.id,
+        aliases: model.aliases,
+        thinkingOptions: model.thinkingOptions,
+        defaultThinkingOptionId: model.defaultThinkingOptionId,
+      })),
       formState.modeOptions,
       formState.selectedMode,
       formState.selectedModel,
@@ -303,16 +324,173 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     initialFeatureValues: composerOptions?.initialFeatureValues,
   });
 
+  const draftPreset = useDraftStore((state) =>
+    state.drafts[draftKey]?.lifecycle === "active"
+      ? (state.drafts[draftKey].input.modelPreset ?? null)
+      : null,
+  );
+  const setDraftPreset = useCallback(
+    (preset: DraftModelPresetSelection | null) => {
+      const store = useDraftStore.getState();
+      const current = store.getDraftInput(draftKey) ?? { text: "", attachments: [] };
+      const { modelPreset: _old, ...rest } = current;
+      const next = preset ? { ...rest, modelPreset: preset } : rest;
+      if (hasDraftContent(next)) store.saveDraftInput({ draftKey, draft: next });
+      else store.clearDraftInput({ draftKey, lifecycle: "abandoned" });
+    },
+    [draftKey],
+  );
+  const supportsModelPresetSelection = useSessionStore(
+    (state) =>
+      state.sessions[formState.selectedServerId ?? ""]?.serverInfo?.features
+        ?.agentModelPresetSelection === true,
+  );
+  const presetPermissionDenied = usePresetPermissionDenied(formState.selectedServerId);
+  const storedPreset = useProviderPresets({
+    serverId: formState.selectedServerId,
+    provider: draftPreset?.provider,
+    cwd: draftPreset?.cwd,
+    enabled: Boolean(draftPreset),
+  });
+  const restoredPresetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draftPreset || !storedPreset.snapshot || draftPreset.cwd !== workingDir) {
+      restoredPresetRef.current = null;
+      return;
+    }
+    const preset = storedPreset.snapshot.presets.find(
+      (entry) => entry.name === draftPreset.name && entry.source === draftPreset.source,
+    );
+    if (
+      !preset ||
+      !formState.modelSelectorProviders.some((entry) => entry.id === draftPreset.provider)
+    )
+      return;
+    if (formState.selectedProvider !== draftPreset.provider) {
+      formState.applyModelPresetFromUser(
+        draftPreset.provider,
+        modelPresetConfiguration(preset, []),
+      );
+      return;
+    }
+    if (formState.isModelLoading) return;
+    const key = JSON.stringify([
+      draftKey,
+      draftPreset,
+      preset,
+      (draftFeatures ?? []).map((feature) =>
+        feature.type === "select"
+          ? { id: feature.id, options: feature.options }
+          : { id: feature.id, type: feature.type },
+      ),
+      formState.availableModels,
+    ]);
+    if (restoredPresetRef.current === key) return;
+    restoredPresetRef.current = key;
+    const complete = modelPresetConfiguration(
+      preset,
+      draftFeatures ?? [],
+      formState.availableModels,
+    );
+    formState.applyModelPresetFromUser(draftPreset.provider, complete);
+    applyProfileFeatureValues(
+      mergeModelPresetFeatureValues(draftFeatureValues, complete),
+      draftPreset.provider,
+    );
+  }, [
+    draftKey,
+    draftPreset,
+    storedPreset.snapshot,
+    workingDir,
+    formState,
+    draftFeatures,
+    draftFeatureValues,
+    applyProfileFeatureValues,
+  ]);
+  const exitDraftPreset = useCallback(() => {
+    if (!draftPreset) return;
+    applyProfileFeatureValues(
+      mergeModelPresetFeatureValues(draftFeatureValues, {
+        modelId: formState.selectedModel,
+        thinkingOptionId: formState.selectedThinkingOptionId || null,
+        featureValues: draftPreset.baseFeatureValues,
+      }),
+      draftPreset.provider,
+    );
+    setDraftPreset(null);
+  }, [
+    applyProfileFeatureValues,
+    draftFeatureValues,
+    draftPreset,
+    formState.selectedModel,
+    formState.selectedThinkingOptionId,
+    setDraftPreset,
+  ]);
+  useEffect(() => {
+    if (!draftPreset || !workingDir || draftPreset.cwd === workingDir) return;
+    if (draftPreset.provider === formState.selectedProvider) {
+      formState.applyModelPresetFromUser(draftPreset.provider, {
+        modelId: effectiveModelId,
+        thinkingOptionId:
+          draftPreset.baseModelId === effectiveModelId ? draftPreset.baseThinkingOptionId : null,
+        featureValues: {},
+      });
+    }
+    exitDraftPreset();
+  }, [draftPreset, effectiveModelId, exitDraftPreset, formState, workingDir]);
+
   const applyDraftAgentProfile = useCallback(
     (profile: Parameters<typeof formState.applyProfileFromUser>[0]) => {
+      setDraftPreset(null);
       formState.applyProfileFromUser(profile);
       applyProfileFeatureValues(profile.featureValues);
     },
-    [applyProfileFeatureValues, formState],
+    [applyProfileFeatureValues, formState, setDraftPreset],
   );
 
   const applyDraftModelPreset = useCallback(
-    (provider: string, configuration: ModelPresetConfiguration) => {
+    (
+      provider: string,
+      configuration: ModelPresetConfiguration,
+      preset: Parameters<ModelPresetControls["apply"]>[2],
+    ) => {
+      if (!supportsModelPresetSelection || presetPermissionDenied || !preset.source) return;
+      const targetPreferences = preferences.providerPreferences?.[provider];
+      const priorModel =
+        provider === formState.selectedProvider
+          ? effectiveModelId
+          : (targetPreferences?.model ?? "");
+      const baseFeatureValues =
+        draftPreset?.provider === provider
+          ? draftPreset.baseFeatureValues
+          : Object.fromEntries(
+              Object.entries(
+                provider === formState.selectedProvider
+                  ? (draftFeatureValues ?? {})
+                  : (targetPreferences?.featureValues ?? {}),
+              ).filter(([key]) => isPresetOwnedFeature(key)),
+            );
+      setDraftPreset({
+        provider,
+        cwd: workingDir,
+        name: preset.name,
+        source: preset.source,
+        baseFeatureValues,
+        baseModelId:
+          draftPreset?.provider === provider
+            ? draftPreset.baseModelId
+            : provider === formState.selectedProvider
+              ? effectiveModelId
+              : priorModel,
+        baseThinkingOptionId:
+          draftPreset?.provider === provider
+            ? draftPreset.baseThinkingOptionId
+            : provider === formState.selectedProvider
+              ? formState.selectedThinkingOptionId || null
+              : priorModel
+                ? (targetPreferences?.thinkingByModel?.[priorModel] ?? null)
+                : null,
+      });
       const complete =
         provider === formState.selectedProvider
           ? withModelPresetRoleDefaults(configuration, draftFeatures)
@@ -326,7 +504,19 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         provider,
       );
     },
-    [applyProfileFeatureValues, draftFeatureValues, draftFeatures, formState],
+    [
+      applyProfileFeatureValues,
+      draftFeatureValues,
+      draftFeatures,
+      draftPreset,
+      formState,
+      supportsModelPresetSelection,
+      presetPermissionDenied,
+      setDraftPreset,
+      workingDir,
+      effectiveModelId,
+      preferences.providerPreferences,
+    ],
   );
 
   const commandDraftConfig = useMemo(
@@ -357,17 +547,60 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
 
     return {
       ...formState,
+      persistFormPreferences: draftPreset ? async () => {} : formState.persistFormPreferences,
       workingDir,
       effectiveModelId,
       effectiveThinkingOptionId,
       featureValues: draftFeatureValues,
-      agentControls: buildDraftAgentControls({
-        formState,
-        features: draftFeatures,
-        onSetFeature: setDraftFeatureValue,
-        onApplyAgentProfile: applyDraftAgentProfile,
-        onApplyModelPreset: applyDraftModelPreset,
-      }),
+      modelPreset: draftPreset
+        ? {
+            name: draftPreset.name,
+            source: draftPreset.source,
+            baseFeatureValues: draftPreset.baseFeatureValues,
+            baseThinkingOptionId: draftPreset.baseThinkingOptionId,
+          }
+        : null,
+      agentControls: {
+        ...buildDraftAgentControls({
+          formState,
+          features: draftFeatures,
+          onSetFeature: setDraftFeatureValue,
+          onApplyAgentProfile: applyDraftAgentProfile,
+          onApplyModelPreset: applyDraftModelPreset,
+        }),
+        selectedModelPreset:
+          supportsModelPresetSelection && !presetPermissionDenied ? draftPreset : null,
+        modelPresetPending: Boolean(
+          draftPreset && (!supportsModelPresetSelection || presetPermissionDenied),
+        ),
+        supportsModelPresetSelection,
+        presetPermissionDenied,
+        onSelectModel: (modelId) => {
+          const exit = draftPreset
+            ? draftPreset.provider === formState.selectedProvider &&
+              draftPreset.baseModelId === modelId
+              ? { baselineThinking: draftPreset.baseThinkingOptionId }
+              : {}
+            : undefined;
+          exitDraftPreset();
+          formState.setModelFromUser(modelId, exit);
+        },
+        onSelectProviderAndModel: (provider, modelId) => {
+          const exit = draftPreset
+            ? draftPreset.provider === provider && draftPreset.baseModelId === modelId
+              ? { baselineThinking: draftPreset.baseThinkingOptionId }
+              : {}
+            : undefined;
+          exitDraftPreset();
+          formState.setProviderAndModelFromUser(provider, modelId, exit);
+        },
+        onSelectThinkingOption: (id) => {
+          if (!draftPreset) formState.setThinkingOptionFromUser(id);
+        },
+        onSetFeature: (id, value) => {
+          if (!draftPreset || !isPresetOwnedFeature(id)) setDraftFeatureValue(id, value);
+        },
+      },
       commandDraftConfig,
     };
   }, [
@@ -377,6 +610,10 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     effectiveThinkingOptionId,
     draftFeatures,
     draftFeatureValues,
+    draftPreset,
+    exitDraftPreset,
+    supportsModelPresetSelection,
+    presetPermissionDenied,
     applyDraftAgentProfile,
     applyDraftModelPreset,
     formState,

@@ -1017,6 +1017,7 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
       thinkingOptionId: composerState.effectiveThinkingOptionId || undefined,
       featureValues: composerState.featureValues,
     },
+    ...(composerState.modelPreset ? { modelPreset: composerState.modelPreset } : {}),
     initialPrompt: text,
     clientMessageId: `${input.draftId}:initial-message`,
     images: images?.length ? images : undefined,
@@ -2198,6 +2199,7 @@ export function NewWorkspaceScreen({
       await composerState.persistFormPreferences();
       await updateFormPreferences({ launchTarget });
       return await createWorkspaceVoiceAgent({
+        modelPreset: composerState.modelPreset,
         config: {
           provider: composerState.selectedProvider,
           cwd: composerState.workingDir,

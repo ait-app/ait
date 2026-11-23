@@ -4,6 +4,7 @@ mod bot;
 mod controls;
 mod native_sessions;
 mod placement;
+pub(crate) mod preset_selection;
 mod resume;
 mod scheduling;
 mod side_questions;
@@ -36,6 +37,11 @@ use provider_core::ports::agent_session::AgentSessionSpec;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
+    pub(crate) preset_lookups: Vec<preset_selection::Pending>,
+    pub(crate) pending_voices: Vec<crate::service::agent_execution::voice::Pending>,
+    pub(crate) pending_creations: Vec<crate::service::agent_execution::voice::PendingCreation>,
+    pub(crate) pending_preparations:
+        Vec<crate::service::agent_execution::voice::PendingPreparation>,
     pub(crate) message_observers:
         std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
     pub(crate) owners: crate::service::agent_manager::ownership::Owners,
@@ -87,7 +93,7 @@ impl ExecutionState {
         match method {
             Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
-            Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
+            Operation::WorkspaceCreate => Box::pin(self.create_workspace_agent(params)).await,
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
             Operation::PrepareDirectory => self.prepare_agent_directory(params),
             Operation::ResolveIdentities => self.resolve_identities(&params),
@@ -118,7 +124,7 @@ impl ExecutionState {
             | Operation::SideCancel
             | Operation::SideHistory
             | Operation::SideTransfer => self.side_operation(method, params).await,
-            Operation::Create => self.create(params).await,
+            Operation::Create => Box::pin(self.create(params)).await,
             Operation::Available
             | Operation::Models
             | Operation::Modes
@@ -135,6 +141,7 @@ impl ExecutionState {
             Operation::AppendTimeline => self.timeline_append(params).await,
             Operation::Resume => self.resume(params).await,
             Operation::Send => self.send(params).await,
+            Operation::ModelPresetContext => self.model_preset_context(&params).await,
             Operation::Model => self.configure("modelId", &params).await,
             Operation::Thinking => self.configure("thinkingOptionId", &params).await,
             Operation::Configure => self.configure("config", &params).await,
@@ -155,7 +162,9 @@ impl ExecutionState {
                 let id = self.resolve(&request.agent_id)?;
                 self.wait_result(&id)
             }
-            Operation::Realtime | Operation::Wake => Err(ErrorCode::MethodNotFound),
+            Operation::Realtime | Operation::Wake | Operation::ModelPreset => {
+                Err(ErrorCode::MethodNotFound)
+            }
             Operation::Get
             | Operation::List
             | Operation::History
@@ -420,6 +429,23 @@ impl ExecutionState {
             )?;
             return Err(ErrorCode::IdempotencyConflict);
         }
+        if request.model_preset.is_some() && worktrees::intent(&request)?.is_some() {
+            let source = placement::directory(&request.config.cwd)?;
+            let id = admission
+                .snapshot
+                .agent_id
+                .clone()
+                .ok_or(ErrorCode::InvalidMessage)?;
+            return self
+                .begin_creation_preparation(
+                    id,
+                    request,
+                    prompt,
+                    admission.snapshot,
+                    (String::new(), false, source),
+                )
+                .await;
+        }
         let (workspace_id, created_worktree) = match self.creation_placement(&mut request).await {
             Ok(placement) => placement,
             Err(error) => {
@@ -432,13 +458,12 @@ impl ExecutionState {
                 return Err(error);
             }
         };
-        self.register_creation(
+        Box::pin(self.register_creation(
             request,
             prompt,
             &admission.snapshot,
-            workspace_id,
-            created_worktree,
-        )
+            (workspace_id, created_worktree, None),
+        ))
         .await
     }
 
@@ -447,11 +472,10 @@ impl ExecutionState {
         request: CreateRequest,
         prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
         admission: &domain::creation::protocol::Snapshot,
-        workspace_id: String,
-        created_worktree: bool,
+        placement: (String, bool, Option<String>),
     ) -> Result<Value, ErrorCode> {
+        let (workspace_id, created_worktree, preset_scope_cwd) = placement;
         self.manager.place_workspace(&workspace_id)?;
-        let creations = self.manager.creations();
         let id = match admission.agent_id.clone() {
             Some(id) => {
                 Uuid::parse_str(&id).map_err(|_| ErrorCode::InvalidMessage)?;
@@ -459,6 +483,125 @@ impl ExecutionState {
             }
             None => Uuid::new_v4().to_string(),
         };
+        if request.model_preset.is_some() {
+            let source = preset_scope_cwd.unwrap_or_else(|| request.config.cwd.clone());
+            return self
+                .begin_creation_preparation(
+                    id,
+                    request,
+                    prompt,
+                    admission.clone(),
+                    (workspace_id, created_worktree, source),
+                )
+                .await;
+        }
+        self.register_prepared_creation(
+            id,
+            request,
+            prompt,
+            admission,
+            (workspace_id, created_worktree),
+            None,
+        )
+        .await
+    }
+
+    async fn begin_creation_preparation(
+        &mut self,
+        id: String,
+        mut request: CreateRequest,
+        prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
+        admission: domain::creation::protocol::Snapshot,
+        placement: (String, bool, String),
+    ) -> Result<Value, ErrorCode> {
+        let (workspace_id, created_worktree, cwd) = placement;
+        if self.pending_preparations.len() >= 4 {
+            return self
+                .creation_preparation_failed(
+                    &id,
+                    &workspace_id,
+                    created_worktree,
+                    &admission,
+                    ErrorCode::CatalogBusy,
+                )
+                .await;
+        }
+        let selection = request
+            .model_preset
+            .take()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let manager = self.manager.fork(None);
+        let session = request.config.clone();
+        let (mut sender, receiver) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let work = tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                manager.prepare_creation_preset(&session, &cwd, &selection),
+            );
+            let result = tokio::select! {
+                () = sender.closed() => return,
+                result = work => result.unwrap_or(Err(model::ErrorCode::CatalogBusy)),
+            };
+            let _ = sender.send(result);
+        });
+        self.pending_preparations.push(
+            crate::service::agent_execution::voice::PendingPreparation::new(
+                id.clone(),
+                request,
+                prompt,
+                admission,
+                workspace_id,
+                created_worktree,
+                receiver,
+            ),
+        );
+        Ok(json!({"_aitPendingPreparation":id}))
+    }
+
+    pub(crate) async fn place_prepared_creation(
+        &mut self,
+        request: &mut CreateRequest,
+    ) -> Result<(String, bool), ErrorCode> {
+        self.creation_placement(request).await
+    }
+
+    pub(crate) async fn creation_preparation_failed(
+        &mut self,
+        id: &str,
+        workspace_id: &str,
+        created_worktree: bool,
+        admission: &domain::creation::protocol::Snapshot,
+        error: ErrorCode,
+    ) -> Result<Value, ErrorCode> {
+        let cleanup_failed = created_worktree
+            && self
+                .cleanup_created_worktree(id, workspace_id)
+                .await
+                .is_err();
+        let message = if cleanup_failed {
+            format!("{error}; worktree cleanup failed for Workspace {workspace_id}")
+        } else {
+            error.to_string()
+        };
+        self.manager
+            .creations()
+            .advance(admission, Phase::Failed, None, Some(message))?;
+        Err(error)
+    }
+
+    pub(crate) async fn register_prepared_creation(
+        &mut self,
+        id: String,
+        request: CreateRequest,
+        prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
+        admission: &domain::creation::protocol::Snapshot,
+        placement: (String, bool),
+        model_preset: Option<domain::agent_runtime::ModelPresetState>,
+    ) -> Result<Value, ErrorCode> {
+        let (workspace_id, created_worktree) = placement;
+        let creations = self.manager.creations();
+        let has_preset = model_preset.is_some();
+        self.manager.place_workspace(&workspace_id)?;
         let created = self
             .manager
             .create_with_environment(
@@ -475,6 +618,7 @@ impl ExecutionState {
                     labels: request.labels,
                     internal: false,
                     owner: None,
+                    model_preset,
                 },
                 &request.env,
             )
@@ -522,7 +666,29 @@ impl ExecutionState {
         if request.auto_archive {
             self.arm_auto_archive(&id, &workspace_id, created_worktree)?;
         }
-        self.finish_creation(&id, admission, prompt).await
+        self.finish_creation_checked(&id, admission, prompt, has_preset)
+            .await
+    }
+
+    pub(crate) async fn finish_creation_checked(
+        &mut self,
+        id: &str,
+        admission: &domain::creation::protocol::Snapshot,
+        prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
+        has_preset: bool,
+    ) -> Result<Value, ErrorCode> {
+        let result = self
+            .finish_creation(id, admission, prompt, has_preset)
+            .await;
+        let creations = self.manager.creations();
+        if let Err(error) = &result
+            && let Ok(Some(snapshot)) =
+                creations.snapshot(admission.kind, &admission.idempotency_key)
+            && !snapshot.phase.is_terminal()
+        {
+            creations.advance(&snapshot, Phase::Failed, None, Some(error.to_string()))?;
+        }
+        result
     }
 
     async fn finish_creation(
@@ -530,19 +696,64 @@ impl ExecutionState {
         id: &str,
         admission: &domain::creation::protocol::Snapshot,
         prompt: Option<provider_core::protocol::prompt::AgentPrompt>,
+        has_preset: bool,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
-        let result = json!({"agent":self.snapshot(id)?});
-        let mut progress = creations.advance(admission, Phase::AgentReady, Some(result), None)?;
-        if let Some(prompt) = prompt {
-            if let Err(error) = self.manager.send_input(id, &prompt).await {
-                creations.advance(&progress, Phase::Failed, None, Some(error.to_string()))?;
-                return Err(map_manager(&error));
+        if !has_preset {
+            let result = json!({"agent":self.snapshot(id)?});
+            let mut progress =
+                creations.advance(admission, Phase::AgentReady, Some(result), None)?;
+            if let Some(prompt) = prompt {
+                if let Err(error) = self.manager.send_input(id, &prompt).await {
+                    creations.advance(&progress, Phase::Failed, None, Some(error.to_string()))?;
+                    return Err(map_manager(&error));
+                }
+                progress = creations.advance(&progress, Phase::PromptStarted, None, None)?;
             }
-            progress = creations.advance(&progress, Phase::PromptStarted, None, None)?;
+            let snapshot = self.snapshot(id)?;
+            let progress = creations.advance(
+                &progress,
+                Phase::Completed,
+                Some(json!({"agent":snapshot})),
+                None,
+            )?;
+            return Ok(
+                json!({"status":"agent_created","agentId":id,"agent":snapshot,"error":null,"creation":progress}),
+            );
+        }
+        // AgentReady is committed before reservation, but this lane remains owned until the
+        // initial input has been queued, so a later request cannot overtake it.
+        let progress = creations.advance(
+            admission,
+            Phase::AgentReady,
+            Some(json!({"agent":self.snapshot(id)?})),
+            None,
+        )?;
+        let mut prompt = prompt;
+        if let Some(prompt) = &mut prompt {
+            let message = prompt
+                .client_message_id
+                .get_or_insert_with(|| id.to_owned())
+                .clone();
+            let timeline = self.manager.timeline().ok_or(ErrorCode::AgentIo)?;
+            match timeline.reserve_creation_input(id, &message, prompt)? {
+                crate::storage::timeline::inbox::Receipt::New => {}
+                _ => return Err(ErrorCode::IdempotencyConflict),
+            }
+        }
+        if let Some(prompt) = prompt {
+            let message = prompt.client_message_id.expect("initial input has an ID");
+            self.pending_creations.push(
+                crate::service::agent_execution::voice::PendingCreation::new(
+                    id.to_owned(),
+                    message,
+                    progress,
+                ),
+            );
+            return Ok(json!({"_aitPendingCreation":id}));
         }
         let snapshot = self.snapshot(id)?;
-        progress = creations.advance(
+        let progress = creations.advance(
             &progress,
             Phase::Completed,
             Some(json!({"agent":snapshot})),
@@ -667,7 +878,7 @@ impl ExecutionState {
         Ok(())
     }
 
-    fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
+    pub(crate) fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
         let record = self
             .registry
             .get_shared(id)
@@ -760,7 +971,8 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
         | AgentManagerError::ConfinementUnsupported(_)
-        | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
+        | AgentManagerError::Busy
+        | AgentManagerError::PresetPending => ErrorCode::UnsupportedCapability,
         AgentManagerError::InvalidRequest
         | AgentManagerError::AlreadyExists(_)
         | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
@@ -788,6 +1000,7 @@ fn parse_creation(
         &[
             "agentId",
             "config",
+            "modelPreset",
             "workspaceId",
             "callerAgentId",
             "autoArchive",

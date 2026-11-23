@@ -55,6 +55,7 @@ export function buildDraftAgentControls(input: {
 export function hasDraftContent(input: {
   text: string;
   attachments: UserComposerAttachment[];
+  modelPreset?: unknown;
 }): boolean {
-  return input.text.length > 0 || input.attachments.length > 0;
+  return input.text.length > 0 || input.attachments.length > 0 || Boolean(input.modelPreset);
 }

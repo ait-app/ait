@@ -6,6 +6,12 @@ export const modelSelector = {
   loadingSelector: "Chargement du sélecteur de modèle...",
   error: "Erreur",
   defaultModelHeading: "Modèle par défaut",
+  presetRequiresUpgrade: "Mettez à jour l’hôte pour sélectionner des préréglages",
+  presetEditInSettings: "Modifiez ce préréglage dans les paramètres des préréglages",
+  presetContextUnavailable:
+    "La sélection des préréglages est indisponible ou le préréglage sélectionné n’existe plus.",
+  presetOwnerOnly:
+    "Les préréglages de modèle ne sont pas disponibles pour cette ressource partagée.",
   modelPresets: "Préréglages de modèle",
   profiles: "Profils",
   providers: "Fournisseurs",

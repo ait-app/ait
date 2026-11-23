@@ -10,6 +10,7 @@ import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
 import {
   DaemonClient,
+  AgentConfigUncertainError,
   type CreateAgentRequestOptions,
   type DaemonClientTrace,
   type DaemonTransport,
@@ -1442,6 +1443,120 @@ test("bounds the wait for push token revocation", async () => {
   await rejection;
   expect(client.getConnectionState().status).toBe("connected");
 });
+
+test("preset selection requires both host capabilities and preserves source", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "preset",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentModelPresetSelection: true } });
+  await connected;
+  const pending = client.selectAgentModelPreset("agent", { name: "Work", source: "project" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "agent.model_preset.select.request",
+    agentId: "agent",
+    name: "Work",
+    source: "project",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.model_preset.select.response",
+      payload: { requestId: request.requestId, agentId: "agent", accepted: true, error: null },
+    }),
+  );
+  await expect(pending).resolves.toBeNull();
+});
+
+test("old hosts reject preset selection and preset creation before sending", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "old-preset",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  await expect(
+    client.selectAgentModelPreset("agent", { name: "Work", source: "ait" }),
+  ).rejects.toThrow("Update the host");
+  await expect(
+    client.createAgent({
+      provider: "omp",
+      cwd: "/repo",
+      modelPreset: { name: "Work", source: "ait", baseFeatureValues: {} },
+    }),
+  ).rejects.toThrow("Update the host");
+  expect(mock.sent).toHaveLength(0);
+});
+
+test("preset context preserves the selected source from the owner-only response", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "preset-context",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { agentModelPresetSelection: true } });
+  await connected;
+  const pending = client.getAgentModelPresetContext("agent");
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({ type: "agent.model_preset.context.request", agentId: "agent" });
+  const payload = {
+    requestId: request.requestId,
+    agentId: "agent",
+    provider: "omp",
+    presets: [{ name: "Work", source: "project", model: "fast" }],
+    selectedModelPreset: { name: "Work", source: "project" },
+    selectedAvailable: true,
+    error: null,
+  };
+  mock.triggerMessage(wrapSessionMessage({ type: "agent.model_preset.context.response", payload }));
+  expect(await pending).toEqual(payload);
+});
+
+test.each(["timeout", "disconnect"] as const)(
+  "a configuration %s leaves the result unknown without retrying",
+  async (failure) => {
+    useHeartbeatClock();
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "config-unknown",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen();
+    await connected;
+    const pending = client.setAgentModel("agent", "model");
+    const rejection = expect(pending).rejects.toBeInstanceOf(AgentConfigUncertainError);
+    if (failure === "timeout") await vi.advanceTimersByTimeAsync(60_000);
+    else mock.triggerClose({ code: 1006, reason: "connection lost" });
+    await rejection;
+    expect(
+      mock.sent.filter(
+        (frame) => JSON.parse(assertStr(frame)).message?.type === "agent.model.set.request",
+      ),
+    ).toHaveLength(1);
+  },
+);
 
 test("defaults session RPC waiters to sixty seconds", async () => {
   useHeartbeatClock();

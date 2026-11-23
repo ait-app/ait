@@ -179,6 +179,8 @@ pub(super) fn new_record(
     handle: AgentPersistenceHandle,
 ) -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: Uuid::new_v4().to_string(),
         provider: handle.provider.clone(),
         cwd: history.descriptor.cwd.clone(),

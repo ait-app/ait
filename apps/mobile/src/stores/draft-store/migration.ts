@@ -3,6 +3,7 @@ import { isLegacyNewWorkspaceDraftKey, NEW_WORKSPACE_DRAFT_KEY } from "@/stores/
 import { z } from "zod";
 import {
   AttachmentMetadataSchema,
+  DraftModelPresetSelectionSchema,
   LegacyDraftImageSchema,
   normalizeAttachmentMetadata,
   normalizeComposerAttachment,
@@ -76,6 +77,7 @@ const LegacyAttachmentMetadataSchema = AttachmentMetadataSchema.extend({
 type PersistedImage = PersistedDraftImage | z.infer<typeof LegacyAttachmentMetadataSchema>;
 
 const RawDraftInputSchema = z.strictObject({
+  modelPreset: DraftModelPresetSelectionSchema.optional(),
   text: z.string().optional(),
   attachments: z.array(PersistedComposerAttachmentSchema).optional(),
   images: z
@@ -161,6 +163,7 @@ export async function migrateDraftInput(
 
   return {
     text: typeof rawInput.text === "string" ? rawInput.text : "",
+    ...(rawInput.modelPreset ? { modelPreset: rawInput.modelPreset } : {}),
     attachments: [...attachments, ...legacyImagesToAttachments(migratedImages)],
   };
 }

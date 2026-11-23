@@ -73,6 +73,8 @@ impl AgentRuntimeRegistry for Agents {
 
 fn agent(id: &str, workspace_id: &str, updated_at: &str) -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: id.to_owned(),
         provider: "codex".to_owned(),
         cwd: "/repo".to_owned(),

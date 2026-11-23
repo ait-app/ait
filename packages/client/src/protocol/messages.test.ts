@@ -8,6 +8,17 @@ import { METHODS } from "./methods.js";
 import { eventMessage, responseMessage, serverInfo } from "./messages.js";
 import { object } from "./types.js";
 import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
+it.each([
+  [[], false],
+  [["agent.model_preset.select.request"], false],
+  [["agent.model_preset.context.request"], false],
+  [["agent.model_preset.select.request", "agent.model_preset.context.request"], true],
+] as const)("requires both preset methods to negotiate selection support", (names, expected) => {
+  const message = serverInfo({ server_id: "host", features: [] }, new Set(names));
+  expect(object(object(message).payload).features).toMatchObject({
+    agentModelPresetSelection: expected,
+  });
+});
 it("retains full directory capabilities for whole-node shares", () => {
   const info = {
     server_id: "shared-node",
@@ -118,7 +129,7 @@ function info(methods: string[]) {
 }
 it("emits every server-info feature schema key as an explicit boolean", () => {
   const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
-  expect(Object.keys(payload.features ?? {})).toHaveLength(96);
+  expect(Object.keys(payload.features ?? {})).toHaveLength(97);
   expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
     true,
   );

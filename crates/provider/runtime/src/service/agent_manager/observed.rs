@@ -359,6 +359,8 @@ fn new_record(
     id: &str,
 ) -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: id.to_owned(),
         provider: root.provider.clone(),
         cwd: child.cwd.clone(),

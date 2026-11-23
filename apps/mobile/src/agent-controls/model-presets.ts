@@ -1,5 +1,5 @@
 import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
-import type { AgentConfigApply, ProviderPreset } from "@ait/protocol/messages";
+import type { AgentConfigApply, ProviderPreset, ProviderPresetEntry } from "@ait/protocol/messages";
 import { findModelByReference } from "@/provider-selection/model-catalog";
 
 const ROLE_PREFIX = "modelRole.";
@@ -21,7 +21,23 @@ export interface ModelPresetConfiguration extends AgentConfigApply {
 /** The browser receives an application target, never an AgentProfile disguised as a preset. */
 export interface ModelPresetControls {
   cwd?: string | null;
-  apply: (provider: string, configuration: ModelPresetConfiguration) => void;
+  contextAgentId?: string;
+  contextRevision?: number;
+  selectionKnown?: boolean;
+  presetActive?: boolean;
+  permissionDenied?: boolean;
+  supported?: boolean;
+  selected?: { provider: string; name: string; source?: ProviderPresetEntry["source"] } | null;
+  apply: (
+    provider: string,
+    configuration: ModelPresetConfiguration,
+    preset: ProviderPresetEntry,
+  ) => void;
+}
+
+/** Fields controlled by a selected model preset. */
+export function isPresetOwnedFeature(id: string): boolean {
+  return id.startsWith(ROLE_PREFIX) || id.startsWith(FALLBACK_PREFIX);
 }
 
 /** Whether the provider's discovered controls support model-role assignments. */

@@ -42,6 +42,32 @@ impl Timeline {
             .transpose()
     }
 
+    /// Return the exact internal state of a reserved input, including queued versus accepted.
+    pub(crate) fn input_delivery_state(
+        &self,
+        agent: &str,
+        message: &str,
+    ) -> Result<Option<String>, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT state FROM input_receipts WHERE agent=? AND message=?",
+                params![agent, message],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(io)
+    }
+
+    /// Withdraw one input only while it is still safely queued.
+    pub(crate) fn cancel_queued_input(&self, agent: &str, message: &str) -> Result<(), ErrorCode> {
+        self.database.lock().map_err(io)?.execute(
+            "UPDATE input_receipts SET state='cancelled',prompt=NULL WHERE agent=? AND message=? AND state='queued'", params![agent,message],
+        ).map_err(io)?;
+        Ok(())
+    }
+
     /// Fence an immediate question answer. Definitive rejections may be retried by the caller;
     /// answers are never put in the interrupt queue or replayed on process recovery.
     pub(crate) fn claim_answer(
@@ -84,6 +110,27 @@ impl Timeline {
         prompt: &AgentPrompt,
         policy: &str,
     ) -> Result<Receipt, ErrorCode> {
+        self.reserve_input_kind(agent, message, prompt, policy, false)
+    }
+
+    /// Reserve an initial creation input under its real client ID and mark it for recovery.
+    pub(crate) fn reserve_creation_input(
+        &self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<Receipt, ErrorCode> {
+        self.reserve_input_kind(agent, message, prompt, "interrupt", true)
+    }
+
+    fn reserve_input_kind(
+        &self,
+        agent: &str,
+        message: &str,
+        prompt: &AgentPrompt,
+        policy: &str,
+        creation: bool,
+    ) -> Result<Receipt, ErrorCode> {
         prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let encoded = serde_json::to_string(prompt).map_err(io)?;
         let fingerprint = fingerprint(policy, &encoded);
@@ -125,8 +172,8 @@ impl Timeline {
             );
             return Err(ErrorCode::ResourceExhausted);
         }
-        tx.execute("INSERT INTO input_receipts(agent,message,fingerprint,prompt,state) VALUES(?,?,?,?,'queued')",
-            params![agent,message,fingerprint,encoded]).map_err(io)?;
+        tx.execute("INSERT INTO input_receipts(agent,message,fingerprint,prompt,state,is_creation) VALUES(?,?,?,?,'queued',?)",
+            params![agent,message,fingerprint,encoded,creation]).map_err(io)?;
         tx.commit().map_err(io)?;
         Ok(Receipt::New)
     }
@@ -265,14 +312,19 @@ impl Timeline {
 
     /// Process recovery retains uncertain receipts and never replays a possibly submitted input.
     pub(crate) fn recover_inputs(&self) -> Result<(), ErrorCode> {
-        self.database
-            .lock()
-            .map_err(io)?
+        let mut database = self.database.lock().map_err(io)?;
+        let transaction = database.transaction().map_err(io)?;
+        transaction.execute(
+            "UPDATE input_receipts SET state='cancelled',prompt=NULL WHERE state='queued' AND is_creation=1",
+            [],
+        ).map_err(io)?;
+        transaction
             .execute(
                 "UPDATE input_receipts SET state='uncertain',prompt=NULL WHERE state='claimed'",
                 [],
             )
             .map_err(io)?;
+        transaction.commit().map_err(io)?;
         Ok(())
     }
 }

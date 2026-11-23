@@ -8,6 +8,7 @@ use provider_core::protocol::prompt::{AgentPrompt, PromptImage};
 mod blocked_commands;
 mod capabilities;
 mod commands;
+mod deferred_config;
 mod diagnostics;
 mod fixture_program;
 mod installed;

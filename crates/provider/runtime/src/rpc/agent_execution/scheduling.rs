@@ -10,6 +10,10 @@ impl ExecutionState {
     pub(crate) fn fork(&self, owner: Option<Owner>) -> Self {
         Self {
             manager: self.manager.fork(owner),
+            preset_lookups: Vec::new(),
+            pending_voices: Vec::new(),
+            pending_creations: Vec::new(),
+            pending_preparations: Vec::new(),
             owners: self.owners.clone(),
             message_observers: BTreeMap::new(),
             directory: self.directory.clone(),

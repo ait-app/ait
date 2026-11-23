@@ -476,6 +476,8 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
             .config
             .as_ref()
             .and_then(|config| config.model.clone()),
+        has_selected_model_preset: record.model_preset.as_ref().and_then(|state| state.selected.as_ref()).is_some(),
+        model_preset_revision: record.config_revision,
         features: Vec::new(),
         thinking_option_id: configured_thinking,
         effective_thinking_option_id,

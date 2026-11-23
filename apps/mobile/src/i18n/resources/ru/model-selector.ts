@@ -6,6 +6,11 @@ export const modelSelector = {
   loadingSelector: "Загрузка выбора модели...",
   error: "Ошибка",
   defaultModelHeading: "Модель по умолчанию",
+  presetRequiresUpgrade: "Обновите хост для выбора предустановок",
+  presetEditInSettings: "Измените предустановку в настройках предустановок",
+  presetContextUnavailable:
+    "Выбор предустановок недоступен или выбранная предустановка больше не существует.",
+  presetOwnerOnly: "Предустановки модели недоступны для этого общего ресурса.",
   modelPresets: "Предустановки модели",
   profiles: "Профили",
   providers: "Провайдеры",

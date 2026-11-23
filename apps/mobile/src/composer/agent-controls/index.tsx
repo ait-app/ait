@@ -28,6 +28,7 @@ import {
   ThinkingIcon,
 } from "@/agent-controls/icons";
 import { formatAgentFeatureLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
+import { usePresetPermissionDenied } from "@/agent-controls/preset-permission";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import {
   buildProviderSelectorProviders,
@@ -38,11 +39,7 @@ import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
-import {
-  applyModelPresetPreferences,
-  mergeProviderPreferences,
-  useFormPreferences,
-} from "@/hooks/use-form-preferences";
+import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import {
   Combobox,
   ComboboxItem,
@@ -73,8 +70,9 @@ import {
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { readMeasuredWidth } from "@/hooks/use-container-width";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { showConfigRequestError, useConfigMutationGate } from "@/agent-controls/config-mutation";
+import { useAgentPresetContext } from "@/agent-controls/preset-context";
 import {
   useAgentControlCommandCenterActions,
   type AgentControlCommandCenterSource,
@@ -100,11 +98,7 @@ import {
   type AgentProfilePicker,
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
-import {
-  withModelPresetRoleDefaults,
-  type ModelPresetControls,
-  type ModelPresetConfiguration,
-} from "@/agent-controls/model-presets";
+import { isPresetOwnedFeature, type ModelPresetControls } from "@/agent-controls/model-presets";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
 interface AgentControlOption {
@@ -157,7 +151,11 @@ export interface DraftAgentControlsProps {
   selectedThinkingOptionId: string;
   onSelectThinkingOption: (thinkingOptionId: string) => void;
   onApplyAgentProfile: DraftAgentProfileControls["applyProfile"];
-  onApplyModelPreset?: (provider: string, configuration: ModelPresetConfiguration) => void;
+  onApplyModelPreset?: ModelPresetControls["apply"];
+  selectedModelPreset?: ModelPresetControls["selected"];
+  supportsModelPresetSelection?: boolean;
+  presetPermissionDenied?: boolean;
+  modelPresetPending?: boolean;
   modelSelectorCwd?: string | null;
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
@@ -337,6 +335,8 @@ type AgentControlsSlice = {
   model: string | null | undefined;
   features: AgentFeature[] | undefined;
   thinkingOptionId: string | null | undefined;
+  modelPresetRevision: number | undefined;
+  hasSelectedModelPreset: boolean | undefined;
 } | null;
 
 function selectAgentControlsSlice(
@@ -355,6 +355,8 @@ function selectAgentControlsSlice(
     model: currentAgent.model,
     features: currentAgent.features,
     thinkingOptionId: currentAgent.thinkingOptionId,
+    modelPresetRevision: currentAgent.modelPresetRevision,
+    hasSelectedModelPreset: currentAgent.hasSelectedModelPreset,
   };
 }
 
@@ -867,11 +869,21 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 showToolbarLabel={presentation.showThinkingLabel}
                 showCaret={presentation.showCarets}
                 open={openSelector === "thinking"}
-                disabled={disabled || !canSelectThinking}
+                disabled={
+                  disabled ||
+                  !canSelectThinking ||
+                  Boolean(
+                    modelPresets?.selected ||
+                    modelPresets?.presetActive ||
+                    modelPresets?.selectionKnown === false,
+                  )
+                }
                 onPress={handleThinkingPress}
-                accessibilityLabel={t("agentControls.thinking.selectWithValue", {
-                  value: displayThinking,
-                })}
+                accessibilityLabel={
+                  modelPresets?.selected
+                    ? `${t("agentControls.thinking.title")}. ${t("modelSelector.presetEditInSettings")}`
+                    : t("agentControls.thinking.selectWithValue", { value: displayThinking })
+                }
                 testID="agent-thinking-selector"
               />
             </TooltipTrigger>
@@ -909,7 +921,23 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
               <DesktopFeatureItem
                 key={`feature-${feature.id}`}
                 feature={feature}
-                disabled={disabled}
+                disabled={
+                  disabled ||
+                  Boolean(
+                    (modelPresets?.selected ||
+                      modelPresets?.presetActive ||
+                      modelPresets?.selectionKnown === false) &&
+                    isPresetOwnedFeature(feature.id),
+                  )
+                }
+                lockedReason={
+                  (modelPresets?.selected ||
+                    modelPresets?.presetActive ||
+                    modelPresets?.selectionKnown === false) &&
+                  isPresetOwnedFeature(feature.id)
+                    ? t("modelSelector.presetEditInSettings")
+                    : undefined
+                }
                 openSelector={openSelector}
                 handleOpenChange={handleOpenChange}
                 onSetFeature={onSetFeature}
@@ -940,7 +968,23 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                     <SheetFeatureItem
                       key={`feature-${feature.id}`}
                       feature={feature}
-                      disabled={disabled}
+                      disabled={
+                        disabled ||
+                        Boolean(
+                          (modelPresets?.selected ||
+                            modelPresets?.presetActive ||
+                            modelPresets?.selectionKnown === false) &&
+                          isPresetOwnedFeature(feature.id),
+                        )
+                      }
+                      lockedReason={
+                        (modelPresets?.selected ||
+                          modelPresets?.presetActive ||
+                          modelPresets?.selectionKnown === false) &&
+                        isPresetOwnedFeature(feature.id)
+                          ? t("modelSelector.presetEditInSettings")
+                          : undefined
+                      }
                       openSelector={openSelector}
                       handleOpenChange={handleNestedOpenChange}
                       onSetFeature={onSetFeature}
@@ -1061,10 +1105,22 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
             value={displayThinking}
             open={activeSheet === "thinking"}
             onPress={handleOpenThinking}
-            disabled={disabled || !canSelectThinking}
-            accessibilityLabel={t("agentControls.thinking.selectWithValue", {
-              value: displayThinking,
-            })}
+            disabled={
+              disabled ||
+              !canSelectThinking ||
+              Boolean(
+                modelPresets?.selected ||
+                modelPresets?.presetActive ||
+                modelPresets?.selectionKnown === false,
+              )
+            }
+            accessibilityLabel={
+              modelPresets?.selected ||
+              modelPresets?.presetActive ||
+              modelPresets?.selectionKnown === false
+                ? `${t("agentControls.thinking.title")}. ${t("modelSelector.presetEditInSettings")}`
+                : t("agentControls.thinking.selectWithValue", { value: displayThinking })
+            }
             testID="agent-controls-thinking"
           />
           <Combobox
@@ -1088,7 +1144,23 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         <SheetFeatureItem
           key={`feature-${feature.id}`}
           feature={feature}
-          disabled={disabled}
+          disabled={
+            disabled ||
+            Boolean(
+              (modelPresets?.selected ||
+                modelPresets?.presetActive ||
+                modelPresets?.selectionKnown === false) &&
+              isPresetOwnedFeature(feature.id),
+            )
+          }
+          lockedReason={
+            (modelPresets?.selected ||
+              modelPresets?.presetActive ||
+              modelPresets?.selectionKnown === false) &&
+            isPresetOwnedFeature(feature.id)
+              ? t("modelSelector.presetEditInSettings")
+              : undefined
+          }
           openSelector={openSelector}
           handleOpenChange={handleOpenChange}
           onSetFeature={onSetFeature}
@@ -1149,6 +1221,7 @@ function useFeatureOptionRenderer(feature: AgentFeature, iconColor: string) {
 function DesktopFeatureItem({
   feature,
   disabled,
+  lockedReason,
   openSelector,
   handleOpenChange,
   onSetFeature,
@@ -1156,6 +1229,7 @@ function DesktopFeatureItem({
 }: {
   feature: AgentFeature;
   disabled: boolean;
+  lockedReason?: string;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   onSetFeature?: (featureId: string, value: unknown) => void;
@@ -1225,7 +1299,11 @@ function DesktopFeatureItem({
             showToolbarLabel={false}
             disabled={disabled}
             onPress={handleTogglePress}
-            accessibilityLabel={getFeatureTooltip(feature)}
+            accessibilityLabel={
+              lockedReason
+                ? `${getFeatureTooltip(feature)}. ${lockedReason}`
+                : getFeatureTooltip(feature)
+            }
             testID={`agent-feature-${feature.id}`}
           />
         </TooltipTrigger>
@@ -1262,7 +1340,7 @@ function DesktopFeatureItem({
               open={openSelector === featureSelector}
               disabled={disabled}
               onPress={handleSelectPress}
-              accessibilityLabel={tooltip}
+              accessibilityLabel={lockedReason ? `${tooltip}. ${lockedReason}` : tooltip}
               testID={`agent-feature-${feature.id}`}
             />
           </TooltipTrigger>
@@ -1290,12 +1368,14 @@ function DesktopFeatureItem({
 function SheetFeatureItem({
   feature,
   disabled,
+  lockedReason,
   openSelector,
   handleOpenChange,
   onSetFeature,
 }: {
   feature: AgentFeature;
   disabled: boolean;
+  lockedReason?: string;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   onSetFeature?: (featureId: string, value: unknown) => void;
@@ -1361,7 +1441,11 @@ function SheetFeatureItem({
           open={openSelector === featureSelector}
           disabled={disabled}
           onPress={handleSelectPress}
-          accessibilityLabel={getFeatureTooltip(feature)}
+          accessibilityLabel={
+            lockedReason
+              ? `${getFeatureTooltip(feature)}. ${lockedReason}`
+              : getFeatureTooltip(feature)
+          }
           testID={`agent-feature-${feature.id}`}
         />
         <Combobox
@@ -1398,7 +1482,11 @@ function SheetFeatureItem({
           open={openSelector === featureSelector}
           disabled={disabled}
           onPress={handleSelectPress}
-          accessibilityLabel={getFeatureTooltip(feature)}
+          accessibilityLabel={
+            lockedReason
+              ? `${getFeatureTooltip(feature)}. ${lockedReason}`
+              : getFeatureTooltip(feature)
+          }
           testID={`agent-feature-${feature.id}`}
         />
         <Combobox
@@ -1457,9 +1545,33 @@ export const AgentControls = memo(function AgentControls({
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const toast = useToast();
-  const modeControl = useLiveAgentModeControl(serverId, agentId);
+  const gate = useConfigMutationGate();
+  const modeControl = useLiveAgentModeControl(serverId, agentId, gate);
+  const supportsPresetSelection = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.agentModelPresetSelection === true,
+  );
   const commandCenterModes = toCommandCenterModes(modeControl);
   const modeProviderDefinitions = getModeProviderDefinitions(modeControl);
+  const presetPermissionDenied = usePresetPermissionDenied(serverId);
+  const presetContext = useAgentPresetContext({
+    serverId,
+    agentId,
+    revision: agent?.modelPresetRevision,
+    enabled: Boolean(agent && supportsPresetSelection && !presetPermissionDenied),
+  });
+  const presetContextValid = Boolean(
+    presetContext.data &&
+    !presetContext.isError &&
+    !presetContext.data.error &&
+    presetContext.data.provider === agent?.provider,
+  );
+  const selectedPreset = presetContextValid
+    ? (presetContext.data?.selectedModelPreset ?? null)
+    : null;
+  const presetRestricted = presetPermissionDenied
+    ? agent?.hasSelectedModelPreset === true
+    : supportsPresetSelection && (!presetContextValid || Boolean(selectedPreset));
+  const refreshPresetContext = presetContext.refetch;
 
   const {
     entries: snapshotEntries,
@@ -1496,32 +1608,11 @@ export const AgentControls = memo(function AgentControls({
     });
   }, [agentProviderDefinitions, agentProviderModels, snapshotSelectedEntry]);
 
-  const [optimisticPreset, setOptimisticPreset] = useState<{
-    agentId: string;
-    modelId: string;
-    thinkingOptionId: string | null;
-  } | null>(null);
-
-  useEffect(() => {
-    if (
-      optimisticPreset &&
-      (optimisticPreset.agentId !== agentId ||
-        (agent?.model === optimisticPreset.modelId &&
-          (agent?.thinkingOptionId ?? null) === optimisticPreset.thinkingOptionId))
-    ) {
-      setOptimisticPreset(null);
-    }
-  }, [agent?.model, agent?.thinkingOptionId, agentId, optimisticPreset]);
-
   const modelSelection = resolveAgentModelSelection({
     models,
     runtimeModelId: agent?.runtimeModelId,
-    configuredModelId:
-      optimisticPreset?.agentId === agentId ? optimisticPreset.modelId : agent?.model,
-    explicitThinkingOptionId:
-      optimisticPreset?.agentId === agentId
-        ? optimisticPreset.thinkingOptionId
-        : agent?.thinkingOptionId,
+    configuredModelId: agent?.model,
+    explicitThinkingOptionId: agent?.thinkingOptionId,
   });
 
   const thinkingOptions = useMemo<AgentControlOption[]>(() => {
@@ -1539,23 +1630,36 @@ export const AgentControls = memo(function AgentControls({
       if (!client || !agentProvider) {
         return;
       }
-      setOptimisticPreset(null);
-      try {
-        const notice = await client.setAgentModel(agentId, modelId);
-        showProviderNoticeToast(toast, notice);
-        await updatePreferences((current) =>
-          mergeProviderPreferences({
-            preferences: current,
-            provider: agentProvider,
-            updates: { model: modelId },
-          }),
-        );
-      } catch (error) {
-        console.warn("[AgentControls] setAgentModel or persist preference failed", error);
-        toast.error(toErrorMessage(error));
-      }
+      await gate.run(async () => {
+        try {
+          const notice = await client.setAgentModel(agentId, modelId);
+          showProviderNoticeToast(toast, notice);
+          if (supportsPresetSelection && !presetPermissionDenied) void refreshPresetContext();
+          await updatePreferences((current) =>
+            mergeProviderPreferences({
+              preferences: current,
+              provider: agentProvider,
+              updates: { model: modelId },
+            }),
+          );
+        } catch (error) {
+          showConfigRequestError(toast, t, error, serverId);
+        }
+      });
     },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    [
+      agentId,
+      agentProvider,
+      client,
+      gate,
+      serverId,
+      supportsPresetSelection,
+      presetPermissionDenied,
+      refreshPresetContext,
+      t,
+      toast,
+      updatePreferences,
+    ],
   );
   const handleSelectCommandCenterModel = useCallback(
     (_provider: AgentProvider, modelId: string) => handleSelectModel(modelId),
@@ -1577,100 +1681,122 @@ export const AgentControls = memo(function AgentControls({
     serverId,
     availableProviders: profileProviders,
     target: profileTarget,
+    gate,
   });
   const handleEditAgentProfiles = useEditAgentProfilesNavigation(serverId, agentProfiles !== null);
 
   const modelPresets = useMemo<ModelPresetControls>(
     () => ({
       cwd: agent?.cwd,
-      apply: (provider, configuration) => {
-        if (!client || provider !== agentProvider) return;
-        const complete = withModelPresetRoleDefaults(configuration, agent?.features ?? []);
-        setOptimisticPreset({
-          agentId,
-          modelId: complete.modelId,
-          thinkingOptionId: complete.thinkingOptionId,
-        });
-        void client
-          .applyAgentConfig(agentId, complete)
-          .then(async (notice) => {
+      contextAgentId: agentId,
+      contextRevision: agent?.modelPresetRevision,
+      selectionKnown: presetPermissionDenied
+        ? true
+        : !supportsPresetSelection || presetContextValid,
+      presetActive: presetPermissionDenied && agent?.hasSelectedModelPreset === true,
+      supported: supportsPresetSelection && !presetPermissionDenied,
+      permissionDenied: presetPermissionDenied,
+      selected:
+        selectedPreset && agentProvider ? { ...selectedPreset, provider: agentProvider } : null,
+      apply: (provider, _configuration, preset) => {
+        if (
+          !client ||
+          provider !== agentProvider ||
+          !preset.source ||
+          !supportsPresetSelection ||
+          presetPermissionDenied
+        )
+          return;
+        void gate.run(async () => {
+          try {
+            const notice = await client.selectAgentModelPreset(agentId, {
+              name: preset.name,
+              source: preset.source!,
+            });
             showProviderNoticeToast(toast, notice);
-            await updatePreferences((current) =>
-              applyModelPresetPreferences({
-                preferences: current,
-                provider,
-                modelId: complete.modelId,
-                thinkingOptionId: complete.thinkingOptionId,
-                featureValues: complete.featureValues,
-              }),
-            );
-          })
-          .catch((error) => {
-            setOptimisticPreset(null);
-            toast.error(toErrorMessage(error));
-          });
+            void refreshPresetContext();
+          } catch (error) {
+            showConfigRequestError(toast, t, error, serverId);
+          }
+        });
       },
     }),
-    [agent?.cwd, agent?.features, agentId, agentProvider, client, toast, updatePreferences],
+    [
+      agent?.cwd,
+      agent?.modelPresetRevision,
+      agent?.hasSelectedModelPreset,
+      agentId,
+      agentProvider,
+      client,
+      gate,
+      serverId,
+      supportsPresetSelection,
+      presetPermissionDenied,
+      presetContextValid,
+      selectedPreset,
+      refreshPresetContext,
+      t,
+      toast,
+    ],
   );
 
   const handleSelectThinkingOption = useCallback(
     (thinkingOptionId: string) => {
-      if (!client || !agentProvider) {
-        return;
-      }
-      setOptimisticPreset(null);
-      if (activeModelId) {
-        void updatePreferences((current) =>
-          mergeProviderPreferences({
-            preferences: current,
-            provider: agentProvider,
-            updates: {
-              model: activeModelId,
-              thinkingByModel: {
-                [activeModelId]: thinkingOptionId,
-              },
-            },
-          }),
-        ).catch((error) => {
-          console.warn("[AgentControls] persist thinking preference failed", error);
-        });
-      }
-      void client
-        .setAgentThinkingOption(agentId, thinkingOptionId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.warn("[AgentControls] setAgentThinkingOption failed", error);
-          toast.error(toErrorMessage(error));
-        });
+      if (!client || !agentProvider || presetRestricted) return;
+      void gate.run(async () => {
+        try {
+          const notice = await client.setAgentThinkingOption(agentId, thinkingOptionId);
+          showProviderNoticeToast(toast, notice);
+          if (activeModelId)
+            await updatePreferences((current) =>
+              mergeProviderPreferences({
+                preferences: current,
+                provider: agentProvider,
+                updates: {
+                  model: activeModelId,
+                  thinkingByModel: { [activeModelId]: thinkingOptionId },
+                },
+              }),
+            );
+        } catch (error) {
+          showConfigRequestError(toast, t, error, serverId);
+        }
+      });
     },
-    [activeModelId, agentId, agentProvider, client, toast, updatePreferences],
+    [
+      activeModelId,
+      presetRestricted,
+      agentId,
+      agentProvider,
+      client,
+      gate,
+      serverId,
+      t,
+      toast,
+      updatePreferences,
+    ],
   );
 
   const handleSetFeature = useCallback(
     (featureId: string, value: unknown) => {
-      if (!client || !agentProvider) {
+      if (!client || !agentProvider || (presetRestricted && isPresetOwnedFeature(featureId)))
         return;
-      }
-      void updatePreferences((current) =>
-        mergeProviderPreferences({
-          preferences: current,
-          provider: agentProvider,
-          updates: {
-            featureValues: {
-              [featureId]: value,
-            },
-          },
-        }),
-      ).catch((error) => {
-        console.warn("[AgentControls] persist feature preference failed", error);
-      });
-      void client.setAgentFeature(agentId, featureId, value).catch((error) => {
-        console.warn("[AgentControls] setAgentFeature failed", error);
-        toast.error(toErrorMessage(error));
+      void gate.run(async () => {
+        try {
+          await client.setAgentFeature(agentId, featureId, value);
+          await updatePreferences((current) =>
+            mergeProviderPreferences({
+              preferences: current,
+              provider: agentProvider,
+              updates: { featureValues: { [featureId]: value } },
+            }),
+          );
+        } catch (error) {
+          showConfigRequestError(toast, t, error, serverId);
+        }
       });
     },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    [presetRestricted, agentId, agentProvider, client, gate, serverId, t, toast, updatePreferences],
   );
 
   const commandCenterControls = useMemo<AgentControlCommandCenterSource>(
@@ -1682,17 +1808,19 @@ export const AgentControls = memo(function AgentControls({
       models: {
         providers: agentModelSelectorProviders,
         selectedProvider: agentProvider,
-        selectedModelId: activeModelId,
+        selectedModelId: presetRestricted ? null : activeModelId,
         select: handleSelectCommandCenterModel,
       },
       thinking: {
-        options: modelSelection.thinkingOptions,
+        options: presetRestricted ? [] : modelSelection.thinkingOptions,
         selectedId: modelSelection.selectedThinkingId,
         select: handleSelectThinkingOption,
       },
       modes: commandCenterModes,
       features: {
-        list: agent?.features,
+        list: presetRestricted
+          ? agent?.features?.filter((feature) => !isPresetOwnedFeature(feature.id))
+          : agent?.features,
         set: handleSetFeature,
       },
     }),
@@ -1709,6 +1837,7 @@ export const AgentControls = memo(function AgentControls({
       modeProviderDefinitions,
       modelSelection.selectedThinkingId,
       modelSelection.thinkingOptions,
+      presetRestricted,
       serverId,
     ],
   );
@@ -1716,7 +1845,7 @@ export const AgentControls = memo(function AgentControls({
   const commandCenterRegistration = (
     <AgentControlCommandCenterRegistration
       sourceId={`agent:${serverId}:${agentId}`}
-      enabled={Boolean(client)}
+      enabled={Boolean(client) && !gate.busy}
       controls={commandCenterControls}
     />
   );
@@ -1758,7 +1887,7 @@ export const AgentControls = memo(function AgentControls({
         onRetryModelProvider={handleRetryModelProvider}
         isRetryingModelProvider={snapshotIsRefreshing}
         onDropdownClose={onDropdownClose}
-        disabled={!client}
+        disabled={!client || gate.busy}
         modeControl={modeControl}
         modelSelectorServerId={serverId}
         isCompactLayout={isCompactLayout}
@@ -1783,6 +1912,10 @@ export function DraftAgentControls({
   onSelectThinkingOption,
   onApplyAgentProfile,
   onApplyModelPreset,
+  selectedModelPreset,
+  supportsModelPresetSelection,
+  presetPermissionDenied,
+  modelPresetPending,
   modelSelectorCwd,
   features,
   onSetFeature,
@@ -1828,8 +1961,25 @@ export function DraftAgentControls({
   );
 
   const modelPresets = useMemo<ModelPresetControls | undefined>(
-    () => (onApplyModelPreset ? { cwd: modelSelectorCwd, apply: onApplyModelPreset } : undefined),
-    [modelSelectorCwd, onApplyModelPreset],
+    () =>
+      onApplyModelPreset
+        ? {
+            cwd: modelSelectorCwd,
+            selected: selectedModelPreset,
+            supported: supportsModelPresetSelection,
+            permissionDenied: presetPermissionDenied,
+            selectionKnown: !modelPresetPending,
+            apply: onApplyModelPreset,
+          }
+        : undefined,
+    [
+      modelSelectorCwd,
+      onApplyModelPreset,
+      selectedModelPreset,
+      supportsModelPresetSelection,
+      presetPermissionDenied,
+      modelPresetPending,
+    ],
   );
 
   const modeControl = useMemo<AgentModeControlValue | null>(

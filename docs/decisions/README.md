@@ -119,11 +119,12 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-301：模型预设与普通模型的选择身份](providers/adr-301-preset-selection-identity.md)
 - [ADR-299：运行时按 adapter 声明的能力决策，不比较 provider id](providers/adr-299-runtime-reads-adapter-capabilities.md)
 - [ADR-298：Provider 测试回放真实 CLI 的 stdio 录制](providers/adr-298-provider-stdio-replay-transcripts.md)
-- [ADR-286：模型预设的备选链、供应商展示与选择器优先级](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)
+- [ADR-286：模型预设的备选链、供应商展示与选择器优先级](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)（经 [ADR-301](providers/adr-301-preset-selection-identity.md) 修订）
 - [ADR-285：账号用量查询遵守上游重试时间](providers/adr-285-account-usage-retry-delay.md)
-- [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)（经 [ADR-286](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）
+- [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)（经 [ADR-286](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)、[ADR-301](providers/adr-301-preset-selection-identity.md) 修订）
 - [ADR-278：共享 BTW 侧会话与完整会话交接](providers/adr-278-shared-btw-sessions.md)
 - [ADR-277：Provider 原生 TODO 统一为完整快照](providers/adr-277-provider-todo-snapshots.md)
 - [ADR-276：Ait 生成的输入使用统一信封并在投影中拆出 origin](providers/adr-276-ait-input-envelope-and-origin.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）

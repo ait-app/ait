@@ -986,7 +986,10 @@ function ProviderModelBrowserContent({
     serverId,
     provider: view.providerId,
     cwd: modelPresets?.cwd,
-    enabled: Boolean(provider && modelPresets),
+    contextAgentId: modelPresets?.contextAgentId,
+    contextRevision: modelPresets?.contextRevision,
+    supportsSelection: modelPresets?.supported,
+    enabled: Boolean(provider && modelPresets && !modelPresets.permissionDenied),
   });
   const profileHeader = useMemo(
     () =>
@@ -1048,6 +1051,8 @@ function ProviderModelBrowserContent({
           }
           onPress={row.onPress}
           disabled={row.disabled}
+          selected={row.selected}
+          selectionIndicator
           testID={row.testID}
         />
       )}
@@ -1086,7 +1091,13 @@ function ProviderModelBrowserContent({
       serverId={serverId}
       rows={visibleRows}
       selectedProvider={selectedProvider}
-      selectedModel={selectedModel}
+      selectedModel={
+        modelPresets?.selected?.provider === selectedProvider ||
+        modelPresets?.selectionKnown === false ||
+        modelPresets?.presetActive
+          ? ""
+          : selectedModel
+      }
       onSelect={onSelect}
       header={header}
       scrolling={scrolling}
@@ -1184,7 +1195,13 @@ export function ModelBrowser({
         serverId={serverId}
         rows={allView.rows}
         selectedProvider={selectedProvider}
-        selectedModel={selectedModel}
+        selectedModel={
+          modelPresets?.selected?.provider === selectedProvider ||
+          modelPresets?.selectionKnown === false ||
+          modelPresets?.presetActive
+            ? ""
+            : selectedModel
+        }
         onSelect={onSelect}
         showProviderLabel
         scrolling={scrolling}

@@ -90,7 +90,7 @@ impl Timeline {
                 | (3, 0x4154_544C, 4)
                 | (4, 0x4154_544C, 5)
                 | (5, 0x4154_544C, 6)
-                | (6 | 7, 0x4154_544C, 10)
+                | (6..=8, 0x4154_544C, 10)
         ) {
             return Err(ErrorCode::UnsupportedFormat);
         }
@@ -110,7 +110,7 @@ impl Timeline {
             CREATE INDEX IF NOT EXISTS progress_native ON progress(agent,native_key,seq);
             CREATE TABLE IF NOT EXISTS input_receipts(seq INTEGER PRIMARY KEY AUTOINCREMENT,
                 agent TEXT NOT NULL, message TEXT NOT NULL, fingerprint TEXT NOT NULL,
-                prompt TEXT, state TEXT NOT NULL, UNIQUE(agent,message));
+                prompt TEXT, state TEXT NOT NULL, is_creation INTEGER NOT NULL DEFAULT 0, UNIQUE(agent,message));
             CREATE INDEX IF NOT EXISTS queued_inputs ON input_receipts(state,agent,seq);
             CREATE TABLE IF NOT EXISTS provider_subagents(agent TEXT NOT NULL, child TEXT NOT NULL,
                 descriptor TEXT NOT NULL, host_agent TEXT, host_observed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,child));
@@ -146,7 +146,18 @@ impl Timeline {
                 database.execute_batch(migration).map_err(io)?;
             }
         }
-        database.execute_batch("CREATE INDEX IF NOT EXISTS provider_subagents_host ON provider_subagents(host_agent); PRAGMA user_version=7; COMMIT;").map_err(io)?;
+        let has_creation_flag: bool = database.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('input_receipts') WHERE name='is_creation')",
+            [], |row| row.get(0),
+        ).map_err(io)?;
+        if !has_creation_flag {
+            database
+                .execute_batch(
+                    "ALTER TABLE input_receipts ADD COLUMN is_creation INTEGER NOT NULL DEFAULT 0;",
+                )
+                .map_err(io)?;
+        }
+        database.execute_batch("CREATE INDEX IF NOT EXISTS provider_subagents_host ON provider_subagents(host_agent); PRAGMA user_version=8; COMMIT;").map_err(io)?;
         Ok(Self {
             database: Arc::new(Mutex::new(database)),
             events: EventHub::default(),

@@ -16,7 +16,7 @@ use operation::{Access, Operation};
 mod export;
 mod lane;
 mod routing;
-mod voice;
+pub(crate) mod voice;
 pub(crate) mod waits;
 
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
@@ -146,6 +146,10 @@ impl AgentExecution {
             .build()?;
         let (sender, receiver) = mpsc::channel(64);
         let template = Arc::new(Mutex::new(ExecutionState {
+            preset_lookups: Vec::new(),
+            pending_voices: Vec::new(),
+            pending_creations: Vec::new(),
+            pending_preparations: Vec::new(),
             message_observers: std::collections::BTreeMap::new(),
             owners: crate::service::agent_manager::ownership::Owners::default().with_changes(
                 dependencies

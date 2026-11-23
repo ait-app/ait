@@ -11,6 +11,7 @@ mod mcp;
 pub(crate) mod native_sessions;
 pub(crate) mod observed;
 pub(crate) mod ownership;
+pub(crate) mod preset_selection;
 mod realtime;
 mod recovery;
 mod resume;
@@ -83,6 +84,9 @@ pub enum AgentManagerError {
     /// A turn is already active or the Agent is archived.
     #[error("Agent is busy or read-only")]
     Busy,
+    /// A preset lookup is pending; no native input has been submitted.
+    #[error("model preset is still being refreshed")]
+    PresetPending,
     /// The provider cannot confine its native process inside a sandboxed Workspace.
     #[error(
         "provider {0} cannot run in a sandboxed worktree: it does not support OS write confinement"
@@ -103,6 +107,8 @@ pub(crate) struct AgentRegistration {
     pub(crate) internal: bool,
     /// Durable owner of an internal session; set before registration is published.
     pub(crate) owner: Option<serde_json::Value>,
+    /// Explicit preset and the independent settings it temporarily replaces.
+    pub(crate) model_preset: Option<domain::agent_runtime::ModelPresetState>,
 }
 
 #[derive(Debug)]
@@ -169,6 +175,8 @@ pub struct AgentManager {
     registry: Arc<dyn AgentRuntimeRegistry>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     live: BTreeMap<String, LiveAgent>,
+    preset_refreshes: BTreeMap<String, preset_selection::Refresh>,
+    preset_ready: BTreeMap<String, (u64, u64)>,
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
     side_store: Option<crate::storage::side::SideStore>,
@@ -215,6 +223,8 @@ impl AgentManager {
             registry: registry.into(),
             clients: BTreeMap::new(),
             live: BTreeMap::new(),
+            preset_refreshes: BTreeMap::new(),
+            preset_ready: BTreeMap::new(),
             events: SessionEvents::default(),
             timeline: None,
             side_store: None,
@@ -578,11 +588,16 @@ impl AgentManager {
         ) {
             return Err(AgentManagerError::InvalidRequest);
         }
-        let mut effective = patch.apply(
+        if record.config_revision == u64::MAX {
+            return Err(AgentManagerError::Busy);
+        }
+        let (mut effective, _) = preset_selection::manual(
             record
                 .config
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
+            record.model_preset.as_ref(),
+            patch,
         );
         if let Some(agent) = self.live.get(agent_id) {
             if let Some(binding) = &agent.mcp {
@@ -605,17 +620,27 @@ impl AgentManager {
             .await
             .map_err(|_| AgentManagerError::InvalidRequest)?;
         let now = now_timestamp();
+        let applied = std::sync::atomic::AtomicBool::new(false);
         self.registry
             .update(agent_id, &|current| {
                 let mut next = current.clone();
-                next.config = Some(
-                    patch.apply(
-                        current
-                            .config
-                            .as_ref()
-                            .unwrap_or(&StoredAgentConfig::default()),
-                    ),
+                if current.created_at != record.created_at
+                    || current.config_revision != record.config_revision
+                {
+                    return current.clone();
+                }
+                applied.store(true, std::sync::atomic::Ordering::Relaxed);
+                let (config, preset) = preset_selection::manual(
+                    current
+                        .config
+                        .as_ref()
+                        .unwrap_or(&StoredAgentConfig::default()),
+                    current.model_preset.as_ref(),
+                    patch,
                 );
+                next.config = Some(config);
+                next.model_preset = preset;
+                next.config_revision += 1;
                 next.last_mode_id = next
                     .config
                     .as_ref()
@@ -625,6 +650,9 @@ impl AgentManager {
             })
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+        if !applied.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(AgentManagerError::Busy);
+        }
         Ok(())
     }
 
@@ -696,6 +724,8 @@ impl AgentManager {
         };
         let now = now_timestamp();
         let record = PersistedAgentRuntimeRecord {
+            config_revision: u64::from(registration.model_preset.is_some()),
+            model_preset: registration.model_preset,
             id: agent_id.to_owned(),
             provider: spec.provider.clone(),
             cwd: spec.cwd.clone(),
@@ -906,6 +936,44 @@ impl AgentManager {
         .await
     }
 
+    fn lock_ready_preset(
+        &mut self,
+        agent_id: &str,
+    ) -> Result<Option<tokio::sync::OwnedRwLockReadGuard<()>>, AgentManagerError> {
+        if !self
+            .ensure_preset_ready(agent_id)
+            .map_err(|_| AgentManagerError::Session)?
+        {
+            return Err(AgentManagerError::PresetPending);
+        }
+        let selected = self
+            .registry
+            .get(agent_id)
+            .map_err(map_registry)?
+            .and_then(|record| record.model_preset.and_then(|state| state.selected))
+            .is_some();
+        let preset_fence = if selected {
+            Some(
+                self.presets
+                    .as_ref()
+                    .ok_or(AgentManagerError::Session)?
+                    .fence()
+                    .try_read_owned()
+                    .map_err(|_| AgentManagerError::PresetPending)?,
+            )
+        } else {
+            None
+        };
+        // A writer may have completed between the refresh and acquiring this guard.
+        if !self
+            .ensure_preset_ready(agent_id)
+            .map_err(|_| AgentManagerError::Session)?
+        {
+            return Err(AgentManagerError::PresetPending);
+        }
+        Ok(preset_fence)
+    }
+
     /// Submit one complete rich prompt while retaining exclusive native-turn admission.
     /// # Errors
     /// Returns invalid input, busy ownership, native admission or persistence failures.
@@ -917,6 +985,8 @@ impl AgentManager {
         prompt
             .validate()
             .map_err(|_| AgentManagerError::InvalidRequest)?;
+        let preset_fence = self.lock_ready_preset(agent_id)?;
+        self.preset_ready.remove(agent_id);
         if self.timeline.is_some() && !self.history_loaded(agent_id) {
             self.load_timeline_for_input(agent_id).await?;
         }
@@ -972,6 +1042,7 @@ impl AgentManager {
             binding.apply(&mut effective);
         }
         let admission = agent.session.start_input(prompt, &effective).await;
+        drop(preset_fence);
         if let Ok(turn) = admission {
             let runtime = agent.session.runtime_info().await;
             agent
@@ -1011,6 +1082,7 @@ impl AgentManager {
     /// Returns native interruption failures. An idle Agent is an idempotent success.
     pub(crate) async fn cancel(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
         self.require_managed(agent_id)?;
+        self.discard_preset_refresh(agent_id);
         if let Some(timeline) = &self.timeline {
             timeline
                 .cancel_inputs(agent_id)

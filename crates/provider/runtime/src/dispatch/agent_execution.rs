@@ -6,6 +6,8 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.cancel.request"),
     MethodSpec::request("agent.finish.wait.request"),
     MethodSpec::request("agent.model.set.request"),
+    MethodSpec::request("agent.model_preset.select.request"),
+    MethodSpec::request("agent.model_preset.context.request"),
     MethodSpec::request("agent.thinking.set.request"),
     MethodSpec::request("agent.config.apply.request"),
     MethodSpec::request("provider.sessions.recent.list.request"),

@@ -46,6 +46,8 @@ pub(crate) enum Operation {
     Cancel,
     Wait,
     Model,
+    ModelPreset,
+    ModelPresetContext,
     Thinking,
     Configure,
     Mode,
@@ -115,6 +117,8 @@ impl Operation {
             "agent.cancel.request" => Ok(Self::Cancel),
             "agent.finish.wait.request" => Ok(Self::Wait),
             "agent.model.set.request" => Ok(Self::Model),
+            "agent.model_preset.select.request" => Ok(Self::ModelPreset),
+            "agent.model_preset.context.request" => Ok(Self::ModelPresetContext),
             "agent.thinking.set.request" => Ok(Self::Thinking),
             "agent.config.apply.request" => Ok(Self::Configure),
             "agent.mode.set.request" => Ok(Self::Mode),
@@ -183,6 +187,8 @@ impl Operation {
             Self::Cancel => "agent.cancel.request",
             Self::Wait => "agent.finish.wait.request",
             Self::Model => "agent.model.set.request",
+            Self::ModelPreset => "agent.model_preset.select.request",
+            Self::ModelPresetContext => "agent.model_preset.context.request",
             Self::Thinking => "agent.thinking.set.request",
             Self::Configure => "agent.config.apply.request",
             Self::Mode => "agent.mode.set.request",
@@ -252,6 +258,7 @@ impl Operation {
             Self::Send
             | Self::Cancel
             | Self::Model
+            | Self::ModelPreset
             | Self::Thinking
             | Self::Configure
             | Self::Mode
@@ -279,7 +286,8 @@ impl Operation {
             | Self::UsageLedger
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
-            Self::RecentSessions
+            Self::ModelPresetContext
+            | Self::RecentSessions
             | Self::SessionPreview
             | Self::Commands
             | Self::Diagnostic
@@ -318,6 +326,8 @@ impl Operation {
             | Self::Cancel
             | Self::Wait
             | Self::Model
+            | Self::ModelPreset
+            | Self::ModelPresetContext
             | Self::Thinking
             | Self::Configure
             | Self::Mode

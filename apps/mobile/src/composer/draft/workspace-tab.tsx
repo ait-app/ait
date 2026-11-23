@@ -1,3 +1,4 @@
+import { isPresetOwnedFeature } from "@/agent-controls/model-presets";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -108,6 +109,7 @@ async function submitDraftCreateRequest(input: {
     effectiveModelId: string | null;
     effectiveThinkingOptionId: string | null;
     featureValues: Record<string, unknown> | undefined;
+    modelPreset?: import("@ait/protocol/messages").CreateAgentRequestMessage["modelPreset"] | null;
   };
   hostDisconnectedMessage: string;
   selectModelMessage: string;
@@ -170,6 +172,9 @@ async function submitDraftCreateRequest(input: {
   );
   const result = await requestWorkspaceDraftAgent(client, {
     config,
+    ...(!autoSubmitConfig && composerState.modelPreset
+      ? { modelPreset: composerState.modelPreset }
+      : {}),
     workspaceId,
     text,
     clientMessageId: attempt.clientMessageId,
@@ -339,7 +344,7 @@ export function WorkspaceDraftAgentTab({
   const draftProviderDefinitions = composerState.providerDefinitions;
   const draftThinkingOptions = composerState.availableThinkingOptions;
   const draftSelectedThinkingId = composerState.selectedThinkingOptionId;
-  const draftSetThinkingOption = composerState.setThinkingOptionFromUser;
+  const draftSetThinkingOption = composerState.agentControls.onSelectThinkingOption;
   const draftModeOptions = composerState.modeOptions;
   const draftSelectedMode = composerState.selectedMode;
   const draftSetMode = composerState.setModeFromUser;
@@ -501,11 +506,11 @@ export function WorkspaceDraftAgentTab({
       models: {
         providers: composerState.modelSelectorProviders,
         selectedProvider: draftProvider,
-        selectedModelId: composerState.effectiveModelId,
-        select: composerState.setProviderAndModelFromUser,
+        selectedModelId: composerState.modelPreset ? null : composerState.effectiveModelId,
+        select: composerState.agentControls.onSelectProviderAndModel,
       },
       thinking: {
-        options: draftThinkingOptions,
+        options: composerState.modelPreset ? [] : draftThinkingOptions,
         selectedId: draftSelectedThinkingId,
         select: draftSetThinkingOption,
       },
@@ -515,7 +520,9 @@ export function WorkspaceDraftAgentTab({
         select: draftSetMode,
       },
       features: {
-        list: draftFeatures,
+        list: composerState.modelPreset
+          ? draftFeatures?.filter((feature) => !isPresetOwnedFeature(feature.id))
+          : draftFeatures,
         set: draftOnSetFeature,
       },
     },

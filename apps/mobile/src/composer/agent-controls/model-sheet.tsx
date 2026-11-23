@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Bot } from "lucide-react-native";
-import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
+import type { ModelPresetControls } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { AgentProfilePicker } from "@/agent-profiles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -143,8 +143,15 @@ export function CompactModelSheet({
   const presetControls = modelPresets
     ? {
         cwd: modelPresets.cwd,
-        apply: (provider: string, configuration: ModelPresetConfiguration) => {
-          modelPresets.apply(provider, configuration);
+        contextAgentId: modelPresets.contextAgentId,
+        contextRevision: modelPresets.contextRevision,
+        selectionKnown: modelPresets.selectionKnown,
+        presetActive: modelPresets.presetActive,
+        permissionDenied: modelPresets.permissionDenied,
+        supported: modelPresets.supported,
+        selected: modelPresets.selected,
+        apply: (...args: Parameters<ModelPresetControls["apply"]>) => {
+          modelPresets.apply(...args);
           close();
         },
       }

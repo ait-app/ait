@@ -176,6 +176,7 @@ impl Peer {
 
     fn run_prompt_scenario(&mut self, text: &str) -> PromptAction {
         match text {
+            "wait-config" => return PromptAction::Wait,
             "closed" => return PromptAction::Exit,
             "crash" => crash(),
             "killed" => kill_self(),

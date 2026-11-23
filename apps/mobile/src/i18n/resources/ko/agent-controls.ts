@@ -35,4 +35,6 @@ export const agentControls = {
     model: "모델 변경",
     mode: "모드 변경",
   },
+  configResultUnknown:
+    "설정 결과를 알 수 없으며 나중에 적용될 수 있습니다. 다시 변경하기 전에 세션을 확인하세요.",
 };

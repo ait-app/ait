@@ -35,4 +35,5 @@ export const agentControls = {
     model: "切换模型",
     mode: "更改模式",
   },
+  configResultUnknown: "配置结果未知，后续仍可能生效。再次更改前请检查会话。",
 };

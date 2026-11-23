@@ -22,10 +22,10 @@
   多供应商模型统一展示上游供应商与模型名；AgentProfile 继续独立提供启动配置。
 - 失效模型或不支持的思考等级在模型卡片中标为不可用并禁止应用；记录仍能在设置中查看、修复或删除，
   不因一条旧记录阻断整个预设库。
-- 预设点击一次提交规范化后的默认模型、思考等级及整套角色与备选模型链：遗漏的角色与备选链恢复继承 `native`，
-  `modelRole.default` 始终归一为继承以避免遮蔽主模型，显式清空保留清空，表单偏好中的旧角色与备选链同步替换；
-  非模型的模式、权限、工具等配置保持原值。草稿先更新待创建配置，已运行 Agent 经现有
-  `agent.config.apply.request` 提交；失败遵循该入口的原子校验与错误返回。
+- 普通模型与模型预设是互斥选择：宿主持久化预设身份，不按模型值猜测；切回普通模型时
+  恢复预设接管前的独立设置。后续回合读取所选预设的当前内容；来源变化或预设缺失时明确
+  报错，不静默切换到同名条目。预设控制模型、思考等级、角色及备选链，不改变模式、权限等
+  无关配置（[ADR-301](../decisions/providers/adr-301-preset-selection-identity.md)）。
 - Claude Code 的角色来自其原生环境变量，不由 adapter 自造词汇：`modelRole.` 前缀下共 8 个开关，
   依次为 `subagent`（`CLAUDE_CODE_SUBAGENT_MODEL`）、`workflow`
   （`CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL`）、`subagent-effort`（`CLAUDE_CODE_SUBAGENT_EFFORT`，
@@ -220,8 +220,9 @@
 
 ## 时间线与历史投影
 
-- 原生会话、认证与历史由原生程序持有；provider 的 Timeline SQLite 是可重建的展示索引。
-  历史校验时未变的原生前缀只追加；改写则在同一事务中退役旧 epoch、换新 epoch，保留宿主失败通知
+- 原生会话、认证与历史由原生程序持有；provider 的 Timeline SQLite 包含可重建的展示索引，
+  也持有避免输入重复执行的收据。预设创建首条输入的收据标记使用 schema v8；旧数据库自动升级，
+  不支持直接用旧版本打开已升级的数据库。历史校验时未变的原生前缀只追加；改写则在同一事务中退役旧 epoch、换新 epoch，保留宿主失败通知
   与 plugin 条目，提交后才发布 `agent.timeline.replacement`
   （[ADR-040](../decisions/providers/adr-040-native-session-import-refresh-context.md)、
   [ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)）。

@@ -35,4 +35,6 @@ export const agentControls = {
     model: "モデルを変更",
     mode: "権限モードを変更",
   },
+  configResultUnknown:
+    "設定結果は不明で、後から適用される可能性があります。再度変更する前にセッションを確認してください。",
 };

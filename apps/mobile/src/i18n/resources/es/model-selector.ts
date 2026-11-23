@@ -6,6 +6,11 @@ export const modelSelector = {
   loadingSelector: "Cargando selector de modelo...",
   error: "Error",
   defaultModelHeading: "Modelo predeterminado",
+  presetRequiresUpgrade: "Actualiza el host para seleccionar preajustes",
+  presetEditInSettings: "Edita este preajuste en la configuración de preajustes",
+  presetContextUnavailable:
+    "La selección de preajustes no está disponible o el preajuste seleccionado ya no existe.",
+  presetOwnerOnly: "Los preajustes de modelo no están disponibles para este recurso compartido.",
   modelPresets: "Ajustes de modelo",
   profiles: "Perfiles",
   providers: "Proveedores",

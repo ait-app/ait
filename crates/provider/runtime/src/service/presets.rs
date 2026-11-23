@@ -75,6 +75,12 @@ pub struct PresetService {
     /// read-modify-write is fenced here instead. One `PresetService` is composed per daemon and
     /// cloned into its consumers, which is what lets this lock span all of them.
     writes: Arc<std::sync::Mutex<()>>,
+    revision: Arc<std::sync::atomic::AtomicU64>,
+    fence: Arc<tokio::sync::RwLock<()>>,
+    #[cfg(test)]
+    lookup_started: Arc<tokio::sync::Semaphore>,
+    #[cfg(test)]
+    lookup_finished: Arc<tokio::sync::Semaphore>,
 }
 
 impl PresetService {
@@ -83,7 +89,51 @@ impl PresetService {
         Self {
             config,
             writes: Arc::new(std::sync::Mutex::new(())),
+            revision: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            fence: Arc::new(tokio::sync::RwLock::new(())),
+            #[cfg(test)]
+            lookup_started: Arc::new(tokio::sync::Semaphore::new(0)),
+            #[cfg(test)]
+            lookup_finished: Arc::new(tokio::sync::Semaphore::new(0)),
         }
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub(crate) fn fence(&self) -> Arc<tokio::sync::RwLock<()>> {
+        self.fence.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn signal_lookup_started(&self) {
+        self.lookup_started.add_permits(1);
+    }
+    #[cfg(test)]
+    pub(crate) fn signal_lookup_finished(&self) {
+        self.lookup_finished.add_permits(1);
+    }
+    #[cfg(test)]
+    pub(crate) async fn wait_lookup_started(&self) {
+        self.lookup_started
+            .acquire()
+            .await
+            .expect("lookup signal")
+            .forget();
+    }
+    #[cfg(test)]
+    pub(crate) async fn wait_lookup_finished(&self) {
+        self.lookup_finished
+            .acquire()
+            .await
+            .expect("lookup signal")
+            .forget();
+    }
+
+    fn changed(&self) {
+        self.revision
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn ait(&self) -> ait::AitPresets {
@@ -163,6 +213,40 @@ impl PresetService {
         preset: &Preset,
         original: Option<&str>,
     ) -> Result<(), PresetError> {
+        let service = self.clone();
+        let provider = provider.to_owned();
+        let cwd = cwd.to_owned();
+        let client = client.cloned();
+        let preset = preset.clone();
+        let original = original.map(str::to_owned);
+        tokio::spawn(async move {
+            let _guard =
+                tokio::time::timeout(std::time::Duration::from_secs(60), service.fence.write())
+                    .await
+                    .map_err(|_| PresetError::Unavailable("Preset store is busy".to_owned()))?;
+            service.changed();
+            service
+                .save_fenced(
+                    &provider,
+                    &cwd,
+                    client.as_ref(),
+                    &preset,
+                    original.as_deref(),
+                )
+                .await
+        })
+        .await
+        .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?
+    }
+
+    async fn save_fenced(
+        &self,
+        provider: &str,
+        cwd: &str,
+        client: Option<&Arc<dyn AgentClient>>,
+        preset: &Preset,
+        original: Option<&str>,
+    ) -> Result<(), PresetError> {
         let preset = &editable(preset.clone());
         preset.validate().map_err(PresetError::Rejected)?;
         if let Some(client) = client
@@ -173,7 +257,8 @@ impl PresetService {
                     "This native preset store does not support rename".to_owned(),
                 ));
             }
-            return client.save_native_preset(cwd, preset).await;
+            client.save_native_preset(cwd, preset).await?;
+            return Ok(());
         }
         // The lock spans the read-modify-write, not just the write: two concurrent saves of
         // different presets would otherwise both list the same store and the later one would
@@ -184,7 +269,8 @@ impl PresetService {
         fenced(&self.writes, self.ait(), move |store| {
             store.save(&provider, &preset, original.as_deref())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     /// Remove one preset through the store that owns it.
@@ -192,6 +278,32 @@ impl PresetService {
     /// # Errors
     /// Rejects an unknown name without writing anything.
     pub(crate) async fn delete(
+        &self,
+        provider: &str,
+        cwd: &str,
+        client: Option<&Arc<dyn AgentClient>>,
+        name: &str,
+    ) -> Result<(), PresetError> {
+        let service = self.clone();
+        let provider = provider.to_owned();
+        let cwd = cwd.to_owned();
+        let client = client.cloned();
+        let name = name.to_owned();
+        tokio::spawn(async move {
+            let _guard =
+                tokio::time::timeout(std::time::Duration::from_secs(60), service.fence.write())
+                    .await
+                    .map_err(|_| PresetError::Unavailable("Preset store is busy".to_owned()))?;
+            service.changed();
+            service
+                .delete_fenced(&provider, &cwd, client.as_ref(), &name)
+                .await
+        })
+        .await
+        .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?
+    }
+
+    async fn delete_fenced(
         &self,
         provider: &str,
         cwd: &str,
@@ -206,7 +318,8 @@ impl PresetService {
         if let Some(client) = client
             && client.preset_backend() == PresetBackend::Native
         {
-            return client.delete_native_preset(cwd, name).await;
+            client.delete_native_preset(cwd, name).await?;
+            return Ok(());
         }
         // Deleting is the same list-wide rewrite as saving, so it takes the same fence.
         let provider = provider.to_owned();
@@ -214,7 +327,8 @@ impl PresetService {
         fenced(&self.writes, self.ait(), move |store| {
             store.delete(&provider, &name)
         })
-        .await
+        .await?;
+        Ok(())
     }
 }
 

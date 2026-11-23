@@ -39,6 +39,8 @@ impl AgentManager {
             registry: self.registry.clone(),
             clients: self.clients.clone(),
             live: BTreeMap::new(),
+            preset_refreshes: BTreeMap::new(),
+            preset_ready: BTreeMap::new(),
             events: self.events.clone(),
             timeline: self.timeline.clone(),
             side_store: self.side_store.clone(),
@@ -193,7 +195,7 @@ impl AgentManager {
 
     /// Whether a live session has accepted native work whose events need low-latency draining.
     pub(crate) fn has_active_turns(&self) -> bool {
-        if !self.side_permits.is_empty() {
+        if !self.side_permits.is_empty() || !self.preset_refreshes.is_empty() {
             return true;
         }
         self.live.values().any(|agent| {

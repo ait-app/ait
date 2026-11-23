@@ -18,6 +18,8 @@ paths:
 
 # ADR-286：模型预设的备选链、供应商展示与选择器优先级
 
+**后续修订：** [ADR-301](adr-301-preset-selection-identity.md)
+
 ## 背景
 
 ADR-279 建立了 Provider 模型预设的统一端口，但在实际使用中暴露出四处边界缺陷：

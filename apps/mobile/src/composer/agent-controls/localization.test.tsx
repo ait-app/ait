@@ -52,6 +52,49 @@ afterEach(async () => {
 });
 
 describe("OMP model settings presentation", () => {
+  it("locks preset-owned controls with an accessible explanation while keeping other controls available", () => {
+    const props: ComponentProps<typeof DraftAgentControls> = {
+      selectedProvider: "omp",
+      providerDefinitions: [],
+      modeOptions: [{ id: "full", label: "Full" }],
+      selectedMode: "full",
+      onSelectMode: vi.fn(),
+      selectedModel: "model",
+      onSelectModel: vi.fn(),
+      isAllModelsLoading: false,
+      onSelectProviderAndModel: vi.fn(),
+      onApplyAgentProfile: vi.fn(),
+      onApplyModelPreset: vi.fn(),
+      selectedModelPreset: { provider: "omp", name: "Work", source: "project" },
+      supportsModelPresetSelection: true,
+      modelSelectorProviders: [],
+      isCompactLayout: true,
+      thinkingOptions: [{ id: "high", label: "High" }],
+      selectedThinkingOptionId: "high",
+      onSelectThinkingOption: vi.fn(),
+      features: [
+        {
+          type: "select",
+          id: "modelRole.worker",
+          label: "Worker",
+          value: "native",
+          options: [{ id: "native", label: "Inherit" }],
+        },
+        { type: "toggle", id: "autoRetry", label: "Retry", value: true },
+      ],
+      onSetFeature: vi.fn(),
+    };
+    const view = render(<DraftAgentControls {...props} />);
+    const thinking = view.getByTestId("agent-controls-thinking");
+    const role = view.getByTestId("agent-feature-modelRole.worker");
+    expect(thinking.getAttribute("aria-disabled")).toBe("true");
+    expect(role.getAttribute("aria-disabled")).toBe("true");
+    expect(thinking.getAttribute("aria-label")).toContain("请在预设管理中修改此预设");
+    expect(role.getAttribute("aria-label")).toContain("请在预设管理中修改此预设");
+    expect(view.getByTestId("agent-feature-autoRetry").getAttribute("aria-disabled")).not.toBe(
+      "true",
+    );
+  });
   it("renders localized labels and semantic icons, then updates the existing controls on language change", async () => {
     const modes = [{ id: "full", label: "Full Access" }];
     const features = [

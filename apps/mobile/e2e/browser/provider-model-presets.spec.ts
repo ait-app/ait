@@ -1,4 +1,6 @@
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, type Page } from "../support/fixtures";
 import { test } from "../support/helpers/omp-test-peer";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
@@ -26,6 +28,111 @@ async function openProviderModelCard(page: Page, mobile: boolean) {
   if (await provider.isVisible().catch(() => false)) await provider.click();
   await expect(page.getByTestId("selector-header-settings-omp")).toBeVisible();
 }
+
+test("same-model presets stay distinct across selection, editing and refresh", async ({
+  page,
+  ompAgentDirectory,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const workspace = await seedWorkspace({ repoPrefix: "preset-identity-" });
+  const client = await connectDaemonClient<DaemonClient>({ clientIdPrefix: "preset-identity" });
+  const model = JSON.stringify(["test", "model"]);
+  const first = "IdentityFirst";
+  const second = "IdentitySecond";
+  try {
+    for (const name of [first, second]) {
+      const saved = await client.saveProviderPreset(
+        "omp",
+        { name, model, thinkingOptionId: "low", featureValues: {} },
+        workspace.repoPath,
+      );
+      expect(saved.error).toBeNull();
+    }
+    const agent = await client.createAgent({
+      provider: "omp",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      model,
+      thinkingOptionId: "low",
+      title: "Preset identity browser verification",
+    });
+    await openAgentRoute(page, { workspaceId: workspace.workspaceId, agentId: agent.id });
+    await expectComposerVisible(page);
+
+    const firstRow = page.getByTestId(`provider-model-preset-omp-${first}`);
+    const secondRow = page.getByTestId(`provider-model-preset-omp-${second}`);
+    const defaultRow = page.getByTestId(`model-row-omp-${model}`);
+    await openProviderModelCard(page, false);
+    await firstRow.click();
+    await openProviderModelCard(page, false);
+    await expect(firstRow).toHaveAttribute("aria-selected", "true");
+    await expect(secondRow).toHaveAttribute("aria-selected", "false");
+    await expect(defaultRow).toHaveAttribute("aria-selected", "false");
+
+    await secondRow.click();
+    await openProviderModelCard(page, false);
+    await expect(firstRow).toHaveAttribute("aria-selected", "false");
+    await expect(secondRow).toHaveAttribute("aria-selected", "true");
+    await expect(defaultRow).toHaveAttribute("aria-selected", "false");
+    await page.reload();
+    await expectComposerVisible(page);
+    await openProviderModelCard(page, false);
+    await expect(secondRow).toHaveAttribute("aria-selected", "true");
+    await expect(defaultRow).toHaveAttribute("aria-selected", "false");
+
+    await defaultRow.click();
+    await openProviderModelCard(page, false);
+    await expect(firstRow).toHaveAttribute("aria-selected", "false");
+    await expect(secondRow).toHaveAttribute("aria-selected", "false");
+    await expect(defaultRow).toHaveAttribute("aria-selected", "true");
+    await secondRow.click();
+
+    await page.locator('[data-testid="sidebar-settings"]:visible').first().click();
+    await page.getByTestId("settings-host-section-providers").click();
+    await page.getByRole("button", { name: "Oh My Pi provider details", exact: true }).click();
+    const settings = page.getByTestId("provider-settings-sheet");
+    await expect(settings).toBeVisible();
+    await page.getByTestId(`provider-preset-${second}`).getByRole("button").first().click();
+    const editor = page.getByTestId("provider-preset-editor");
+    await expect(editor).toBeVisible();
+    await page.getByTestId("provider-preset-thinking-options").getByRole("button").click();
+    await page.getByRole("button", { name: "High", exact: true }).last().click();
+    await page.getByTestId("provider-preset-save").click();
+    await expect(editor).not.toBeVisible();
+    await page.getByLabel("Close", { exact: true }).filter({ visible: true }).last().click();
+    await expect(settings).not.toBeVisible();
+    await openAgentRoute(page, { workspaceId: workspace.workspaceId, agentId: agent.id });
+    await expectComposerVisible(page);
+
+    const logPath = path.join(ompAgentDirectory, "calls.jsonl");
+    const before = (await readFile(logPath, "utf8")).trim().split("\n").length;
+    await submitMessage(page, "Verify edited preset on the next turn");
+    await expect(page.getByText("Hello world", { exact: true })).toBeVisible({ timeout: 30_000 });
+    const calls = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .slice(before)
+      .map((line) => JSON.parse(line));
+    expect(
+      calls.some(
+        (call) =>
+          (call.type === "set_thinking_level" && call.level === "high") ||
+          (Array.isArray(call.args) &&
+            call.args.some(
+              (arg: string, index: number) =>
+                arg === "--thinking" && call.args[index + 1] === "high",
+            )),
+      ),
+    ).toBe(true);
+  } finally {
+    for (const name of [first, second]) {
+      await client.deleteProviderPreset("omp", name, workspace.repoPath).catch(() => undefined);
+    }
+    await client.close();
+    await workspace.cleanup();
+  }
+});
 
 test("a draft applies saved roles before its first message creates the agent", async ({ page }) => {
   test.setTimeout(120_000);

@@ -69,6 +69,8 @@ export interface AgentRuntimeInfo {
 }
 
 export interface Agent {
+  modelPresetRevision?: number;
+  hasSelectedModelPreset?: boolean;
   management?: "managed" | "observed";
   observation?: import("@ait/protocol/messages").AgentObservationPayload;
   serverId: string;

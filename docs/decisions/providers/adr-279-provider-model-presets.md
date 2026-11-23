@@ -18,6 +18,8 @@ paths:
 
 # ADR-279：Provider 模型预设的存储归属与整套角色应用
 
+**后续修订：** [ADR-301](adr-301-preset-selection-identity.md)
+
 ## 背景
 
 Provider 设置需要管理具名的模型与角色分配，模型切换卡片需要读取同一份预设。

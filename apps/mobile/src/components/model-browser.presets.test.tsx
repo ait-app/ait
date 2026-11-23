@@ -14,6 +14,7 @@ vi.mock("@/data/provider-presets", () => ({
         ? [
             {
               name: "Fast preset",
+              source: "global",
               model: available.unresolved ? "retired" : "fast",
               featureValues: { "modelRole.worker": "fast" },
             },
@@ -34,6 +35,9 @@ vi.mock("@/data/provider-presets", () => ({
         ]
       : [],
   }),
+}));
+vi.mock("@/agent-controls/preset-context", () => ({
+  useAgentPresetContext: () => ({ data: undefined, error: null }),
 }));
 vi.mock("@/lib/overlay-root", () => ({ useCurrentOverlayLayer: () => 0 }));
 vi.mock("@/agent-profiles", () => ({ AgentProfileGlyph: () => null }));
@@ -143,11 +147,15 @@ it.each(["sheet", "independent"] as const)(
     ).toBeTruthy();
     expect(screen.getByText("modelSelector.profiles")).toBeTruthy();
     fireEvent.click(screen.getByTestId("provider-model-preset-omp-Fast preset"));
-    expect(apply).toHaveBeenCalledExactlyOnceWith("omp", {
-      modelId: "fast",
-      thinkingOptionId: null,
-      featureValues: { "modelRole.worker": "fast" },
-    });
+    expect(apply).toHaveBeenCalledExactlyOnceWith(
+      "omp",
+      {
+        modelId: "fast",
+        thinkingOptionId: null,
+        featureValues: { "modelRole.worker": "fast" },
+      },
+      expect.objectContaining({ name: "Fast preset" }),
+    );
     expect(applyProfile).not.toHaveBeenCalled();
   },
 );
@@ -190,5 +198,68 @@ it("renders an unresolved model preset as disabled in the actual model browser r
   expect(row.getAttribute("aria-disabled")).toBe("true");
   expect(row.textContent).toContain("providerSelection.unavailable");
   fireEvent.click(row);
+  expect(apply).not.toHaveBeenCalled();
+});
+
+it("marks only the chosen preset even when its model matches the default row", () => {
+  const onSelect = vi.fn();
+  const sameModelState: ModelBrowserState = {
+    ...state,
+    selectedModel: "fast",
+    providers: state.providers.map((provider) => ({
+      ...provider,
+      modelSelection: {
+        kind: "models",
+        rows: [
+          {
+            favoriteKey: "omp:fast",
+            provider: "omp",
+            providerLabel: "OMP",
+            modelId: "fast",
+            modelLabel: "Fast",
+          },
+        ],
+      },
+    })),
+  };
+  const controls = {
+    cwd: "/project",
+    selected: { provider: "omp", name: "Fast preset", source: "global" as const },
+    apply: vi.fn(),
+  };
+  const { rerender } = render(
+    <ModelBrowser state={sameModelState} onSelect={onSelect} modelPresets={controls} />,
+  );
+  expect(
+    screen.getByTestId("provider-model-preset-omp-Fast preset").getAttribute("aria-selected"),
+  ).toBe("true");
+  expect(screen.getByTestId("model-row-omp-fast").getAttribute("aria-selected")).toBe("false");
+  fireEvent.click(screen.getByTestId("model-row-omp-fast"));
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("omp", "fast");
+  rerender(
+    <ModelBrowser
+      state={sameModelState}
+      onSelect={onSelect}
+      modelPresets={{ ...controls, selected: null }}
+    />,
+  );
+  expect(
+    screen.getByTestId("provider-model-preset-omp-Fast preset").getAttribute("aria-selected"),
+  ).toBe("false");
+  expect(screen.getByTestId("model-row-omp-fast").getAttribute("aria-selected")).toBe("true");
+});
+
+it("does not expose an owner's preset identity or select a default row to a guest", () => {
+  const apply = vi.fn();
+  render(
+    <ModelBrowser
+      state={state}
+      onSelect={vi.fn()}
+      modelPresets={{ cwd: "/project", permissionDenied: true, presetActive: true, apply }}
+    />,
+  );
+  expect(screen.getByText("modelSelector.presetOwnerOnly")).toBeTruthy();
+  expect(screen.getByTestId("model-row-omp-large").getAttribute("aria-selected")).toBe("false");
+  expect(screen.queryByTestId("provider-model-preset-omp-Fast preset")).toBeNull();
   expect(apply).not.toHaveBeenCalled();
 });

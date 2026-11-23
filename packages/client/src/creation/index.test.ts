@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import type {
   AgentSnapshotPayload,
   CreationSnapshot,
@@ -50,9 +50,11 @@ const agent: AgentSnapshotPayload = {
   labels: {},
 };
 
-function fixture(modern: boolean) {
+function fixture(modern: boolean, replay?: CreationSnapshot) {
   const requests: Array<{ kind: string; input: Record<string, unknown> }> = [];
   const legacy: Array<{ kind: string; input: unknown }> = [];
+  let observeNext: ((snapshot: CreationSnapshot | null) => void) | undefined;
+  let releases = 0;
   let resolve!: (result: CreationResult) => void;
   const result = new Promise<CreationResult>((done) => {
     resolve = done;
@@ -64,7 +66,13 @@ function fixture(modern: boolean) {
       requests.push({ kind, input });
       return result;
     },
-    observe: () => () => {},
+    observe: (_kind, _key, next) => {
+      observeNext = next;
+      if (replay) next(replay);
+      return () => {
+        releases += 1;
+      };
+    },
     legacyWorkspace: async (input) => {
       legacy.push({ kind: "workspace", input });
       return { requestId: "legacy-workspace", workspace, error: null, setupTerminalId: null };
@@ -83,8 +91,80 @@ function fixture(modern: boolean) {
       clientMessageId: "message-one",
     },
   };
-  return { client, requests, legacy, resolve, input };
+  return {
+    client,
+    requests,
+    legacy,
+    resolve,
+    input,
+    observing: () => Boolean(observeNext),
+    releases: () => releases,
+    publish: (snapshot: CreationSnapshot | null) => observeNext?.(snapshot),
+  };
 }
+
+test("a terminal receipt replayed during subscription settles and releases the observer", async () => {
+  const snapshot: CreationSnapshot = {
+    kind: "workspace",
+    idempotencyKey: "intent-one",
+    revision: 3,
+    phase: "completed",
+    workspaceId: workspace.id,
+    agentId: agent.id,
+    workspace,
+    agent,
+    error: null,
+  };
+  const f = fixture(true, snapshot);
+  const pending = f.client.createWorkspace(f.input);
+  f.resolve({
+    workspace,
+    agent,
+    creation: { ...snapshot, revision: 2, phase: "agent_ready" },
+    error: null,
+  });
+  expect(await pending).toMatchObject({ creation: { phase: "completed" }, agent });
+  expect(f.releases()).toBe(1);
+  f.client.close();
+});
+
+test.each(["completed", "failed"] as const)(
+  "nonterminal keyed creation with an agent waits for %s",
+  async (terminal) => {
+    const f = fixture(true);
+    const pending = f.client.createWorkspace(f.input);
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    const snapshot: CreationSnapshot = {
+      kind: "workspace",
+      idempotencyKey: "intent-one",
+      revision: 2,
+      phase: "agent_ready",
+      workspaceId: workspace.id,
+      agentId: agent.id,
+      workspace,
+      agent,
+      error: null,
+    };
+    f.resolve({ workspace, agent, creation: snapshot, error: null });
+    await vi.waitFor(() => expect(f.observing()).toBe(true));
+    expect(settled).toBe(false);
+    expect(f.client.createWorkspace(f.input)).toBe(pending);
+    f.publish({
+      ...snapshot,
+      revision: 3,
+      phase: terminal,
+      error: terminal === "failed" ? "prompt rejected" : null,
+    });
+    expect(await pending).toMatchObject({
+      creation: { phase: terminal },
+      error: terminal === "failed" ? "prompt rejected" : null,
+    });
+    f.client.close();
+  },
+);
 
 test("duplicate client submissions join one complete intent and cumulative updates never regress", async () => {
   const f = fixture(true);

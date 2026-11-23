@@ -141,6 +141,7 @@ function createDraftRecord(input: {
     input: {
       text: input.draft.text,
       attachments: input.draft.attachments.map(normalizeComposerAttachment),
+      ...(input.draft.modelPreset ? { modelPreset: input.draft.modelPreset } : {}),
     },
     lifecycle: input.lifecycle,
     updatedAt: Date.now(),

@@ -6,6 +6,12 @@ export const modelSelector = {
   loadingSelector: "Carregando seletor de modelos...",
   error: "Erro",
   defaultModelHeading: "Modelo padrão",
+  presetRequiresUpgrade: "Atualize o host para selecionar predefinições",
+  presetEditInSettings: "Edite esta predefinição nas configurações de predefinições",
+  presetContextUnavailable:
+    "A seleção de predefinições está indisponível ou a predefinição selecionada não existe mais.",
+  presetOwnerOnly:
+    "As predefinições de modelo não estão disponíveis para este recurso compartilhado.",
   modelPresets: "Predefinições de modelo",
   profiles: "Perfis",
   providers: "Provedores",

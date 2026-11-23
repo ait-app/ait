@@ -525,6 +525,19 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.config.apply.response",
   },
+  "agent.model_preset.select.request": {
+    method: "agent.model_preset.select.request",
+    kind: "request",
+    channel: 2,
+    response: "agent.model_preset.select.response",
+    retryAdmission: false,
+  },
+  "agent.model_preset.context.request": {
+    method: "agent.model_preset.context.request",
+    kind: "request",
+    channel: 2,
+    response: "agent.model_preset.context.response",
+  },
   "agent.permission.resolve.request": {
     method: "agent.permission.resolve.request",
     kind: "request",

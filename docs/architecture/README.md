@@ -130,6 +130,8 @@ Provider 运行时行为测试归 `crates/provider/runtime`（执行与管理器
 Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
 [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)。
+模型预设与普通模型使用互斥的持久选择身份；切换普通模型时恢复原有独立设置，
+预设的后续修改在新回合使用，见 [ADR-301](../decisions/providers/adr-301-preset-selection-identity.md)。
 
 Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列独立限额并让位于必要输出，
 见 [ADR-220](../decisions/providers/adr-220-pi-extension-notifications.md)。

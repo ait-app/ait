@@ -59,6 +59,8 @@ export function derivePendingPermissionKey(
 
 export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
   return {
+    modelPresetRevision: agent.modelPresetRevision,
+    hasSelectedModelPreset: agent.hasSelectedModelPreset,
     management: agent.management,
     observation: agent.observation,
     parentAgentId: agent.parentAgentId,
@@ -109,6 +111,8 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
   const turn = normalizeTurn(snapshot, lastUserMessageAt);
 
   return {
+    modelPresetRevision: snapshot.modelPresetRevision,
+    hasSelectedModelPreset: snapshot.hasSelectedModelPreset,
     management: snapshot.management,
     observation: snapshot.observation,
     serverId,

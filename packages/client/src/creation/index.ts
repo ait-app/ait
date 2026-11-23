@@ -168,6 +168,14 @@ export class CreationClient {
         subscribe: true,
       });
       if (result.creation) this.receive(result.creation);
+      if (
+        result.creation &&
+        result.creation.phase !== "completed" &&
+        result.creation.phase !== "failed"
+      ) {
+        this.watch(operation, false);
+        return;
+      }
       this.finish(operation, result);
     } catch (error) {
       if (
@@ -200,20 +208,39 @@ export class CreationClient {
   reconnect(): void {
     for (const operation of this.operations.values()) {
       if (operation.settled || !operation.modern || operation.recovering) continue;
-      operation.recovering = true;
-      operation.stopObserving = this.deps.observe(
-        operation.kind,
-        operation.key,
-        (snapshot) => {
-          if (!snapshot) void this.submit(operation);
-          else {
-            // Re-subscription is authoritative even if its revision matches the last live event.
-            this.receive(snapshot);
-          }
-        },
-        (error) => this.fail(operation, error),
-      );
+      this.watch(operation, true);
     }
+  }
+
+  private watch(operation: Operation, resubmitMissing: boolean): void {
+    if (operation.settled || operation.recovering) return;
+    operation.recovering = true;
+    if (
+      operation.snapshot &&
+      (operation.snapshot.phase === "completed" || operation.snapshot.phase === "failed")
+    ) {
+      this.receive(operation.snapshot);
+      if (operation.settled) return;
+    }
+    const stop = this.deps.observe(
+      operation.kind,
+      operation.key,
+      (snapshot) => {
+        if (!snapshot) {
+          if (resubmitMissing) void this.submit(operation);
+          else
+            this.fail(
+              operation,
+              new Error("Creation result is unavailable; its outcome is unknown"),
+            );
+        } else {
+          this.receive(snapshot);
+        }
+      },
+      (error) => this.fail(operation, error),
+    );
+    if (operation.settled) stop();
+    else operation.stopObserving = stop;
   }
   close(): void {
     for (const operation of this.operations.values())

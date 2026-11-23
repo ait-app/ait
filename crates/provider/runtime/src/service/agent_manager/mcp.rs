@@ -74,6 +74,7 @@ impl AgentManager {
     ///
     /// A ledger call still open for the session's turn finishes as interrupted.
     pub(super) fn drop_live(&mut self, agent_id: &str) {
+        self.discard_preset_refresh(agent_id);
         let Some(mut agent) = self.live.remove(agent_id) else {
             return;
         };

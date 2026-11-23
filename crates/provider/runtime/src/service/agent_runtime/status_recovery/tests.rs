@@ -14,6 +14,8 @@ const SINCE: &str = "2026-11-18T10:00:00.000Z";
 
 fn record(id: &str, last_user_message_at: Option<&str>) -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: id.to_owned(),
         provider: "claude".to_owned(),
         cwd: "/repo".to_owned(),

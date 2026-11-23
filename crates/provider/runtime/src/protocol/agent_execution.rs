@@ -37,6 +37,18 @@ pub(crate) struct SessionConfig {
     pub(crate) stored: StoredAgentConfig,
 }
 
+/// Explicit preset chosen before creating the Agent.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CreateModelPreset {
+    pub(crate) name: String,
+    pub(crate) source: String,
+    #[serde(default)]
+    pub(crate) base_feature_values: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub(crate) base_thinking_option_id: Option<String>,
+}
+
 /// Create an independently owned native session.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +71,8 @@ pub(crate) struct CreateRequest {
     pub(crate) agent_id: Option<String>,
     /// Native configuration.
     pub(crate) config: SessionConfig,
+    /// An explicitly selected preset, resolved again from its owning store.
+    pub(crate) model_preset: Option<CreateModelPreset>,
     /// Ephemeral native child environment, excluded from Agent persistence and responses.
     #[serde(default)]
     pub(crate) env: provider_core::ports::environment::AgentEnvironment,

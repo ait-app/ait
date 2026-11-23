@@ -120,6 +120,38 @@ pub enum TitleOrigin {
     Generated,
 }
 
+/// Explicit identity of a preset in the provider's effective store for one directory.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelPresetReference {
+    /// Name in the provider's preset store.
+    pub name: String,
+    /// Store layer, one of `ait`, `global`, or `project`.
+    pub source: String,
+    /// Canonical directory used to resolve the effective preset layer.
+    pub cwd: String,
+    /// Agent directory bound to this selection, distinct for newly created worktrees.
+    pub agent_cwd: String,
+}
+
+/// Preset identity and the independent role selections it temporarily replaces.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelPresetState {
+    /// Selected identity; absent after a manual role edit makes the selection custom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected: Option<ModelPresetReference>,
+    /// Independent role and fallback overrides to restore on leaving the preset.
+    #[serde(default)]
+    pub baseline: BTreeMap<String, Value>,
+    /// Independent thinking selection from before the first preset was selected.
+    #[serde(default)]
+    pub baseline_thinking: Option<String>,
+    /// Fields still owned by the preset and eligible for baseline restoration.
+    #[serde(default)]
+    pub owned: std::collections::BTreeSet<String>,
+}
+
 /// Durable Agent runtime snapshot translated from Paseo `StoredAgentRecord`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -161,6 +193,12 @@ pub struct PersistedAgentRuntimeRecord {
     /// Serializable provider configuration.
     #[serde(default)]
     pub config: Option<StoredAgentConfig>,
+    /// Explicit preset identity and reversible role/fallback ownership, if present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_preset: Option<ModelPresetState>,
+    /// Monotonic desired-config revision, used to reject stale preset reads.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub config_revision: u64,
     /// Last provider runtime facts.
     #[serde(default)]
     pub runtime_info: Option<StoredAgentRuntimeInfo>,
@@ -194,6 +232,12 @@ pub struct PersistedAgentRuntimeRecord {
     /// Read-only native child binding; absent for sessions managed by Ait.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observation: Option<observation::ObservedAgent>,
+}
+
+// Serde supplies a reference to fields in skip_serializing_if predicates.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 #[cfg(test)]

@@ -90,6 +90,7 @@ export type AgentFormAction =
       providerDef: AgentProviderDefinition | undefined;
       providerModels: AgentModelDefinition[] | null;
       providerPrefs?: ProviderPrefs | undefined;
+      exitPreset?: { baselineThinking?: string | null };
     }
   | {
       type: "APPLY_PROFILE_FROM_USER";
@@ -115,6 +116,7 @@ export type AgentFormAction =
       modelId: string;
       availableModels: AgentModelDefinition[] | null;
       providerPrefs: ProviderPrefs | undefined;
+      exitPreset?: { baselineThinking?: string | null };
     }
   | { type: "SET_THINKING_OPTION_FROM_USER"; thinkingOptionId: string }
   | { type: "RESET" };
@@ -613,9 +615,17 @@ export function resolveAgentForm(
         modelId: nextModelId,
         providerPrefs: action.providerPrefs,
         currentModelId: state.form.model,
-        currentThinkingOptionId: state.form.thinkingOptionId,
-        isSameProvider: state.form.provider === action.provider,
+        currentThinkingOptionId: action.exitPreset?.baselineThinking ?? state.form.thinkingOptionId,
+        isSameProvider: !action.exitPreset && state.form.provider === action.provider,
       });
+      const selectedThinkingOptionId =
+        action.exitPreset && "baselineThinking" in action.exitPreset
+          ? resolveThinkingOptionId({
+              availableModels: action.providerModels,
+              modelId: nextModelId,
+              requestedThinkingOptionId: action.exitPreset.baselineThinking ?? "",
+            })
+          : nextThinkingOptionId;
       const nextModeId = pickNextModeForProviderAndModel({
         currentProvider: state.form.provider,
         currentModeId: state.form.modeId,
@@ -630,7 +640,7 @@ export function resolveAgentForm(
           provider: action.provider,
           model: nextModelId,
           modeId: nextModeId,
-          thinkingOptionId: nextThinkingOptionId,
+          thinkingOptionId: selectedThinkingOptionId,
         },
         userModified: { ...state.userModified, provider: true, model: true },
       };
@@ -685,14 +695,22 @@ export function resolveAgentForm(
         providerPrefs: action.providerPrefs,
         currentModelId: state.form.model,
         currentThinkingOptionId: state.form.thinkingOptionId,
-        isSameProvider: true,
+        isSameProvider: !action.exitPreset,
       });
+      const selectedThinkingOptionId =
+        action.exitPreset && "baselineThinking" in action.exitPreset
+          ? resolveThinkingOptionId({
+              availableModels: action.availableModels,
+              modelId: nextModelId,
+              requestedThinkingOptionId: action.exitPreset.baselineThinking ?? "",
+            })
+          : nextThinkingOptionId;
       return {
         ...state,
         form: {
           ...state.form,
           model: nextModelId,
-          thinkingOptionId: nextThinkingOptionId,
+          thinkingOptionId: selectedThinkingOptionId,
         },
         userModified: { ...state.userModified, model: true },
       };

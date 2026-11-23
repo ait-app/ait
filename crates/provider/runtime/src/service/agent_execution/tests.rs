@@ -7,6 +7,7 @@ mod contracts;
 mod environment;
 mod export;
 mod placement;
+mod preset_selection;
 mod realtime;
 mod reasoning;
 mod resume;

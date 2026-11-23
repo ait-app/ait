@@ -35,4 +35,6 @@ export const agentControls = {
     model: "Alterar modelo",
     mode: "Alterar modo de permissão",
   },
+  configResultUnknown:
+    "O resultado da configuração é desconhecido e ela ainda pode ser aplicada. Verifique a sessão antes de alterá-la novamente.",
 };

@@ -37,6 +37,19 @@ const EXIT_WAIT: Duration = Duration::from_secs(2);
 /// Wait for stderr to finish after OMP exits; grandchildren can keep it open.
 const STDERR_WAIT: Duration = Duration::from_millis(100);
 
+#[cfg(test)]
+fn frame_notifications() -> &'static tokio::sync::broadcast::Sender<()> {
+    static FRAMES: std::sync::OnceLock<tokio::sync::broadcast::Sender<()>> =
+        std::sync::OnceLock::new();
+    FRAMES.get_or_init(|| tokio::sync::broadcast::channel(1024).0)
+}
+
+/// Observe frames after they have entered a transport's receive queue in tests.
+#[cfg(test)]
+pub(super) fn subscribe_frames() -> tokio::sync::broadcast::Receiver<()> {
+    frame_notifications().subscribe()
+}
+
 /// Bounds for one native connection; the defaults follow Paseo's OMP provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Timeouts {
@@ -251,6 +264,8 @@ async fn read_frames(
                 if frames.send(frame).await.is_err() {
                     return Ending::Abandoned;
                 }
+                #[cfg(test)]
+                let _ = frame_notifications().send(());
             }
             Ok(None) => {}
             Err(problem) => {

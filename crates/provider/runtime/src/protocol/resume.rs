@@ -59,6 +59,9 @@ impl Overrides {
             self.config.system_prompt.as_ref(),
         );
         replace(&mut config.mcp_servers, self.config.mcp_servers.as_ref());
+        if self.cwd.is_some() || self.config != StoredAgentConfig::default() {
+            record.config_revision = record.config_revision.saturating_add(1);
+        }
         record.archived_at = None;
     }
 }

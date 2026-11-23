@@ -1161,6 +1161,51 @@ describe("resolveAgentForm", () => {
   });
 
   describe("SET_MODEL_FROM_USER", () => {
+    it("restores the baseline thinking when exiting a preset to its original model", () => {
+      const state = makeState({
+        provider: "codex",
+        model: "gpt-5.3-codex",
+        thinkingOptionId: "high",
+      });
+      const next = resolveAgentForm(state, {
+        type: "SET_MODEL_FROM_USER",
+        modelId: "gpt-5.3-codex",
+        availableModels: CODEX_MODELS,
+        providerPrefs: undefined,
+        exitPreset: { baselineThinking: "low" },
+      });
+      expect(next.form.thinkingOptionId).toBe("low");
+    });
+
+    it("uses the target model preference instead of preset thinking on exit", () => {
+      const state = makeState({
+        provider: "codex",
+        model: "gpt-5.3-codex",
+        thinkingOptionId: "high",
+      });
+      const next = resolveAgentForm(state, {
+        type: "SET_MODEL_FROM_USER",
+        modelId: "gpt-5.3-codex",
+        availableModels: CODEX_MODELS,
+        providerPrefs: { thinkingByModel: { "gpt-5.3-codex": "low" } },
+        exitPreset: {},
+      });
+      expect(next.form.thinkingOptionId).toBe("low");
+    });
+
+    it("uses the target provider preference when switching providers on exit", () => {
+      const state = makeState({ provider: "pi", model: "other", thinkingOptionId: "high" });
+      const next = resolveAgentForm(state, {
+        type: "SET_PROVIDER_AND_MODEL_FROM_USER",
+        provider: "codex",
+        modelId: "gpt-5.3-codex",
+        providerDef: TEST_CODEX_DEFINITION,
+        providerModels: CODEX_MODELS,
+        providerPrefs: { thinkingByModel: { "gpt-5.3-codex": "low" } },
+        exitPreset: {},
+      });
+      expect(next.form.thinkingOptionId).toBe("low");
+    });
     it("updates model and resets thinking to model default when thinking is not user-modified", () => {
       const state = makeState({ provider: "codex", model: "", thinkingOptionId: "" });
       const next = resolveAgentForm(state, {

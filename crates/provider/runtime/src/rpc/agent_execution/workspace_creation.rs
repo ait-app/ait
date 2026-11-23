@@ -51,9 +51,14 @@ impl ExecutionState {
         let input: Input = decode(params)?;
         let request = self.workspace_agent_request(&input);
         let result = match request {
-            Ok((request, prompt, workspace)) => {
-                self.register_creation(request, prompt, &input.creation, workspace, false)
-                    .await
+            Ok((request, prompt, workspace, source_cwd)) => {
+                Box::pin(self.register_creation(
+                    request,
+                    prompt,
+                    &input.creation,
+                    (workspace, false, Some(source_cwd)),
+                ))
+                .await
             }
             Err(error) => Err(error),
         };
@@ -85,7 +90,7 @@ impl ExecutionState {
     fn workspace_agent_request(
         &self,
         input: &Input,
-    ) -> Result<(CreateRequest, Option<AgentPrompt>, String), ErrorCode> {
+    ) -> Result<(CreateRequest, Option<AgentPrompt>, String, String), ErrorCode> {
         let (mut request, prompt, _) = parse_creation(input.agent.clone())?;
         let id = input
             .creation
@@ -143,7 +148,12 @@ impl ExecutionState {
                 .labels
                 .insert(PARENT_AGENT_ID_LABEL.into(), caller.id);
         }
-        Ok((request, prompt, id.clone()))
+        Ok((
+            request,
+            prompt,
+            id.clone(),
+            draft.to_string_lossy().into_owned(),
+        ))
     }
 }
 

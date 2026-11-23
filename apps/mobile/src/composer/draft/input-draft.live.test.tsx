@@ -15,8 +15,9 @@ import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
 import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
 
-const { asyncStorage } = vi.hoisted(() => ({
+const { asyncStorage, applyModelPresetFromUser } = vi.hoisted(() => ({
   asyncStorage: new Map<string, string>(),
+  applyModelPresetFromUser: vi.fn(),
 }));
 
 vi.hoisted(() => {
@@ -39,6 +40,15 @@ vi.mock("@/attachments/service", () => ({
   garbageCollectAttachments: async () => undefined,
 }));
 
+vi.mock("@/data/provider-presets", () => ({
+  useProviderPresets: () => ({ snapshot: null, isSupported: false, isLoading: false, error: null }),
+}));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => null,
+  useHostRuntimeIsConnected: () => false,
+  useHosts: () => [],
+}));
+
 vi.mock("@/hooks/use-agent-form-state", () => ({
   useAgentFormState: () => ({
     selectedServerId: "host-1",
@@ -48,6 +58,7 @@ vi.mock("@/hooks/use-agent-form-state", () => ({
     setModeFromUser: () => undefined,
     selectedModel: "",
     setModelFromUser: () => undefined,
+    applyModelPresetFromUser,
     selectedThinkingOptionId: "",
     setThinkingOptionFromUser: () => undefined,
     workingDir: "/repo",
@@ -158,6 +169,90 @@ describe("useAgentInputDraft live contract", () => {
       createModalDraft: null,
       attachmentFocusRequestByDraftKey: {},
     });
+  });
+
+  it("restores preset identity per draft and choosing a regular model clears only that draft", async () => {
+    const preset = {
+      provider: "codex",
+      cwd: "/repo",
+      name: "Work",
+      source: "ait" as const,
+      baseFeatureValues: { "modelRole.worker": "old" },
+      baseThinkingOptionId: "medium",
+      baseModelId: "gpt-5.4",
+    };
+    useDraftStore.getState().saveDraftInput({
+      draftKey: "draft:a",
+      draft: { text: "", attachments: [], modelPreset: preset },
+    });
+    useDraftStore.getState().saveDraftInput({
+      draftKey: "draft:b",
+      draft: { text: "other", attachments: [], modelPreset: { ...preset, name: "Other" } },
+    });
+    let latest: ReturnType<typeof useAgentInputDraft> | undefined;
+    function Probe() {
+      latest = useAgentInputDraft({
+        draftKey: "draft:a",
+        composer: { initialServerId: "host-1", isVisible: true, lockedWorkingDir: "/repo" },
+      });
+      return null;
+    }
+    const container = document.getElementById("root")!;
+    const root = createTestRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+    expect(latest?.composerState?.modelPreset).toMatchObject({ name: "Work", source: "ait" });
+    await act(async () => {
+      latest?.composerState?.agentControls.onSelectModel("gpt-5.4");
+    });
+    expect(useDraftStore.getState().getDraftInput("draft:a")?.modelPreset).toBeUndefined();
+    expect(useDraftStore.getState().getDraftInput("draft:b")?.modelPreset?.name).toBe("Other");
+  });
+
+  it("restores the ordinary thinking baseline when the draft directory changes", async () => {
+    useDraftStore.getState().saveDraftInput({
+      draftKey: "draft:directory",
+      draft: {
+        text: "",
+        attachments: [],
+        modelPreset: {
+          provider: "codex",
+          cwd: "/original",
+          name: "Work",
+          source: "ait",
+          baseFeatureValues: {},
+          baseThinkingOptionId: "medium",
+          baseModelId: "gpt-5.4",
+        },
+      },
+    });
+    applyModelPresetFromUser.mockClear();
+    function Probe() {
+      useAgentInputDraft({
+        draftKey: "draft:directory",
+        composer: { initialServerId: "host-1", isVisible: true, lockedWorkingDir: "/new" },
+      });
+      return null;
+    }
+    const root = createTestRoot(document.getElementById("root")!);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+    expect(applyModelPresetFromUser).toHaveBeenCalledWith("codex", {
+      modelId: "gpt-5.4",
+      thinkingOptionId: "medium",
+      featureValues: {},
+    });
+    expect(useDraftStore.getState().getDraftInput("draft:directory")?.modelPreset).toBeUndefined();
   });
 
   async function mountDraftEditor(draftKey: string) {

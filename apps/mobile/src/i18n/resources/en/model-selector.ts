@@ -6,6 +6,11 @@ export const modelSelector = {
   loadingSelector: "Loading model selector...",
   error: "Error",
   defaultModelHeading: "Default model",
+  presetRequiresUpgrade: "Update host to select presets",
+  presetEditInSettings: "Edit this preset in preset settings",
+  presetContextUnavailable:
+    "Preset selection is unavailable or the selected preset no longer exists.",
+  presetOwnerOnly: "Model presets are unavailable for this shared resource.",
   modelPresets: "Model presets",
   profiles: "Profiles",
   providers: "Providers",

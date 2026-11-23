@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { ModelPresetControls, ModelPresetConfiguration } from "@/agent-controls/model-presets";
+import type { ModelPresetControls } from "@/agent-controls/model-presets";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { AgentProfilePicker } from "@/agent-profiles";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -176,8 +176,15 @@ export function CombinedModelSelector({
   const presetControls = modelPresets
     ? {
         cwd: modelPresets.cwd,
-        apply: (provider: string, configuration: ModelPresetConfiguration) => {
-          modelPresets.apply(provider, configuration);
+        contextAgentId: modelPresets.contextAgentId,
+        contextRevision: modelPresets.contextRevision,
+        selectionKnown: modelPresets.selectionKnown,
+        presetActive: modelPresets.presetActive,
+        permissionDenied: modelPresets.permissionDenied,
+        supported: modelPresets.supported,
+        selected: modelPresets.selected,
+        apply: (...args: Parameters<ModelPresetControls["apply"]>) => {
+          modelPresets.apply(...args);
           handleOpenChange(false);
         },
       }

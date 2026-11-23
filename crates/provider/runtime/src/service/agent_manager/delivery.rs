@@ -50,7 +50,11 @@ impl AgentManager {
         }
         match self.steer_input(agent, prompt).await {
             Ok(()) => timeline.finish_input(agent, message, Receipt::Accepted),
-            Err(AgentManagerError::Busy | AgentManagerError::InvalidRequest) => {
+            Err(
+                AgentManagerError::Busy
+                | AgentManagerError::InvalidRequest
+                | AgentManagerError::PresetPending,
+            ) => {
                 timeline.finish_input(agent, message, Receipt::Rejected)?;
                 Err(ErrorCode::CatalogBusy)
             }
@@ -276,6 +280,18 @@ impl AgentManager {
                 timeline.cancel_inputs(&input.agent)?;
                 continue;
             }
+            match self.ensure_preset_ready(&input.agent) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(_) => {
+                    timeline.claim_input(&input.agent, &input.message)?;
+                    self.fail_queued_input(&timeline, &input, &AgentManagerError::InvalidRequest)?;
+                    if selected.is_some() {
+                        return Err(ErrorCode::InvalidMessage);
+                    }
+                    continue;
+                }
+            }
             timeline.claim_input(&input.agent, &input.message)?;
             let admitted = async {
                 if input
@@ -308,6 +324,9 @@ impl AgentManager {
             .await;
             match admitted {
                 Ok(()) => timeline.finish_input(&input.agent, &input.message, Receipt::Accepted)?,
+                Err(AgentManagerError::PresetPending) => {
+                    timeline.requeue_input(&input.agent, &input.message)?;
+                }
                 Err(error) => {
                     self.fail_queued_input(&timeline, &input, &error)?;
                     if selected.is_some() {

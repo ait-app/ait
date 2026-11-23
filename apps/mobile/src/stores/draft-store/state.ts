@@ -19,7 +19,30 @@ export type PersistedDraftImage = AttachmentMetadata | LegacyDraftImage;
 export interface DraftInput {
   text: string;
   attachments: UserComposerAttachment[];
+  modelPreset?: DraftModelPresetSelection;
 }
+
+export interface DraftModelPresetSelection {
+  provider: string;
+  cwd: string;
+  name: string;
+  source: "ait" | "global" | "project";
+  baseFeatureValues: Record<string, unknown>;
+  baseThinkingOptionId: string | null;
+  baseModelId: string;
+}
+
+export const DraftModelPresetSelectionSchema: z.ZodType<DraftModelPresetSelection> = z.strictObject(
+  {
+    provider: z.string().min(1),
+    cwd: z.string(),
+    name: z.string().min(1).max(256),
+    source: z.enum(["ait", "global", "project"]),
+    baseFeatureValues: z.record(z.string(), z.unknown()),
+    baseThinkingOptionId: z.string().nullable(),
+    baseModelId: z.string(),
+  },
+);
 
 export type DraftLifecycleState = "active" | "abandoned" | "sent";
 
@@ -39,9 +62,10 @@ export function editDraftRecordText(
 ): DraftRecord {
   if (record?.lifecycle === "active" && record.input.text === text) return record;
   const attachments = record?.lifecycle === "active" ? record.input.attachments : [];
+  const modelPreset = record?.lifecycle === "active" ? record.input.modelPreset : undefined;
   return {
-    input: { text, attachments },
-    lifecycle: text.length > 0 || attachments.length > 0 ? "active" : "abandoned",
+    input: { text, attachments, ...(modelPreset ? { modelPreset } : {}) },
+    lifecycle: text.length > 0 || attachments.length > 0 || modelPreset ? "active" : "abandoned",
     updatedAt: now,
     version: (record?.version ?? 0) + 1,
   };
@@ -120,6 +144,7 @@ export const UserComposerAttachmentSchema: z.ZodType<UserComposerAttachment> = z
 );
 export const CanonicalDraftInputSchema = z.strictObject({
   text: z.string(),
+  modelPreset: DraftModelPresetSelectionSchema.optional(),
   attachments: z.preprocess(
     (value) =>
       Array.isArray(value)
@@ -203,6 +228,7 @@ export function toDraftInputIfReady(
   return {
     text: record.input.text,
     attachments: record.input.attachments.map(normalizeComposerAttachment),
+    ...(record.input.modelPreset ? { modelPreset: record.input.modelPreset } : {}),
   };
 }
 

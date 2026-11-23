@@ -13,11 +13,14 @@ const client = {
   describeProviderPresets: vi.fn(),
   listProviderPresets: vi.fn(),
   listProviderFeatures: vi.fn(),
+  getAgentModelPresetContext: vi.fn(),
 };
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
     select({
-      sessions: { host: { serverInfo: { features: { providerPresets: host.supportsPresets } } } },
+      sessions: {
+        host: { client, serverInfo: { features: { providerPresets: host.supportsPresets } } },
+      },
     }),
 }));
 vi.mock("@/runtime/host-runtime", () => ({
@@ -111,6 +114,85 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("explains that guest users cannot select presets even when no list is visible", () => {
+  render(
+    <ProviderModelPresets
+      provider="omp"
+      choices={{ presets: [], features: [] }}
+      controls={{ permissionDenied: true, supported: false, apply: vi.fn() }}
+      renderRow={() => <span />}
+    />,
+  );
+  expect(screen.getByText("modelSelector.presetOwnerOnly")).toBeTruthy();
+});
+
+it("uses owner context and refreshes after an agent revision without guessing a same-name preset", async () => {
+  client.getAgentModelPresetContext.mockResolvedValueOnce({
+    agentId: "a",
+    provider: "omp",
+    presets: [{ name: "Quick", model: "fast", source: "project" }],
+    selectedModelPreset: { name: "Quick", source: "project" },
+    selectedAvailable: true,
+    error: null,
+  });
+  client.getAgentModelPresetContext.mockResolvedValueOnce({
+    agentId: "a",
+    provider: "omp",
+    presets: [{ name: "Quick", model: "fast", source: "project" }],
+    selectedModelPreset: { name: "Quick", source: "project" },
+    selectedAvailable: false,
+    error: null,
+  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function Probe({ revision }: { revision: number }) {
+    const choices = useProviderModelPresetChoices({
+      serverId: "host",
+      provider: "omp",
+      cwd: "/worktree",
+      contextAgentId: "a",
+      contextRevision: revision,
+      supportsSelection: true,
+      enabled: true,
+    });
+    return (
+      <ProviderModelPresets
+        provider="omp"
+        choices={choices}
+        models={models}
+        controls={{
+          apply: vi.fn(),
+          selected: { provider: "omp", name: "Quick", source: "project" },
+        }}
+        renderRow={(row) => (
+          <button data-testid={row.testID} aria-selected={row.selected}>
+            {row.name}
+          </button>
+        )}
+      />
+    );
+  }
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <Probe revision={1} />
+    </QueryClientProvider>,
+  );
+  expect(
+    (await screen.findByTestId("provider-model-preset-omp-Quick")).getAttribute("aria-selected"),
+  ).toBe("true");
+  view.rerender(
+    <QueryClientProvider client={queryClient}>
+      <Probe revision={2} />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByTestId("provider-model-preset-omp-Quick").getAttribute("aria-selected"),
+    ).toBe("false"),
+  );
+  expect(screen.getByText("modelSelector.presetContextUnavailable")).toBeTruthy();
+  expect(client.listProviderPresets).not.toHaveBeenCalled();
+});
+
 function showPicker(
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 ) {
@@ -164,17 +246,21 @@ it("shows vendor-qualified preset rows after shared-cache invalidation and appli
     await invalidatePresetCaches(queryClient, "host", "omp");
   });
   fireEvent.click(await screen.findByRole("button", { name: "Quick test / fast" }));
-  expect(apply).toHaveBeenCalledExactlyOnceWith("omp", {
-    modelId: '["test","fast"]',
-    thinkingOptionId: null,
-    featureValues: {
-      "modelRole.advisor": "native",
-      "modelRole.worker": "unset",
-      "modelFallback.advisor": "native",
-      "modelFallback.worker": "native",
-      "modelFallback.default": ["test/fast:off"],
+  expect(apply).toHaveBeenCalledExactlyOnceWith(
+    "omp",
+    {
+      modelId: '["test","fast"]',
+      thinkingOptionId: null,
+      featureValues: {
+        "modelRole.advisor": "native",
+        "modelRole.worker": "unset",
+        "modelFallback.advisor": "native",
+        "modelFallback.worker": "native",
+        "modelFallback.default": ["test/fast:off"],
+      },
     },
-  });
+    expect.objectContaining({ name: "Quick", source: "ait" }),
+  );
   expect(client.listProviderFeatures).toHaveBeenCalledWith({ provider: "omp", cwd: "/project" });
 });
 
@@ -184,11 +270,15 @@ it("also shows Ait-managed presets for providers without separate role features"
   const { apply } = showPicker();
   const row = await screen.findByTestId("provider-model-preset-omp-Quick");
   fireEvent.click(row);
-  expect(apply).toHaveBeenCalledExactlyOnceWith("omp", {
-    modelId: '["test","fast"]',
-    thinkingOptionId: null,
-    featureValues: {},
-  });
+  expect(apply).toHaveBeenCalledExactlyOnceWith(
+    "omp",
+    {
+      modelId: '["test","fast"]',
+      thinkingOptionId: null,
+      featureValues: {},
+    },
+    expect.objectContaining({ name: "Quick", source: "ait" }),
+  );
 });
 
 it("does not advertise stale cached presets when the store fails", async () => {
@@ -236,6 +326,7 @@ it.each([undefined, "off", "high"])(
         modelId: '["test","fast"]',
         thinkingOptionId: thinkingOptionId ?? null,
       }),
+      expect.objectContaining({ name: "Available", source: "global" }),
     );
   },
 );

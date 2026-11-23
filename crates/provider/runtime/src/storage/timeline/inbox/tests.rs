@@ -310,3 +310,112 @@ fn bounded_fifo_preserves_distinct_agents_and_rejects_excess_before_admission() 
     timeline.cancel_inputs("agent").unwrap();
     assert_eq!(timeline.queued_inputs().unwrap().len(), 1);
 }
+
+#[test]
+fn interrupted_creation_input_never_replays_but_claimed_is_uncertain() {
+    let timeline = Timeline::memory().unwrap();
+    let queued = "queued-client-id";
+    let claimed = "claimed-client-id";
+    let prompt = AgentPrompt::text("initial");
+    timeline
+        .reserve_creation_input("queued-agent", queued, &prompt)
+        .unwrap();
+    timeline
+        .reserve_creation_input("claimed-agent", claimed, &prompt)
+        .unwrap();
+    timeline.claim_input("claimed-agent", claimed).unwrap();
+    timeline
+        .reserve_input("normal-agent", "normal", &prompt, "interrupt")
+        .unwrap();
+    timeline.recover_inputs().unwrap();
+    assert_eq!(
+        timeline
+            .input_delivery_state("queued-agent", queued)
+            .unwrap()
+            .as_deref(),
+        Some("cancelled")
+    );
+    assert_eq!(
+        timeline
+            .input_delivery_state("claimed-agent", claimed)
+            .unwrap()
+            .as_deref(),
+        Some("uncertain")
+    );
+    assert_eq!(
+        timeline
+            .input_delivery_state("normal-agent", "normal")
+            .unwrap()
+            .as_deref(),
+        Some("queued")
+    );
+}
+
+#[test]
+fn creation_and_later_message_share_client_id_receipt_while_queued_and_accepted() {
+    let timeline = Timeline::memory().unwrap();
+    let prompt = AgentPrompt {
+        client_message_id: Some("client-1".into()),
+        ..AgentPrompt::text("hello")
+    };
+    assert_eq!(
+        timeline
+            .reserve_creation_input("agent", "client-1", &prompt)
+            .unwrap(),
+        Receipt::New
+    );
+    assert_eq!(
+        timeline
+            .reserve_input("agent", "client-1", &prompt, "interrupt")
+            .unwrap(),
+        Receipt::Accepted
+    );
+    assert_eq!(timeline.queued_inputs().unwrap().len(), 1);
+    timeline.claim_input("agent", "client-1").unwrap();
+    timeline
+        .finish_input("agent", "client-1", Receipt::Accepted)
+        .unwrap();
+    assert_eq!(
+        timeline
+            .reserve_input("agent", "client-1", &prompt, "interrupt")
+            .unwrap(),
+        Receipt::Accepted
+    );
+    assert!(timeline.queued_inputs().unwrap().is_empty());
+}
+
+#[test]
+fn version_seven_queue_migrates_and_keeps_existing_inputs() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&path).unwrap();
+    let prompt = AgentPrompt::text("hello");
+    timeline
+        .reserve_input("agent", "old", &prompt, "interrupt")
+        .unwrap();
+    drop(timeline);
+    let database = Connection::open(&path).unwrap();
+    database
+        .execute_batch("ALTER TABLE input_receipts DROP COLUMN is_creation; PRAGMA user_version=7;")
+        .unwrap();
+    drop(database);
+    let timeline = Timeline::open(&path).unwrap();
+    timeline
+        .reserve_creation_input("agent", "initial", &prompt)
+        .unwrap();
+    timeline.recover_inputs().unwrap();
+    assert_eq!(
+        timeline
+            .input_delivery_state("agent", "old")
+            .unwrap()
+            .as_deref(),
+        Some("queued")
+    );
+    assert_eq!(
+        timeline
+            .input_delivery_state("agent", "initial")
+            .unwrap()
+            .as_deref(),
+        Some("cancelled")
+    );
+}

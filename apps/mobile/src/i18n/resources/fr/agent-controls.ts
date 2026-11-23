@@ -35,4 +35,6 @@ export const agentControls = {
     model: "Changer de modèle",
     mode: "Changer de mode",
   },
+  configResultUnknown:
+    "Le résultat de la configuration est inconnu et peut être appliqué plus tard. Vérifiez la session avant de la modifier à nouveau.",
 };

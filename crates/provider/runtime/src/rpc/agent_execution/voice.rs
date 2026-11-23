@@ -27,6 +27,9 @@ impl ExecutionState {
         } else {
             self.manager.send_input(&id, &request.into_prompt()).await
         };
+        if matches!(result, Err(super::AgentManagerError::PresetPending)) {
+            return Err(ErrorCode::CatalogBusy);
+        }
         let mut receipt = json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(|error|error.to_string())});
         if receipt["accepted"] == true {
             self.manager.claim_exclusive_turn(&id)?;

@@ -378,6 +378,7 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   agentId?: string;
   onEvent?: (snapshot: CreationSnapshot) => void;
   config?: AgentSessionConfig;
+  modelPreset?: CreateAgentRequestMessage["modelPreset"];
   provider?: AgentProvider;
   cwd?: string;
   env?: CreateAgentRequestMessage["env"];
@@ -912,6 +913,14 @@ export class DaemonConnectionError extends Error {
   ) {
     super(message);
     this.name = "DaemonConnectionError";
+  }
+}
+
+/** A configuration request may have reached the host despite a lost response. */
+export class AgentConfigUncertainError extends Error {
+  constructor() {
+    super("The configuration result is unknown and may still be applied.");
+    this.name = "AgentConfigUncertainError";
   }
 }
 
@@ -2907,6 +2916,7 @@ export class DaemonClient {
   });
 
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
+    if (options.modelPreset) this.requireModelPresetSelectionSupport();
     const result = await this.creations.createAgent({
       ...options,
       config: resolveAgentConfig(options),
@@ -2925,6 +2935,7 @@ export class DaemonClient {
       type: "agent.create.request",
       requestId,
       config,
+      ...(options.modelPreset ? { modelPreset: options.modelPreset } : {}),
       ...(options.env ? { env: options.env } : {}),
       ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
       ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
@@ -3795,11 +3806,56 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "setAgentMode rejected");
     }
     return payload.notice ?? null;
+  }
+
+  async selectAgentModelPreset(
+    agentId: string,
+    preset: { name: string; source: "ait" | "global" | "project" },
+  ): Promise<AgentProviderNotice | null> {
+    this.requireModelPresetSelectionSupport();
+    const requestId = this.createRequestId();
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.model_preset.select.request",
+      agentId,
+      ...preset,
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) =>
+        msg.type === "agent.model_preset.select.response" && msg.payload.requestId === requestId
+          ? msg.payload
+          : null,
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
+    });
+    if (!payload.accepted) throw new Error(payload.error ?? "selectAgentModelPreset rejected");
+    return payload.notice ?? null;
+  }
+
+  async getAgentModelPresetContext(agentId: string) {
+    this.requireModelPresetSelectionSupport();
+    const requestId = this.createRequestId();
+    return this.sendRequest({
+      requestId,
+      message: { type: "agent.model_preset.context.request", agentId, requestId },
+      options: { skipQueue: true },
+      select: (msg) =>
+        msg.type === "agent.model_preset.context.response" && msg.payload.requestId === requestId
+          ? msg.payload
+          : null,
+    });
   }
 
   async setAgentModel(
@@ -3826,6 +3882,9 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "setAgentModel rejected");
@@ -3855,6 +3914,9 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "setAgentFeature rejected");
@@ -3885,6 +3947,9 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "setAgentThinkingOption rejected");
@@ -3923,6 +3988,9 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    }).catch((error: unknown) => {
+      if (error instanceof DaemonRpcError && error.code !== "agent_io") throw error;
+      throw new AgentConfigUncertainError();
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "applyAgentConfig rejected");
@@ -4730,6 +4798,7 @@ export class DaemonClient {
     input: CreateWorkspaceRequestOptions,
     requestId?: string,
   ): Promise<WorkspaceCreatePayload> {
+    if (input.agent?.modelPreset) this.requireModelPresetSelectionSupport();
     const resolvedRequestId = this.createRequestId(requestId ?? input.requestId);
     const result = await this.creations.createWorkspace({
       ...input,
@@ -6225,6 +6294,14 @@ export class DaemonClient {
     // rather than surfacing a generic "method not implemented" failure.
     if (this.lastServerInfoMessage?.features?.sideQuestions !== true) {
       throw new Error("This host does not support side questions. Update the host and retry.");
+    }
+  }
+
+  private requireModelPresetSelectionSupport(): void {
+    if (this.lastServerInfoMessage?.features?.agentModelPresetSelection !== true) {
+      throw new Error(
+        "This host cannot persist model preset selections. Update the host and retry.",
+      );
     }
   }
 

@@ -221,6 +221,8 @@ fn placement_projection_preserves_managed_worktree_identity() {
 
 fn record() -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: "agent-1".to_owned(),
         provider: "codex".to_owned(),
         cwd: "/repo".to_owned(),

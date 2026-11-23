@@ -4,6 +4,7 @@ import type { AgentAttachment, AgentSnapshotPayload } from "@ait/protocol/messag
 /** Voice needs an empty Agent, whereas an empty text submission creates only a workspace. */
 export async function createWorkspaceVoiceAgent<TWorkspace>(input: {
   config: NonNullable<NonNullable<CreateWorkspaceRequestOptions["agent"]>["config"]>;
+  modelPreset?: NonNullable<CreateWorkspaceRequestOptions["agent"]>["modelPreset"] | null;
   ensureWorkspace: (request: {
     cwd: string;
     prompt: string;
@@ -20,7 +21,10 @@ export async function createWorkspaceVoiceAgent<TWorkspace>(input: {
     prompt: "",
     attachments: [],
     withInitialAgent: true,
-    agent: { config: input.config },
+    agent: {
+      config: input.config,
+      ...(input.modelPreset ? { modelPreset: input.modelPreset } : {}),
+    },
   });
   if (!agent) throw new Error("Workspace creation returned no agent");
   input.clearConsumedDraft();

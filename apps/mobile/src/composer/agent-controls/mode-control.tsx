@@ -22,8 +22,8 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { showConfigRequestError, type ConfigMutationGate } from "@/agent-controls/config-mutation";
 import type { AgentMode } from "@ait/protocol/agent-types";
 import type { AgentProviderDefinition } from "@ait/protocol/provider-manifest";
 import { getAgentModeIcon } from "@/agent-controls/icons";
@@ -245,6 +245,7 @@ function compareAvailableModes(a: AgentMode[], b: AgentMode[]): boolean {
 export function useLiveAgentModeControl(
   serverId: string,
   agentId: string,
+  gate: ConfigMutationGate,
 ): AgentModeControlValue | null {
   const slice = useSessionStore(
     useShallow((state) => {
@@ -265,6 +266,7 @@ export function useLiveAgentModeControl(
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const { updatePreferences } = useFormPreferences();
   const toast = useToast();
+  const { t } = useTranslation();
   const { entries: snapshotEntries } = useProvidersSnapshot(serverId, { cwd: slice?.cwd });
 
   const providerDefinitions = useMemo<AgentProviderDefinition[]>(() => {
@@ -276,24 +278,23 @@ export function useLiveAgentModeControl(
   const handleSelectMode = useCallback(
     (modeId: string) => {
       if (!client || !slice?.provider) return;
-      void updatePreferences((current) =>
-        mergeProviderPreferences({
-          preferences: current,
-          provider: slice.provider,
-          updates: { mode: modeId || undefined },
-        }),
-      ).catch((error) => {
-        console.warn("[AgentModeControl] persist mode preference failed", error);
+      void gate.run(async () => {
+        try {
+          const notice = await client.setAgentMode(agentId, modeId);
+          showProviderNoticeToast(toast, notice);
+          await updatePreferences((current) =>
+            mergeProviderPreferences({
+              preferences: current,
+              provider: slice.provider,
+              updates: { mode: modeId || undefined },
+            }),
+          );
+        } catch (error) {
+          showConfigRequestError(toast, t, error, serverId);
+        }
       });
-      void client
-        .setAgentMode(agentId, modeId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.warn("[AgentModeControl] setAgentMode failed", error);
-          toast.error(toErrorMessage(error));
-        });
     },
-    [agentId, client, slice?.provider, toast, updatePreferences],
+    [agentId, client, gate, serverId, slice?.provider, t, toast, updatePreferences],
   );
 
   return useMemo(() => {
@@ -304,9 +305,9 @@ export function useLiveAgentModeControl(
       modeOptions: availableModes,
       selectedModeId: slice.currentModeId,
       onSelectMode: handleSelectMode,
-      disabled: !client,
+      disabled: !client || gate.busy,
     };
-  }, [availableModes, client, handleSelectMode, providerDefinitions, slice]);
+  }, [availableModes, client, gate.busy, handleSelectMode, providerDefinitions, slice]);
 }
 
 const styles = StyleSheet.create((theme) => ({

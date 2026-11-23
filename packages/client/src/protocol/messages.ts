@@ -217,6 +217,10 @@ export function serverInfo(
       has("daemon.config.set.request") &&
       has("agent.config.apply.request"),
     agentConfigApply: has("agent.config.apply.request"),
+    agentModelPresetSelection: supports([
+      "agent.model_preset.select.request",
+      "agent.model_preset.context.request",
+    ]),
     providerPresets:
       !scopedGuest &&
       supports([

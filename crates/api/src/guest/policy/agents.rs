@@ -227,6 +227,10 @@ pub(super) async fn create(
     state: &Shared,
     params: &mut Value,
 ) -> Result<(), ErrorCode> {
+    let request = object(params)?;
+    if !matches!(&session.reach, Reach::Node) && present(request.get("modelPreset")) {
+        return Err(ErrorCode::Forbidden);
+    }
     let placement = placement(session, state, params).await?;
     let request = object(params)?;
     let given = |keys: &[&str]| keys.iter().any(|key| present(request.get(*key)));

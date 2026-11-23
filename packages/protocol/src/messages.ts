@@ -158,6 +158,12 @@ export const ProviderPresetEntrySchema = ProviderPresetSchema.extend({
 });
 export type ProviderPresetEntry = z.infer<typeof ProviderPresetEntrySchema>;
 
+export const ModelPresetSelectionSchema = z.object({
+  name: z.string().min(1).max(256),
+  source: z.enum(["ait", "global", "project"]),
+});
+export type ModelPresetSelection = z.infer<typeof ModelPresetSelectionSchema>;
+
 export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
 export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
 
@@ -976,6 +982,8 @@ export const AgentObservationPayloadSchema = z.object({
 export type AgentObservationPayload = z.infer<typeof AgentObservationPayloadSchema>;
 
 export const AgentSnapshotPayloadSchema = z.object({
+  modelPresetRevision: z.number().int().nonnegative().optional(),
+  hasSelectedModelPreset: z.boolean().optional(),
   management: z.enum(["managed", "observed"]).optional(),
   parentAgentId: z.string().nullable().optional(),
   observation: AgentObservationPayloadSchema.optional(),
@@ -1835,6 +1843,10 @@ export const CreateAgentRequestMessageSchema = z.object({
   // Creation receipts use the canonical Ait operation name.
   idempotencyKey: z.string().min(1).max(512).optional(),
   config: AgentSessionConfigSchema,
+  modelPreset: ModelPresetSelectionSchema.extend({
+    baseFeatureValues: z.record(z.string(), z.unknown()),
+    baseThinkingOptionId: z.string().nullable().optional(),
+  }).optional(),
   env: z.record(z.string(), z.string()).optional(),
   workspaceId: z.string().optional(),
   // Optional caller context lets managed CLI invocations use the same daemon-owned
@@ -2115,6 +2127,37 @@ const AgentActionResponsePayloadSchema = z.object({
   accepted: z.boolean(),
   error: z.string().nullable(),
   notice: AgentProviderNoticeSchema.nullable().optional(),
+});
+
+export const SelectAgentModelPresetRequestSchema = z.object({
+  type: z.literal("agent.model_preset.select.request"),
+  agentId: z.string(),
+  name: z.string().min(1).max(256),
+  source: z.enum(["ait", "global", "project"]),
+  requestId: z.string(),
+});
+
+export const SelectAgentModelPresetResponseSchema = z.object({
+  type: z.literal("agent.model_preset.select.response"),
+  payload: AgentActionResponsePayloadSchema,
+});
+
+export const AgentModelPresetContextRequestSchema = z.object({
+  type: z.literal("agent.model_preset.context.request"),
+  agentId: z.string(),
+  requestId: z.string(),
+});
+export const AgentModelPresetContextResponseSchema = z.object({
+  type: z.literal("agent.model_preset.context.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    presets: z.array(ProviderPresetEntrySchema),
+    selectedAvailable: z.boolean(),
+    selectedModelPreset: ModelPresetSelectionSchema.nullable(),
+    error: z.string().nullable(),
+  }),
 });
 
 export const SetAgentModeResponseMessageSchema = z.object({
@@ -3415,6 +3458,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentForkContextRequestMessageSchema,
   AgentContextCompactRequestMessageSchema,
   SetAgentModeRequestMessageSchema,
+  SelectAgentModelPresetRequestSchema,
+  AgentModelPresetContextRequestSchema,
   SetAgentModelRequestMessageSchema,
   SetAgentThinkingRequestMessageSchema,
   SetAgentFeatureRequestMessageSchema,
@@ -3879,6 +3924,7 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: z.boolean().optional(),
+        agentModelPresetSelection: z.boolean().optional(),
         // Preset management requires all four provider.presets RPCs on the host.
         providerPresets: z.boolean().optional(),
         // COMPAT(sideQuestions): added in v0.2.11, remove gate after 2027-11-11 once
@@ -6999,6 +7045,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ReadProjectConfigResponseMessageSchema,
   WriteProjectConfigResponseMessageSchema,
   SetAgentModeResponseMessageSchema,
+  SelectAgentModelPresetResponseSchema,
+  AgentModelPresetContextResponseSchema,
   SetAgentModelResponseMessageSchema,
   SetAgentThinkingResponseMessageSchema,
   SetAgentFeatureResponseMessageSchema,

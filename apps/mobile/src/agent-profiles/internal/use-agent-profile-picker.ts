@@ -5,8 +5,12 @@ import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useSessionStore } from "@/stores/session-store";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import {
+  showConfigRequestError,
+  useConfigMutationGate,
+  type ConfigMutationGate,
+} from "@/agent-controls/config-mutation";
 import {
   materializeAgentProfile,
   reconcileMaterializedProfileMode,
@@ -46,6 +50,7 @@ export interface AgentProfilePicker {
 
 export interface UseAgentProfilePickerInput {
   serverId: string | null;
+  gate?: ConfigMutationGate;
   /**
    * Providers this composer can actually run; pass a stable reference. A profile
    * naming anything else is hidden rather than shown as a row that cannot do
@@ -66,6 +71,8 @@ export function useAgentProfilePicker(
   input: UseAgentProfilePickerInput,
 ): AgentProfilePicker | null {
   const { serverId, availableProviders, target } = input;
+  const ownGate = useConfigMutationGate();
+  const gate = input.gate ?? ownGate;
   const { t } = useTranslation();
   const { profiles, isSupported } = useAgentProfiles(serverId);
   // Profiles are host config, so their labels read from the host-wide catalog
@@ -110,7 +117,7 @@ export function useAgentProfilePicker(
 
   const persistSelection = useCallback(
     (resolved: MaterializedAgentProfile) => {
-      void updatePreferences((current) =>
+      return updatePreferences((current) =>
         mergeCreateAgentSelectionPreferences({
           preferences: current,
           provider: resolved.provider,
@@ -121,9 +128,7 @@ export function useAgentProfilePicker(
             ? { featureValues: resolved.featureValues }
             : {}),
         }),
-      ).catch((error) => {
-        console.warn("[useAgentProfilePicker] persist profile selection failed", error);
-      });
+      );
     },
     [updatePreferences],
   );
@@ -145,19 +150,23 @@ export function useAgentProfilePicker(
       if (!reconciled) {
         return;
       }
-      persistSelection(reconciled);
       if (!client) {
         return;
       }
-      void client
-        .applyAgentConfig(target.agentId, toAgentConfigApply(reconciled))
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.warn("[useAgentProfilePicker] applyAgentConfig failed", error);
-          toast.error(toErrorMessage(error));
-        });
+      void gate.run(async () => {
+        try {
+          const notice = await client.applyAgentConfig(
+            target.agentId,
+            toAgentConfigApply(reconciled),
+          );
+          showProviderNoticeToast(toast, notice);
+          await persistSelection(reconciled);
+        } catch (error) {
+          showConfigRequestError(toast, t, error, serverId ?? "");
+        }
+      });
     },
-    [applicableProfiles, client, persistSelection, target, toast],
+    [applicableProfiles, client, gate, persistSelection, serverId, t, target, toast],
   );
 
   return useMemo(

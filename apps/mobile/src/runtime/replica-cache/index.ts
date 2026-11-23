@@ -256,6 +256,8 @@ const StoredProjectPlacementSchema = z.strictObject({
 });
 
 const StoredAgentSnapshotSchema = z.strictObject({
+  modelPresetRevision: z.number().int().nonnegative().optional(),
+  hasSelectedModelPreset: z.boolean().optional(),
   id: z.string(),
   provider: AgentProviderSchema,
   cwd: z.string(),
@@ -659,6 +661,12 @@ function serializeAgentTurn(agent: Agent): NonNullable<StoredAgent["turn"]> {
 
 function serializeAgent(agent: Agent): StoredAgent {
   const snapshot = {
+    ...(agent.modelPresetRevision !== undefined
+      ? { modelPresetRevision: agent.modelPresetRevision }
+      : {}),
+    ...(agent.hasSelectedModelPreset !== undefined
+      ? { hasSelectedModelPreset: agent.hasSelectedModelPreset }
+      : {}),
     id: agent.id,
     provider: agent.provider,
     cwd: agent.cwd,

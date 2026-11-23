@@ -36,6 +36,13 @@ function createSnapshot(
 }
 
 describe("normalizeAgentSnapshot", () => {
+  it("retains only the non-sensitive preset state and revision through cache projection", () => {
+    const snapshot = { ...createSnapshot(), hasSelectedModelPreset: true, modelPresetRevision: 7 };
+    expect(projectAgentSnapshot(normalizeAgentSnapshot(snapshot, "server"))).toMatchObject({
+      hasSelectedModelPreset: true,
+      modelPresetRevision: 7,
+    });
+  });
   it("preserves independent side-question state across client snapshot caching", () => {
     const snapshot = {
       ...createSnapshot(),

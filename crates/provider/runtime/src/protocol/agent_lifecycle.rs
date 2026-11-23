@@ -102,6 +102,10 @@ pub(crate) struct AgentSnapshotPayload {
     pub(crate) workspace_id: Option<String>,
     /// Configured model.
     pub(crate) model: Option<String>,
+    /// Whether this Agent has a selected preset, without exposing its identity.
+    pub(crate) has_selected_model_preset: bool,
+    /// Revision for invalidating owner-only preset selection context.
+    pub(crate) model_preset_revision: u64,
     /// Provider feature descriptors.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) features: Vec<Value>,

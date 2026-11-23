@@ -244,6 +244,12 @@ impl Peer {
                     self.complete_compaction();
                     continue;
                 }
+                () = sleep(Duration::from_millis(10)), if self.active && self.current_prompt == "wait-config" => {
+                    if self.root.join("release-config").exists() {
+                        self.finish(true);
+                    }
+                    continue;
+                }
             };
             let Some(line) = line else { return };
             let command: Value = serde_json::from_str(&line).expect("parse OMP command");

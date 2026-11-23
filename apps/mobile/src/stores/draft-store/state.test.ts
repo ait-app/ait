@@ -11,6 +11,28 @@ import {
 } from "./state";
 
 describe("draft-store lifecycle", () => {
+  it("retains a draft-scoped preset through serialization and text edits, then clears it", () => {
+    const preset = {
+      provider: "omp",
+      cwd: "/repo",
+      name: "Work",
+      source: "project" as const,
+      baseFeatureValues: { "modelRole.worker": "original" },
+      baseThinkingOptionId: "low",
+      baseModelId: "model",
+    };
+    const input = CanonicalDraftInputSchema.parse(
+      JSON.parse(JSON.stringify({ text: "", attachments: [], modelPreset: preset })),
+    );
+    const record: DraftRecord = { input, lifecycle: "active", updatedAt: 1, version: 1 };
+    expect(toDraftInputIfReady(record)?.modelPreset).toEqual(preset);
+    const edited = editDraftRecordText(record, "hello", 2);
+    expect(edited.input.modelPreset).toEqual(preset);
+    expect(editDraftRecordText(edited, "", 3).lifecycle).toBe("active");
+    expect(
+      applyClearDraftRecord({ record: edited, lifecycle: "sent", nowMs: 4 })?.input.modelPreset,
+    ).toBeUndefined();
+  });
   it("edits text without invalidating attachment subscribers", () => {
     const draft: DraftRecord = {
       input: {

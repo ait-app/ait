@@ -806,3 +806,40 @@ async fn node_timeline_exports_use_private_visitor_bound_download_delivery() {
         .await;
     assert!(matches!(decision, Decision::Private(_, Private::Download)));
 }
+
+#[test]
+fn preset_source_operations_follow_node_or_scoped_authority() {
+    for method in [
+        "agent.model_preset.select.request",
+        "agent.model_preset.context.request",
+    ] {
+        assert_eq!(classify(method), Rule::Deny);
+        assert!(super::node::allows(
+            method,
+            model::methods::InboundKind::Request
+        ));
+    }
+}
+
+#[tokio::test]
+async fn preset_creation_is_denied_for_scoped_guests_and_allowed_for_node() {
+    for kind in [ResourceKind::Workspace, ResourceKind::Project] {
+        let guest = Guest::with(kind).await;
+        let params = json!({"config":{"provider":"codex","cwd":guest.root()},"modelPreset":{"name":"secret","source":"project"}});
+        assert_eq!(
+            guest.refused("agent.create.request", params).await,
+            ErrorCode::Forbidden
+        );
+    }
+    let guest = Guest::with(ResourceKind::Node).await;
+    let params = json!({"config":{"provider":"codex","cwd":guest.root()},"modelPreset":{"name":"team","source":"project"}});
+    let created = guest.creation_params("agent.create.request", params).await;
+    assert_eq!(created["modelPreset"]["name"], "team");
+    for method in [
+        "agent.model_preset.select.request",
+        "agent.model_preset.context.request",
+    ] {
+        let params = json!({"agentId":"any-agent"});
+        assert_eq!(guest.forwarded(method, params.clone()).await, params);
+    }
+}

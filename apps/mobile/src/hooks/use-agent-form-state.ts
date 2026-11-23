@@ -13,10 +13,7 @@ import {
 } from "@/provider-selection/provider-selection";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { OptimisticFormPreferences } from "@/create-agent-preferences/optimistic-preferences";
-import {
-  applyAgentProfilePreferences,
-  applyModelPresetPreferences,
-} from "@/create-agent-preferences/preferences";
+import { applyAgentProfilePreferences } from "@/create-agent-preferences/preferences";
 import { useProvidersSnapshot } from "./use-providers-snapshot";
 import {
   useFormPreferences,
@@ -57,7 +54,7 @@ export interface UseAgentFormStateResult {
   selectedMode: string;
   setModeFromUser: (modeId: string) => void;
   selectedModel: string;
-  setModelFromUser: (modelId: string) => void;
+  setModelFromUser: (modelId: string, exitPreset?: { baselineThinking?: string | null }) => void;
   selectedThinkingOptionId: string;
   setThinkingOptionFromUser: (thinkingOptionId: string) => void;
   workingDir: string;
@@ -71,7 +68,11 @@ export interface UseAgentFormStateResult {
   isModelLoading: boolean;
   refreshProviderModels: (provider?: AgentProvider) => void;
   refetchProviderModelsIfStale: () => void;
-  setProviderAndModelFromUser: (provider: AgentProvider, modelId: string) => void;
+  setProviderAndModelFromUser: (
+    provider: AgentProvider,
+    modelId: string,
+    exitPreset?: { baselineThinking?: string | null },
+  ) => void;
   applyProfileFromUser: (profile: MaterializedAgentProfile) => void;
   applyModelPresetFromUser: (
     provider: AgentProvider,
@@ -264,7 +265,11 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   ]);
 
   const setProviderAndModelFromUser = useCallback(
-    (provider: AgentProvider, modelId: string) => {
+    (
+      provider: AgentProvider,
+      modelId: string,
+      exitPreset?: { baselineThinking?: string | null },
+    ) => {
       if (!selectableProviderDefinitionMap.has(provider)) {
         return;
       }
@@ -281,6 +286,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
         providerDef,
         providerModels,
         providerPrefs,
+        exitPreset,
       });
       void updateCurrentPreferences((current) =>
         mergeProviderPreferences({
@@ -306,26 +312,9 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
         providerDef: selectableProviderDefinitionMap.get(provider),
         providerModels: allProviderModels.get(provider) ?? null,
       };
-      const next = resolveAgentForm({ form: formState, userModified, resolution }, action);
       dispatch(action);
-      void updateCurrentPreferences((current) =>
-        applyModelPresetPreferences({
-          preferences: current,
-          provider,
-          modelId: next.form.model,
-          thinkingOptionId: next.form.thinkingOptionId,
-          featureValues: configuration.featureValues,
-        }),
-      ).catch((error) => console.warn("[useAgentFormState] persist model preset failed", error));
     },
-    [
-      allProviderModels,
-      formState,
-      resolution,
-      selectableProviderDefinitionMap,
-      updateCurrentPreferences,
-      userModified,
-    ],
+    [allProviderModels, selectableProviderDefinitionMap],
   );
 
   const applyProfileFromUser = useCallback(
@@ -402,7 +391,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   );
 
   const setModelFromUser = useCallback(
-    (modelId: string) => {
+    (modelId: string, exitPreset?: { baselineThinking?: string | null }) => {
       const provider = formState.provider;
       const providerPrefs = provider
         ? preferenceOverlayRef.current.current().providerPreferences?.[provider]
@@ -412,6 +401,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
         modelId,
         availableModels,
         providerPrefs,
+        exitPreset,
       });
       if (provider) {
         const normalizedModelId = normalizeSelectedModelId(modelId);

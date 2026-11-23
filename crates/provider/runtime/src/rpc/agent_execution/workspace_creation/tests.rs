@@ -33,3 +33,11 @@ fn initial_agent_validation_binds_environment_without_retaining_secrets() {
     invalid["agentId"] = json!("not-a-uuid");
     assert!(validate(&invalid).is_err());
 }
+
+#[test]
+fn embedded_preset_is_preserved_for_initial_agent_creation() {
+    let input = json!({"config":{"provider":"codex","cwd":"/source"},
+        "modelPreset":{"name":"team","source":"project"}});
+    let intent = validate(&input).unwrap();
+    assert_eq!(intent["modelPreset"]["name"], "team");
+}
