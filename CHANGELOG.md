@@ -1,6 +1,6 @@
 # Ait changelog
 
-## Unreleased
+## 0.2.25 - 2026-11-23
 
 - Stopping an Agent refreshes that session's authoritative state, clearing a stale busy indicator
   when the host has already finished while preserving a turn that is still running.
@@ -13,6 +13,36 @@
   saved in the selected preset are used on later turns.
 - Running Oh My Pi subagents can be guided or stopped from their parent Agent when the parent
   session is connected and owns the native writer. The rest of the parent session continues.
+
+- A user message that a harness filled with XML-style context blocks, such as a Claude Code
+  `<system-reminder>`, pasted content or an IDE selection, shows those blocks as collapsed
+  sections instead of raw markup. A block is recognized only when it cannot be ordinary prose, so
+  HTML and a sentence that mentions a tag inline stay part of the text, and the session preview
+  and the one-line titles use the prose alone
+  ([#817](https://github.com/ait-app/ait/pull/817)).
+
+- A failing Agent keeps the RPC context it failed in, so the failure is answered and logged under
+  the request that caused it. The Agent I/O error now says that the operation failed and asks for
+  the current state to be checked, instead of promising that the same key can be retried
+  ([#823](https://github.com/ait-app/ait/pull/823)).
+
+- Forking an Agent from inside a running Codex tool call works again. The boundary is resolved
+  against the whole projection and the history up to it is exported in the state it had at that
+  point, so a tool that finished after the boundary no longer refuses the fork
+  ([#824](https://github.com/ait-app/ait/pull/824)).
+
+- Claude, Codex and MiniMax Code ask for permission automatically by default, so a new session no
+  longer waits for a permission mode to be picked. A Bot session, an ephemeral Claude probe and a
+  resumed MiniMax session keep the permissions they had. Antigravity and MiniMax Code can also
+  generate the metadata of a title, a branch name, a commit message or a pull request with an
+  auxiliary small model, such as gemini-4-hydrogen, gemini-3.8-flash, gpt-oss-120b or MiniMax
+  M3.1 Flash, in an isolated turn that may not use a tool
+  ([#825](https://github.com/ait-app/ait/pull/825)).
+
+- Signing in from the welcome screen opens a page that confirms the account, lists the hosts on it
+  with their state, and offers to open the projects once a host of the account is online. A sign-in
+  that finishes after its sheet was already closed still lands on that page
+  ([#828](https://github.com/ait-app/ait/pull/828)).
 
 ## 0.2.24 - 2026-11-22
 

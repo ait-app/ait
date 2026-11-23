@@ -1,6 +1,6 @@
 {
   "name": "@ait/highlight",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "private": true,
   "files": [
     "dist",
