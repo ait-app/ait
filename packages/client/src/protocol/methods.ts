@@ -541,7 +541,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
   "agent.model_preset.context.request": {
     method: "agent.model_preset.context.request",
     kind: "request",
-    channel: 2,
+    channel: 1,
     response: "agent.model_preset.context.response",
   },
   "agent.permission.resolve.request": {

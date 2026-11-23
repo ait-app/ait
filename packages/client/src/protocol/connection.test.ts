@@ -233,6 +233,24 @@ it("negotiates business ping only on the liveness connection while retaining rel
     expect(capabilities).toContain("subscription.release.request");
     expect(capabilities.length).toBeLessThanOrEqual(64);
   }
+
+});
+
+it("routes preset selection and context on their negotiated split connections", () => {
+  const h = harness();
+  try {
+    h.ready();
+    for (const [channel, method] of [
+      [2, "agent.model_preset.select.request"],
+      [1, "agent.model_preset.context.request"],
+    ] as const) {
+      expect(CHANNEL_CAPABILITIES[channel]).toContain(method);
+      h.send({ type: method, requestId: method, agentId: "agent" });
+      expect(h.last(channel)).toMatchObject({ method, request_id: method });
+    }
+  } finally {
+    h.transport.close();
+  }
 });
 
 it("releases a file subscription through its owning split connection", () => {
