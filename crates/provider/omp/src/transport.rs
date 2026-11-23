@@ -7,7 +7,9 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{
+    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
+};
 use tokio::process::ChildStdin;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::task::AbortOnDropHandle;
@@ -32,6 +34,8 @@ const STDERR_TAIL: usize = 8 * 1024;
 const STDERR_EXCERPT: usize = 2 * 1024;
 /// Wait after SIGTERM, and again after SIGKILL, before shutdown gives up.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+/// Optional requests cannot wait indefinitely for the writer.
+const OPTIONAL_WRITE_LIMIT: Duration = Duration::from_millis(250);
 /// Wait for an exit status after OMP closes stdout.
 const EXIT_WAIT: Duration = Duration::from_secs(2);
 /// Wait for stderr to finish after OMP exits; grandchildren can keep it open.
@@ -57,6 +61,17 @@ pub(super) struct Timeouts {
     pub(super) ready: Duration,
     /// Default wait for a response, and the bound on every stdin write.
     pub(super) request: Duration,
+}
+
+/// Whether an optional command reached the native stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OptionalWrite {
+    /// The complete frame was written; a response can still arrive.
+    Sent,
+    /// Nothing was written; native output cannot arrive.
+    Unsent,
+    /// A write failed or may have partially written, so the transport is unusable.
+    Failed,
 }
 
 impl Default for Timeouts {
@@ -549,6 +564,51 @@ impl Transport {
         Ok(id)
     }
 
+    /// Queue an optional command behind earlier replies without holding the session lane.
+    /// Cancellation before the first byte prevents the command from reaching the peer.
+    pub(super) fn queue_optional(
+        &mut self,
+        kind: &str,
+        mut fields: Value,
+        cancelled: tokio_util::sync::CancellationToken,
+    ) -> Result<(String, oneshot::Receiver<OptionalWrite>), AgentSessionError> {
+        if !fields.is_object() {
+            return Err(AgentSessionError::Rejected);
+        }
+        let input = self.writable()?.clone();
+        self.sequence += 1;
+        let id = format!("ait-omp-{}", self.sequence);
+        fields["id"] = json!(id);
+        fields["type"] = json!(kind);
+        let mut bytes = serde_json::to_vec(&fields).map_err(|_| AgentSessionError::Rejected)?;
+        if bytes.len() > MAX_OUTBOUND {
+            return Err(AgentSessionError::Rejected);
+        }
+        bytes.push(b'\n');
+        let earlier = self.reply_write.take();
+        let poisoned = Arc::clone(&self.poisoned);
+        let completion_limit = self.timeouts.request;
+        let (sender, receiver) = oneshot::channel();
+        self.reply_write = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            if let Some(earlier) = earlier {
+                let _ = earlier.await;
+            }
+            let outcome = write_optional(
+                &input,
+                &bytes,
+                &cancelled,
+                OPTIONAL_WRITE_LIMIT,
+                completion_limit,
+            )
+            .await;
+            if outcome == OptionalWrite::Failed {
+                poisoned.store(true, Ordering::Release);
+            }
+            let _ = sender.send(outcome);
+        })));
+        Ok((id, receiver))
+    }
+
     /// Send a correlated command without waiting for hooks or extension interactions.
     /// Returns bounded write failures; the caller must consume the eventual native response.
     pub(super) async fn begin(
@@ -766,6 +826,40 @@ impl Transport {
         })
         .await
         .unwrap_or(false)
+    }
+}
+
+async fn write_optional<W: AsyncWrite + Unpin>(
+    input: &Mutex<W>,
+    bytes: &[u8],
+    cancelled: &tokio_util::sync::CancellationToken,
+    admission_limit: Duration,
+    completion_limit: Duration,
+) -> OptionalWrite {
+    let first = tokio::select! {
+        biased;
+        () = cancelled.cancelled() => None,
+        result = tokio::time::timeout(admission_limit, async {
+            let mut input = input.lock().await;
+            let count = input.write(bytes).await?;
+            Ok::<_, std::io::Error>((input, count))
+        }) => Some(result),
+    };
+    let (mut input, written) = match first {
+        None | Some(Err(_)) => return OptionalWrite::Unsent,
+        Some(Ok(Err(_) | Ok((_, 0)))) => return OptionalWrite::Failed,
+        Some(Ok(Ok((input, written)))) => (input, written),
+    };
+    // Once any byte has reached the stream, abandoning the rest would corrupt JSONL. Finish
+    // the frame even if the requester goes away; a real stalled/broken write is still fatal.
+    match tokio::time::timeout(completion_limit, async {
+        input.write_all(&bytes[written..]).await?;
+        input.flush().await
+    })
+    .await
+    {
+        Ok(Ok(())) => OptionalWrite::Sent,
+        Ok(Err(_)) | Err(_) => OptionalWrite::Failed,
     }
 }
 

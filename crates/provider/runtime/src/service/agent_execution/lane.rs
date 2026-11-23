@@ -67,6 +67,7 @@ pub(super) async fn serve(
                 if commands.is_empty() && !state.manager.has_sessions()
                     && state.preset_lookups.is_empty() && state.pending_voices.is_empty()
                     && state.pending_creations.is_empty() && state.pending_preparations.is_empty()
+                    && state.child_controls.is_empty()
                     && activity.elapsed() > IDLE_EXPIRY {
                     commands.close();
                     let _ = close(state).await;
@@ -84,6 +85,7 @@ pub(super) async fn serve(
             || !state.pending_voices.is_empty()
             || !state.pending_creations.is_empty()
             || !state.pending_preparations.is_empty()
+            || !state.child_controls.is_empty()
         {
             ACTIVE_POLL
         } else {
@@ -152,6 +154,11 @@ pub(super) async fn request(
                 }
                 voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
                 state.settle_preset_selections();
+                if !state.child_controls.is_empty() {
+                    state.observe_messages();
+                    let _ = state.manager.poll().await;
+                    state.settle_child_controls();
+                }
                 tracing::debug!(
                     method = method.as_str(),
                     class = class(method, owned),
@@ -184,6 +191,7 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
             voice::settle(&mut state).await;
             voice::settle_creations(&mut state);
             Box::pin(voice::settle_preparations(&mut state)).await;
+            state.settle_child_controls();
             // Fence queued recovery admission before native I/O, just like foreground requests.
             let pending = state
                 .manager

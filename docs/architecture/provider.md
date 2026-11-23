@@ -199,6 +199,9 @@
   路由到根 Agent 的 lane，打开子会话不会启动子 writer
   （[ADR-209](../decisions/providers/adr-209-observed-subagent-normalization.md)，修订 ADR-041/052
   的子会话边界）。
+- 支持控制的活动父会话可引导或停止其当前运行的原生子 Agent：宿主先校验父子关系与观测版本，
+  再通过父会话的单一 writer 发出类型化请求。等待原生回执不阻塞权限操作；结果不确定时不重放。
+  observed 子项本身仍不可写（[ADR-300](../decisions/providers/adr-300-parent-owned-subagent-controls.md)）。
 - Bot 隐藏会话（`internal` 且有 `owner`）的权限请求在发布前直接回复原生 deny；请求缺少 ID 或
   拒绝失败时该轮按失败结算。只有 get、timeline、时间线搜索和 prompts 可以按完整 ID 寻址隐藏会话
   （[ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)，第 3、4 条已由

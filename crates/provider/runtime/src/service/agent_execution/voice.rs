@@ -1,5 +1,7 @@
 use super::operation::Operation;
-use super::{AgentExecution, CancellationToken, ErrorCode, ExecutionState, Value, json, oneshot};
+use super::{AgentExecution, CancellationToken, ErrorCode, ExecutionState, Value, json};
+use crate::rpc::agent_execution::Reply;
+use tokio::sync::oneshot;
 
 impl AgentExecution {
     /// Open native realtime audio for an Agent when its provider declares support.
@@ -47,8 +49,6 @@ impl AgentExecution {
         .await
     }
 }
-
-type Reply = oneshot::Sender<Result<Value, ErrorCode>>;
 
 pub(crate) struct PendingPreparation {
     id: String,
@@ -346,6 +346,18 @@ pub(super) async fn dispatch(
             || cancel.is_some() && reply.is_closed()
     };
     let retry_params = (method == Operation::VoiceSend).then(|| params.clone());
+    // A child control parks its reply under the adapter receipt and answers from a later drain,
+    // so this lane is free to serve queued permissions and reads while the native runtime works.
+    if realtime.is_none() && matches!(method, Operation::ChildGuide | Operation::ChildStop) {
+        if abandoned() {
+            let _ = reply.send(Err(ErrorCode::AgentIo));
+        } else {
+            state.defer_child_control(method, params, reply);
+        }
+        let _ = state.manager.reconcile().await;
+        let _ = state.publish();
+        return;
+    }
     let result = if abandoned() {
         Err(ErrorCode::AgentIo)
     } else if let Some(endpoint) = realtime {

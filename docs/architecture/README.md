@@ -105,6 +105,8 @@ Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可�
 Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
 旧视图保持有效，权限写入仍核对最新记录，见
 [ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
+原生子 Agent 仍以只读身份登记；支持控制的父会话可以在核验关系后通过自己的 writer
+引导或停止子项，见 [ADR-300](../decisions/providers/adr-300-parent-owned-subagent-controls.md)。
 会话导出同样是独立只读操作：完整读取已保存 Timeline，按类型渲染 Markdown/HTML，再通过类型化
 Completion 把匿名 artifact 交给 API/Files 既有一次性下载管线，不调用原生导出或另建 token 系统。
 新增 RPC/SDK、内部文件所有权、浏览器下载 CORS 与平台完成语义见

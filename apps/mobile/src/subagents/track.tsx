@@ -15,6 +15,7 @@ import { WorkspaceTabIcon } from "@/screens/workspace/workspace-tab-icon";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { getPanelManifest } from "@/panels/panel-manifest";
 import type { SubagentRow } from "./select";
+import { NativeSubagentControls } from "./native-controls";
 import type { ArchiveFinishedStatus } from "./use-archive-finished";
 import {
   buildSubagentPillPresentation,
@@ -222,6 +223,7 @@ function SubagentsTrackRow({
             <SubagentFacts rowId={row.id} text={presentation.subtitle} />
           )}
         </View>
+        <NativeSubagentControls serverId={serverId} row={row} compact={isCompact} />
         {row.kind === "paseo" &&
         (row.canArchive !== false || (onDetachSubagent && row.canDetach !== false)) ? (
           <SubagentRowActions

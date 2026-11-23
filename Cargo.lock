@@ -121,6 +121,7 @@ dependencies = [
  "persistence",
  "provider",
  "provider-builtin",
+ "provider-core",
  "relay",
  "reqwest",
  "schedule",

@@ -149,6 +149,7 @@ pub(super) fn finish_turn(agent: &mut super::LiveAgent) {
             | AgentTurnEvent::Usage(_)
             | AgentTurnEvent::RequestUsage(_)
             | AgentTurnEvent::Subagent(_)
+            | AgentTurnEvent::ChildControl { .. }
             | AgentTurnEvent::PermissionRequested(_)
             | AgentTurnEvent::PermissionResolved(_)
             | AgentTurnEvent::Progress { .. }

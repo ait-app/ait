@@ -240,6 +240,8 @@ flowchart LR
   全部仍在运行时丢弃新子 Agent 的帧并记录调试日志，不使回合失败。
   标题为 “agent · 模型 (provider)”，描述取任务说明；子 Agent 的正文增量以进度事件发布
   （`history/children`、`subagents`）。
+- 已接纳且仍由本进程管理的父会话可以通过原生控制引导或停止其运行中的子 Agent；
+  发出控制前重新核验成员身份，并通过父会话 writer 异步关联回执。
 
 ## 用量与运行信息
 
@@ -271,7 +273,7 @@ flowchart LR
 ## 暂缓与已知限制
 
 - 未实现：宿主工具与 MCP 桥接、经 `branch` 的会话回退、迟到 steer 拒绝后的重新排队、基于
-  `available_commands_update` 的会话级命令缓存、单独控制子 Agent、终端组件 UI。
+  `available_commands_update` 的会话级命令缓存、终端组件 UI。
 - 已知限制：
   - 未经运行时通告的自主回合不能被 `cancel_pending` 取消，排队输入要等该运行结束后才投递。
   - 同一回合中先 `/follow-up` 后 `/steer` 时，客户端 ID 按写入顺序分配，而 OMP 先投递 steer。

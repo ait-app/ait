@@ -175,6 +175,7 @@ export function serverInfo(
     providerSubagents: supportsProviderSubagents,
     projectedSubagentTimeline: has("agent.provider_subagents.timeline.get.request"),
     providerSubagentNesting: supportsProviderSubagents,
+    subagentControls: has("agent.subagents.guide.request") && has("agent.subagents.stop.request"),
     workspacePinning: has("workspace.pin.set.request"),
     workspaceMarkUnread: has("workspace.mark_unread.request"),
     projectGithubClone: has("project.github.clone.request"),

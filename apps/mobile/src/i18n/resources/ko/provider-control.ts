@@ -38,4 +38,23 @@ export const providerControl = {
   sourceUnknown: "알 수 없는 출처",
   viewPreset: "{{name}} 보기",
   wildcardProvider: "{{provider}}의 모든 모델",
+  tasks: {
+    worker: "하위 에이전트",
+    guide: "지도",
+    stop: "중지",
+    guideTitle: "{{name}} 지도",
+    stopTitle: "{{name}}을(를) 중지할까요?",
+    stopDescription: "이 하위 에이전트에 중지를 요청합니다. 상위 작업은 계속됩니다.",
+    guidance: "이 하위 에이전트가 다음에 무엇을 해야 하나요?",
+    confirmGuide: "지도 보내기",
+    confirmStop: "하위 에이전트 중지",
+    sent: "지도를 접수했습니다.",
+    notRunningGuide: "실행 중인 항목이 없어 지도를 전달하지 않았습니다.",
+    stopped: "중지를 접수했습니다. 하위 에이전트의 보고를 기다리는 중입니다.",
+    notRunningStop: "실행 중인 항목이 없어 중지된 항목이 없습니다.",
+    guideFailed:
+      "지도가 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 하위 에이전트를 확인하세요.",
+    stopFailed: "중지 요청을 확인할 수 없습니다. 다시 시도하기 전에 하위 에이전트를 확인하세요.",
+    tooLong: "지도는 UTF-8 기준 64 KiB 이하여야 합니다.",
+  },
 };

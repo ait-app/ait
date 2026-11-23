@@ -1,6 +1,7 @@
 //! Provider session registration and recovery for the independent server.
 
 pub(crate) mod auto_archive;
+mod child_controls;
 mod confinement;
 mod controls;
 mod delivery;
@@ -130,6 +131,7 @@ struct LiveAgent {
     failure_entry: Option<provider_core::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+    child_controls: BTreeMap<String, Option<provider_core::ports::controls::ChildControlOutcome>>,
     /// Usage ledger calls of this session's turns.
     calls: ledger::Calls,
 }
@@ -160,6 +162,7 @@ impl LiveAgent {
             failure_entry: None,
             exclusive: false,
             interruption_requested: false,
+            child_controls: BTreeMap::new(),
             calls: ledger::Calls::new(ledger),
         }
     }

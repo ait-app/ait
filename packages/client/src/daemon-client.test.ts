@@ -272,6 +272,91 @@ test.each(["not_found", "expired", "resource_exhausted"])(
   },
 );
 
+test("sends child guidance and stop with typed receipts and revision fences", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "child-controls",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { subagentControls: true } });
+  await connected;
+  const pendingGuide = client.guideSubagent("parent", "child", "  proceed\n", {
+    expectedRevision: 4,
+  });
+  const guide = parseSentFrame(mock.sent[0]);
+  expect(guide).toMatchObject({
+    type: "agent.subagents.guide.request",
+    parentAgentId: "parent",
+    childAgentId: "child",
+    message: "  proceed\n",
+    expectedRevision: 4,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.subagents.guide.response",
+      payload: {
+        requestId: guide.requestId,
+        parentAgentId: "parent",
+        childAgentId: "child",
+        disposition: "accepted",
+        error: null,
+      },
+    }),
+  );
+  expect(await pendingGuide).toMatchObject({ disposition: "accepted" });
+  const pendingStop = client.stopSubagent("parent", "child", { expectedRevision: 4 });
+  const stop = parseSentFrame(mock.sent[1]);
+  expect(stop).toMatchObject({
+    type: "agent.subagents.stop.request",
+    parentAgentId: "parent",
+    childAgentId: "child",
+    expectedRevision: 4,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.subagents.stop.response",
+      payload: {
+        requestId: stop.requestId,
+        parentAgentId: "parent",
+        childAgentId: "child",
+        disposition: "not_running",
+        error: null,
+      },
+    }),
+  );
+  expect(await pendingStop).toMatchObject({ disposition: "not_running" });
+});
+
+test.each([undefined, false])(
+  "old host rejects child controls without sending (%s)",
+  async (supported) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "child-controls-old",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+      logger: createMockLogger(),
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { subagentControls: supported } });
+    await connected;
+    await expect(client.guideSubagent("parent", "child", "hello")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    await expect(client.stopSubagent("parent", "child")).rejects.toMatchObject({
+      code: "unsupported_capability",
+    });
+    expect(mock.sent).toHaveLength(0);
+  },
+);
+
 function createMockLogger() {
   return {
     debug: vi.fn(),

@@ -1,5 +1,6 @@
 use super::*;
 
+mod child_controls;
 mod commands;
 #[cfg(target_os = "macos")]
 mod confinement;

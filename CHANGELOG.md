@@ -5,6 +5,8 @@
 - Model presets and ordinary model choices now have separate selection states. Selecting an
   ordinary model exits the preset and restores independent role and fallback settings; changes
   saved in the selected preset are used on later turns.
+- Running Oh My Pi subagents can be guided or stopped from their parent Agent when the parent
+  session is connected and owns the native writer. The rest of the parent session continues.
 
 ## 0.2.24 - 2026-11-22
 

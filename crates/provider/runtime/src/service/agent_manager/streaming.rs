@@ -57,6 +57,7 @@ fn event_kind(event: &AgentTurnEvent) -> &'static str {
     match event {
         AgentTurnEvent::Started(_) => "started",
         AgentTurnEvent::Subagent(_) => "subagent",
+        AgentTurnEvent::ChildControl { .. } => "child_control",
         AgentTurnEvent::Progress { .. } => "progress",
         AgentTurnEvent::PermissionRequested(_) => "permission_requested",
         AgentTurnEvent::PermissionResolved(_) => "permission_resolved",
@@ -112,11 +113,7 @@ pub(super) async fn drain(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
-    agent
-        .session
-        .service_realtime()
-        .await
-        .map_err(super::map_session)?;
+    service_realtime(agent).await?;
     checkpoint_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
@@ -137,6 +134,10 @@ pub(super) async fn drain(
             }
             Some(AgentTurnEvent::Subagent(event)) => {
                 super::controls::publish_subagent(registry, timeline, events, agent, event)
+            }
+            Some(AgentTurnEvent::ChildControl { token, outcome }) => {
+                record_child_control(&mut agent.child_controls, token, outcome);
+                Ok(())
             }
             Some(AgentTurnEvent::Usage(usage)) => {
                 persist_usage(registry, timeline, id, agent, usage)
@@ -217,6 +218,27 @@ pub(super) async fn drain(
     Ok(())
 }
 
+async fn service_realtime(agent: &mut super::LiveAgent) -> Result<(), AgentManagerError> {
+    agent
+        .session
+        .service_realtime()
+        .await
+        .map_err(super::map_session)
+}
+
+fn record_child_control(
+    pending: &mut std::collections::BTreeMap<
+        String,
+        Option<provider_core::ports::controls::ChildControlOutcome>,
+    >,
+    token: &str,
+    outcome: &provider_core::ports::controls::ChildControlOutcome,
+) {
+    if let Some(slot) = pending.get_mut(token) {
+        slot.get_or_insert_with(|| outcome.clone());
+    }
+}
+
 fn persist_info(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     id: &str,
@@ -294,6 +316,7 @@ fn take_processed(id: &str, agent: &mut super::LiveAgent) {
             AgentTurnEvent::RuntimeInfo(_)
             | AgentTurnEvent::Usage(_)
             | AgentTurnEvent::Subagent(_)
+            | AgentTurnEvent::ChildControl { .. }
             | AgentTurnEvent::PermissionRequested(_)
             | AgentTurnEvent::PermissionResolved(_)
             | AgentTurnEvent::Progress { .. }

@@ -61,6 +61,13 @@ pub enum AgentTurnEvent {
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
     Subagent(super::controls::SubagentEvent),
+    /// Final result of a previously queued parent-owned child control.
+    ChildControl {
+        /// Adapter receipt token returned by the initial control call.
+        token: String,
+        /// Native outcome, distinct from the child's eventual lifecycle status.
+        outcome: super::controls::ChildControlOutcome,
+    },
     /// One incremental display event with a retry-stable observation identity.
     Progress {
         /// Unique identity for this observation, distinct from the native item identity.
@@ -94,6 +101,35 @@ pub enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub trait AgentSession: Debug + Send + Sync {
+    /// Queue guidance for a verified native child through this parent's managed writer.
+    ///
+    /// The returned token correlates the later [`AgentTurnEvent::ChildControl`]; this method
+    /// does not wait for a native reply and delivery is never automatically retried.
+    ///
+    /// # Errors
+    /// Returns unavailable when unsupported, rejected for invalid inputs, or busy on saturation.
+    fn begin_child_guide(
+        &mut self,
+        _child_id: &str,
+        _message: &str,
+    ) -> Result<super::controls::ChildControlReceipt, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
+    /// Queue stop for a verified native child through this parent's managed writer.
+    ///
+    /// The returned token correlates the later [`AgentTurnEvent::ChildControl`]. Acceptance
+    /// does not assert the child has already terminated.
+    ///
+    /// # Errors
+    /// Returns unavailable when unsupported, rejected for invalid inputs, or busy on saturation.
+    fn begin_child_stop(
+        &mut self,
+        _child_id: &str,
+    ) -> Result<super::controls::ChildControlReceipt, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,

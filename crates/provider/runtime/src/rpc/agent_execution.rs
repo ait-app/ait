@@ -42,6 +42,7 @@ pub(crate) struct ExecutionState {
     pub(crate) pending_creations: Vec<crate::service::agent_execution::voice::PendingCreation>,
     pub(crate) pending_preparations:
         Vec<crate::service::agent_execution::voice::PendingPreparation>,
+    pub(crate) child_controls: std::collections::BTreeMap<(String, String), DeferredChildControl>,
     pub(crate) message_observers:
         std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
     pub(crate) owners: crate::service::agent_manager::ownership::Owners,
@@ -53,6 +54,74 @@ pub(crate) struct ExecutionState {
         Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceDirectory>>,
     pub(crate) workspace_automation:
         Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
+}
+
+pub(crate) type Reply = tokio::sync::oneshot::Sender<Result<Value, ErrorCode>>;
+
+pub(crate) struct DeferredChildControl {
+    parent_agent_id: String,
+    child_agent_id: String,
+    started: std::time::Instant,
+    reply: Reply,
+}
+
+impl ExecutionState {
+    /// Admit a child operation and retain the response while the parent lane keeps polling.
+    pub(crate) fn defer_child_control(&mut self, method: Operation, params: Value, reply: Reply) {
+        let dispatched = match self.start_child_control(method, params) {
+            Ok(dispatched) => dispatched,
+            Err(error) => {
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        let key = (dispatched.parent_agent_id.clone(), dispatched.receipt.token);
+        if self.child_controls.contains_key(&key) {
+            let _ = reply.send(Err(ErrorCode::AgentIo));
+            return;
+        }
+        self.child_controls.insert(
+            key,
+            DeferredChildControl {
+                parent_agent_id: dispatched.parent_agent_id,
+                child_agent_id: dispatched.child_agent_id,
+                started: std::time::Instant::now(),
+                reply,
+            },
+        );
+    }
+
+    /// Settle native outcomes, or fail uncertain after the owner closes or the bound expires.
+    pub(crate) fn settle_child_controls(&mut self) {
+        for (parent, token, outcome) in self.manager.take_completed_child_controls() {
+            if let Some(parked) = self.child_controls.remove(&(parent, token)) {
+                let result = controls::child_control_receipt(
+                    &parked.parent_agent_id,
+                    &parked.child_agent_id,
+                    &outcome,
+                );
+                let _ = parked.reply.send(result);
+            }
+        }
+        let expired = self
+            .child_controls
+            .iter()
+            .filter(|(_, pending)| {
+                self.manager
+                    .live_snapshot(&pending.parent_agent_id)
+                    .is_none()
+                    || pending.started.elapsed() >= std::time::Duration::from_secs(120)
+            })
+            .map(|(token, _)| token.clone())
+            .collect::<Vec<_>>();
+        for key in expired {
+            if let Some(pending) = self.child_controls.remove(&key) {
+                self.manager
+                    .forget_child_control(&pending.parent_agent_id, &key.1);
+                let _ = pending.reply.send(Err(ErrorCode::AgentIo));
+            }
+        }
+    }
 }
 
 impl ExecutionState {
@@ -91,6 +160,7 @@ impl ExecutionState {
     ) -> Result<Value, ErrorCode> {
         self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            Operation::ChildGuide | Operation::ChildStop => Err(ErrorCode::AgentIo),
             Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
             Operation::WorkspaceCreate => Box::pin(self.create_workspace_agent(params)).await,

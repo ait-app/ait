@@ -39,3 +39,46 @@ pub enum SubagentEvent {
         entry: crate::protocol::timeline::NativeItem,
     },
 }
+
+/// Correlation returned when a parent-owned control is queued for native delivery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChildControlReceipt {
+    /// Adapter-generated identity of the eventual control outcome.
+    pub token: String,
+}
+
+/// Native result of sending guidance to a child.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ChildGuideOutcome {
+    /// Guidance was accepted by the parent-owned native runtime.
+    Accepted,
+    /// The target child is not running, so no guidance was delivered.
+    NotRunning,
+}
+
+/// Native result of requesting one child stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ChildStopOutcome {
+    /// The native runtime accepted the stop; termination is observed separately.
+    Cancelled,
+    /// The child is no longer running and nothing was stopped.
+    NotRunning,
+}
+
+/// Why a child control did not establish a native disposition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ChildControlFailure {
+    /// The provider definitively refused the control.
+    Rejected,
+    /// Delivery could not be determined; the operation must never be automatically replayed.
+    Uncertain,
+}
+
+/// Correlated outcome of one parent-owned native child control.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ChildControlOutcome {
+    /// Outcome of sending guidance.
+    Guide(Result<ChildGuideOutcome, ChildControlFailure>),
+    /// Outcome of requesting stop.
+    Stop(Result<ChildStopOutcome, ChildControlFailure>),
+}

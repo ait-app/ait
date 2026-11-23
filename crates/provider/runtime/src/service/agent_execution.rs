@@ -151,6 +151,7 @@ impl AgentExecution {
             pending_creations: Vec::new(),
             pending_preparations: Vec::new(),
             message_observers: std::collections::BTreeMap::new(),
+            child_controls: std::collections::BTreeMap::new(),
             owners: crate::service::agent_manager::ownership::Owners::default().with_changes(
                 dependencies
                     .import_directory
@@ -243,6 +244,8 @@ impl AgentExecution {
             return self.catalog(operation, params).await;
         }
         if operation != Operation::Wait {
+            // The worker parks a child control's reply, so awaiting here does not occupy the
+            // single-writer lane while the native runtime answers.
             return self.call(operation, params).await;
         }
         self.wait(params).await

@@ -322,7 +322,8 @@ impl AgentClient for OmpClient {
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
-            "supportsDynamicModes":true,"supportsRewindConversation":false,
+            "supportsDynamicModes":true,"supportsChildGuide":true,"supportsChildStop":true,
+            "supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 

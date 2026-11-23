@@ -33,7 +33,9 @@ const RUNTIME_METHODS: Readonly<Record<string, MethodSpec>> = {
 
 export const CHANNEL_CAPABILITIES = Array.from({ length: 4 }, (_, channel) => [
   ...new Set([
-    "connection.ping",
+    // Liveness is probed on channel 0 only. All channels retain subscription release because
+    // releases must go to the connection which owns the subscription.
+    ...(channel === 0 ? ["connection.ping"] : []),
     "subscription.release.request",
     ...Object.values(RUNTIME_METHODS)
       .filter((spec) => spec.channel === channel)

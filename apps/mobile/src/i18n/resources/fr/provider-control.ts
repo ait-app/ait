@@ -40,4 +40,24 @@ export const providerControl = {
   sourceUnknown: "Source inconnue",
   viewPreset: "Voir {{name}}",
   wildcardProvider: "Tous les modèles de {{provider}}",
+  tasks: {
+    worker: "Sous-agent",
+    guide: "Guider",
+    stop: "Arrêter",
+    guideTitle: "Guider {{name}}",
+    stopTitle: "Arrêter {{name}} ?",
+    stopDescription: "Demande l’arrêt de ce sous-agent. La tâche parente continue.",
+    guidance: "Que doit faire ce sous-agent ensuite ?",
+    confirmGuide: "Envoyer les consignes",
+    confirmStop: "Arrêter le sous-agent",
+    sent: "Consignes acceptées.",
+    notRunningGuide: "Rien ne s’exécutait, donc aucune consigne n’a été transmise.",
+    stopped: "Arrêt accepté. En attente du rapport du sous-agent.",
+    notRunningStop: "Rien ne s’exécutait, donc rien n’a été arrêté.",
+    guideFailed:
+      "Impossible de confirmer la transmission. Vérifiez le sous-agent avant de réessayer.",
+    stopFailed:
+      "Impossible de confirmer la demande d’arrêt. Vérifiez le sous-agent avant de réessayer.",
+    tooLong: "Les consignes dépassent la limite de 64 Kio en UTF-8.",
+  },
 };

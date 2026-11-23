@@ -2,6 +2,7 @@ use super::*;
 
 mod bot;
 mod browser_auth;
+mod child_controls;
 mod chunks;
 mod guest;
 mod hub_control;
