@@ -215,11 +215,13 @@ impl Peer {
             "maxFrameBytes": if mode.as_deref() == Ok("sizes") { 2 * FRAME_BYTES } else { FRAME_BYTES },
             "maxReassembledFrameBytes": 67_108_864, "supportsBashExcludeFromContext": true,
         }));
-        self.emit(&json!({ "type": "available_commands_update", "commands": [
-            { "name": "compact", "description": "Compact the session context", "source": "builtin" },
-            { "name": "handoff", "description": "Hand off to a fresh context", "source": "builtin" },
-            { "name": "review", "description": "Review", "source": "skill" },
-        ] }));
+        let mut commands = vec![
+            json!({ "name": "compact", "description": "Compact the session context", "source": "builtin" }),
+            json!({ "name": "handoff", "description": "Hand off to a fresh context", "source": "builtin" }),
+            json!({ "name": "review", "description": "Review", "source": "skill" }),
+        ];
+        commands.extend(self.read_plugins());
+        self.emit(&json!({ "type": "available_commands_update", "commands": commands }));
     }
 
     fn replay(&self) {

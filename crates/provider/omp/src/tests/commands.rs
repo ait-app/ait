@@ -49,6 +49,47 @@ fn command(text: &str) -> AgentPrompt {
 }
 
 #[tokio::test]
+async fn peer_initial_command_update_includes_plugins_and_builtin_collisions() {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let root = tempfile::tempdir().unwrap();
+    let plugins = json!([
+        { "name": "compact", "description": "Extension collision", "source": "extension", "aliases": ["short"] },
+        { "name": "extra", "description": "Extra command", "source": "extension" }
+    ]);
+    std::fs::write(root.path().join("plugins.json"), plugins.to_string()).unwrap();
+    let mut child = tokio::process::Command::new(fixture_program::program())
+        .env("PI_CODING_AGENT_DIR", root.path())
+        .current_dir(root.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let ready: Value =
+            serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        assert_eq!(ready["type"], "ready");
+        let update: Value =
+            serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        assert_eq!(update["type"], "available_commands_update");
+        assert_eq!(update["commands"][0]["name"], "compact");
+        assert_eq!(update["commands"][0]["source"], "builtin");
+        assert_eq!(update["commands"][1]["name"], "handoff");
+        assert_eq!(update["commands"][2]["name"], "review");
+        assert_eq!(
+            &update["commands"].as_array().unwrap()[3..],
+            plugins.as_array().unwrap()
+        );
+        drop(child.stdin.take());
+        assert!(child.wait().await.unwrap().success());
+    })
+    .await
+    .expect("peer startup or shutdown timed out");
+}
+
+#[tokio::test]
 async fn session_stats_are_published_before_the_turn_outcome() {
     let (root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();

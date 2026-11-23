@@ -181,6 +181,10 @@ fn methods_are_classified_by_default_deny() {
     ] {
         assert_eq!(classify(denied), Rule::Deny, "{denied}");
     }
+}
+
+#[test]
+fn workspace_management_rules_obey_share_scope() {
     for (method, rule) in [
         ("workspace.create.request", Rule::WorkspaceCreate),
         ("workspace.archive.request", Rule::WorkspaceManage),
