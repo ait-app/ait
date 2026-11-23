@@ -38,6 +38,10 @@
   [ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)）。
 - `workspace.get.request` 按准确 ID 读取单个 Workspace，返回 `ready`、`archived` 或 `missing`；
   不创建、不恢复，也不枚举完整目录（[ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)）。
+- 打开 Workspace 的目录读取（`project.list`、同步模式 `workspace.list` 的冷读取与续读、`workspace.get`）
+  有本地线路预算：`crates/metadata/src/directory/service/directory/tests/wire_budgets.rs` 用 200 个带 Git
+  与 PR 事实的 Workspace 测量编码后的结果字节与返回行数，读法和提高上限的方式见
+  [Provider 规格](provider.md#时间线与历史投影)。同步模式忽略 `page.limit`，冷读取随目录规模增长。
 - 归档托管 worktree 时先把 Workspace 记录标记为已归档，再由宿主实现的 `WorktreeArchiveCleanup` 关闭
   相关资源；清理失败保留 checkout，仍有未归档 Workspace 引用时也不删除 checkout
   （[ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)）。

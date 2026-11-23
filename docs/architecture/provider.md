@@ -217,6 +217,12 @@
   `ResourceExhausted`，不截断条目也不返回无法推进游标的空页
   （[ADR-090](../decisions/providers/adr-090-timeline-entry-and-page-budgets.md)，修订 ADR-039；
   Codex MCP 超大字段预览见 [ADR-140](../decisions/providers/adr-140-codex-mcp-display-previews.md)）。
+- 打开会话的读取有本地线路预算：`crates/provider/runtime/src/rpc/tests/wire_budgets.rs` 用确定的合成数据
+  （约 900 条的单个长轮次、40 个已完成轮次、200 个 Agent 的目录）测量 Timeline tail、更早一页、重连后的
+  `after` 追赶与 epoch 变更后的追赶，以及 Agent 目录读取，比较编码后 JSON 结果的字节数和返回行数与同文件的
+  `CEILINGS` 表；不含 WebSocket envelope，也不计时。测试日志每行打印
+  `wire budget | 读取 | bytes 实测 / 上限 | rows 实测 / 上限`，超出即失败。确需增长时只改表中一行，并在
+  PR 描述写明实测值与原因；不要为压低数字改变分页或载荷行为。
 - `allowCached` 仅在已有持久条目且没有未完成的 rewind 替换时走独立读取，响应以
   `historyNeedsRefresh` 标明尚未完成原生校验；daemon 以 `agent-timeline-cached-reads-v1` 宣告
   （[ADR-133](../decisions/providers/adr-133-cached-timeline-first.md)）。

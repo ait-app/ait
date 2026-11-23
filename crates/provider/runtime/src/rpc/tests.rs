@@ -1,5 +1,7 @@
 use model::ErrorCode;
 
+mod wire_budgets;
+
 #[test]
 fn provider_failures_keep_public_codes_messages_and_retry_semantics() {
     use super::ErrorCode as ProviderError;
