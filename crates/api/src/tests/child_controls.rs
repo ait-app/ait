@@ -28,7 +28,7 @@ impl model::summary::SummaryGenerator for Silent {
     fn shutdown(&self) {}
 }
 
-fn services(root: &std::path::Path, state: Arc<State>) -> Services {
+fn services(root: &std::path::Path, state: &Arc<State>) -> Services {
     let registry = FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
     let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
     let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
@@ -98,7 +98,7 @@ async fn child_controls_do_not_block_permission_on_the_same_socket() {
     for single in [false, true] {
         let root = tempfile::tempdir().unwrap();
         let state = Arc::new(State::default());
-        let fixture = Fixture::with_services(services(root.path(), state.clone())).await;
+        let fixture = Fixture::with_services(services(root.path(), &state)).await;
         let mut socket = fixture.socket().await;
         let capabilities = json!([
             "connection.single.v1",
