@@ -88,7 +88,7 @@ describe("welcome account entry", () => {
     fireEvent.click(view.getByTestId("welcome-account-relay"));
     expect(view.getByTestId("account-host-panel")).toBeTruthy();
   });
-  it("waits for login sheet dismissal before opening the shared host flow", async () => {
+  it("opens the signed-in page after the login sheet is dismissed", async () => {
     mocks.command.mockResolvedValueOnce({ status: "connecting" });
     const view = render(<WelcomeScreen />);
     fireEvent.click(view.getByTestId("welcome-account-relay"));
@@ -100,10 +100,52 @@ describe("welcome account entry", () => {
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => mocks.dismiss());
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/open-project");
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/signed-in");
     act(() => mocks.dismiss());
     view.rerender(<WelcomeScreen />);
     expect(mocks.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the signed-in page when no account host is online", async () => {
+    mocks.command.mockResolvedValueOnce({ status: "connecting" });
+    const view = render(<WelcomeScreen />);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() => expect(view.queryByTestId("account-host-panel")).toBeNull());
+    act(() => mocks.dismiss());
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/signed-in");
+  });
+
+  it("stays on the welcome page when the login sheet is cancelled", () => {
+    const view = render(<WelcomeScreen />);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    act(() => mocks.dismiss());
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(view.getByTestId("welcome-screen")).toBeTruthy();
+  });
+
+  it("opens the signed-in page when sign-in finishes after the sheet was closed", async () => {
+    let finish: (value: { status: string }) => void = () => {};
+    mocks.command.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const view = render(<WelcomeScreen />);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    const dismissWhileSigningIn = mocks.dismiss;
+    act(() => dismissWhileSigningIn());
+    expect(mocks.replace).not.toHaveBeenCalled();
+    await act(async () => finish({ status: "connecting" }));
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/signed-in");
+  });
+
+  it("stays on the welcome page when sign-in does not complete", async () => {
+    mocks.command.mockResolvedValueOnce({ status: "logged_out" });
+    const view = render(<WelcomeScreen />);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    act(() => mocks.dismiss());
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it.each(["android", "ios"] as const)(

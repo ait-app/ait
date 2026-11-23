@@ -29,6 +29,8 @@ import { AddRemoteSshHostModal } from "./add-remote-ssh-host-modal";
 import { AccountHostPanel } from "./account-host-panel";
 import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 
+const SIGNED_IN_ROUTE = "/signed-in";
+
 interface WelcomeAction {
   key: "account-relay" | "direct-connection" | "remote-ssh";
   label: string;
@@ -180,6 +182,10 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isAccountPresented, setIsAccountPresented] = useState(false);
   const hasNavigated = useRef(false);
+  // Set by a completed sign-in; the signed-in page opens once its sheet has left the screen.
+  const hasSignedIn = useRef(false);
+  // Mirrors isAccountPresented for a sign-in that resolves after the sheet already left.
+  const accountPresented = useRef(false);
   const accountAvailable = supportsAccountRelay();
   const accountHeader = useMemo<SheetHeader>(() => ({ title: t("onlineService.title") }), [t]);
   const hosts = useHosts();
@@ -209,14 +215,28 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleCloseDirect = useCallback(() => setIsDirectOpen(false), []);
   const handleOpenRemoteSsh = useCallback(() => setIsRemoteSshOpen(true), []);
   const handleCloseRemoteSsh = useCallback(() => setIsRemoteSshOpen(false), []);
+  const openSignedIn = useCallback(() => {
+    if (hasNavigated.current) return;
+    hasNavigated.current = true;
+    router.replace(SIGNED_IN_ROUTE);
+  }, [router]);
   const handleOpenAccount = useCallback(() => {
+    hasSignedIn.current = false;
+    accountPresented.current = true;
     setIsAccountPresented(true);
     setIsAccountOpen(true);
   }, []);
   const handleCloseAccount = useCallback(() => setIsAccountOpen(false), []);
+  const handleSignedIn = useCallback(() => {
+    hasSignedIn.current = true;
+    if (accountPresented.current) setIsAccountOpen(false);
+    else openSignedIn();
+  }, [openSignedIn]);
   const handleAccountDismissed = useCallback(() => {
+    accountPresented.current = false;
     setIsAccountPresented(false);
-  }, []);
+    if (hasSignedIn.current) openSignedIn();
+  }, [openSignedIn]);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -324,7 +344,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           onDismiss={handleAccountDismissed}
           testID="welcome-account-sheet"
         >
-          <AccountHostPanel onSignedIn={handleCloseAccount} onCancel={handleCloseAccount} />
+          <AccountHostPanel onSignedIn={handleSignedIn} onCancel={handleCloseAccount} />
         </AdaptiveModalSheet>
       ) : null}
     </View>
