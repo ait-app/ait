@@ -8,6 +8,7 @@ import {
   type CommandOwnership,
 } from "@/client-slash-commands";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
+import { routeBtwCommand } from "@/btw";
 import { orderAutocompleteOptions } from "@/utils/autocomplete-utils";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -228,9 +229,10 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
       description: input.t("btw.commandDescription"),
       argumentHint: "[question]",
     };
-    const commands = input.includeSideQuestions
-      ? [sideCommand, ...input.commands.filter((command) => command.name !== "btw")]
-      : input.commands;
+    const commands =
+      input.includeSideQuestions && routeBtwCommand(input.ownership) === "side"
+        ? [sideCommand, ...input.commands.filter((command) => command.name !== "btw")]
+        : input.commands;
     const providerCommands = visibleNativeCommands(commands).map((command) => ({
       source: "provider" as const,
       command: { ...command, aliases: command.menuAliases ?? command.aliases },

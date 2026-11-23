@@ -1,4 +1,4 @@
-import { resolveBtwCommand, type BtwCommand } from "@/btw";
+import { dispatchBtwCommand, resolveBtwCommand, type BtwCommand } from "@/btw";
 import { BtwPanel } from "@/components/provider-side-questions";
 import { useBtwPanelState } from "@/btw/use-panel";
 import { getFileTypeLabel } from "@/attachments/file-types";
@@ -1771,7 +1771,15 @@ function ComposerContentImpl({
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (btw && inputMode === "chat") {
-        openBtw(btw);
+        void dispatchBtwCommand({
+          checkOwnership: checkFreshCommandOwnership,
+          onSide: () => openBtw(btw),
+          onNative: () => {
+            if (blurOnSubmit) messageInputRef.current?.blur();
+            void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+          },
+          onUncertain: () => setSendError(t("agentAutocomplete.ownershipAmbiguous")),
+        });
         return;
       }
       const candidate = resolveClientSlashCommand({
@@ -2102,7 +2110,12 @@ function ComposerContentImpl({
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (btw && inputMode === "chat") {
-        openBtw(btw);
+        void dispatchBtwCommand({
+          checkOwnership: checkFreshCommandOwnership,
+          onSide: () => openBtw(btw),
+          onNative: () => queueMessage(payload.text, outgoingAttachments),
+          onUncertain: () => setSendError(t("agentAutocomplete.ownershipAmbiguous")),
+        });
         return;
       }
       const candidate = resolveClientSlashCommand({

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { resolveBtwCommand, btwTopicTurns } from "./index";
+import { describe, expect, it, vi } from "vitest";
+import { dispatchBtwCommand, routeBtwCommand, resolveBtwCommand, btwTopicTurns } from "./index";
 import type { SideTopic } from "@ait/protocol/messages";
 
 function topic(overrides: Partial<SideTopic> = {}): SideTopic {
@@ -36,6 +36,55 @@ describe("resolveBtwCommand", () => {
       question: "question",
       attachmentsUnsupported: true,
     });
+  });
+});
+
+describe("BTW command ownership", () => {
+  it("preserves legacy and unclaimed side questions while respecting native names and aliases", () => {
+    expect(routeBtwCommand({ kind: "legacy" })).toBe("side");
+    expect(routeBtwCommand({ kind: "unavailable" })).toBe("uncertain");
+    expect(routeBtwCommand({ kind: "complete", commands: [] })).toBe("side");
+    for (const commands of [
+      [{ name: "btw", source: "extension" }],
+      [{ name: "btw", source: "builtin" }],
+      [{ name: "review", aliases: ["btw:"], source: "skill" }],
+    ])
+      expect(routeBtwCommand({ kind: "complete", commands })).toBe("native");
+    for (const commands of [
+      [{ name: "btw" }],
+      [
+        { name: "btw", source: "builtin" },
+        { name: "btw", source: "extension" },
+      ],
+      [{ name: "btw", source: "unknown" }],
+    ])
+      expect(routeBtwCommand({ kind: "complete", commands })).toBe("uncertain");
+  });
+
+  it("dispatches only after fresh ownership is known", async () => {
+    const onSide = vi.fn();
+    const onNative = vi.fn();
+    const onUncertain = vi.fn();
+    const run = (ownership: Parameters<typeof routeBtwCommand>[0] | null) =>
+      dispatchBtwCommand({
+        checkOwnership: async () => ownership,
+        onSide,
+        onNative,
+        onUncertain,
+      });
+    await run({
+      kind: "complete",
+      commands: [{ name: "other", aliases: ["btw"], source: "extension" }],
+    });
+    expect(onNative).toHaveBeenCalledTimes(1);
+    expect(onSide).not.toHaveBeenCalled(); // No side-question history is needed for a native command.
+    await run({ kind: "complete", commands: [{ name: "btw" }] });
+    expect(onUncertain).toHaveBeenCalledTimes(1);
+    await run(null);
+    expect(onSide).not.toHaveBeenCalled();
+    await run({ kind: "complete", commands: [] });
+    await run({ kind: "legacy" });
+    expect(onSide).toHaveBeenCalledTimes(2);
   });
 });
 

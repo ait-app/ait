@@ -1,6 +1,7 @@
 import type { BtwHistoryTurn, SideTopic } from "@ait/protocol/messages";
 import { SIDE_QUESTION_REASONS } from "@ait/protocol/messages";
 import type { TFunction } from "i18next";
+import type { CommandOwnership } from "@/client-slash-commands";
 
 /** A `/btw` submission recognised client-side; it never becomes a main prompt. */
 export interface BtwCommand {
@@ -8,6 +9,52 @@ export interface BtwCommand {
   question: string;
   /** The command stays on the BTW route while the composer preserves its attachments. */
   attachmentsUnsupported?: boolean;
+}
+
+/** Decide ownership before opening the side panel or forwarding to the provider. */
+export function routeBtwCommand(ownership: CommandOwnership): "side" | "native" | "uncertain" {
+  if (ownership.kind === "legacy") return "side";
+  if (ownership.kind === "unavailable") return "uncertain";
+  const claims = ownership.commands.filter((entry) =>
+    [entry.name, ...(entry.aliases ?? [])].some(
+      (name) => name.replace(/:+$/u, "").toLowerCase() === "btw",
+    ),
+  );
+  if (claims.length === 0) return "side";
+  const nativeSources = new Set([
+    "extension",
+    "skill",
+    "custom",
+    "file",
+    "project",
+    "template",
+    "prompt",
+  ]);
+  const allBuiltin = claims.every((claim) => claim.source === "builtin");
+  return allBuiltin || claims.every((claim) => claim.source && nativeSources.has(claim.source))
+    ? "native"
+    : "uncertain";
+}
+
+export async function dispatchBtwCommand(input: {
+  checkOwnership: () => Promise<CommandOwnership | null>;
+  onSide: () => void;
+  onNative: () => void;
+  onUncertain: () => void;
+}): Promise<void> {
+  const ownership = await input.checkOwnership();
+  if (!ownership) return;
+  switch (routeBtwCommand(ownership)) {
+    case "side":
+      input.onSide();
+      break;
+    case "native":
+      input.onNative();
+      break;
+    case "uncertain":
+      input.onUncertain();
+      break;
+  }
 }
 
 /**

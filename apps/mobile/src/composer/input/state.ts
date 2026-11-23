@@ -5,6 +5,26 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 
 const PROMPT_HISTORY_LIMIT = 50;
 
+/** Modified Enter belongs to the active-turn alternate action before autocomplete sees it. */
+export function shouldPrioritizeAlternateSend(input: {
+  key: string;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  submitOnEnter: boolean;
+  isAgentRunning: boolean;
+  hasQueue: boolean;
+}): boolean {
+  return (
+    input.key === "Enter" &&
+    input.submitOnEnter &&
+    !input.shiftKey &&
+    Boolean(input.ctrlKey || input.metaKey) &&
+    input.isAgentRunning &&
+    input.hasQueue
+  );
+}
+
 export interface PromptHistoryState {
   entries: string[];
   cursor: number;

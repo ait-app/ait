@@ -96,6 +96,7 @@ import {
   runAlternateSendAction,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
+  shouldPrioritizeAlternateSend,
   stopRealtimeVoice,
 } from "./state";
 
@@ -410,6 +411,25 @@ function handleDesktopKeyPressImpl(
 ): void {
   if (isImeComposingKeyboardEvent(event.nativeEvent)) return;
 
+  const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
+  if (event.nativeEvent.key === "Enter" && shiftKey) return;
+  if (
+    shouldPrioritizeAlternateSend({
+      key: event.nativeEvent.key,
+      shiftKey,
+      metaKey,
+      ctrlKey,
+      submitOnEnter: ctx.submitOnEnter,
+      isAgentRunning: ctx.isAgentRunning,
+      hasQueue: Boolean(ctx.onQueue),
+    })
+  ) {
+    if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
+    event.preventDefault();
+    ctx.handleAlternateSendAction();
+    return;
+  }
+
   if (ctx.onKeyPressCallback) {
     const handled = ctx.onKeyPressCallback({
       key: event.nativeEvent.key,
@@ -421,18 +441,9 @@ function handleDesktopKeyPressImpl(
 
   if (ctx.onPromptHistoryKeyPress(event)) return;
 
-  const { shiftKey, metaKey, ctrlKey } = event.nativeEvent;
-
   if (event.nativeEvent.key !== "Enter") return;
   if (!ctx.submitOnEnter) return;
   if (shiftKey) return;
-
-  if ((metaKey || ctrlKey) && ctx.isAgentRunning && ctx.onQueue) {
-    if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
-    event.preventDefault();
-    ctx.handleAlternateSendAction();
-    return;
-  }
 
   if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
   event.preventDefault();

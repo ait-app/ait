@@ -14,6 +14,7 @@ import {
   runAlternateSendAction,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
+  shouldPrioritizeAlternateSend,
   stopRealtimeVoice,
 } from "./state";
 
@@ -249,6 +250,21 @@ describe("queueing from the composer input", () => {
 });
 
 describe("composer send behavior", () => {
+  it("reserves modified Enter for the active turn without changing normal or multiline completion keys", () => {
+    const base = { key: "Enter", submitOnEnter: true, isAgentRunning: true, hasQueue: true };
+    expect(shouldPrioritizeAlternateSend({ ...base, ctrlKey: true })).toBe(true);
+    expect(shouldPrioritizeAlternateSend({ ...base, metaKey: true })).toBe(true);
+    expect(shouldPrioritizeAlternateSend(base)).toBe(false);
+    expect(shouldPrioritizeAlternateSend({ ...base, shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(shouldPrioritizeAlternateSend({ ...base, ctrlKey: true, isAgentRunning: false })).toBe(
+      false,
+    );
+    expect(shouldPrioritizeAlternateSend({ ...base, ctrlKey: true, hasQueue: false })).toBe(false);
+    expect(shouldPrioritizeAlternateSend({ ...base, ctrlKey: true, submitOnEnter: false })).toBe(
+      false,
+    );
+    expect(shouldPrioritizeAlternateSend({ ...base, ctrlKey: true, key: "Tab" })).toBe(false);
+  });
   it("sends immediately when queue mode cannot advance past a permission", () => {
     expect(resolveActiveSendBehavior("queue", true)).toBe("interrupt");
     expect(resolveActiveSendBehavior("queue", false)).toBe("queue");
