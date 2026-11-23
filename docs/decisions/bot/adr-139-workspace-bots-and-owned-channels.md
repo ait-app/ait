@@ -15,6 +15,8 @@ paths:
 - 后续修订：[ADR-213](adr-213-single-workspace-manager-bot.md) 取代多 Bot、人格、`botId` 寻址与 Workspace 目录内的记忆位置，
   改为每个 Workspace 一个管理者 Bot 并以 `workspaceId` 寻址；
   [ADR-224](adr-224-feishu-scan-onboarding-and-stored-secrets.md) 允许 daemon 保存 Channel 的 Secret，修订第 8 条。
+- 修订说明（2026-11-23）：第 2 条的账号独占按未删除的 Channel 判断，已停用的 Channel 也占用其外部账号，
+  见 [Bot 规格](../../architecture/bot.md#channel-与凭据)。
 
 ## 背景
 

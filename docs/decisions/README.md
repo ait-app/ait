@@ -43,14 +43,14 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-247：按需采样主机资源并在侧栏展示](daemon/adr-247-host-resource-monitor.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
-- [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)
-- [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](daemon/adr-200-headless-independent-transports.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
+- [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
+- [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](daemon/adr-200-headless-independent-transports.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-180：消息 Hub 服务端点（ait-hub-v1）](daemon/adr-180-hub-serve-endpoint.md)（经 [ADR-181](daemon/adr-181-hub-host-publication.md)、[ADR-200](daemon/adr-200-headless-independent-transports.md)、[ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-204](clients/adr-204-hub-only-online-business-transport.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-155：可协商的持久 Relay 数据隧道](daemon/adr-155-persistent-relay-data-tunnel.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
 - [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)（经 [ADR-202](providers/adr-202-agent-mcp-injection.md)、[ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-295](daemon/adr-295-mcp-tool-naming-and-aliases.md) 修订）
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
-- [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
+- [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)（经 [ADR-291](daemon/adr-291-best-effort-activity-heartbeats.md) 修订）
@@ -106,8 +106,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-082：Workspace 可空字段使用单级 Option](workspace/adr-082-canonical-nullable-workspace-fields.md)
 - [ADR-081：由状态变更唤醒 Workspace 与 Agent 目录订阅](workspace/adr-081-directory-change-push.md)（经 [ADR-126](workspace/adr-126-workspace-target-read.md)、[ADR-156](clients/adr-156-setup-and-activity-events.md)、[ADR-210](providers/adr-210-committed-runtime-read-snapshots.md) 修订）
 - [ADR-071：在 Rust checkout adapter 生成 Diff 语法 token](workspace/adr-071-checkout-diff-syntax-highlighting.md)
-- [ADR-069：活跃工作区的后台 Git fetch](workspace/adr-069-background-git-fetch.md)（经 [ADR-083](workspace/adr-083-reset-workspace-to-origin-default.md) 修订）
-- [ADR-068：Workspace 侧边栏运行时摘要](workspace/adr-068-workspace-runtime-summaries.md)（经 [ADR-217](workspace/adr-217-event-driven-workspace-runtime.md) 修订）
+- [ADR-069：活跃工作区的后台 Git fetch](workspace/adr-069-background-git-fetch.md)（经 [ADR-083](workspace/adr-083-reset-workspace-to-origin-default.md)、[ADR-104](workspace/adr-104-filesystem-model-collaboration.md) 修订）
+- [ADR-068：Workspace 侧边栏运行时摘要](workspace/adr-068-workspace-runtime-summaries.md)（经 [ADR-104](workspace/adr-104-filesystem-model-collaboration.md)、[ADR-113](workspace/adr-113-filesystem-capability-groups.md)、[ADR-217](workspace/adr-217-event-driven-workspace-runtime.md) 修订）
 - [ADR-066：通过 glab 支持 GitLab Forge](workspace/adr-066-gitlab-forge.md)（经 [ADR-287](bot/adr-287-ticket-pull-request-follow-and-answers.md) 修订）
 - [ADR-065：Paseo 目录、时间线与会话 API 兼容行为](workspace/adr-065-paseo-directory-and-timeline-projections.md)（经 [ADR-082](workspace/adr-082-canonical-nullable-workspace-fields.md) 修订）
 - [ADR-060：统一 Workspace 创建入口支持 Worktree](workspace/adr-060-workspace-create-worktree.md)
@@ -180,7 +180,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-135：OpenCode 目录就绪与配置确认](providers/adr-135-opencode-catalog-readiness.md)（经 [ADR-143](providers/adr-143-opencode-2-0-25-compatibility.md)、[ADR-153](providers/adr-153-opencode-acp-cold-start-budget.md) 修订）
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](providers/adr-133-cached-timeline-first.md)
 - [ADR-129：Agent Skills 能力组归 provider](providers/adr-129-provider-owned-skills.md)
-- [ADR-125：持久化展示投影索引与按页读取 Timeline](providers/adr-125-durable-timeline-projection-pages.md)
+- [ADR-125：持久化展示投影索引与按页读取 Timeline](providers/adr-125-durable-timeline-projection-pages.md)（经 [ADR-209](providers/adr-209-observed-subagent-normalization.md) 修订）
 - [ADR-122：Codex Auto-review 的 computer use 工具批准](providers/adr-122-codex-computer-use-approval.md)（经 [ADR-149](providers/adr-149-codex-computer-use-access-auto-approval.md) 修订）
 - [ADR-121：ACP 轮次关联与原生历史结算](providers/adr-121-acp-turn-history-reconciliation.md)
 - [ADR-119：原生账号用量与 Codex 速度目录](providers/adr-119-native-account-usage-and-codex-speed.md)（经 [ADR-167](providers/adr-167-account-scoped-successful-usage.md) 修订）
@@ -221,7 +221,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-216：默认数据目录统一为 `~/.ait`](clients/adr-216-default-data-directory-ait.md)
 - [ADR-214：客户端 Workspace Bot 标签页 v2](clients/adr-214-workspace-bot-tab-v2.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-221](bot/adr-221-read-only-bot-session-inspection.md) 修订）
 - [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)
-- [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)
+- [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
 - [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-188：网页客户端以独立镜像部署在网站根路径](clients/adr-188-standalone-web-client-image.md)
@@ -281,7 +281,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-055：Ait 与 Paseo 的桌面数据和链接隔离](clients/adr-055-desktop-profile-isolation.md)（经 [ADR-056](clients/adr-056-paseo-coexistence.md)、[ADR-073](clients/adr-073-desktop-renderer-navigation.md)、[ADR-216](clients/adr-216-default-data-directory-ait.md) 修订）
 - [ADR-054：桌面服务监听配置与网络地址](clients/adr-054-desktop-daemon-listen.md)
 - [ADR-053：Ait 0.0.7 桌面发布切换到 apps/desktop](clients/adr-053-paseo-desktop-release.md)（经 [ADR-055](clients/adr-055-desktop-profile-isolation.md) 修订）
-- [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
+- [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-218](clients/adr-218-hub-feature-negotiation.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
 - [ADR-048：Paseo workspace 与 Rust 桌面服务启动](clients/adr-048-paseo-desktop-rust-launcher.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-128](clients/adr-128-desktop-daemon-keep-running.md)、[ADR-184](clients/adr-184-windows-desktop-without-daemon.md)、[ADR-207](clients/adr-207-desktop-daemon-readiness-ownership.md) 修订）
 - [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)（经 [ADR-045](daemon/adr-045-remove-hub-chat-loop.md)、[ADR-094](clients/adr-094-canonical-ait-client-methods.md)、[ADR-211](clients/adr-211-sdk-native-daemon-protocol.md) 修订）
 

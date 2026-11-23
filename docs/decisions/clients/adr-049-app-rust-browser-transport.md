@@ -9,6 +9,8 @@ paths:
 # ADR-049：独立 App 的 Rust server 浏览器连接
 
 - 范围：`apps/mobile`、独立 `server` 的 HTTP/WebSocket 传输边界与本地开发入口。
+- 后续修订：[ADR-218](adr-218-hub-feature-negotiation.md) 让直连优先使用 `connection.single.v1` 单连接，daemon 拒绝时才回退
+  ADR-044 的四连接；每个物理连接独立换票的规则不变。
 
 ## 决策
 

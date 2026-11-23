@@ -20,6 +20,7 @@ paths:
 # ADR-201：daemon 统一拥有节点发布与机器授权
 
 - 修订：[ADR-087](../clients/adr-087-headless-device-authorization.md)、[ADR-140](adr-140-headless-local-api-token.md)、[ADR-180](adr-180-hub-serve-endpoint.md)、[ADR-200](adr-200-headless-independent-transports.md)
+- 后续修订：[ADR-218](../clients/adr-218-hub-feature-negotiation.md) 起 daemon 只维护 Hub serve（及按需的 bulk 链路），不再建立 relay control 或下载 Relay；下文“维护 Hub serve 和下载 Relay”“重新建立两条链路”只剩 Hub。
 
 ## 背景
 

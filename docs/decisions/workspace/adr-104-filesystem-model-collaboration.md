@@ -2,6 +2,9 @@
 id: ADR-104
 status: accepted
 date: 2026-10-07
+amends:
+  - workspace/adr-068-workspace-runtime-summaries.md
+  - workspace/adr-069-background-git-fetch.md
 paths:
   - crates/filesystem
 ---

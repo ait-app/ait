@@ -4,6 +4,7 @@ status: accepted
 date: 2026-10-09
 amends:
   - workspace/adr-030-daemon-filesystem.md
+  - workspace/adr-068-workspace-runtime-summaries.md
   - workspace/adr-104-filesystem-model-collaboration.md
 paths:
   - crates/filesystem

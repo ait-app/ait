@@ -118,6 +118,8 @@
   缓冲满时暂停读取本地会话；续连按 250 ms 至 8 s 退避。收到中心 `replaced` 后让出 5 分钟再接管
   （[ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)、
   [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)）。
+- 访问链路按中心给出的 `pingMs`（默认 20 秒）发应用层 ping，15 秒无 pong 即断开物理连接并续传；
+  回到前台时的探活只等 3 秒（[ADR-180](../decisions/daemon/adr-180-hub-serve-endpoint.md)）。
 - Hub 链路存在（在线或续传中）时由中心续租，daemon 不发 HTTP renew；链路不存在或刚轮换 JWT 时
   才 renew（[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)）。
 - daemon 只以 Hub `k:"download"` 会话提供下载，在中心提示后走独立 bulk 链路；daemon 不再建立

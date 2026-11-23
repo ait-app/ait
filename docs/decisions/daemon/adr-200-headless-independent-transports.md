@@ -14,6 +14,8 @@ paths:
 
 > 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布；外部断开会同时关闭 Hub/下载 Relay 并清除机器授权，不再支持单独暂停 Hub。
 
+> 后续修订：[ADR-218](../clients/adr-218-hub-feature-negotiation.md) 起 daemon 只维护 Hub serve（及按需的 bulk 链路），不再建立 relay control 或下载 Relay；上文的“Hub/下载 Relay”与“两条链路”只剩 Hub。
+
 状态说明：采用。修订 [ADR-180](adr-180-hub-serve-endpoint.md) 的 headless 发布调度与端口默认行为。
 
 ## 背景

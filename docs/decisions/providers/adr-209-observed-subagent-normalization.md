@@ -2,6 +2,8 @@
 id: ADR-209
 status: accepted
 date: 2026-10-31
+amends:
+  - providers/adr-125-durable-timeline-projection-pages.md
 paths:
   - crates/provider/runtime
   - apps/mobile
