@@ -3393,6 +3393,84 @@ export class DaemonClient {
     return payload;
   }
 
+  /** Guide one observed native child through its parent's live managed writer. */
+  async guideSubagent(
+    parentAgentId: string,
+    childAgentId: string,
+    message: string,
+    options: { requestId?: string; timeout?: number; expectedRevision?: number } = {},
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "agent.subagents.guide.response" }>["payload"]
+  > {
+    if (this.lastServerInfoMessage?.features?.subagentControls !== true) {
+      throw Object.assign(new Error("Subagent controls are unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    const requestId = this.createRequestId(options.requestId);
+    const message_ = SessionInboundMessageSchema.parse({
+      type: "agent.subagents.guide.request",
+      parentAgentId,
+      childAgentId,
+      message,
+      expectedRevision: options.expectedRevision,
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message: message_,
+      timeout: options.timeout,
+      options: { skipQueue: true },
+      select: (response) =>
+        response.type === "agent.subagents.guide.response" &&
+        response.payload.requestId === requestId
+          ? response.payload
+          : null,
+    });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload;
+  }
+
+  /** Stop one observed native child through its parent's live managed writer. */
+  async stopSubagent(
+    parentAgentId: string,
+    childAgentId: string,
+    options: { requestId?: string; timeout?: number; expectedRevision?: number } = {},
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "agent.subagents.stop.response" }>["payload"]
+  > {
+    if (this.lastServerInfoMessage?.features?.subagentControls !== true) {
+      throw Object.assign(new Error("Subagent controls are unavailable on this host"), {
+        code: "unsupported_capability",
+      });
+    }
+    const requestId = this.createRequestId(options.requestId);
+    const message_ = SessionInboundMessageSchema.parse({
+      type: "agent.subagents.stop.request",
+      parentAgentId,
+      childAgentId,
+      expectedRevision: options.expectedRevision,
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message: message_,
+      timeout: options.timeout,
+      options: { skipQueue: true },
+      select: (response) =>
+        response.type === "agent.subagents.stop.response" &&
+        response.payload.requestId === requestId
+          ? response.payload
+          : null,
+    });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload;
+  }
+
   async listProviderSubagents(
     parentAgentId: string,
     options: { requestId?: string; timeout?: number } = {},

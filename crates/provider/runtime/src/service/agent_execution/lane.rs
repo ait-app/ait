@@ -76,7 +76,7 @@ pub(super) async fn serve(
             Ok(next) => state = next,
             Err(_) => break,
         }
-        let cadence = if state.manager.has_active_turns() {
+        let cadence = if state.manager.has_active_turns() || !state.child_controls.is_empty() {
             ACTIVE_POLL
         } else {
             IDLE_POLL
@@ -143,6 +143,11 @@ pub(super) async fn request(
                     }
                 }
                 voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
+                if !state.child_controls.is_empty() {
+                    state.observe_messages();
+                    let _ = state.manager.poll().await;
+                    state.settle_child_controls();
+                }
                 tracing::debug!(
                     method = method.as_str(),
                     class = class(method, owned),
@@ -171,6 +176,7 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
             if let Err(error) = state.manager.poll().await {
                 tracing::warn!(error = ?error, "Agent poll failed");
             }
+            state.settle_child_controls();
             // Fence queued recovery admission before native I/O, just like foreground requests.
             let pending = state
                 .manager

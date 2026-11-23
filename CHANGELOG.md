@@ -1,5 +1,10 @@
 # Ait changelog
 
+## Unreleased
+
+- Running Oh My Pi subagents can be guided or stopped from their parent Agent when the parent
+  session is connected and owns the native writer. The rest of the parent session continues.
+
 ## 0.2.24 - 2026-11-22
 
 - The MCP tool catalog was reorganized, and every tool is now named `<domain>[_<object>]_<verb>`, such as `agent_create`, `schedule_pause`, `bot_ticket_list` and `ticket_report`. The previous names still work: `tools/list` shows only the new ones, but `tools/call` resolves a retired name to its tool, rewrites the argument names that tool used before and grants nothing its tool does not; every retired name is counted and logged on its first call and on each doubling, and none of them is removed before 2026-12-22. Argument names were aligned as well, with `agent_update.title`, `scheduleId` on the schedule tools, `heartbeatId` on `heartbeat_delete` and `schedule_update.modeId`, the new `heartbeat_list` returns the calling agent's heartbeats, and `kill_agent` now returns the archive result ([#814](https://github.com/ait-app/ait/pull/814)).

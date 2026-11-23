@@ -140,6 +140,7 @@ pub(super) struct Session {
     usage: usage::Poller,
     /// Built-in slash commands awaiting OMP's answer, by request id (M5).
     pending: BTreeMap<String, slash::Pending>,
+    child_controls: child_controls::Controls,
     model: Model,
     /// Private role overlay the running process reads; dropped with the process it belongs to.
     overlay: Option<tempfile::NamedTempFile>,
@@ -342,6 +343,7 @@ pub(super) async fn open(
         todos: Todos::Current,
         usage: usage::Poller::default(),
         pending: BTreeMap::new(),
+        child_controls: child_controls::Controls::default(),
         model: Model::Current,
         overlay,
         catalog: client.role_catalog(&spec.cwd).await.ok(),
@@ -409,7 +411,7 @@ impl Session {
     /// thinking and Fast across. A failed start leaves the current process in place.
     async fn restart(&mut self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         // A command in flight, such as a compaction, belongs to the running process.
-        if !self.pending.is_empty() {
+        if !self.pending.is_empty() || !self.child_controls.is_empty() {
             return Err(AgentSessionError::Rejected);
         }
         // The old process may have changed its model or Fast since the last read.
@@ -647,6 +649,12 @@ impl Session {
     }
 
     fn control_response(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if self
+            .child_controls
+            .response(&mut self.transport, event, &mut self.stream.events)
+        {
+            return Ok(true);
+        }
         if self.usage.owns(event) {
             if let Some(usage) = self.usage.answer(event, self.stream.totals()) {
                 self.publish_usage(usage);
@@ -1315,6 +1323,27 @@ impl AgentSession for Session {
     fn pending_permissions(&self) -> Vec<Value> {
         self.dialogs.pending()
     }
+    fn begin_child_guide(
+        &mut self,
+        child_id: &str,
+        message: &str,
+    ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
+        if self.closed || message.trim().is_empty() || message.len() > 65_536 {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.child_controls
+            .begin(&mut self.transport, &self.state, child_id, Some(message))
+    }
+    fn begin_child_stop(
+        &mut self,
+        child_id: &str,
+    ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.child_controls
+            .begin(&mut self.transport, &self.state, child_id, None)
+    }
     async fn respond_permission(
         &mut self,
         id: &str,
@@ -1341,6 +1370,7 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        self.child_controls.clear(&mut self.stream.events);
         self.usage.stop();
         self.pending.clear();
         self.release_identities();
@@ -1352,6 +1382,7 @@ impl AgentSession for Session {
 impl Session {
     /// Return the next turn event, reading native frames until one is produced.
     fn observe(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        self.child_controls.poll(&mut self.stream.events);
         self.check_cancellation()?;
         if let Some(event) = self.next_event() {
             return Ok(Some(event));
@@ -1531,6 +1562,7 @@ fn failure_text(reason: &str, message: &Value) -> String {
     }
 }
 
+mod child_controls;
 mod slash;
 
 #[cfg(all(test, unix))]

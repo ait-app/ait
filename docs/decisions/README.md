@@ -119,6 +119,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-300：由父会话控制原生子 Agent](providers/adr-300-parent-owned-subagent-controls.md)（提议中）
 - [ADR-299：运行时按 adapter 声明的能力决策，不比较 provider id](providers/adr-299-runtime-reads-adapter-capabilities.md)
 - [ADR-298：Provider 测试回放真实 CLI 的 stdio 录制](providers/adr-298-provider-stdio-replay-transcripts.md)
 - [ADR-286：模型预设的备选链、供应商展示与选择器优先级](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)
@@ -142,7 +143,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-219：共享套餐缓存与 Codex 查询进程](providers/adr-219-shared-account-usage-cache.md)（经 [ADR-285](providers/adr-285-account-usage-retry-delay.md) 修订）
 - [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
 - [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)（经 [ADR-288](daemon/adr-288-deferred-agent-status-writes.md) 修订）
-- [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
+- [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)（经 [ADR-300](providers/adr-300-parent-owned-subagent-controls.md) 修订）
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](providers/adr-206-opencode-acp-subagents.md)（经 [ADR-237](providers/adr-237-opencode-child-terminal-readback.md) 修订）
 - [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)（经 [ADR-215](bot/adr-215-bot-permissions-and-scoped-mcp.md)、[ADR-232](providers/adr-232-agent-mcp-session-delivery.md)、[ADR-274](bot/adr-274-bot-tickets-assignments-and-reports.md) 修订）
@@ -283,7 +284,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-053：Ait 0.0.7 桌面发布切换到 apps/desktop](clients/adr-053-paseo-desktop-release.md)（经 [ADR-055](clients/adr-055-desktop-profile-isolation.md) 修订）
 - [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-239](providers/adr-239-persisted-timeline-export-downloads.md) 修订）
 - [ADR-048：Paseo workspace 与 Rust 桌面服务启动](clients/adr-048-paseo-desktop-rust-launcher.md)（经 [ADR-054](clients/adr-054-desktop-daemon-listen.md)、[ADR-128](clients/adr-128-desktop-daemon-keep-running.md)、[ADR-184](clients/adr-184-windows-desktop-without-daemon.md)、[ADR-207](clients/adr-207-desktop-daemon-readiness-ownership.md) 修订）
-- [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)（经 [ADR-045](daemon/adr-045-remove-hub-chat-loop.md)、[ADR-094](clients/adr-094-canonical-ait-client-methods.md)、[ADR-211](clients/adr-211-sdk-native-daemon-protocol.md) 修订）
+- [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)（经 [ADR-045](daemon/adr-045-remove-hub-chat-loop.md)、[ADR-094](clients/adr-094-canonical-ait-client-methods.md)、[ADR-211](clients/adr-211-sdk-native-daemon-protocol.md)、[ADR-300](providers/adr-300-parent-owned-subagent-controls.md) 修订）
 
 ## 品牌与视觉
 

@@ -26,6 +26,11 @@ pub(super) struct State {
     pub(super) history_reads: usize,
     events: VecDeque<AgentTurnEvent>,
     child: Option<NativeSubagent>,
+    pub(super) child_controls: Vec<(String, String)>,
+    pub(super) control_test: bool,
+    pub(super) release_control: bool,
+    pub(super) permission_pending: bool,
+    pub(super) permission_answers: usize,
 }
 
 pub(super) struct Harness {
@@ -104,7 +109,7 @@ impl AgentClient for Client {
     fn settings(&self, _: &StoredAgentConfig) -> Value {
         json!({"availableModes":[], "features":[], "capabilities":{
             "supportsRewindConversation":false, "supportsRewindFiles":false,
-            "supportsRewindBoth":false
+            "supportsRewindBoth":false, "supportsChildGuide":true, "supportsChildStop":true
         }})
     }
 
@@ -167,6 +172,38 @@ struct Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn begin_child_guide(
+        &mut self,
+        id: &str,
+        message: &str,
+    ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
+        self.state
+            .lock()
+            .unwrap()
+            .child_controls
+            .push((id.to_owned(), message.to_owned()));
+        Ok(provider_core::ports::controls::ChildControlReceipt {
+            token: "control-token".to_owned(),
+        })
+    }
+
+    fn pending_permissions(&self) -> Vec<Value> {
+        if self.state.lock().unwrap().permission_pending {
+            vec![json!({"id":"permission-1", "toolName":"fixture"})]
+        } else {
+            Vec::new()
+        }
+    }
+
+    async fn respond_permission(&mut self, id: &str, _: &Value) -> Result<(), AgentSessionError> {
+        let mut state = self.state.lock().unwrap();
+        if id != "permission-1" || !state.permission_pending {
+            return Err(AgentSessionError::Rejected);
+        }
+        state.permission_pending = false;
+        state.permission_answers += 1;
+        Ok(())
+    }
     fn provider(&self) -> &'static str {
         "contract"
     }
@@ -216,6 +253,12 @@ impl AgentSession for Session {
         state
             .events
             .push_back(AgentTurnEvent::Subagent(SubagentEvent::Upsert(child)));
+        if state.control_test {
+            state.permission_pending = true;
+            state.events.push_back(AgentTurnEvent::PermissionRequested(
+                json!({"id":"permission-1", "toolName":"fixture"}),
+            ));
+        }
         state.events.push_back(AgentTurnEvent::Subagent(SubagentEvent::Progress {
             id:"native-child".to_owned(), observation:"child-progress".to_owned(),
             entry:NativeItem { key:"native:child:answer".to_owned(), turn_id:Some("child-turn".to_owned()), timestamp:NOW.to_owned(),
@@ -229,7 +272,17 @@ impl AgentSession for Session {
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
-        Ok(self.state.lock().unwrap().events.pop_front())
+        let mut state = self.state.lock().unwrap();
+        if state.release_control {
+            state.release_control = false;
+            return Ok(Some(AgentTurnEvent::ChildControl {
+                token: "control-token".to_owned(),
+                outcome: provider_core::ports::controls::ChildControlOutcome::Guide(Ok(
+                    provider_core::ports::controls::ChildGuideOutcome::Accepted,
+                )),
+            }));
+        }
+        Ok(state.events.pop_front())
     }
 
     async fn cancel_turn(&mut self, _: &str) -> Result<(), AgentSessionError> {

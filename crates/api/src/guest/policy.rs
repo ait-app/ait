@@ -238,6 +238,9 @@ fn classify_resource(method: &str) -> Rule {
         | "agent.context.compact.request" => Rule::AgentDrive("agentId"),
         "agent.provider_subagents.list.request"
         | "agent.provider_subagents.timeline.get.request" => Rule::Agent("parentAgentId"),
+        "agent.subagents.guide.request" | "agent.subagents.stop.request" => {
+            Rule::AgentDrive("parentAgentId")
+        }
         "agent.update.request" => Rule::AgentUpdate,
         "agent.commands.list.request" => Rule::AgentCommands,
         "agent.list.request" | "agent.history.get.request" => Rule::AgentFilter,

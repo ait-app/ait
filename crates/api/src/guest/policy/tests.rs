@@ -208,6 +208,16 @@ fn methods_are_classified_by_default_deny() {
 }
 
 #[test]
+fn child_controls_require_drive_on_parent() {
+    for method in [
+        "agent.subagents.guide.request",
+        "agent.subagents.stop.request",
+    ] {
+        assert_eq!(classify(method), Rule::AgentDrive("parentAgentId"));
+    }
+}
+
+#[test]
 fn the_workspace_notepad_follows_the_workspace_share() {
     // Guests of a shared Workspace see its Notepad tab, so they reach its notepad (ADR-296).
     for method in ["get", "write"] {
@@ -624,6 +634,14 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
         (
             "agent.message.send.request",
             json!({"agentId": "a", "text": "hi"}),
+        ),
+        (
+            "agent.subagents.guide.request",
+            json!({"parentAgentId":"a", "childAgentId":"c", "message":"hi"}),
+        ),
+        (
+            "agent.subagents.stop.request",
+            json!({"parentAgentId":"a", "childAgentId":"c"}),
         ),
         (
             "agent.update.request",

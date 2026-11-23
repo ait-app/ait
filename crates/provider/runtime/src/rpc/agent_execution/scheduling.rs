@@ -10,6 +10,8 @@ impl ExecutionState {
     pub(crate) fn fork(&self, owner: Option<Owner>) -> Self {
         Self {
             manager: self.manager.fork(owner),
+            // A forked lane owns its own dispatches; answers never cross lane boundaries.
+            child_controls: BTreeMap::new(),
             owners: self.owners.clone(),
             message_observers: BTreeMap::new(),
             directory: self.directory.clone(),

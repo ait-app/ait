@@ -100,6 +100,12 @@ impl AgentManager {
                 target.extend(flags.clone());
             }
         }
+        for flag in crate::rpc::agent_runtime::CHILD_CONTROL_FLAGS {
+            let enabled = !record.internal
+                && self.live.contains_key(&record.id)
+                && snapshot["capabilities"][flag] == true;
+            snapshot["capabilities"][flag] = json!(enabled);
+        }
         snapshot["pendingPermissions"] = json!(self.live.get(&record.id).map_or_else(
             || {
                 record

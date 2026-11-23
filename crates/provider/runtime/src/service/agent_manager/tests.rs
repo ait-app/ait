@@ -12,6 +12,7 @@ use provider_core::ports::agent_session::AgentSessionSpec;
 
 mod auto_archive;
 mod bot_permissions;
+mod child_controls;
 mod delivery;
 mod environment;
 mod generated_titles;
@@ -121,6 +122,12 @@ enum CancellationStall {
     Turn,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ChildControlSupport {
+    Unsupported,
+    Supported,
+}
+
 #[derive(Debug)]
 struct FakeState {
     mcp_support: mcp::Support,
@@ -151,6 +158,8 @@ struct FakeState {
     permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
     interrupted_turns: InterruptedTurns,
+    child_control_requests: Vec<(String, Option<String>)>,
+    child_control_supported: ChildControlSupport,
 }
 
 /// What the fake adapter declares for turns interrupted by a host restart.
@@ -191,6 +200,8 @@ impl Default for FakeState {
             permission_result: Ok(()),
             during_resume: None,
             interrupted_turns: InterruptedTurns::Continue,
+            child_control_requests: Vec::new(),
+            child_control_supported: ChildControlSupport::Unsupported,
         }
     }
 }
@@ -295,6 +306,35 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
+    fn begin_child_guide(
+        &mut self,
+        id: &str,
+        message: &str,
+    ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        if state.child_control_supported == ChildControlSupport::Unsupported {
+            return Err(AgentSessionError::Unavailable);
+        }
+        state
+            .child_control_requests
+            .push((id.to_owned(), Some(message.to_owned())));
+        Ok(provider_core::ports::controls::ChildControlReceipt {
+            token: format!("receipt-{}", state.child_control_requests.len()),
+        })
+    }
+    fn begin_child_stop(
+        &mut self,
+        id: &str,
+    ) -> Result<provider_core::ports::controls::ChildControlReceipt, AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        if state.child_control_supported == ChildControlSupport::Unsupported {
+            return Err(AgentSessionError::Unavailable);
+        }
+        state.child_control_requests.push((id.to_owned(), None));
+        Ok(provider_core::ports::controls::ChildControlReceipt {
+            token: format!("receipt-{}", state.child_control_requests.len()),
+        })
+    }
     fn failure_diagnostic(&self) -> Option<provider_core::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }

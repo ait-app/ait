@@ -77,6 +77,8 @@ fn modes_are_dynamic_while_mcp_and_rewind_stay_deferred() {
     let capabilities = &client.settings(&spec.config)["capabilities"];
 
     assert_eq!(capabilities["supportsDynamicModes"], true);
+    assert_eq!(capabilities["supportsChildGuide"], true);
+    assert_eq!(capabilities["supportsChildStop"], true);
     for deferred in [
         "supportsMcpServers",
         "supportsRewindConversation",

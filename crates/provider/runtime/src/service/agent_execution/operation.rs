@@ -60,6 +60,8 @@ pub(crate) enum Operation {
     Commands,
     Subagents,
     UnifiedSubagents,
+    ChildGuide,
+    ChildStop,
     ChildTimeline,
     Diagnostic,
     PresetDescribe,
@@ -129,6 +131,8 @@ impl Operation {
             "agent.commands.list.request" => Ok(Self::Commands),
             "agent.provider_subagents.list.request" => Ok(Self::Subagents),
             "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
+            "agent.subagents.guide.request" => Ok(Self::ChildGuide),
+            "agent.subagents.stop.request" => Ok(Self::ChildStop),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
             "provider.presets.describe.request" => Ok(Self::PresetDescribe),
@@ -197,6 +201,8 @@ impl Operation {
             Self::Commands => "agent.commands.list.request",
             Self::Subagents => "agent.provider_subagents.list.request",
             Self::UnifiedSubagents => "agent.subagents.list.request",
+            Self::ChildGuide => "agent.subagents.guide.request",
+            Self::ChildStop => "agent.subagents.stop.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
             Self::PresetDescribe => "provider.presets.describe.request",
@@ -262,6 +268,8 @@ impl Operation {
             | Self::Rewind
             | Self::Subagents
             | Self::UnifiedSubagents
+            | Self::ChildGuide
+            | Self::ChildStop
             | Self::ChildTimeline
             | Self::Update
             | Self::Detach
@@ -346,7 +354,11 @@ impl Operation {
             | Self::SideHistory
             | Self::SideTransfer
             | Self::Wake => Some(Target::Agent),
-            Self::Subagents | Self::UnifiedSubagents | Self::ChildTimeline => Some(Target::Parent),
+            Self::Subagents
+            | Self::UnifiedSubagents
+            | Self::ChildTimeline
+            | Self::ChildGuide
+            | Self::ChildStop => Some(Target::Parent),
             Self::AppendTimeline => Some(Target::AppendedAgent),
             Self::Create
             | Self::Resume

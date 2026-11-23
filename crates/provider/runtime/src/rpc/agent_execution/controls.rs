@@ -6,7 +6,8 @@ use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::usage_ledger::{UsageLedgerError, UsageQuery};
 use crate::protocol::agent_execution::SESSION_CONFIG_FIELDS;
 use crate::protocol::controls::{
-    CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
+    CommandsRequest, PermissionRequest, RewindRequest, SubagentGuideRequest, SubagentRequest,
+    SubagentStopRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
@@ -19,7 +20,50 @@ use provider_core::protocol::agent_config::ConfigPatch;
 /// Longest summary range a `provider.usage.ledger` request may cover: 400 days in milliseconds.
 const MAX_LEDGER_RANGE_MS: i64 = 400 * 24 * 60 * 60 * 1000;
 
+pub(super) struct DeferredControl {
+    pub(super) receipt: provider_core::ports::controls::ChildControlReceipt,
+    pub(super) parent_agent_id: String,
+    pub(super) child_agent_id: String,
+}
+
 impl ExecutionState {
+    pub(super) fn start_child_control(
+        &mut self,
+        method: Operation,
+        params: Value,
+    ) -> Result<DeferredControl, ErrorCode> {
+        let (parent, child, dispatched) = match method {
+            Operation::ChildGuide => {
+                let request: SubagentGuideRequest = decode(params)?;
+                let parent = self.resolve(&request.parent_agent_id)?;
+                self.active_workspace(&parent)?;
+                let child = self.resolve(&request.child_agent_id)?;
+                let dispatched = self
+                    .manager
+                    .guide_child(&parent, &child, &request.message, request.expected_revision)
+                    .map_err(map_child_control)?;
+                (parent, child, dispatched)
+            }
+            Operation::ChildStop => {
+                let request: SubagentStopRequest = decode(params)?;
+                let parent = self.resolve(&request.parent_agent_id)?;
+                self.active_workspace(&parent)?;
+                let child = self.resolve(&request.child_agent_id)?;
+                let dispatched = self
+                    .manager
+                    .stop_child(&parent, &child, request.expected_revision)
+                    .map_err(map_child_control)?;
+                (parent, child, dispatched)
+            }
+            _ => return Err(ErrorCode::MethodNotFound),
+        };
+        Ok(DeferredControl {
+            receipt: dispatched.receipt,
+            parent_agent_id: parent,
+            child_agent_id: child,
+        })
+    }
+
     pub(super) async fn unified_subagents(&self, params: Value) -> Result<Value, ErrorCode> {
         only(&params, &["parentAgentId", "subagentId"])?;
         let parent = self.resolve_field(&params, "parentAgentId")?;
@@ -341,6 +385,40 @@ impl ExecutionState {
         object.insert("provider".to_owned(), json!(record.provider));
         crate::rpc::timeline::bounded(value).map_err(Into::into)
     }
+}
+
+fn map_child_control(error: super::AgentManagerError) -> ErrorCode {
+    match error {
+        super::AgentManagerError::SessionRejected => ErrorCode::UnsupportedCapability,
+        error => super::map_manager(&error),
+    }
+}
+
+pub(super) fn child_control_receipt(
+    parent: &str,
+    child: &str,
+    outcome: &provider_core::ports::controls::ChildControlOutcome,
+) -> Result<Value, ErrorCode> {
+    use provider_core::ports::controls::{
+        ChildControlFailure, ChildControlOutcome, ChildGuideOutcome, ChildStopOutcome,
+    };
+    let disposition = match outcome {
+        ChildControlOutcome::Guide(Ok(ChildGuideOutcome::Accepted)) => "accepted",
+        ChildControlOutcome::Stop(Ok(ChildStopOutcome::Cancelled)) => "cancelled",
+        ChildControlOutcome::Guide(Ok(ChildGuideOutcome::NotRunning))
+        | ChildControlOutcome::Stop(Ok(ChildStopOutcome::NotRunning)) => "not_running",
+        ChildControlOutcome::Guide(Err(ChildControlFailure::Rejected))
+        | ChildControlOutcome::Stop(Err(ChildControlFailure::Rejected)) => {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        ChildControlOutcome::Guide(Err(ChildControlFailure::Uncertain))
+        | ChildControlOutcome::Stop(Err(ChildControlFailure::Uncertain)) => {
+            return Err(ErrorCode::AgentIo);
+        }
+    };
+    Ok(
+        json!({"parentAgentId":parent, "childAgentId":child, "disposition":disposition, "error":null}),
+    )
 }
 
 /// Whether `query` covers a nonempty range of at most 400 days and groups by each dimension at

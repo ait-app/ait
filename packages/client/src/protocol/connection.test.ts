@@ -150,6 +150,124 @@ it.each([
 });
 
 it.each([
+  [true, true],
+  [true, false],
+  [false, true],
+  [false, false],
+])("negotiates child controls with guide=%s and stop=%s", (guide, stop) => {
+  const methods = Object.values(METHODS)
+    .map((spec) => spec.method)
+    .filter(
+      (method) =>
+        (guide || method !== "agent.subagents.guide.request") &&
+        (stop || method !== "agent.subagents.stop.request"),
+    );
+  const h = harness(methods);
+  try {
+    h.ready();
+    const status = h.received.find((message) => message.type === "status");
+    expect(object(object(status).payload).features).toMatchObject({
+      subagentControls: guide && stop,
+    });
+  } finally {
+    h.transport.close();
+  }
+});
+
+it("routes child controls together without retrying rejected admission", async () => {
+  vi.useFakeTimers();
+  const h = harness();
+  try {
+    h.ready();
+    const request = {
+      type: "agent.subagents.guide.request",
+      requestId: "guide-1",
+      parentAgentId: "parent",
+      childAgentId: "child",
+      message: "  proceed\n",
+      expectedRevision: 4,
+    };
+    h.send(request);
+    expect(h.last(3)).toEqual({
+      type: "request",
+      request_id: "guide-1",
+      method: "agent.subagents.guide.request",
+      params: {
+        parentAgentId: "parent",
+        childAgentId: "child",
+        message: "  proceed\n",
+        expectedRevision: 4,
+      },
+    });
+    const sent = h.sockets[3].send.mock.calls.length;
+    h.sockets[3].message({
+      type: "error",
+      request_id: "guide-1",
+      code: "resource_exhausted",
+      message: "busy",
+      retryable: true,
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.sockets[3].send).toHaveBeenCalledTimes(sent);
+    expect(object(h.received.at(-1)).type).toBe("rpc_error");
+    h.send({
+      type: "agent.subagents.stop.request",
+      requestId: "stop-1",
+      parentAgentId: "parent",
+      childAgentId: "child",
+      expectedRevision: 4,
+    });
+    expect(h.last(3)).toMatchObject({
+      method: "agent.subagents.stop.request",
+      params: { parentAgentId: "parent", childAgentId: "child", expectedRevision: 4 },
+    });
+  } finally {
+    h.transport.close();
+    vi.useRealTimers();
+  }
+});
+
+it("negotiates business ping only on the liveness connection while retaining releases", () => {
+  for (const [channel, capabilities] of CHANNEL_CAPABILITIES.entries()) {
+    expect(capabilities.includes("connection.ping")).toBe(channel === 0);
+    expect(capabilities).toContain("subscription.release.request");
+  }
+  // #663 is independently reviewable; retain room for its two channel 2 methods in either merge order.
+  expect(
+    new Set([
+      ...CHANNEL_CAPABILITIES[2],
+      "agent.native_html.export.request",
+      "agent.native_html.export.cancel.request",
+    ]).size,
+  ).toBeLessThanOrEqual(64);
+});
+
+it("releases a file subscription through its owning split connection", () => {
+  const h = harness();
+  try {
+    h.ready();
+    h.send({ type: "fs.file.subscribe.request", requestId: "subscribe-file", path: "/file" });
+    expect(h.last(2).method).toBe("fs.file.subscribe.request");
+    h.sockets[2].message({
+      type: "response",
+      request_id: "subscribe-file",
+      result: { subscriptionId: "file-lease" },
+    });
+    h.send({
+      type: "subscription.release.request",
+      requestId: "release-file",
+      subscriptionId: "file-lease",
+    });
+    expect(h.last(2)).toMatchObject({
+      method: "subscription.release.request",
+      params: { subscriptionId: "file-lease" },
+    });
+  } finally {
+    h.transport.close();
+  }
+});
+
+it.each([
   ["markdown", "conversation"],
   ["markdown", "timeline"],
   ["html", "conversation"],

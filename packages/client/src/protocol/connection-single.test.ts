@@ -129,6 +129,44 @@ describe("single-connection daemon transport", () => {
     }
   });
 
+  it("keeps the single-socket heartbeat and subscription release on that socket", () => {
+    const h = connect(endpoint());
+    try {
+      h.ready();
+      h.transport.send({ type: "connection.ping" });
+      const ping = object(JSON.parse(h.sockets[0].send.mock.lastCall![0]));
+      expect(ping.method).toBe("connection.ping");
+      h.sockets[0].message({
+        type: "response",
+        request_id: ping.request_id,
+        result: { nonce: object(ping.params).nonce },
+      });
+      expect(h.received.at(-1)).toEqual({ type: "connection.pong" });
+      h.transport.send({
+        type: "session.events.set_subscription.request",
+        requestId: "subscribe",
+        events: [],
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "subscribe",
+        result: { subscriptionId: "single-lease" },
+      });
+      h.transport.send({
+        type: "subscription.release.request",
+        requestId: "release",
+        subscriptionId: "single-lease",
+      });
+      const release = object(JSON.parse(h.sockets[0].send.mock.lastCall![0]));
+      expect(release).toMatchObject({
+        method: "subscription.release.request",
+        params: { subscriptionId: "single-lease" },
+      });
+    } finally {
+      h.transport.close();
+    }
+  });
+
   it("falls back to four sockets when an older daemon rejects the single hello", () => {
     const url = endpoint();
     const h = connect(url);

@@ -579,6 +579,21 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.subagents.list.response",
   },
+  // Services lane leaves the two mutation requests together; never replay an admitted control.
+  "agent.subagents.guide.request": {
+    method: "agent.subagents.guide.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.subagents.guide.response",
+    retryAdmission: false,
+  },
+  "agent.subagents.stop.request": {
+    method: "agent.subagents.stop.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.subagents.stop.response",
+    retryAdmission: false,
+  },
   "agent.provider_subagents.list.request": {
     method: "agent.provider_subagents.list.request",
     kind: "request",

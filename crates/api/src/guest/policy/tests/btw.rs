@@ -133,3 +133,33 @@ async fn btw_identity_must_remain_inside_the_shared_workspace_even_for_guest_cre
         .await
         .expect("directory worker shutdown");
 }
+
+#[tokio::test]
+async fn child_controls_require_a_guest_owned_parent_in_the_share() {
+    let (guest, execution) = guest_with_agent_directory().await;
+    for method in [
+        "agent.subagents.guide.request",
+        "agent.subagents.stop.request",
+    ] {
+        for id in ["owner-agent", "foreign-agent", "missing-agent"] {
+            assert_eq!(
+                guest
+                    .refused(
+                        method,
+                        json!({"parentAgentId":id,"childAgentId":"child","message":"hello"})
+                    )
+                    .await,
+                ErrorCode::Forbidden,
+                "{method} {id}"
+            );
+        }
+        let forwarded = guest
+            .forwarded(
+                method,
+                json!({"parentAgentId":"guest-agent","childAgentId":"child"}),
+            )
+            .await;
+        assert_eq!(forwarded["parentAgentId"], "guest-agent");
+    }
+    execution.shutdown().await.expect("worker shutdown");
+}

@@ -9,6 +9,58 @@ mod fixture;
 use fixture::Harness;
 
 #[tokio::test]
+async fn child_control_wait_does_not_block_parent_permission_and_returns_native_outcome() {
+    let harness = Harness::new().await;
+    harness.state.lock().unwrap().control_test = true;
+    harness.send().await;
+    let listed = request(
+        &harness.execution,
+        "agent.subagents.list.request",
+        json!({"parentAgentId":harness.id}),
+    )
+    .await;
+    let child = listed["agents"][0]["id"]
+        .as_str()
+        .expect("observed child")
+        .to_owned();
+    let revision = listed["agents"][0]["observation"]["revision"]
+        .as_u64()
+        .expect("revision");
+    let executor = harness.execution.clone();
+    let parent = harness.id.clone();
+    let child_id = child.clone();
+    let control = tokio::spawn(async move {
+        executor.execute("agent.subagents.guide.request", json!({"parentAgentId":parent,"childAgentId":child_id,"message":"  guide\n","expectedRevision":revision})).await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while harness.state.lock().unwrap().child_controls.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("control admitted");
+    assert!(!control.is_finished(), "native receipt is still pending");
+    tokio::time::timeout(std::time::Duration::from_secs(2), harness.execution.execute(
+        "agent.permission.resolve.request",
+        json!({"agentId":harness.id,"requestId":"permission-1","response":{"behavior":"allow"}}),
+    )).await.expect("permission must not wait for child control").unwrap();
+    assert_eq!(harness.state.lock().unwrap().permission_answers, 1);
+    harness.state.lock().unwrap().release_control = true;
+    let receipt = tokio::time::timeout(std::time::Duration::from_secs(3), control)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(receipt["disposition"], "accepted");
+    assert_eq!(receipt["childAgentId"], child);
+    assert_eq!(
+        harness.state.lock().unwrap().child_controls,
+        [("native-child".to_owned(), "  guide\n".to_owned())]
+    );
+    harness.execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn unsupported_rewind_preserves_the_turn_writer_and_queued_input() {
     let harness = Harness::new().await;
     harness.send().await;

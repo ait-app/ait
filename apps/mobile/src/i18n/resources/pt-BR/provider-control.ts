@@ -40,4 +40,24 @@ export const providerControl = {
   sourceUnknown: "Origem desconhecida",
   viewPreset: "Ver {{name}}",
   wildcardProvider: "Todos os modelos de {{provider}}",
+  tasks: {
+    worker: "Subagente",
+    guide: "Orientar",
+    stop: "Parar",
+    guideTitle: "Orientar {{name}}",
+    stopTitle: "Parar {{name}}?",
+    stopDescription: "Solicita a parada deste subagente. A tarefa principal continua.",
+    guidance: "O que este subagente deve fazer agora?",
+    confirmGuide: "Enviar orientação",
+    confirmStop: "Parar subagente",
+    sent: "Orientação aceita.",
+    notRunningGuide: "Nada estava em execução, então nenhuma orientação foi entregue.",
+    stopped: "Parada aceita. Aguardando o relatório do subagente.",
+    notRunningStop: "Nada estava em execução, então nada foi parado.",
+    guideFailed:
+      "Não foi possível confirmar o envio. Verifique o subagente antes de tentar novamente.",
+    stopFailed:
+      "Não foi possível confirmar a parada. Verifique o subagente antes de tentar novamente.",
+    tooLong: "A orientação excede o limite de 64 KiB em UTF-8.",
+  },
 };
