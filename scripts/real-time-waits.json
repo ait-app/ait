@@ -135,7 +135,7 @@
   "crates/provider/minimax/src/tests/questionnaire.rs": 1,
   "crates/provider/omp/src/session/tests.rs": 1,
   "crates/provider/omp/src/side/tests.rs": 1,
-  "crates/provider/omp/src/tests.rs": 3,
+  "crates/provider/omp/src/tests.rs": 2,
   "crates/provider/omp/src/tests/diagnostics.rs": 3,
   "crates/provider/omp/src/tests/installed.rs": 2,
   "crates/provider/omp/src/tests/installed/commands.rs": 1,

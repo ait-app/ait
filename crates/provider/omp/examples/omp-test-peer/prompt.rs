@@ -78,14 +78,14 @@ impl Peer {
                 self.response(command, Value::Null);
                 self.prompt_result("completed", false, true);
             }
-            "/local" | "/local-result" => {
+            "/session" | "/session-result" => {
                 // OMP 18.18.8 writes a builtin command's output before acknowledging it.
                 self.emit(&json!({
                     "type": "command_output",
                     "text": "\u{1b}[1mSession\u{1b}[0m: \u{1b}]8;;file:///x\u{7}local\u{1b}]8;;\u{7} \n"
                 }));
                 self.response(command, json!({"agentInvoked": false}));
-                if text == "/local-result" {
+                if text == "/session-result" {
                     // Older OMP releases also report a prompt result for builtins.
                     self.prompt_result("completed", false, true);
                 }

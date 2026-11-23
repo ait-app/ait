@@ -607,6 +607,7 @@ async fn rich_turns_replay_without_duplicate_items_and_resume_the_same_session()
 async fn agent_end_does_not_complete_retries_and_steering_is_acknowledged() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
+    commands_ready(session.as_mut()).await;
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     assert!(matches!(
         next(session.as_mut()).await.unwrap(),
@@ -681,7 +682,8 @@ async fn questions_require_exact_answers_and_unsupported_input_never_reaches_nat
             .await
             .is_err()
     );
-    session.start_turn("/local", &spec.config).await.unwrap();
+    commands_ready(session.as_mut()).await;
+    session.start_turn("/session", &spec.config).await.unwrap();
     // A command's output is a card, and the turn still reports it as its last text.
     assert!(matches!(
         complete(session.as_mut()).await.last(),
@@ -898,7 +900,8 @@ fn timeline_items(events: &[AgentTurnEvent]) -> Vec<&Value> {
 async fn local_commands_settle_with_an_echo_and_clean_output_with_or_without_a_result() {
     let (root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
-    for (index, command) in ["/local", "/local-result"].into_iter().enumerate() {
+    commands_ready(session.as_mut()).await;
+    for (index, command) in ["/session", "/session-result"].into_iter().enumerate() {
         let prompt = AgentPrompt {
             client_message_id: Some(format!("client-{index}")),
             ..AgentPrompt::text(command)
@@ -924,7 +927,7 @@ async fn local_commands_settle_with_an_echo_and_clean_output_with_or_without_a_r
         );
     }
     session.close().await.unwrap();
-    // OMP 18.18.8 sends no result for /local, so native idle state settled it.
+    // OMP 18.18.8 sends no result for /session, so native idle state settled it.
     assert!(count(&calls_after(root.path(), 0), "get_state") >= 2);
 }
 
@@ -1038,7 +1041,7 @@ async fn a_resumed_process_replaying_its_session_shows_only_new_work() {
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    commands_ready(resumed.as_mut()).await;
     assert_eq!(resumed.poll_turn().unwrap(), None);
 
     resumed.start_turn("again", &spec.config).await.unwrap();
