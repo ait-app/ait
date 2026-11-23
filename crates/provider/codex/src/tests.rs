@@ -6,6 +6,7 @@ mod diagnostics;
 mod installed;
 mod persistence;
 mod progress;
+mod replay;
 
 #[tokio::test]
 async fn async_questions_preserve_the_completed_assistant_answer() {

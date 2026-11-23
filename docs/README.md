@@ -43,6 +43,7 @@
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护；
   `node scripts/adr.mjs governs <路径>` 列出约束某个文件或目录的现行 ADR。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
+- [Provider 录制回放测试](operations/provider-replay.md)：从真实 CLI 录制 stdio 帧并在 adapter 测试中回放。
 - [移动端 E2E](../apps/mobile/e2e/README.md)、[Maestro](../apps/mobile/maestro/README.md)。
 - [品牌资源](../assets/brand/README.md)、[Paseo 来源与许可证](../paseo/README.md)。
 

@@ -119,6 +119,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## Provider、Agent 与会话
 
+- [ADR-298：Provider 测试回放真实 CLI 的 stdio 录制](providers/adr-298-provider-stdio-replay-transcripts.md)
 - [ADR-286：模型预设的备选链、供应商展示与选择器优先级](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md)
 - [ADR-285：账号用量查询遵守上游重试时间](providers/adr-285-account-usage-retry-delay.md)
 - [ADR-279：Provider 模型预设的存储归属与整套角色应用](providers/adr-279-provider-model-presets.md)（经 [ADR-286](providers/adr-286-provider-preset-fallbacks-and-picker-priority.md) 修订）
@@ -157,7 +158,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-189：Pi 不暴露 Host 模式](providers/adr-189-pi-without-host-mode.md)
 - [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)（经 [ADR-211](providers/adr-211-pi-next-turn-reasoning-controls.md) 修订）
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)（经 [ADR-190](providers/adr-190-omp-acp-settlement.md)、[ADR-194](providers/adr-194-omp-settlement-reconciliation.md)、[ADR-248](providers/adr-248-omp-paseo-native-rpc.md) 修订）
-- [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md) 修订）
+- [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)（经 [ADR-249](providers/adr-249-omp-adapter-crate.md)、[ADR-270](providers/adr-270-provider-crate-family.md)、[ADR-298](providers/adr-298-provider-stdio-replay-transcripts.md) 修订）
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
 - [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
 - [ADR-176: Pi user images in the shared timeline projection](providers/adr-176-pi-user-image-projection.md)

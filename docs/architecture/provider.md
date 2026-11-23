@@ -65,7 +65,9 @@
   [daemon 手册](../operations/daemon.md#provider-与扩展能力)）。
 - 原生 adapter 共享的进程、沙箱、ACP、图片、诊断与用量工具在 `crates/provider/native`，生产依赖只有
   `provider-core` 与 `domain`，只公开 adapter 用到的项；`provider` 不依赖它
-  （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+  （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。它的 `test-support` feature
+  在 Unix 上公开 `provider_native::replay`（stdio 录制回放对端 `StdioPeer`），不启用任何依赖，adapter 只以 dev 边启用
+  （[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)）。
 - Antigravity 的 adapter 在 `crates/provider/antigravity`，生产依赖为 `provider-core`、`provider-native` 与
   `domain`（`model`、`persistence` 与带 `test-support` 的 `provider` 仅测试使用），只公开 `AntigravityClient`；
   `provider` 与 daemon 都不依赖它。`provider-builtin` 用 `Providers::with` 追加它：设置
@@ -368,6 +370,12 @@ DSH 以安装包 `@deepseek-ai/dsh-tool-todo` 的 `todo/write` 日志契约为�
   （[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)、
   [ADR-249](../decisions/providers/adr-249-omp-adapter-crate.md)、
   [ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
+- stdio JSON 行协议的 adapter 可用 `provider_native::replay::StdioPeer` 回放真实 CLI 的录制：录制文件
+  （`ait-stdio-replay` NDJSON，按启动序号记 `spawn`、`stdin`、`stdout` 原样帧）放在所属 adapter crate 的
+  `tests/fixtures/replay/`，由该 crate 中默认忽略的录制测试驱动真实 adapter 对真实 CLI 生成，使用只含凭据副本的隔离配置；
+  回放离线运行，adapter 发出与录制不符的帧（除请求 `id` 与 `{{any}}` 外逐值比较）即失败。目前只有 Codex 接入，
+  其余场景仍用手写假 CLI（[ADR-298](../decisions/providers/adr-298-provider-stdio-replay-transcripts.md)、
+  [操作说明](../operations/provider-replay.md)）。
 - 需要多个真实 adapter 与真实运行时协作的装配测试归 `crates/provider/builtin`，经 `provider::testing`
   读取装配结果；运行时测试用桩 adapter 验证目录与容器行为，adapter 自身的端口值在该 adapter 的测试中断言
   （[ADR-270](../decisions/providers/adr-270-provider-crate-family.md)）。
