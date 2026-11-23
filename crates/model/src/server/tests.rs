@@ -1,6 +1,18 @@
 use super::*;
 
 #[test]
+fn agent_io_message_advises_checking_state_before_retrying() {
+    let error = ErrorCode::AgentIo;
+
+    assert_eq!(
+        error.message(),
+        "Agent operation failed; check the current state before retrying"
+    );
+    assert!(error.retryable());
+    assert_eq!(serde_json::to_value(error).unwrap(), "agent_io");
+}
+
+#[test]
 fn server_info_preserves_software_and_protocol_versions() {
     let info = crate::tests::runtime().info();
 
