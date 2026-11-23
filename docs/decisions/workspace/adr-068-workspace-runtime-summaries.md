@@ -13,6 +13,10 @@ paths:
 状态说明：Accepted；刷新间隔与唤醒规则于 2026-11-07 修订，见决策中标注修订的条目；macOS 文件事件、
 专用唤醒信号与合并 Git 读取见 [ADR-217](adr-217-event-driven-workspace-runtime.md)。
 
+后续修订：[ADR-104](adr-104-filesystem-model-collaboration.md) 将 `WorkspaceRuntimeSource` 移入 `model::workspace::runtime`（快照类型现位于
+`domain::workspace::runtime`），[ADR-113](adr-113-filesystem-capability-groups.md) 将 `filesystem::local::workspace_runtime` 改为
+`filesystem::workspace_runtime`；决策中的 metadata 端口与模块路径以此为准。
+
 ## 背景
 
 Paseo 的 workspace 行已经支持增删行数、分支、PR/MR 合并状态和 CI 检查结果。Ait 的

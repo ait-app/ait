@@ -1,6 +1,6 @@
 # Linux/macOS 无人值守 daemon
 
-中心需要支持 device authorization、Hub serve 和下载 Relay，并开启 `DEVICE_AUTH_ENABLED`、
+中心需要支持 device authorization 和 Hub serve（声明全部 `hub_features`），并开启 `DEVICE_AUTH_ENABLED`、
 配置机器授权签名与回执密钥；旧中心仅支持 Relay 业务连接时不能使用当前客户端。生产中心固定为
 `https://aitapp.cn/api`，不能修改。Linux 的 systemd、macOS 的 launchd 安装与管理由外部脚本负责。
 
@@ -70,11 +70,11 @@ aitd run
 
 以下 HTTP 接口都要求 `Authorization: Bearer <本地 API token>`，沿用 daemon 的 Host/Origin 校验：
 
-| 接口                               | 行为                                                    |
-| ---------------------------------- | ------------------------------------------------------- |
-| `GET /api/device/authorization`    | 身份、管理阶段/绑定、Hub 在线状态、Relay 状态；不含秘密 |
-| `PUT /api/device/authorization`    | 持久化授权交接，202 表示已接受，随后异步领取凭据并发布  |
-| `DELETE /api/device/authorization` | 断开 Hub/Relay、停止续租并清除机器凭据，204             |
+| 接口                               | 行为                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| `GET /api/device/authorization`    | 身份、管理阶段/绑定、Hub 在线状态；`relay` 字段只为兼容保留，恒为离线；不含秘密 |
+| `PUT /api/device/authorization`    | 持久化授权交接，202 表示已接受，随后异步领取凭据并发布                          |
+| `DELETE /api/device/authorization` | 断开 Hub、停止续租并清除机器凭据，204                                           |
 
 授权请求有三种形态，`request_id` 必须为每次新交接生成唯一 UUID，重试使用原 ID：
 
@@ -100,8 +100,8 @@ WebSocket/Hub 客户端协商 `publication.status.request`、`publication.author
 授权写入后自动连接，不需要 start/resume。运行中的 daemon 拒绝直接 `PUT /api/hub/control` 或 Relay 票据。
 
 `DELETE /api/hub/control`、`DELETE /api/relay/control` 和兼容的 `relay.stop.request` 也执行相同的完整断开。
-登录产生一份机器授权与节点会话，由 Hub/Relay 共同使用；两条链路的协议票据分别领取，不可互换。
-断开会取消取票、注册、续租、刷新，关闭两条链路及数据通道，清除已保存和内存中的机器凭据、
+登录产生一份机器授权与节点会话，供 Hub 链路使用；main 与 bulk 链路的票据分别领取，不可互换。
+断开会取消取票、注册、续租、刷新，关闭 Hub 链路及数据通道，清除已保存和内存中的机器凭据、
 enrollment/device code 与待恢复请求。仅保留机器身份和不含秘密的 `disconnected` 标记；重启和
 Desktop 自动同步不会重新授权。重新连接需要显式授权，或停止 daemon 后执行 `aitd login`。
 本地 API token、任务和工作区数据保留。Desktop 退出/账号退出本身不触发这个断开操作。
@@ -119,7 +119,7 @@ aitd status --json
 status 不要求本地 API token，不创建文件，不争用运行中服务的凭据锁。输出稳定 ID、是否存在
 凭据以及带时间戳的非秘密 runtime 缓存快照；`runtime_process_alive` 表示快照记录的进程是否仍存在
 （PID 可能被复用，非 Unix 平台为 `null`）。缓存不是即时在线证明；鉴权后的本地
-`GET /api/device/authorization` 查看实时 Hub、Relay 及管理状态，`GET /api/hub/control` 查看 Hub。
+`GET /api/device/authorization` 查看实时 Hub 与管理状态，`GET /api/hub/control` 查看 Hub。
 
 授权成功后保存 `<data-dir>/device/.env`，权限 `0600`，目录 `0700`。文件是私有凭据 snapshot，
 不要编辑、共享、复制到另一安装或提交到 Git。access JWT 只存内存，刷新 token 自动轮换。
@@ -128,7 +128,7 @@ Web/enrollment 的中断可重新执行不带 token 的 `aitd login` 恢复原�
 中心回执恢复窗口为 10 分钟；已消费的 device code 即使超过批准期限，仍使用原请求 ID 向中心尝试恢复。
 初次领取受原凭据期限约束，无法恢复时需要重新授权。
 
-网络故障及非授权类协议错误（例如网络登录页重定向、非 JSON 响应）自动指数退避重连：注册/续租/刷新与 Relay 的退避等待上限为 30 秒，Hub 重新取票和授权领取为 60 秒。
+网络故障及非授权类协议错误（例如网络登录页重定向、非 JSON 响应）自动指数退避重连：注册/续租/刷新的退避等待上限为 30 秒，Hub 重新取票和授权领取为 60 秒。
 Web/device code 轮询还会遵守中心指定的最小间隔。
 连接任务启动不清零退避，握手在线才恢复初始间隔；Hub 物理续连另有 250 毫秒到 8 秒的退避。
 短期 access JWT 被拒绝时关闭远程通道并刷新一次，新 JWT 或 refresh 仍被拒绝才要求重新登录。
@@ -143,7 +143,7 @@ aitd logout
 ```
 
 logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领取结果未知时，CLI 提示在网页 Host
-详情补做撤销。网页撤销会关闭现有 Relay 控制和数据连接；普通网页登录退出不撤销机器授权。
+详情补做撤销。网页撤销使机器授权失效，daemon 随之关闭 Hub 链路；普通网页登录退出不撤销机器授权。
 桌面/手机可以完整断开 Host，也可以显式重新授权；节点租约始终由 daemon 自行维护。
 
 早期协议、数据库差异与部署验收见[历史设计](../archive/plans/linux-headless-device-auth.md)；

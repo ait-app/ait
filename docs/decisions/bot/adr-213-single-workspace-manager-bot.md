@@ -17,6 +17,11 @@ paths:
   修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)）；
   取代 [ADR-145](adr-145-bot-permission-denial.md) 第 3 条（删除 `bot.permission.resolve`），其第 1、2、4、5 条的自动拒绝规则继续有效。
 - 后续修订：[ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 增加权限与作用域 MCP 工具，修订 ADR-145 第 4 条，并让 Bot 可写记忆（第 6 条）；[ADR-221](adr-221-read-only-bot-session-inspection.md) 允许按完整 ID 只读查看隐藏会话。
+- 后续修订：[ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 让 `bot.setup` 携带权限、[ADR-271](adr-271-bot-notification-inbox-and-wake-turns.md) 增加唤醒范围，
+  第 3 条的幂等判断因此比较执行配置、权限与唤醒范围，任一不同即 `BotConflict`；ADR-271、[ADR-274](adr-274-bot-tickets-assignments-and-reports.md)
+  与 [ADR-280](adr-280-bot-recall-reads-and-spill.md) 增加了访客可读的方法，第 4 条的访客清单以 [Bot 规格](../../architecture/bot.md#访客与客户端契约)为准。
+- 修订说明（2026-11-23）：第 2 条的用户移除释放全部外部 Channel，不限于 Telegram／飞书：此后加入的 Lark、微信、QQ、iMessage 与 Webhook
+  Channel 同样停用并标记为已删除，只保留内置 Channel（`crates/bot/src/state/catalog.rs` 的 `retire_bots`）。
 - 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../archive/plans/workspace-bot-manager-phase-1.md)。
 
 ## 背景

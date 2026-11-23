@@ -9,6 +9,9 @@ paths:
 # ADR-060：统一 Workspace 创建入口支持 Worktree
 
 - 关联：ADR-030、ADR-037、ADR-056、ADR-058
+- 修订说明（2026-11-23）：“范围”中 Forge PR checkout 不受支持的说法已过期：`workspace.create.request` 接受 `checkoutSource`
+  （及旧的 `githubPrNumber`），由 `LocalForge` 解析 GitHub PR 或 GitLab MR 后检出（`crates/filesystem/src/forge/local/forge/worktree_checkout.rs`，
+  MR 引用顺序见 [ADR-066](adr-066-gitlab-forge.md)）。
 
 ## 背景
 

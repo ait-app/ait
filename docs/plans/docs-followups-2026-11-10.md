@@ -15,13 +15,13 @@
 
 ## 文档与源码不一致
 
-- [ ] [daemon 手册](../operations/daemon.md)称 DeepSeek Harness 使用 stdio ACP；源码默认使用原生 Web Host，
-      仅在 `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp` 时使用 ACP。
-- [ ] [Bot 手册](../operations/bots.md)与 ADR-213 称移除 Bot 只释放 Telegram、飞书账号；源码软删除全部外部 Channel。
-      ADR-213 另有三处：setup 幂等性还比较权限、账号唯一性也覆盖已停用的 Channel、访客可读方法清单过期。
-- [ ] ADR-211、ADR-049 仍写直连与 SSH 保留四条连接，ADR-218 已改变这一点但 ADR-211 没有修订说明。
-- [ ] ADR-140、180、200、201 与[无人值守 daemon](../operations/headless-daemon.md)仍提到下载 Relay 或“两条链路”；
+- [x] [daemon 手册](../operations/daemon.md)称 DeepSeek Harness 使用 stdio ACP；源码默认使用原生 Web Host，
+      仅在 `AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp` 时使用 ACP。（手册已在 #710 改正。）
+- [x] [Bot 手册](../operations/bots.md)与 ADR-213 称移除 Bot 只释放 Telegram、飞书账号；源码软删除全部外部 Channel。
+      ADR-213 另有三处：setup 幂等性还比较权限、账号唯一性也覆盖已停用的 Channel（此句实际在 ADR-139）、访客可读方法清单过期。（Bot 手册此前已改正。）
+- [x] ADR-211、ADR-049 仍写直连与 SSH 保留四条连接，ADR-218 已改变这一点但 ADR-211 没有修订说明。
+- [x] ADR-140、180、200、201 与[无人值守 daemon](../operations/headless-daemon.md)仍提到下载 Relay 或“两条链路”；
       ADR-180 的 3 秒 pong 规则与 15 秒心跳不符。
-- [ ] ADR-060 称不支持 Forge PR checkout，源码已支持。
-- [ ] ADR-125 写 schema 版本 6，源码为 7。
-- [ ] ADR-068 的模块路径过期；ADR-069 称 metadata 声明 `WorkspaceGitObserver`，实际位于 `model::workspace::git`。
+- [x] ADR-060 称不支持 Forge PR checkout，源码已支持。
+- [x] ADR-125 写 schema 版本 6，源码为 7。
+- [x] ADR-068 的模块路径过期；ADR-069 称 metadata 声明 `WorkspaceGitObserver`，实际位于 `model::workspace::git`。

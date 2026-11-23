@@ -37,6 +37,23 @@ export function checkDocumentationLinks(files) {
   return problems;
 }
 
+/**
+ * docs/policy/documentation.md: `docs/README.md` navigates by task and leaves ADRs to the generated
+ * index, and per-PR evidence goes in the PR description rather than `docs/reports/`.
+ */
+export function checkDocumentationLayout({ navigation, reports }) {
+  const problems = [];
+  for (const match of navigation.matchAll(/\]\((decisions\/[^/)\s]+\/adr-[^)\s]+)\)/g)) {
+    problems.push(
+      `docs/README.md: links ADR ${match[1]}; link the spec or operations page, or decisions/README.md`,
+    );
+  }
+  for (const entry of reports.filter((name) => name !== "README.md").toSorted()) {
+    problems.push(`docs/reports/${entry}: put verification evidence in the PR description`);
+  }
+  return problems;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const files = [
     path.join(repository, "README.md"),
@@ -48,6 +65,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const decisions = readDecisions(repository);
   const problems = [
     ...checkDocumentationLinks(files),
+    ...checkDocumentationLayout({
+      navigation: readFileSync(path.join(repository, "docs", "README.md"), "utf8"),
+      reports: readdirSync(path.join(repository, "docs", "reports")),
+    }),
     ...checkDecisions(decisions, {
       exists: (owned) => existsSync(path.join(repository, owned)),
       index: readFileSync(path.join(repository, DECISIONS_DIRECTORY, "README.md"), "utf8"),

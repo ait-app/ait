@@ -13,6 +13,8 @@ paths:
 # ADR-211：SDK 原生使用 daemon 协议
 
 - 修订：[ADR-044](adr-044-paseo-client-rust-transport.md)、[ADR-094](adr-094-canonical-ait-client-methods.md)。
+- 后续修订：[ADR-218](adr-218-hub-feature-negotiation.md) 让直连、SSH 和本机 daemon 优先使用 `connection.single.v1` 单连接，
+  daemon 拒绝时才回退四连接；决策中“直连与 SSH 保留四通道”不再成立。
 
 ## 背景
 

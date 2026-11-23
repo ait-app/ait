@@ -16,6 +16,7 @@
     "generate:icons": "node scripts/generate-brand-assets.mjs",
     "check:icons": "node scripts/generate-brand-assets.mjs --check",
     "check:docs": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs",
+    "check:conventions": "node --test scripts/check-conventions.test.mjs && node scripts/check-conventions.mjs",
     "check:ui": "node scripts/check-ui.mjs",
     "format": "oxfmt .",
     "check:format": "oxfmt --check .",

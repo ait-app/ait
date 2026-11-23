@@ -142,6 +142,7 @@ When the user explicitly requests the full suite, run `cargo nextest run --works
 - For `src/lib.rs`, `src/main.rs`, or `src/foo/mod.rs`, the child file is the sibling `tests.rs`. For `src/foo.rs`, the child file is `src/foo/tests.rs`. Split larger suites into additional named child files.
 - Keep integration tests in the crate's `tests/` directory. Place shared integration-test helpers in a subdirectory such as `tests/common/mod.rs` so they are not discovered as standalone test targets.
 - When adding or modifying an existing inline test module, move that module into its child file as part of the change, preserving test coverage and behavior.
+- `npm run check:conventions` rejects inline test module bodies (`#[cfg(test)] mod name {`, any `mod name {` in a `tests` file) and source files over 5000 lines; move the module to its child file or split the file as above.
 
 ### Faster local builds
 

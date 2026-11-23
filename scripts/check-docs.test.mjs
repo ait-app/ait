@@ -12,7 +12,7 @@ import {
   renderIndex,
   repositoryPath,
 } from "./adr.mjs";
-import { checkDocumentationLinks } from "./check-docs.mjs";
+import { checkDocumentationLayout, checkDocumentationLinks } from "./check-docs.mjs";
 
 test("checks local links and images without interpreting examples or remote URLs", (t) => {
   const root = mkdtempSync(path.join(tmpdir(), "ait-doc-links-"));
@@ -36,6 +36,19 @@ test("checks local links and images without interpreting examples or remote URLs
     `${file}: missing local link missing.md`,
     `${file}: missing local link missing.png`,
   ]);
+});
+
+test("the docs navigation links no ADR and docs/reports holds only its README", () => {
+  const navigation = [
+    "- [ADR 分类索引](decisions/README.md)",
+    "- [Provider 规格](architecture/provider.md#测试归属)",
+    "- [Readback](decisions/providers/adr-237-opencode-child-terminal-readback.md)：detail",
+  ].join("\n");
+  assert.deepEqual(checkDocumentationLayout({ navigation, reports: ["README.md", "run.md"] }), [
+    "docs/README.md: links ADR decisions/providers/adr-237-opencode-child-terminal-readback.md; link the spec or operations page, or decisions/README.md",
+    "docs/reports/run.md: put verification evidence in the PR description",
+  ]);
+  assert.deepEqual(checkDocumentationLayout({ navigation: "", reports: ["README.md"] }), []);
 });
 
 function decisionTree(t, files) {

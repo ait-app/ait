@@ -10,6 +10,8 @@ paths:
 # ADR-069：活跃工作区的后台 Git fetch
 
 - 关联：ADR-030、ADR-037、ADR-065
+- 后续修订：[ADR-104](adr-104-filesystem-model-collaboration.md) 将 `WorkspaceGitObserver` / `WorkspaceGitObservation` 移入 `model::workspace::git`；
+  第 1 条中“metadata 声明”以此为准，metadata 仍是消费者，filesystem 仍是实现者。
 
 “从 main 更新”的合并行为已由 [ADR-083](adr-083-reset-workspace-to-origin-default.md) 中的工作区重置取代。
 

@@ -28,7 +28,7 @@ const find = (result, text) =>
 
 test("docs and formatting run for every change, because a rename can break any link", () => {
   const result = plan(["docs/README.md"]);
-  assert.deepEqual(commands(result, "docs"), ["npm run check:docs"]);
+  assert.deepEqual(commands(result, "docs"), ["npm run check:docs", "npm run check:conventions"]);
   assert.deepEqual(commands(result, "format"), ["npx --yes oxfmt@1.2.3 --check ."]);
   assert.deepEqual(result.outputs, { rust: false, ui: false, web_client: false });
 });
@@ -202,7 +202,7 @@ test("--only limits execution without changing what the CI gate reports", () => 
   const result = plan(["crates/voice/src/lib.rs"], { only: ["docs"] });
   assert.deepEqual(
     result.steps.map((step) => step.group),
-    ["docs"],
+    ["docs", "docs"],
   );
   assert.equal(result.outputs.rust, true);
 });
