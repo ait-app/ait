@@ -1,6 +1,6 @@
 pub(super) mod media;
 
-use model::realtime::{Audio, Endpoint, Event};
+use model::realtime::{Endpoint, Event};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -8,6 +8,7 @@ use tracing::Instrument;
 
 use super::{AgentSessionError, CodexSession};
 
+#[cfg(feature = "voice")]
 const MAX_AUDIO_BYTES: usize = 512 * 1024;
 
 #[derive(Debug)]
@@ -222,7 +223,8 @@ impl CodexSession {
     }
 }
 
-fn valid_audio(audio: &Audio) -> bool {
+#[cfg(feature = "voice")]
+fn valid_audio(audio: &model::realtime::Audio) -> bool {
     matches!(
         audio.sample_rate,
         8_000 | 16_000 | 22_050 | 24_000 | 44_100 | 48_000
@@ -231,6 +233,8 @@ fn valid_audio(audio: &Audio) -> bool {
         && audio.bytes.len().is_multiple_of(2)
 }
 
+/// PCM resampling for the Opus codec and the offline fixture; absent without either.
+#[cfg(any(feature = "voice", all(unix, any(test, feature = "test-support"))))]
 #[derive(Debug, Default)]
 struct Resampler {
     rate: Option<u32>,
@@ -238,8 +242,9 @@ struct Resampler {
     phase: u32,
 }
 
+#[cfg(any(feature = "voice", all(unix, any(test, feature = "test-support"))))]
 impl Resampler {
-    fn convert(&mut self, audio: &Audio) -> Option<Vec<u8>> {
+    fn convert(&mut self, audio: &model::realtime::Audio) -> Option<Vec<u8>> {
         if self.rate.is_some_and(|rate| rate != audio.sample_rate) {
             return None;
         }
@@ -267,5 +272,5 @@ impl Resampler {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "voice", unix)))]
 mod tests;

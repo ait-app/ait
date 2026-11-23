@@ -41,6 +41,9 @@ use provider_core::ports::agent_session::{
     AgentTurnEvent,
 };
 use provider_core::ports::bot_session::{BotSessionSupport, InstructionDelivery};
+// Only the `voice` peer diagnostics test installs a subscriber.
+#[cfg(all(test, not(feature = "voice")))]
+use tracing_subscriber as _;
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
@@ -348,7 +351,7 @@ impl AgentClient for CodexClient {
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         json!({"availableModes":self.modes(),"features":self.features(config),
             "capabilities":{"supportsDynamicModes":true,"supportsRewindConversation":true,"supportsMcpServers":true,
-                "supportsRealtimeVoice":true,"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
+                "supportsRealtimeVoice":cfg!(feature = "voice"),"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
     }
 
     async fn draft_features(

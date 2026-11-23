@@ -1,3 +1,5 @@
+use model::realtime::Audio;
+
 use super::*;
 
 #[test]
