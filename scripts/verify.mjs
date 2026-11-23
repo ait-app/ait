@@ -356,7 +356,11 @@ export function planVerification({
   const rust = rustSteps(context);
   const ui = uiSteps(context);
   const planned = {
-    docs: [step("docs", "npm", "run", "check:docs")],
+    // Repository-wide text checks: cheap, Node-only, and run for every change.
+    docs: [
+      step("docs", "npm", "run", "check:docs"),
+      step("docs", "npm", "run", "check:conventions"),
+    ],
     format: [step("format", "npx", "--yes", `oxfmt@${oxfmtVersion}`, "--check", ".")],
     rust: rust.steps,
     ui,

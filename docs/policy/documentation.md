@@ -80,5 +80,6 @@ paths:
 
 移动文档时修正入站链接、文档自身的相对路径和相关附件引用；更新所属分类索引。
 运行 `npm run check:docs` 检查本地链接与 ADR 元数据，并对改动文件运行适用的格式检查与 `git diff --check`。
+`npm run check:docs` 还拒绝 `docs/README.md` 链接单篇 ADR（改链规格、操作文档或 `decisions/README.md`）以及 `docs/reports/` 中 README 以外的文件（证据写进 PR 描述）。
 链接检查不访问外部网站，也不验证页面锚点，修改标题时需另行检查锚点引用。
 仅修改文档且未改动 `bins/` 或 `crates/` 的 Rust 代码时，不运行 Rust 测试。
