@@ -40,6 +40,8 @@ session_id = "minimax-session"
 # Like native ACP agents, a prompt blocked on an unanswered permission cannot settle a cancel.
 awaiting_permission = False
 awaiting_questionnaire = False
+# Like native 0.7.7, a cancelled Turn keeps ending after its prompt answered `cancelled`.
+refusals = 0
 
 
 def send(value):
@@ -135,6 +137,16 @@ for line in sys.stdin:
         update({"sessionUpdate": "config_option_update", "configOptions": options()})
         reply(identity, {"configOptions": options()})
     elif method == "session/prompt":
+        update({"sessionUpdate": "available_commands_update", "availableCommands": []})
+        if refusals:
+            refusals -= 1
+            # The ending Turn still reports state before the refusal.
+            update({"sessionUpdate": "usage_update", "used": 10, "size": 100})
+            update({"sessionUpdate": "session_info_update"})
+            send({"id": identity, "error": {"code": -32603, "message":
+                "Internal error: MiniMax Code Runtime failed: Session already has an active "
+                "Turn. Use queue send to deliver the message after it."}})
+            continue
         active = identity
         text = "".join(block.get("text", "") for block in params["prompt"])
         if text == "wait":
@@ -198,6 +210,7 @@ for line in sys.stdin:
     elif method == "session/cancel":
         if scenario != "ignore-cancel" and not awaiting_permission and not awaiting_questionnaire:
             reply(active, {"stopReason": "cancelled"})
+            refusals = {"ending-turn": 2, "stuck-turn": 1000}.get(scenario, 0)
     elif method == "session/close":
         reply(identity, {})
     elif identity == "permission":

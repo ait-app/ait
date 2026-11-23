@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
@@ -36,8 +37,19 @@ pub(super) struct Session {
     permissions: BTreeMap<String, acp_permissions::Pending>,
     /// Latest `ask_user` tool update of the active prompt, which labels the form that follows.
     asked: Option<Value>,
+    /// The last prompt settled as cancelled, so the native Turn may still be ending.
+    cancelled: bool,
     closed: bool,
 }
+
+/// Prompt submissions after a cancellation before a busy refusal fails the turn.
+const ADMISSION_ATTEMPTS: u32 = 20;
+/// Pause between prompt submissions refused while the cancelled Turn ends.
+const ADMISSION_RETRY: Duration = Duration::from_millis(50);
+/// Longest wait for a refusal before a silent submission counts as admitted.
+const ADMISSION_WINDOW: Duration = Duration::from_secs(1);
+/// Native refusal of a prompt while another Turn of the session is still running.
+const BUSY_REFUSAL: &str = "Session already has an active Turn";
 
 /// Create or resume a native ACP writer; rejects foreign handles and unsupported settings.
 /// Uses `client` launch settings and `spec`; `handle` selects native resume when present.
@@ -85,6 +97,7 @@ pub(super) async fn open(
         images: client.images.clone(),
         permissions: BTreeMap::new(),
         asked: None,
+        cancelled: false,
         closed: false,
     };
     if let Err(error) = config::apply(
@@ -187,13 +200,12 @@ impl Session {
         .await?;
         let user_text = prompt_blocks::text(&blocks);
         let turn = Uuid::new_v4().to_string();
-        let rpc_id = self
-            .transport
-            .begin(
-                "session/prompt",
-                json!({"sessionId":self.id,"prompt":blocks}),
-            )
-            .await?;
+        let params = json!({"sessionId":self.id,"prompt":blocks});
+        let (rpc_id, first) = if std::mem::take(&mut self.cancelled) {
+            self.admit(&params).await?
+        } else {
+            (self.transport.begin("session/prompt", params).await?, None)
+        };
         self.stream.begin(turn.clone());
         let mut item = json!({
             "type":"user_message",
@@ -221,7 +233,84 @@ impl Session {
                 &self.id,
                 &self.options,
             )));
+        if let Some(message) = first {
+            self.consume(&message)?;
+        }
         Ok(turn)
+    }
+
+    /// Submit a prompt after a cancelled one; resubmits while the native Turn is still ending.
+    ///
+    /// `MiniMax` Code answers `session/cancel` before its Turn has ended and refuses prompts until
+    /// it has, without any notification marking the end. The last refusal is kept so that it
+    /// settles the turn as failed.
+    ///
+    /// # Returns
+    ///
+    /// The request ID of the admitted submission and its first frame, which the caller consumes
+    /// once the turn is active.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport failures.
+    async fn admit(
+        &mut self,
+        params: &Value,
+    ) -> Result<(String, Option<Value>), AgentSessionError> {
+        let mut attempt = 1;
+        loop {
+            let id = self
+                .transport
+                .begin("session/prompt", params.clone())
+                .await?;
+            let first = self.first_frame().await?;
+            let refused = first.as_ref().is_some_and(|message| {
+                message["id"] == *id
+                    && message["error"]["message"]
+                        .as_str()
+                        .is_some_and(|text| text.contains(BUSY_REFUSAL))
+            });
+            if !refused || attempt == ADMISSION_ATTEMPTS {
+                return Ok((id, first));
+            }
+            attempt += 1;
+            tokio::time::sleep(ADMISSION_RETRY).await;
+        }
+    }
+
+    /// Wait up to [`ADMISSION_WINDOW`] for the first frame that only a submitted prompt produces:
+    /// its response, a callback, or turn content.
+    ///
+    /// Session state updates, such as usage the cancelled Turn reports late, are consumed as they
+    /// arrive since they cannot tell which Turn is running.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport failures and invalid session state updates.
+    async fn first_frame(&mut self) -> Result<Option<Value>, AgentSessionError> {
+        let deadline = tokio::time::Instant::now() + ADMISSION_WINDOW;
+        loop {
+            let Ok(message) = tokio::time::timeout_at(deadline, self.transport.receive()).await
+            else {
+                return Ok(None);
+            };
+            let message = message?;
+            let turn_content = matches!(
+                message["params"]["update"]["sessionUpdate"].as_str(),
+                Some(
+                    "agent_message_chunk"
+                        | "agent_thought_chunk"
+                        | "tool_call"
+                        | "tool_call_update"
+                        | "plan"
+                        | "compaction_update"
+                )
+            );
+            if message["method"] != "session/update" || turn_content {
+                return Ok(Some(message));
+            }
+            self.consume(&message)?;
+        }
     }
 
     /// Withdraw pending permissions, then ask the agent to cancel the running prompt.
@@ -313,6 +402,7 @@ impl Session {
                             .push_back(AgentTurnEvent::RequestUsage(request));
                     }
                 }
+                self.cancelled = event == AgentTurnEvent::Cancelled;
                 self.stream.events.push_back(event);
                 self.active = None;
                 self.asked = None;

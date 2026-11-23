@@ -46,6 +46,15 @@ async fn installed_latest_mcode_works_through_ait_and_restores_context() {
     super::execution::round_trip(&fixture, program.into(), true).await;
 }
 
+async fn next_event(session: &mut dyn super::AgentSession) -> super::AgentTurnEvent {
+    loop {
+        if let Some(event) = session.poll_turn().unwrap() {
+            return event;
+        }
+        tokio::time::sleep(super::Duration::from_millis(10)).await;
+    }
+}
+
 #[tokio::test]
 #[ignore = "requires AIT_TEST_MINIMAX_CODE_BIN and native login; exercises tools and cancellation"]
 async fn installed_latest_mcode_tools_and_cancel() {
@@ -80,8 +89,8 @@ async fn installed_latest_mcode_tools_and_cancel() {
     let mut permissions = 0;
     tokio::time::timeout(Duration::from_secs(180), async {
         loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::PermissionRequested(request)) => {
+            match next_event(session.as_mut()).await {
+                AgentTurnEvent::PermissionRequested(request) => {
                     permissions += 1;
                     session
                         .respond_permission(
@@ -91,16 +100,15 @@ async fn installed_latest_mcode_tools_and_cancel() {
                         .await
                         .unwrap();
                 }
-                Some(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "tool_call" => {
+                AgentTurnEvent::Timeline(entry) if entry.item["type"] == "tool_call" => {
                     tools += 1;
                 }
-                Some(AgentTurnEvent::Completed(_)) => break,
-                Some(AgentTurnEvent::Failed) => {
+                AgentTurnEvent::Completed(_) => break,
+                AgentTurnEvent::Failed => {
                     panic!("native failure: {:?}", session.failure_message())
                 }
                 _ => {}
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
     .await
@@ -120,9 +128,31 @@ async fn installed_latest_mcode_tools_and_cancel() {
         )
         .await
         .unwrap();
+    // Cancel a Turn that is streaming: native 0.7.7 answers before that Turn has ended.
+    tokio::time::timeout(Duration::from_secs(120), async {
+        loop {
+            if let AgentTurnEvent::Timeline(entry) = next_event(session.as_mut()).await
+                && entry.item["type"] != "user_message"
+            {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
     session.cancel_turn(&turn).await.unwrap();
     let events = finish(session.as_mut()).await;
     assert_eq!(events.last(), Some(&AgentTurnEvent::Cancelled));
+    session
+        .start_turn("Reply with exactly: AIT_MCODE_AFTER_CANCEL", &spec.config)
+        .await
+        .unwrap();
+    let events = finish(session.as_mut()).await;
+    assert!(
+        matches!(events.last(), Some(AgentTurnEvent::Completed(_))),
+        "{:?}",
+        session.failure_message()
+    );
     session.close().await.unwrap();
 }
 
@@ -233,8 +263,8 @@ async fn installed_latest_mcode_asks_one_question_per_step_and_accepts_the_answe
     let mut asked = false;
     let reply = tokio::time::timeout(Duration::from_secs(180), async {
         loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::PermissionRequested(request)) => {
+            match next_event(session.as_mut()).await {
+                AgentTurnEvent::PermissionRequested(request) => {
                     let questions = request["input"]["questions"].as_array().unwrap();
                     assert_eq!(questions.len(), 1, "{request}");
                     assert_eq!(questions[0]["header"], "Language", "{request}");
@@ -251,13 +281,12 @@ async fn installed_latest_mcode_asks_one_question_per_step_and_accepts_the_answe
                         .unwrap();
                     asked = true;
                 }
-                Some(AgentTurnEvent::Completed(reply)) => break reply,
-                Some(AgentTurnEvent::Failed) => {
+                AgentTurnEvent::Completed(reply) => break reply,
+                AgentTurnEvent::Failed => {
                     panic!("native failure: {:?}", session.failure_message())
                 }
                 _ => {}
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
     .await

@@ -130,7 +130,7 @@
   "crates/provider/deepseek-harness/src/tests.rs": 2,
   "crates/provider/deepseek-harness/src/tests/execution.rs": 1,
   "crates/provider/minimax/src/tests.rs": 5,
-  "crates/provider/minimax/src/tests/live.rs": 2,
+  "crates/provider/minimax/src/tests/live.rs": 1,
   "crates/provider/minimax/src/tests/mcp.rs": 1,
   "crates/provider/minimax/src/tests/questionnaire.rs": 1,
   "crates/provider/omp/src/session/tests.rs": 1,

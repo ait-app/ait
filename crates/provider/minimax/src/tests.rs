@@ -349,6 +349,64 @@ async fn cancellation_waits_for_acknowledgement_and_allows_the_next_turn() {
     session.close().await.unwrap();
 }
 
+fn prompt_count(root: &tempfile::TempDir) -> usize {
+    std::fs::read_to_string(root.path().join("requests.jsonl"))
+        .unwrap()
+        .lines()
+        .filter(|line| serde_json::from_str::<Value>(line).unwrap()["method"] == "session/prompt")
+        .count()
+}
+
+#[tokio::test]
+async fn prompt_after_cancellation_is_resubmitted_until_the_native_turn_ends() {
+    let (root, client, spec) = fixture();
+    std::fs::write(root.path().join("scenario"), "ending-turn").unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    session.cancel_turn(&turn).await.unwrap();
+    assert_eq!(
+        finish(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Cancelled)
+    );
+
+    session.start_turn("hello", &spec.config).await.unwrap();
+
+    assert_eq!(
+        finish(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Completed(Some(
+            "Hello from MiniMax".into()
+        )))
+    );
+    assert_eq!(prompt_count(&root), 4);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn native_turn_that_never_ends_fails_the_prompt_after_bounded_resubmission() {
+    let (root, client, spec) = fixture();
+    std::fs::write(root.path().join("scenario"), "stuck-turn").unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    session.cancel_turn(&turn).await.unwrap();
+    finish(session.as_mut()).await;
+
+    session.start_turn("hello", &spec.config).await.unwrap();
+
+    assert_eq!(
+        finish(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Failed)
+    );
+    assert!(session.failure_message().unwrap().contains("active Turn"));
+    assert_eq!(prompt_count(&root), 1 + 20);
+    session.start_turn("hello", &spec.config).await.unwrap();
+    assert_eq!(
+        finish(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Failed)
+    );
+    assert_eq!(prompt_count(&root), 1 + 20 + 1);
+    session.close().await.unwrap();
+}
+
 #[tokio::test]
 async fn failed_authentication_and_native_errors_do_not_become_success() {
     let (root, client, spec) = fixture();
