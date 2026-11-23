@@ -424,15 +424,26 @@ export class DirectorySync {
     );
   }
 
+  async refreshAgentSnapshot(agentId: string): Promise<void> {
+    // Do not reuse a route read that may have started before the control request completed.
+    await this.readTargetAgent(agentId);
+  }
+
   private async readTargetAgent(agentId: string): Promise<void> {
     const { client, source } = this.requireOnline();
     await this.waitForSession(client, source);
+    const currentTurn = () => {
+      const session = useSessionStore.getState().sessions[this.serverId];
+      return (session?.agents.get(agentId) ?? session?.agentDetails.get(agentId))?.turn;
+    };
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const token = this.agents.captureTimeline(agentId);
       const revision = this.revision;
+      const turn = currentTurn();
       const result = await client.fetchAgent(agentId);
       if (!this.isCurrent(client, source)) return;
-      if (this.revision !== revision) continue;
+      // Turn stream events can arrive before their directory update.
+      if (this.revision !== revision || currentTurn() !== turn) continue;
       if (!result) return;
       if (result.agent.id !== agentId) throw new Error("Agent lookup identity mismatch");
       const entry = {

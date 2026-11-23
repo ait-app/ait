@@ -302,6 +302,7 @@ describe("cancelComposerAgent", () => {
     isAgentRunning: boolean;
     isCancellingAgent: boolean;
     isConnected: boolean;
+    refreshAgentSnapshot: ReturnType<typeof vi.fn<() => Promise<void>>>;
   } {
     const canceledIds: string[] = [];
     return {
@@ -315,6 +316,7 @@ describe("cancelComposerAgent", () => {
       isAgentRunning: true,
       isCancellingAgent: false,
       isConnected: true,
+      refreshAgentSnapshot: vi.fn(async () => undefined),
     };
   }
 
@@ -324,6 +326,35 @@ describe("cancelComposerAgent", () => {
     expect(result).not.toBeNull();
     await result;
     expect(input.client.canceledIds).toEqual(["agent"]);
+    expect(input.refreshAgentSnapshot).toHaveBeenCalledOnce();
+  });
+
+  it("waits for cancellation acceptance before refreshing and settling", async () => {
+    const input = baseInput();
+    const cancelled = Promise.withResolvers<void>();
+    const refreshed = Promise.withResolvers<void>();
+    input.client.cancelAgent = () => cancelled.promise;
+    input.refreshAgentSnapshot.mockReturnValue(refreshed.promise);
+    let settled = false;
+    const cancellation = cancelComposerAgent(input)!.then(() => {
+      settled = true;
+    });
+
+    expect(input.refreshAgentSnapshot).not.toHaveBeenCalled();
+    cancelled.resolve();
+    await cancelled.promise;
+    expect(input.refreshAgentSnapshot).toHaveBeenCalledOnce();
+    expect(settled).toBe(false);
+    refreshed.resolve();
+    await cancellation;
+    expect(settled).toBe(true);
+  });
+
+  it("reports a failed snapshot read instead of assuming the turn stopped", async () => {
+    const input = baseInput();
+    const error = new Error("Host disconnected during reconciliation");
+    input.refreshAgentSnapshot.mockRejectedValue(error);
+    await expect(cancelComposerAgent(input)).rejects.toBe(error);
   });
 
   it("returns a rejected cancel request to the composer", async () => {
@@ -334,6 +365,7 @@ describe("cancelComposerAgent", () => {
     };
 
     await expect(cancelComposerAgent(input)).rejects.toBe(cancellationError);
+    expect(input.refreshAgentSnapshot).not.toHaveBeenCalled();
   });
 
   it("does nothing when the agent is not running", () => {

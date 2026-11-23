@@ -11,8 +11,10 @@ import { parseServerInfoStatusPayload, type SessionOutboundMessage } from "@ait/
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
+  selectAgentTurnPresentation,
   useSessionStore,
 } from "@/stores/session-store";
+import { cancelComposerAgent } from "@/composer/actions";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";
 import {
   selectWorkspaceDirectoryServerIds,
@@ -486,6 +488,160 @@ describe("target workspace reads", () => {
     expect(useSessionStore.getState().sessions[serverId].agents.has("visible")).toBe(true);
     expect(useSessionStore.getState().sessions[serverId].hasHydratedAgents).toBe(false);
     expect(client.fetchAgentsCalls).toBe(0);
+    directory.dispose();
+  });
+
+  it("settles a stale running composer after an idle host accepts cancellation without an event", async () => {
+    const serverId = "cancel-stale-turn";
+    const { client, directory } = targetDirectory(serverId);
+    const agent = createAgent(serverId, "visible");
+    directory.acceptAgent(agent);
+    directory.applyAgentTurnLiveness(agent.id, {
+      type: "stream_open",
+      turn: { turnId: "finished-turn", startedAt: new Date() },
+    });
+    const fetchAgent = vi.fn(async () => ({ agent: projectAgentSnapshot(agent), project: null }));
+    Object.assign(client, { fetchAgent });
+    const cancelAgent = vi.fn(async () => undefined);
+    const presentation = () =>
+      selectAgentTurnPresentation(useSessionStore.getState().sessions[serverId], agent.id);
+    expect(presentation().isActive).toBe(true);
+
+    await cancelComposerAgent({
+      client: { cancelAgent },
+      agentId: agent.id,
+      isAgentRunning: true,
+      isCancellingAgent: false,
+      isConnected: true,
+      refreshAgentSnapshot: () => directory.refreshAgentSnapshot(agent.id),
+    });
+
+    expect(cancelAgent).toHaveBeenCalledWith(agent.id);
+    expect(presentation().isActive).toBe(false);
+    expect(fetchAgent).toHaveBeenCalledWith(agent.id);
+    expect(client.fetchAgentsCalls).toBe(0);
+    expect(useSessionStore.getState().sessions[serverId].hasHydratedAgents).toBe(false);
+    directory.dispose();
+  });
+
+  it("keeps a turn active when the host has accepted cancellation but is still running", async () => {
+    const serverId = "cancel-still-running";
+    const { client, directory } = targetDirectory(serverId);
+    const agent = createAgent(serverId, "visible");
+    const activeTurn = { turnId: "turn", startedAt: "2026-08-26T00:00:01.000Z" };
+    directory.acceptAgent(agent);
+    Object.assign(client, {
+      fetchAgent: async () => ({
+        agent: { ...projectAgentSnapshot(agent), status: "running", activeTurn },
+        project: null,
+      }),
+    });
+
+    await directory.refreshAgentSnapshot(agent.id);
+
+    expect(
+      selectAgentTurnPresentation(useSessionStore.getState().sessions[serverId], agent.id),
+    ).toMatchObject({ isActive: true, turnId: "turn" });
+    directory.dispose();
+  });
+
+  it("re-reads an idle snapshot if a new turn opens while cancellation is being reconciled", async () => {
+    const serverId = "cancel-new-turn";
+    const { client, directory } = targetDirectory(serverId);
+    const agent = createAgent(serverId, "visible");
+    directory.acceptAgent(agent);
+    const reading = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<Awaited<ReturnType<DaemonClient["fetchAgent"]>>>();
+    const activeTurn = { turnId: "new-turn", startedAt: "2026-08-26T00:00:01.000Z" };
+    const fetchAgent = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        reading.resolve();
+        return first.promise;
+      })
+      .mockResolvedValue({
+        agent: { ...projectAgentSnapshot(agent), status: "running", activeTurn },
+        project: null,
+      });
+    Object.assign(client, { fetchAgent });
+
+    const refresh = directory.refreshAgentSnapshot(agent.id);
+    await reading.promise;
+    directory.applyAgentTurnLiveness(agent.id, {
+      type: "stream_open",
+      turn: { turnId: activeTurn.turnId, startedAt: new Date(activeTurn.startedAt) },
+    });
+    first.resolve({ agent: projectAgentSnapshot(agent), project: null });
+    await refresh;
+
+    expect(fetchAgent).toHaveBeenCalledTimes(2);
+    expect(
+      selectAgentTurnPresentation(useSessionStore.getState().sessions[serverId], agent.id),
+    ).toMatchObject({ isActive: true, turnId: "new-turn" });
+    directory.dispose();
+  });
+
+  it("ignores a cancellation snapshot from a previous connection", async () => {
+    const serverId = "cancel-reconnected";
+    const { client, directory } = targetDirectory(serverId);
+    const agent = createAgent(serverId, "visible");
+    directory.acceptAgent(agent);
+    const reading = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<Awaited<ReturnType<DaemonClient["fetchAgent"]>>>();
+    Object.assign(client, {
+      fetchAgent: () => {
+        reading.resolve();
+        return first.promise;
+      },
+    });
+
+    const refresh = directory.refreshAgentSnapshot(agent.id);
+    await reading.promise;
+    directory.connectionChanged({
+      client: client as unknown as DaemonClient,
+      status: "online",
+      source: { clientGeneration: 1, connectionEpoch: 2 },
+    });
+    directory.applyAgentTurnLiveness(agent.id, {
+      type: "stream_open",
+      turn: { turnId: "new-connection-turn", startedAt: new Date() },
+    });
+    first.resolve({ agent: projectAgentSnapshot(agent), project: null });
+    await refresh;
+
+    expect(
+      selectAgentTurnPresentation(useSessionStore.getState().sessions[serverId], agent.id),
+    ).toMatchObject({ isActive: true, turnId: "new-connection-turn" });
+    directory.dispose();
+  });
+
+  it("refreshes the cancelled agent while another agent opens a turn", async () => {
+    const serverId = "cancel-unrelated-turn";
+    const { client, directory } = targetDirectory(serverId);
+    const agent = createAgent(serverId, "visible");
+    directory.acceptAgent(agent);
+    directory.acceptAgent(createAgent(serverId, "other"));
+    const reading = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<Awaited<ReturnType<DaemonClient["fetchAgent"]>>>();
+    const fetchAgent = vi.fn(() => {
+      reading.resolve();
+      return first.promise;
+    });
+    Object.assign(client, { fetchAgent });
+
+    const refresh = directory.refreshAgentSnapshot(agent.id);
+    await reading.promise;
+    directory.applyAgentTurnLiveness("other", {
+      type: "stream_open",
+      turn: { turnId: "other-turn", startedAt: new Date() },
+    });
+    first.resolve({ agent: projectAgentSnapshot(agent), project: null });
+    await refresh;
+
+    expect(fetchAgent).toHaveBeenCalledOnce();
+    expect(
+      selectAgentTurnPresentation(useSessionStore.getState().sessions[serverId], "other"),
+    ).toMatchObject({ isActive: true, turnId: "other-turn" });
     directory.dispose();
   });
 

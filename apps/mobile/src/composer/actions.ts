@@ -209,13 +209,17 @@ export interface CancelComposerAgentInput {
   isAgentRunning: boolean;
   isCancellingAgent: boolean;
   isConnected: boolean;
+  refreshAgentSnapshot: () => Promise<void>;
 }
 
 export function cancelComposerAgent(input: CancelComposerAgentInput): Promise<void> | null {
   if (!input.isAgentRunning || input.isCancellingAgent) return null;
   if (!input.isConnected || !input.client) return null;
   try {
-    return Promise.resolve(input.client.cancelAgent(input.agentId));
+    // An idle host accepts cancellation without emitting another turn-completed event.
+    return Promise.resolve(input.client.cancelAgent(input.agentId)).then(
+      input.refreshAgentSnapshot,
+    );
   } catch (error) {
     return Promise.reject(error);
   }

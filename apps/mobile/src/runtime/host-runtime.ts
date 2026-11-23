@@ -2840,6 +2840,10 @@ export class HostRuntimeStore {
     await directory.prepareAgentRoute(agentId);
   }
 
+  async refreshAgentSnapshot(serverId: string, agentId: string): Promise<void> {
+    await this.requireDirectory(serverId).refreshAgentSnapshot(agentId);
+  }
+
   async prepareWorkspaceRoute(serverId: string, workspaceId: string) {
     const directory = this.requireDirectory(serverId);
     return directory.prepareWorkspaceRoute(workspaceId);

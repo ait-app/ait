@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stopping an Agent refreshes that session's authoritative state, clearing a stale busy indicator
+  when the host has already finished while preserving a turn that is still running.
+
 - OMP slash commands distinguish native extensions and aliases from Ait-managed built-ins.
   Ambiguous ownership is reported before an input can be sent or a local shortcut can archive a session.
 

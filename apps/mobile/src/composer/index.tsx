@@ -2009,6 +2009,8 @@ function ComposerContentImpl({
       isAgentRunning,
       isCancellingAgent,
       isConnected,
+      refreshAgentSnapshot: () =>
+        getHostRuntimeStore().refreshAgentSnapshot(serverId, targetAgentId),
     });
     if (!cancellation) return;
     const requestId = getHostRuntimeStore().beginAgentCancellation(serverId, targetAgentId);
