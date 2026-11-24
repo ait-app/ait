@@ -1,6 +1,7 @@
 //! Calls between sibling Hosts of one account. Discovery and transport remain adapters.
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -113,7 +114,14 @@ pub trait Peers: fmt::Debug + Send + Sync {
     /// cannot list Hosts.
     async fn hosts(&self) -> Result<Vec<Host>, Error>;
 
-    /// Send one tool call to the Host on `node`.
+    /// Send one tool call to the Host on `node`, giving up after `timeout`.
+    /// Dropping the future also gives up the call; a call given up before
+    /// its request was sent never reaches the target.
+    ///
+    /// # Arguments
+    /// * `node` - The node of the target Host.
+    /// * `request` - The tool call.
+    /// * `timeout` - How long the caller waits, from the call until the reply.
     ///
     /// # Returns
     /// The `result` object the target Host replied with.
@@ -122,8 +130,11 @@ pub trait Peers: fmt::Debug + Send + Sync {
     /// Returns the reason the call did not reach the target,
     /// `Error::OutcomeUnknown` when it was sent but no reply arrived, and the
     /// target's refusal (`Error::NotAccepting`, `Error::TooLarge` or
-    /// `Error::Rejected`) when it replied with an error.
-    async fn call(&self, node: Uuid, request: Request) -> Result<Value, Error>;
+    /// `Error::Rejected`) when it replied with an error. When `timeout` passes
+    /// the error is `Error::Offline` if the target had not accepted the call's
+    /// session, `Error::OutcomeUnknown` if the request was sent, and
+    /// `Error::Capacity` if it was still waiting for its turn to be sent.
+    async fn call(&self, node: Uuid, request: Request, timeout: Duration) -> Result<Value, Error>;
 }
 
 #[cfg(test)]

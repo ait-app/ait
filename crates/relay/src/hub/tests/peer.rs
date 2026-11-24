@@ -444,7 +444,10 @@ async fn peer_online(
 
 type Outcome = tokio::task::JoinHandle<Result<Value, PeerError>>;
 
-/// Call `tool` on the Host on `node` from a task.
+/// The time limit of calls whose limit a test does not reach, like the MCP call timeout.
+const LIMIT: Duration = Duration::from_secs(60);
+
+/// Call `tool` on the Host on `node` from a task, within [`LIMIT`].
 fn call(
     hub: &Connector,
     node: Uuid,
@@ -452,13 +455,26 @@ fn call(
     arguments: Value,
     caller: Option<&str>,
 ) -> Outcome {
-    let hub = hub.clone();
     let request = Request {
         tool: tool.to_owned(),
         arguments,
         caller: caller.map(str::to_owned),
     };
-    tokio::spawn(async move { Peers::call(&hub, node, request).await })
+    call_within(hub, node, request, LIMIT)
+}
+
+/// Send `request` to the Host on `node` from a task, giving up after `limit`.
+fn call_within(hub: &Connector, node: Uuid, request: Request, limit: Duration) -> Outcome {
+    let hub = hub.clone();
+    tokio::spawn(async move { Peers::call(&hub, node, request, limit).await })
+}
+
+fn agent(tool: &str, arguments: Value) -> Request {
+    Request {
+        tool: tool.to_owned(),
+        arguments,
+        caller: None,
+    }
 }
 
 async fn outcome(call: Outcome) -> Result<Value, PeerError> {
@@ -969,6 +985,106 @@ async fn hosts_come_from_the_center_and_are_unavailable_without_the_method() {
     let (_relay, hub, center, _local, _calls) = peer_connector().await;
     let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
     assert_eq!(Peers::hosts(&hub).await, Err(PeerError::Unavailable));
+    quiet(&mut socket).await;
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_call_whose_open_is_never_accepted_is_offline_at_its_limit() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let limit = Duration::from_secs(10);
+    let pending = call_within(&hub, node, agent("agent_list", json!({})), limit);
+    // The target is in its grace period: the center holds the open unanswered.
+    let s = opened(&mut socket, 1, node).await;
+
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(9)).await; // virtual time
+    quiet(&mut socket).await;
+    assert!(!pending.is_finished(), "the call waits until its limit");
+    tokio::time::advance(Duration::from_secs(1)).await; // virtual time
+    assert_eq!(outcome(pending).await, Err(PeerError::Offline));
+    // Nothing was sent, and the open is not left behind.
+    assert_eq!(
+        next(&mut socket).await.0,
+        json!({"t":"close","seq":2,"s":s,"code":"done"})
+    );
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_sent_call_is_outcome_unknown_at_its_limit_and_its_late_reply_is_ignored() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let limit = Duration::from_secs(10);
+    let first = call_within(
+        &hub,
+        node,
+        agent("agent_wait", json!({"agentId":"b-7"})),
+        limit,
+    );
+    let s = opened(&mut socket, 1, node).await;
+    socket
+        .send(peer_accept(1, s, Some(65_536)))
+        .await
+        .expect("accept");
+    let first_id = request(&mut socket, s).await["id"].clone();
+    let second = call(&hub, node, "agent_get", json!({"agentId":"b-8"}), None);
+    let second_id = request(&mut socket, s).await["id"].clone();
+
+    tokio::time::pause();
+    tokio::time::advance(limit).await; // virtual time
+    assert_eq!(outcome(first).await, Err(PeerError::OutcomeUnknown));
+
+    // The late reply reaches nobody; the second call on the session still gets its own.
+    let late = json!({"id":first_id,"result":{"content":["late"]}});
+    let answer = json!({"id":second_id,"result":{"structuredContent":{"agent":"b-8"}}});
+    socket.send(text(2, s, &late)).await.expect("late reply");
+    socket.send(text(3, s, &answer)).await.expect("reply");
+    assert_eq!(
+        outcome(second).await,
+        Ok(json!({"structuredContent":{"agent":"b-8"}}))
+    );
+    // Both replies are credited, the late one included.
+    let delivered = (late.to_string().len() + answer.to_string().len()) as u64;
+    let mut credit = 0;
+    while credit != delivered {
+        let (header, _) = next(&mut socket).await;
+        assert_eq!((&header["t"], &header["s"]), (&json!("credit"), &json!(s)));
+        credit = header["c"].as_u64().expect("credit");
+    }
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_call_waiting_for_the_window_is_capacity_at_its_limit_and_never_sent() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let large = json!({"text":"x".repeat(40_000)});
+    let _first = call(&hub, node, "agent_prompt", large.clone(), None);
+    let s = opened(&mut socket, 1, node).await;
+    socket
+        .send(peer_accept(1, s, Some(65_536)))
+        .await
+        .expect("accept");
+    let sent = request(&mut socket, s).await;
+    // The second request does not fit beside the first in the target's window.
+    let limit = Duration::from_secs(10);
+    let second = call_within(&hub, node, agent("agent_prompt", large), limit);
+    quiet(&mut socket).await;
+
+    tokio::time::pause();
+    tokio::time::advance(limit).await; // virtual time
+    assert_eq!(outcome(second).await, Err(PeerError::Capacity));
+    // Credit that would admit it now sends nothing.
+    let credit = sent.to_string().len() as u64;
+    socket
+        .send(frame(&json!({"t":"credit","s":s,"c":credit}), b""))
+        .await
+        .expect("credit");
     quiet(&mut socket).await;
     hub.stop().await;
 }

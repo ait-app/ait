@@ -319,14 +319,17 @@ impl Peers for Connector {
         Ok(hosts)
     }
 
-    /// Send one call over this link's peer session to `node`.
+    /// Send one call over this link's peer session to `node`, giving up after `timeout`.
     ///
     /// # Errors
     /// Returns `Error::Unavailable` without a link that enabled `peer`, and
     /// otherwise the outcome described on [`opener`].
-    async fn call(&self, node: Uuid, request: Request) -> Result<Value, Error> {
+    async fn call(&self, node: Uuid, request: Request, timeout: Duration) -> Result<Value, Error> {
         let caller = self.state.lock().await.peers.clone();
-        caller.ok_or(Error::Unavailable)?.call(node, request).await
+        caller
+            .ok_or(Error::Unavailable)?
+            .call(node, request, timeout)
+            .await
     }
 }
 

@@ -320,7 +320,7 @@ async fn a_center_declaring_peer_is_offered_it_and_may_leave_it_disabled() {
         caller: None,
     };
     assert_eq!(
-        model::peer::Peers::call(&hub, Uuid::new_v4(), request).await,
+        model::peer::Peers::call(&hub, Uuid::new_v4(), request, Duration::from_secs(60)).await,
         Err(model::peer::Error::Unavailable)
     );
     let later = Uuid::new_v4();

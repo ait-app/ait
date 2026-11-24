@@ -9,14 +9,21 @@
 //! any end of its session, or of the logical link, leaves its outcome unknown.
 //! A session is closed as `done` after [`IDLE`] without requests, and before
 //! the target accepts it once every caller waiting on it gave up.
+//!
+//! Each call carries its caller's time limit as a [`Progress`] shared with the
+//! opener: at the limit the caller learns how far the call got, and the opener
+//! never sends a request whose caller already gave up.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
 use model::peer::{Error, Request};
 use serde_json::Value;
+use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::Instant;
+use tokio::time::{Instant, timeout_at};
 use tokio_tungstenite::tungstenite::{Bytes, Message};
 use uuid::Uuid;
 
@@ -40,6 +47,63 @@ pub(in crate::hub) struct Call {
     node: Uuid,
     request: Request,
     reply: Reply,
+    progress: Progress,
+}
+
+/// How far one call got: [`QUEUED`], [`OPENING`], [`HELD`] or [`SENT`], or
+/// [`GAVE_UP`] once its caller's time limit passed before it was sent. Shared
+/// by the caller and the opener, so the two agree on whether it was sent.
+#[derive(Clone, Debug)]
+struct Progress(Arc<AtomicU8>);
+
+/// Waiting for the link loop, not yet on a session.
+const QUEUED: u8 = 0;
+/// Held on a session whose `open` the target has not accepted.
+const OPENING: u8 = 1;
+/// Held on an accepted session until its window admits the request.
+const HELD: u8 = 2;
+/// Handed to the link.
+const SENT: u8 = 3;
+/// Its caller gave up before it was sent; the opener drops it.
+const GAVE_UP: u8 = 4;
+
+impl Progress {
+    /// A call waiting for the link loop.
+    fn queued() -> Self {
+        Self(Arc::new(AtomicU8::new(QUEUED)))
+    }
+
+    /// Record that the call reached `stage`.
+    ///
+    /// # Returns
+    /// `false` once the caller gave up; the opener must then drop the call.
+    fn reach(&self, stage: u8) -> bool {
+        self.0
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                (current != GAVE_UP).then_some(stage)
+            })
+            .is_ok()
+    }
+
+    /// Give the call up at its caller's time limit.
+    ///
+    /// # Returns
+    /// `Error::OutcomeUnknown` when the request was already sent,
+    /// `Error::Offline` when it waited for the target to accept its session,
+    /// and `Error::Capacity` when it waited in the queue or for the target's
+    /// window.
+    fn give_up(&self) -> Error {
+        let previous = self
+            .0
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                (current != SENT).then_some(GAVE_UP)
+            });
+        match previous {
+            Err(_) => Error::OutcomeUnknown,
+            Ok(OPENING) => Error::Offline,
+            Ok(_) => Error::Capacity,
+        }
+    }
 }
 
 /// Hands calls to the link loop that owns the peer sessions.
@@ -49,26 +113,47 @@ pub(in crate::hub) struct Caller {
 }
 
 impl Caller {
-    /// Send `request` to the Host on `node` and wait for its reply. Dropping
-    /// the future gives up the call; if its session was not accepted yet,
-    /// nothing was sent.
+    /// Send `request` to the Host on `node` and wait for its reply, at most
+    /// `limit`. Dropping the future gives up the call too; if its session was
+    /// not accepted yet, nothing was sent.
     ///
     /// # Errors
     /// Returns `Error::Unavailable` once the link ended before the call reached
-    /// a session, and otherwise what [`Opener`] answered.
-    pub(in crate::hub) async fn call(&self, node: Uuid, request: Request) -> Result<Value, Error> {
-        let (reply, outcome) = oneshot::channel();
-        self.queue
-            .send(Call {
-                node,
-                request,
-                reply,
-            })
-            .await
-            .map_err(|_| Error::Unavailable)?;
+    /// a session; at the limit, `Error::Offline` while the target had not
+    /// accepted the session, `Error::OutcomeUnknown` once the request was sent,
+    /// and `Error::Capacity` while it waited in the queue or for the target's
+    /// window; otherwise what [`Opener`] answered.
+    pub(in crate::hub) async fn call(
+        &self,
+        node: Uuid,
+        request: Request,
+        limit: Duration,
+    ) -> Result<Value, Error> {
+        let deadline = Instant::now() + limit;
+        let progress = Progress::queued();
+        let (reply, mut outcome) = oneshot::channel();
+        let call = Call {
+            node,
+            request,
+            reply,
+            progress: progress.clone(),
+        };
+        match timeout_at(deadline, self.queue.send(call)).await {
+            Err(_) => return Err(Error::Capacity),
+            Ok(Err(_)) => return Err(Error::Unavailable),
+            Ok(Ok(())) => {}
+        }
         // The opener answers every call it took, even when the link ends; a
         // call dropped unanswered never left this Host.
-        outcome.await.unwrap_or(Err(Error::Unavailable))
+        match timeout_at(deadline, &mut outcome).await {
+            Ok(answer) => answer.unwrap_or(Err(Error::Unavailable)),
+            // An answer that raced the limit still counts.
+            Err(_) => match outcome.try_recv() {
+                Ok(answer) => answer,
+                Err(TryRecvError::Empty) => Err(progress.give_up()),
+                Err(TryRecvError::Closed) => Err(Error::Unavailable),
+            },
+        }
     }
 }
 
@@ -100,6 +185,7 @@ struct Held {
     id: u64,
     body: Bytes,
     reply: Reply,
+    progress: Progress,
 }
 
 /// Flow control of an accepted session in both directions.
@@ -165,6 +251,7 @@ impl Opener {
             node,
             request,
             reply,
+            progress,
         } = call;
         if reply.is_closed() {
             return Ok(());
@@ -173,46 +260,57 @@ impl Opener {
             let _ = reply.send(Err(Error::Unavailable));
             return Ok(());
         }
-        let existing = self
-            .sessions
-            .iter()
-            .find_map(|(s, session)| (session.node == node).then_some((*s, session.next_id)));
-        let id = existing.map_or(1, |(_, id)| id);
+        let existing = self.sessions.iter().find_map(|(s, session)| {
+            (session.node == node).then_some((*s, session.next_id, session.accepted))
+        });
+        let id = existing.map_or(1, |(_, id, _)| id);
         let body = encode_request(id, request);
         if body.len() > wire::MAX_PAYLOAD {
             let _ = reply.send(Err(Error::TooLarge));
             return Ok(());
         }
-        let s = match existing {
-            Some((s, _)) => s,
+        let (found, stage) = match existing {
+            Some((s, _, true)) => (Some(s), HELD),
+            Some((s, _, false)) => (Some(s), OPENING),
             None if self.sessions.len() >= MAX_PEER_SESSIONS => {
                 let _ = reply.send(Err(Error::Capacity));
                 return Ok(());
             }
-            None => {
-                let s = Uuid::new_v4();
-                // Opened with the largest window, so any reply within the
-                // payload limit can arrive.
-                let to = Target { node };
-                let w = Some(credit::WINDOW);
-                push(
-                    link,
-                    frames,
-                    |seq| Outbound::Open {
-                        seq,
-                        s,
-                        to,
-                        k: wire::PEER,
-                        w,
-                    },
-                    HELLO,
-                )?;
-                s
-            }
+            None => (None, OPENING),
+        };
+        if !progress.reach(stage) {
+            return Ok(());
+        }
+        let s = if let Some(s) = found {
+            s
+        } else {
+            let s = Uuid::new_v4();
+            // Opened with the largest window, so any reply within the
+            // payload limit can arrive.
+            let to = Target { node };
+            let w = Some(credit::WINDOW);
+            push(
+                link,
+                frames,
+                |seq| Outbound::Open {
+                    seq,
+                    s,
+                    to,
+                    k: wire::PEER,
+                    w,
+                },
+                HELLO,
+            )?;
+            s
         };
         let session = self.sessions.entry(s).or_insert_with(|| Opened::new(node));
         session.next_id = id + 1;
-        session.held.push_back(Held { id, body, reply });
+        session.held.push_back(Held {
+            id,
+            body,
+            reply,
+            progress,
+        });
         session.send(s, link, frames)
     }
 
@@ -241,6 +339,10 @@ impl Opener {
         }
         session.accepted = true;
         session.window = window.map(Window::new);
+        // From here a request still held waits for the window, not the target.
+        for held in &session.held {
+            held.progress.reach(HELD);
+        }
         session.send(s, link, frames)?;
         Ok(true)
     }
@@ -464,7 +566,7 @@ impl Opened {
                     break;
                 }
             }
-            if held.reply.is_closed() {
+            if held.reply.is_closed() || !held.progress.reach(SENT) {
                 continue;
             }
             let pt = PayloadKind::Text;
@@ -532,3 +634,6 @@ fn push(
     frames.push(Message::Binary(link.push(header, payload)?));
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
