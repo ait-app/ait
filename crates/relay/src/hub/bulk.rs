@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::link::Link;
-use super::{Connector, Failure, Role, calls, wire};
+use super::{Connector, Failure, Requests, Role, wire};
 use crate::validate_ticket;
 
 /// One-use bulk lane serve ticket. The bulk link's `hello.f` is fixed
@@ -87,11 +87,11 @@ async fn serve(
         tracing::warn!("Hub bulk ticket rejected");
         return;
     }
-    // A bulk link carries no center calls.
-    let (_, mut calls) = calls::Calls::channel();
+    // A bulk link carries no center calls and opens no peer sessions.
+    let (_, _, mut requests) = Requests::channel();
     let link = (hub_ticket, Link::new(wire::BULK_FEATURES.to_vec()));
     match connector
-        .run(url, link, &Role::Bulk, cancel, &mut calls)
+        .run(url, link, &Role::Bulk, cancel, &mut requests)
         .await
     {
         Ok(()) => tracing::info!("Hub bulk link closed"),

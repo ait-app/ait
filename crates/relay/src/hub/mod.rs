@@ -9,7 +9,9 @@
 //! all of them predates this daemon; the link fails instead of downgrading.
 //! `peer`, for sessions between sibling Hosts, is optional: the link declares
 //! it only when the center does, and runs whether or not the center enables it.
-//! A peer session another Host opens is served by the local API, one task per call.
+//! A peer session another Host opens is served by the local API, one task per call;
+//! on a link that enabled `peer`, this Host also opens peer sessions to call
+//! sibling Hosts (`model::peer::Peers`).
 //! Sessions still adapt to their opener: an `open` without `w` is served without
 //! flow control, one without `k` is an RPC session.
 
@@ -44,6 +46,7 @@ use crate::transport::Socket;
 use crate::{Error, Local, center_url, diagnostics, endpoint, validate_ticket};
 use bridge::Frame;
 use link::{Joined, Link};
+use peer::opener::{Caller, Opener};
 use session::{Output, Session};
 use wire::{Inbound, Outbound, SessionKind};
 
@@ -123,6 +126,10 @@ struct State {
     cancel: CancellationToken,
     replaced_at: Option<Instant>,
     calls: Option<calls::Sender>,
+    /// Calls to sibling Hosts, while a link exists.
+    peers: Option<Caller>,
+    /// The latest Host list from the center.
+    hosts: Option<peer::Listed>,
 }
 
 /// Owns at most one hub link and the local sessions it carries.
@@ -145,6 +152,8 @@ impl Connector {
                 cancel: CancellationToken::new(),
                 replaced_at: None,
                 calls: None,
+                peers: None,
+                hosts: None,
             })),
             local,
             shutdown,
@@ -235,7 +244,7 @@ impl Connector {
             center: center.to_string(),
             node_session_id: grant.node_session_id,
         };
-        let (sender, mut calls) = calls::Calls::channel();
+        let (sender, caller, mut requests) = Requests::channel();
         {
             let mut state = self.state.lock().await;
             state.cancel.cancel();
@@ -243,6 +252,7 @@ impl Connector {
             state.generation = generation;
             state.replaced_at = None;
             state.calls = Some(sender);
+            state.peers = Some(caller);
             self.publication.send_modify(|publication| {
                 if publication.scope.as_ref() != Some(&scope) {
                     publication.methods.clear();
@@ -275,7 +285,7 @@ impl Connector {
                         (grant.hub_ticket, Link::new(offer)),
                         &role,
                         &cancel,
-                        &mut calls,
+                        &mut requests,
                     )
                     .await;
                 if let Err(error) = &result {
@@ -297,6 +307,7 @@ impl Connector {
         state.status = Status::default();
         state.replaced_at = None;
         state.calls = None;
+        state.peers = None;
         self.publication.send_replace(LinkState::default());
     }
 
@@ -333,6 +344,7 @@ impl Connector {
             ..Status::default()
         };
         state.calls = None;
+        state.peers = None;
         self.publication.send_modify(|publication| {
             publication.online = false;
             if state.status.rejected.is_some() {
@@ -395,7 +407,7 @@ impl Connector {
         (ticket, mut link): (SecretString, Link),
         role: &Role,
         cancel: &CancellationToken,
-        calls: &mut calls::Calls,
+        requests: &mut Requests,
     ) -> Result<(), Failure> {
         let (output_tx, mut output_rx) = mpsc::channel(MAX_SESSIONS);
         let mut sessions = Sessions {
@@ -423,8 +435,10 @@ impl Connector {
                 Ok(mut welcome) => {
                     if welcome.fresh {
                         sessions.routes.clear();
-                        calls.fresh();
+                        requests.calls.fresh();
                     }
+                    let peer = welcome.features.iter().any(|feature| feature == wire::PEER);
+                    requests.peers.joined(welcome.fresh, peer);
                     grace = welcome.grace;
                     lost = None;
                     failures = 0;
@@ -434,13 +448,16 @@ impl Connector {
                         return Ok(());
                     }
                     // Empty on a fresh link, whose sessions are gone.
-                    let credits = sessions_credit(&sessions);
+                    let mut credits = sessions_credit(&sessions);
+                    credits.extend(requests.peers.credits());
                     let mut pump = Pump {
                         link: &mut link,
                         sessions: &mut sessions,
                         outputs: &mut output_rx,
-                        calls,
+                        calls: &mut requests.calls,
+                        peers: &mut requests.peers,
                         lane,
+                        frames: Vec::new(),
                     };
                     match pump.run(welcome.socket, credits, cancel).await? {
                         Ended::Stopped => return Ok(()),
@@ -479,6 +496,22 @@ impl Connector {
                 () = sleep(Duration::from_millis(delay)) => {},
             }
         }
+    }
+}
+
+/// What this Host asks over a link: center calls and calls to sibling Hosts.
+/// Both outlive physical connections.
+struct Requests {
+    calls: calls::Calls,
+    peers: Opener,
+}
+
+impl Requests {
+    /// The requests of a new link, and the handles that submit them.
+    fn channel() -> (calls::Sender, Caller, Self) {
+        let (sender, calls) = calls::Calls::channel();
+        let (caller, peers) = Opener::channel();
+        (sender, caller, Self { calls, peers })
     }
 }
 
@@ -768,8 +801,12 @@ struct Pump<'a> {
     sessions: &'a mut Sessions,
     outputs: &'a mut mpsc::Receiver<(Uuid, Output)>,
     calls: &'a mut calls::Calls,
+    /// Peer sessions this Host opened.
+    peers: &'a mut Opener,
     /// Opens the bulk link on `lane` hints; only on a main link that declared `bulk`.
     lane: Option<&'a bulk::Lane>,
+    /// Frames to write after the current event, in the order the link numbered them.
+    frames: Vec<Message>,
 }
 
 impl Pump<'_> {
@@ -795,7 +832,8 @@ impl Pump<'_> {
         acks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut idle = Instant::now() + IDLE_TIMEOUT;
         loop {
-            let outgoing = tokio::select! {
+            let peer_idle = self.peers.next_idle();
+            tokio::select! {
                 () = cancel.cancelled() => {
                     let _ = timeout(Duration::from_secs(1), sink.close()).await;
                     return Ok(Ended::Stopped);
@@ -804,8 +842,8 @@ impl Pump<'_> {
                     idle = Instant::now() + IDLE_TIMEOUT;
                     match message {
                         Some(Ok(Message::Binary(frame))) => self.inbound(&frame)?,
-                        Some(Ok(Message::Ping(body))) => Some(Message::Pong(body)),
-                        Some(Ok(Message::Pong(_))) => None,
+                        Some(Ok(Message::Ping(body))) => self.frames.push(Message::Pong(body)),
+                        Some(Ok(Message::Pong(_))) => {}
                         Some(Ok(Message::Text(_) | Message::Frame(_))) => {
                             return Err(Error::Protocol.into());
                         }
@@ -816,40 +854,54 @@ impl Pump<'_> {
                         Some(Ok(Message::Close(_))) | None => return Ok(Ended::Lost),
                     }
                 }
-                Some((id, output)) = self.outputs.recv(), if self.link.has_room() => self.output(id, output)?,
+                Some((id, output)) = self.outputs.recv(), if self.link.has_room() => {
+                    self.output(id, output)?;
+                }
                 Some(request) = self.calls.queue.recv(), if self.link.has_room() => {
-                    self.calls.output(request, self.link)?.map(Message::Binary)
+                    if let Some(frame) = self.calls.output(request, self.link)? {
+                        self.frames.push(Message::Binary(frame));
+                    }
+                }
+                Some(call) = self.peers.queue.recv(), if self.link.has_room() => {
+                    self.peers.call(call, self.link, &mut self.frames)?;
+                }
+                () = sleep_until(peer_idle.unwrap_or(idle)), if peer_idle.is_some() => {
+                    self.peers.expire(self.link, &mut self.frames)?;
                 }
                 _ = acks.tick() => {
                     self.calls.prune();
-                    self.link.take_ack()?.map(Message::Binary)
+                    if let Some(ack) = self.link.take_ack()? {
+                        self.frames.push(Message::Binary(ack));
+                    }
+                    self.peers.prune(self.link, &mut self.frames)?;
                 },
                 () = sleep_until(idle) => return Ok(Ended::Lost),
-            };
-            if let Some(message) = outgoing
-                && !matches!(timeout(WRITE_TIMEOUT, sink.send(message)).await, Ok(Ok(())))
-            {
-                return Ok(Ended::Lost);
+            }
+            // Sequenced frames left unwritten are replayed after a resume.
+            for message in self.frames.drain(..) {
+                if !matches!(timeout(WRITE_TIMEOUT, sink.send(message)).await, Ok(Ok(()))) {
+                    return Ok(Ended::Lost);
+                }
             }
         }
     }
 
-    /// Apply one center frame; returns a frame to send in reply, if any.
-    fn inbound(&mut self, frame: &Bytes) -> Result<Option<Message>, Failure> {
+    /// Apply one center frame, queuing any frame it calls for.
+    fn inbound(&mut self, frame: &Bytes) -> Result<(), Failure> {
         let (header, payload) = wire::decode(frame)?;
         if let Some(seq) = header.seq()
             && !self.link.received(seq)
         {
-            return Ok(None);
+            return Ok(());
         }
         let refused = match header {
             Inbound::Ack { a } => {
                 self.link.acked(a)?;
-                return Ok(None);
+                return Ok(());
             }
             Inbound::Reply { id, .. } => {
                 self.calls.reply(id, &payload)?;
-                return Ok(None);
+                return Ok(());
             }
             Inbound::Open {
                 s,
@@ -872,26 +924,39 @@ impl Pump<'_> {
                     .err()
                     .map(|code| (s, code))
             }
-            // This link opens no sessions, so no accept belongs to one.
-            Inbound::Accept { .. } => return Ok(None),
+            // Only sessions this Host opened are accepted; others are ignored.
+            Inbound::Accept { s, w, .. } => {
+                self.peers
+                    .accepted(s, w, &payload, self.link, &mut self.frames)?;
+                return Ok(());
+            }
             Inbound::Credit { s, c } => {
-                self.sessions.credit(s, c);
-                return Ok(None);
+                if !self.peers.credit(s, c, self.link, &mut self.frames)? {
+                    self.sessions.credit(s, c);
+                }
+                return Ok(());
             }
             Inbound::ShareStatus { .. } => {
                 // A malformed outcome is ignored; the next publication repairs state.
                 if let Ok(outcome) = serde_json::from_slice::<Outcome>(&payload) {
                     self.sessions.shares.send_replace(Some(outcome));
                 }
-                return Ok(None);
+                return Ok(());
+            }
+            Inbound::Msg { s, pt, .. } if self.peers.owns(s) => {
+                self.peers
+                    .message(s, pt, &payload, self.link, &mut self.frames)?;
+                return Ok(());
             }
             Inbound::Msg { s, pt, .. } => self
                 .sessions
                 .deliver(s, pt, payload)
                 .err()
                 .map(|code| (s, code)),
-            Inbound::Close { s, .. } => {
-                self.sessions.routes.remove(&s);
+            Inbound::Close { s, code, .. } => {
+                if !self.peers.closed(s, code.as_deref()) {
+                    self.sessions.routes.remove(&s);
+                }
                 None
             }
             Inbound::Lane { lane } => {
@@ -901,7 +966,7 @@ impl Pump<'_> {
                 {
                     lane.hint();
                 }
-                return Ok(None);
+                return Ok(());
             }
             Inbound::Error { code } => {
                 // The center closes unused bulk links as `idle`; that is routine.
@@ -915,27 +980,29 @@ impl Pump<'_> {
             Inbound::Welcome { .. } => return Err(Error::Protocol.into()),
         };
         let Some((s, code)) = refused else {
-            return Ok(None);
+            return Ok(());
         };
         let frame = self
             .link
             .push(|seq| Outbound::Close { seq, s, code }, b"")?;
-        Ok(Some(Message::Binary(frame)))
+        self.frames.push(Message::Binary(frame));
+        Ok(())
     }
 
     /// Frame one session output; output of an already closed session is dropped.
-    fn output(&mut self, id: Uuid, output: Output) -> Result<Option<Message>, Error> {
+    fn output(&mut self, id: Uuid, output: Output) -> Result<(), Error> {
         if let Output::Closed(code) = output {
             if self.sessions.routes.remove(&id).is_none() {
-                return Ok(None);
+                return Ok(());
             }
             let frame = self
                 .link
                 .push(|seq| Outbound::Close { seq, s: id, code }, b"")?;
-            return Ok(Some(Message::Binary(frame)));
+            self.frames.push(Message::Binary(frame));
+            return Ok(());
         }
         let Some(route) = self.sessions.routes.get_mut(&id) else {
-            return Ok(None);
+            return Ok(());
         };
         let frame = match output {
             // Answer a window with this Host's own; otherwise the session is not flow-controlled.
@@ -946,7 +1013,7 @@ impl Pump<'_> {
             }
             Output::Credit(c) => {
                 let Some(credit) = route.credit.as_mut() else {
-                    return Ok(None);
+                    return Ok(());
                 };
                 credit.granted = c;
                 wire::encode(&Outbound::Credit { s: id, c }, b"")?
@@ -954,9 +1021,10 @@ impl Pump<'_> {
             Output::Message(pt, body) => self
                 .link
                 .push(|seq| Outbound::Msg { seq, s: id, pt }, &body)?,
-            Output::Closed(_) => return Ok(None),
+            Output::Closed(_) => return Ok(()),
         };
-        Ok(Some(Message::Binary(frame)))
+        self.frames.push(Message::Binary(frame));
+        Ok(())
     }
 }
 

@@ -312,5 +312,31 @@ async fn a_center_declaring_peer_is_offered_it_and_may_leave_it_disabled() {
         next(&mut socket).await,
         (json!({"t":"accept","seq":1,"s":s}), br#"{"v":1}"#.to_vec())
     );
+
+    // Calls to sibling Hosts need `peer` enabled: no `open` is sent, which would end the link.
+    let request = model::peer::Request {
+        tool: "agent_list".to_owned(),
+        arguments: json!({}),
+        caller: None,
+    };
+    assert_eq!(
+        model::peer::Peers::call(&hub, Uuid::new_v4(), request).await,
+        Err(model::peer::Error::Unavailable)
+    );
+    let later = Uuid::new_v4();
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":2,"s":later,"from":Uuid::new_v4(),"k":"peer","peer":identity}),
+            br#"{"v":1}"#,
+        ))
+        .await
+        .expect("peer open");
+    assert_eq!(
+        next(&mut socket).await,
+        (
+            json!({"t":"accept","seq":2,"s":later}),
+            br#"{"v":1}"#.to_vec()
+        )
+    );
     hub.stop().await;
 }

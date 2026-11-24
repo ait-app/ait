@@ -102,10 +102,6 @@ pub(super) enum Outbound {
     },
     /// A session this Host opens to `to`; `w` is this Host's receive window
     /// when the session is flow-controlled.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "opened once this Host calls sibling Hosts")
-    )]
     #[serde(rename = "open")]
     Open {
         seq: u64,
@@ -182,10 +178,6 @@ pub(super) enum Inbound {
     },
     /// The target accepted a session this Host opened; `w` is its receive
     /// window when the session is flow-controlled.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "read once this Host calls sibling Hosts")
-    )]
     #[serde(rename = "accept")]
     Accept {
         seq: u64,
@@ -200,10 +192,6 @@ pub(super) enum Inbound {
     Close {
         seq: u64,
         s: Uuid,
-        #[cfg_attr(
-            not(test),
-            expect(dead_code, reason = "read once this Host calls sibling Hosts")
-        )]
         #[serde(default)]
         code: Option<String>,
     },

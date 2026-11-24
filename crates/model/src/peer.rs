@@ -66,7 +66,7 @@ pub struct Request {
 }
 
 /// Why a call to another Host failed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     /// This Host has no link to the center, or the center cannot reach other Hosts.
     #[error("account hub unavailable")]
@@ -92,6 +92,15 @@ pub enum Error {
     /// The request was sent but no reply arrived; it may or may not have run.
     #[error("call outcome unknown")]
     OutcomeUnknown,
+    /// The target Host refused the call itself with a JSON-RPC style error,
+    /// such as `-32602` for invalid arguments.
+    #[error("host rejected the call ({code}): {message}")]
+    Rejected {
+        /// The error code the target Host replied with.
+        code: i32,
+        /// The target Host's message, shown to the caller as given.
+        message: String,
+    },
 }
 
 /// Sibling Hosts of this account, reached through the account center.
@@ -110,7 +119,12 @@ pub trait Peers: fmt::Debug + Send + Sync {
     /// The `result` object the target Host replied with.
     ///
     /// # Errors
-    /// Returns the reason the call did not reach the target, or
-    /// `Error::OutcomeUnknown` when it was sent but no reply arrived.
+    /// Returns the reason the call did not reach the target,
+    /// `Error::OutcomeUnknown` when it was sent but no reply arrived, and the
+    /// target's refusal (`Error::NotAccepting`, `Error::TooLarge` or
+    /// `Error::Rejected`) when it replied with an error.
     async fn call(&self, node: Uuid, request: Request) -> Result<Value, Error>;
 }
+
+#[cfg(test)]
+mod tests;

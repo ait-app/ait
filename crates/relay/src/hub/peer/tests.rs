@@ -103,3 +103,104 @@ fn refusals_map_to_reply_errors() {
         (-32_602, "Unknown or unavailable tool".to_owned())
     );
 }
+
+#[test]
+fn requests_encode_to_what_the_receiver_decodes() {
+    let request = Request {
+        tool: "agent_get".to_owned(),
+        arguments: json!({"agentId":"b"}),
+        caller: Some("a".to_owned()),
+    };
+    let encoded = encode_request(7, request.clone());
+    assert_eq!(
+        decoded(&encoded),
+        json!({"id":7,"tool":"agent_get","arguments":{"agentId":"b"},"caller":{"agentId":"a"}})
+    );
+    assert_eq!(decode_request(&encoded), Ok((7, request)));
+    let anonymous = encode_request(
+        8,
+        Request {
+            tool: "agent_list".to_owned(),
+            arguments: json!({}),
+            caller: None,
+        },
+    );
+    assert_eq!(
+        decoded(&anonymous),
+        json!({"id":8,"tool":"agent_list","arguments":{}})
+    );
+}
+
+#[test]
+fn reply_errors_map_to_call_errors() {
+    assert_eq!(
+        decode_reply(&encode_reply(3, Ok(json!({"content":[]})))),
+        Ok((3, Ok(json!({"content":[]}))))
+    );
+    let error = |code: i32| encode_reply(4, Err((code, "no".to_owned())));
+    assert_eq!(
+        decode_reply(&error(NOT_ACCEPTING)),
+        Ok((4, Err(Error::NotAccepting)))
+    );
+    assert_eq!(
+        decode_reply(&error(TOO_LARGE)),
+        Ok((4, Err(Error::TooLarge)))
+    );
+    assert_eq!(
+        decode_reply(&error(-32_602)),
+        Ok((
+            4,
+            Err(Error::Rejected {
+                code: -32_602,
+                message: "no".to_owned()
+            })
+        ))
+    );
+    for text in [
+        br#"{"id":1}"#.as_slice(),
+        br#"{"result":{}}"#,
+        br#"{"id":1,"error":{"code":"x","message":"no"}}"#,
+        br#"{"id":1,"tool":"agent_list","arguments":{}}"#,
+        b"not json",
+    ] {
+        assert_eq!(
+            decode_reply(text),
+            Err(Malformed),
+            "{}",
+            String::from_utf8_lossy(text)
+        );
+    }
+}
+
+#[test]
+fn hosts_without_an_address_are_left_out_and_unknown_states_read_as_offline() {
+    let (host_id, node_id, server_id) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    let listed = json!({"hosts":[
+        {"host_id":host_id,"node_id":node_id,"server_id":server_id,"name":"Studio",
+            "hostname":null,"platform":"macos","app_version":"1.2.3","state":"sleeping",
+            "peer":{"supported":true,"enabled":true},"later":"ignored"},
+        {"host_id":Uuid::new_v4(),"node_id":null,"server_id":Uuid::new_v4(),"name":"New",
+            "hostname":null,"platform":null,"app_version":null,"state":"offline",
+            "peer":{"supported":false,"enabled":false}},
+        {"host_id":Uuid::new_v4(),"node_id":Uuid::new_v4(),"server_id":null,"name":"Old",
+            "hostname":null,"platform":null,"app_version":null,"state":"online",
+            "peer":{"supported":false,"enabled":false}},
+    ]});
+    assert_eq!(
+        decode_hosts(listed),
+        Ok(vec![Host {
+            server_id,
+            host_id,
+            node_id,
+            name: "Studio".to_owned(),
+            hostname: String::new(),
+            platform: "macos".to_owned(),
+            app_version: "1.2.3".to_owned(),
+            state: HostState::Offline,
+            supported: true,
+            enabled: true,
+        }])
+    );
+    assert_eq!(decode_hosts(json!({"hosts":{}})), Err(Malformed));
+    assert_eq!(decode_hosts(json!({})), Err(Malformed));
+}

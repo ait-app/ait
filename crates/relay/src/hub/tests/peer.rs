@@ -1,4 +1,4 @@
-use model::peer::Identity;
+use model::peer::{Error as PeerError, Host, HostState, Identity, Peers, Request};
 
 use super::*;
 use crate::hub::bridge::PeerRefusal;
@@ -411,5 +411,564 @@ async fn a_peer_session_runs_a_bounded_number_of_calls_and_credits_no_more() {
     );
     settle(&mut socket).await;
     assert!(calls.try_recv().is_err(), "still no more than the cap");
+    hub.stop().await;
+}
+
+/// `hello.f` of a main link whose center declared `peer`, which the welcome enables.
+const PEER_MAIN: [&str; 4] = ["lease", "credit", "download", "peer"];
+
+/// A welcome enabling `peer` and advertising `methods`.
+fn peer_welcome(link: Uuid, resumed: bool, recv: u64, methods: &[&str]) -> Value {
+    let mut header = welcome(link, resumed, recv);
+    header["f"] = json!(PEER_MAIN);
+    header["center_methods"] = json!(methods);
+    header
+}
+
+/// Accept the first connection of `hub` and welcome link `link` with `peer` enabled.
+async fn peer_online(
+    hub: &Connector,
+    center: &TcpListener,
+    link: Uuid,
+    methods: &[&str],
+) -> Center {
+    let (mut socket, _) = accept(center).await;
+    assert_eq!(next(&mut socket).await.0["f"], json!(PEER_MAIN));
+    socket
+        .send(frame(&peer_welcome(link, false, 0, methods), b""))
+        .await
+        .expect("welcome");
+    next_status(hub, |status| status.online).await;
+    socket
+}
+
+type Outcome = tokio::task::JoinHandle<Result<Value, PeerError>>;
+
+/// Call `tool` on the Host on `node` from a task.
+fn call(
+    hub: &Connector,
+    node: Uuid,
+    tool: &str,
+    arguments: Value,
+    caller: Option<&str>,
+) -> Outcome {
+    let hub = hub.clone();
+    let request = Request {
+        tool: tool.to_owned(),
+        arguments,
+        caller: caller.map(str::to_owned),
+    };
+    tokio::spawn(async move { Peers::call(&hub, node, request).await })
+}
+
+async fn outcome(call: Outcome) -> Result<Value, PeerError> {
+    timeout(Duration::from_secs(3), call)
+        .await
+        .expect("call ends in time")
+        .expect("call task")
+}
+
+/// The next frame, which must be the `open` of a peer session to `node`; returns its session.
+async fn opened(center: &mut Center, seq: u64, node: Uuid) -> Uuid {
+    let (header, hello) = next(center).await;
+    let s: Uuid = serde_json::from_value(header["s"].clone()).expect("session id");
+    assert_eq!(
+        header,
+        json!({"t":"open","seq":seq,"s":s,"to":{"node":node},"k":"peer","w":credit::WINDOW})
+    );
+    assert_eq!(hello, VERSION);
+    s
+}
+
+fn peer_accept(seq: u64, s: Uuid, window: Option<u32>) -> Message {
+    let mut header = json!({"t":"accept","seq":seq,"s":s});
+    if let Some(window) = window {
+        header["w"] = json!(window);
+    }
+    frame(&header, VERSION)
+}
+
+fn close(seq: u64, s: Uuid, code: &str) -> Message {
+    frame(&json!({"t":"close","seq":seq,"s":s,"code":code}), b"")
+}
+
+/// The next frame, which must be a request on session `s`; returns its JSON.
+async fn request(center: &mut Center, s: Uuid) -> Value {
+    let (header, body) = next(center).await;
+    assert_eq!((&header["t"], &header["s"]), (&json!("msg"), &json!(s)));
+    assert_eq!(header["pt"], "text");
+    serde_json::from_slice(&body).expect("JSON request")
+}
+
+/// Assert the Host sends nothing but acknowledgements before answering a ping.
+async fn quiet(center: &mut Center) {
+    center
+        .send(Message::Ping(Bytes::from_static(b"quiet")))
+        .await
+        .expect("ping");
+    timeout(Duration::from_secs(3), async {
+        loop {
+            match center.next().await.expect("open").expect("healthy") {
+                Message::Pong(_) => return,
+                Message::Binary(bytes) => {
+                    let length = usize::from(u16::from_be_bytes([bytes[0], bytes[1]]));
+                    let header: Value =
+                        serde_json::from_slice(&bytes[2..2 + length]).expect("header");
+                    assert_eq!(header["t"], "ack", "unexpected frame {header}");
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("pong");
+}
+
+#[tokio::test]
+async fn a_call_opens_one_session_per_host_and_matches_replies_by_id() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let get = call(
+        &hub,
+        node,
+        "agent_get",
+        json!({"agentId":"b-7"}),
+        Some("a-1"),
+    );
+    let list = call(&hub, node, "agent_list", json!({}), None);
+
+    let s = opened(&mut socket, 1, node).await;
+    socket
+        .send(peer_accept(1, s, Some(65_536)))
+        .await
+        .expect("accept");
+    // Both calls share the session: the next two frames are their requests, not a second open.
+    let mut requests = [request(&mut socket, s).await, request(&mut socket, s).await];
+    requests.sort_by_key(|request| request["tool"].as_str().map(str::to_owned));
+    let [get_request, list_request] = requests;
+    let get_id = get_request["id"].as_u64().expect("id");
+    let list_id = list_request["id"].as_u64().expect("id");
+    assert_eq!(
+        get_request,
+        json!({"id":get_id,"tool":"agent_get","arguments":{"agentId":"b-7"},"caller":{"agentId":"a-1"}})
+    );
+    assert_eq!(
+        list_request,
+        json!({"id":list_id,"tool":"agent_list","arguments":{}})
+    );
+    assert_eq!(
+        [get_id.min(list_id), get_id.max(list_id)],
+        [1, 2],
+        "ids count up within the session"
+    );
+
+    // Replies in the opposite order still reach their own calls.
+    let replies = [
+        json!({"id":list_id,"result":{"structuredContent":{"agents":[]}}}),
+        json!({"id":get_id,"result":{"structuredContent":{"agent":"b-7"}}}),
+    ];
+    for (seq, reply) in (2..).zip(&replies) {
+        socket.send(text(seq, s, reply)).await.expect("reply");
+    }
+    assert_eq!(
+        outcome(get).await,
+        Ok(json!({"structuredContent":{"agent":"b-7"}}))
+    );
+    assert_eq!(
+        outcome(list).await,
+        Ok(json!({"structuredContent":{"agents":[]}}))
+    );
+    // Each delivered reply is credited back.
+    let delivered = replies
+        .iter()
+        .map(|reply| reply.to_string().len() as u64)
+        .sum::<u64>();
+    let mut credit = 0;
+    while credit != delivered {
+        let (header, _) = next(&mut socket).await;
+        assert_eq!((&header["t"], &header["s"]), (&json!("credit"), &json!(s)));
+        credit = header["c"].as_u64().expect("credit");
+    }
+
+    // A call to another Host opens its own session.
+    let other = Uuid::new_v4();
+    let _pending = call(&hub, other, "agent_list", json!({}), None);
+    assert_ne!(opened(&mut socket, 4, other).await, s);
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn refusals_before_the_request_map_to_their_errors() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let refusals = [
+        ("unknown_target", PeerError::Offline),
+        ("unsupported", PeerError::Unsupported),
+        ("peer_disabled", PeerError::NotAccepting),
+        ("capacity", PeerError::Capacity),
+        ("forbidden", PeerError::Unavailable),
+        ("invalid_window", PeerError::Unavailable),
+    ];
+    for ((seq, (code, error)), node) in (1..)
+        .zip(refusals)
+        .zip(std::iter::repeat_with(Uuid::new_v4))
+    {
+        let pending = call(&hub, node, "agent_list", json!({}), None);
+        let s = opened(&mut socket, seq, node).await;
+        socket.send(close(seq, s, code)).await.expect("close");
+        assert_eq!(outcome(pending).await, Err(error), "{code}");
+    }
+    // No request was ever sent.
+    quiet(&mut socket).await;
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_ninth_host_is_refused_without_an_open() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let mut pending = Vec::new();
+    for seq in 1..=8 {
+        let node = Uuid::new_v4();
+        pending.push(call(&hub, node, "agent_list", json!({}), None));
+        opened(&mut socket, seq, node).await;
+    }
+    let ninth = call(&hub, Uuid::new_v4(), "agent_list", json!({}), None);
+    assert_eq!(outcome(ninth).await, Err(PeerError::Capacity));
+    quiet(&mut socket).await;
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn error_replies_map_to_their_errors() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let errors = [
+        (-32_001, PeerError::NotAccepting),
+        (-32_000, PeerError::TooLarge),
+        (
+            -32_602,
+            PeerError::Rejected {
+                code: -32_602,
+                message: "workspaceId is required".to_owned(),
+            },
+        ),
+    ];
+    let first = call(&hub, node, "agent_create", json!({}), None);
+    let s = opened(&mut socket, 1, node).await;
+    socket.send(peer_accept(1, s, None)).await.expect("accept");
+    let mut pending = Some(first);
+    for (seq, (code, error)) in (2..).zip(errors) {
+        let current = pending
+            .take()
+            .unwrap_or_else(|| call(&hub, node, "agent_create", json!({}), None));
+        let id = request(&mut socket, s).await["id"].clone();
+        let reply = json!({"id":id,"error":{"code":code,"message":"workspaceId is required"}});
+        socket.send(text(seq, s, &reply)).await.expect("reply");
+        assert_eq!(outcome(current).await, Err(error), "{code}");
+    }
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn an_abandoned_open_is_closed() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let abandoned = call(&hub, node, "agent_list", json!({}), None);
+    let s = opened(&mut socket, 1, node).await;
+    // The caller gives up while the target is still in its grace period.
+    abandoned.abort();
+    assert_eq!(
+        next(&mut socket).await.0,
+        json!({"t":"close","seq":2,"s":s,"code":"done"})
+    );
+    // A late accept of the closed session is ignored; a new call opens a new session.
+    socket.send(peer_accept(1, s, None)).await.expect("accept");
+    let _pending = call(&hub, node, "agent_list", json!({}), None);
+    assert_ne!(opened(&mut socket, 3, node).await, s);
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_session_that_ends_after_the_request_reports_an_unknown_outcome() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let create = call(
+        &hub,
+        node,
+        "agent_create",
+        json!({"idempotencyKey":"k"}),
+        None,
+    );
+    let s = opened(&mut socket, 1, node).await;
+    socket.send(peer_accept(1, s, None)).await.expect("accept");
+    assert_eq!(request(&mut socket, s).await["tool"], "agent_create");
+
+    socket.send(close(2, s, "peer_gone")).await.expect("close");
+    assert_eq!(outcome(create).await, Err(PeerError::OutcomeUnknown));
+
+    // The next call opens a new session.
+    let _pending = call(&hub, node, "agent_list", json!({}), None);
+    assert_ne!(opened(&mut socket, 3, node).await, s);
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn calls_survive_a_resumed_link() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let link = Uuid::new_v4();
+    let mut first = peer_online(&hub, &center, link, &[]).await;
+    let node = Uuid::new_v4();
+    let wait = call(&hub, node, "agent_wait", json!({"agentId":"b-7"}), None);
+    let s = opened(&mut first, 1, node).await;
+    first
+        .send(peer_accept(1, s, Some(65_536)))
+        .await
+        .expect("accept");
+    let id = request(&mut first, s).await["id"].clone();
+
+    // The connection drops after the center received the request.
+    drop(first);
+    let (mut second, credential) = accept(&center).await;
+    assert_eq!(credential, format!("Bearer {RESUME}"));
+    assert_eq!(
+        next(&mut second).await.0,
+        json!({"t":"hello","v":1,"resume":{"link":link,"recv":1},"f":PEER_MAIN})
+    );
+    second
+        .send(frame(&peer_welcome(link, true, 2, &[]), b""))
+        .await
+        .expect("resume");
+    second
+        .send(text(2, s, &json!({"id":id,"result":{"content":[]}})))
+        .await
+        .expect("reply");
+    assert_eq!(outcome(wait).await, Ok(json!({"content":[]})));
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn an_idle_peer_session_is_closed_by_the_opener() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    let node = Uuid::new_v4();
+    let list = call(&hub, node, "agent_list", json!({}), None);
+    let s = opened(&mut socket, 1, node).await;
+    socket.send(peer_accept(1, s, None)).await.expect("accept");
+    let id = request(&mut socket, s).await["id"].clone();
+    socket
+        .send(text(2, s, &json!({"id":id,"result":{}})))
+        .await
+        .expect("reply");
+    assert_eq!(outcome(list).await, Ok(json!({})));
+
+    // The connection is set up; from here the clock only moves when the test moves it.
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(59)).await; // virtual time
+    quiet(&mut socket).await;
+    tokio::time::advance(Duration::from_secs(1)).await; // virtual time
+    assert_eq!(
+        next(&mut socket).await.0,
+        json!({"t":"close","seq":3,"s":s,"code":"done"})
+    );
+    hub.stop().await;
+}
+
+/// Next frame from either Host as (header, payload); acknowledgements and
+/// hop-local messages are skipped.
+async fn read(center: &mut Center) -> (Value, Vec<u8>) {
+    loop {
+        let Message::Binary(bytes) = center.next().await.expect("open").expect("healthy") else {
+            continue;
+        };
+        let length = usize::from(u16::from_be_bytes([bytes[0], bytes[1]]));
+        let header: Value = serde_json::from_slice(&bytes[2..2 + length]).expect("header");
+        if header["t"] != "ack" {
+            return (header, bytes[2 + length..].to_vec());
+        }
+    }
+}
+
+/// `header` as the center forwards it to the other Host: sequenced again in
+/// that Host's own sequence space, and an `open` addressed from `from`.
+fn forwarded(mut header: Value, seq: &mut u64, from: Uuid, identity: &Identity) -> Value {
+    if header["t"] == "credit" {
+        return header;
+    }
+    *seq += 1;
+    header["seq"] = json!(*seq);
+    if header["t"] == "open" {
+        let fields = header.as_object_mut().expect("header object");
+        fields.remove("to");
+        header["from"] = json!(from);
+        header["peer"] =
+            json!({"host_id":identity.host_id,"server_id":identity.server_id,"name":identity.name});
+    }
+    header
+}
+
+#[tokio::test]
+async fn two_links_complete_a_call_through_a_forwarding_center() {
+    let (_relay_a, a, center_a, _local_a, _calls_a) = peer_connector().await;
+    let (_relay_b, b, center_b, _local_b, mut calls_b) = peer_connector().await;
+    let mut socket_a = peer_online(&a, &center_a, Uuid::new_v4(), &[]).await;
+    let mut socket_b = peer_online(&b, &center_b, Uuid::new_v4(), &[]).await;
+    let (node_a, node_b) = (Uuid::new_v4(), Uuid::new_v4());
+    let identity_a = identity();
+
+    let pending = call(
+        &a,
+        node_b,
+        "agent_get",
+        json!({"agentId":"b-7"}),
+        Some("a-1"),
+    );
+    let expected = identity_a.clone();
+    let api_b = tokio::spawn(async move {
+        let call = next_call(&mut calls_b).await;
+        assert_eq!(call.from, expected);
+        assert_eq!(
+            call.request,
+            Request {
+                tool: "agent_get".to_owned(),
+                arguments: json!({"agentId":"b-7"}),
+                caller: Some("a-1".to_owned()),
+            }
+        );
+        call.reply
+            .send(Ok(
+                json!({"structuredContent":{"agent":"b-7","status":"idle"}}),
+            ))
+            .expect("reply");
+    });
+
+    let (mut to_a, mut to_b) = (0, 0);
+    let mut pending = std::pin::pin!(pending);
+    let result = loop {
+        tokio::select! {
+            outcome = &mut pending => break outcome.expect("call task"),
+            (header, payload) = read(&mut socket_a) => {
+                if header["t"] == "open" {
+                    assert_eq!(header["to"], json!({"node":node_b}));
+                }
+                let header = forwarded(header, &mut to_b, node_a, &identity_a);
+                socket_b.send(frame(&header, &payload)).await.expect("to B");
+            }
+            (header, payload) = read(&mut socket_b) => {
+                let header = forwarded(header, &mut to_a, node_b, &identity_a);
+                socket_a.send(frame(&header, &payload)).await.expect("to A");
+            }
+        }
+    };
+    assert_eq!(
+        result,
+        Ok(json!({"structuredContent":{"agent":"b-7","status":"idle"}}))
+    );
+    api_b.await.expect("B answered");
+    a.stop().await;
+    b.stop().await;
+}
+
+#[tokio::test]
+async fn hosts_come_from_the_center_and_are_unavailable_without_the_method() {
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &["hub.peers.list"]).await;
+    let ids: Vec<[Uuid; 3]> = (0..3)
+        .map(|_| [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()])
+        .collect();
+    let listed = json!({"hosts":[
+        {"host_id":ids[0][0],"node_id":ids[0][1],"server_id":ids[0][2],"name":"Studio",
+            "hostname":"studio.local","platform":"macos","app_version":"1.2.3","state":"online",
+            "peer":{"supported":true,"enabled":true}},
+        {"host_id":ids[1][0],"node_id":ids[1][1],"server_id":ids[1][2],"name":"Build",
+            "hostname":"build","platform":"linux","app_version":"1.2.2","state":"reconnecting",
+            "peer":{"supported":true,"enabled":false}},
+        {"host_id":ids[2][0],"node_id":ids[2][1],"server_id":ids[2][2],"name":"Laptop",
+            "hostname":null,"platform":null,"app_version":null,"state":"offline",
+            "peer":{"supported":false,"enabled":false}},
+    ]});
+    let connector = hub.clone();
+    let hosts = tokio::spawn(async move { Peers::hosts(&connector).await });
+    let (header, params) = next(&mut socket).await;
+    assert_eq!(
+        (&header["t"], &header["method"]),
+        (&json!("call"), &json!("hub.peers.list"))
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&params).expect("params"),
+        json!({})
+    );
+    socket
+        .send(frame(
+            &json!({"t":"reply","seq":1,"id":header["id"]}),
+            json!({"result":listed}).to_string().as_bytes(),
+        ))
+        .await
+        .expect("reply");
+    let hosts = timeout(Duration::from_secs(3), hosts)
+        .await
+        .expect("hosts in time")
+        .expect("hosts task")
+        .expect("hosts");
+    let host = |index: usize,
+                name: &str,
+                hostname: &str,
+                platform: &str,
+                version: &str,
+                state,
+                supported,
+                enabled| Host {
+        host_id: ids[index][0],
+        node_id: ids[index][1],
+        server_id: ids[index][2],
+        name: name.to_owned(),
+        hostname: hostname.to_owned(),
+        platform: platform.to_owned(),
+        app_version: version.to_owned(),
+        state,
+        supported,
+        enabled,
+    };
+    assert_eq!(
+        hosts,
+        [
+            host(
+                0,
+                "Studio",
+                "studio.local",
+                "macos",
+                "1.2.3",
+                HostState::Online,
+                true,
+                true
+            ),
+            host(
+                1,
+                "Build",
+                "build",
+                "linux",
+                "1.2.2",
+                HostState::Reconnecting,
+                true,
+                false
+            ),
+            host(2, "Laptop", "", "", "", HostState::Offline, false, false),
+        ]
+    );
+    // Within five seconds on the same link the list is answered without a call.
+    let cached = timeout(Duration::from_secs(3), Peers::hosts(&hub))
+        .await
+        .expect("cached hosts in time");
+    assert_eq!(cached, Ok(hosts));
+    hub.stop().await;
+
+    let (_relay, hub, center, _local, _calls) = peer_connector().await;
+    let mut socket = peer_online(&hub, &center, Uuid::new_v4(), &[]).await;
+    assert_eq!(Peers::hosts(&hub).await, Err(PeerError::Unavailable));
+    quiet(&mut socket).await;
     hub.stop().await;
 }
