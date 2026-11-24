@@ -20,10 +20,14 @@ fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
         "workspace_rename",
         "workspace_list",
         "workspace_create",
+        "host_list",
         "unknown",
     ] {
         assert_eq!(tool_access(tool), ToolAccess::HostOnly);
     }
+    // Listing the account's other Hosts is for host credentials only, by an explicit entry.
+    assert!(TOOLS.contains(&("host_list", ToolAccess::HostOnly)));
+    assert!(!grantable_tools().any(|tool| tool == "host_list"));
     assert!(!grantable_tools().any(|tool| tool == "permission_respond"));
     assert!(!grantable_tools().any(|tool| tool == "workspace_create"));
     assert!(grantable_tools().any(|tool| tool == "bot_memory_update"));

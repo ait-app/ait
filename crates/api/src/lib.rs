@@ -101,6 +101,9 @@ struct Shared {
     shares: Arc<shares::Shares>,
     automation: Arc<automation::Automation>,
     peer_acceptance: peer_acceptance::PeerAcceptance,
+    /// The account's sibling Hosts, for `host_list` and MCP calls routed with `hostId`: the Hub
+    /// serve link (`relay.hub()`) unless a test replaces it.
+    peers: Arc<dyn model::peer::Peers>,
 }
 
 impl std::ops::Deref for Shared {
@@ -216,6 +219,21 @@ fn runtime_info(
         implemented_capabilities,
         limits: Limits::default(),
     }))
+}
+
+/// Create the Hub serve link of the API on `address`; the Bot service's webhook channels request
+/// their endpoints over it.
+fn serve_link(
+    address: SocketAddr,
+    server_id: &str,
+    instance_id: &str,
+    bots: Option<&bot::service::Bots>,
+) -> relay::Connector {
+    let relay = relay::Connector::new(address, server_id.to_owned(), instance_id.to_owned());
+    if let Some(bots) = bots {
+        bots.attach_center(Arc::new(relay.hub().clone()));
+    }
+    relay
 }
 
 fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), ConfigError> {
@@ -368,11 +386,7 @@ impl Api {
         services: Services,
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
-        let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
-        if let Some(bots) = &services.bot {
-            // Webhook channels request their endpoints over this Host's serve link.
-            bots.attach_center(Arc::new(relay.hub().clone()));
-        }
+        let relay = serve_link(address, &server_id, &instance_id, services.bot.as_ref());
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services
@@ -432,6 +446,7 @@ impl Api {
             address,
             &metadata.session_events,
         );
+        let peers = Arc::new(relay.hub().clone());
         let api = Self {
             shared: Arc::new(Shared {
                 _push_delivery: metadata::push::delivery::start(&metadata),
@@ -454,6 +469,7 @@ impl Api {
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
                 automation: Arc::default(),
                 peer_acceptance: peer_acceptance::PeerAcceptance::start(&metadata)?,
+                peers,
                 runtime,
                 metadata,
                 filesystem,

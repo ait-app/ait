@@ -111,6 +111,7 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("workspace_archive", HostOnly),
     ("workspace_rename", HostOnly),
     ("workspace_list", HostOnly),
+    ("host_list", HostOnly),
 ];
 
 /// Return the access class for `tool`, failing closed to `HostOnly`.

@@ -165,6 +165,7 @@ async fn dispatch(
             queries::permissions(state, workspaces, sight.as_ref()).await
         }
         "profile_list" => queries::profiles(state).await,
+        "host_list" => Ok(super::hosts::list(state).await),
         "agent_activity_read" => queries::activity(state, arguments).await,
         "provider_get" => queries::provider(state, arguments, caller).await,
         "agent_update" => update_agent(state, arguments).await,

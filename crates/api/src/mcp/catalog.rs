@@ -81,6 +81,10 @@ pub(super) struct Tool {
 /// validation refuses them (ADR-274: only the Bot names the ticket a new Agent joins).
 const BOT_ARGUMENTS: [(&str, &str); 1] = [("agent_create", "ticketId")];
 
+/// Argument naming the Host, by its `serverId`, that runs a call of a tool marked for peers;
+/// only host callers are offered it.
+pub(super) const HOST_ARGUMENT: &str = "hostId";
+
 impl Tool {
     /// Return public MCP metadata for `scope`'s caller without exposing internal RPC method
     /// mappings.
@@ -94,16 +98,26 @@ impl Tool {
     }
 
     /// The input schema `scope`'s caller sees and is validated against: without arguments
-    /// reserved for Bot sessions unless the caller is one.
+    /// reserved for Bot sessions unless the caller is one, and, for host callers of a tool
+    /// marked for peers, with the optional `hostId` that runs it on another Host.
     pub(super) fn schema(&self, scope: Option<&Scope>) -> Cow<'_, Value> {
         let bot = scope.is_some_and(|scope| scope.caller.kind.holder() == Holder::Bot);
-        if bot || !BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name) {
+        let withheld = !bot && BOT_ARGUMENTS.iter().any(|(tool, _)| *tool == self.name);
+        let routable = scope.is_none() && self.peer;
+        if !withheld && !routable {
             return Cow::Borrowed(&self.input_schema);
         }
         let mut schema = self.input_schema.clone();
         if let Some(properties) = schema["properties"].as_object_mut() {
+            // A Bot session never gets here: it sees its schema as written.
             for (_, argument) in BOT_ARGUMENTS.iter().filter(|(tool, _)| *tool == self.name) {
                 properties.remove(*argument);
+            }
+            if routable {
+                properties.insert(
+                    HOST_ARGUMENT.to_owned(),
+                    json!({"type":"string","minLength":1}),
+                );
             }
         }
         Cow::Owned(schema)

@@ -1662,5 +1662,18 @@
       "additionalProperties": false
     },
     "readOnly": true
+  },
+  {
+    "name": "host_list",
+    "title": "List hosts",
+    "methods": [],
+    "description": "List this host and the other hosts on this account: hostId, name, hostname, platform, appVersion, state, and whether each can be called now (available) or why not (reason: offline, unsupported or not_accepting). This host is first. accepting says whether this host accepts calls from other hosts. Pass an available host's hostId to agent, workspace and provider tools to run them there.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
   }
 ]

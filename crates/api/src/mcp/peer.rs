@@ -105,13 +105,13 @@ pub(crate) async fn serve(
 /// Whether a peer may pass `arguments` to a tool whose host-credential `schema` is given: never
 /// with `hostId`, even once that schema offers it, since a call is not forwarded again.
 fn permitted(schema: &Value, arguments: &Value) -> bool {
-    arguments.get("hostId").is_none() && validation::matches(schema, arguments)
+    arguments.get(catalog::HOST_ARGUMENT).is_none() && validation::matches(schema, arguments)
 }
 
 /// Whether this Host accepts calls from sibling Hosts now, read from the current configuration
 /// rather than what was last published: the center may still deliver calls queued before this
-/// Host stopped accepting. An unreadable configuration does not accept.
-async fn accepts(state: &Shared) -> bool {
+/// Host stopped accepting. An unreadable configuration does not accept. `host_list` reports it.
+pub(super) async fn accepts(state: &Shared) -> bool {
     match daemon_config(state).await {
         Ok(config) => config.is_some_and(|config| accepting(&config)),
         Err(error) => {
