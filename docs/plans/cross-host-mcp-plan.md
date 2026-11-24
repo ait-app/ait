@@ -27,10 +27,13 @@ daemon 在会话里转发 MCP 工具调用，接收方用自己的 MCP 层以“
   - 每条链路发起的与接受的 peer 会话各至多 8 个（`MAX_PEER_SESSIONS = 8`），不计入每链路 16 个会话。
   - 会话内消息（UTF-8 JSON 文本）：`open` 与 `accept` 的 payload 都是 `{"v":1}`；请求 `{"id":u64,"tool":string,"arguments":object,"caller"?:{"agentId":string}}`；
     回复 `{"id":u64,"result":object}` 或 `{"id":u64,"error":{"code":i32,"message":string}}`。
+    接收方自己产生的两个错误码固定为：`-32001` 本机当前不接受对端调用（随后以 `peer_disabled` 关闭会话），`-32000` 回复超过消息上限；其余 `error` 是工具调用本身被拒绝（如 `-32602`）。
   - 配置键 `mcp.acceptPeers`（布尔，缺省 `false`）。标签 `ait.parent.server-id`、`ait.parent.agent-id`，保留前缀 `ait.parent.`。
   - MCP：工具 `host_list`；参数 `hostId`（daemon 的 `serverId`）；转发结果在 `structuredContent.hostId` 给出目标主机。
   - A 侧失败结果的 `structuredContent.code`：`hub_unavailable`、`host_unknown`、`host_offline`、`host_not_accepting`、`host_unsupported`、
-    `capacity`、`outcome_unknown`、`caller_not_allowed`。
+    `capacity`、`outcome_unknown`、`caller_not_allowed`、`host_rejected`（对端以 `error` 拒绝了这次调用，文本为对端给出的消息）。
+  - `model::peer::Error` 另有 `Rejected { code: i32, message: String }`：对端回复了 `error`（`-32001` 映射为 `NotAccepting`，`-32000` 映射为 `TooLarge`，其余为 `Rejected`）。
+  - 发起方打开 peer 会话时声明 1 MiB 的接收窗口（`credit::WINDOW`），使不超过消息上限的回复总能送达。
   - 可跨主机的 13 个工具：`agent_create`、`agent_prompt`、`agent_get`、`agent_activity_read`、`agent_list`、`agent_wait`、`agent_cancel`、
     `agent_archive`、`workspace_create`、`workspace_list`、`provider_list`、`provider_model_list`、`profile_list`。
 - 主机列表缓存 5 秒；发起方的 peer 会话空闲 60 秒后关闭。
