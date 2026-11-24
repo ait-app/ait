@@ -44,6 +44,22 @@ fn refused(result: &Result<Value, PeerRefusal>, message: &str) {
     );
 }
 
+/// The id of the Agent a successful `agent_create` result reports.
+fn created_agent(result: &Value) -> &str {
+    assert_eq!(result["isError"], false, "{result}");
+    result["structuredContent"]["agentId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{result}"))
+}
+
+/// The refusal of a peer call this Host cannot run now.
+fn busy(message: &str) -> Result<Value, PeerRefusal> {
+    Err(PeerRefusal::Failed {
+        code: -32_002,
+        message: message.to_owned(),
+    })
+}
+
 /// The text of a tool result that failed, as a peer receives it.
 fn failure(result: Result<Value, PeerRefusal>) -> String {
     let result = result.expect("a tool result");
@@ -96,35 +112,32 @@ async fn a_peer_creates_an_agent_with_its_remote_parent_labels() {
         .await
         .expect("a tool result");
 
-    assert_eq!(created["isError"], false, "{created}");
+    let agent = created_agent(&created);
     assert_eq!(
         created["content"][0]["text"],
         created["structuredContent"].to_string(),
         "the result has the shape of a local tools/call result"
     );
-    let agent = created["structuredContent"]["agentId"]
-        .as_str()
-        .unwrap_or_else(|| panic!("{created}"));
     let labels = scoped.agent_labels(agent).await;
     assert_eq!(labels[PARENT_SERVER_LABEL], from.server_id.to_string());
     assert_eq!(labels[PARENT_AGENT_LABEL], "a-1");
     assert_eq!(labels["team"], "remote", "the peer's own labels are kept");
     assert!(labels.get(LOCAL_PARENT_LABEL).is_none(), "{labels}");
 
-    // Through the Hub bridge, and without a calling Agent: no parent is recorded.
-    let orphan = InProcess::new(&scoped.fixture.api.shared)
-        .peer(
-            &from,
-            request("agent_create", create_in(&scoped.workspace), None),
-        )
-        .await
-        .expect("a tool result");
-    let orphan = orphan["structuredContent"]["agent"]["id"]
-        .as_str()
-        .unwrap_or_else(|| panic!("{orphan}"));
-    let labels = scoped.agent_labels(orphan).await;
-    for label in [PARENT_SERVER_LABEL, PARENT_AGENT_LABEL, LOCAL_PARENT_LABEL] {
-        assert!(labels.get(label).is_none(), "{label}: {labels}");
+    // Through the Hub bridge, without a calling Agent or with an empty id: no parent is recorded.
+    let bridge = InProcess::new(&scoped.fixture.api.shared);
+    for caller in [None, Some("")] {
+        let orphan = bridge
+            .peer(
+                &from,
+                request("agent_create", create_in(&scoped.workspace), caller),
+            )
+            .await
+            .expect("a tool result");
+        let labels = scoped.agent_labels(created_agent(&orphan)).await;
+        for label in [PARENT_SERVER_LABEL, PARENT_AGENT_LABEL, LOCAL_PARENT_LABEL] {
+            assert!(labels.get(label).is_none(), "{caller:?} {label}: {labels}");
+        }
     }
     scoped.stop().await;
 }
@@ -279,12 +292,34 @@ async fn a_peer_is_refused_rather_than_queued_when_the_call_budget_is_full() {
         scoped
             .peer(&caller_host(), request("agent_list", json!({}), None))
             .await,
-        Err(PeerRefusal::Failed {
-            code: -32000,
-            message: "MCP request budget exhausted".to_owned()
-        })
+        busy("MCP request budget exhausted"),
+        "not -32000, which tells the caller the call ran and its reply was too large"
+    );
+    let local = scoped.call(TOKEN, None, "agent_list", json!({})).await;
+    assert_eq!(
+        local["error"],
+        json!({"code":-32_000,"message":"MCP request budget exhausted"}),
+        "the MCP route keeps its own code: {local}"
     );
     drop(held);
+    scoped.stop().await;
+}
+
+#[tokio::test]
+async fn a_draining_host_tells_peers_it_cannot_run_their_calls() {
+    let scoped = Scoped::start().await;
+    scoped.accept_peers().await;
+    scoped.fixture.api.begin_shutdown();
+
+    assert_eq!(
+        scoped
+            .peer(
+                &caller_host(),
+                request("agent_create", create_in(&scoped.workspace), Some("a-1")),
+            )
+            .await,
+        busy("Server is draining")
+    );
     scoped.stop().await;
 }
 
@@ -292,21 +327,29 @@ async fn a_peer_is_refused_rather_than_queued_when_the_call_budget_is_full() {
 async fn nobody_else_writes_the_parent_labels() {
     let scoped = Scoped::start().await;
     let agent = scoped.agent(json!({})).await;
-    for label in [PARENT_SERVER_LABEL, PARENT_AGENT_LABEL] {
-        let mut create = create_in(&scoped.workspace);
-        create["labels"] = json!({label:"x"});
-        forbidden(&scoped.call(TOKEN, None, "agent_create", create).await);
-        forbidden(
-            &scoped
-                .call(
-                    TOKEN,
-                    None,
-                    "agent_update",
-                    json!({"agentId":agent,"labels":{label:"x"}}),
-                )
-                .await,
-        );
+    let created = scoped.agent_count().await;
+    // Current and retired names alike; `update_agent` also renames `name` to `title`.
+    for (create_tool, update_tool) in [
+        ("agent_create", "agent_update"),
+        ("create_agent", "update_agent"),
+    ] {
+        for label in [PARENT_SERVER_LABEL, PARENT_AGENT_LABEL] {
+            let mut create = create_in(&scoped.workspace);
+            create["labels"] = json!({label:"x"});
+            forbidden(&scoped.call(TOKEN, None, create_tool, create).await);
+            forbidden(
+                &scoped
+                    .call(
+                        TOKEN,
+                        None,
+                        update_tool,
+                        json!({"agentId":agent,"labels":{label:"x"}}),
+                    )
+                    .await,
+            );
+        }
     }
+    assert_eq!(scoped.agent_count().await, created, "nothing was created");
     assert!(
         scoped
             .agent_labels(&agent)

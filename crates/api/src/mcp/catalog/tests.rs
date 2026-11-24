@@ -94,3 +94,25 @@ fn exactly_the_thirteen_tools_are_marked_for_peers() {
         ])
     );
 }
+
+#[tokio::test]
+async fn a_marked_tool_whose_methods_are_not_installed_is_not_offered_to_peers() {
+    let api = crate::Api::new(
+        "127.0.0.1:7316".parse().unwrap(),
+        "stable".into(),
+        "instance".into(),
+        "offline-test-token-at-least-32-characters".into(),
+        crate::Services::default(),
+    )
+    .unwrap();
+    let (tool, _) = resolve("agent_create").unwrap();
+    assert!(tool.peer);
+    assert!(
+        !api.shared
+            .info
+            .implemented_capabilities
+            .contains(&tool.methods[0])
+    );
+
+    assert!(super::for_peers(&api.shared, "agent_create").is_none());
+}

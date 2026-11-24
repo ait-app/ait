@@ -16,7 +16,12 @@ use crate::Shared;
 use crate::peer_acceptance::accepting;
 
 use super::scope::{self, Failure};
-use super::{catalog, daemon_config, run, tool_result, validation};
+use super::{DRAINING, UNAVAILABLE, catalog, daemon_config, run, tool_result, validation};
+
+/// Peer-wire error code for a call this Host cannot run now, because its call budget is full or
+/// it is draining: the call did not run, unlike a `-32000` reply (the call ran but its reply
+/// exceeds the message size limit). The calling Host receives it as `Rejected` with the text.
+pub(crate) const BUSY: i32 = -32_002;
 
 /// Label naming the `serverId` of the Host whose Agent created this one.
 pub(crate) const PARENT_SERVER_LABEL: &str = "ait.parent.server-id";
@@ -42,7 +47,8 @@ const UNSOURCED_WORKSPACE: &str = "workspace_create from another host requires p
 /// # Arguments
 /// * `state` - This API.
 /// * `from` - The calling Host, as the account center authenticated it.
-/// * `request` - The tool call, with the id of the calling Agent on `from` when known.
+/// * `request` - The tool call, with the id of the calling Agent on `from` when known; an empty
+///   id counts as unknown.
 ///
 /// # Returns
 /// The same result object a local `tools/call` returns; rule violations of the call itself are
@@ -52,13 +58,17 @@ const UNSOURCED_WORKSPACE: &str = "workspace_create from another host requires p
 /// # Errors
 /// Returns `PeerRefusal::Disabled` unless `mcp.enabled` and `mcp.acceptPeers` are both on now;
 /// `Failed { code: -32602 }` for a tool not marked for peers or not installed, and for arguments
-/// outside the host-credential schema or naming a Host; `Failed { code: -32000 }` when the call
+/// outside the host-credential schema or naming a Host; `Failed { code: BUSY }` when the call
 /// budget is exhausted or the server drains.
 pub(crate) async fn serve(
     state: &Arc<Shared>,
     from: &Identity,
     request: Request,
 ) -> Result<Value, PeerRefusal> {
+    // A draining server can no longer read its configuration; the call did not run.
+    if state.cancellation.is_cancelled() {
+        return Err(failed(BUSY, DRAINING));
+    }
     if !accepts(state).await {
         return Err(PeerRefusal::Disabled);
     }
@@ -79,14 +89,17 @@ pub(crate) async fn serve(
         return Ok(tool_result(Err(refusal)));
     }
     if tool.name == "agent_create"
-        && let Some(caller) = caller
+        && let Some(caller) = caller.filter(|caller| !caller.is_empty())
         && let Err(error) = record_parent(from, caller, &mut arguments)
     {
         return Ok(tool_result(Err(error.into())));
     }
     run(state.clone(), tool, arguments, None, None)
         .await
-        .map_err(|(code, message)| failed(code, message))
+        .map_err(|(code, message)| match code {
+            UNAVAILABLE => failed(BUSY, message),
+            code => failed(code, message),
+        })
 }
 
 /// Whether a peer may pass `arguments` to a tool whose host-credential `schema` is given: never

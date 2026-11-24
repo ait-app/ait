@@ -43,6 +43,9 @@ pub(super) async fn execute(
     }
     match scope {
         Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
+        // Host callers may not write `ait.parent.` labels either; that check is in `mcp::call`,
+        // since calls from sibling Hosts also run unscoped here, carrying the parent labels
+        // `mcp::peer` wrote.
         None if matches!(tool.name.as_str(), "agent_create" | "agent_update") => {
             scope::reserved_labels(&arguments, domain::bot::BOT_LABEL_PREFIX)?;
         }

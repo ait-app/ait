@@ -175,6 +175,24 @@ fn reply_errors_map_to_call_errors() {
 }
 
 #[test]
+fn a_receiver_that_cannot_run_a_call_now_is_a_rejection_with_its_reason() {
+    // `-32002`: the receiving Host's call budget is full or it is draining, so the call did not
+    // run. Unlike `TOO_LARGE`, the caller keeps the receiver's reason.
+    for reason in ["MCP request budget exhausted", "Server is draining"] {
+        assert_eq!(
+            decode_reply(&encode_reply(5, Err((-32_002, reason.to_owned())))),
+            Ok((
+                5,
+                Err(Error::Rejected {
+                    code: -32_002,
+                    message: reason.to_owned()
+                })
+            ))
+        );
+    }
+}
+
+#[test]
 fn hosts_without_an_address_are_left_out_and_unknown_states_read_as_offline() {
     let (host_id, node_id, server_id) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
     let listed = json!({"hosts":[

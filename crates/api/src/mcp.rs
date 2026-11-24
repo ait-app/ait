@@ -30,6 +30,13 @@ use scope::{Failure, Scope};
 pub(super) const PATH: &str = "/mcp/agents";
 const VERSIONS: &[&str] = &["2025-03-26", "2025-06-18", "2025-11-25"];
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+/// JSON-RPC code of the MCP route for a call this API cannot run now: its call budget is full or
+/// the server drains. A peer call answers these with [`peer::BUSY`] instead.
+const UNAVAILABLE: i32 = -32_000;
+/// Refusal text for a call that arrives while the server drains.
+pub(crate) const DRAINING: &str = "Server is draining";
+/// Refusal text for a call that finds the call budget full.
+const BUDGET_EXHAUSTED: &str = "MCP request budget exhausted";
 /// Longest a detached call (a scoped `agent_create`) may run in all once its caller stopped
 /// waiting; it holds its call permit until then.
 const DETACHED_TIMEOUT: Duration = Duration::from_secs(300);
@@ -295,7 +302,9 @@ async fn call(
         .map_err(|_| (-32602, "Invalid caller header"))?;
     let caller = claimed(scope.as_ref(), header)?.map(str::to_owned);
     // Only this Host writes remote parent labels, for calls from sibling Hosts; scoped callers
-    // already may write no `ait.` label.
+    // already may write no `ait.` label. The other label namespace closed to host callers,
+    // `ait.bot.`, is refused in `tools::execute`; this one cannot be, because calls from sibling
+    // Hosts run unscoped through it after their parent labels are written.
     if scope.is_none()
         && matches!(tool.name.as_str(), "agent_create" | "agent_update")
         && let Err(error) = scope::reserved_labels(&arguments, peer::PARENT_LABEL_PREFIX)
@@ -309,7 +318,7 @@ async fn call(
 /// for: hold one of the API's call permits, refusing rather than waiting when none is free, and
 /// give up after `CALL_TIMEOUT`.
 /// # Errors
-/// Returns `-32000` when the call budget is exhausted or the server drains, `-32603` when the
+/// Returns `UNAVAILABLE` when the call budget is exhausted or the server drains, `-32603` when the
 /// execution task failed, and the caller refusals of `invoke`.
 async fn run(
     state: Arc<Shared>,
@@ -322,14 +331,14 @@ async fn run(
         .connections
         .clone()
         .try_acquire_owned()
-        .map_err(|_| (-32000, "MCP request budget exhausted"))?;
+        .map_err(|_| (UNAVAILABLE, BUDGET_EXHAUSTED))?;
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let admission = state
         .admission
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if state.cancellation.is_cancelled() {
-        return Err((-32000, "Server is draining"));
+        return Err((UNAVAILABLE, DRAINING));
     }
     // A scoped `agent_create` opens or joins a Bot ticket and must finish its bookkeeping
     // (assign the Agent, or delete a ticket whose Agent was not created) even when the caller

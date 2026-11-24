@@ -165,7 +165,7 @@ async fn draining_or_dropped_apis_refuse_sessions() {
     assert_eq!(
         bridge.peer(&from, call).await,
         Err(PeerRefusal::Failed {
-            code: -32000,
+            code: -32_002,
             message: "Server is draining".to_owned()
         }),
         "a call from a sibling Host outliving the API is refused without ending its session"

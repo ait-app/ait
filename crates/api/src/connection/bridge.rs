@@ -74,8 +74,8 @@ impl LocalApi for InProcess {
 
     async fn peer(&self, from: &Identity, request: Request) -> Result<Value, PeerRefusal> {
         let state = self.shared.upgrade().ok_or_else(|| PeerRefusal::Failed {
-            code: -32000,
-            message: "Server is draining".to_owned(),
+            code: crate::mcp::peer::BUSY,
+            message: crate::mcp::DRAINING.to_owned(),
         })?;
         crate::mcp::peer::serve(&state, from, request).await
     }
