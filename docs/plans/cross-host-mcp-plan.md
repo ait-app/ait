@@ -27,7 +27,7 @@ daemon 在会话里转发 MCP 工具调用，接收方用自己的 MCP 层以“
   - 每条链路发起的与接受的 peer 会话各至多 8 个（`MAX_PEER_SESSIONS = 8`），不计入每链路 16 个会话。
   - 会话内消息（UTF-8 JSON 文本）：`open` 与 `accept` 的 payload 都是 `{"v":1}`；请求 `{"id":u64,"tool":string,"arguments":object,"caller"?:{"agentId":string}}`；
     回复 `{"id":u64,"result":object}` 或 `{"id":u64,"error":{"code":i32,"message":string}}`。
-    接收方自己产生的两个错误码固定为：`-32001` 本机当前不接受对端调用（随后以 `peer_disabled` 关闭会话），`-32000` 回复超过消息上限；其余 `error` 是工具调用本身被拒绝（如 `-32602`）。
+    接收方自己产生的错误码固定为：`-32001` 本机当前不接受对端调用（随后以 `peer_disabled` 关闭会话），`-32000` 回复超过消息上限（调用已执行）；`-32002` 接收方此刻无法执行（调用额度已满或正在停机，调用未执行）；其余 `error` 是工具调用本身被拒绝（如 `-32602`）。发起方只对 `-32001` 与 `-32000` 做专门映射，`-32002` 与其余码一样成为 `Rejected`，文本原样带回。
   - 配置键 `mcp.acceptPeers`（布尔，缺省 `false`）。标签 `ait.parent.server-id`、`ait.parent.agent-id`，保留前缀 `ait.parent.`。
   - MCP：工具 `host_list`；参数 `hostId`（daemon 的 `serverId`）；转发结果在 `structuredContent.hostId` 给出目标主机。
   - A 侧失败结果的 `structuredContent.code`：`hub_unavailable`、`host_unknown`、`host_offline`、`host_not_accepting`、`host_unsupported`、
