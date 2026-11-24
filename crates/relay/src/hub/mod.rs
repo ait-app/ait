@@ -52,6 +52,8 @@ const MAX_SESSIONS: usize = 16;
 /// Peer sessions per link, counted apart from the others; the center enforces
 /// the same bound.
 const MAX_PEER_SESSIONS: usize = 8;
+/// Calls of one peer session that run or wait to be answered at once.
+const MAX_PEER_CALLS: usize = 16;
 /// Buffered business messages per session before it is closed as `overflow`.
 const SESSION_QUEUE: usize = 64;
 /// Message bound of a flow-controlled session. Its window already bounds the

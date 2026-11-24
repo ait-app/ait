@@ -18,11 +18,13 @@ use super::wire;
 pub(super) const VERSION: u64 = 1;
 /// Payload of a peer `open` and `accept`.
 pub(super) const HELLO: &[u8] = br#"{"v":1}"#;
-/// Error code of the replies this Host substitutes: a refusal because it does
-/// not accept calls, and a reply over the payload limit.
-const SERVER_ERROR: i32 = -32_000;
-/// Message of the error that replaces a reply over the payload limit.
-const TOO_LARGE: &str = "reply exceeds the message size limit";
+/// Error code of the reply to a call this Host does not accept; the session
+/// then closes as `peer_disabled`.
+pub(super) const NOT_ACCEPTING: i32 = -32_001;
+/// Error code of the reply that replaces one over the message size limit.
+pub(super) const TOO_LARGE: i32 = -32_000;
+/// Message of the error that replaces a reply over the message size limit.
+const TOO_LARGE_MESSAGE: &str = "reply exceeds the message size limit";
 
 /// A peer message that is not what the protocol defines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -94,8 +96,19 @@ pub(super) fn decode_request(text: &[u8]) -> Result<(u64, Request), Malformed> {
     ))
 }
 
-/// Encode the reply to request `id`: its result object, or an error code and
-/// message. A reply over the payload limit is replaced by an error.
+/// Encode the reply to one request.
+///
+/// A reply over the payload limit is replaced by a [`TOO_LARGE`] error. The
+/// opener must open the session with a window of at least the payload limit
+/// (`credit::WINDOW`): a reply larger than its window would end the session as
+/// `overflow` instead.
+///
+/// # Arguments
+/// * `id` - The request's id.
+/// * `outcome` - The call's result object, or an error code and message.
+///
+/// # Returns
+/// The reply message's UTF-8 JSON text.
 pub(super) fn encode_reply(id: u64, outcome: Result<Value, (i32, String)>) -> Bytes {
     let outcome = match outcome {
         Ok(result) => Outcome::Result(result),
@@ -106,16 +119,23 @@ pub(super) fn encode_reply(id: u64, outcome: Result<Value, (i32, String)>) -> By
         return encoded.into();
     }
     let outcome = Outcome::Error {
-        code: SERVER_ERROR,
-        message: TOO_LARGE.to_owned(),
+        code: TOO_LARGE,
+        message: TOO_LARGE_MESSAGE.to_owned(),
     };
     serialize(&Reply { id, outcome }).into()
 }
 
 /// The error a refused call is answered with.
+///
+/// # Arguments
+/// * `refusal` - Why the local API did not run the call.
+///
+/// # Returns
+/// [`NOT_ACCEPTING`] when this Host does not accept calls from other Hosts,
+/// otherwise the code and message the API gave.
 pub(super) fn refusal(refusal: PeerRefusal) -> (i32, String) {
     match refusal {
-        PeerRefusal::Disabled => (SERVER_ERROR, refusal.to_string()),
+        PeerRefusal::Disabled => (NOT_ACCEPTING, refusal.to_string()),
         PeerRefusal::Failed { code, message } => (code, message),
     }
 }

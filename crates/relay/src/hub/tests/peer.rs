@@ -2,7 +2,7 @@ use model::peer::Identity;
 
 use super::*;
 use crate::hub::bridge::PeerRefusal;
-use crate::test_support::{FakeApi, PeerCall};
+use crate::test_support::{Accepted, FakeApi, PeerCall};
 
 type PeerCalls = mpsc::UnboundedReceiver<PeerCall>;
 
@@ -209,46 +209,207 @@ async fn malformed_peer_opens_and_refused_calls_close_the_session() {
     assert_eq!(header, json!({"t":"msg","seq":7,"s":refused,"pt":"text"}));
     let reply: Value = serde_json::from_slice(&reply).expect("JSON reply");
     assert_eq!(reply["id"], 9);
-    assert_eq!(reply["error"]["code"], -32_000);
+    assert_eq!(reply["error"]["code"], -32_001);
+    assert_eq!(reply["error"]["code"], crate::hub::peer::NOT_ACCEPTING);
     assert!(reply["error"]["message"].is_string());
     assert_eq!(
         next(&mut socket).await.0,
         json!({"t":"close","seq":8,"s":refused,"code":"peer_disabled"})
     );
 
-    // Eight peer sessions fill their own quota; the owner's sessions are unaffected.
+    fill_both_quotas(&mut socket, &mut local, &from).await;
+    // Only the one request ever reached the API.
+    assert!(calls.try_recv().is_err());
+    hub.stop().await;
+}
+
+/// Starting at center sequence 8 and Host sequence 9: eight peer sessions fill
+/// their own quota, sixteen owner sessions still fit beside them, and a peer
+/// session fits beside those once one of the eight ends.
+async fn fill_both_quotas(socket: &mut Center, local: &mut Connections, from: &Identity) {
+    // Eight peer sessions fill their own quota.
+    let mut peers = Vec::new();
     for seq in 8..16 {
+        let s = Uuid::new_v4();
         socket
-            .send(peer_open(seq, Uuid::new_v4(), &from, None))
+            .send(peer_open(seq, s, from, None))
             .await
             .expect("peer open");
-        assert_eq!(next(&mut socket).await.0["t"], "accept");
+        assert_eq!(next(socket).await.0["t"], "accept");
+        peers.push(s);
     }
     let ninth = Uuid::new_v4();
     socket
-        .send(peer_open(16, ninth, &from, None))
+        .send(peer_open(16, ninth, from, None))
         .await
         .expect("peer open");
     assert_eq!(
-        next(&mut socket).await.0,
+        next(socket).await.0,
         json!({"t":"close","seq":17,"s":ninth,"code":"capacity"})
     );
-    let owner = Uuid::new_v4();
+
+    // All sixteen owner sessions still fit beside them, and only those count against the sixteen.
+    let mut owners = Vec::new();
+    for seq in 17..33 {
+        owners.push(accept_owner(socket, local, seq).await);
+    }
+    let seventeenth = Uuid::new_v4();
     socket
-        .send(open(17, owner, HELLO.as_bytes()))
+        .send(open(33, seventeenth, HELLO.as_bytes()))
         .await
         .expect("owner open");
-    let mut api = local.recv().await.expect("owner session connects");
+    assert_eq!(
+        next(socket).await.0,
+        json!({"t":"close","seq":34,"s":seventeenth,"code":"capacity"})
+    );
+
+    // With sixteen owner sessions open, a peer session fits once one of the eight ends.
+    socket
+        .send(frame(
+            &json!({"t":"close","seq":34,"s":peers[0],"code":"done"}),
+            b"",
+        ))
+        .await
+        .expect("close");
+    let later = Uuid::new_v4();
+    socket
+        .send(peer_open(35, later, from, None))
+        .await
+        .expect("peer open");
+    assert_eq!(
+        next(socket).await,
+        (json!({"t":"accept","seq":35,"s":later}), VERSION.to_vec())
+    );
+}
+
+/// Open an owner RPC session with center sequence `seq` and answer its hello as the API.
+async fn accept_owner(center: &mut Center, local: &mut Connections, seq: u64) -> Accepted {
+    let s = Uuid::new_v4();
+    center
+        .send(open(seq, s, HELLO.as_bytes()))
+        .await
+        .expect("owner open");
+    let mut api = timeout(Duration::from_secs(3), local.recv())
+        .await
+        .expect("owner session in time")
+        .expect("owner session connects");
     api.next().await.expect("hello");
     api.reply("server info").await;
+    let (header, info) = next(center).await;
+    assert_eq!((&header["t"], &header["s"]), (&json!("accept"), &json!(s)));
+    assert_eq!(info, b"server info");
+    api
+}
+
+#[tokio::test]
+async fn a_center_close_ends_a_peer_session_without_cancelling_its_calls() {
+    let (_relay, hub, center, _local, mut calls) = peer_connector().await;
+    let mut socket = online(&hub, &center, 120).await;
+    let from = identity();
+    let s = Uuid::new_v4();
+    socket
+        .send(peer_open(1, s, &from, None))
+        .await
+        .expect("peer open");
+    assert_eq!(next(&mut socket).await.0["t"], "accept");
+    let request = json!({"id":1,"tool":"agent_wait","arguments":{"agentId":"b-7"}});
+    socket.send(text(2, s, &request)).await.expect("request");
+    let call = next_call(&mut calls).await;
+
+    socket
+        .send(frame(
+            &json!({"t":"close","seq":3,"s":s,"code":"peer_gone"}),
+            b"",
+        ))
+        .await
+        .expect("close");
+    settle(&mut socket).await;
+    // The call still runs; its answer has nowhere to go.
+    call.reply
+        .send(Ok(json!({"content":[],"isError":false})))
+        .expect("the call was not cancelled");
+    // The route is gone: a late request reaches nobody.
+    socket
+        .send(text(
+            4,
+            s,
+            &json!({"id":2,"tool":"agent_list","arguments":{}}),
+        ))
+        .await
+        .expect("late request");
+
+    // No reply was sent before the next session's accept.
+    let later = Uuid::new_v4();
+    socket
+        .send(peer_open(5, later, &from, None))
+        .await
+        .expect("peer open");
     assert_eq!(
         next(&mut socket).await,
-        (
-            json!({"t":"accept","seq":18,"s":owner}),
-            b"server info".to_vec()
-        )
+        (json!({"t":"accept","seq":2,"s":later}), VERSION.to_vec())
     );
-    // Only the one request ever reached the API.
     assert!(calls.try_recv().is_err());
+    hub.stop().await;
+}
+
+#[tokio::test]
+async fn a_peer_session_runs_a_bounded_number_of_calls_and_credits_no_more() {
+    let (_relay, hub, center, _local, mut calls) = peer_connector().await;
+    let mut socket = online(&hub, &center, 120).await;
+    let from = identity();
+    let s = Uuid::new_v4();
+    socket
+        .send(peer_open(1, s, &from, Some(65_536)))
+        .await
+        .expect("peer open");
+    assert_eq!(next(&mut socket).await.0["t"], "accept");
+
+    let requests: Vec<Value> = (1..=MAX_PEER_CALLS + 2)
+        .map(|id| json!({"id":id,"tool":"agent_wait","arguments":{"agentId":format!("b-{id}")}}))
+        .collect();
+    let lengths: Vec<u64> = requests
+        .iter()
+        .map(|request| request.to_string().len() as u64)
+        .collect();
+    for (seq, request) in (2..).zip(&requests) {
+        socket.send(text(seq, s, request)).await.expect("request");
+    }
+    let mut running = Vec::with_capacity(MAX_PEER_CALLS);
+    for _ in 0..MAX_PEER_CALLS {
+        running.push(next_call(&mut calls).await);
+    }
+    // Credit covers exactly the calls that run; the rest wait unread.
+    let bounded = lengths[..MAX_PEER_CALLS].iter().sum::<u64>();
+    let mut credit = 0;
+    while credit != bounded {
+        let (header, _) = next(&mut socket).await;
+        assert_eq!(header["t"], "credit");
+        credit = header["c"].as_u64().expect("credit");
+        assert!(
+            credit <= bounded,
+            "credit {credit} beyond the running calls"
+        );
+    }
+    settle(&mut socket).await;
+    assert!(calls.try_recv().is_err(), "no call runs beyond the cap");
+
+    // Answering one call frees one slot: its reply leaves, then one more call is read and credited.
+    running
+        .remove(0)
+        .reply
+        .send(Ok(json!({"content":[]})))
+        .expect("reply");
+    assert_eq!(next(&mut socket).await.0["t"], "msg");
+    assert_eq!(
+        next(&mut socket).await.0,
+        json!({"t":"credit","s":s,"c":bounded + lengths[MAX_PEER_CALLS]})
+    );
+    let admitted = next_call(&mut calls).await;
+    assert_eq!(
+        admitted.request.arguments,
+        json!({"agentId":format!("b-{}", MAX_PEER_CALLS + 1)})
+    );
+    settle(&mut socket).await;
+    assert!(calls.try_recv().is_err(), "still no more than the cap");
     hub.stop().await;
 }

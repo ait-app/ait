@@ -8,6 +8,10 @@ fn decoded(reply: &Bytes) -> Value {
 
 #[test]
 fn hellos_must_declare_this_version() {
+    assert_eq!(
+        serde_json::from_slice::<Value>(HELLO).expect("JSON hello"),
+        json!({ "v": VERSION })
+    );
     assert_eq!(decode_hello(HELLO), Ok(()));
     assert_eq!(decode_hello(br#"{"v":1,"note":"later"}"#), Ok(()));
     for payload in [
@@ -79,15 +83,17 @@ fn replies_over_the_payload_limit_become_errors() {
     let large = json!({"content":[{"type":"text","text":"x".repeat(wire::MAX_PAYLOAD)}]});
     let reply = decoded(&encode_reply(5, Ok(large)));
     assert_eq!(reply["id"], 5);
-    assert_eq!(reply["error"]["code"], SERVER_ERROR);
-    assert_eq!(reply["error"]["message"], TOO_LARGE);
+    assert_eq!(reply["error"]["code"], -32_000);
+    assert_eq!(reply["error"]["code"], TOO_LARGE);
+    assert_eq!(reply["error"]["message"], TOO_LARGE_MESSAGE);
     assert!(reply.get("result").is_none());
 }
 
 #[test]
 fn refusals_map_to_reply_errors() {
     let (code, message) = refusal(PeerRefusal::Disabled);
-    assert_eq!(code, SERVER_ERROR);
+    assert_eq!(code, -32_001);
+    assert_eq!(code, NOT_ACCEPTING);
     assert_eq!(message, "this host does not accept calls from other hosts");
     assert_eq!(
         refusal(PeerRefusal::Failed {
