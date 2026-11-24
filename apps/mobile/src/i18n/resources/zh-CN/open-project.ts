@@ -14,7 +14,7 @@ export const openProject = {
     },
     signIn: {
       title: "登录账号",
-      description: "在浏览器中打开统一登录页面",
+      description: "在设置中管理在线服务账号",
     },
   },
 };

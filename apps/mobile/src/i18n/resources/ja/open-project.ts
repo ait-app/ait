@@ -14,7 +14,7 @@ export const openProject = {
     },
     signIn: {
       title: "アカウントにログイン",
-      description: "ブラウザーで統一ログインページを開く",
+      description: "設定でオンラインサービスのアカウントを管理",
     },
   },
 };

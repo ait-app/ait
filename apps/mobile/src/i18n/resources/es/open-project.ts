@@ -14,7 +14,7 @@ export const openProject = {
     },
     signIn: {
       title: "Iniciar sesión",
-      description: "Abre la página de inicio de sesión unificado en tu navegador",
+      description: "Gestiona tu cuenta del servicio en línea en Ajustes",
     },
   },
 };

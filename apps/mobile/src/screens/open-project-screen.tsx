@@ -19,8 +19,8 @@ import {
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
-import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { supportsAccountRelay } from "@/runtime/account-state";
+import { buildSettingsHostSectionRoute, buildSettingsSectionRoute } from "@/utils/host-routes";
 
 export function OpenProjectScreen() {
   const { t } = useTranslation();
@@ -30,7 +30,6 @@ export function OpenProjectScreen() {
   const openProjectPicker = useOpenAddProject();
   const importSession = useImportSession();
   const chooseHost = useHostChooser();
-  const [loginPortalOpenFailed, setLoginPortalOpenFailed] = useState(false);
 
   const isCompactLayout = useIsCompactFormFactor();
 
@@ -45,11 +44,8 @@ export function OpenProjectScreen() {
   }, [openProjectPicker]);
 
   const handleSignIn = useCallback(() => {
-    setLoginPortalOpenFailed(false);
-    void openExternalUrl("https://ait-login.authing.cn/u").catch(() =>
-      setLoginPortalOpenFailed(true),
-    );
-  }, []);
+    router.push(buildSettingsSectionRoute("online-service"));
+  }, [router]);
 
   const handleOpenProviders = useCallback(() => {
     chooseHost({
@@ -93,19 +89,16 @@ export function OpenProjectScreen() {
             onPress={handleOpenProviders}
             testID="open-project-setup-providers"
           />
-          <HomeTile
-            icon={LogIn}
-            title={t("openProject.tiles.signIn.title")}
-            description={t("openProject.tiles.signIn.description")}
-            onPress={handleSignIn}
-            testID="open-project-sign-in"
-          />
+          {supportsAccountRelay() ? (
+            <HomeTile
+              icon={LogIn}
+              title={t("openProject.tiles.signIn.title")}
+              description={t("openProject.tiles.signIn.description")}
+              onPress={handleSignIn}
+              testID="open-project-sign-in"
+            />
+          ) : null}
         </View>
-        {loginPortalOpenFailed ? (
-          <Text accessibilityRole="alert" style={styles.hostError}>
-            {t("onlineService.loginPortalOpenFailed")}
-          </Text>
-        ) : null}
       </View>
       <View style={styles.communityRow}>
         <CommunityLinks />

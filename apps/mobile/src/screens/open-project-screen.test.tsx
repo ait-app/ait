@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OpenProjectScreen } from "./open-project-screen";
 
-const mocks = vi.hoisted(() => ({ openUrl: vi.fn(async () => {}), openSidebar: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  openUrl: vi.fn(async () => {}),
+  openSidebar: vi.fn(),
+  push: vi.fn(),
+  accountRelay: true,
+}));
+vi.mock("expo-router", () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock("@/runtime/account-state", () => ({ supportsAccountRelay: () => mocks.accountRelay }));
 vi.mock("@/runtime/host-runtime", () => ({
   useHosts: () => [],
   useHostRuntimeLastError: () => null,
@@ -40,27 +47,25 @@ vi.mock("lucide-react-native", () => ({
   Globe: () => null,
 }));
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.accountRelay = true;
+});
 afterEach(cleanup);
 
-it("opens the login portal from the home screen without a local daemon", () => {
+it("opens the online service settings from the home screen instead of a website", () => {
   const view = render(<OpenProjectScreen />);
   expect(view.queryByTestId("open-project-pair-device")).toBeNull();
   expect(view.getByText("openProject.tiles.signIn.title")).toBeTruthy();
   fireEvent.click(view.getByTestId("open-project-sign-in"));
-  expect(mocks.openUrl).toHaveBeenCalledExactlyOnceWith("https://ait-login.authing.cn/u");
+  expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/settings/online-service");
+  expect(mocks.openUrl).not.toHaveBeenCalled();
 });
 
-it("shows login portal failures and clears the error on retry", async () => {
-  mocks.openUrl.mockRejectedValueOnce(new Error("Unable to open browser"));
+it("hides the sign-in tile where the client has no online service account", () => {
+  mocks.accountRelay = false;
   const view = render(<OpenProjectScreen />);
-  fireEvent.click(view.getByTestId("open-project-sign-in"));
-  await waitFor(() =>
-    expect(view.getByRole("alert").textContent).toBe("onlineService.loginPortalOpenFailed"),
-  );
-  fireEvent.click(view.getByTestId("open-project-sign-in"));
-  await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
-  expect(mocks.openUrl).toHaveBeenCalledTimes(2);
+  expect(view.queryByTestId("open-project-sign-in")).toBeNull();
 });
 
 it.each([

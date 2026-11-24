@@ -14,7 +14,7 @@ export const openProject = {
     },
     signIn: {
       title: "계정 로그인",
-      description: "브라우저에서 통합 로그인 페이지 열기",
+      description: "설정에서 온라인 서비스 계정 관리",
     },
   },
 };

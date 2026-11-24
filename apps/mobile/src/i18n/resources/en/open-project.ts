@@ -14,7 +14,7 @@ export const openProject = {
     },
     signIn: {
       title: "Sign in",
-      description: "Open the unified login page in your browser",
+      description: "Manage your online service account in Settings",
     },
   },
 };
