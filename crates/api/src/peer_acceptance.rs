@@ -88,7 +88,7 @@ fn read(daemon: Option<&metadata::daemon::service::Daemon>) -> bool {
 
 /// Whether `config` lets sibling Hosts call this Host. An absent `mcp.enabled` means enabled,
 /// as on the MCP route; an absent `mcp.acceptPeers` means off.
-fn accepting(config: &Value) -> bool {
+pub(crate) fn accepting(config: &Value) -> bool {
     config["mcp"]["enabled"] != false && config["mcp"]["acceptPeers"] == true
 }
 

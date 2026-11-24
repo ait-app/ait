@@ -17,6 +17,7 @@ use crate::connection::rpc;
 use crate::{ApiError, Shared, auth};
 
 mod catalog;
+pub(crate) mod peer;
 mod scope;
 #[cfg(unix)]
 mod socket;
@@ -103,19 +104,29 @@ async fn enabled(state: &Shared) -> Result<(), ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
-    if let Some(daemon) = &state.metadata.daemon {
-        let config = state
-            .runtime
-            .run_shared_queued(Some(daemon.clone()), model::ErrorCode::DaemonIo, |daemon| {
-                daemon.get_config().map_err(|_| model::ErrorCode::DaemonIo)
-            })
-            .await
-            .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE))?;
-        if config["mcp"]["enabled"] == false {
-            return Err(ApiError(StatusCode::NOT_FOUND));
-        }
+    let config = daemon_config(state)
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE))?;
+    if config.is_some_and(|config| config["mcp"]["enabled"] == false) {
+        return Err(ApiError(StatusCode::NOT_FOUND));
     }
     Ok(())
+}
+
+/// Read the current daemon configuration; `None` when the daemon service is not installed.
+/// # Errors
+/// Returns `DaemonIo` when the configuration cannot be read.
+async fn daemon_config(state: &Shared) -> Result<Option<Value>, model::ErrorCode> {
+    let Some(daemon) = &state.metadata.daemon else {
+        return Ok(None);
+    };
+    state
+        .runtime
+        .run_shared_queued(Some(daemon.clone()), model::ErrorCode::DaemonIo, |daemon| {
+            daemon.get_config().map_err(|_| model::ErrorCode::DaemonIo)
+        })
+        .await
+        .map(Some)
 }
 
 async fn method_not_allowed(State(state): State<Arc<Shared>>) -> Result<Response, ApiError> {
@@ -283,6 +294,30 @@ async fn call(
     let header = auth::single_header(headers, "x-ait-agent-id")
         .map_err(|_| (-32602, "Invalid caller header"))?;
     let caller = claimed(scope.as_ref(), header)?.map(str::to_owned);
+    // Only this Host writes remote parent labels, for calls from sibling Hosts; scoped callers
+    // already may write no `ait.` label.
+    if scope.is_none()
+        && matches!(tool.name.as_str(), "agent_create" | "agent_update")
+        && let Err(error) = scope::reserved_labels(&arguments, peer::PARENT_LABEL_PREFIX)
+    {
+        return Ok(tool_result(Err(error.into())));
+    }
+    run(state, tool, arguments, scope, caller).await
+}
+
+/// Execute an authorized call of `tool` for `scope`'s caller, with `caller` the Agent it acts
+/// for: hold one of the API's call permits, refusing rather than waiting when none is free, and
+/// give up after `CALL_TIMEOUT`.
+/// # Errors
+/// Returns `-32000` when the call budget is exhausted or the server drains, `-32603` when the
+/// execution task failed, and the caller refusals of `invoke`.
+async fn run(
+    state: Arc<Shared>,
+    tool: &'static catalog::Tool,
+    arguments: Value,
+    scope: Option<Scope>,
+    caller: Option<String>,
+) -> Result<Value, (i32, &'static str)> {
     let permit = state
         .connections
         .clone()

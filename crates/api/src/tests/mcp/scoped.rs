@@ -10,6 +10,7 @@ mod confinement;
 mod follow;
 mod notepad;
 mod notifications;
+mod peer;
 mod peer_acceptance;
 mod recall;
 mod schedules;

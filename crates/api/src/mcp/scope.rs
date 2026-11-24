@@ -318,7 +318,8 @@ pub(super) fn filter(scope: &Scope, tool: &str, result: &mut Value) {
 }
 
 /// Refuse labels starting with the reserved `prefix`: no MCP caller may write `ait.bot.` labels,
-/// and scoped callers may write no `ait.` label at all.
+/// host callers no `ait.parent.` label either, and scoped callers and sibling Hosts no `ait.`
+/// label at all.
 /// # Errors
 /// Returns `Forbidden` when `arguments.labels` names a reserved label.
 pub(super) fn reserved_labels(arguments: &Value, prefix: &str) -> Result<(), ErrorCode> {
@@ -653,7 +654,7 @@ fn text(value: &Value) -> Result<String, ErrorCode> {
 }
 
 /// Return `arguments[key]` as a mutable object, inserting an empty one when absent.
-fn object<'a>(
+pub(super) fn object<'a>(
     arguments: &'a mut Value,
     key: &str,
 ) -> Result<&'a mut Map<String, Value>, ErrorCode> {

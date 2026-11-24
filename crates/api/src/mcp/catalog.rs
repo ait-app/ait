@@ -72,6 +72,9 @@ pub(super) struct Tool {
     /// Whether the tool archives, kills or deletes something.
     #[serde(default)]
     destructive: bool,
+    /// Whether sibling Hosts of the account may call it, and host callers may route it to them.
+    #[serde(default)]
+    pub(super) peer: bool,
 }
 
 /// Arguments only Bot sessions may pass, by tool; every other caller's schema omits them, so
@@ -145,6 +148,11 @@ pub(super) fn granted<'a>(
             |scope| scope.allows(&tool.name),
         )
     })
+}
+
+/// Find installed tool `name` marked for calls from sibling Hosts, by its current name only.
+pub(super) fn for_peers(state: &Shared, name: &str) -> Option<&'static Tool> {
+    installed(state).find(|tool| tool.peer && tool.name == name)
 }
 
 #[cfg(test)]

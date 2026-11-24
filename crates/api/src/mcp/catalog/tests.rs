@@ -67,3 +67,30 @@ fn uses_of_a_retired_name_are_counted() {
         before + 2
     );
 }
+
+#[test]
+fn exactly_the_thirteen_tools_are_marked_for_peers() {
+    let marked: BTreeSet<_> = all()
+        .iter()
+        .filter(|tool| tool.peer)
+        .map(|tool| tool.name.as_str())
+        .collect();
+    assert_eq!(
+        marked,
+        BTreeSet::from([
+            "agent_create",
+            "agent_prompt",
+            "agent_get",
+            "agent_activity_read",
+            "agent_list",
+            "agent_wait",
+            "agent_cancel",
+            "agent_archive",
+            "workspace_create",
+            "workspace_list",
+            "provider_list",
+            "provider_model_list",
+            "profile_list",
+        ])
+    );
+}
