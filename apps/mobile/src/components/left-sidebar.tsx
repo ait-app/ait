@@ -48,7 +48,7 @@ import { useRetainedPanelActive } from "@/hooks/use-retained-panel-active";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
 import { type SidebarGroupMode, useSidebarViewStore } from "@/stores/sidebar-view-store";
-import { useHosts } from "@/runtime/host-runtime";
+import { useSidebarHostPicker } from "@/components/sidebar/use-sidebar-host-picker";
 import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/desktop/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
@@ -312,24 +312,22 @@ function SidebarHostPicker({
   onAddHost: () => void;
   onOpenHostSettings: (serverId: string) => void;
 }) {
-  const hosts = useHosts({ availableOnly: true });
   const triggerRef = useRef<View | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  const handleOpen = useCallback(() => setIsOpen(true), []);
+  const { hosts, handleOpenChange, openHostSettings } = useSidebarHostPicker(onOpenHostSettings);
+  const handleOpen = useCallback(() => handleOpenChange(true), [handleOpenChange]);
 
   return (
     <HostPicker
-      hosts={hosts}
+      hosts={hosts ?? []}
       value=""
-      onSelect={onOpenHostSettings}
-      open={isOpen}
-      onOpenChange={setIsOpen}
+      onSelect={openHostSettings}
+      open={hosts !== null}
+      onOpenChange={handleOpenChange}
       anchorRef={triggerRef}
       includeAddHost
       onAddHost={onAddHost}
       showActiveConnection
-      onOpenHostSettings={onOpenHostSettings}
+      onOpenHostSettings={openHostSettings}
       searchable
       desktopPlacement="top-start"
       desktopMinWidth={240}

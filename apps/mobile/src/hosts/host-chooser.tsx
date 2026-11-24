@@ -25,9 +25,11 @@ import {
   useGlobalWebOverlayLayer,
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
-import { useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
 import { buildSettingsAddHostRoute } from "@/utils/host-routes";
+
+type HostRow = Pick<HostProfile, "serverId" | "label">;
 
 type HostFilter = (host: HostProfile) => boolean;
 type HostChoiceHandler = (serverId: string) => void | Promise<void>;
@@ -42,7 +44,7 @@ export interface ChooseHostInput {
 interface HostChoiceRequest {
   id: number;
   title: string;
-  serverIds: string[];
+  hosts: HostRow[];
   onChooseHost: HostChoiceHandler;
 }
 
@@ -62,7 +64,7 @@ const useHostChooserStore = create<HostChooserState>((set) => ({
   close: () => set({ request: null }),
 }));
 
-function matchesHostQuery(host: HostProfile, query: string): boolean {
+function matchesHostQuery(host: HostRow, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
   return (
@@ -95,7 +97,7 @@ export function useHostChooser() {
 
       open({
         title: input.title ?? t("addProjectFlow.titles.host"),
-        serverIds: availableHosts.map((host) => host.serverId),
+        hosts: availableHosts.map(({ serverId, label }) => ({ serverId, label })),
         onChooseHost: input.onChooseHost,
       });
       return true;
@@ -107,10 +109,12 @@ export function useHostChooser() {
 function HostChooserRow({
   host,
   active,
+  disabled,
   onChooseHost,
 }: {
-  host: HostProfile;
+  host: HostRow;
   active: boolean;
+  disabled: boolean;
   onChooseHost: (serverId: string) => void;
 }) {
   const { theme } = useUnistyles();
@@ -118,14 +122,17 @@ function HostChooserRow({
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
-      (active || hovered || pressed) && styles.rowActive,
+      !disabled && (active || hovered || pressed) && styles.rowActive,
+      disabled && styles.rowDisabled,
     ],
-    [active],
+    [active, disabled],
   );
 
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={handlePress}
       style={rowStyle}
       testID={`host-chooser-row-${host.serverId}`}
@@ -157,18 +164,10 @@ export function HostChooserModal() {
   const [activeIndex, setActiveIndex] = useState(0);
   const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && request != null);
 
-  const requestHosts = useMemo(() => {
-    if (!request) return [];
-    const hostByServerId = new Map(hosts.map((host) => [host.serverId, host] as const));
-    return request.serverIds.flatMap((serverId) => {
-      const host = hostByServerId.get(serverId);
-      return host ? [host] : [];
-    });
-  }, [hosts, request]);
-
+  const availableIds = useMemo(() => new Set(hosts.map((host) => host.serverId)), [hosts]);
   const options = useMemo(
-    () => requestHosts.filter((host) => matchesHostQuery(host, query)),
-    [query, requestHosts],
+    () => request?.hosts.filter((host) => matchesHostQuery(host, query)) ?? [],
+    [query, request],
   );
   const activeOptionIndex = options.length === 0 ? 0 : Math.min(activeIndex, options.length - 1);
 
@@ -188,10 +187,15 @@ export function HostChooserModal() {
 
   const chooseHost = useCallback(
     (serverId: string) => {
-      const currentRequest = request;
+      if (
+        !request ||
+        !getHostRuntimeStore()
+          .getAvailableHosts()
+          .some((host) => host.serverId === serverId)
+      )
+        return;
       close();
-      if (!currentRequest) return;
-      void currentRequest.onChooseHost(serverId);
+      void request.onChooseHost(serverId);
     },
     [close, request],
   );
@@ -223,19 +227,18 @@ export function HostChooserModal() {
 
       if (options.length === 0) return false;
       event.preventDefault();
-      const next = event.key === "ArrowDown" ? activeOptionIndex + 1 : activeOptionIndex - 1;
-      if (next < 0) {
-        setActiveIndex(options.length - 1);
-        return true;
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      let index = activeOptionIndex;
+      for (let visited = 0; visited < options.length; visited++) {
+        index = (index + step + options.length) % options.length;
+        if (availableIds.has(options[index].serverId)) {
+          setActiveIndex(index);
+          break;
+        }
       }
-      if (next >= options.length) {
-        setActiveIndex(0);
-        return true;
-      }
-      setActiveIndex(next);
       return true;
     },
-    [activeOptionIndex, chooseHost, close, options],
+    [activeOptionIndex, availableIds, chooseHost, close, options],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
     active: isWeb && request != null,
@@ -278,6 +281,7 @@ export function HostChooserModal() {
                 key={host.serverId}
                 host={host}
                 active={index === activeOptionIndex}
+                disabled={!availableIds.has(host.serverId)}
                 onChooseHost={chooseHost}
               />
             ))}
@@ -344,6 +348,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
   },
+  rowDisabled: { opacity: 0.5 },
   rowActive: {
     backgroundColor: theme.colors.surface1,
   },

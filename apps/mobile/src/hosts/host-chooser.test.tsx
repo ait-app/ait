@@ -19,15 +19,22 @@ function host(serverId: string): HostProfile {
   };
 }
 
-const hosts = [host("host-a"), host("host-b")];
+let hosts: HostProfile[];
+let handleKey: (event: KeyboardEvent) => boolean;
 
-vi.mock("@/runtime/host-runtime", () => ({ useHosts: () => hosts }));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHosts: () => hosts,
+  getHostRuntimeStore: () => ({ getAvailableHosts: () => hosts }),
+}));
 vi.mock("@/hooks/use-is-local-daemon", () => ({ useLocalDaemonServerId: () => null }));
 vi.mock("@/components/hosts/host-picker", () => ({ HostStatusDotSlot: () => null }));
 vi.mock("@/lib/overlay-root", () => ({
   OverlayLayerProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useGlobalWebOverlayLayer: () => 0,
-  useWebOverlayRegistration: () => () => undefined,
+  useWebOverlayRegistration: ({ onKeyDown }: { onKeyDown: typeof handleKey }) => {
+    handleKey = onKeyDown;
+    return () => undefined;
+  },
 }));
 vi.mock("@/components/ui/text-input", () => ({
   EditingTextInput: forwardRef<
@@ -50,6 +57,7 @@ function Harness({ input }: { input: Omit<ChooseHostInput, "onChooseHost"> }) {
 }
 
 beforeEach(() => {
+  hosts = [host("host-a"), host("host-b"), host("host-c")];
   vi.stubGlobal("React", React);
 });
 
@@ -92,4 +100,43 @@ it("keeps a title the caller passes", async () => {
   });
 
   expect(screen.getByText("Import into which host?")).toBeTruthy();
+});
+
+it("keeps the keyboard target when another host disappears and skips unavailable hosts", () => {
+  const onChooseHost = vi.fn();
+  function Launcher() {
+    const choose = useHostChooser();
+    return (
+      <>
+        <button onClick={() => choose({ onChooseHost })}>Choose</button>
+        <HostChooserModal />
+      </>
+    );
+  }
+  const view = render(<Launcher />);
+  fireEvent.click(screen.getByText("Choose"));
+  const press = (key: string) =>
+    act(() => {
+      handleKey(new KeyboardEvent("keydown", { key }));
+    });
+  press("ArrowDown");
+  const [first, second, third] = hosts;
+  hosts = [third];
+  view.rerender(<Launcher />);
+  expect(screen.getByTestId("host-chooser-row-host-b").getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByTestId("host-chooser-row-host-b"));
+  press("Enter");
+  expect(onChooseHost).not.toHaveBeenCalled();
+  press("ArrowUp");
+  press("Enter");
+  expect(onChooseHost).toHaveBeenCalledExactlyOnceWith(third.serverId);
+
+  hosts = [first, second, third];
+  view.rerender(<Launcher />);
+  fireEvent.click(screen.getByText("Choose"));
+  press("ArrowDown");
+  hosts = [second, third];
+  view.rerender(<Launcher />);
+  press("Enter");
+  expect(onChooseHost).toHaveBeenLastCalledWith(second.serverId);
 });
