@@ -26,6 +26,11 @@ An Agent-scoped creation inherits the caller's workspace and records parentage. 
 `workspaceId` places the child in that workspace while preserving the caller relationship.
 Parentage does not itself provide a separate checkout.
 
+On another host (`hostId` passed) there is no caller workspace to inherit: `agent_create` needs that
+host's `workspaceId`, never `cwd`, and `workspace_create` needs a `path` or `projectId` there. The
+child is a top-level Agent on its host that only carries labels naming its parent; archiving or
+cancelling the parent does not touch it.
+
 Use `workspace_create` for isolation:
 
 | Intent                          | Arguments in addition to source `path` or `projectId`                                              |

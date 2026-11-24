@@ -1,5 +1,9 @@
 # 跨主机 MCP 与子 Agent：实施计划
 
+> **归档说明（2026-11-25）：** 计划的三个部分（账号中心 A、daemon B、客户端与文档 C）均已实施，步骤勾选框不代表未完成。
+> 设计与实现的差别见[设计文档的“实施中的修订”](cross-host-mcp.md#实施中的修订)；现行说明见 [ADR-305](../../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、
+> [MCP 手册](../../operations/mcp.md#跨主机调用)与[未完成工作](../../plans/README.md)。正文保留计划时的表述。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让一台主机上的 Agent 经 daemon MCP 发现同账号的其他主机，并在那里创建、提示、观察 Agent。
@@ -9,12 +13,12 @@ daemon 在会话里转发 MCP 工具调用，接收方用自己的 MCP 层以“
 
 **Tech Stack:** Rust（`ait-server` 的 axum + 内存 Hub；本仓库的 `relay`、`model`、`api`、`daemon`），TypeScript（`packages/protocol`、`apps/mobile`），Markdown 文档。
 
-**Spec:** [docs/plans/cross-host-mcp.md](cross-host-mcp.md)。每个任务的实现者都要读它；本计划只补充规格没有定下的名字、签名与数值。
+**Spec:** [docs/archive/plans/cross-host-mcp.md](cross-host-mcp.md)。每个任务的实现者都要读它；本计划只补充规格没有定下的名字、签名与数值。
 
 ## Global Constraints
 
 - 三部分按 A → B → C 的顺序交付。A 在 `ait-server` 仓库（`/Users/necokeine/Documents/ait-server`）的独立分支上，先合并并部署；B、C 在本仓库。
-- 改 Rust 之前阅读并遵守 [Rust 规范](../policy/rust.md)；改文件之前运行 `node scripts/adr.mjs governs <path>` 查看约束它的 ADR。
+- 改 Rust 之前阅读并遵守 [Rust 规范](../../policy/rust.md)；改文件之前运行 `node scripts/adr.mjs governs <path>` 查看约束它的 ADR。
 - 只运行改动代码及直接相关行为的测试；不运行整个工作区的测试或覆盖率。交付前在本仓库运行 `npm run verify`。
 - 测试等待事件、消息或进程退出，不等待时间；不新增 `sleep`、timer promise 或 `waitForTimeout`。
 - Markdown 与 TypeScript 用 `npx oxfmt <file>` 格式化，不用 prettier。

@@ -1,11 +1,14 @@
 # 跨主机 MCP 与子 Agent
 
-**状态说明（2026-11-24）：** 设计已确认，尚未实施。对照源码提交 `5f3ac5eb3`（本仓库）与 `7ef22db`（账号中心 `ait-server`）。
-实施步骤见[实施计划](cross-host-mcp-plan.md)。
+**归档说明（2026-11-25）：** 本设计已按计划实施（账号中心 `ait-server` 的 Hub `peer`、daemon 的 `host_list` 与 `hostId`、客户端的远程子 Agent 与设置开关）。
+实现与下文有出入之处见文末“实施中的修订”。现行说明见 [ADR-305](../../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、
+[MCP 手册](../../operations/mcp.md#跨主机调用)与[连接规格](../../architecture/connection.md#跨主机-peer-会话)；
+尚未完成的验收与范围外事项见[未完成工作](../../plans/README.md)。正文保留设计时的表述，对照源码提交 `5f3ac5eb3`（本仓库）与 `7ef22db`（账号中心 `ait-server`）。
+实施步骤记录在[实施计划](cross-host-mcp-plan.md)。
 
 ## 意图
 
-一台主机上的 Agent 目前只能编排本机：daemon 的 MCP（[MCP 手册](../operations/mcp.md)）没有主机的概念，daemon 之间也没有任何通道。
+一台主机上的 Agent 目前只能编排本机：daemon 的 MCP（[MCP 手册](../../operations/mcp.md)）没有主机的概念，daemon 之间也没有任何通道。
 用户在同一账号下有多台主机（工作站、服务器、笔记本）时，只能自己在客户端里切换主机、手工转述。
 
 目标是让 Agent 自己发现同账号的其他主机，在那里创建、提示并观察 Agent，并让这些 Agent 作为它的子 Agent 出现在客户端里。
@@ -13,8 +16,8 @@
 
 ## 现状
 
-- MCP 入口 `/mcp/agents` 无状态，工具目录是 [`catalog.json`](../../crates/api/src/mcp/catalog.json)，
-  调用者分主机凭据与 Bot 作用域凭据两类（[`mcp.rs`](../../crates/api/src/mcp.rs)）。
+- MCP 入口 `/mcp/agents` 无状态，工具目录是 [`catalog.json`](../../../crates/api/src/mcp/catalog.json)，
+  调用者分主机凭据与 Bot 作用域凭据两类（[`mcp.rs`](../../../crates/api/src/mcp.rs)）。
 - 主机之间只经账号 Hub 相遇。Hub 的方向规则是“只有 `access` 能开会话，目标是同账号其他节点的 `serve`”；
   daemon 持有的是 `serve` 链路；机器凭据（headless）申请 `access` 返回 403，桌面版的 `access` 链路属于界面进程而不是 daemon
   （`ait-server` 的 `docs/hub-protocol.md` 第 1、2 节）。`serve` 链路只能调用发布类的中心方法，不能读取其他 Host
@@ -22,9 +25,9 @@
 - serve 链路已有两种可复用的机制：显式 `call` 调用中心方法（`hub.automation.publish`、`hub.shares.publish`），
   以及由中心按“最近一次发布为 enabled”才投递的服务会话（自动化会话，`hub-protocol.md` 6.2 节）。
 - Hub 会话进入本机 API 时带一个准入身份：所有者、访客或自动化
-  （[`bridge.rs`](../../crates/relay/src/hub/bridge.rs) 的 `Admission`）。
+  （[`bridge.rs`](../../../crates/relay/src/hub/bridge.rs) 的 `Admission`）。
 - 父子关系存在子 Agent 的标签 `paseo.parent-agent-id` 里，快照以 `parentAgentId` 给出；归档级联、子 Agent 控制和客户端的
-  子 Agent 轨道、任务总览都把它当作**同一主机**上的 Agent id（[任务总览](../operations/task-board.md)）。
+  子 Agent 轨道、任务总览都把它当作**同一主机**上的 Agent id（[任务总览](../../operations/task-board.md)）。
 
 ## 目标、非目标与反目标
 
@@ -41,7 +44,7 @@
 - 不做完成通知（Paseo 的 `notifyOnFinish`）：Ait 没有这条机制，父 Agent 用带 `hostId` 的 `agent_wait`。
 - 归档或取消父 Agent 不级联到其他主机上的子 Agent。
 - 不跨账号（访客与分享不参与），不做多跳转发，不做按来源主机的允许名单，不保存任何主机凭据或地址。
-- 不改旧工具名的别名与移除期限（[ADR-295](../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md) 照旧）。
+- 不改旧工具名的别名与移除期限（[ADR-295](../../decisions/daemon/adr-295-mcp-tool-naming-and-aliases.md) 照旧）。
 
 反目标（出现即算失败）：
 
@@ -105,9 +108,9 @@
 ### 2. daemon：peer 会话
 
 - **声明。** 中心的 `hub_features` 含 `peer` 时，main 链路在 `hello.f` 中声明它；不含时不声明，链路照常建立。
-  `peer` 不进入“中心必须声明”的集合（[`wire.rs`](../../crates/relay/src/hub/wire.rs) 的 `FEATURES`）。
+  `peer` 不进入“中心必须声明”的集合（[`wire.rs`](../../../crates/relay/src/hub/wire.rs) 的 `FEATURES`）。
 - **发布。** daemon 在每条新链路上以及配置变化后调用 `hub.peers.publish`，`enabled` 为 `mcp.enabled && mcp.acceptPeers`，
-  做法与 [`automation.rs`](../../bins/daemon/src/host/hub/automation.rs) 相同。
+  做法与 [`automation.rs`](../../../bins/daemon/src/host/hub/automation.rs) 相同。
 - **发起。** serve 链路新增发起方向：发 `open`，处理中心发来的 `accept` 以及自己发起的会话上的 `msg`、`close`、`credit`。
   对每台目标主机至多保持一个 peer 会话，按需打开，多个调用以请求 id 复用它，空闲约 60 秒后由发起方关闭。
 - **接收。** `k:"peer"` 的 `open` 以新的准入身份（对端主机，带中心填写的 `host_id`、`server_id`、`name`）交给本机 API；
@@ -135,10 +138,10 @@
   Bot 会话、Bot 子树与工单工作者的目录里没有 `host_list`，它们看到的 Schema 没有 `hostId`，传入时按参数不符拒绝。
   调用者 Agent 位于沙箱化 Worktree 时拒绝跨主机调用：沙箱限制的是本机的写入范围，另一台主机在它之外。
   访客会话创建的 Agent（带 `ait.guest.share-id` 标签）本来就不注入 daemon MCP
-  （[`agent_mcp.rs`](../../crates/provider/runtime/src/service/agent_mcp.rs)）；调用者 Agent 带该标签时同样拒绝跨主机调用。
-  `X-Ait-Agent-Id` 不是权限边界（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险），所以这一条只是尽力而为，文档需如实说明。
+  （[`agent_mcp.rs`](../../../crates/provider/runtime/src/service/agent_mcp.rs)）；调用者 Agent 带该标签时同样拒绝跨主机调用。
+  `X-Ait-Agent-Id` 不是权限边界（[ADR-215](../../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险），所以这一条只是尽力而为，文档需如实说明。
 - 转发占用 A 的 MCP 调用额度，并受 A 的 60 秒调用超时约束；B 上的 `agent_wait` 上限 45 秒，在此之内。
-- `initialize` 的 `instructions`、[ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md) 和客户端的工具展示目录补上 `host_list` 与 `hostId`。
+- `initialize` 的 `instructions`、[ait-orchestration Skill](../../../skills/ait-orchestration/SKILL.md) 和客户端的工具展示目录补上 `host_list` 与 `hostId`。
 
 ### 4. B 上的权限
 
@@ -222,20 +225,33 @@
 - 端到端：`relay` 测试里两个 serve 链路经一个按协议转发的测试中心完成一次对端调用。仓库里没有可供两个 daemon 进程共用的中心替身，
   所以不写双 daemon 进程测试；真实中心上的两主机验收（`agent_create` 加 `agent_wait`，并核对子 Agent 的远程父 Agent 标签）记在 PR 描述里。
 - 客户端：子 Agent 选择与任务总览模型的跨主机关联；设置开关。
-- 测试等待事件而不是时间（[仓库约定](../../AGENTS.md)）。
+- 测试等待事件而不是时间（[仓库约定](../../../AGENTS.md)）。
 
 ## 文档与 ADR
 
 - 本仓库新增一条 ADR（`daemon` 分类，编号在实施时扫描全部分支后取，当前最大为 304），修订
-  [ADR-148](../decisions/daemon/adr-148-daemon-mcp.md) 与 [ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)：
+  [ADR-148](../../decisions/daemon/adr-148-daemon-mcp.md) 与 [ADR-218](../../decisions/clients/adr-218-hub-feature-negotiation.md)：
   记录 peer 会话这一新的跨组件契约，以及“对端调用者”这一新的权限边界。
-- 更新 [MCP 手册](../operations/mcp.md)、[连接规格](../architecture/connection.md)、[架构概览](../architecture/README.md)、
-  [任务总览](../operations/task-board.md)、[daemon 手册](../operations/daemon.md) 与 CHANGELOG；实施完成后本文件归档。
+- 更新 [MCP 手册](../../operations/mcp.md)、[连接规格](../../architecture/connection.md)、[架构概览](../../architecture/README.md)、
+  [任务总览](../../operations/task-board.md)、[daemon 手册](../../operations/daemon.md) 与 CHANGELOG；实施完成后本文件归档。
 
 ## 留给实现者
 
 - 中心方法的版本字段与错误文本；peer 会话的配额数值、主机列表缓存时长与空闲关闭时长。
-- 发起方需要 `close` 的 `code`（现在 [`wire.rs`](../../crates/relay/src/hub/wire.rs) 的 `Inbound::Close` 不解析它）来区分
+- 发起方需要 `close` 的 `code`（现在 [`wire.rs`](../../../crates/relay/src/hub/wire.rs) 的 `Inbound::Close` 不解析它）来区分
   `unknown_target`、`peer_disabled` 等原因；daemon 侧的每链路 16 个会话上限也要与中心的单独计数保持一致。
-- 对端调用者在 [`scope.rs`](../../crates/api/src/mcp/scope.rs) 中如何表示（现有 `Scope` 是 Bot 专用的），前提是授权判定仍只有一处。
+- 对端调用者在 [`scope.rs`](../../../crates/api/src/mcp/scope.rs) 中如何表示（现有 `Scope` 是 Bot 专用的），前提是授权判定仍只有一处。
 - 远程子 Agent 在轨道和任务总览里的具体呈现，以及“归档已完成的子 Agent”是否包含远程子 Agent。
+
+## 实施中的修订
+
+以下各处实现与上文设计不同；权威描述是 [ADR-305](../../decisions/daemon/adr-305-cross-host-mcp-peer-sessions.md)、[MCP 手册](../../operations/mcp.md#跨主机调用)与[连接规格](../../architecture/connection.md#跨主机-peer-会话)。
+
+- **主机列表：** 目标未知时不刷新（设计写“遇到 `unknown_target` 时刷新一次”），缓存 5 秒，刚上线的主机可能稍后才出现。
+- **没有节点或 `server_id` 的主机：** 中心返回的从未连接过的主机不列入 `host_list`。
+- **错误码：** 接收方自己产生的错误码是 `-32001`（当前不接受）、`-32000`（回复过大等）与 `-32002`（此刻无法执行，调用未执行）；调用侧把目标在协议层的拒绝报告为 `host_rejected`。
+- **期限：** `Peers::call` 带时间限制，一次转发调用（包括路由）共用一个 55 秒期限，而不是只受 60 秒调用超时约束。
+- **接受与拒绝：** 接收方接受会话，在每次调用时拒绝，而不是在建立会话时拒绝；关闭开关后已有会话里的下一次调用得到 `host_not_accepting`。
+- **远程父 Agent：** 只有两个标签（`ait.parent.server-id`、`ait.parent.agent-id`），没有归档级联、提醒或未读的特殊处理。
+- **访客会话：** 访客会话不能写父标签；`ait.parent.` 前缀对所有 MCP 调用者保留。
+- **测试：** 没有双 daemon 进程测试；端到端检查是 `relay` 的中继测试，加上真实中心上的两主机手工验收。

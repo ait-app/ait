@@ -69,6 +69,30 @@ archives it while retaining its history. `workspace_archive` retires its Agents,
 terminals and can remove an owned worktree. Apply lifecycle actions to the resources and scope
 requested by the user.
 
+## Work across hosts
+
+Other hosts of the user's account can run Agents for you, but only when the live `tools/list` shows
+`host_list` and a `hostId` argument. Omitting `hostId` always means the calling host.
+
+1. Call `host_list` first. Use only hosts with `available: true`; `reason` says why another is not
+   (`offline`, `not_accepting`, `unsupported`). Its `hostId` is the value to pass.
+2. Agents on another host live in an existing Workspace of that host. Get a `workspaceId` with
+   `workspace_list` or `workspace_create` passing the same `hostId`; ids of the calling host mean
+   nothing there. `provider_list`, `provider_model_list` and `profile_list` also take `hostId`
+   because providers and models differ per host.
+3. Call `agent_create` with `hostId`, that `workspaceId` and an explicit `provider/model`; never `cwd`.
+   Then pass the same `hostId` to `agent_wait`, `agent_get`, `agent_activity_read`, `agent_prompt`,
+   `agent_cancel` and `agent_archive`. There are no finish notifications and no archive cascade
+   across hosts: wait on the child yourself.
+4. A failure is a tool result with `isError` and `structuredContent.code`. `outcome_unknown` means the
+   call may have run: check with `agent_list` or `agent_get` on that host before retrying, and reuse the
+   same `idempotencyKey` for `agent_create`. `host_not_accepting` means the user has not turned on
+   accepting calls on that host: tell the user and do not retry.
+
+Everything not listed here (terminals, scripts, schedules, heartbeats, permissions, the notepad)
+stays on the calling host. Opening a workspace on another host runs code there with the account's
+trust, so do it only for work the user asked for.
+
 ## Share notes through the workspace notepad
 
 Every workspace has exactly one notepad: a Markdown file the host keeps outside the checkout, which
