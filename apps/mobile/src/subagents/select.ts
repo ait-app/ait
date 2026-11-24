@@ -4,6 +4,7 @@ import { toArchiveKey, type ArchiveAgentPendingState } from "@/data/archive-agen
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type Agent } from "@/stores/session-store";
+import { isSharedResourceServerId } from "@/runtime/host-runtime";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@ait/protocol/messages";
 import { markObservedSubagentsStale, refreshUnifiedSubagents } from "./unified";
@@ -96,7 +97,9 @@ export function localSubagentRows<Row extends SubagentRow>(
 /**
  * Children of `params.parentAgentId` on `params.serverId`: the parent host's own children, plus
  * agents on every other connected host whose remote parent is exactly that `(serverId, agentId)`.
- * `pendingArchiveIds` are the parent host's; `pendingArchives` covers the other hosts.
+ * Only the account's own hosts group across hosts: another account's shared host neither adopts
+ * nor lends children. `pendingArchiveIds` are the parent host's; `pendingArchives` covers the
+ * other hosts.
  */
 export function selectSubagentsForParent(
   state: SessionStoreSnapshot,
@@ -117,8 +120,11 @@ export function selectSubagentsForParent(
     rows.push(toSubagentRow(agent, params.serverId));
   }
 
-  for (const [serverId, session] of Object.entries(state.sessions)) {
-    if (serverId === params.serverId) continue;
+  const otherHosts = isSharedResourceServerId(params.serverId)
+    ? []
+    : Object.entries(state.sessions);
+  for (const [serverId, session] of otherHosts) {
+    if (serverId === params.serverId || isSharedResourceServerId(serverId)) continue;
     for (const agent of session.agents.values()) {
       const remoteParent = agent.remoteParent;
       if (

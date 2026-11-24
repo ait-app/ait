@@ -14,9 +14,11 @@ import { toArchiveKey } from "@/data/archive-agent-pending";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
 import { serverInfo } from "@ait/client/internal/protocol/messages";
 import { object } from "@ait/client/internal/protocol/types";
+import { sharedResourceServerId } from "@/runtime/host-runtime";
 
 const SERVER_ID = "server-1";
 const REMOTE_SERVER_ID = "server-2";
+const SHARED_SERVER_ID = sharedResourceServerId("share-1");
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
 const EMPTY_PENDING_ARCHIVE_IDS = new Set<string>();
 
@@ -80,9 +82,20 @@ function setRemoteAgents(agents: Agent[]): void {
     );
 }
 
+function setSharedAgents(agents: Agent[]): void {
+  useSessionStore.getState().initializeSession(SHARED_SERVER_ID, null as unknown as DaemonClient);
+  useSessionStore
+    .getState()
+    .setAgents(
+      SHARED_SERVER_ID,
+      new Map(agents.map((agent) => [agent.id, { ...agent, serverId: SHARED_SERVER_ID }])),
+    );
+}
+
 afterEach(() => {
   useSessionStore.getState().clearSession(SERVER_ID);
   useSessionStore.getState().clearSession(REMOTE_SERVER_ID);
+  useSessionStore.getState().clearSession(SHARED_SERVER_ID);
   useProviderSubagentStore.setState({
     descriptors: new Map(),
     timelines: new Map(),
@@ -616,6 +629,29 @@ describe("remote subagents", () => {
         EMPTY_PENDING_ARCHIVE_IDS,
       ).map((row) => row.id),
     ).toEqual(["c"]);
+  });
+
+  it("groups across hosts only among the account's own hosts, never with a shared host", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    setSharedAgents([
+      makeAgent({ id: "Y" }),
+      makeAgent({ id: "shared-child", remoteParent }),
+      makeAgent({ id: "shared-local", parentAgentId: "Y" }),
+    ]);
+    setRemoteAgents([
+      makeAgent({ id: "own-child", remoteParent: { serverId: SHARED_SERVER_ID, agentId: "Y" } }),
+    ]);
+    const childrenOf = (serverId: string, parentAgentId: string) =>
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId, parentAgentId },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => [row.id, row.serverId]);
+
+    // A child on a shared host is never nested under a parent on another host.
+    expect(childrenOf(SERVER_ID, "X")).toEqual([]);
+    // A parent on a shared host adopts no child from another host, only its own children.
+    expect(childrenOf(SHARED_SERVER_ID, "Y")).toEqual([["shared-local", SHARED_SERVER_ID]]);
   });
 
   it("hides archived remote children and those whose archive is pending on their own host", () => {

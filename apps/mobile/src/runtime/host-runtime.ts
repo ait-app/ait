@@ -89,8 +89,15 @@ import { toErrorMessage } from "@/utils/error-messages";
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
 
+const SHARED_RESOURCE_PREFIX = "shared:";
+
 export function sharedResourceServerId(shareId: string): string {
-  return `shared:${shareId}`;
+  return `${SHARED_RESOURCE_PREFIX}${shareId}`;
+}
+
+/** Whether a runtime id names another account's shared resource rather than an own host. */
+export function isSharedResourceServerId(serverId: string): boolean {
+  return serverId.startsWith(SHARED_RESOURCE_PREFIX);
 }
 
 export function isSharedResourceHost(host: HostProfile): boolean {

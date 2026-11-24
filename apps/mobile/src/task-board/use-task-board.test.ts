@@ -35,6 +35,7 @@ vi.mock("@/runtime/host-runtime", () => ({
   useHosts: () => state.hosts,
   useHostRuntimeConnectionStatuses: () => new Map([["local", state.snapshot.connectionStatus]]),
   getHostRuntimeStore: () => runtime,
+  isSharedResourceHost: () => false,
 }));
 
 afterEach(cleanup);

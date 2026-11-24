@@ -45,10 +45,11 @@ function agent(id: string, patch: Partial<Agent> = {}): Agent {
   };
 }
 
-function host(agents: Agent[], serverId = "local"): TaskBoardHost {
+function host(agents: Agent[], serverId = "local", shared = false): TaskBoardHost {
   return {
     serverId,
     label: serverId,
+    shared,
     agents: new Map(agents.map((item) => [item.id, { ...item, serverId }])),
     workspaces: new Map(),
   };
@@ -279,6 +280,30 @@ describe("task board", () => {
     expect(
       filterTaskBoard(model.roots, { ...filters, hostId: "C" }).map((item) => item.key),
     ).toEqual([taskKey("C", "other")]);
+  });
+
+  it("groups across hosts only among the account's own hosts, never with a shared host", () => {
+    const model = buildTaskBoard([
+      host([agent("X")], "A"),
+      host(
+        [
+          agent("Y"),
+          agent("shared-child", { remoteParent: { serverId: "A", agentId: "X" } }),
+          agent("shared-local", { parentAgentId: "Y" }),
+        ],
+        "shared:s1",
+        true,
+      ),
+      host([agent("own-child", { remoteParent: { serverId: "shared:s1", agentId: "Y" } })], "B"),
+    ]);
+    const children = (serverId: string, id: string) =>
+      model.byKey.get(taskKey(serverId, id))?.children.map((child) => child.key);
+
+    expect(children("A", "X")).toEqual([]);
+    expect(children("shared:s1", "Y")).toEqual([taskKey("shared:s1", "shared-local")]);
+    expect(model.roots.map((task) => task.key)).toEqual(
+      expect.arrayContaining([taskKey("shared:s1", "shared-child"), taskKey("B", "own-child")]),
+    );
   });
 
   it("ignores a remote parent on the child's own host, as the subagent selector does", () => {

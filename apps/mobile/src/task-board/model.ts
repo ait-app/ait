@@ -13,6 +13,8 @@ export type TaskSort = "recent" | "oldest";
 export interface TaskBoardHost {
   serverId: string;
   label: string;
+  /** Another account's shared resource: its agents never group with those of other hosts. */
+  shared: boolean;
   agents: ReadonlyMap<string, Agent>;
   workspaces: ReadonlyMap<string, WorkspaceDescriptor>;
 }
@@ -126,10 +128,17 @@ export function buildTaskBoard(hosts: readonly TaskBoardHost[]): TaskBoardModel 
 
   // A child created from another host names its parent by that host; a parent on a host this
   // client is not connected to is absent from the board, so the child stays a task of its own.
-  // A remote parent on the child's own host is ignored, as the subagent selector ignores it.
+  // Only the account's own hosts group across hosts, so a remote parent is ignored when either
+  // side is a shared host, and on the child's own host, as the subagent selector ignores both.
+  const shared = new Set(hosts.filter((host) => host.shared).map((host) => host.serverId));
   const parentOf = (task: BoardTask): BoardTask | undefined => {
     const { remoteParent, parentAgentId, serverId } = task.agent;
-    if (remoteParent && remoteParent.serverId !== serverId)
+    if (
+      remoteParent &&
+      remoteParent.serverId !== serverId &&
+      !shared.has(serverId) &&
+      !shared.has(remoteParent.serverId)
+    )
       return byKey.get(taskKey(remoteParent.serverId, remoteParent.agentId));
     return parentAgentId ? byKey.get(taskKey(serverId, parentAgentId)) : undefined;
   };
