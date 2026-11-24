@@ -79,7 +79,7 @@ export function SidebarAccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="top"
-        align="end"
+        align="start"
         offset={8}
         width={280}
         testID="sidebar-account-menu"

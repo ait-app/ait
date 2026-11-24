@@ -390,8 +390,8 @@ function SidebarFooter({
   const settingsKeys = useShortcutKeys("toggle-settings");
   const signedIn = useIsAccountSignedIn();
 
-  return (
-    <View style={styles.sidebarFooter}>
+  const hostAndProjectButtons = (
+    <>
       <SidebarHostPicker
         theme={theme}
         label={labels.hosts}
@@ -407,28 +407,39 @@ function SidebarFooter({
         shortcutKeys={newAgentKeys}
         theme={theme}
       />
-      {signedIn ? (
+    </>
+  );
+
+  if (signedIn) {
+    return (
+      <View style={styles.sidebarFooter}>
         <SidebarAccountMenu onOpenSettings={handleSettings} onImportSession={handleImportSession} />
-      ) : (
-        <View style={styles.footerIconRow}>
-          <FooterIconButton
-            onPress={handleImportSession}
-            testID="sidebar-import-session"
-            label={labels.importSession}
-            icon={Import}
-            theme={theme}
-          />
-          <SidebarHelpMenu />
-          <FooterIconButton
-            onPress={handleSettings}
-            testID="sidebar-settings"
-            label={labels.settings}
-            icon={Settings}
-            shortcutKeys={settingsKeys}
-            theme={theme}
-          />
-        </View>
-      )}
+        {hostAndProjectButtons}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.sidebarFooter}>
+      {hostAndProjectButtons}
+      <View style={styles.footerIconRow}>
+        <FooterIconButton
+          onPress={handleImportSession}
+          testID="sidebar-import-session"
+          label={labels.importSession}
+          icon={Import}
+          theme={theme}
+        />
+        <SidebarHelpMenu />
+        <FooterIconButton
+          onPress={handleSettings}
+          testID="sidebar-settings"
+          label={labels.settings}
+          icon={Settings}
+          shortcutKeys={settingsKeys}
+          theme={theme}
+        />
+      </View>
     </View>
   );
 }
