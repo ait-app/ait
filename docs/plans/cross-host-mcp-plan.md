@@ -33,6 +33,7 @@ daemon 在会话里转发 MCP 工具调用，接收方用自己的 MCP 层以“
   - A 侧失败结果的 `structuredContent.code`：`hub_unavailable`、`host_unknown`、`host_offline`、`host_not_accepting`、`host_unsupported`、
     `capacity`、`outcome_unknown`、`caller_not_allowed`、`host_rejected`（对端以 `error` 拒绝了这次调用，文本为对端给出的消息）。
   - `model::peer::Error` 另有 `Rejected { code: i32, message: String }`：对端回复了 `error`（`-32001` 映射为 `NotAccepting`，`-32000` 映射为 `TooLarge`，其余为 `Rejected`）。
+  - `Peers::call(node, request, timeout: std::time::Duration)`：时限由调用方给出、由适配器执行——在 `accept` 之前到期为 `Offline`（请求未发出），请求发出之后到期为 `OutcomeUnknown`。
   - 发起方打开 peer 会话时声明 1 MiB 的接收窗口（`credit::WINDOW`），使不超过消息上限的回复总能送达。
   - 可跨主机的 13 个工具：`agent_create`、`agent_prompt`、`agent_get`、`agent_activity_read`、`agent_list`、`agent_wait`、`agent_cancel`、
     `agent_archive`、`workspace_create`、`workspace_list`、`provider_list`、`provider_model_list`、`profile_list`。
