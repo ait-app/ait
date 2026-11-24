@@ -247,6 +247,8 @@ Composer 的“功能”入口使用与模式选择相同的搜索下拉菜单�
   `ResourceExhausted`，不截断条目也不返回无法推进游标的空页
   （[ADR-090](../decisions/providers/adr-090-timeline-entry-and-page-budgets.md)，修订 ADR-039；
   Codex MCP 超大字段预览见 [ADR-140](../decisions/providers/adr-140-codex-mcp-display-previews.md)）。
+- Agent 目录同步的快照和增量都按请求的 `page.limit` 与编码字节数分页。客户端在同一连接上用
+  `pageInfo.nextCursor` 读取同一批结果，收完全部页后提交检查点。订阅从这批结果的检查点继续交付变更。
 - 打开会话的读取有本地线路预算：`crates/provider/runtime/src/rpc/tests/wire_budgets.rs` 用确定的合成数据
   （约 900 条的单个长轮次、40 个已完成轮次、200 个 Agent 的目录）测量 Timeline tail、更早一页、重连后的
   `after` 追赶与 epoch 变更后的追赶，以及 Agent 目录读取，比较编码后 JSON 结果的字节数和返回行数与同文件的

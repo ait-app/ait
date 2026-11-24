@@ -11,6 +11,8 @@ use crate::dispatch::State;
 use crate::service::agent_execution::AgentExecution;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 
+pub(crate) mod pages;
+
 #[derive(Clone)]
 struct Reader {
     runtime: Arc<Runtime>,
@@ -80,7 +82,11 @@ pub(crate) async fn subscribe(
     let id = uuid::Uuid::new_v4().to_string();
     response["subscriptionId"] = json!(id);
     let outbound = context.outbound.clone();
-    context.respond(Ok(response))?;
+    let first = match connection.directory_pages.first(&params, response) {
+        Ok(page) => page,
+        Err(error) => return context.respond(Err(error)),
+    };
+    context.respond(Ok(first))?;
     let observation = Arc::new(tokio::sync::Mutex::new(Observation {
         id: id.clone(),
         params,
