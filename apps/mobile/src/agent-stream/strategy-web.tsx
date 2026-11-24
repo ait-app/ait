@@ -52,6 +52,7 @@ const HISTORY_START_SLOT_HEIGHT_PX = 32;
 const CONTENT_PADDING_TOP_PX = 16;
 const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
 const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADDING_TOP_PX;
+const MAX_SYNC_ROW_MEASURE_PASSES = 8;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
@@ -341,6 +342,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const readingAnchor = useMemo(createReadingAnchor, []);
   const measuredRowHeights = useRef(new Map<string, { width: number; height: number }>());
   const pendingRowMeasureFrameRef = useRef<number | null>(null);
+  const syncRowMeasurePassesRef = useRef(0);
   const lastActiveFollowOutputLayoutRef = useRef<ActiveFollowOutputLayout | null>(null);
   const lastObservedViewportGeometryRef = useRef<ObservedViewportGeometry | null>(null);
   const wasFollowOutputLayoutActiveRef = useRef(false);
@@ -505,6 +507,16 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return resized;
   });
 
+  const scheduleVirtualizedRowMeasurement = useStableEvent(() => {
+    if (pendingRowMeasureFrameRef.current !== null) return;
+    pendingRowMeasureFrameRef.current = window.requestAnimationFrame(() => {
+      pendingRowMeasureFrameRef.current = null;
+      syncRowMeasurePassesRef.current = 0;
+      if (!isActiveRef.current) return;
+      if (!measureVirtualizedRows()) reconcileReadingPosition();
+    });
+  });
+
   // Measure the committed DOM rather than queued observer entries: queued entries
   // can describe a pre-commit layout, because an image's pending intrinsic
   // dimensions only land in the DOM once React commits it. Scheduling the
@@ -514,14 +526,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     () =>
       new ResizeObserver(() => {
         if (!isActiveRef.current) return;
-        if (pendingRowMeasureFrameRef.current !== null) return;
-        pendingRowMeasureFrameRef.current = window.requestAnimationFrame(() => {
-          pendingRowMeasureFrameRef.current = null;
-          if (!isActiveRef.current) return;
-          measureVirtualizedRows();
-        });
+        scheduleVirtualizedRowMeasurement();
       }),
-    [measureVirtualizedRows],
+    [scheduleVirtualizedRowMeasurement],
   );
   const measureVirtualizedRowElement = useCallback(
     (node: HTMLDivElement | null) => {
@@ -536,7 +543,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       const pendingFrame = pendingRowMeasureFrameRef.current;
       if (pendingFrame !== null) {
         window.cancelAnimationFrame(pendingFrame);
+        pendingRowMeasureFrameRef.current = null;
       }
+      syncRowMeasurePassesRef.current = 0;
       virtualRowObserver.disconnect();
     },
     [virtualRowObserver],
@@ -715,7 +724,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   useLayoutEffect(() => {
     // Commit positions for every resized row before accepting reading geometry.
     // Child layout can change during this commit, ahead of ResizeObserver delivery.
-    if (!isActive || measureVirtualizedRows()) return;
+    if (!isActive) return;
+    // Short or empty rows reveal more rows after each measurement. A long run
+    // can otherwise exceed React's nested update limit before the browser paints.
+    if (syncRowMeasurePassesRef.current >= MAX_SYNC_ROW_MEASURE_PASSES) {
+      scheduleVirtualizedRowMeasurement();
+      return;
+    }
+    if (measureVirtualizedRows()) {
+      syncRowMeasurePassesRef.current += 1;
+      scheduleVirtualizedRowMeasurement();
+      return;
+    }
     reconcileReadingPosition();
   }, [
     contentWidth,
@@ -724,6 +744,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     virtualRows,
     measureVirtualizedRows,
     reconcileReadingPosition,
+    scheduleVirtualizedRowMeasurement,
   ]);
 
   const stopFollowingOutputFromUserIntent = useStableEvent(() => {

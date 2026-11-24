@@ -131,51 +131,92 @@ describe("createWebStreamStrategy", () => {
     vi.restoreAllMocks();
   });
 
-  it("mounts virtualized history without recursive row measurement updates", () => {
-    const rowRenderCount = vi.fn();
-    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
-    const viewportRef = React.createRef<StreamViewportHandle>();
-    const historyVirtualized = Array.from({ length: 16 }, (_, index) => userMessage(index));
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
+  it.each([24, 0])(
+    "mounts virtualized history with %ipx rows without recursive updates",
+    (height) => {
+      const frames = new Map<number, FrameRequestCallback>();
+      let nextFrameId = 0;
+      vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+        const id = ++nextFrameId;
+        frames.set(id, callback);
+        return id;
+      });
+      vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+        frames.delete(id);
+      });
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+        configurable: true,
+        get() {
+          return this.dataset.testid === "agent-chat-scroll" ? 500 : height;
+        },
+      });
+      const rowRenderCount = vi.fn();
+      const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+      const viewportRef = React.createRef<StreamViewportHandle>();
+      const historyVirtualized = Array.from({ length: 1000 }, (_, index) => userMessage(index));
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
 
-    act(() => {
-      root?.render(
-        <>
-          {strategy.render({
-            agentId: "agent",
-            segments: {
-              historyVirtualized,
-              historyMounted: [],
-              liveHead: [],
-            },
-            boundary: {
-              hasVirtualizedHistory: true,
-              hasMountedHistory: false,
-              hasLiveHead: false,
-            },
-            renderers: createRenderers(rowRenderCount),
-            listEmptyComponent: null,
-            viewportRef,
-            routeBottomAnchorRequest: null,
-            isAuthoritativeHistoryReady: true,
-            onNearBottomChange: vi.fn(),
-            onNearHistoryStart: vi.fn().mockReturnValue(true),
-            isLoadingOlderHistory: false,
-            hasOlderHistory: false,
-            olderHistoryProgressKey: null,
-            listStyle: null,
-            baseListContentContainerStyle: null,
-            contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
-          })}
-        </>,
-      );
-    });
+      act(() => {
+        root?.render(
+          <>
+            {strategy.render({
+              agentId: "agent",
+              segments: {
+                historyVirtualized,
+                historyMounted: [],
+                liveHead: [],
+              },
+              boundary: {
+                hasVirtualizedHistory: true,
+                hasMountedHistory: false,
+                hasLiveHead: false,
+              },
+              renderers: {
+                ...createRenderers(rowRenderCount),
+                renderHistoryVirtualizedRow: (item) => {
+                  rowRenderCount();
+                  return height === 0 ? null : <div style={VIRTUAL_ROW_STYLE}>{item.id}</div>;
+                },
+              },
+              listEmptyComponent: null,
+              viewportRef,
+              routeBottomAnchorRequest: null,
+              isAuthoritativeHistoryReady: true,
+              onNearBottomChange: vi.fn(),
+              onNearHistoryStart: vi.fn().mockReturnValue(true),
+              isLoadingOlderHistory: false,
+              hasOlderHistory: false,
+              olderHistoryProgressKey: null,
+              listStyle: null,
+              baseListContentContainerStyle: null,
+              contentMaxWidth: DEFAULT_CONTENT_MAX_WIDTH,
+            })}
+          </>,
+        );
+      });
 
-    expect(rowRenderCount.mock.calls.length).toBeGreaterThan(0);
-    expect(rowRenderCount.mock.calls.length).toBeLessThanOrEqual(historyVirtualized.length);
-  });
+      // Drive the queued work until it settles, without waiting for real frames.
+      for (let frame = 0; frames.size > 0 && frame < 100; frame += 1) {
+        const callbacks = [...frames.values()];
+        frames.clear();
+        act(() => callbacks.forEach((callback) => callback(frame * 16)));
+      }
+      expect(frames.size).toBe(0);
+      expect(rowRenderCount.mock.calls.length).toBeGreaterThan(0);
+      expect(rowRenderCount.mock.calls.length).toBeLessThanOrEqual(historyVirtualized.length);
+      if (height === 0) {
+        expect(rowRenderCount).toHaveBeenCalledTimes(historyVirtualized.length);
+        expect(container.querySelector('[data-history-row-id="message-999"]')).not.toBeNull();
+      } else {
+        expect(
+          container.querySelector<HTMLElement>('[data-history-row-id="message-1"]')?.style
+            .transform,
+        ).toBe("translateY(24px)");
+      }
+    },
+  );
 
   it("retains a row's DOM and local state when recent history becomes virtualized", () => {
     const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
