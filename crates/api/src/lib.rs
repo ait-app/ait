@@ -12,6 +12,7 @@ mod guest;
 mod listener;
 pub mod managed_relay;
 mod mcp;
+mod peer_acceptance;
 mod publication;
 mod shares;
 mod terminal_activity;
@@ -99,6 +100,7 @@ struct Shared {
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     shares: Arc<shares::Shares>,
     automation: Arc<automation::Automation>,
+    peer_acceptance: peer_acceptance::PeerAcceptance,
 }
 
 impl std::ops::Deref for Shared {
@@ -280,6 +282,16 @@ impl Api {
         async move { shares.restore_guests().await }
     }
 
+    /// Observe whether this Host accepts calls from Agents on sibling Hosts of the account, for
+    /// the daemon's publication to the account center.
+    ///
+    /// The value is `mcp.enabled && mcp.acceptPeers`, read once at startup and updated by every
+    /// committed daemon configuration change (`daemon.config.set.request` or a reload).
+    #[must_use]
+    pub fn peer_acceptance(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.shared.peer_acceptance.receiver()
+    }
+
     /// Return the Host's share settings for the daemon's publication loop.
     #[must_use]
     pub fn share_book(&self) -> Arc<dyn model::share::ShareBook> {
@@ -370,10 +382,9 @@ impl Api {
             .unwrap_or_default();
         compose_automation_events(services.workspace_automation.as_ref(), &session_events)?;
         let creations = creation_receipts(&services);
-        let worktrees = services.worktrees;
         let (directory, has_git_fetch) = compose_directory(
             services.directory,
-            worktrees.as_ref(),
+            services.worktrees.as_ref(),
             services.git_fetch,
             &runtime,
             &session_events,
@@ -389,7 +400,7 @@ impl Api {
             workspace_notepads: services.workspace_notepads.map(shared_service),
             workspace_automation: services.workspace_automation,
             workspace_state: services.workspace_state.map(shared_service),
-            worktrees,
+            worktrees: services.worktrees,
             workspace_recovery: services.workspace_recovery.map(shared_service),
             github_projects: services.github_projects.map(shared_service),
             session_events,
@@ -442,6 +453,7 @@ impl Api {
                 workspace_names: services.workspace_names,
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
                 automation: Arc::default(),
+                peer_acceptance: peer_acceptance::PeerAcceptance::start(&metadata)?,
                 runtime,
                 metadata,
                 filesystem,

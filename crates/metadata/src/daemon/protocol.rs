@@ -121,6 +121,9 @@ struct MutableMcpConfig {
     enabled: Option<bool>,
     /// Whether configured MCP tools are injected into agents.
     inject_into_agents: bool,
+    /// Whether Agents on sibling Hosts of the account may call this Host; absent reads as off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    accept_peers: Option<bool>,
     /// Forward-compatible Paseo fields.
     #[serde(flatten)]
     extra: Map<String, Value>,
@@ -311,6 +314,7 @@ impl Default for DaemonConfig {
             mcp: MutableMcpConfig {
                 enabled: Some(true),
                 inject_into_agents: true,
+                accept_peers: Some(false),
                 extra: Map::new(),
             },
             hostnames: None,
@@ -439,6 +443,7 @@ impl DaemonConfigPatch {
         validate_optional_object(self.metadata_generation.as_ref())?;
         validate_optional_bool(self.relay.as_ref(), "enabled")?;
         validate_optional_bool(self.mcp.as_ref(), "injectIntoAgents")?;
+        validate_optional_bool(self.mcp.as_ref(), "acceptPeers")?;
         validate_optional_bool(self.browser_tools.as_ref(), "enabled")?;
         if let Some(metadata) = self.metadata_generation.as_ref() {
             let metadata = metadata.as_object().ok_or(InvalidDaemonConfig)?;
