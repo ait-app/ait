@@ -244,3 +244,78 @@ async fn reported_log_directory_must_be_absolute() {
         "{relative}"
     );
 }
+
+#[test]
+fn glog_excerpts_use_host_local_time_and_omit_unscoped_or_outside_records() {
+    let local = Local
+        .with_ymd_and_hms(2026, 11, 24, 23, 28, 53)
+        .single()
+        .unwrap();
+    let start = local.with_timezone(&Utc);
+    let end = start + chrono::Duration::seconds(2);
+    let text = concat!(
+        "I1124 23:28:53.000000 1136 stream.go:20] native failure\n",
+        "W1124 23:28:54.123456 1136 stream.go:21] warning\n",
+        "E1124 23:28:55.000000 1136 stream.go:22] final error\n",
+        "I1124 23:28:52.999999 1136 stream.go:19] before\n",
+        "I1124 23:28:52.000000 1136 stream.go:19] embedded 2026-11-24T23:28:54Z\n",
+        "I1124 23:28:55.000001 1136 stream.go:23] after\n",
+        "unscoped fixture-secret continuation\n",
+        "I1132 23:28:54.000000 1136 stream.go:24] invalid date\n",
+    );
+    let (excerpt, omitted) = window_excerpt(text, start, end);
+    assert_eq!(excerpt.lines().count(), 3);
+    assert_eq!(omitted, 5);
+    assert!(!excerpt.contains("fixture-secret"));
+    assert!(!excerpt.contains("before"));
+    assert!(!excerpt.contains("after"));
+    for malformed in ["X1124 23:28:53.0", "I界 23:28:53.0", "I1124 nope", "I1124"] {
+        assert!(glog_timestamp(malformed, 2026).is_none());
+    }
+}
+
+#[test]
+fn glog_excerpts_handle_a_local_new_year_window() {
+    let local = Local
+        .with_ymd_and_hms(2026, 12, 31, 23, 59, 59)
+        .single()
+        .unwrap();
+    let start = local.with_timezone(&Utc);
+    let end = start + chrono::Duration::seconds(2);
+    let text = concat!(
+        "I1231 23:59:59.000000 1 stream.go:1] old year\n",
+        "I0101 00:00:00.000000 1 stream.go:2] new year\n",
+        "I0101 00:00:01.000001 1 stream.go:3] after\n",
+    );
+    let (excerpt, omitted) = window_excerpt(text, start, end);
+    assert_eq!(excerpt.lines().count(), 2);
+    assert_eq!(omitted, 1);
+}
+
+#[test]
+fn agy_log_roots_use_home_and_allow_an_explicit_override() {
+    let source = HarnessEvidenceSource {
+        program_variable: "AIT_SERVER_ANTIGRAVITY_BIN",
+        default_program: "agy",
+        log_directory_variable: "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR",
+        native_logs: NativeLogs::UnderRoot {
+            root_variable: "HOME",
+            home_directory: "",
+            subdirectory: ".gemini/antigravity-cli/log",
+        },
+    };
+    for (override_path, expected) in [
+        (None, "/fixture/.gemini/antigravity-cli/log"),
+        (Some("/native/log"), "/native/log"),
+    ] {
+        let evidence = HarnessEvidence::configured([("antigravity", source)], |key| match key {
+            "HOME" => Some("/fixture".into()),
+            "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR" => override_path.map(OsString::from),
+            _ => None,
+        });
+        assert_eq!(
+            evidence.sources[0].logs.as_deref(),
+            Some(Path::new(expected))
+        );
+    }
+}

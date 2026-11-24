@@ -44,7 +44,7 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 | Codex            | `CODEX_HOME/log`，未设置时 `$HOME/.codex/log`             | `AIT_DIAGNOSTICS_CODEX_LOG_DIR`            |
 | Claude           | `CLAUDE_CONFIG_DIR/debug`，未设置时 `$HOME/.claude/debug` | `AIT_DIAGNOSTICS_CLAUDE_LOG_DIR`           |
 | DeepSeek Harness | 无默认目录，明确显示 unavailable                          | `AIT_DIAGNOSTICS_DEEPSEEK_HARNESS_LOG_DIR` |
-| Antigravity      | 无默认目录，明确显示 unavailable                          | `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR`      |
+| Antigravity      | `$HOME/.gemini/antigravity-cli/log`                       | `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR`      |
 | Pi               | 无默认目录，明确显示 unavailable                          | `AIT_DIAGNOSTICS_PI_LOG_DIR`               |
 
 `AIT_SERVER_<PROVIDER>_BIN` 同时控制相应 CLI 版本探测；未设置时使用 PATH 中的
@@ -52,9 +52,11 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 覆盖目录必须是专用日志目录，不应指向项目根目录或凭据目录。
 
 最多扫描 1024 个目录项，选最近修改的 3 个 `.log` / `.txt` 普通文件，分别读取末尾
-64 KiB。仅保留故障前 5 分钟到采集时刻之间的 ISO 时间戳行，时区偏移被统一为 UTC；
-没有时区的时间按 UTC 解释。无时间戳的续行、会话 JSONL、符号链接不会被收集。
-日志采用其他格式或本地无时区时间时，报告可能没有匹配记录，不能据此认定没有发生错误。
+64 KiB。仅保留故障前 5 分钟到采集时刻之间的时间戳行。ISO 时间戳的偏移统一为 UTC，
+没有时区的 ISO 时间按 UTC 解释。AGY 的 glog 前缀（如 `I1124 23:28:53.123456`）
+按主机本地时区解释，年份仅取 incident 窗口跨越的本地年份；有歧义的本地时间被省略。
+无时间戳的续行、会话 JSONL、符号链接不会被收集。其他格式可能没有匹配记录，
+不能据此认定没有发生错误。
 
 ## 资源预算拒绝
 

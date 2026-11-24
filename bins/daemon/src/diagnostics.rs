@@ -403,7 +403,7 @@ fn capture(
     // Include records emitted while an error was being propagated to the collector.
     let end = Utc::now();
     let mut report = format!(
-        "\nAit incident evidence v1\nIncident ID: {}\nCollected at: {end}\nIncident at: {at}\nUTC window: {start} through {end}\nNaive native timestamps are interpreted as UTC; untimestamped records are omitted.\nDaemon version: {}\nOS: {} / {}\nRetention: 7 days, 20 incidents, 5 MiB; automatic capture at most once per 30 seconds\nDropped capture jobs: {}\n",
+        "\nAit incident evidence v1\nIncident ID: {}\nCollected at: {end}\nIncident at: {at}\nUTC window: {start} through {end}\nISO timestamps without offsets use UTC; glog timestamps use host local time and incident-window years; untimestamped records are omitted.\nDaemon version: {}\nOS: {} / {}\nRetention: 7 days, 20 incidents, 5 MiB; automatic capture at most once per 30 seconds\nDropped capture jobs: {}\n",
         uuid::Uuid::new_v4(),
         model::BUILD_VERSION,
         std::env::consts::OS,

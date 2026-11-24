@@ -533,3 +533,21 @@ async fn cumulative_usage_queues_a_delta_segment_only_after_the_baseline() {
     );
     session.close().await.unwrap();
 }
+
+#[test]
+fn native_evidence_declares_the_verified_agy_log_directory() {
+    let (_directory, client, _spec) = fixture();
+    let source = client.harness_evidence().unwrap();
+    assert_eq!(
+        source.log_directory_variable,
+        "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR"
+    );
+    assert_eq!(
+        source.native_logs,
+        provider_core::ports::harness_evidence::NativeLogs::UnderRoot {
+            root_variable: "HOME",
+            home_directory: "",
+            subdirectory: ".gemini/antigravity-cli/log",
+        }
+    );
+}

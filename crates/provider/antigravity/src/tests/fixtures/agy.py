@@ -128,6 +128,34 @@ for line in sys.stdin:
         continue
     if text == 'crash-once':
         sys.exit(1)
+    if text.startswith('protocol-'):
+        update = {'conversation_id': conversation, 'state': 'ACTIVE',
+                  'step_type': 'agent_response', 'step_index': 0}
+        if text == 'protocol-foreign':
+            update['conversation_id'] = 'fixture-secret'
+        elif text == 'protocol-state':
+            update['state'] = 'fixture-secret'
+        elif text == 'protocol-text':
+            update['text_delta'] = {'secret': 'fixture-secret'}
+        elif text == 'protocol-tool':
+            update.update(step_type='tool', tool_info='fixture-secret')
+        elif text == 'protocol-event':
+            emit({'event': 'init', 'secret': 'fixture-secret'})
+            continue
+        elif text == 'protocol-usage':
+            terminal('SUCCESS', 'answer', usage={'input_tokens': -1})
+            continue
+        elif text == 'protocol-denials':
+            terminal('SUCCESS', 'answer', denied_actions='fixture-secret')
+            continue
+        emit({'event': 'step_update', 'step_update': update})
+        if text == 'protocol-unfinished':
+            terminal('SUCCESS', 'fixture-secret')
+        elif text == 'protocol-duplicate':
+            update['state'] = 'DONE'
+            emit({'event': 'step_update', 'step_update': update})
+            emit({'event': 'step_update', 'step_update': update})
+        continue
     if scenario == 'foreign':
         emit({'event': 'step_update', 'step_update': {'conversation_id': 'foreign',
             'state': 'DONE', 'step_type': 'agent_response', 'step_index': step_index}})

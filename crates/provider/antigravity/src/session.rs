@@ -7,7 +7,10 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    AntigravityClient, PROVIDER, config, diagnostics::Failure, discovery, input, streaming::Stream,
+    AntigravityClient, PROVIDER, config,
+    diagnostics::{Failure, ProtocolError},
+    discovery, input,
+    streaming::Stream,
     transport::Transport,
 };
 use provider_core::ports::agent_session::{
@@ -28,6 +31,7 @@ pub(super) struct Session {
     active: Option<String>,
     stream: Stream,
     input_error: Option<&'static str>,
+    protocol_error: Option<ProtocolError>,
     closed: bool,
 }
 
@@ -62,6 +66,7 @@ pub(super) async fn open(
         active: None,
         stream: Stream::default(),
         input_error: None,
+        protocol_error: None,
         closed: false,
     })
 }
@@ -199,6 +204,7 @@ impl Session {
         }
         let turn = Uuid::new_v4().to_string();
         self.stream.begin(turn.clone(), self.id.clone());
+        self.protocol_error = None;
         self.active = Some(turn.clone());
         self.stream
             .events
@@ -218,12 +224,22 @@ impl Session {
 
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.active.is_none() {
+            self.protocol_error = Some(ProtocolError::Event);
             return Err(AgentSessionError::Failed);
         }
         match message["event"].as_str() {
-            Some("step_update") => self.stream.update(&message["step_update"]),
+            Some("step_update") => self
+                .stream
+                .update(&message["step_update"])
+                .map_err(|reason| {
+                    self.protocol_error = Some(reason);
+                    AgentSessionError::Failed
+                }),
             Some("result") => {
-                self.stream.finish(&message["result"])?;
+                self.stream.finish(&message["result"]).map_err(|reason| {
+                    self.protocol_error = Some(reason);
+                    AgentSessionError::Failed
+                })?;
                 self.active = None;
                 // Native ERROR (including interrupted) retires the driver. A later explicit
                 // prompt resumes the conversation; never retry an ambiguously admitted prompt.
@@ -232,7 +248,10 @@ impl Session {
                 }
                 Ok(())
             }
-            Some("init") | None => Err(AgentSessionError::Failed),
+            Some("init") | None => {
+                self.protocol_error = Some(ProtocolError::Event);
+                Err(AgentSessionError::Failed)
+            }
             Some(_) => Ok(()),
         }
     }
@@ -268,7 +287,12 @@ impl AgentSession for Session {
             Failure::Quota => Category::Quota,
             Failure::Permission => Category::Permission,
         };
-        Some(Diagnostic::new(category, "result"))
+        let source = if failure == Failure::Protocol {
+            self.protocol_error.map_or("stream", ProtocolError::source)
+        } else {
+            "result"
+        };
+        Some(Diagnostic::new(category, source))
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
@@ -285,7 +309,15 @@ impl AgentSession for Session {
             .into_iter()
             .chain(self.transport.as_ref().and_then(Transport::failure))
             .max()
-            .map(|failure| Cow::Borrowed(failure.message()))
+            .map(|failure| {
+                if failure == Failure::Protocol
+                    && let Some(reason) = self.protocol_error
+                {
+                    Cow::Owned(reason.to_string())
+                } else {
+                    Cow::Borrowed(failure.message())
+                }
+            })
     }
 
     fn provider(&self) -> &'static str {

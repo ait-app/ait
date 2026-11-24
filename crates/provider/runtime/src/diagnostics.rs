@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveDateTime, TimeZone, Utc};
 use tokio::io::AsyncReadExt;
 
 use provider_core::ports::agent_session::AgentClient;
@@ -274,9 +274,19 @@ fn read_tail(path: &Path) -> std::io::Result<(String, bool)> {
 fn window_excerpt(text: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> (String, usize) {
     let mut report = String::new();
     let mut omitted = 0;
+    let first_year = start.with_timezone(&Local).year();
+    let last_year = end.with_timezone(&Local).year();
     // Untimestamped continuations are deliberately omitted: they can contain prompts or payloads.
     for line in text.lines() {
-        if timestamp(line).is_some_and(|time| time >= start && time <= end) {
+        let in_window = if let Some(time) = glog_timestamp(line, first_year) {
+            (time >= start && time <= end)
+                || (last_year != first_year
+                    && glog_timestamp(line, last_year)
+                        .is_some_and(|time| time >= start && time <= end))
+        } else {
+            timestamp(line).is_some_and(|time| time >= start && time <= end)
+        };
+        if in_window {
             report.push_str(line);
             report.push('\n');
         } else {
@@ -284,6 +294,29 @@ fn window_excerpt(text: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> (Stri
         }
     }
     (report, omitted)
+}
+
+/// AGY uses glog's local `Lmmdd hh:mm:ss.ffffff` prefix without a year or offset.
+/// Only years intersecting the incident window are considered; ambiguous local times are omitted.
+fn glog_timestamp(line: &str, year: i32) -> Option<DateTime<Utc>> {
+    let mut fields = line.split_whitespace();
+    let prefix = fields.next()?;
+    if prefix.len() != 5
+        || !matches!(prefix.as_bytes()[0], b'I' | b'W' | b'E' | b'F')
+        || !prefix.as_bytes()[1..].iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    let time = fields.next()?;
+    let date = NaiveDateTime::parse_from_str(
+        &format!("{year}{} {time}", &prefix[1..]),
+        "%Y%m%d %H:%M:%S%.f",
+    )
+    .ok()?;
+    Local
+        .from_local_datetime(&date)
+        .single()
+        .map(|time| time.with_timezone(&Utc))
 }
 
 fn timestamp(line: &str) -> Option<DateTime<Utc>> {

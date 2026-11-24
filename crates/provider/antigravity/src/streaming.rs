@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::diagnostics::Failure;
-use provider_core::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use super::diagnostics::{Failure, ProtocolError};
+use provider_core::ports::agent_session::AgentTurnEvent;
 use provider_core::ports::usage_ledger::{RequestUsage, UsageBoundary};
 use provider_core::protocol::{timeline::NativeItem, usage::AgentUsage};
 use provider_native::usage::cumulative::{CumulativeUsage, UsageCounters};
@@ -103,14 +103,14 @@ impl Stream {
         }
     }
 
-    pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
+    pub(super) fn update(&mut self, update: &Value) -> Result<(), ProtocolError> {
         if update["conversation_id"] != self.conversation {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Conversation);
         }
         let done = match update["state"].as_str() {
             Some("ACTIVE") => false,
             Some("DONE" | "ERROR") => true,
-            _ => return Err(AgentSessionError::Failed),
+            _ => return Err(ProtocolError::StepState),
         };
         let kind = match update["step_type"].as_str() {
             Some("agent_response") => "assistant_message",
@@ -119,13 +119,13 @@ impl Stream {
             // Metadata-only user_input echoes must not duplicate the accepted input above.
             // Other categories do not change the host's lifecycle.
             Some(_) => return Ok(()),
-            None => return Err(AgentSessionError::Failed),
+            None => return Err(ProtocolError::StepIdentity),
         };
         let index = update["step_index"]
             .as_u64()
-            .ok_or(AgentSessionError::Failed)?;
+            .ok_or(ProtocolError::StepIdentity)?;
         if self.steps.len() >= MAX_ITEMS && !self.steps.contains_key(&index) {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Limit);
         }
         let key = format!(
             "native:antigravity:{}:{}:step:{index}",
@@ -144,18 +144,18 @@ impl Stream {
             published: false,
         });
         if step.done || step.entry.item["type"] != kind {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::StepLifecycle);
         }
         let mut progress = step.entry.clone();
         if kind == "assistant_message" {
             let delta = update
                 .get("text_delta")
-                .map(|value| value.as_str().ok_or(AgentSessionError::Failed))
+                .map(|value| value.as_str().ok_or(ProtocolError::Text))
                 .transpose()?
                 .unwrap_or_default();
             self.assistant_seen |= !delta.is_empty();
             if step.text.len().saturating_add(delta.len()) > MAX_TEXT {
-                return Err(AgentSessionError::Failed);
+                return Err(ProtocolError::Limit);
             }
             step.text.push_str(delta);
             self.bytes = self.bytes.saturating_add(delta.len());
@@ -166,7 +166,7 @@ impl Stream {
             progress.clone_from(&step.entry);
         }
         if self.bytes > 8 * 1024 * 1024 {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Limit);
         }
         self.observation += 1;
         if done {
@@ -195,10 +195,10 @@ impl Stream {
         Ok(())
     }
 
-    fn compaction(&mut self, update: &Value, done: bool) -> Result<(), AgentSessionError> {
+    fn compaction(&mut self, update: &Value, done: bool) -> Result<(), ProtocolError> {
         let index = update["step_index"]
             .as_u64()
-            .ok_or(AgentSessionError::Failed)?;
+            .ok_or(ProtocolError::StepIdentity)?;
         let id = format!("{}:{}:checkpoint:{index}", self.conversation, self.turn);
         let status = if update["state"] == "ERROR" {
             "failed"
@@ -207,7 +207,11 @@ impl Stream {
         } else {
             "loading"
         };
-        if let Some(item) = self.compactions.marker(&id, status, Some("auto"))? {
+        if let Some(item) = self
+            .compactions
+            .marker(&id, status, Some("auto"))
+            .map_err(|_| ProtocolError::Checkpoint)?
+        {
             self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
                 key: format!("native:antigravity:{id}:{status}"),
                 turn_id: Some(self.turn.clone()),
@@ -218,20 +222,18 @@ impl Stream {
         Ok(())
     }
 
-    pub(super) fn finish(&mut self, result: &Value) -> Result<(), AgentSessionError> {
+    pub(super) fn finish(&mut self, result: &Value) -> Result<(), ProtocolError> {
         if result["conversation_id"] != self.conversation {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Conversation);
         }
-        let status = result["status"].as_str().ok_or(AgentSessionError::Failed)?;
+        let status = result["status"].as_str().ok_or(ProtocolError::Result)?;
         let denied_tools = denied_tools(result, &mut self.reported_denials)?;
         let denied = !denied_tools.is_empty();
         let canceled = matches!(status, "CANCELED" | "INTERRUPTED")
             || (status == "ERROR" && result["error"] == "interrupted");
-        let response = result["response"]
-            .as_str()
-            .ok_or(AgentSessionError::Failed)?;
+        let response = result["response"].as_str().ok_or(ProtocolError::Result)?;
         if response.len() > MAX_TEXT {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Limit);
         }
         self.finish_compactions();
         if let Some(usage) = result.get("usage") {
@@ -242,7 +244,7 @@ impl Stream {
                 ..AgentUsage::default()
             };
             if !snapshot.is_valid() {
-                return Err(AgentSessionError::Failed);
+                return Err(ProtocolError::Usage);
             }
             // Native result usage is cumulative. Publish replacement snapshots, never sums.
             self.events.push_back(AgentTurnEvent::Usage(snapshot));
@@ -257,7 +259,7 @@ impl Stream {
                             .is_some_and(|name| denied_tools.contains(&normalized_tool_name(name))))
             })
         {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Unfinished);
         }
         let failed = !canceled && (status != "SUCCESS" || (denied && response.trim().is_empty()));
         if failed {
@@ -414,10 +416,10 @@ fn task_snapshot(step: &Step) -> Option<NativeItem> {
     })
 }
 
-fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, AgentSessionError> {
+fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, ProtocolError> {
     let mut bytes = 0_usize;
     if let Some(info) = update.get("tool_info").filter(|info| !info.is_null()) {
-        let fields = info.as_object().ok_or(AgentSessionError::Failed)?;
+        let fields = info.as_object().ok_or(ProtocolError::Tool)?;
         for (name, value) in fields {
             let (value, size) = preview(value);
             bytes = bytes.saturating_add(size);
@@ -430,7 +432,7 @@ fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, Age
     let name = step.tool["name"]
         .as_str()
         .filter(|name| !name.is_empty() && name.len() <= 512 && !name.chars().any(char::is_control))
-        .ok_or(AgentSessionError::Failed)?;
+        .ok_or(ProtocolError::Tool)?;
     let failed = done && (update["state"] == "ERROR" || !step.tool["error"].is_null());
     let error = if !failed {
         Value::Null
@@ -469,21 +471,21 @@ fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, Age
 fn denied_tools(
     result: &Value,
     reported: &mut BTreeMap<(String, String), usize>,
-) -> Result<BTreeSet<String>, AgentSessionError> {
+) -> Result<BTreeSet<String>, ProtocolError> {
     let mut names = BTreeSet::new();
     let mut counts = BTreeMap::new();
     let Some(actions) = result.get("denied_actions") else {
         return Ok(names);
     };
-    let actions = actions.as_array().ok_or(AgentSessionError::Failed)?;
+    let actions = actions.as_array().ok_or(ProtocolError::Denials)?;
     if actions.len() > MAX_ITEMS {
-        return Err(AgentSessionError::Failed);
+        return Err(ProtocolError::Denials);
     }
     for action in actions {
-        let kind = action["action"].as_str().ok_or(AgentSessionError::Failed)?;
+        let kind = action["action"].as_str().ok_or(ProtocolError::Denials)?;
         let display = action["display_name"]
             .as_str()
-            .ok_or(AgentSessionError::Failed)?;
+            .ok_or(ProtocolError::Denials)?;
         if display.is_empty()
             || display.len() > 512
             || display.chars().any(char::is_control)
@@ -491,7 +493,7 @@ fn denied_tools(
             || kind.len() > 512
             || kind.chars().any(char::is_control)
         {
-            return Err(AgentSessionError::Failed);
+            return Err(ProtocolError::Denials);
         }
         let key = (kind.to_owned(), display.to_owned());
         let count = counts.entry(key.clone()).or_insert(0);
@@ -509,7 +511,7 @@ fn denied_tools(
         *previous = (*previous).max(count);
     }
     if reported.len() > MAX_ITEMS {
-        return Err(AgentSessionError::Failed);
+        return Err(ProtocolError::Denials);
     }
     Ok(names)
 }
@@ -521,10 +523,10 @@ fn normalized_tool_name(name: &str) -> String {
         .collect()
 }
 
-fn counter(usage: &Value, field: &str) -> Result<Option<u64>, AgentSessionError> {
+fn counter(usage: &Value, field: &str) -> Result<Option<u64>, ProtocolError> {
     usage
         .get(field)
-        .map(|value| value.as_u64().ok_or(AgentSessionError::Failed))
+        .map(|value| value.as_u64().ok_or(ProtocolError::Usage))
         .transpose()
 }
 

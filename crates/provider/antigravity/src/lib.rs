@@ -86,7 +86,11 @@ impl AgentClient for AntigravityClient {
                 program_variable: "AIT_SERVER_ANTIGRAVITY_BIN",
                 default_program: "agy",
                 log_directory_variable: "AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR",
-                native_logs: provider_core::ports::harness_evidence::NativeLogs::Unknown,
+                native_logs: provider_core::ports::harness_evidence::NativeLogs::UnderRoot {
+                    root_variable: "HOME",
+                    home_directory: "",
+                    subdirectory: ".gemini/antigravity-cli/log",
+                },
             },
         )
     }
