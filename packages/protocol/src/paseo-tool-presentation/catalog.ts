@@ -211,6 +211,9 @@ const TOOLS = {
     detail: { inputOrder: ["agentId", "requestId", "response"] },
   },
 
+  // Hosts
+  host_list: { label: "List hosts" },
+
   // Workspaces and scripts
   workspace_create: {
     label: "Create workspace",

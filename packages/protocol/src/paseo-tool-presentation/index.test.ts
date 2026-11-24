@@ -135,6 +135,32 @@ describe("Paseo tool display", () => {
     });
   });
 
+  it("presents host_list and names the host of a routed call", () => {
+    expect(display("mcp__ait__host_list", {})).toEqual({ displayName: "List hosts" });
+    expect(display("mcp__ait__agent_get", { agentId: "agt_1", hostId: "h" })).toEqual({
+      displayName: "Check agent",
+      summary: "on h · agt_1",
+    });
+    expect(display("mcp__ait__agent_list", { hostId: "h" })).toEqual({
+      displayName: "List agents",
+      summary: "on h",
+    });
+    expect(display("mcp__ait__agent_get", { agentId: "agt_1", hostId: "  " })?.summary).toBe(
+      "agt_1",
+    );
+  });
+
+  it("keeps the host in view when a routed prompt is truncated", () => {
+    const prompt = "x".repeat(1_000);
+    const summary = display("mcp__ait__agent_prompt", {
+      agentId: "a",
+      prompt,
+      hostId: "host-b",
+    })?.summary;
+    expect(summary).toHaveLength(MAX_SUMMARY_CHARS);
+    expect(summary?.startsWith("on host-b · xxx")).toBe(true);
+  });
+
   it("omits the summary when a call has no context", () => {
     expect(display("mcp__ait__list_agents", {})).toEqual({ displayName: "List agents" });
   });

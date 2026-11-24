@@ -34,7 +34,7 @@ export function buildPaseoToolDisplay(input: PaseoToolDisplayInput): PaseoToolDi
 
   const toolInput = readToolInput(input.detail);
   const targetAgent = input.targetAgentTitle ?? readString(toolInput.agentId);
-  const summary = formatContext(entry.context?.(toolInput, targetAgent));
+  const summary = withHost(formatContext(entry.context?.(toolInput, targetAgent)), toolInput);
   return { displayName: entry.label, ...(summary ? { summary } : {}) };
 }
 
@@ -73,6 +73,16 @@ function formatContext(value: unknown): string | undefined {
     return rest.length > 0 ? `${head} +${rest.length}` : head;
   }
   return undefined;
+}
+
+/** A call routed to another host leads with that host, so truncation never hides it. */
+function withHost(
+  summary: string | undefined,
+  toolInput: Readonly<Record<string, unknown>>,
+): string | undefined {
+  const hostId = readString(toolInput.hostId)?.trim();
+  if (!hostId) return summary;
+  return toSummaryText(summary ? `on ${hostId} · ${summary}` : `on ${hostId}`);
 }
 
 function humanizeLeafName(leafName: string): string {
