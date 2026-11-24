@@ -160,6 +160,7 @@ function row(overrides: Partial<PaseoSubagentRow> = {}): PaseoSubagentRow {
   return {
     kind: "paseo",
     id: "worker",
+    serverId: "server-1",
     provider: "omp",
     title: "Build handoff card",
     description: "Implementation",

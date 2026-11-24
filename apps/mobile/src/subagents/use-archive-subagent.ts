@@ -17,13 +17,16 @@ export interface UseArchiveSubagentInput {
   serverId: string;
 }
 
-export function useArchiveSubagent(input: UseArchiveSubagentInput): (subagentId: string) => void {
+/** Archives a subagent through its own host: the parent's unless the row names another. */
+export function useArchiveSubagent(
+  input: UseArchiveSubagentInput,
+): (subagentId: string, subagentServerId?: string) => void {
   const { archiveAgent } = useArchiveAgent();
-  const { serverId } = input;
+  const { serverId: parentServerId } = input;
   const toast = useToast();
 
   return useCallback(
-    (subagentId: string) => {
+    (subagentId: string, serverId: string = parentServerId) => {
       void requestArchiveSubagent(
         { serverId, subagentId },
         {
@@ -37,6 +40,6 @@ export function useArchiveSubagent(input: UseArchiveSubagentInput): (subagentId:
         },
       );
     },
-    [archiveAgent, serverId, toast],
+    [archiveAgent, parentServerId, toast],
   );
 }

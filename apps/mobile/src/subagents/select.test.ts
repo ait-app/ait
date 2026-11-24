@@ -2,6 +2,7 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createSubagentsForParentSelector,
+  localSubagentRows,
   selectProviderSubagentsForParent,
   selectSubagentsForParent,
 } from "./select";
@@ -14,6 +15,7 @@ import { serverInfo } from "@ait/client/internal/protocol/messages";
 import { object } from "@ait/client/internal/protocol/types";
 
 const SERVER_ID = "server-1";
+const REMOTE_SERVER_ID = "server-2";
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
 const EMPTY_PENDING_ARCHIVE_IDS = new Set<string>();
 
@@ -67,8 +69,19 @@ function setAgents(agents: Agent[]): void {
     .setAgents(SERVER_ID, new Map(agents.map((agent) => [agent.id, agent])));
 }
 
+function setRemoteAgents(agents: Agent[]): void {
+  useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+  useSessionStore
+    .getState()
+    .setAgents(
+      REMOTE_SERVER_ID,
+      new Map(agents.map((agent) => [agent.id, { ...agent, serverId: REMOTE_SERVER_ID }])),
+    );
+}
+
 afterEach(() => {
   useSessionStore.getState().clearSession(SERVER_ID);
+  useSessionStore.getState().clearSession(REMOTE_SERVER_ID);
   useProviderSubagentStore.setState({
     descriptors: new Map(),
     timelines: new Map(),
@@ -427,6 +440,7 @@ describe("selectSubagentsForParent", () => {
       {
         kind: "paseo",
         id: "child",
+        serverId: SERVER_ID,
         provider: "claude",
         title: "Review child",
         description: null,
@@ -444,6 +458,7 @@ describe("selectSubagentsForParent", () => {
       "kind",
       "provider",
       "requiresAttention",
+      "serverId",
       "status",
       "subtitle",
       "title",
@@ -549,6 +564,111 @@ describe("selectSubagentsForParent", () => {
         EMPTY_PENDING_ARCHIVE_IDS,
       ),
     );
+  });
+});
+
+describe("remote subagents", () => {
+  const remoteParent = { serverId: SERVER_ID, agentId: "X" };
+
+  it("lists children on another connected host under their remote parent", () => {
+    setAgents([
+      makeAgent({ id: "X" }),
+      makeAgent({
+        id: "local-child",
+        parentAgentId: "X",
+        createdAt: new Date("2026-03-08T10:01:00.000Z"),
+      }),
+    ]);
+    setRemoteAgents([
+      makeAgent({ id: "c", remoteParent, createdAt: new Date("2026-03-08T10:02:00.000Z") }),
+      makeAgent({ id: "unrelated" }),
+    ]);
+
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+
+    expect(rows.map((row) => [row.id, row.serverId])).toEqual([
+      ["local-child", SERVER_ID],
+      ["c", REMOTE_SERVER_ID],
+    ]);
+    expect(localSubagentRows(rows, SERVER_ID).map((row) => row.id)).toEqual(["local-child"]);
+  });
+
+  it("does not adopt a remote child under a local agent with the same id", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    setRemoteAgents([makeAgent({ id: "X" }), makeAgent({ id: "c", remoteParent })]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: REMOTE_SERVER_ID, parentAgentId: "X" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ),
+    ).toEqual([]);
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        { serverId: SERVER_ID, parentAgentId: "X" },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => row.id),
+    ).toEqual(["c"]);
+  });
+
+  it("hides archived remote children and those whose archive is pending on their own host", () => {
+    setAgents([makeAgent({ id: "X" }), makeAgent({ id: "c-pending" })]);
+    setRemoteAgents([
+      makeAgent({ id: "c-archived", remoteParent, archivedAt: AGENT_TIMESTAMP }),
+      makeAgent({ id: "c-pending", remoteParent }),
+      makeAgent({ id: "c-kept", remoteParent }),
+    ]);
+
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      // The parent host's pending ids name a different agent with the same id.
+      new Set(["c-kept"]),
+      { [`${REMOTE_SERVER_ID}:c-pending`]: true },
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(["c-kept"]);
+  });
+
+  it("keeps the rows until an agent map on any host changes", () => {
+    setAgents([makeAgent({ id: "X" })]);
+    const remoteAgents = new Map([["unrelated", makeAgent({ id: "unrelated" })]]);
+    useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(REMOTE_SERVER_ID, remoteAgents);
+    const select = createSubagentsForParentSelector(
+      { serverId: SERVER_ID, parentAgentId: "X" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+    const before = select(useSessionStore.getState());
+    expect(before).toEqual([]);
+
+    useSessionStore.getState().setAgentStreamState(REMOTE_SERVER_ID, "unrelated", {
+      head: [{ kind: "assistant_message", id: "m", text: "tick", timestamp: AGENT_TIMESTAMP }],
+    });
+    expect(select(useSessionStore.getState())).toBe(before);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set("unrelated", makeAgent({ id: "unrelated", status: "running" })),
+      );
+    expect(select(useSessionStore.getState())).toBe(before);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set("c", makeAgent({ id: "c", serverId: REMOTE_SERVER_ID, remoteParent })),
+      );
+    expect(select(useSessionStore.getState()).map((row) => row.id)).toEqual(["c"]);
+
+    useSessionStore.getState().clearSession(REMOTE_SERVER_ID);
+    expect(select(useSessionStore.getState())).toEqual([]);
   });
 });
 

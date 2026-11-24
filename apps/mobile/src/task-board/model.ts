@@ -88,7 +88,7 @@ function ownBucket(agent: Agent): WorkspaceStateBucket {
   });
 }
 
-/** The board groups managed and observed children within the same host. */
+/** The board groups managed and observed children under their parent, on its host or another. */
 export function buildTaskBoard(hosts: readonly TaskBoardHost[]): TaskBoardModel {
   const byKey = new Map<string, BoardTask>();
   for (const host of hosts) {
@@ -124,19 +124,23 @@ export function buildTaskBoard(hosts: readonly TaskBoardHost[]): TaskBoardModel 
     }
   }
 
+  // A child created from another host names its parent by that host; a parent on a host this
+  // client is not connected to is absent from the board, so the child stays a task of its own.
+  const parentOf = (task: BoardTask): BoardTask | undefined => {
+    const { remoteParent, parentAgentId, serverId } = task.agent;
+    if (remoteParent) return byKey.get(taskKey(remoteParent.serverId, remoteParent.agentId));
+    return parentAgentId ? byKey.get(taskKey(serverId, parentAgentId)) : undefined;
+  };
+
   const roots: BoardTask[] = [];
   for (const task of byKey.values()) {
-    const parent = task.agent.parentAgentId
-      ? byKey.get(taskKey(task.agent.serverId, task.agent.parentAgentId))
-      : undefined;
+    const parent = parentOf(task);
     // Corrupt/cyclic ancestry must not hide a task or recurse forever.
     let ancestor = parent;
     const visited = new Set([task.key]);
     while (ancestor && !visited.has(ancestor.key)) {
       visited.add(ancestor.key);
-      ancestor = ancestor.agent.parentAgentId
-        ? byKey.get(taskKey(ancestor.agent.serverId, ancestor.agent.parentAgentId))
-        : undefined;
+      ancestor = parentOf(ancestor);
     }
     if (parent && !ancestor) parent.children.push(task);
     else roots.push(task);

@@ -1,6 +1,6 @@
 import type { AgentSnapshotPayload } from "@ait/protocol/messages";
 import type { AgentPermissionRequest } from "@ait/protocol/agent-types";
-import { getParentAgentIdFromLabels } from "@ait/protocol/agent-labels";
+import { getParentAgentIdFromLabels, getRemoteParentFromLabels } from "@ait/protocol/agent-labels";
 import {
   TURN_LIVENESS_IDLE,
   type ActiveTurnIdentity,
@@ -144,6 +144,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     attentionTimestamp,
     archivedAt,
     parentAgentId,
+    remoteParent: getRemoteParentFromLabels(snapshot.labels),
     labels: snapshot.labels,
   };
 }

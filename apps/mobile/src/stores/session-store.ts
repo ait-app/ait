@@ -103,6 +103,8 @@ export interface Agent {
   attentionTimestamp?: Date | null;
   archivedAt?: Date | null;
   parentAgentId: string | null;
+  /** The agent on another host that created this one through cross-host MCP. */
+  remoteParent?: { serverId: string; agentId: string } | null;
   labels: Record<string, string>;
   projectPlacement?: ProjectPlacementPayload | null;
 }

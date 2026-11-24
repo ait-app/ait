@@ -197,6 +197,59 @@ describe("task board", () => {
     expect(model.roots.map((item) => item.key)).toContain(taskKey("remote", "orphan"));
   });
 
+  it("lists children on another connected host under their remote parent", () => {
+    const model = buildTaskBoard([
+      host([agent("X")], "A"),
+      host([agent("c", { remoteParent: { serverId: "A", agentId: "X" } })], "B"),
+    ]);
+    const parent = model.byKey.get(taskKey("A", "X"))!;
+    expect(parent.children.map((item) => item.key)).toEqual([taskKey("B", "c")]);
+    expect(parent.children[0].agent.serverId).toBe("B");
+    expect(model.roots.map((item) => item.key)).toEqual([taskKey("A", "X")]);
+  });
+
+  it("does not adopt a remote child under a local agent with the same id", () => {
+    const model = buildTaskBoard([
+      host([agent("X")], "A"),
+      host([agent("X"), agent("c", { remoteParent: { serverId: "A", agentId: "X" } })], "B"),
+    ]);
+    expect(model.byKey.get(taskKey("B", "X"))?.children).toHaveLength(0);
+    expect(model.byKey.get(taskKey("A", "X"))?.children.map((item) => item.key)).toEqual([
+      taskKey("B", "c"),
+    ]);
+  });
+
+  it("shows a remote child on its own when its parent host is not connected", () => {
+    const model = buildTaskBoard([
+      host([agent("c", { remoteParent: { serverId: "A", agentId: "X" } })], "B"),
+    ]);
+    expect(model.roots.map((item) => item.key)).toEqual([taskKey("B", "c")]);
+  });
+
+  it("rolls a remote child's status into the parent task", () => {
+    const model = buildTaskBoard([
+      host([agent("X")], "A"),
+      host(
+        [
+          agent("c", {
+            remoteParent: { serverId: "A", agentId: "X" },
+            attentionReason: "permission",
+            lastActivityAt: new Date(700),
+          }),
+        ],
+        "B",
+      ),
+    ]);
+    expect(model.roots.map((item) => item.key)).toEqual([taskKey("A", "X")]);
+    expect(model.roots[0].ownBucket).toBe("done");
+    expect(model.roots[0].bucket).toBe("needs_input");
+    expect(model.roots[0].activityAt).toBe(700);
+    expect(taskLane(model.roots[0].bucket)).toBe("needs_action");
+    expect(
+      filterTaskBoard(model.roots, { hostId: null, projectKey: null, search: "", sort: "recent" }),
+    ).toHaveLength(1);
+  });
+
   it("does not lose or infinitely traverse cyclic ancestry", () => {
     const model = buildTaskBoard([
       host([

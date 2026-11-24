@@ -184,6 +184,7 @@ function BotSessionTrack({
       {
         kind: "paseo",
         id: sessionAgentId,
+        serverId,
         provider,
         title,
         description: null,
@@ -196,7 +197,7 @@ function BotSessionTrack({
         createdAt: new Date(0),
       },
     ],
-    [busy, provider, sessionAgentId, title],
+    [busy, provider, serverId, sessionAgentId, title],
   );
   const openSession = useCallback(
     // The session never joins the Agent directory, which would otherwise prune its tab.
