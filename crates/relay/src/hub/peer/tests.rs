@@ -160,6 +160,8 @@ fn reply_errors_map_to_call_errors() {
         br#"{"id":1}"#.as_slice(),
         br#"{"result":{}}"#,
         br#"{"id":1,"error":{"code":"x","message":"no"}}"#,
+        br#"{"id":1,"result":[]}"#,
+        br#"{"id":1,"result":"done"}"#,
         br#"{"id":1,"tool":"agent_list","arguments":{}}"#,
         b"not json",
     ] {
@@ -203,4 +205,22 @@ fn hosts_without_an_address_are_left_out_and_unknown_states_read_as_offline() {
     );
     assert_eq!(decode_hosts(json!({"hosts":{}})), Err(Malformed));
     assert_eq!(decode_hosts(json!({})), Err(Malformed));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_host_list_is_reused_for_five_seconds_on_its_logical_link() {
+    let link = Some(Uuid::new_v4());
+    let listed = Listed {
+        link,
+        at: Instant::now(),
+        hosts: Vec::new(),
+    };
+    assert_eq!(listed.current(link), Some([].as_slice()));
+    // A new logical link, or none, reads the list again.
+    assert_eq!(listed.current(Some(Uuid::new_v4())), None);
+    assert_eq!(listed.current(None), None);
+    tokio::time::advance(Duration::from_millis(4_999)).await; // virtual time
+    assert_eq!(listed.current(link), Some([].as_slice()));
+    tokio::time::advance(Duration::from_millis(1)).await; // virtual time
+    assert_eq!(listed.current(link), None);
 }

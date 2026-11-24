@@ -244,7 +244,7 @@ impl Connector {
             center: center.to_string(),
             node_session_id: grant.node_session_id,
         };
-        let (sender, caller, mut requests) = Requests::channel();
+        let (sender, caller, mut requests) = Requests::channel(self.publication.subscribe());
         {
             let mut state = self.state.lock().await;
             state.cancel.cancel();
@@ -508,9 +508,12 @@ struct Requests {
 
 impl Requests {
     /// The requests of a new link, and the handles that submit them.
-    fn channel() -> (calls::Sender, Caller, Self) {
+    ///
+    /// # Arguments
+    /// * `link` - The state of the link they run on.
+    fn channel(link: watch::Receiver<LinkState>) -> (calls::Sender, Caller, Self) {
         let (sender, calls) = calls::Calls::channel();
-        let (caller, peers) = Opener::channel();
+        let (caller, peers) = Opener::channel(link);
         (sender, caller, Self { calls, peers })
     }
 }

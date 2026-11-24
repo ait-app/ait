@@ -19,10 +19,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
+use model::hub::LinkState;
 use model::peer::{Error, Request};
 use serde_json::Value;
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{Instant, timeout_at};
 use tokio_tungstenite::tungstenite::{Bytes, Message};
 use uuid::Uuid;
@@ -50,59 +51,112 @@ pub(in crate::hub) struct Call {
     progress: Progress,
 }
 
-/// How far one call got: [`QUEUED`], [`OPENING`], [`HELD`] or [`SENT`], or
-/// [`GAVE_UP`] once its caller's time limit passed before it was sent. Shared
-/// by the caller and the opener, so the two agree on whether it was sent.
+/// How far one call got. Shared by the caller and the opener as one atomic
+/// byte, so the two agree on whether its request was sent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+enum Stage {
+    /// Waiting for the link loop, not yet on a session.
+    Queued,
+    /// Held on a session whose `open` the target has not accepted.
+    Opening,
+    /// Held on an accepted session until its window admits the request.
+    Held,
+    /// Handed to the link.
+    Sent,
+    /// Its caller gave up before it was sent; the opener drops it.
+    GaveUp,
+}
+
+impl Stage {
+    /// The stage stored as `raw`, which only ever holds a `Stage`.
+    fn from_raw(raw: u8) -> Self {
+        [
+            Self::Queued,
+            Self::Opening,
+            Self::Held,
+            Self::Sent,
+            Self::GaveUp,
+        ]
+        .into_iter()
+        .find(|stage| *stage as u8 == raw)
+        .expect("progress only ever stores a stage")
+    }
+
+    /// The error of a call given up at its caller's time limit in this stage.
+    ///
+    /// # Arguments
+    /// * `online` - Whether the link was connected at the limit.
+    ///
+    /// # Returns
+    /// `Error::OutcomeUnknown` once the request was sent and `Error::Offline`
+    /// while the target had not accepted its session. A call still waiting in
+    /// the queue or for the target's window is `Error::Capacity` while the link
+    /// is connected, and `Error::Unavailable` while it is not, since the link
+    /// was then the reason.
+    const fn at_limit(self, online: bool) -> Error {
+        match self {
+            Self::Sent => Error::OutcomeUnknown,
+            Self::Opening => Error::Offline,
+            Self::Queued | Self::Held if online => Error::Capacity,
+            Self::Queued | Self::Held | Self::GaveUp => Error::Unavailable,
+        }
+    }
+
+    /// The error of a call whose answer was dropped unsent: its request never
+    /// left this Host unless it was handed to the link.
+    const fn unanswered(self) -> Error {
+        match self {
+            Self::Sent => Error::OutcomeUnknown,
+            Self::Queued | Self::Opening | Self::Held | Self::GaveUp => Error::Unavailable,
+        }
+    }
+}
+
+/// The [`Stage`] of one call.
 #[derive(Clone, Debug)]
 struct Progress(Arc<AtomicU8>);
-
-/// Waiting for the link loop, not yet on a session.
-const QUEUED: u8 = 0;
-/// Held on a session whose `open` the target has not accepted.
-const OPENING: u8 = 1;
-/// Held on an accepted session until its window admits the request.
-const HELD: u8 = 2;
-/// Handed to the link.
-const SENT: u8 = 3;
-/// Its caller gave up before it was sent; the opener drops it.
-const GAVE_UP: u8 = 4;
 
 impl Progress {
     /// A call waiting for the link loop.
     fn queued() -> Self {
-        Self(Arc::new(AtomicU8::new(QUEUED)))
+        Self(Arc::new(AtomicU8::new(Stage::Queued as u8)))
     }
 
-    /// Record that the call reached `stage`.
+    fn stage(&self) -> Stage {
+        Stage::from_raw(self.0.load(Ordering::Acquire))
+    }
+
+    /// Record that the call reached `stage`; it never moves back.
     ///
     /// # Returns
     /// `false` once the caller gave up; the opener must then drop the call.
-    fn reach(&self, stage: u8) -> bool {
+    fn reach(&self, stage: Stage) -> bool {
         self.0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current != GAVE_UP).then_some(stage)
-            })
+            .fetch_update(
+                Ordering::AcqRel,
+                Ordering::Acquire,
+                |raw| match Stage::from_raw(raw) {
+                    Stage::GaveUp => None,
+                    current => Some(current.max(stage) as u8),
+                },
+            )
             .is_ok()
     }
 
-    /// Give the call up at its caller's time limit.
+    /// Give the call up at its caller's time limit unless its request was
+    /// already sent.
     ///
     /// # Returns
-    /// `Error::OutcomeUnknown` when the request was already sent,
-    /// `Error::Offline` when it waited for the target to accept its session,
-    /// and `Error::Capacity` when it waited in the queue or for the target's
-    /// window.
-    fn give_up(&self) -> Error {
+    /// The stage the call had reached: `Stage::Sent`, or the stage it was
+    /// given up in.
+    fn give_up(&self) -> Stage {
         let previous = self
             .0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current != SENT).then_some(GAVE_UP)
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |raw| {
+                (Stage::from_raw(raw) != Stage::Sent).then_some(Stage::GaveUp as u8)
             });
-        match previous {
-            Err(_) => Error::OutcomeUnknown,
-            Ok(OPENING) => Error::Offline,
-            Ok(_) => Error::Capacity,
-        }
+        Stage::from_raw(previous.unwrap_or_else(|sent| sent))
     }
 }
 
@@ -110,6 +164,8 @@ impl Progress {
 #[derive(Clone, Debug)]
 pub(in crate::hub) struct Caller {
     queue: mpsc::Sender<Call>,
+    /// The link's state; a call given up while it is not connected waited for the link.
+    link: watch::Receiver<LinkState>,
 }
 
 impl Caller {
@@ -118,11 +174,9 @@ impl Caller {
     /// not accepted yet, nothing was sent.
     ///
     /// # Errors
-    /// Returns `Error::Unavailable` once the link ended before the call reached
-    /// a session; at the limit, `Error::Offline` while the target had not
-    /// accepted the session, `Error::OutcomeUnknown` once the request was sent,
-    /// and `Error::Capacity` while it waited in the queue or for the target's
-    /// window; otherwise what [`Opener`] answered.
+    /// Returns what [`Opener`] answered; `Error::Unavailable` once the link
+    /// ended before the request was sent, and `Error::OutcomeUnknown` once it
+    /// ended after; at the limit, the error [`Stage::at_limit`] gives.
     pub(in crate::hub) async fn call(
         &self,
         node: Uuid,
@@ -139,21 +193,25 @@ impl Caller {
             progress: progress.clone(),
         };
         match timeout_at(deadline, self.queue.send(call)).await {
-            Err(_) => return Err(Error::Capacity),
+            Err(_) => return Err(Stage::Queued.at_limit(self.online())),
             Ok(Err(_)) => return Err(Error::Unavailable),
             Ok(Ok(())) => {}
         }
-        // The opener answers every call it took, even when the link ends; a
-        // call dropped unanswered never left this Host.
+        // The opener answers every call it took, even when the link ends; an
+        // answer dropped unsent is decided by how far the call got.
         match timeout_at(deadline, &mut outcome).await {
-            Ok(answer) => answer.unwrap_or(Err(Error::Unavailable)),
+            Ok(answer) => answer.unwrap_or_else(|_| Err(progress.stage().unanswered())),
             // An answer that raced the limit still counts.
             Err(_) => match outcome.try_recv() {
                 Ok(answer) => answer,
-                Err(TryRecvError::Empty) => Err(progress.give_up()),
-                Err(TryRecvError::Closed) => Err(Error::Unavailable),
+                Err(TryRecvError::Empty) => Err(progress.give_up().at_limit(self.online())),
+                Err(TryRecvError::Closed) => Err(progress.stage().unanswered()),
             },
         }
+    }
+
+    fn online(&self) -> bool {
+        self.link.borrow().online
     }
 }
 
@@ -204,10 +262,13 @@ struct Window {
 
 impl Opener {
     /// An opener and the handle that hands it calls.
-    pub(in crate::hub) fn channel() -> (Caller, Self) {
+    ///
+    /// # Arguments
+    /// * `link` - The state of the link the opener runs on.
+    pub(in crate::hub) fn channel(link: watch::Receiver<LinkState>) -> (Caller, Self) {
         let (queue, receiver) = mpsc::channel(QUEUE);
         (
-            Caller { queue },
+            Caller { queue, link },
             Self {
                 queue: receiver,
                 enabled: false,
@@ -270,13 +331,13 @@ impl Opener {
             return Ok(());
         }
         let (found, stage) = match existing {
-            Some((s, _, true)) => (Some(s), HELD),
-            Some((s, _, false)) => (Some(s), OPENING),
+            Some((s, _, true)) => (Some(s), Stage::Held),
+            Some((s, _, false)) => (Some(s), Stage::Opening),
             None if self.sessions.len() >= MAX_PEER_SESSIONS => {
                 let _ = reply.send(Err(Error::Capacity));
                 return Ok(());
             }
-            None => (None, OPENING),
+            None => (None, Stage::Opening),
         };
         if !progress.reach(stage) {
             return Ok(());
@@ -341,7 +402,7 @@ impl Opener {
         session.window = window.map(Window::new);
         // From here a request still held waits for the window, not the target.
         for held in &session.held {
-            held.progress.reach(HELD);
+            held.progress.reach(Stage::Held);
         }
         session.send(s, link, frames)?;
         Ok(true)
@@ -566,7 +627,7 @@ impl Opened {
                     break;
                 }
             }
-            if held.reply.is_closed() || !held.progress.reach(SENT) {
+            if held.reply.is_closed() || !held.progress.reach(Stage::Sent) {
                 continue;
             }
             let pt = PayloadKind::Text;

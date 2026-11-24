@@ -88,7 +88,7 @@ async fn serve(
         return;
     }
     // A bulk link carries no center calls and opens no peer sessions.
-    let (_, _, mut requests) = Requests::channel();
+    let (_, _, mut requests) = Requests::channel(connector.publication.subscribe());
     let link = (hub_ticket, Link::new(wire::BULK_FEATURES.to_vec()));
     match connector
         .run(url, link, &Role::Bulk, cancel, &mut requests)

@@ -222,7 +222,7 @@ pub(super) fn encode_request(id: u64, request: Request) -> Bytes {
         .into()
 }
 
-/// Decode one reply.
+/// Decode one reply; its `result` must be an object.
 ///
 /// # Returns
 /// The id of the request it answers, and the `result` object or the error the
@@ -234,7 +234,8 @@ pub(super) fn encode_request(id: u64, request: Request) -> Bytes {
 pub(super) fn decode_reply(text: &[u8]) -> Result<(u64, Result<Value, Error>), Malformed> {
     let reply: Reply = serde_json::from_slice(text).map_err(|_| Malformed)?;
     let outcome = match reply.outcome {
-        Outcome::Result(result) => Ok(result),
+        Outcome::Result(result) if result.is_object() => Ok(result),
+        Outcome::Result(_) => return Err(Malformed),
         Outcome::Error {
             code: NOT_ACCEPTING,
             ..
@@ -299,11 +300,15 @@ impl Peers for Connector {
             let scope = publication.scope.clone().ok_or(Error::Unavailable)?;
             (scope, publication.link)
         };
-        if let Some(listed) = &self.state.lock().await.hosts
-            && listed.link == link
-            && listed.at.elapsed() < HOSTS_TTL
+        if let Some(hosts) = self
+            .state
+            .lock()
+            .await
+            .hosts
+            .as_ref()
+            .and_then(|listed| listed.current(link))
         {
-            return Ok(listed.hosts.clone());
+            return Ok(hosts.to_vec());
         }
         let at = Instant::now();
         let result = self
@@ -330,6 +335,14 @@ impl Peers for Connector {
             .ok_or(Error::Unavailable)?
             .call(node, request, timeout)
             .await
+    }
+}
+
+impl Listed {
+    /// The Hosts, while the list was read on logical link `link` less than
+    /// [`HOSTS_TTL`] ago.
+    fn current(&self, link: Option<Uuid>) -> Option<&[Host]> {
+        (self.link == link && self.at.elapsed() < HOSTS_TTL).then_some(self.hosts.as_slice())
     }
 }
 
