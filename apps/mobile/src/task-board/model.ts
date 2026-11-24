@@ -126,9 +126,11 @@ export function buildTaskBoard(hosts: readonly TaskBoardHost[]): TaskBoardModel 
 
   // A child created from another host names its parent by that host; a parent on a host this
   // client is not connected to is absent from the board, so the child stays a task of its own.
+  // A remote parent on the child's own host is ignored, as the subagent selector ignores it.
   const parentOf = (task: BoardTask): BoardTask | undefined => {
     const { remoteParent, parentAgentId, serverId } = task.agent;
-    if (remoteParent) return byKey.get(taskKey(remoteParent.serverId, remoteParent.agentId));
+    if (remoteParent && remoteParent.serverId !== serverId)
+      return byKey.get(taskKey(remoteParent.serverId, remoteParent.agentId));
     return parentAgentId ? byKey.get(taskKey(serverId, parentAgentId)) : undefined;
   };
 
@@ -204,8 +206,10 @@ export function filterTaskBoard(tasks: readonly BoardTask[], filters: TaskFilter
   const words = filters.search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   return tasks
     .filter((task) => {
-      if (filters.hostId && task.agent.serverId !== filters.hostId) return false;
       const family = [task, ...taskDescendants(task)];
+      // A child created from another host runs elsewhere than its root; the family is shown whole.
+      if (filters.hostId && !family.some((member) => member.agent.serverId === filters.hostId))
+        return false;
       if (filters.projectKey && !family.some((member) => member.projectKey === filters.projectKey))
         return false;
       const haystack = family

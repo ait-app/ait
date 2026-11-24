@@ -250,6 +250,47 @@ describe("task board", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps a nested remote family visible under a filter on any member's host", () => {
+    const model = buildTaskBoard([
+      host([agent("X"), agent("local-child", { parentAgentId: "X" })], "A"),
+      host(
+        [
+          agent("c", {
+            remoteParent: { serverId: "A", agentId: "X" },
+            attentionReason: "permission",
+          }),
+          agent("b-own"),
+        ],
+        "B",
+      ),
+      host([agent("other")], "C"),
+    ]);
+    const filters = { hostId: "B", projectKey: null, search: "", sort: "recent" as const };
+    const onB = filterTaskBoard(model.roots, filters);
+
+    expect(onB.map((item) => item.key)).toEqual([taskKey("A", "X"), taskKey("B", "b-own")]);
+    expect(taskDescendants(onB[0]).map((item) => item.key)).toEqual([
+      taskKey("A", "local-child"),
+      taskKey("B", "c"),
+    ]);
+    expect(
+      filterTaskBoard(model.roots, { ...filters, hostId: "A" }).map((item) => item.key),
+    ).toEqual([taskKey("A", "X")]);
+    expect(
+      filterTaskBoard(model.roots, { ...filters, hostId: "C" }).map((item) => item.key),
+    ).toEqual([taskKey("C", "other")]);
+  });
+
+  it("ignores a remote parent on the child's own host, as the subagent selector does", () => {
+    const model = buildTaskBoard([
+      host([agent("X"), agent("c", { remoteParent: { serverId: "B", agentId: "X" } })], "B"),
+    ]);
+    expect(model.byKey.get(taskKey("B", "X"))?.children).toHaveLength(0);
+    expect(model.roots.map((item) => item.key).sort()).toEqual(
+      [taskKey("B", "X"), taskKey("B", "c")].sort(),
+    );
+  });
+
   it("does not lose or infinitely traverse cyclic ancestry", () => {
     const model = buildTaskBoard([
       host([

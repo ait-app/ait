@@ -10,6 +10,7 @@ import { createWorkspaceAgentVisibilitySelector } from "@/workspace-tabs/agent-v
 import { useProviderSubagentStore } from "./provider-store";
 import { markObservedSubagentsStale } from "./unified";
 import { useSessionStore, type Agent } from "@/stores/session-store";
+import { toArchiveKey } from "@/data/archive-agent-pending";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
 import { serverInfo } from "@ait/client/internal/protocol/messages";
 import { object } from "@ait/client/internal/protocol/types";
@@ -630,7 +631,7 @@ describe("remote subagents", () => {
       { serverId: SERVER_ID, parentAgentId: "X" },
       // The parent host's pending ids name a different agent with the same id.
       new Set(["c-kept"]),
-      { [`${REMOTE_SERVER_ID}:c-pending`]: true },
+      { [toArchiveKey({ serverId: REMOTE_SERVER_ID, agentId: "c-pending" })]: true },
     );
 
     expect(rows.map((row) => row.id)).toEqual(["c-kept"]);
@@ -777,6 +778,50 @@ describe("createSubagentsForParentSelector", () => {
 
     expect(rows.map((row) => row.id)).toEqual(["child-a"]);
   });
+  it("keeps a non-empty row array across stream ticks and unrelated changes on another host", () => {
+    const localAgents = new IterationCountingMap<string, Agent>(
+      [makeAgent({ id: "parent" }), makeAgent({ id: "child", parentAgentId: "parent" })].map(
+        (agent) => [agent.id, agent],
+      ),
+    );
+    const remoteAgents = new IterationCountingMap<string, Agent>([
+      ["unrelated", makeAgent({ id: "unrelated", serverId: REMOTE_SERVER_ID })],
+    ]);
+    useSessionStore.getState().initializeSession(SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(SERVER_ID, localAgents);
+    useSessionStore.getState().initializeSession(REMOTE_SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setAgents(REMOTE_SERVER_ID, remoteAgents);
+    const select = createSubagentsForParentSelector(params, EMPTY_PENDING_ARCHIVE_IDS);
+    const before = select(useSessionStore.getState());
+    expect(before.map((row) => row.id)).toEqual(["child"]);
+    const localIterations = localAgents.iterations;
+    const remoteIterations = remoteAgents.iterations;
+
+    for (let tick = 0; tick < 10; tick += 1) {
+      streamTick(`token ${tick}`);
+      useSessionStore.getState().setAgentStreamState(REMOTE_SERVER_ID, "unrelated", {
+        head: [
+          { kind: "assistant_message", id: "m", text: `tick ${tick}`, timestamp: AGENT_TIMESTAMP },
+        ],
+      });
+      expect(select(useSessionStore.getState())).toBe(before);
+    }
+    expect(useSessionStore.getState().sessions[SERVER_ID]?.agents).toBe(localAgents);
+    expect(useSessionStore.getState().sessions[REMOTE_SERVER_ID]?.agents).toBe(remoteAgents);
+    expect(localAgents.iterations).toBe(localIterations);
+    expect(remoteAgents.iterations).toBe(remoteIterations);
+
+    useSessionStore
+      .getState()
+      .setAgents(REMOTE_SERVER_ID, (current) =>
+        new Map(current).set(
+          "unrelated",
+          makeAgent({ id: "unrelated", serverId: REMOTE_SERVER_ID, status: "running" }),
+        ),
+      );
+    expect(select(useSessionStore.getState())).toBe(before);
+  });
+
   it("does no agent map walks for 100 stream commits with unchanged source maps", () => {
     const agents = new IterationCountingMap<string, Agent>(
       Array.from({ length: 200 }, (_, i) => {
